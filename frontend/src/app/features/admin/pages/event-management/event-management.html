@@ -1,0 +1,485 @@
+<div
+  class="min-h-screen bg-background text-foreground p-6 md:p-10 space-y-8 font-sans selection:bg-primary/30"
+>
+  @if (isLoading()) {
+    <div class="space-y-4">
+      <div class="h-8 w-64 rounded-md bg-muted/60 animate-pulse"></div>
+      <z-progress-bar [zIndeterminate]="true" />
+    </div>
+  } @else if (errorMessage()) {
+    <div
+      data-testid="management-load-error"
+      role="alert"
+      aria-live="assertive"
+      class="flex flex-col items-start gap-4 rounded-xl border border-destructive/40 bg-destructive/10 p-6 text-destructive"
+    >
+      <p>{{ errorMessage() }}</p>
+      <a
+        [routerLink]="backLink()"
+        [queryParams]="routeQueryParams() ?? undefined"
+        class="text-muted-foreground hover:text-primary transition-colors text-sm font-medium flex items-center gap-1 group"
+      >
+        <span class="transform group-hover:-translate-x-1 transition-transform"
+          >←</span
+        >
+        Back to Events
+      </a>
+    </div>
+  } @else if (summary(); as data) {
+    <div
+      class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
+    >
+      <div class="space-y-2">
+        <a
+          [routerLink]="backLink()"
+          [queryParams]="routeQueryParams() ?? undefined"
+          class="text-muted-foreground hover:text-primary transition-colors text-sm font-medium flex items-center gap-1 group"
+        >
+          <span
+            class="transform group-hover:-translate-x-1 transition-transform"
+            >←</span
+          >
+          Back to Events
+        </a>
+        <div>
+          <h1
+            class="text-2xl sm:text-3xl lg:text-4xl font-bold text-foreground tracking-tight font-display uppercase"
+          >
+            {{ data.event.title }}
+          </h1>
+          <p class="text-sm text-muted-foreground font-mono">
+            {{ data.event.date | date: 'fullDate' }}
+            @if (data.event.location) {
+              <span class="text-muted-foreground">
+                • {{ data.event.location }}</span
+              >
+            }
+          </p>
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <a
+          z-button
+          zType="outline"
+          [routerLink]="editEventLink()"
+          [queryParams]="routeQueryParams() ?? undefined"
+        >
+          Edit Event
+        </a>
+        <a
+          z-button
+          zType="ghost"
+          [routerLink]="backLink()"
+          [queryParams]="routeQueryParams() ?? undefined"
+        >
+          {{ section() === 'admin' ? 'All Communities' : 'All Events' }}
+        </a>
+      </div>
+    </div>
+
+    <!-- Ticket Sales Status Banner -->
+    @if (isSoldOut()) {
+      <div
+        class="rounded-xl border border-destructive/40 bg-destructive/10 p-4 flex items-center gap-3"
+      >
+        <z-icon zType="circle-alert" class="text-destructive" />
+        <div>
+          <p class="text-destructive font-display uppercase tracking-wider">
+            Sold Out
+          </p>
+          <p class="text-destructive/70 text-xs font-mono">
+            All tickets have been sold for this event.
+          </p>
+        </div>
+      </div>
+    } @else if (ticketSalesStatus() === 'paused') {
+      <div
+        class="rounded-xl border border-warning/40 bg-warning/10 p-4 flex items-center gap-3"
+      >
+        <z-icon zType="clock" class="text-warning" />
+        <div>
+          <p class="text-warning font-display uppercase tracking-wider">
+            Ticket Sales Paused
+          </p>
+          <p class="text-warning/70 text-xs font-mono">
+            Users cannot purchase tickets while sales are paused.
+          </p>
+        </div>
+      </div>
+    } @else if (ticketSalesStatus() === 'ended') {
+      <div
+        class="rounded-xl border border-destructive/40 bg-destructive/10 p-4 flex items-center gap-3"
+      >
+        <z-icon zType="circle-alert" class="text-destructive" />
+        <div>
+          <p class="text-destructive font-display uppercase tracking-wider">
+            Ticket Sales Ended
+          </p>
+          <p class="text-destructive/70 text-xs font-mono">
+            Ticket sales have been permanently ended for this event.
+          </p>
+        </div>
+      </div>
+    }
+
+    <!-- Payout Status Banner -->
+    @if (payoutStatus(); as status) {
+      <z-alert
+        [zType]="status.state === 'paid' ? 'success' : 'info'"
+        zAppearance="soft"
+        [zTitle]="
+          status.state === 'paid'
+            ? 'Paid Out'
+            : status.state === 'pending'
+              ? 'Payout Scheduled'
+              : status.state === 'processing'
+                ? 'Payout Processing'
+                : 'Payout Policy'
+        "
+        [zDescription]="payoutStatusDescription()"
+      />
+    }
+
+    <section
+      class="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
+      aria-labelledby="sales-summary-heading"
+    >
+      <z-card class="border-border bg-card/80">
+        <bra-inventory-meter
+          testid="tickets-sold"
+          label="Tickets Sold"
+          [soldCount]="data.soldCount"
+          [heldCount]="data.heldCount"
+          [totalTickets]="data.totalTickets"
+        />
+      </z-card>
+
+      <z-card class="border-border bg-card/80">
+        <div class="space-y-4">
+          <p
+            class="text-xs uppercase font-mono text-muted-foreground tracking-widest"
+          >
+            Ticket Tiers
+          </p>
+          <div class="grid grid-cols-1 gap-3 text-sm">
+            <div
+              class="flex items-center justify-between rounded-lg border border-border/60 bg-muted/40 px-4 py-3"
+            >
+              <span class="font-mono text-muted-foreground uppercase text-xs"
+                >Regular</span
+              >
+              <span class="text-foreground font-display text-lg">{{
+                data.tierCounts.regular
+              }}</span>
+            </div>
+            <div
+              class="flex items-center justify-between rounded-lg border border-border/60 bg-muted/40 px-4 py-3"
+            >
+              <span class="font-mono text-muted-foreground uppercase text-xs"
+                >Notaflof</span
+              >
+              <span class="text-foreground font-display text-lg">{{
+                data.tierCounts.notaflof
+              }}</span>
+            </div>
+            <div
+              class="flex items-center justify-between rounded-lg border border-border/60 bg-muted/40 px-4 py-3"
+            >
+              <span class="font-mono text-muted-foreground uppercase text-xs"
+                >Supporter</span
+              >
+              <span class="text-foreground font-display text-lg">{{
+                data.tierCounts.supporter
+              }}</span>
+            </div>
+          </div>
+        </div>
+      </z-card>
+
+      <z-card class="border-border bg-card/80">
+        <div class="space-y-4">
+          <p
+            class="text-xs uppercase font-mono text-muted-foreground tracking-widest"
+          >
+            Purchases
+          </p>
+          <div class="flex items-baseline gap-2">
+            <span
+              class="text-4xl font-display text-foreground"
+              data-testid="purchase-count"
+              >{{ purchaseCount() }}</span
+            >
+            <span class="text-xs font-mono text-muted-foreground uppercase"
+              >Completed</span
+            >
+          </div>
+          <p class="text-xs text-muted-foreground font-mono">
+            Includes all completed orders for this event.
+          </p>
+        </div>
+      </z-card>
+
+      <z-card class="border-border bg-card/80" data-testid="check-in-card">
+        <div class="space-y-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <p
+                class="text-xs uppercase font-mono text-muted-foreground tracking-widest"
+              >
+                Checked In
+              </p>
+              <p
+                class="text-3xl font-display text-foreground"
+                data-testid="checked-in-count"
+              >
+                {{ data.checkInStats.checkedIn }} / {{ data.soldCount }}
+              </p>
+            </div>
+            <div
+              class="rounded-full border border-primary/30 bg-primary/30 px-3 py-1 text-sm font-mono text-foreground"
+              data-testid="check-in-percentage"
+            >
+              {{ checkInPercentage() }}%
+            </div>
+          </div>
+          <z-progress-bar [progress]="checkInPercentage()" />
+          <p
+            class="text-xs font-mono text-muted-foreground"
+            data-testid="check-in-not-scanned"
+          >
+            {{ data.soldCount - data.checkInStats.checkedIn }} not yet scanned
+          </p>
+        </div>
+      </z-card>
+    </section>
+
+    <!-- Tab Bar -->
+    <nav
+      class="flex border-b border-border overflow-x-auto whitespace-nowrap"
+      role="tablist"
+      aria-label="Event management sections"
+      tabindex="-1"
+      (keydown)="onTabKeydown($event)"
+    >
+      <button
+        type="button"
+        role="tab"
+        id="tab-analytics"
+        aria-controls="panel-analytics"
+        [attr.aria-selected]="activeTab() === 'analytics'"
+        [attr.tabindex]="activeTab() === 'analytics' ? 0 : -1"
+        [class.border-primary]="activeTab() === 'analytics'"
+        [class.text-foreground]="activeTab() === 'analytics'"
+        [class.border-transparent]="activeTab() !== 'analytics'"
+        [class.text-muted-foreground]="activeTab() !== 'analytics'"
+        class="shrink-0 px-4 py-3 text-sm font-mono uppercase tracking-widest border-b-2 -mb-px transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        (click)="activeTab.set('analytics')"
+        data-testid="tab-analytics"
+      >
+        Analytics
+      </button>
+      <button
+        type="button"
+        role="tab"
+        id="tab-buyers"
+        aria-controls="panel-buyers"
+        [attr.aria-selected]="activeTab() === 'buyers'"
+        [attr.tabindex]="activeTab() === 'buyers' ? 0 : -1"
+        [class.border-primary]="activeTab() === 'buyers'"
+        [class.text-foreground]="activeTab() === 'buyers'"
+        [class.border-transparent]="activeTab() !== 'buyers'"
+        [class.text-muted-foreground]="activeTab() !== 'buyers'"
+        class="shrink-0 px-4 py-3 text-sm font-mono uppercase tracking-widest border-b-2 -mb-px transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring flex items-center gap-2"
+        (click)="activeTab.set('buyers')"
+        data-testid="tab-buyers"
+      >
+        Buyers
+        <span
+          class="rounded-full bg-primary/15 border border-primary/30 px-2 py-0.5 text-2xs font-mono text-primary leading-none"
+          data-testid="tab-buyers-count"
+        >
+          {{ purchaseCount() }}
+        </span>
+      </button>
+      <button
+        type="button"
+        role="tab"
+        id="tab-guests"
+        aria-controls="panel-guests"
+        [attr.aria-selected]="activeTab() === 'guests'"
+        [attr.tabindex]="activeTab() === 'guests' ? 0 : -1"
+        [class.border-primary]="activeTab() === 'guests'"
+        [class.text-foreground]="activeTab() === 'guests'"
+        [class.border-transparent]="activeTab() !== 'guests'"
+        [class.text-muted-foreground]="activeTab() !== 'guests'"
+        class="shrink-0 px-4 py-3 text-sm font-mono uppercase tracking-widest border-b-2 -mb-px transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring flex items-center gap-2"
+        (click)="activeTab.set('guests')"
+        data-testid="tab-guests"
+      >
+        Guests
+        <span
+          class="rounded-full bg-primary/15 border border-primary/30 px-2 py-0.5 text-2xs font-mono text-primary leading-none"
+          data-testid="tab-guests-count"
+        >
+          {{ guests().length }}
+        </span>
+      </button>
+      <button
+        type="button"
+        role="tab"
+        id="tab-resale"
+        aria-controls="panel-resale"
+        [attr.aria-selected]="activeTab() === 'resale'"
+        [attr.tabindex]="activeTab() === 'resale' ? 0 : -1"
+        [class.border-primary]="activeTab() === 'resale'"
+        [class.text-foreground]="activeTab() === 'resale'"
+        [class.border-transparent]="activeTab() !== 'resale'"
+        [class.text-muted-foreground]="activeTab() !== 'resale'"
+        class="shrink-0 px-4 py-3 text-sm font-mono uppercase tracking-widest border-b-2 -mb-px transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring flex items-center gap-2"
+        (click)="activeTab.set('resale')"
+        data-testid="tab-resale"
+      >
+        Resale
+        @if (resaleListingCount() > 0) {
+          <span
+            class="rounded-full bg-primary/15 border border-primary/30 px-2 py-0.5 text-2xs font-mono text-primary leading-none"
+            data-testid="tab-resale-count"
+          >
+            {{ resaleListingCount() }}
+          </span>
+        }
+      </button>
+      <button
+        type="button"
+        role="tab"
+        id="tab-email"
+        aria-controls="panel-email"
+        [attr.aria-selected]="activeTab() === 'email'"
+        [attr.tabindex]="activeTab() === 'email' ? 0 : -1"
+        [class.border-primary]="activeTab() === 'email'"
+        [class.text-foreground]="activeTab() === 'email'"
+        [class.border-transparent]="activeTab() !== 'email'"
+        [class.text-muted-foreground]="activeTab() !== 'email'"
+        class="shrink-0 px-4 py-3 text-sm font-mono uppercase tracking-widest border-b-2 -mb-px transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        (click)="activeTab.set('email')"
+        data-testid="tab-email"
+      >
+        Email
+      </button>
+    </nav>
+
+    <!-- Tab Panels -->
+
+    <!-- Analytics Tab: kept alive with [hidden] to preserve chart state -->
+    <div
+      role="tabpanel"
+      id="panel-analytics"
+      aria-labelledby="tab-analytics"
+      tabindex="0"
+      [hidden]="activeTab() !== 'analytics'"
+    >
+      @if (tierPricingStatsError(); as pricingStatsError) {
+        <z-alert
+          data-testid="tier-pricing-stats-error"
+          zType="warning"
+          zAppearance="soft"
+          zTitle="Pricing stats unavailable"
+          [zDescription]="pricingStatsError"
+          class="mb-4"
+        />
+      }
+      <app-event-analytics-tab
+        [summary]="summary() ?? null"
+        [purchasesCount]="purchaseCount()"
+        [tierPricingStats]="tierPricingStats()"
+        [isGeneratingSettlement]="isGeneratingSettlement()"
+        [isSettlementExportReady]="isSettlementExportReady()"
+        [ticketSalesStatus]="ticketSalesStatus()"
+        [isUpdatingStatus]="isUpdatingStatus()"
+        [isSoldOut]="isSoldOut()"
+        (exportSettlementReport)="exportSettlementReport()"
+        (updateTicketSalesStatus)="updateTicketSalesStatus($event)"
+      />
+    </div>
+
+    <div
+      role="tabpanel"
+      id="panel-buyers"
+      aria-labelledby="tab-buyers"
+      tabindex="0"
+      [hidden]="activeTab() !== 'buyers'"
+    >
+      <app-event-management-buyers-tab
+        [eventId]="data.event._id"
+        [communityId]="data.event.organizerId"
+        [eventTitle]="data.event.title"
+        [eventDate]="data.event.date"
+        [purchases]="purchases()"
+        [guests]="guests()"
+        [reloadToken]="reloadToken()"
+        (dataChanged)="reloadData()"
+      />
+    </div>
+
+    @if (activeTab() === 'guests') {
+      <div
+        role="tabpanel"
+        id="panel-guests"
+        aria-labelledby="tab-guests"
+        tabindex="0"
+      >
+        <app-event-management-guests-tab
+          [eventId]="data.event._id"
+          [guests]="guests()"
+          [isLoading]="isLoadingGuests()"
+          (dataChanged)="reloadData()"
+        />
+      </div>
+    }
+
+    @if (activeTab() === 'resale') {
+      <div
+        role="tabpanel"
+        id="panel-resale"
+        aria-labelledby="tab-resale"
+        tabindex="0"
+      >
+        <app-event-management-resale-tab
+          [eventId]="data.event._id"
+          [resaleListings]="resaleListings()"
+          [resaleMetrics]="resaleMetrics()"
+          [resaleEnabled]="resaleEnabled()"
+          [resaleFeePct]="resaleFeePct()"
+          (dataChanged)="reloadData()"
+        />
+      </div>
+    }
+
+    <!-- Email Tab -->
+    @if (activeTab() === 'email') {
+      <div
+        role="tabpanel"
+        id="panel-email"
+        aria-labelledby="tab-email"
+        tabindex="0"
+        class="space-y-6"
+      >
+        <app-marketing-announcement-card
+          [eventId]="data.event._id"
+          [organizerId]="data.event.organizerId"
+          [reloadToken]="reloadToken()"
+          (dataChanged)="reloadData()"
+        />
+        <app-broadcast-email-tab
+          [eventId]="data.event._id"
+          [communityId]="data.event.organizerId"
+          [reloadToken]="reloadToken()"
+          [eventTitle]="data.event.title"
+          (dataChanged)="reloadData()"
+        />
+      </div>
+    }
+  } @else {
+    <div class="text-muted-foreground font-mono">No event selected.</div>
+  }
+</div>

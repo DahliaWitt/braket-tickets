@@ -1,0 +1,661 @@
+<!-- Right Sidebar (Payment Flow) -->
+<div
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="sidebar-checkout-heading"
+  [cdkTrapFocus]="isOpen()"
+  [attr.inert]="!isOpen() || null"
+  (keydown.escape)="closeRequested.emit()"
+  class="ph-no-capture fixed inset-y-0 right-0 z-50 flex w-full translate-x-full transform flex-col border-l border-border bg-background shadow-[0_0_50px_rgba(0,0,0,0.8)] md:w-[450px]"
+  [class.transition-transform]="true"
+  [class.duration-500]="initialized()"
+  [class.ease-in-out]="initialized()"
+  [class.translate-x-0]="isOpen()"
+  [class.translate-x-full]="!isOpen()"
+  [class.invisible]="!isOpen()"
+>
+  <!-- Sidebar Header -->
+  <div
+    class="flex h-20 items-center justify-between border-b border-border bg-background px-4 sm:px-6 md:px-8"
+  >
+    <div class="min-w-0 flex-1 space-y-1">
+      <h2
+        id="sidebar-checkout-heading"
+        class="font-display text-sm tracking-[0.2em] text-secondary uppercase"
+      >
+        Checkout
+      </h2>
+      <p class="mono-label truncate text-2xs text-muted-foreground">
+        {{ event().title }}
+      </p>
+      @if (isResalePurchase()) {
+        <span
+          class="font-mono text-[9px] tracking-[0.15em] text-primary/60 uppercase"
+        >
+          Resale Purchase
+        </span>
+      }
+    </div>
+    <button
+      type="button"
+      #closeButton
+      data-testid="checkout-close"
+      (click)="closeRequested.emit()"
+      class="group transition-smooth focus-ring relative flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-lg p-2.5 hover:bg-muted/50 active:scale-95"
+      aria-label="Close checkout"
+    >
+      <z-icon
+        zType="x"
+        class="text-muted-foreground transition-colors group-hover:text-foreground"
+      />
+    </button>
+  </div>
+
+  <!-- Sidebar Content -->
+  <div class="relative flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">
+    @if (paymentStatus() === 'idle') {
+      @if (isGuest() && !guestEmail()) {
+        <!-- Guest Email Collection -->
+        <div
+          class="animate-in slide-in-from-bottom-2 fade-in space-y-8 duration-300"
+        >
+          <div class="space-y-2">
+            <p class="mono-label text-2xs text-muted-foreground">Your Email</p>
+            <p class="text-sm text-muted-foreground">
+              we'll send your tickets here
+            </p>
+          </div>
+
+          <div class="space-y-2">
+            <div
+              class="group rounded-sm border border-border bg-card focus-within:border-secondary/50 focus-within:shadow-[0_0_15px_-5px_hsl(var(--secondary)/0.3)]"
+            >
+              <input
+                id="guest-sidebar-email"
+                type="email"
+                zInput
+                data-testid="guest-sidebar-email-input"
+                autocomplete="email"
+                placeholder="your@email.com"
+                [formField]="guestEmailForm.email"
+                [zStatus]="isGuestEmailInvalid() ? 'error' : undefined"
+                class="w-full border-none bg-transparent p-4 font-sans focus:outline-none"
+                (keydown.enter)="submitGuestEmail()"
+              />
+            </div>
+            @if (isGuestEmailInvalid()) {
+              <p
+                class="font-mono text-xs tracking-wide text-destructive uppercase"
+                role="alert"
+              >
+                enter a valid email address
+              </p>
+            }
+          </div>
+
+          <z-button
+            data-testid="guest-sidebar-continue"
+            (click)="submitGuestEmail()"
+            [zDisabled]="guestEmailForm().invalid()"
+            class="w-full border-none bg-primary py-6 font-display tracking-widest uppercase shadow-[0_0_20px_-5px_hsl(var(--primary)/0.4)] hover:bg-primary/90"
+          >
+            Continue
+          </z-button>
+
+          <!-- Divider -->
+          <div class="flex items-center gap-4">
+            <div class="h-px flex-1 bg-border"></div>
+            <span
+              class="font-mono text-2xs tracking-widest text-muted-foreground uppercase"
+              >or</span
+            >
+            <div class="h-px flex-1 bg-border"></div>
+          </div>
+
+          <a
+            routerLink="/login"
+            [queryParams]="loginQueryParams()"
+            data-testid="guest-sidebar-sign-in"
+            class="focus-ring block w-full rounded-lg border border-secondary/40 py-3 text-center font-display text-sm tracking-widest text-secondary uppercase transition-all duration-200 hover:border-secondary/60 hover:bg-secondary/10"
+          >
+            Sign In
+          </a>
+        </div>
+      } @else {
+        <div class="space-y-8">
+          <!-- Ticket Selection -->
+          <div class="space-y-6">
+            <div class="flex items-center justify-between">
+              <span class="mono-label text-2xs text-muted-foreground"
+                >Quantity</span
+              >
+              @if (isResalePurchase()) {
+                <span
+                  class="rounded-lg border border-border bg-muted/50 px-4 py-2 font-mono text-base text-foreground"
+                  aria-label="1 ticket"
+                  >1</span
+                >
+              } @else {
+                <div
+                  class="flex items-center gap-4 rounded-lg border border-border bg-muted/50 p-1"
+                >
+                  <button
+                    type="button"
+                    data-testid="checkout-decrease-qty"
+                    (click)="quantityChanged.emit(-1)"
+                    [disabled]="ticketQuantity() <= 1 || checkoutLocked()"
+                    [attr.aria-label]="
+                      ticketQuantity() <= 1
+                        ? 'Cannot decrease quantity below 1'
+                        : 'Decrease ticket quantity'
+                    "
+                    class="flex h-11 w-11 items-center justify-center rounded bg-background font-mono text-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+                  >
+                    -
+                  </button>
+                  <span
+                    data-testid="checkout-quantity"
+                    class="w-8 text-center font-mono text-base text-foreground"
+                    [attr.aria-label]="ticketQuantity() + ' tickets'"
+                    >{{ ticketQuantity() }}</span
+                  >
+                  <button
+                    type="button"
+                    data-testid="checkout-increase-qty"
+                    (click)="quantityChanged.emit(1)"
+                    [disabled]="isAtMaxTickets() || checkoutLocked()"
+                    [attr.aria-label]="
+                      isAtMaxTickets()
+                        ? 'Cannot increase quantity, maximum tickets reached'
+                        : 'Increase ticket quantity'
+                    "
+                    class="flex h-11 w-11 items-center justify-center rounded bg-background font-mono text-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+                  >
+                    +
+                  </button>
+                </div>
+              }
+            </div>
+
+            @if (isResalePurchase()) {
+              <div
+                class="rounded-lg border border-primary/40 bg-primary/10 p-3 font-sans text-xs leading-relaxed text-primary"
+              >
+                <span
+                  class="font-mono text-2xs tracking-wider text-primary uppercase"
+                  >Resale:</span
+                >
+                Resale checkout is limited to one ticket per purchase.
+              </div>
+            } @else if (isAtMaxTickets()) {
+              <div
+                class="rounded-lg border border-warning/40 bg-warning/10 p-3 font-sans text-xs leading-relaxed text-foreground dark:text-warning"
+              >
+                <span
+                  class="font-mono text-2xs tracking-wider text-warning uppercase"
+                  >Notice:</span
+                >
+                {{ maxTicketsNotice() }}
+              </div>
+            }
+
+            <!-- Tier Selection -->
+            <div class="space-y-3">
+              <span class="mono-label text-2xs text-muted-foreground"
+                >Select Rate</span
+              >
+
+              <!-- Regular -->
+              <button
+                type="button"
+                data-testid="checkout-tier-regular"
+                (click)="tierSelected.emit('regular')"
+                [disabled]="checkoutLocked()"
+                [attr.aria-pressed]="selectedTier() === 'regular'"
+                class="group relative w-full rounded-lg border bg-background p-4 text-left transition-all duration-200 hover:bg-muted/5"
+                [class.pointer-events-none]="checkoutLocked()"
+                [class.opacity-60]="checkoutLocked()"
+                [class.border-secondary]="selectedTier() === 'regular'"
+                [class.shadow-[0_0_15px_-5px_hsl(var(--secondary)/0.15)]]="
+                  selectedTier() === 'regular'
+                "
+                [class.border-border]="selectedTier() !== 'regular'"
+              >
+                <div class="mb-1 flex items-center justify-between">
+                  <span
+                    class="font-display text-sm tracking-wide uppercase transition-colors"
+                    [class.text-secondary]="selectedTier() === 'regular'"
+                    [class.text-foreground]="selectedTier() !== 'regular'"
+                    >Regular</span
+                  >
+                  <span class="font-mono text-sm text-foreground">{{
+                    (event().price || 0) / 100 | currency: 'USD'
+                  }}</span>
+                </div>
+                <p
+                  class="text-2xs tracking-wider text-muted-foreground uppercase"
+                >
+                  Standard admission
+                </p>
+              </button>
+
+              <!-- Supporter -->
+              <button
+                type="button"
+                data-testid="checkout-tier-supporter"
+                (click)="tierSelected.emit('supporter')"
+                [disabled]="checkoutLocked()"
+                [attr.aria-pressed]="selectedTier() === 'supporter'"
+                class="group relative w-full rounded-lg border bg-background p-4 text-left transition-all duration-200 hover:bg-muted/5"
+                [class.pointer-events-none]="checkoutLocked()"
+                [class.opacity-60]="checkoutLocked()"
+                [class.border-primary]="selectedTier() === 'supporter'"
+                [class.shadow-[0_0_15px_-5px_hsl(var(--primary)/0.15)]]="
+                  selectedTier() === 'supporter'
+                "
+                [class.border-border]="selectedTier() !== 'supporter'"
+              >
+                <div class="mb-1 flex items-start justify-between">
+                  <span
+                    class="font-display text-sm tracking-wide uppercase transition-colors"
+                    [class.text-primary]="selectedTier() === 'supporter'"
+                    [class.text-foreground]="selectedTier() !== 'supporter'"
+                    >Supporter</span
+                  >
+                  <div class="text-right">
+                    <span
+                      data-testid="supporter-min-price"
+                      class="font-mono text-sm text-foreground"
+                      >{{ supporterMinDollars() | currency: 'USD' }}</span
+                    >
+                    <p
+                      data-testid="supporter-min-label"
+                      class="text-2xs tracking-wider text-muted-foreground uppercase"
+                    >
+                      min
+                    </p>
+                  </div>
+                </div>
+                <p
+                  class="text-2xs tracking-wider text-muted-foreground uppercase"
+                >
+                  Help us make events sustainable
+                </p>
+
+                @if (selectedTier() === 'supporter') {
+                  <div
+                    class="animate-in slide-in-from-top-1 fade-in mt-4 space-y-3 duration-200"
+                    (click)="$event.stopPropagation()"
+                    (keydown.enter)="$event.stopPropagation()"
+                    tabindex="0"
+                    role="group"
+                    aria-label="Supporter tier options"
+                  >
+                    <!-- Explanation Text -->
+                    <p
+                      class="font-sans text-xs leading-relaxed text-foreground/80"
+                    >
+                      The Supporter tier is for those who want to financially
+                      contribute to making these events happen. It helps us
+                      cover costs and provide no-cost tickets to those who can't
+                      afford them. Completely optional, no perks. Just our
+                      eternal gratitude &lt;3
+                    </p>
+                    <!-- Slider -->
+                    <z-slider
+                      [zMin]="0"
+                      [zMax]="100"
+                      [zValue]="supporterSliderPosition()"
+                      [zStep]="1"
+                      [zDisabled]="checkoutLocked()"
+                      (zSlideIndexChange)="
+                        sliderChanged.emit(supporterPositionToDollars($event))
+                      "
+                      class="w-full"
+                    />
+                    <!-- Input -->
+                    <div class="group relative">
+                      <span
+                        class="absolute top-1/2 left-3 -translate-y-1/2 font-mono text-sm text-primary"
+                        >$</span
+                      >
+                      <input
+                        type="number"
+                        [value]="customAmount() / 100"
+                        (input)="handleCustomAmountInput($event)"
+                        [disabled]="checkoutLocked()"
+                        class="w-full rounded border border-primary/30 bg-card/80 py-3 pr-4 pl-8 font-mono text-base text-foreground transition-all placeholder:text-muted-foreground/40 focus:border-primary focus:ring-1 focus:ring-primary/50 focus:outline-hidden"
+                        [min]="supporterMinDollars()"
+                        step="0.01"
+                        aria-label="Enter custom supporter amount"
+                      />
+                    </div>
+                    @if (slidingScaleError()) {
+                      <p
+                        class="ml-1 font-mono text-xs tracking-wide text-destructive uppercase"
+                      >
+                        {{ slidingScaleError() }}
+                      </p>
+                    }
+                  </div>
+                }
+              </button>
+
+              <!-- NOTAFLOF -->
+              @if (event().slidingScaleEnabled) {
+                <button
+                  type="button"
+                  data-testid="checkout-tier-notaflof"
+                  (click)="tierSelected.emit('notaflof')"
+                  [disabled]="checkoutLocked()"
+                  [attr.aria-pressed]="selectedTier() === 'notaflof'"
+                  class="group relative w-full rounded-lg border bg-background p-4 text-left transition-all duration-200 hover:bg-muted/5"
+                  [class.pointer-events-none]="checkoutLocked()"
+                  [class.opacity-60]="checkoutLocked()"
+                  [class.border-success]="selectedTier() === 'notaflof'"
+                  [class.shadow-[0_0_15px_-5px_hsl(var(--success)/0.15)]]="
+                    selectedTier() === 'notaflof'
+                  "
+                  [class.border-border]="selectedTier() !== 'notaflof'"
+                >
+                  <div class="mb-1 flex items-center justify-between">
+                    <span
+                      class="font-display text-sm tracking-wide uppercase transition-colors"
+                      [class.text-success]="selectedTier() === 'notaflof'"
+                      [class.text-foreground]="selectedTier() !== 'notaflof'"
+                      >Community</span
+                    >
+                    <span class="font-mono text-sm text-foreground"
+                      >Sliding Scale</span
+                    >
+                  </div>
+                  <p
+                    class="text-2xs tracking-wider text-muted-foreground uppercase"
+                  >
+                    No one turned away for lack of funds
+                  </p>
+
+                  @if (selectedTier() === 'notaflof') {
+                    <div
+                      class="animate-in slide-in-from-top-1 fade-in mt-4 space-y-3 duration-200"
+                      (click)="$event.stopPropagation()"
+                      (keydown.enter)="$event.stopPropagation()"
+                      tabindex="0"
+                      role="group"
+                      aria-label="Community tier options"
+                    >
+                      <!-- Slider -->
+                      <z-slider
+                        [zMin]="(event().slidingScaleMin || 0) / 100"
+                        [zMax]="communitySliderMax()"
+                        [zValue]="customAmount() / 100"
+                        [zStep]="1"
+                        [zDisabled]="checkoutLocked()"
+                        (zSlideIndexChange)="sliderChanged.emit($event)"
+                        class="w-full"
+                      />
+                      <!-- Input -->
+                      <div class="group relative">
+                        <span
+                          class="absolute top-1/2 left-3 -translate-y-1/2 font-mono text-sm text-success"
+                          >$</span
+                        >
+                        <input
+                          type="number"
+                          [value]="customAmount() / 100"
+                          (input)="handleCustomAmountInput($event)"
+                          [disabled]="checkoutLocked()"
+                          class="w-full rounded border border-success/30 bg-card/80 py-3 pr-4 pl-8 font-mono text-base text-foreground transition-all placeholder:text-muted-foreground/40 focus:border-success focus:ring-1 focus:ring-success/50 focus:outline-hidden"
+                          [min]="(event().slidingScaleMin || 0) / 100"
+                          step="0.01"
+                          aria-label="Enter custom community amount"
+                        />
+                      </div>
+                      @if (slidingScaleError()) {
+                        <p
+                          class="ml-1 font-mono text-xs tracking-wide text-destructive uppercase"
+                        >
+                          {{ slidingScaleError() }}
+                        </p>
+                      }
+                    </div>
+                  }
+                </button>
+              }
+            </div>
+          </div>
+
+          <!-- Total -->
+          <div
+            class="space-y-4 rounded-xl border border-border bg-muted/30 p-6"
+          >
+            @if (checkoutLocked()) {
+              <div
+                class="rounded-lg border border-primary/30 bg-primary/10 p-3"
+              >
+                <p
+                  class="font-mono text-[10px] tracking-[0.18em] text-primary uppercase"
+                >
+                  Reservation locked while secure checkout is active
+                </p>
+              </div>
+            }
+            <div class="flex items-center justify-between">
+              <span class="mono-label text-2xs text-muted-foreground"
+                >Unit Price</span
+              >
+              <span class="font-mono text-sm text-card-foreground">
+                {{
+                  (selectedTier() === 'regular'
+                    ? event().price || 0
+                    : customAmount()) / 100 | currency: 'USD'
+                }}
+              </span>
+            </div>
+            <div class="h-px w-full bg-border"></div>
+            <div class="flex items-center justify-between">
+              <span class="mono-label text-xs text-muted-foreground"
+                >Total Due</span
+              >
+              <span
+                data-testid="checkout-total"
+                class="font-mono text-xl font-bold tracking-tight text-secondary"
+                >{{ totalAmount() / 100 | currency: 'USD' }}</span
+              >
+            </div>
+          </div>
+
+          <!-- Payment Button / Form -->
+          @if (purchaseBlockedByVetting()) {
+            <div
+              data-testid="checkout-vetting-required"
+              class="rounded-lg border border-secondary/20 bg-secondary/5 p-6 text-left"
+            >
+              <div class="flex items-start gap-3">
+                <z-icon
+                  zType="shield"
+                  class="mt-0.5 shrink-0 text-secondary/70"
+                />
+                <div>
+                  <p
+                    class="mb-1.5 font-mono text-2xs tracking-widest text-secondary uppercase"
+                  >
+                    vetted community
+                  </p>
+                  <p class="text-sm leading-relaxed text-muted-foreground">
+                    Tickets unavailable — community vetting required.
+                  </p>
+                  @if (isGuest()) {
+                    <a
+                      routerLink="/login"
+                      [queryParams]="loginQueryParams()"
+                      class="mt-3 inline-flex items-center gap-1.5 font-mono text-2xs tracking-widest text-secondary uppercase underline decoration-secondary/30 underline-offset-4 transition-colors hover:text-primary hover:decoration-primary/50"
+                      data-testid="checkout-vetting-sign-in"
+                    >
+                      sign in to get started
+                      <z-icon zType="arrow-right" class="h-3 w-3" />
+                    </a>
+                  } @else {
+                    <a
+                      [routerLink]="[
+                        '/vetting',
+                        event().organizer?.slug ?? event().organizerId,
+                      ]"
+                      class="mt-3 inline-flex items-center gap-1.5 font-mono text-2xs tracking-widest text-secondary uppercase underline decoration-secondary/30 underline-offset-4 transition-colors hover:text-primary hover:decoration-primary/50"
+                      data-testid="checkout-apply-for-vetting"
+                    >
+                      apply for vetting
+                      <z-icon zType="arrow-right" class="h-3 w-3" />
+                    </a>
+                  }
+                </div>
+              </div>
+            </div>
+          } @else if (event().organizerPaymentReady === false) {
+            <div
+              data-testid="payment-setup-incomplete"
+              class="rounded-lg border border-border p-6 text-center"
+            >
+              <p class="text-muted-foreground">
+                Tickets unavailable — payment setup incomplete
+              </p>
+            </div>
+          } @else if (totalAmount() > 0) {
+            <div class="relative z-10 space-y-4">
+              <app-stripe-payment
+                [publishableKey]="stripeConfig.publishableKey"
+                [resetKey]="stripeResetKey()"
+                [checkoutSessionFetcher]="checkoutSessionFetcher()"
+                [connectedAccountId]="connectedAccountId()"
+                [eventId]="event()._id"
+                [checkoutKind]="checkoutKind()"
+                [orderId]="orderId()"
+                [mockPayments]="stripeConfig.mockPayments"
+                [amount]="totalAmount()"
+                [buyerEmail]="buyerEmail()"
+                [paymentLabel]="event().title || 'Ticket Purchase'"
+                (paymentConfirmed)="paymentConfirmed.emit()"
+                (paymentError)="paymentError.emit($event)"
+              />
+            </div>
+          } @else {
+            <z-button
+              data-testid="checkout-free-ticket"
+              (click)="freeTicketClaimed.emit()"
+              class="w-full border-none bg-success py-6 font-display tracking-widest uppercase shadow-[0_0_20px_-5px_hsl(var(--success)/0.4)] hover:bg-success/90"
+            >
+              GET TICKET
+            </z-button>
+          }
+        </div>
+      }
+      <!-- end @else (isGuest() && !guestEmail()) -->
+    } @else if (paymentStatus() === 'processing') {
+      <div class="flex h-full flex-col items-center justify-center space-y-6">
+        <div class="relative" role="status" aria-label="Processing payment">
+          <div class="h-16 w-16 rounded-full border-2 border-border"></div>
+          <div
+            class="absolute top-0 left-0 h-16 w-16 animate-spin rounded-full border-2 border-secondary border-t-transparent"
+          ></div>
+        </div>
+        <p
+          class="animate-pulse text-center font-mono text-xs tracking-widest text-secondary uppercase"
+        >
+          Processing Transaction...<br />
+          <span
+            class="mt-2 block text-2xs text-muted-foreground normal-case opacity-70"
+            >Please do not refresh the page</span
+          >
+        </p>
+      </div>
+    } @else if (paymentStatus() === 'success') {
+      <div
+        class="flex h-full flex-col items-center justify-center space-y-6 text-center"
+      >
+        <div
+          class="mb-4 flex h-20 w-20 items-center justify-center rounded-full border border-success/20 bg-success/10"
+        >
+          <z-icon zType="check" class="h-10 w-10 text-success" />
+        </div>
+        <div class="space-y-2">
+          <h3
+            class="font-display text-2xl tracking-tight text-success uppercase"
+          >
+            Access Granted
+          </h3>
+          @if (isGuest()) {
+            <p
+              class="mx-auto max-w-[250px] font-sans text-sm text-muted-foreground"
+            >
+              check your email for your tickets
+            </p>
+          } @else {
+            <p
+              class="mx-auto max-w-[250px] font-sans text-sm text-muted-foreground"
+            >
+              {{
+                totalAmount() === 0
+                  ? 'Ticket claimed. Your ticket(s) have been added to your wallet.'
+                  : 'Payment successful. Your tickets have been added to your wallet.'
+              }}
+            </p>
+          }
+        </div>
+        <div class="mt-8 w-full space-y-3">
+          @if (!isGuest()) {
+            <z-button
+              data-testid="checkout-view-tickets"
+              routerLink="/tickets"
+              class="w-full border border-success/30 bg-success/10 text-success hover:bg-success/20"
+              >VIEW TICKETS</z-button
+            >
+          }
+          <button
+            type="button"
+            (click)="closeRequested.emit()"
+            class="font-mono text-2xs tracking-widest text-muted-foreground uppercase transition-colors hover:text-foreground"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    } @else if (paymentStatus() === 'error') {
+      <div
+        class="flex h-full flex-col items-center justify-center space-y-6 text-center"
+      >
+        <div
+          class="mb-4 flex h-20 w-20 items-center justify-center rounded-full border border-destructive/20 bg-destructive/10"
+        >
+          <span class="font-display text-4xl text-destructive">!</span>
+        </div>
+        <div class="space-y-2">
+          <h3
+            class="font-display text-2xl tracking-tight text-destructive uppercase"
+          >
+            Transaction Failed
+          </h3>
+          <p
+            class="mx-auto max-w-[250px] font-mono text-sm wrap-break-word text-destructive/80"
+          >
+            {{ paymentErrorMessage() }}
+          </p>
+        </div>
+        <z-button
+          data-testid="checkout-retry"
+          (click)="retryPayment.emit()"
+          class="mt-8 w-full"
+          >TRY AGAIN</z-button
+        >
+      </div>
+    }
+  </div>
+</div>
+
+<!-- Overlay for mobile when sidebar is open -->
+@if (isOpen()) {
+  <div
+    class="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm md:hidden"
+    (click)="closeRequested.emit()"
+    aria-hidden="true"
+  ></div>
+}

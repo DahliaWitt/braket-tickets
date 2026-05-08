@@ -1,0 +1,21 @@
+# pnpm workspace configuration
+# Defines the monorepo structure for Braket Tickets
+packages:
+  # Root package (workspace orchestration)
+  - '.'
+  # Backend Convex application
+  - 'backend'
+  # Frontend Angular application
+  - 'frontend'
+  # Scripts utilities
+  - 'scripts'
+  # Shared packages (if any are added in the future)
+  - 'shared/*'
+
+# Temporary security override note:
+# Active pnpm overrides live in the root package.json under pnpm.overrides
+# because this repo is pinned to pnpm 9.15.0.
+# Reason: upstream packages still resolve hono@4.11.4 as of April 13, 2026.
+# Remove when @convex-dev/* and @modelcontextprotocol/sdk resolve patched Hono
+# without overrides.
+# Recheck with: pnpm why hono && pnpm audit --prod

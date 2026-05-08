@@ -1,0 +1,43 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreExportsUsedInFile": true,
+  "workspaces": {
+    ".": {
+      "entry": [
+        "ops/**/*.ts!",
+        "ops/**/*.mjs!",
+        "scripts/*.ts!",
+        "backend/scripts/*.ts!",
+        "frontend/scripts/*.ts!",
+        "!ops/**/*.test.ts!",
+        "!scripts/**/*.test.ts!",
+        "!backend/scripts/**/*.test.ts!",
+        "!frontend/scripts/**/*.test.ts!"
+      ],
+      "project": [
+        "ops/**/*.ts!",
+        "ops/**/*.mjs!",
+        "scripts/**/*.ts!",
+        "backend/scripts/**/*.ts!",
+        "frontend/scripts/**/*.ts!",
+        "!ops/**/*.test.ts!",
+        "!scripts/**/*.test.ts!",
+        "!backend/scripts/**/*.test.ts!",
+        "!frontend/scripts/**/*.test.ts!"
+      ],
+      "vitest": {
+        "config": "vitest.config.ts"
+      }
+    }
+  },
+  "ignoreDependencies": [
+    "concurrently",
+    "@angular-eslint/builder",
+    "@compodoc/compodoc",
+    "vite-bundle-analyzer",
+    "@tailwindcss/typography",
+    "agent"
+  ],
+  "ignoreFiles": ["scripts/codemods/__fixtures__/**!"],
+  "ignoreBinaries": ["build", "serve"]
+}

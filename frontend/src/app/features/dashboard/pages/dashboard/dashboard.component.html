@@ -1,0 +1,605 @@
+<app-content-layout>
+  <div class="flex grow flex-col">
+    @if (approvalsLoading() || isLoading()) {
+      <!-- Loading skeleton -->
+      <div class="fade-in space-y-6 py-6">
+        <z-skeleton class="h-3 w-40" />
+        <div
+          class="grid grid-cols-2 gap-px border border-border md:grid-cols-3"
+        >
+          @for (_ of [1, 2, 3]; track $index) {
+            <div class="space-y-2 p-4">
+              <z-skeleton class="h-4 w-24" />
+              <z-skeleton class="h-3 w-16" />
+            </div>
+          }
+        </div>
+        <z-skeleton class="h-3 w-32" />
+        <div class="space-y-3 border border-border p-6">
+          <z-skeleton class="h-6 w-3/4" />
+          <z-skeleton class="h-4 w-1/2" />
+          <z-skeleton class="h-20 w-full" />
+        </div>
+      </div>
+    } @else if (hasLoadError()) {
+      <!-- Error state: resource failed to load -->
+      <div
+        class="animate-in fade-in zoom-in mx-auto flex w-full max-w-xl flex-col items-center justify-center py-16 text-center duration-500"
+        data-testid="dashboard-error-state"
+        role="alert"
+        aria-live="assertive"
+      >
+        <div
+          class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-destructive/20"
+        >
+          <svg
+            class="h-10 w-10 text-destructive"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"
+            />
+          </svg>
+        </div>
+        <h2
+          class="mb-4 font-display text-2xl font-bold tracking-tight text-destructive uppercase md:text-3xl"
+        >
+          hit a snag
+        </h2>
+        <p class="mb-8 font-sans text-lg text-muted-foreground">
+          couldn't load your dashboard — give it another shot
+        </p>
+        <button
+          type="button"
+          (click)="reload()"
+          class="cursor-pointer font-mono text-sm tracking-widest text-muted-foreground uppercase transition-colors hover:text-foreground"
+        >
+          ↻ Try Again
+        </button>
+      </div>
+    } @else if (isNewUser()) {
+      <!-- New user: no community relationships -->
+      <h1
+        class="fade-in py-6 font-display text-3xl leading-[0.9] font-bold tracking-tight text-foreground sm:text-4xl md:py-8 lg:text-5xl"
+      >
+        find your people
+      </h1>
+
+      <!-- Community directory -->
+      <section class="fade-in fade-in-delay-1">
+        <div class="flex items-center justify-between px-1 py-3">
+          <h2 class="mono-label text-xs text-muted-foreground">
+            Communities on Braket Tickets
+          </h2>
+          <a
+            routerLink="/communities"
+            class="font-mono text-2xs tracking-widest text-primary uppercase transition-colors hover:text-primary/80"
+          >
+            Browse All &rarr;
+          </a>
+        </div>
+        <div class="border-t border-border">
+          @for (community of publicCommunities(); track community._id) {
+            @if (community.status === 'published') {
+              <a
+                [routerLink]="['/vetting', community.slug ?? community._id]"
+                data-testid="dashboard-apply-link"
+                class="group flex items-center gap-4 border-b border-border px-4 py-5 transition-colors hover:bg-foreground/[0.02]"
+              >
+                @if (community.logoUrl) {
+                  <img
+                    [src]="community.logoUrl"
+                    [alt]="community.name + ' logo'"
+                    loading="lazy"
+                    decoding="async"
+                    class="h-10 w-10 flex-shrink-0 rounded-sm border border-border object-cover"
+                  />
+                } @else {
+                  <div
+                    class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-sm border border-border bg-card"
+                  >
+                    <span class="font-display text-base font-bold text-primary">
+                      {{ community.name.charAt(0) }}
+                    </span>
+                  </div>
+                }
+                <div class="min-w-0 flex-1">
+                  <p
+                    class="truncate font-display text-base font-bold tracking-tight text-foreground uppercase md:text-lg"
+                  >
+                    {{ community.name }}
+                  </p>
+                  @if (community.description) {
+                    <p class="mt-0.5 truncate text-xs text-muted-foreground/50">
+                      {{ community.description }}
+                    </p>
+                  }
+                </div>
+                <span
+                  class="flex-shrink-0 border border-primary px-4 py-1.5 font-mono text-2xs tracking-widest text-foreground uppercase transition-colors group-hover:bg-primary group-hover:text-white"
+                >
+                  Apply
+                </span>
+              </a>
+            }
+          }
+        </div>
+      </section>
+
+      <!-- Public events -->
+      <section class="fade-in fade-in-delay-2 mt-6">
+        <div class="flex items-center justify-between px-1 py-3">
+          <h2 class="mono-label text-2xs text-muted-foreground">
+            Public Events
+          </h2>
+          <a
+            routerLink="/events"
+            class="font-mono text-2xs tracking-widest text-primary uppercase transition-colors hover:text-primary/80"
+          >
+            Browse All &rarr;
+          </a>
+        </div>
+        @if (publicEvents().length > 0) {
+          <div
+            class="no-scrollbar flex overflow-x-auto border-t border-border md:overflow-visible"
+          >
+            @for (event of publicEvents().slice(0, 4); track event._id) {
+              <a
+                [routerLink]="['/events', event._id]"
+                class="flex w-56 flex-1 flex-shrink-0 flex-col border-r border-border transition-colors last:border-r-0 hover:border-foreground/30 hover:bg-foreground/[0.02] md:w-auto"
+              >
+                <div class="relative aspect-video overflow-hidden bg-card">
+                  @if (event.posterUrl) {
+                    <img
+                      [src]="event.posterUrl"
+                      [alt]="event.title + ' poster'"
+                      loading="lazy"
+                      decoding="async"
+                      class="absolute inset-0 h-full w-full object-cover"
+                    />
+                  }
+                </div>
+                <div class="min-w-0 space-y-1 overflow-hidden p-3 md:p-4">
+                  <h3
+                    data-testid="dashboard-event-title"
+                    class="truncate font-display text-base font-bold tracking-tight text-foreground uppercase"
+                  >
+                    {{ event.title }}
+                  </h3>
+                  <p class="mono-label text-2xs text-muted-foreground/60">
+                    {{ event.date | date: 'mediumDate' }}
+                    &middot;
+                    {{
+                      event.price / 100 | currency: 'USD' : 'symbol' : '1.0-2'
+                    }}
+                  </p>
+                </div>
+              </a>
+            }
+          </div>
+        } @else {
+          <p
+            class="py-8 text-center font-mono text-sm text-muted-foreground/50"
+          >
+            no events right now — check back soon
+          </p>
+        }
+      </section>
+
+      <!-- Viewable events (vetting required) -->
+      @if (viewableEvents().length > 0) {
+        <section class="fade-in fade-in-delay-3 mt-6">
+          <div class="px-1 py-3">
+            <h2 class="mono-label text-2xs text-muted-foreground/50">
+              More Events
+            </h2>
+            <p class="mt-1 text-2xs text-muted-foreground/40 italic">
+              the good stuff's behind the door — get vetted to see more
+            </p>
+          </div>
+          <div
+            class="no-scrollbar flex overflow-x-auto border-t border-border md:overflow-visible"
+          >
+            @for (event of viewableEvents().slice(0, 4); track event._id) {
+              <a
+                [routerLink]="['/events', event._id]"
+                class="flex w-56 flex-1 flex-shrink-0 flex-col border-r border-border opacity-60 transition-opacity last:border-r-0 hover:opacity-80 md:w-auto"
+                [attr.aria-label]="
+                  'View details for ' + event.title + ' (vetting required)'
+                "
+              >
+                <div class="relative aspect-video overflow-hidden bg-card">
+                  @if (event.posterUrl) {
+                    <img
+                      [src]="event.posterUrl"
+                      [alt]="event.title + ' poster'"
+                      loading="lazy"
+                      decoding="async"
+                      class="absolute inset-0 h-full w-full object-cover"
+                    />
+                  }
+                </div>
+                <div class="min-w-0 space-y-1 overflow-hidden p-3 md:p-4">
+                  <h3
+                    data-testid="dashboard-event-title"
+                    class="truncate font-display text-base font-bold tracking-tight text-foreground uppercase"
+                  >
+                    {{ event.title }}
+                  </h3>
+                  <p class="mono-label text-2xs text-muted-foreground/60">
+                    {{ event.date | date: 'mediumDate' }}
+                  </p>
+                  <p
+                    class="w-fit rounded-sm border border-accent/20 bg-accent/10 px-2 py-0.5 font-mono text-2xs tracking-widest text-accent uppercase"
+                  >
+                    Vetting Required
+                  </p>
+                </div>
+              </a>
+            }
+          </div>
+        </section>
+      }
+    } @else {
+      <!-- Vetted user: has community relationships -->
+
+      <!-- Section: Your Communities -->
+      <section class="fade-in">
+        <div class="flex items-center justify-between px-1 py-3">
+          <h2 class="mono-label text-xs text-muted-foreground">
+            Your Communities
+          </h2>
+          <a
+            routerLink="/communities"
+            class="font-mono text-2xs tracking-widest text-primary uppercase transition-colors hover:text-primary/80"
+          >
+            Find More &rarr;
+          </a>
+        </div>
+        <div
+          class="grid gap-3 pt-3"
+          style="grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr))"
+        >
+          @for (entry of visibleCommunities(); track entry.organizerId) {
+            @if (entry.status === 'access') {
+              <a
+                [routerLink]="['/events']"
+                [queryParams]="{community: entry.organizerId}"
+                data-testid="dashboard-community-cell"
+                class="flex flex-col gap-2 border-l-[3px] border-l-success/50 bg-card/40 p-4 transition-all hover:border-l-success/80 hover:bg-card/70"
+              >
+                <div class="flex min-w-0 items-center gap-2.5">
+                  <div
+                    class="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-sm border border-border bg-card"
+                  >
+                    <span class="font-display text-xs font-bold text-primary">
+                      {{ entry.organizerName.charAt(0) }}
+                    </span>
+                  </div>
+                  <span
+                    class="truncate font-display text-base font-bold text-foreground"
+                  >
+                    {{ entry.organizerName }}
+                  </span>
+                </div>
+                @if (
+                  nextEventByOrganizer().get(entry.organizerId);
+                  as nextEvt
+                ) {
+                  <p
+                    class="truncate font-mono text-2xs text-muted-foreground/50"
+                  >
+                    {{ nextEvt.date | date: 'mediumDate' }} —
+                    {{ nextEvt.title }}
+                  </p>
+                }
+                <div class="mt-auto flex min-w-0 items-center gap-2">
+                  <span
+                    class="flex-shrink-0 rounded-sm border border-success/20 bg-success/10 px-1.5 py-0.5 font-mono text-2xs tracking-widest text-success uppercase"
+                  >
+                    Access
+                  </span>
+                  @if (entry.source === 'shared' && entry.viaOrganizerName) {
+                    <p
+                      class="truncate font-mono text-2xs text-muted-foreground/50"
+                    >
+                      via {{ entry.viaOrganizerName }}
+                    </p>
+                  }
+                </div>
+              </a>
+            } @else if (entry.status === 'pending') {
+              <div
+                data-testid="dashboard-community-cell"
+                class="flex flex-col gap-2 border-l-[3px] border-l-warning/50 bg-card/40 p-4"
+              >
+                <div class="flex min-w-0 items-center gap-2.5">
+                  <div
+                    class="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-sm border border-border bg-card"
+                  >
+                    <span
+                      class="font-display text-xs font-bold text-muted-foreground/60"
+                    >
+                      {{ entry.organizerName.charAt(0) }}
+                    </span>
+                  </div>
+                  <span
+                    class="truncate font-display text-base font-bold text-muted-foreground/70"
+                  >
+                    {{ entry.organizerName }}
+                  </span>
+                </div>
+                <span
+                  data-testid="application-status"
+                  class="mt-auto w-fit rounded-sm border border-warning/20 bg-warning/10 px-1.5 py-0.5 font-mono text-2xs tracking-widest text-warning uppercase"
+                >
+                  Pending
+                </span>
+              </div>
+            } @else {
+              <!-- Rejected -->
+              <div
+                data-testid="dashboard-community-cell"
+                class="flex flex-col gap-2 border-l-[3px] border-l-destructive/50 bg-card/30 p-4"
+              >
+                <div class="flex min-w-0 items-center gap-2.5">
+                  <div
+                    class="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-sm border border-border bg-card"
+                  >
+                    <span
+                      class="font-display text-xs font-bold text-muted-foreground/60"
+                    >
+                      {{ entry.organizerName.charAt(0) }}
+                    </span>
+                  </div>
+                  <span
+                    class="truncate font-display text-base font-bold text-muted-foreground/70"
+                  >
+                    {{ entry.organizerName }}
+                  </span>
+                </div>
+                @if (entry.reason) {
+                  <p class="truncate text-2xs text-muted-foreground/60">
+                    {{ entry.reason }}
+                  </p>
+                }
+                <span
+                  class="mt-auto w-fit rounded-sm border border-destructive/20 bg-destructive/10 px-1.5 py-0.5 font-mono text-2xs tracking-widest text-destructive/80 uppercase"
+                >
+                  Rejected
+                </span>
+              </div>
+            }
+          }
+        </div>
+        @if (hasMoreCommunities() && !showAllCommunities()) {
+          <button
+            type="button"
+            (click)="showAllCommunities.set(true)"
+            class="px-1 py-2 font-mono text-2xs tracking-widest text-primary uppercase transition-colors hover:text-primary/80"
+          >
+            Show All &rarr;
+          </button>
+        }
+      </section>
+
+      <!-- Section: Discover More -->
+      @if (showDiscoverSection()) {
+        <section data-testid="dashboard-discover-section" class="fade-in mt-4">
+          <div class="flex items-center justify-between px-1 py-3">
+            <h2 class="mono-label text-xs text-muted-foreground">
+              Discover More
+            </h2>
+            <a
+              routerLink="/communities"
+              class="font-mono text-2xs tracking-widest text-primary uppercase transition-colors hover:text-primary/80"
+            >
+              Browse All &rarr;
+            </a>
+          </div>
+          <div class="border-t border-border">
+            @for (community of undiscoveredCommunities(); track community._id) {
+              <a
+                [routerLink]="['/vetting', community.slug ?? community._id]"
+                data-testid="dashboard-discover-apply"
+                class="group flex items-center gap-4 border-b border-border px-4 py-4 transition-colors hover:bg-foreground/[0.02]"
+              >
+                @if (community.logoUrl) {
+                  <img
+                    [src]="community.logoUrl"
+                    [alt]="community.name + ' logo'"
+                    class="h-8 w-8 flex-shrink-0 rounded-sm border border-border object-cover"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                } @else {
+                  <div
+                    class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-sm border border-border bg-card"
+                  >
+                    <span class="font-display text-sm font-bold text-primary">
+                      {{ community.name.charAt(0) }}
+                    </span>
+                  </div>
+                }
+                <div class="min-w-0 flex-1">
+                  <p
+                    class="truncate font-display text-sm font-bold tracking-tight text-foreground uppercase"
+                  >
+                    {{ community.name }}
+                  </p>
+                  @if (community.description) {
+                    <p
+                      class="mt-0.5 truncate text-2xs text-muted-foreground/50"
+                    >
+                      {{ community.description }}
+                    </p>
+                  }
+                </div>
+                <span
+                  class="flex-shrink-0 border border-primary px-3 py-1 font-mono text-2xs tracking-widest text-foreground uppercase transition-colors group-hover:bg-primary group-hover:text-white"
+                >
+                  Apply
+                </span>
+              </a>
+            }
+          </div>
+        </section>
+      }
+
+      <!-- Section: Your Events (featured + overflow) -->
+      @if (featuredEvent(); as featured) {
+        <section
+          class="fade-in fade-in-delay-1 mt-10 border-t border-border pt-6"
+        >
+          <div class="flex items-center justify-between px-1 pb-4">
+            <h2 class="mono-label text-2xs text-muted-foreground">
+              What's Coming Up
+            </h2>
+            @if (showBrowseAll()) {
+              <a
+                routerLink="/events"
+                class="font-mono text-2xs tracking-widest text-primary uppercase transition-colors hover:text-primary/80"
+              >
+                Browse All &rarr;
+              </a>
+            }
+          </div>
+
+          <!-- Featured event -->
+          <a
+            [routerLink]="['/events', featured._id]"
+            [queryParams]="featuredCanPurchase() ? {buy: 'true'} : {}"
+            class="grid grid-cols-1 border-t border-border transition-colors hover:bg-foreground/[0.02] md:grid-cols-[auto_1fr]"
+            data-testid="featured-event"
+            [attr.aria-label]="'View details for ' + featured.title"
+          >
+            @if (featured.posterUrl) {
+              <div
+                class="relative h-64 w-full overflow-hidden bg-card md:h-80 md:w-56 lg:w-64"
+              >
+                <img
+                  [src]="featured.posterUrl"
+                  [alt]="featured.title + ' event poster'"
+                  fetchpriority="high"
+                  decoding="async"
+                  class="absolute inset-0 h-full w-full object-contain"
+                />
+              </div>
+            }
+            <div
+              class="space-y-3 border-l-2 border-l-primary/30 px-5 py-6 md:px-6 md:py-8"
+              [class.md:border-l-0]="!!featured.posterUrl"
+              [class.md:border-l-2]="!featured.posterUrl"
+            >
+              <p class="mono-label text-2xs text-muted-foreground/60">
+                Next Up
+              </p>
+              <h3
+                data-testid="dashboard-event-title"
+                class="line-clamp-2 font-display text-2xl font-bold tracking-tight text-foreground uppercase md:text-3xl"
+              >
+                {{ featured.title }}
+              </h3>
+              <p class="mono-label text-2xs text-muted-foreground">
+                {{ featured.date | date: 'mediumDate' }}
+                @if (featured.location) {
+                  <span> &middot; {{ featured.location }}</span>
+                }
+                &middot;
+                {{
+                  featured.price / 100 | currency: 'USD' : 'symbol' : '1.0-2'
+                }}
+              </p>
+              <div class="pt-1">
+                @if (featuredCanPurchase()) {
+                  <span
+                    data-testid="dashboard-get-tickets"
+                    class="inline-block border-2 border-primary px-6 py-2 font-mono text-2xs tracking-widest text-foreground uppercase transition-colors hover:bg-primary hover:text-white"
+                  >
+                    Get Tickets &rarr;
+                  </span>
+                } @else {
+                  <span
+                    class="font-mono text-2xs tracking-widest text-primary uppercase"
+                  >
+                    View Event &rarr;
+                  </span>
+                }
+              </div>
+              @if (featured.description) {
+                <p
+                  class="line-clamp-3 max-w-prose text-sm leading-relaxed text-muted-foreground/60"
+                >
+                  {{ featured.description }}
+                </p>
+              }
+            </div>
+          </a>
+        </section>
+
+        <!-- Overflow events -->
+        @if (overflowEvents().length > 0) {
+          <section class="fade-in fade-in-delay-2">
+            <div
+              class="no-scrollbar flex overflow-x-auto border-t border-border md:overflow-visible"
+            >
+              @for (event of overflowEvents(); track event._id) {
+                <a
+                  [routerLink]="['/events', event._id]"
+                  class="flex w-56 flex-1 flex-shrink-0 flex-col border-r border-border transition-colors last:border-r-0 hover:border-foreground/30 hover:bg-foreground/[0.02] md:w-auto"
+                  [attr.aria-label]="'View details for ' + event.title"
+                >
+                  <div class="relative aspect-video overflow-hidden bg-card">
+                    @if (event.posterUrl) {
+                      <img
+                        [src]="event.posterUrl"
+                        [alt]="event.title + ' poster'"
+                        loading="lazy"
+                        decoding="async"
+                        class="absolute inset-0 h-full w-full object-cover"
+                      />
+                    }
+                  </div>
+                  <div class="min-w-0 space-y-1 overflow-hidden p-3 md:p-4">
+                    <h3
+                      data-testid="dashboard-event-title"
+                      class="truncate font-display text-base font-bold tracking-tight text-foreground uppercase"
+                    >
+                      {{ event.title }}
+                    </h3>
+                    <p class="mono-label text-2xs text-muted-foreground/60">
+                      {{ event.date | date: 'mediumDate' }}
+                      &middot;
+                      {{
+                        event.price / 100 | currency: 'USD' : 'symbol' : '1.0-2'
+                      }}
+                      @if (
+                        organizerNameById().get(event.organizerId);
+                        as orgName
+                      ) {
+                        <span> &middot; {{ orgName }}</span>
+                      }
+                    </p>
+                  </div>
+                </a>
+              }
+            </div>
+          </section>
+        }
+      } @else {
+        <!-- Vetted no events empty state -->
+        <div class="fade-in fade-in-delay-2 py-12 text-center">
+          <p class="font-mono text-sm text-muted-foreground/50">
+            nothing on the calendar yet — keep an eye out
+          </p>
+        </div>
+      }
+    }
+  </div>
+</app-content-layout>

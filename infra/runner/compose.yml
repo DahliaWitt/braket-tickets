@@ -1,0 +1,165 @@
+# GitHub Actions self-hosted runner fleet.
+# Runs 5 persistent runner containers with shared Docker socket (DinD).
+#
+# Setup:
+#   1. Copy .env.example to .env and fill in values
+#   2. Build the image: docker compose build
+#   3. Start all runners: docker compose up -d
+#   4. Verify in GitHub: Settings > Actions > Runners (5 runners should appear)
+#
+# Scaling:
+#   docker compose up -d --scale runner=5
+#   Or add/remove runner-N services below for named runners.
+#
+# Rebuilding (after Playwright/Node version bumps):
+#   docker compose build --no-cache
+#   docker compose up -d  # rolling restart
+
+x-runner: &runner-base
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: braket-runner:latest
+  restart: unless-stopped
+  dns:
+    - 1.1.1.1
+    - 8.8.8.8
+  env_file: .env
+  environment:
+    - REPO_URL=${REPO_URL}
+    - ACCESS_TOKEN=${ACCESS_TOKEN}
+    - RUNNER_SCOPE=${RUNNER_SCOPE:-repo}
+    - ORG_NAME=${ORG_NAME:-}
+    - RUNNER_LABELS=linux,x64
+    - RUNNER_WORKDIR=/tmp/runner/work
+    - DISABLE_AUTOMATIC_DEREGISTRATION=true
+    - CONFIGURED_ACTIONS_RUNNER_FILES_DIR=/runner/persistent_files
+    - PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
+  volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+    - pnpm-store:/root/.local/share/pnpm/store/v3
+    - playwright-browsers:/opt/playwright-browsers
+  tmpfs:
+    - /tmp:size=6g,exec
+
+services:
+  runner-1:
+    <<: *runner-base
+    container_name: github-runner-1
+    hostname: whiterose-1
+    environment:
+      - RUNNER_NAME=whiterose_1
+      - REPO_URL=${REPO_URL}
+      - ACCESS_TOKEN=${ACCESS_TOKEN}
+      - RUNNER_SCOPE=${RUNNER_SCOPE:-repo}
+      - ORG_NAME=${ORG_NAME:-}
+      - RUNNER_LABELS=linux,x64
+      - RUNNER_WORKDIR=/tmp/runner/work
+      - DISABLE_AUTOMATIC_DEREGISTRATION=true
+      - CONFIGURED_ACTIONS_RUNNER_FILES_DIR=/runner/persistent_files
+      - PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - pnpm-store:/root/.local/share/pnpm/store/v3
+      - playwright-browsers:/opt/playwright-browsers
+      - runner-1-files:/runner/persistent_files
+
+  runner-2:
+    <<: *runner-base
+    container_name: github-runner-2
+    hostname: whiterose-2
+    environment:
+      - RUNNER_NAME=whiterose_2
+      - REPO_URL=${REPO_URL}
+      - ACCESS_TOKEN=${ACCESS_TOKEN}
+      - RUNNER_SCOPE=${RUNNER_SCOPE:-repo}
+      - ORG_NAME=${ORG_NAME:-}
+      - RUNNER_LABELS=linux,x64
+      - RUNNER_WORKDIR=/tmp/runner/work
+      - DISABLE_AUTOMATIC_DEREGISTRATION=true
+      - CONFIGURED_ACTIONS_RUNNER_FILES_DIR=/runner/persistent_files
+      - PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - pnpm-store:/root/.local/share/pnpm/store/v3
+      - playwright-browsers:/opt/playwright-browsers
+      - runner-2-files:/runner/persistent_files
+
+  runner-3:
+    <<: *runner-base
+    container_name: github-runner-3
+    hostname: whiterose-3
+    environment:
+      - RUNNER_NAME=whiterose_3
+      - REPO_URL=${REPO_URL}
+      - ACCESS_TOKEN=${ACCESS_TOKEN}
+      - RUNNER_SCOPE=${RUNNER_SCOPE:-repo}
+      - ORG_NAME=${ORG_NAME:-}
+      - RUNNER_LABELS=linux,x64
+      - RUNNER_WORKDIR=/tmp/runner/work
+      - DISABLE_AUTOMATIC_DEREGISTRATION=true
+      - CONFIGURED_ACTIONS_RUNNER_FILES_DIR=/runner/persistent_files
+      - PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - pnpm-store:/root/.local/share/pnpm/store/v3
+      - playwright-browsers:/opt/playwright-browsers
+      - runner-3-files:/runner/persistent_files
+
+  runner-4:
+    <<: *runner-base
+    container_name: github-runner-4
+    hostname: whiterose-4
+    environment:
+      - RUNNER_NAME=whiterose_4
+      - REPO_URL=${REPO_URL}
+      - ACCESS_TOKEN=${ACCESS_TOKEN}
+      - RUNNER_SCOPE=${RUNNER_SCOPE:-repo}
+      - ORG_NAME=${ORG_NAME:-}
+      - RUNNER_LABELS=linux,x64
+      - RUNNER_WORKDIR=/tmp/runner/work
+      - DISABLE_AUTOMATIC_DEREGISTRATION=true
+      - CONFIGURED_ACTIONS_RUNNER_FILES_DIR=/runner/persistent_files
+      - PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - pnpm-store:/root/.local/share/pnpm/store/v3
+      - playwright-browsers:/opt/playwright-browsers
+      - runner-4-files:/runner/persistent_files
+
+  runner-5:
+    <<: *runner-base
+    container_name: github-runner-5
+    hostname: whiterose-5
+    environment:
+      - RUNNER_NAME=whiterose_5
+      - REPO_URL=${REPO_URL}
+      - ACCESS_TOKEN=${ACCESS_TOKEN}
+      - RUNNER_SCOPE=${RUNNER_SCOPE:-repo}
+      - ORG_NAME=${ORG_NAME:-}
+      - RUNNER_LABELS=linux,x64
+      - RUNNER_WORKDIR=/tmp/runner/work
+      - DISABLE_AUTOMATIC_DEREGISTRATION=true
+      - CONFIGURED_ACTIONS_RUNNER_FILES_DIR=/runner/persistent_files
+      - PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - pnpm-store:/root/.local/share/pnpm/store/v3
+      - playwright-browsers:/opt/playwright-browsers
+      - runner-5-files:/runner/persistent_files
+
+volumes:
+  pnpm-store:
+    name: braket-pnpm-store
+  playwright-browsers:
+    name: braket-playwright-browsers
+  runner-1-files:
+    name: braket-runner-1-files
+  runner-2-files:
+    name: braket-runner-2-files
+  runner-3-files:
+    name: braket-runner-3-files
+  runner-4-files:
+    name: braket-runner-4-files
+  runner-5-files:
+    name: braket-runner-5-files

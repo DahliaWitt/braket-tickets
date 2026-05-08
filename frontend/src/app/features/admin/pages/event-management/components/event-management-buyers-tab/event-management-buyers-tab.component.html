@@ -1,0 +1,17 @@
+<div class="ph-no-capture space-y-4">
+  <app-ticket-reminder-tab
+    [eventId]="eventId()"
+    [communityId]="communityId()"
+    [reloadToken]="reloadToken()"
+    [eventTitle]="eventTitle()"
+    (dataChanged)="dataChanged.emit()"
+  />
+
+  <app-event-management-purchases-panel
+    [purchases]="purchases()"
+    [guests]="guests()"
+    [eventTitle]="eventTitle()"
+    [eventDate]="eventDate()"
+    (dataChanged)="dataChanged.emit()"
+  />
+</div>

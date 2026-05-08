@@ -1,0 +1,79 @@
+<div class="ph-no-capture space-y-4">
+  @if (isInitializing() && !isReady()) {
+    <div class="animate-in fade-in space-y-4 duration-300">
+      <z-skeleton class="h-12 w-full rounded-md" />
+      <div class="rounded-sm border border-border bg-card p-4">
+        <z-skeleton class="h-20 w-full" />
+      </div>
+    </div>
+  }
+
+  <div
+    [class.hidden]="isInitializing() && !isReady()"
+    class="space-y-4 transition-opacity duration-300"
+    [class.opacity-0]="isInitializing() && !isReady()"
+  >
+    <div
+      class="transition-smooth relative focus-within:border-secondary/50 focus-within:shadow-[0_0_15px_-5px_hsl(var(--primary)/0.3)]"
+      [class.rounded-sm]="!checkoutMounted()"
+      [class.border]="!checkoutMounted()"
+      [class.border-border]="!checkoutMounted()"
+      [class.bg-card]="!checkoutMounted()"
+      [class.p-4]="!checkoutMounted()"
+      [class.embedded-checkout-shell]="checkoutMounted()"
+    >
+      @if (!checkoutMounted()) {
+        <p
+          class="font-mono text-xs tracking-[0.18em] text-muted-foreground uppercase"
+        >
+          Secure checkout is handled by Stripe.
+        </p>
+      }
+
+      <div
+        #paymentElementContainer
+        data-testid="stripe-payment-element"
+        class="min-h-[24px]"
+        [class.hidden]="!checkoutMounted()"
+        role="region"
+        aria-label="Embedded secure checkout"
+      ></div>
+    </div>
+
+    @if (error()) {
+      <div
+        data-testid="stripe-payment-error"
+        class="animate-in fade-in slide-in-from-top-2 rounded-sm border border-destructive/20 bg-destructive/10 p-3 duration-300"
+      >
+        <p
+          class="font-mono text-2xs leading-tight tracking-[0.2em] text-destructive uppercase"
+        >
+          {{ error() }}
+        </p>
+      </div>
+    }
+
+    @if (!checkoutMounted() || mockPayments()) {
+      <z-button
+        data-testid="stripe-pay-button"
+        [zDisabled]="processing() || !isReady()"
+        (click)="handlePayment($event)"
+        zType="secondary"
+        class="transition-smooth focus-ring w-full border-none py-4 font-display text-sm tracking-[0.2em] uppercase shadow-[0_4px_20px_-5px_hsl(var(--primary)/0.4)] hover:shadow-[0_4px_25px_-5px_hsl(var(--primary)/0.6)] active:translate-y-0.5"
+        [attr.aria-label]="
+          checkoutMounted() && mockPayments()
+            ? 'Complete mock payment'
+            : 'Continue to secure checkout'
+        "
+      >
+        @if (processing()) {
+          PROCESSING...
+        } @else if (checkoutMounted() && mockPayments()) {
+          COMPLETE MOCK PAYMENT
+        } @else {
+          CONTINUE TO SECURE CHECKOUT
+        }
+      </z-button>
+    }
+  </div>
+</div>

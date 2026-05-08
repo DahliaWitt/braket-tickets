@@ -1,0 +1,113 @@
+import { ComponentHarness } from '@angular/cdk/testing';
+
+export class DashboardComponentHarness extends ComponentHarness {
+  static hostSelector = 'app-dashboard';
+
+  private readonly eventTitles = this.locatorForAll('[data-testid="dashboard-event-title"]');
+
+  /** Get all community cell elements from the community grid. */
+  async getCommunityCells(): Promise<number> {
+    const cells = await this.locatorForAll('[data-testid="dashboard-community-cell"]')();
+    return cells.length;
+  }
+
+  /** Get community cell text by index. */
+  async getCommunityCellText(index: number): Promise<string | null> {
+    const cells = await this.locatorForAll('[data-testid="dashboard-community-cell"]')();
+    if (index >= cells.length) return null;
+    return (await cells[index].text()).trim();
+  }
+
+  /** Check whether the featured event section is rendered. */
+  async hasFeaturedEvent(): Promise<boolean> {
+    const el = await this.locatorForOptional('[data-testid="featured-event"]')();
+    return !!el;
+  }
+
+  /** Get the text content of the featured event section. */
+  async getFeaturedEventText(): Promise<string | null> {
+    const el = await this.locatorForOptional('[data-testid="featured-event"]')();
+    return el ? (await el.text()).trim() : null;
+  }
+
+  async getVisibleEventTitles(): Promise<string[]> {
+    const titles = await this.eventTitles();
+    return Promise.all(
+      titles.map(async (title) => {
+        const textContent = await title.getProperty<unknown>('textContent');
+        return typeof textContent === 'string' ? textContent.trim() : '';
+      }),
+    );
+  }
+
+  /** Check whether the "Get Tickets" CTA is visible on the featured event. */
+  async hasGetTicketsCta(): Promise<boolean> {
+    const el = await this.locatorForOptional('[data-testid="dashboard-get-tickets"]')();
+    return !!el;
+  }
+
+  /** Get the "find your people" heading text (new user state). */
+  async getNewUserHeading(): Promise<string | null> {
+    const headings = await this.locatorForAll('h1')();
+    for (const h of headings) {
+      const text = await h.text();
+      if (text.toLowerCase().includes('find your people')) {
+        return text.trim();
+      }
+    }
+    return null;
+  }
+
+  /** Check whether the error state block is rendered. */
+  async hasErrorState(): Promise<boolean> {
+    const el = await this.locatorForOptional('[data-testid="dashboard-error-state"]')();
+    return !!el;
+  }
+
+  /** Get the error state heading text. */
+  async getErrorStateHeading(): Promise<string | null> {
+    const el = await this.locatorForOptional('[data-testid="dashboard-error-state"] h2')();
+    return el ? (await el.text()).trim() : null;
+  }
+
+  /** Check whether the "Try Again" button is present in the error state. */
+  async hasTryAgainButton(): Promise<boolean> {
+    const errorState = await this.locatorForOptional('[data-testid="dashboard-error-state"]')();
+    if (!errorState) return false;
+    const btn = await this.locatorForOptional('[data-testid="dashboard-error-state"] button')();
+    return !!btn;
+  }
+
+  async getApplyLinkCount(): Promise<number> {
+    const links = await this.locatorForAll('[data-testid="dashboard-apply-link"]')();
+    return links.length;
+  }
+
+  async hasDiscoverSection(): Promise<boolean> {
+    const el = await this.locatorForOptional('[data-testid="dashboard-discover-section"]')();
+    return !!el;
+  }
+
+  async getDiscoverCommunityCount(): Promise<number> {
+    const rows = await this.locatorForAll('[data-testid="dashboard-discover-apply"]')();
+    return rows.length;
+  }
+
+  async getDiscoverCommunityText(index: number): Promise<string | null> {
+    const rows = await this.locatorForAll('[data-testid="dashboard-discover-apply"]')();
+    if (index >= rows.length) return null;
+    return (await rows[index].text()).trim();
+  }
+
+  /** Check whether the application status element is present. */
+  async isApplicationStatusVisible(): Promise<boolean> {
+    const el = await this.locatorForOptional('[data-testid="application-status"]')();
+    return el !== null;
+  }
+
+  /** Get the text content of the application status element. */
+  async getApplicationStatusText(): Promise<string | null> {
+    const el = await this.locatorForOptional('[data-testid="application-status"]')();
+    return el ? (await el.text()).trim() : null;
+  }
+}

@@ -1,0 +1,170 @@
+import type {Doc, Id} from '../../_generated/dataModel';
+import type {DatabaseReader, QueryCtx} from '../../_generated/server';
+import {
+  loadAllMagicLinkRedemptionsByMagicLink,
+  loadAllMagicLinksByCreator,
+  loadFirstMagicLinkByToken,
+} from '../../lib/indexed_loaders';
+import {resolveSiteUrl} from '../../lib/site_url';
+import type {MagicLinkStatus} from '../../lib/validators/magic_links';
+import {canManageCommunity} from '../access';
+import {throwInvalidState} from '../errors';
+
+export type MagicLinkStatusAction = 'pause' | 'resume' | 'disable' | 'delete';
+export type MagicLinkAdminStatus = MagicLinkStatus;
+
+const STATE_MACHINE: Record<
+  MagicLinkAdminStatus,
+  readonly MagicLinkStatusAction[]
+> = {
+  active: ['pause', 'disable', 'delete'],
+  paused: ['resume', 'disable', 'delete'],
+  disabled: ['delete'],
+};
+
+type MagicLinkStatusTransition = {
+  status: MagicLinkAdminStatus;
+  deletedAt?: number;
+};
+
+type MagicLinksReadDb = Pick<DatabaseReader, 'query'>;
+type MagicLinksReadCtx = QueryCtx;
+
+export type MagicLinksListItem = {
+  _id: Id<'magic_links'>;
+  _creationTime: number;
+  tokenPrefix?: string;
+  label?: string;
+  status: MagicLinkAdminStatus;
+  expiresAt?: number;
+  maxRedemptions?: number;
+  redemptionCount: number;
+  lastUsedAt?: number;
+};
+
+export function buildMagicLinkUrl(token: string): string {
+  return `${resolveSiteUrl()}/invite/${token}`;
+}
+
+export function resolveMagicLinkTransition(
+  currentStatus: MagicLinkAdminStatus,
+  action: MagicLinkStatusAction,
+): MagicLinkStatusTransition {
+  const allowedActions = STATE_MACHINE[currentStatus] ?? [];
+  if (!allowedActions.includes(action)) {
+    const message = `Cannot ${action} a ${currentStatus} link`;
+    throwInvalidState(message);
+  }
+
+  switch (action) {
+    case 'pause':
+      return {status: 'paused'};
+    case 'resume':
+      return {status: 'active'};
+    case 'disable':
+      return {status: 'disabled'};
+    case 'delete':
+      return {status: 'disabled', deletedAt: Date.now()};
+  }
+
+  throwInvalidState('Invalid transition action');
+}
+
+export async function getMagicLinkByTokenForInternal(
+  ctx: QueryCtx,
+  token: string,
+): Promise<
+  | (Doc<'magic_links'> & {
+      status: MagicLinkAdminStatus;
+      deletedAt?: number;
+    })
+  | null
+> {
+  return await loadFirstMagicLinkByToken(ctx.db, token);
+}
+
+async function loadMagicLinkRedemptionStats(
+  db: MagicLinksReadDb,
+  linkId: Id<'magic_links'>,
+): Promise<{redemptionCount: number; lastUsedAt: number | undefined}> {
+  const redemptions = await loadAllMagicLinkRedemptionsByMagicLink(db, linkId);
+
+  const redemptionCount = redemptions.length;
+  const lastUsedAt =
+    redemptions.length > 0
+      ? Math.max(...redemptions.map((r) => r.redeemedAt))
+      : undefined;
+
+  return {redemptionCount, lastUsedAt};
+}
+
+export type PastMagicLinksListItem = MagicLinksListItem & {deletedAt: number};
+
+export async function mapMagicLinkForAdmin(
+  db: MagicLinksReadDb,
+  link: Doc<'magic_links'> & {status: MagicLinkAdminStatus},
+): Promise<MagicLinksListItem> {
+  const redemptionStats = await loadMagicLinkRedemptionStats(db, link._id);
+  return {
+    _id: link._id,
+    _creationTime: link._creationTime,
+    tokenPrefix: link.tokenPrefix ?? link.token?.slice(0, 8),
+    label: link.label,
+    status: link.status,
+    expiresAt: link.expiresAt,
+    maxRedemptions: link.maxRedemptions,
+    redemptionCount: redemptionStats.redemptionCount,
+    lastUsedAt: redemptionStats.lastUsedAt,
+  };
+}
+
+export async function getMagicLinksForCreator(
+  ctx: MagicLinksReadCtx,
+  creatorId: Id<'users'>,
+): Promise<MagicLinksListItem[]> {
+  const links = await loadAllMagicLinksByCreator(ctx.db, creatorId);
+
+  const visibleLinks = links.filter((link) => !link.deletedAt) as Array<
+    Doc<'magic_links'> & {status: MagicLinkAdminStatus}
+  >;
+  const access = await Promise.all(
+    visibleLinks.map((link) =>
+      canManageCommunity(ctx, creatorId, link.organizerId),
+    ),
+  );
+  const authorizedLinks = visibleLinks.filter((_, index) => access[index]);
+
+  const result = await Promise.all(
+    authorizedLinks.map((link) => mapMagicLinkForAdmin(ctx.db, link)),
+  );
+
+  return result;
+}
+
+export async function getPastMagicLinksForCreator(
+  ctx: MagicLinksReadCtx,
+  creatorId: Id<'users'>,
+): Promise<PastMagicLinksListItem[]> {
+  const links = await loadAllMagicLinksByCreator(ctx.db, creatorId);
+
+  const deletedLinks = links.filter(
+    (link) => link.deletedAt !== undefined,
+  ) as Array<
+    Doc<'magic_links'> & {status: MagicLinkAdminStatus; deletedAt: number}
+  >;
+  const access = await Promise.all(
+    deletedLinks.map((link) =>
+      canManageCommunity(ctx, creatorId, link.organizerId),
+    ),
+  );
+  const authorizedLinks = deletedLinks.filter((_, index) => access[index]);
+
+  const result = await Promise.all(
+    authorizedLinks.map(async (link) => {
+      const base = await mapMagicLinkForAdmin(ctx.db, link);
+      return {...base, deletedAt: link.deletedAt};
+    }),
+  );
+
+  return result;
+}

@@ -1,0 +1,90 @@
+name: braket-ops
+
+services:
+  convex-log-forwarder:
+    build:
+      context: ..
+      dockerfile: ops/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - path: .env.prod
+        required: false
+    environment:
+      CONVEX_DEPLOY_KEY: ${CONVEX_DEPLOY_KEY:-}
+      CONVEX_LOG_SINK: ${CONVEX_LOG_SINK:-posthog}
+      POSTHOG_LOGS_PROJECT_TOKEN: ${POSTHOG_LOGS_PROJECT_TOKEN:-}
+      POSTHOG_LOGS_HOST: ${POSTHOG_LOGS_HOST:-https://us.i.posthog.com}
+      POSTHOG_LOGS_SERVICE_NAME: ${POSTHOG_LOGS_SERVICE_NAME:-}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      CONVEX_LOG_TARGET: prod
+      CONVEX_LOGS_HISTORY: ${CONVEX_LOGS_HISTORY:-200}
+      CONVEX_LOG_INCLUDE_SUCCESS: ${CONVEX_LOG_INCLUDE_SUCCESS:-false}
+      CONVEX_LOG_FORWARD_ALL: ${CONVEX_LOG_FORWARD_ALL:-false}
+      CONVEX_LOG_RECONNECT_MS: ${CONVEX_LOG_RECONNECT_MS:-3000}
+      CONVEX_LOG_DEDUP_CACHE_SIZE: ${CONVEX_LOG_DEDUP_CACHE_SIZE:-5000}
+    command: ['node', '/app/scripts/convex-log-forwarder.mjs']
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '10m'
+        max-file: '3'
+        compress: 'true'
+
+  convex-log-forwarder-dev:
+    profiles: ['dev-observability']
+    build:
+      context: ..
+      dockerfile: ops/Dockerfile
+    restart: unless-stopped
+    environment:
+      CONVEX_DEPLOY_KEY: ${CONVEX_DEV_DEPLOY_KEY:-}
+      CONVEX_LOG_SINK: ${CONVEX_DEV_LOG_SINK:-posthog}
+      POSTHOG_LOGS_PROJECT_TOKEN: ${POSTHOG_DEV_LOGS_PROJECT_TOKEN:-}
+      POSTHOG_LOGS_HOST: ${POSTHOG_DEV_LOGS_HOST:-https://us.i.posthog.com}
+      POSTHOG_LOGS_SERVICE_NAME: ${POSTHOG_DEV_LOGS_SERVICE_NAME:-}
+      SENTRY_DSN: ${SENTRY_DSN_DEVELOPMENT:-}
+      CONVEX_LOG_TARGET: ${CONVEX_DEV_LOG_TARGET:-dev}
+      CONVEX_LOGS_HISTORY: ${CONVEX_DEV_LOGS_HISTORY:-200}
+      CONVEX_LOG_INCLUDE_SUCCESS: ${CONVEX_DEV_LOG_INCLUDE_SUCCESS:-false}
+      CONVEX_LOG_FORWARD_ALL: ${CONVEX_DEV_LOG_FORWARD_ALL:-false}
+      CONVEX_LOG_RECONNECT_MS: ${CONVEX_DEV_LOG_RECONNECT_MS:-3000}
+      CONVEX_LOG_DEDUP_CACHE_SIZE: ${CONVEX_DEV_LOG_DEDUP_CACHE_SIZE:-5000}
+    command: ['node', '/app/scripts/convex-log-forwarder.mjs']
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '10m'
+        max-file: '3'
+        compress: 'true'
+
+  convex-backup:
+    build:
+      context: ..
+      dockerfile: ops/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - path: .env.prod
+        required: false
+    environment:
+      CONVEX_DEPLOY_KEY: ${CONVEX_DEPLOY_KEY:-}
+      BACKUP_DIR: /backups
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+      BACKUP_INCLUDE_FILE_STORAGE: ${BACKUP_INCLUDE_FILE_STORAGE:-true}
+      CONVEX_BACKUP_TARGET: prod
+    volumes:
+      - type: bind
+        source: ${BRAKET_APPDATA_ROOT:-/mnt/user/appdata/braket-tickets}/convex-backups
+        target: /backups
+    command:
+      [
+        '/bin/sh',
+        '-lc',
+        'while true; do /app/scripts/convex-backup.sh; sleep ${BACKUP_INTERVAL_SECONDS:-86400}; done',
+      ]
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '10m'
+        max-file: '3'
+        compress: 'true'

@@ -1,0 +1,71 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Design System/Storybook/Conventions" />
+
+# Storybook Conventions
+
+This Storybook is not just a component catalog. It has two jobs:
+
+1. Document the reusable design-system surface.
+2. Show how Braket actually uses that surface in the product.
+
+Those goals are related, but they are not the same. This page explains the difference.
+
+## Taxonomy
+
+| Section               | Meaning                                                    |
+| --------------------- | ---------------------------------------------------------- |
+| `Braket/Primitives/*` | Foundational controls and presentational building blocks   |
+| `Braket/Composites/*` | Reusable combinations of primitives and shared workflows   |
+| `Braket/Layouts/*`    | Structural page frames and content scaffolding             |
+| `Braket/Archetypes/*` | Real product pages or shells imported into Storybook       |
+| `Design System/*`     | Design-token guidance, rules, and supporting documentation |
+
+## Story Labels
+
+Stories in this repo follow two documentation levels:
+
+| Label             | Meaning                                                                                                    | Expectation                                                                   |
+| ----------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| App-proven        | The story mirrors an actual product usage pattern                                                          | Prefer importing the real component or page and mocking only its dependencies |
+| Library reference | The story documents a supported API or composition, but not one that is currently a stable product pattern | Keep the story explicit and honest; do not imply the app uses it today        |
+
+## When To Import The Real Component
+
+Prefer the real component when the point of the story is:
+
+- page composition
+- shell behavior
+- route-driven states
+- admin workflow realism
+- trust in spacing, hierarchy, and responsive behavior
+
+That is why archetype stories such as `Landing`, `Invite`, `HelpShell`, and `EventDetails` import the real app pages instead of reconstructed mock layouts.
+
+## When A Reference Story Is Better
+
+A reference story is still the right tool when:
+
+- the product barely uses the component yet
+- the app usage is too entangled with runtime state to be worth reproducing in Storybook
+- the goal is documenting the supported API, not simulating the full feature
+
+Examples in this repo include some `Switch`, `Tabs`, and advanced `Dropdown` or `Toast` variants.
+
+## Contribution Rule
+
+When adding or updating a story, decide which of these you are writing:
+
+1. A truthful product story.
+2. A truthful library-reference story.
+
+Do not blur the two. If a story is not app-proven, say so in the docs description.
+
+## Preferred Progression
+
+When Storybook coverage grows, use this order:
+
+1. Cover primitives completely.
+2. Align shared composites to real workflows.
+3. Add layout and archetype stories for high-value product surfaces.
+4. Fill remaining library-reference gaps without pretending they are product-real.

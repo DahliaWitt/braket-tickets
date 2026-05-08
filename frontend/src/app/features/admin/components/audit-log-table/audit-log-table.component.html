@@ -1,0 +1,562 @@
+<!-- Filter bar -->
+<div class="flex flex-wrap gap-3 mb-4">
+  <select
+    data-testid="filter-category"
+    aria-label="Filter by category"
+    class="native-select bg-card border border-border rounded px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+    [value]="selectedCategory() ?? ''"
+    (change)="onCategoryChange($event)"
+  >
+    @for (opt of categoryOptions; track opt.value) {
+      <option [value]="opt.value">{{ opt.label }}</option>
+    }
+  </select>
+
+  <select
+    data-testid="filter-time-window"
+    aria-label="Filter by time period"
+    class="native-select bg-card border border-border rounded px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+    [value]="selectedTimeWindow()"
+    (change)="onTimeWindowChange($event)"
+  >
+    @for (opt of timeWindowOptions; track opt.value) {
+      <option [value]="opt.value">{{ opt.label }}</option>
+    }
+  </select>
+
+  @if (hasActiveFilter()) {
+    <button
+      type="button"
+      z-button
+      zType="ghost"
+      class="text-muted-foreground font-mono text-xs"
+      (click)="clearFilters()"
+    >
+      CLEAR FILTERS
+    </button>
+  }
+</div>
+
+<!-- Desktop Table View -->
+<div
+  class="hidden md:block bg-card rounded-xl border border-border/50 overflow-hidden shadow-2xl"
+>
+  <table class="w-full text-left border-collapse table-fixed">
+    <thead data-testid="audit-log-header" class="bg-muted/50">
+      <tr>
+        <th
+          class="p-4 mono-label text-2xs text-muted-foreground font-medium border-b border-border w-32"
+        >
+          Time
+        </th>
+        <th
+          class="p-4 mono-label text-2xs text-muted-foreground font-medium border-b border-border w-40"
+        >
+          Admin
+        </th>
+        <th
+          class="p-4 mono-label text-2xs text-muted-foreground font-medium border-b border-border w-56"
+        >
+          Action
+        </th>
+        <th
+          class="p-4 mono-label text-2xs text-muted-foreground font-medium border-b border-border"
+        >
+          Details
+        </th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-border/50" [attr.aria-busy]="isLoading()">
+      @if (isLoading()) {
+        @for (i of skeletonRows; track i) {
+          <tr data-testid="skeleton-row" class="animate-pulse">
+            <td class="p-4">
+              <z-skeleton class="h-3 w-20" />
+            </td>
+            <td class="p-4">
+              <z-skeleton class="h-3 w-28" />
+            </td>
+            <td class="p-4">
+              <div class="flex items-center gap-2">
+                <z-skeleton class="h-4 w-4 rounded" />
+                <z-skeleton class="h-3 w-32" />
+              </div>
+            </td>
+            <td class="p-4">
+              <z-skeleton class="h-3 w-40" />
+            </td>
+          </tr>
+        }
+      } @else if (results().length === 0) {
+        <tr>
+          <td colspan="4" class="p-0">
+            <div
+              data-testid="empty-state"
+              class="p-16 text-center text-muted-foreground mono-label text-sm"
+            >
+              NO ACTIVITY RECORDED
+              <p class="text-sm text-muted-foreground mt-2">
+                Actions taken by community admins will appear here — event
+                changes, application reviews, check-ins, and more.
+              </p>
+            </div>
+          </td>
+        </tr>
+      } @else {
+        @for (entry of results(); track entry._id; let i = $index) {
+          <tr
+            data-testid="audit-log-row"
+            class="group/row hover:bg-muted/50 transition-colors audit-row-enter"
+            [class.bg-muted/30]="expandedEntryId() === entry._id"
+            [style.animation-delay]="Math.min(i, 10) * 50 + 'ms'"
+          >
+            <td class="p-4 align-middle">
+              <span
+                class="font-mono text-2xs text-muted-foreground whitespace-nowrap"
+              >
+                {{ relativeTime(entry._creationTime) }}
+              </span>
+            </td>
+            <td class="p-4 align-middle">
+              <span
+                class="text-sm text-foreground/80 block truncate"
+                [title]="entry.adminName"
+                >{{ entry.adminName }}</span
+              >
+            </td>
+            <td class="p-4 align-middle">
+              <div class="flex items-center gap-2">
+                <z-icon
+                  [zType]="actionDisplay(entry).icon"
+                  class="size-4 text-muted-foreground shrink-0"
+                />
+                <span
+                  class="font-mono uppercase tracking-widest text-2xs text-foreground/80"
+                >
+                  {{ actionDisplay(entry).label }}
+                </span>
+              </div>
+            </td>
+            <td class="p-4 align-middle">
+              <div class="flex items-center">
+                <button
+                  [id]="expandedTriggerId(entry)"
+                  type="button"
+                  data-testid="audit-log-detail-trigger"
+                  class="group/detail inline-flex max-w-full items-center gap-2 appearance-none bg-transparent border-0 p-0 text-sm text-muted-foreground cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  [attr.aria-expanded]="expandedEntryId() === entry._id"
+                  [attr.aria-label]="expandLabel(entry)"
+                  [attr.aria-controls]="
+                    expandedEntryId() === entry._id
+                      ? expandedPanelId(entry)
+                      : null
+                  "
+                  (click)="toggleExpanded(entry)"
+                  (keydown.enter)="toggleExpandedFromKeyboard($event, entry)"
+                  (keydown.space)="toggleExpandedFromKeyboard($event, entry)"
+                >
+                  <span
+                    class="truncate border-b border-transparent group-hover/detail:border-dashed group-hover/detail:border-primary group-focus-visible/detail:border-dashed group-focus-visible/detail:border-primary"
+                  >
+                    {{ detailSummary(entry) }}
+                  </span>
+                  <z-icon
+                    zType="chevron-down"
+                    class="size-3.5 text-muted-foreground/50 shrink-0 transition-transform duration-200"
+                    [class.rotate-180]="expandedEntryId() === entry._id"
+                  />
+                </button>
+              </div>
+            </td>
+          </tr>
+          @if (expandedEntryId() === entry._id) {
+            <tr data-testid="audit-log-expanded-row">
+              <td colspan="4" class="p-0 border-t-0">
+                <div
+                  [id]="expandedPanelId(entry)"
+                  role="region"
+                  [attr.aria-labelledby]="expandedTriggerId(entry)"
+                  class="px-4 pb-4 pt-2 bg-muted/20 border-b border-border/30"
+                >
+                  <div class="flex flex-wrap gap-x-8 gap-y-2">
+                    <div>
+                      <span class="mono-label text-2xs text-muted-foreground"
+                        >Admin</span
+                      >
+                      <p
+                        class="text-sm text-foreground/80"
+                        data-testid="expanded-admin"
+                      >
+                        {{ entry.adminName }}
+                      </p>
+                    </div>
+                    <div>
+                      <span class="mono-label text-2xs text-muted-foreground"
+                        >Action</span
+                      >
+                      <div class="flex items-center gap-1.5">
+                        <z-icon
+                          [zType]="actionDisplay(entry).icon"
+                          class="size-3.5 text-muted-foreground"
+                        />
+                        <p class="text-sm text-foreground/80">
+                          {{ actionDisplay(entry).label }}
+                        </p>
+                      </div>
+                    </div>
+                    <div>
+                      <span class="mono-label text-2xs text-muted-foreground"
+                        >Timestamp</span
+                      >
+                      <p
+                        class="text-sm text-foreground/80"
+                        data-testid="expanded-timestamp"
+                      >
+                        {{ absoluteTime(entry._creationTime) }}
+                      </p>
+                    </div>
+                    @if (entry.eventId && entry.eventName) {
+                      <div>
+                        <span class="mono-label text-2xs text-muted-foreground"
+                          >Event</span
+                        >
+                        <a
+                          [routerLink]="[
+                            '/community-admin/events',
+                            entry.eventId,
+                            'manage',
+                          ]"
+                          class="text-sm border-b border-dashed border-primary hover:border-solid block"
+                        >
+                          {{ entry.eventName }}
+                        </a>
+                      </div>
+                    }
+                    @if (!entry.eventName && entry.deletedEventName) {
+                      <div>
+                        <span class="mono-label text-2xs text-muted-foreground"
+                          >Event</span
+                        >
+                        <p
+                          class="text-sm text-foreground/80"
+                          data-testid="expanded-deleted-event"
+                        >
+                          {{ entry.deletedEventName }} (deleted)
+                        </p>
+                      </div>
+                    }
+                    @if (entry.applicationId && entry.applicationUserName) {
+                      <div>
+                        <span class="mono-label text-2xs text-muted-foreground"
+                          >Applicant</span
+                        >
+                        <a
+                          routerLink="/community-admin/history"
+                          class="text-sm border-b border-dashed border-primary hover:border-solid block"
+                        >
+                          {{ entry.applicationUserName }}
+                        </a>
+                      </div>
+                    }
+                    @if (entry.magicLinkLabel) {
+                      <div>
+                        <span class="mono-label text-2xs text-muted-foreground"
+                          >Magic Link</span
+                        >
+                        <p class="text-sm text-foreground/80">
+                          {{ entry.magicLinkLabel }}
+                        </p>
+                      </div>
+                    }
+                    @if (entry.trustLinkLabel) {
+                      <div>
+                        <span class="mono-label text-2xs text-muted-foreground"
+                          >Trust Link</span
+                        >
+                        <p class="text-sm text-foreground/80">
+                          {{ entry.trustLinkLabel }}
+                        </p>
+                      </div>
+                    }
+                    @if (entry.reason) {
+                      <div>
+                        <span class="mono-label text-2xs text-muted-foreground"
+                          >Reason</span
+                        >
+                        <p
+                          class="text-sm text-foreground/80"
+                          data-testid="expanded-reason"
+                        >
+                          {{ entry.reason }}
+                        </p>
+                      </div>
+                    }
+                    @if (entry.source) {
+                      <div>
+                        <span class="mono-label text-2xs text-muted-foreground"
+                          >Source</span
+                        >
+                        <p class="text-sm text-muted-foreground">
+                          {{ entry.source }}
+                        </p>
+                      </div>
+                    }
+                  </div>
+                </div>
+              </td>
+            </tr>
+          }
+        }
+      }
+    </tbody>
+  </table>
+</div>
+
+<!-- Mobile List View -->
+<div class="md:hidden space-y-3" [attr.aria-busy]="isLoading()">
+  @if (isLoading()) {
+    @for (i of skeletonRows; track i) {
+      <div
+        data-testid="skeleton-row"
+        class="border border-border rounded-xl p-4 bg-card/80 space-y-3 animate-pulse"
+      >
+        <div class="flex items-center justify-between">
+          <z-skeleton class="h-3 w-24" />
+          <z-skeleton class="h-3 w-16" />
+        </div>
+        <div class="flex items-center gap-2">
+          <z-skeleton class="h-4 w-4 rounded" />
+          <z-skeleton class="h-3 w-32" />
+        </div>
+        <z-skeleton class="h-3 w-40" />
+      </div>
+    }
+  } @else if (results().length === 0) {
+    <div
+      data-testid="empty-state"
+      class="border border-border/50 rounded-xl p-8 text-center text-muted-foreground mono-label text-sm"
+    >
+      NO ACTIVITY RECORDED
+      <p class="text-sm text-muted-foreground mt-2">
+        Actions taken by community admins will appear here — event changes,
+        application reviews, check-ins, and more.
+      </p>
+    </div>
+  } @else {
+    @for (entry of results(); track entry._id; let i = $index) {
+      <!-- Outer container is not interactive — avoids nested-interactive axe violation -->
+      <div
+        data-testid="audit-log-row"
+        class="border rounded-xl bg-card/80 audit-row-enter overflow-hidden"
+        [class.border-primary/30]="expandedEntryId() === entry._id"
+        [class.border-border/50]="expandedEntryId() !== entry._id"
+        [style.animation-delay]="Math.min(i, 10) * 50 + 'ms'"
+      >
+        <!-- Toggle button — only the summary row triggers expand -->
+        <button
+          [id]="mobileExpandedTriggerId(entry)"
+          type="button"
+          data-testid="audit-log-mobile-detail-trigger"
+          class="w-full text-left p-4 space-y-2 cursor-pointer transition-colors"
+          [attr.aria-expanded]="expandedEntryId() === entry._id"
+          [attr.aria-label]="expandLabel(entry)"
+          [attr.aria-controls]="
+            expandedEntryId() === entry._id
+              ? mobileExpandedPanelId(entry)
+              : null
+          "
+          (click)="toggleExpanded(entry)"
+          (keydown.enter)="toggleExpandedFromKeyboard($event, entry)"
+          (keydown.space)="toggleExpandedFromKeyboard($event, entry)"
+        >
+          <div class="flex items-center justify-between">
+            <span class="font-mono text-2xs text-muted-foreground">
+              {{ relativeTime(entry._creationTime) }}
+            </span>
+            <div class="flex items-center gap-1.5 min-w-0">
+              <span
+                class="text-xs text-muted-foreground truncate"
+                [title]="entry.adminName"
+                >{{ entry.adminName }}</span
+              >
+              <z-icon
+                zType="chevron-down"
+                class="size-3.5 text-muted-foreground/50 shrink-0 transition-transform duration-200"
+                [class.rotate-180]="expandedEntryId() === entry._id"
+              />
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <z-icon
+              [zType]="actionDisplay(entry).icon"
+              class="size-4 text-muted-foreground shrink-0"
+            />
+            <span
+              class="font-mono uppercase tracking-widest text-2xs text-foreground/80"
+            >
+              {{ actionDisplay(entry).label }}
+            </span>
+          </div>
+          @if (detailSummary(entry) !== '—') {
+            <p class="text-sm text-muted-foreground truncate">
+              {{ detailSummary(entry) }}
+            </p>
+          }
+        </button>
+
+        @if (expandedEntryId() === entry._id) {
+          <!-- Expanded detail — sibling of the button, no nested-interactive violation -->
+          <div class="audit-detail-expand expanded">
+            <div>
+              <div
+                [id]="mobileExpandedPanelId(entry)"
+                data-testid="audit-log-expanded-detail"
+                role="region"
+                [attr.aria-labelledby]="mobileExpandedTriggerId(entry)"
+                class="px-4 pb-4 border-t border-border/30 pt-2 space-y-2"
+              >
+                <div>
+                  <span class="mono-label text-2xs text-muted-foreground"
+                    >Timestamp</span
+                  >
+                  <p class="text-sm text-foreground/80">
+                    {{ absoluteTime(entry._creationTime) }}
+                  </p>
+                </div>
+                @if (entry.eventId && entry.eventName) {
+                  <div>
+                    <span class="mono-label text-2xs text-muted-foreground"
+                      >Event</span
+                    >
+                    <a
+                      [routerLink]="[
+                        '/community-admin/events',
+                        entry.eventId,
+                        'manage',
+                      ]"
+                      class="text-sm border-b border-dashed border-primary hover:border-solid block py-1.5"
+                      [tabindex]="expandedEntryId() === entry._id ? 0 : -1"
+                    >
+                      {{ entry.eventName }}
+                    </a>
+                  </div>
+                }
+                @if (!entry.eventName && entry.deletedEventName) {
+                  <div>
+                    <span class="mono-label text-2xs text-muted-foreground"
+                      >Event</span
+                    >
+                    <p
+                      class="text-sm text-foreground/80"
+                      data-testid="expanded-deleted-event"
+                    >
+                      {{ entry.deletedEventName }} (deleted)
+                    </p>
+                  </div>
+                }
+                @if (entry.applicationId && entry.applicationUserName) {
+                  <div>
+                    <span class="mono-label text-2xs text-muted-foreground"
+                      >Applicant</span
+                    >
+                    <a
+                      routerLink="/community-admin/history"
+                      class="text-sm border-b border-dashed border-primary hover:border-solid block py-1.5"
+                      [tabindex]="expandedEntryId() === entry._id ? 0 : -1"
+                    >
+                      {{ entry.applicationUserName }}
+                    </a>
+                  </div>
+                }
+                @if (entry.magicLinkLabel) {
+                  <div>
+                    <span class="mono-label text-2xs text-muted-foreground"
+                      >Magic Link</span
+                    >
+                    <p class="text-sm text-foreground/80">
+                      {{ entry.magicLinkLabel }}
+                    </p>
+                  </div>
+                }
+                @if (entry.trustLinkLabel) {
+                  <div>
+                    <span class="mono-label text-2xs text-muted-foreground"
+                      >Trust Link</span
+                    >
+                    <p class="text-sm text-foreground/80">
+                      {{ entry.trustLinkLabel }}
+                    </p>
+                  </div>
+                }
+                @if (entry.reason) {
+                  <div>
+                    <span class="mono-label text-2xs text-muted-foreground"
+                      >Reason</span
+                    >
+                    <p class="text-sm text-foreground/80">{{ entry.reason }}</p>
+                  </div>
+                }
+                @if (entry.source) {
+                  <div>
+                    <span class="mono-label text-2xs text-muted-foreground"
+                      >Source</span
+                    >
+                    <p class="text-sm text-muted-foreground">
+                      {{ entry.source }}
+                    </p>
+                  </div>
+                }
+              </div>
+            </div>
+          </div>
+        }
+      </div>
+    }
+  }
+</div>
+
+<!-- Load More -->
+@if (!isDone() && !isLoading()) {
+  <div
+    class="mt-8 flex justify-center pb-8 animate-in fade-in slide-in-from-bottom-4 duration-700"
+  >
+    <button
+      type="button"
+      z-button
+      zType="default"
+      data-testid="load-more-button"
+      (click)="loadMore()"
+      [disabled]="isLoadingMore()"
+      class="min-w-[200px] bg-muted hover:bg-muted text-foreground/80 border-border font-mono tracking-widest text-xs h-12"
+    >
+      @if (isLoadingMore()) {
+        <span class="flex items-center gap-2">
+          <svg
+            class="animate-spin h-4 w-4 text-muted-foreground"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <circle
+              class="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              stroke-width="4"
+            />
+            <path
+              class="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            />
+          </svg>
+          LOADING...
+        </span>
+      } @else {
+        LOAD MORE
+      }
+    </button>
+  </div>
+}

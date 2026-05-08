@@ -1,0 +1,386 @@
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
+import {api} from '../_generated/api';
+import {buildFrontendCallbackUrl, resolveAuthBaseUrl} from '../lib/better_auth';
+import {createAutoDrainConvexTest} from '../setup.testing';
+
+// Mutation-context auth callbacks capture test email rows when IS_TEST=true.
+const convexTest = createAutoDrainConvexTest();
+
+const runActionMock = vi.hoisted(() => vi.fn());
+const betterAuthMock = vi.hoisted(() => vi.fn((config: unknown) => config));
+const createClientMock = vi.hoisted(() =>
+  vi.fn(() => ({
+    adapter: vi.fn(() => ({})),
+    triggersApi: vi.fn(() => ({
+      onCreate: vi.fn(),
+      onUpdate: vi.fn(),
+      onDelete: vi.fn(),
+    })),
+  })),
+);
+const convexPluginMock = vi.hoisted(() => vi.fn(() => ({id: 'convex-plugin'})));
+const crossDomainPluginMock = vi.hoisted(() =>
+  vi.fn(() => ({id: 'cross-domain-plugin'})),
+);
+
+vi.mock('@convex-dev/better-auth', () => ({
+  createClient: createClientMock,
+}));
+
+vi.mock('@convex-dev/better-auth/plugins', () => ({
+  convex: convexPluginMock,
+  crossDomain: crossDomainPluginMock,
+}));
+
+vi.mock('better-auth', () => ({
+  betterAuth: betterAuthMock,
+}));
+
+vi.mock('better-auth/api', () => ({
+  createAuthMiddleware: (handler: unknown) => handler,
+}));
+
+vi.mock('better-auth/crypto', () => ({
+  generateRandomString: () => 'mock-token',
+}));
+
+describe('auth password reset callback', () => {
+  let originalIsTest: string | undefined;
+  let originalResendApiKey: string | undefined;
+  let originalSmtpUser: string | undefined;
+  let originalSmtpPass: string | undefined;
+  let originalAuthBaseUrl: string | undefined;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    originalIsTest = process.env.IS_TEST;
+    originalResendApiKey = process.env.RESEND_API_KEY;
+    originalSmtpUser = process.env.SMTP_USER;
+    originalSmtpPass = process.env.SMTP_PASS;
+    originalAuthBaseUrl = process.env.AUTH_BASE_URL;
+    process.env.IS_TEST = 'true';
+    process.env.AUTH_BASE_URL = 'http://127.0.0.1:3210';
+  });
+
+  afterEach(() => {
+    if (originalIsTest === undefined) {
+      delete process.env.IS_TEST;
+    } else {
+      process.env.IS_TEST = originalIsTest;
+    }
+    if (originalSmtpUser === undefined) {
+      delete process.env.SMTP_USER;
+    } else {
+      process.env.SMTP_USER = originalSmtpUser;
+    }
+    if (originalSmtpPass === undefined) {
+      delete process.env.SMTP_PASS;
+    } else {
+      process.env.SMTP_PASS = originalSmtpPass;
+    }
+    if (originalResendApiKey === undefined) {
+      delete process.env.RESEND_API_KEY;
+    } else {
+      process.env.RESEND_API_KEY = originalResendApiKey;
+    }
+    if (originalAuthBaseUrl === undefined) {
+      delete process.env.AUTH_BASE_URL;
+    } else {
+      process.env.AUTH_BASE_URL = originalAuthBaseUrl;
+    }
+  });
+
+  it('awaits runAction in sendResetPassword before resolving', async () => {
+    const {createAuth} =
+      await vi.importActual<typeof import('../lib/better_auth')>(
+        '../lib/better_auth',
+      );
+
+    let resolveRunAction: (() => void) | undefined;
+    const runActionPromise = new Promise<void>((resolve) => {
+      resolveRunAction = resolve;
+    });
+    runActionMock.mockReturnValueOnce(runActionPromise);
+
+    const auth = createAuth({
+      runAction: runActionMock,
+    } as never) as {
+      emailAndPassword?: {
+        sendResetPassword?: (args: unknown) => Promise<void>;
+      };
+    };
+
+    const sendResetPassword = auth.emailAndPassword?.sendResetPassword;
+    expect(sendResetPassword).toBeTypeOf('function');
+
+    if (!sendResetPassword) {
+      throw new Error('Expected sendResetPassword to be defined');
+    }
+
+    let callbackResolved = false;
+    const callbackPromise = sendResetPassword({
+      user: {email: 'reset@example.com'},
+      url: 'https://example.com/confirm/password-reset/token-123',
+    }).then(() => {
+      callbackResolved = true;
+    });
+
+    await Promise.resolve();
+
+    expect(runActionMock).toHaveBeenCalledTimes(1);
+    expect(callbackResolved).toBe(false);
+    expect(runActionMock.mock.calls[0]?.[1]).toMatchObject({
+      to: 'reset@example.com',
+    });
+    const runActionPayload = runActionMock.mock.calls[0]?.[1] as
+      | {subject?: string; html?: string}
+      | undefined;
+    expect(runActionPayload?.subject).toMatch(/reset/i);
+    expect(runActionPayload?.html).toContain(
+      'https://example.com/confirm/password-reset/token-123',
+    );
+
+    if (!resolveRunAction) {
+      throw new Error('Expected resolveRunAction to be assigned');
+    }
+    resolveRunAction();
+
+    await callbackPromise;
+    expect(callbackResolved).toBe(true);
+  });
+
+  it('captures password reset email when auth is created with mutation context', async () => {
+    const {createAuth} =
+      await vi.importActual<typeof import('../lib/better_auth')>(
+        '../lib/better_auth',
+      );
+
+    const t = convexTest();
+
+    await t.run(async (ctx) => {
+      const auth = createAuth(ctx as never) as {
+        emailAndPassword?: {
+          sendResetPassword?: (args: {
+            user: {email: string};
+            url: string;
+          }) => Promise<void>;
+        };
+      };
+
+      const sendResetPassword = auth.emailAndPassword?.sendResetPassword;
+      expect(sendResetPassword).toBeTypeOf('function');
+      if (!sendResetPassword) {
+        throw new Error('Expected sendResetPassword to be defined');
+      }
+
+      await sendResetPassword({
+        user: {email: 'reset@example.com'},
+        url: 'https://example.com/confirm/password-reset/token-123',
+      });
+    });
+
+    const payload = await readLatestTestEmail(t, 'reset@example.com');
+    expect(payload).not.toBeNull();
+    expect(payload?.to).toBe('reset@example.com');
+    expect(payload?.subject).toMatch(/reset/i);
+    expect(payload?.html).toContain(
+      'https://example.com/confirm/password-reset/token-123',
+    );
+  });
+
+  it('captures change email confirmation when auth is created with mutation context', async () => {
+    const {createAuth} =
+      await vi.importActual<typeof import('../lib/better_auth')>(
+        '../lib/better_auth',
+      );
+
+    const t = convexTest();
+
+    await t.run(async (ctx) => {
+      const auth = createAuth(ctx as never) as {
+        user?: {
+          changeEmail?: {
+            sendChangeEmailConfirmation?: (args: {
+              user: {email: string};
+              newEmail: string;
+              url: string;
+            }) => Promise<void>;
+          };
+        };
+      };
+
+      const sendChangeEmailConfirmation =
+        auth.user?.changeEmail?.sendChangeEmailConfirmation;
+      expect(sendChangeEmailConfirmation).toBeTypeOf('function');
+      if (!sendChangeEmailConfirmation) {
+        throw new Error('Expected sendChangeEmailConfirmation to be defined');
+      }
+
+      await sendChangeEmailConfirmation({
+        user: {email: 'current@example.com'},
+        newEmail: 'new@example.com',
+        url: 'https://example.com/confirm/email-change/token-123',
+      });
+    });
+
+    const payload = await readLatestTestEmail(t, 'current@example.com');
+    expect(payload).not.toBeNull();
+    expect(payload?.to).toBe('current@example.com');
+    expect(payload?.subject?.length).toBeGreaterThan(0);
+    expect(payload?.html).toContain('new@example.com');
+  });
+
+  it('rejects required delivery in mutation context when email is not configured', async () => {
+    process.env.IS_TEST = 'false';
+    delete process.env.RESEND_API_KEY;
+    delete process.env.SMTP_USER;
+    delete process.env.SMTP_PASS;
+
+    const {createAuth} =
+      await vi.importActual<typeof import('../lib/better_auth')>(
+        '../lib/better_auth',
+      );
+
+    const t = convexTest();
+
+    await expect(
+      t.run(async (ctx) => {
+        const auth = createAuth(ctx as never) as {
+          user?: {
+            changeEmail?: {
+              sendChangeEmailConfirmation?: (args: {
+                user: {email: string};
+                newEmail: string;
+                url: string;
+              }) => Promise<void>;
+            };
+          };
+        };
+
+        const sendChangeEmailConfirmation =
+          auth.user?.changeEmail?.sendChangeEmailConfirmation;
+        expect(sendChangeEmailConfirmation).toBeTypeOf('function');
+        if (!sendChangeEmailConfirmation) {
+          throw new Error('Expected sendChangeEmailConfirmation to be defined');
+        }
+
+        await sendChangeEmailConfirmation({
+          user: {email: 'current@example.com'},
+          newEmail: 'new@example.com',
+          url: 'https://example.com/confirm/email-change/token-123',
+        });
+      }),
+    ).rejects.toThrow(/not configured/i);
+
+    const payload = await readLatestTestEmail(t, 'current@example.com');
+    expect(payload).toBeNull();
+  });
+});
+
+type CapturedEmail = {
+  to?: string;
+  subject?: string;
+  html?: string;
+};
+
+async function readLatestTestEmail(
+  t: ReturnType<typeof convexTest>,
+  to: string,
+): Promise<CapturedEmail | null> {
+  const emails = await t.query(api.testing.email.getSentEmails, {to});
+  const email = emails[0];
+  return email
+    ? {to: email.to, subject: email.subject, html: email.html}
+    : null;
+}
+
+describe('resolveAuthBaseUrl', () => {
+  let originalConvexSiteUrl: string | undefined;
+  let originalAuthBaseUrl: string | undefined;
+
+  beforeEach(() => {
+    originalConvexSiteUrl = process.env.CONVEX_SITE_URL;
+    originalAuthBaseUrl = process.env.AUTH_BASE_URL;
+    delete process.env.CONVEX_SITE_URL;
+    delete process.env.AUTH_BASE_URL;
+  });
+
+  afterEach(() => {
+    if (originalConvexSiteUrl === undefined) {
+      delete process.env.CONVEX_SITE_URL;
+    } else {
+      process.env.CONVEX_SITE_URL = originalConvexSiteUrl;
+    }
+    if (originalAuthBaseUrl === undefined) {
+      delete process.env.AUTH_BASE_URL;
+    } else {
+      process.env.AUTH_BASE_URL = originalAuthBaseUrl;
+    }
+  });
+
+  it('throws when neither CONVEX_SITE_URL nor AUTH_BASE_URL is set', () => {
+    expect(() => resolveAuthBaseUrl()).toThrow(
+      /AUTH_BASE_URL or CONVEX_SITE_URL must be set/,
+    );
+  });
+
+  it('returns CONVEX_SITE_URL when set', () => {
+    process.env.CONVEX_SITE_URL = 'https://test-deployment.convex.site';
+    expect(resolveAuthBaseUrl()).toBe('https://test-deployment.convex.site');
+  });
+
+  it('falls back to AUTH_BASE_URL when CONVEX_SITE_URL is unset', () => {
+    process.env.AUTH_BASE_URL = 'https://fallback-deployment.convex.site';
+    expect(resolveAuthBaseUrl()).toBe(
+      'https://fallback-deployment.convex.site',
+    );
+  });
+});
+
+describe('buildFrontendCallbackUrl', () => {
+  const originalSiteUrl = process.env.SITE_URL;
+  const originalAuthBaseUrl = process.env.AUTH_BASE_URL;
+  const originalAllowLocalhost = process.env.ALLOW_LOCALHOST_CORS;
+
+  beforeEach(() => {
+    process.env.SITE_URL = 'https://app.example.com';
+    process.env.AUTH_BASE_URL = 'http://127.0.0.1:3210';
+    delete process.env.ALLOW_LOCALHOST_CORS;
+  });
+
+  afterEach(() => {
+    if (originalSiteUrl === undefined) {
+      delete process.env.SITE_URL;
+    } else {
+      process.env.SITE_URL = originalSiteUrl;
+    }
+    if (originalAuthBaseUrl === undefined) {
+      delete process.env.AUTH_BASE_URL;
+    } else {
+      process.env.AUTH_BASE_URL = originalAuthBaseUrl;
+    }
+    if (originalAllowLocalhost === undefined) {
+      delete process.env.ALLOW_LOCALHOST_CORS;
+    } else {
+      process.env.ALLOW_LOCALHOST_CORS = originalAllowLocalhost;
+    }
+  });
+
+  it('accepts localhost frontend callback URLs when auth runs locally', () => {
+    expect(
+      buildFrontendCallbackUrl(
+        'http://127.0.0.1:4201/confirm/social-link?provider=google',
+        '/confirm/social-link',
+      ),
+    ).toBe('http://127.0.0.1:4201/confirm/social-link?provider=google');
+  });
+
+  it('falls back to SITE_URL for untrusted callback origins', () => {
+    expect(
+      buildFrontendCallbackUrl(
+        'https://evil.example.com/confirm/social-link?provider=google',
+        '/confirm/social-link',
+      ),
+    ).toBe('https://app.example.com/confirm/social-link');
+  });
+});

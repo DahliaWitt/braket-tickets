@@ -1,0 +1,39 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Design System/Spacing & Motion" />
+
+# Spacing & Motion
+
+## Spacing Rhythm
+
+The primary spacing unit is **24px** (`gap-6`, `px-6`, `py-6`). Use multiples and fractions of this unit for visual rhythm.
+
+| Scale | Tailwind | px | Usage |
+|---|---|---|---|
+| Tight | `gap-2`, `p-2` | 8px | Inside components (icon-to-label, checkbox-to-text) |
+| Compact | `gap-3`, `p-3` | 12px | Within card bodies, form groups |
+| Base | `gap-6`, `p-6` | 24px | Between sections, card padding, page margins |
+| Generous | `gap-8`, `p-8` | 32px | Between major page sections |
+| Spacious | `gap-12`, `p-12` | 48px | Hero spacing, landing page sections |
+
+**Rule:** Don't use the same spacing everywhere. Tight groupings + generous separations create visual hierarchy.
+
+## Motion Conventions
+
+| Context | Duration | Easing | Example |
+|---|---|---|---|
+| Interactions | 200ms | `cubic-bezier(0.4, 0, 0.2, 1)` | Button hover, checkbox toggle, focus ring |
+| Entrances | 400ms | `cubic-bezier(0, 0, 0.2, 1)` | Dialog open, toast slide-in, page transitions |
+| Exits | 200ms | `cubic-bezier(0.4, 0, 1, 1)` | Dialog close, toast dismiss |
+
+**Rule:** Never animate `width`, `height`, `padding`, or `margin`. Use `transform` and `opacity` only.
+
+## Focus Rings
+
+All interactive elements use: `2px solid primary` with `2px offset` and a `box-shadow` halo.
+
+```css
+outline: 2px solid hsl(var(--ring));
+outline-offset: 2px;
+box-shadow: 0 0 0 4px hsl(var(--ring) / 0.2);
+```

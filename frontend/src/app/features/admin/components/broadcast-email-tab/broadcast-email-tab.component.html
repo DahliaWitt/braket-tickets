@@ -1,0 +1,208 @@
+<div class="space-y-6">
+  <!-- Compose Card -->
+  <z-card
+    class="border-border bg-card/80 py-0 [&>[data-slot=card-content]]:p-6"
+    data-testid="broadcast-email-card"
+  >
+    <form
+      class="space-y-4"
+      (submit)="openSendBroadcastConfirm(); $event.preventDefault()"
+    >
+      <div>
+        <p
+          class="text-xs uppercase font-mono text-muted-foreground tracking-widest"
+        >
+          Broadcast Email
+        </p>
+        <p class="text-xs font-mono text-muted-foreground">
+          Send a custom email to all ticket holders and guests for this event.
+        </p>
+      </div>
+
+      <div class="grid gap-4 md:grid-cols-2">
+        <div class="md:col-span-2 space-y-1">
+          <label
+            for="broadcast-subject"
+            class="text-xs uppercase font-mono text-muted-foreground tracking-widest"
+          >
+            Subject
+          </label>
+          <input
+            id="broadcast-subject"
+            type="text"
+            [formField]="broadcastForm.subject"
+            data-testid="broadcast-subject"
+            class="w-full rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            placeholder="Email subject"
+          />
+          <p class="text-2xs font-mono text-muted-foreground">
+            {{ broadcastSubjectLength() }} /
+            {{ maxTicketReminderSubjectLength }}
+          </p>
+        </div>
+
+        <div class="md:col-span-2 space-y-1">
+          <label
+            for="broadcast-message"
+            class="text-xs uppercase font-mono text-muted-foreground tracking-widest"
+          >
+            Message
+          </label>
+          <textarea
+            id="broadcast-message"
+            [formField]="broadcastForm.message"
+            data-testid="broadcast-message"
+            rows="5"
+            class="w-full rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            placeholder="Write your broadcast message..."
+          ></textarea>
+          <p class="text-2xs font-mono text-muted-foreground">
+            {{ broadcastMessageLength() }} /
+            {{ maxTicketReminderMessageLength }}
+          </p>
+        </div>
+      </div>
+
+      @if (hasBroadcastLengthErrors()) {
+        <p
+          class="text-xs font-mono text-destructive"
+          data-testid="broadcast-length-error"
+        >
+          Subject or message exceeds allowed length.
+        </p>
+      }
+
+      @if (isLoadingBroadcastAudience()) {
+        <p
+          class="text-xs font-mono text-muted-foreground"
+          data-testid="broadcast-audience-loading"
+        >
+          Calculating audience...
+        </p>
+      } @else if (broadcastAudienceError()) {
+        <p
+          class="text-xs font-mono text-destructive"
+          data-testid="broadcast-audience-error"
+        >
+          {{ broadcastAudienceError() }}
+        </p>
+      } @else if (broadcastExceedsCap()) {
+        <p
+          class="text-xs font-mono text-destructive"
+          data-testid="broadcast-exceeds-cap"
+        >
+          {{ broadcastRecipientCount() }} recipients exceeds the 500 limit.
+        </p>
+      } @else {
+        <p
+          class="text-xs font-mono text-muted-foreground"
+          data-testid="broadcast-recipient-count"
+        >
+          {{ broadcastRecipientCount() }} recipients (ticket holders + guests).
+        </p>
+      }
+
+      <button
+        z-button
+        zType="outline"
+        zSize="sm"
+        type="submit"
+        data-testid="send-broadcast"
+        [zDisabled]="isSendBroadcastDisabled()"
+        [attr.aria-busy]="isSendingBroadcast()"
+        class="w-full sm:w-auto border-primary/50 text-primary hover:bg-primary/10"
+      >
+        @if (isSendingBroadcast()) {
+          <z-icon zType="loader-circle" class="mr-2 animate-spin" />
+          Sending...
+        } @else {
+          <z-icon zType="mail" class="mr-2" />
+          Send Email
+        }
+      </button>
+
+      @if (sendFeedback(); as feedback) {
+        <p
+          class="text-xs font-mono"
+          data-testid="broadcast-send-feedback"
+          [class.text-destructive]="feedback.kind === 'error'"
+          [class.text-emerald-500]="feedback.kind === 'success'"
+          [attr.role]="feedback.kind === 'error' ? 'alert' : 'status'"
+        >
+          {{ feedback.message }}
+        </p>
+      }
+    </form>
+  </z-card>
+
+  <!-- History Card -->
+  <z-card
+    class="border-border bg-card/80 py-0 [&>[data-slot=card-content]]:p-6"
+    data-testid="broadcast-history-card"
+  >
+    <div class="space-y-4">
+      <p
+        class="text-xs uppercase font-mono text-muted-foreground tracking-widest"
+      >
+        Send History
+      </p>
+
+      @if (broadcastHistoryError()) {
+        <p
+          class="text-destructive text-sm"
+          data-testid="broadcast-history-error-state"
+          role="alert"
+        >
+          {{ broadcastHistoryError() }}
+        </p>
+      } @else if (isLoadingBroadcastHistory()) {
+        <div class="space-y-3">
+          @for (i of [1, 2, 3]; track i) {
+            <div
+              class="rounded-lg border border-border/60 bg-muted/40 p-4 animate-pulse"
+            >
+              <div class="h-4 w-48 bg-muted-foreground/20 rounded mb-2"></div>
+              <div class="h-3 w-32 bg-muted-foreground/10 rounded"></div>
+            </div>
+          }
+        </div>
+      } @else if (broadcastHistory().length === 0) {
+        <p
+          class="text-sm font-mono text-muted-foreground"
+          data-testid="broadcast-history-empty"
+        >
+          No broadcast emails sent yet.
+        </p>
+      } @else {
+        <div class="space-y-3">
+          @for (entry of broadcastHistory(); track entry._id) {
+            <div
+              class="rounded-lg border border-border/60 bg-muted/40 p-4"
+              data-testid="broadcast-history-entry"
+            >
+              <div class="flex items-start justify-between gap-4">
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm font-medium text-foreground truncate">
+                    {{ entry.subject }}
+                  </p>
+                  <p class="text-2xs font-mono text-muted-foreground mt-1">
+                    Sent by {{ entry.adminName }} to {{ entry.recipientCount }}
+                    {{
+                      entry.recipientCount === 1 ? 'recipient' : 'recipients'
+                    }}
+                  </p>
+                </div>
+                <time
+                  class="text-2xs font-mono text-muted-foreground whitespace-nowrap"
+                  [attr.datetime]="entry.sentAt"
+                >
+                  {{ entry.sentAt | date: 'short' }}
+                </time>
+              </div>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  </z-card>
+</div>

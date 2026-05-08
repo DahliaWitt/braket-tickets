@@ -1,0 +1,538 @@
+<div class="ph-no-capture space-y-4">
+  <div class="flex items-center justify-between">
+    <h2 class="font-display text-xl text-foreground">Buyer List</h2>
+    <div class="flex items-center gap-3">
+      <span
+        class="font-mono text-xs tracking-widest text-muted-foreground uppercase"
+      >
+        {{ purchases().length }} records
+      </span>
+      @if (purchases().length > 0) {
+        <button
+          type="button"
+          z-button
+          zType="outline"
+          zSize="sm"
+          (click)="openExportDialog()"
+          class="border-primary/50 text-primary hover:bg-primary/10"
+        >
+          <z-icon zType="download" class="mr-2" />
+          Attendees
+        </button>
+      }
+    </div>
+  </div>
+
+  <div
+    class="hidden overflow-hidden rounded-xl border border-border bg-card md:block"
+  >
+    <table class="w-full border-collapse text-left">
+      <thead class="border-b border-border bg-muted">
+        <tr>
+          <th
+            scope="col"
+            class="px-6 py-4 font-mono text-xs tracking-widest text-muted-foreground uppercase"
+          >
+            Date
+          </th>
+          <th
+            scope="col"
+            class="px-6 py-4 font-mono text-xs tracking-widest text-muted-foreground uppercase"
+          >
+            Buyer
+          </th>
+          <th
+            scope="col"
+            class="px-6 py-4 font-mono text-xs tracking-widest text-muted-foreground uppercase"
+          >
+            Tier
+          </th>
+          <th
+            scope="col"
+            class="px-6 py-4 text-right font-mono text-xs tracking-widest text-muted-foreground uppercase"
+          >
+            Amount
+          </th>
+          <th
+            scope="col"
+            class="px-6 py-4 text-right font-mono text-xs tracking-widest text-muted-foreground uppercase"
+          >
+            Actions
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (purchase of purchases(); track purchase.id) {
+          <tr
+            class="border-b border-border/50 transition-colors hover:bg-muted/40"
+            data-testid="buyer-entry"
+          >
+            <td class="px-6 py-4 font-mono text-sm text-muted-foreground">
+              {{ purchase.createdAt | date: 'shortDate' }}
+            </td>
+            <td class="px-6 py-4">
+              <div class="flex flex-col">
+                <span class="text-sm font-medium text-foreground">{{
+                  purchase.userName || 'Unknown'
+                }}</span>
+                <span class="font-mono text-xs text-muted-foreground">{{
+                  purchase.userEmail
+                }}</span>
+              </div>
+            </td>
+            <td class="px-6 py-4">
+              <span
+                class="rounded border px-2 py-0.5 font-mono text-2xs tracking-widest uppercase"
+                [class.bg-muted]="purchase.status === 'completed'"
+                [class.text-muted-foreground]="purchase.status === 'completed'"
+                [class.border-border]="purchase.status === 'completed'"
+                [class.bg-destructive/10]="purchase.status === 'refunded'"
+                [class.text-destructive]="purchase.status === 'refunded'"
+                [class.border-destructive/30]="purchase.status === 'refunded'"
+                data-testid="purchase-status"
+                [attr.data-purchase-id]="purchase.id"
+              >
+                {{
+                  purchase.status === 'refunded' ? 'REFUNDED' : purchase.tier
+                }}
+              </span>
+            </td>
+            <td
+              class="px-6 py-4 text-right font-mono text-sm font-medium text-foreground"
+            >
+              {{ purchase.amount / 100 | currency: 'USD' }}
+            </td>
+            <td class="px-6 py-4 text-right">
+              @if (purchase.tickets.length > 1) {
+                <button
+                  type="button"
+                  z-button
+                  zType="ghost"
+                  zSize="sm"
+                  (click)="togglePurchaseTickets(purchase.id)"
+                  [attr.aria-expanded]="isPurchaseExpanded(purchase.id)"
+                  [attr.data-testid]="'toggle-purchase-tickets-' + purchase.id"
+                  class="text-muted-foreground hover:bg-muted/60"
+                  [attr.aria-label]="
+                    'Toggle ticket details for ' + buyerActionLabel(purchase)
+                  "
+                >
+                  <z-icon
+                    [zType]="
+                      isPurchaseExpanded(purchase.id)
+                        ? 'chevron-up'
+                        : 'chevron-down'
+                    "
+                    class="mr-1"
+                  />
+                  Tickets
+                </button>
+              }
+              <button
+                type="button"
+                z-button
+                zType="ghost"
+                zSize="sm"
+                (click)="viewTicket(purchase)"
+                [zDisabled]="
+                  isGeneratingPdf() === purchase.id || !canViewTicket(purchase)
+                "
+                [attr.aria-busy]="isGeneratingPdf() === purchase.id"
+                data-testid="view-ticket-action"
+                [attr.data-purchase-id]="purchase.id"
+                class="text-primary hover:bg-primary/10"
+                [attr.aria-label]="
+                  'View ticket PDF for ' + buyerActionLabel(purchase)
+                "
+              >
+                @if (isGeneratingPdf() === purchase.id) {
+                  <z-icon zType="loader-circle" class="mr-2 animate-spin" />
+                } @else {
+                  <z-icon zType="file-text" class="mr-2" />
+                }
+                Ticket
+              </button>
+              <button
+                type="button"
+                z-button
+                zType="ghost"
+                zSize="sm"
+                (click)="refundPayment(purchase)"
+                [zDisabled]="
+                  isPurchaseRefunding(purchase.id) ||
+                  !canRefundPayment(purchase)
+                "
+                [attr.aria-busy]="isRefunding() === purchase.id"
+                data-testid="refund-payment-action"
+                [attr.data-purchase-id]="purchase.id"
+                class="ml-1 text-destructive hover:bg-destructive/10"
+                [attr.aria-label]="
+                  (purchase.amount === 0
+                    ? 'Cancel tickets for '
+                    : 'Refund payment for ') + buyerActionLabel(purchase)
+                "
+              >
+                @if (isRefunding() === purchase.id) {
+                  <z-icon zType="loader-circle" class="mr-2 animate-spin" />
+                }
+                {{ purchase.amount === 0 ? 'Cancel' : 'Refund' }}
+              </button>
+              @if (canForceRefundAll(purchase)) {
+                <button
+                  type="button"
+                  z-button
+                  zType="ghost"
+                  zSize="sm"
+                  (click)="forceRefundAll(purchase)"
+                  [zDisabled]="isPurchaseRefunding(purchase.id)"
+                  [attr.aria-busy]="isRefunding() === purchase.id"
+                  data-testid="force-refund-all-action"
+                  [attr.data-purchase-id]="purchase.id"
+                  class="ml-1 text-destructive hover:bg-destructive/10"
+                  [attr.aria-label]="
+                    'Force refund all tickets for ' + buyerActionLabel(purchase)
+                  "
+                >
+                  @if (isRefunding() === purchase.id) {
+                    <z-icon zType="loader-circle" class="mr-2 animate-spin" />
+                  }
+                  Force Refund All
+                </button>
+              }
+            </td>
+          </tr>
+          @if (purchase.tickets.length > 1 && isPurchaseExpanded(purchase.id)) {
+            <tr
+              class="border-b border-border/40 bg-muted/20"
+              [attr.data-testid]="'purchase-tickets-row-' + purchase.id"
+            >
+              <td colspan="5" class="px-6 py-4">
+                <div class="space-y-2">
+                  @for (
+                    ticket of purchase.tickets;
+                    track ticket.id;
+                    let index = $index
+                  ) {
+                    <div
+                      class="flex items-center justify-between rounded-md border border-border/60 bg-card px-3 py-2"
+                    >
+                      <div class="flex items-center gap-3">
+                        <span
+                          class="font-mono text-xs tracking-wider text-muted-foreground uppercase"
+                        >
+                          Ticket {{ index + 1 }}
+                        </span>
+                        <span
+                          class="rounded border px-2 py-0.5 font-mono text-2xs tracking-widest uppercase"
+                          [class.bg-success/10]="ticket.status === 'valid'"
+                          [class.text-success]="ticket.status === 'valid'"
+                          [class.border-success/30]="ticket.status === 'valid'"
+                          [class.bg-muted]="ticket.status === 'used'"
+                          [class.text-muted-foreground]="
+                            ticket.status === 'used'
+                          "
+                          [class.border-border]="ticket.status === 'used'"
+                          [class.bg-destructive/10]="
+                            ticket.status === 'refunded'
+                          "
+                          [class.text-destructive]="
+                            ticket.status === 'refunded'
+                          "
+                          [class.border-destructive/30]="
+                            ticket.status === 'refunded'
+                          "
+                          [class.bg-warning/10]="ticket.status === 'expired'"
+                          [class.text-warning]="ticket.status === 'expired'"
+                          [class.border-warning/30]="
+                            ticket.status === 'expired'
+                          "
+                          [attr.data-testid]="'ticket-status-' + ticket.id"
+                        >
+                          {{ ticket.status }}
+                        </span>
+                        <span
+                          class="font-mono text-xs text-muted-foreground uppercase"
+                        >
+                          {{ ticket.tier }}
+                        </span>
+                      </div>
+                      @if (ticket.status === 'valid') {
+                        <button
+                          type="button"
+                          z-button
+                          zType="outline"
+                          zSize="sm"
+                          (click)="refundPurchaseTicket(purchase, ticket)"
+                          [zDisabled]="isPurchaseRefunding(purchase.id)"
+                          [attr.aria-busy]="isRefundingTicket() === ticket.id"
+                          [attr.data-testid]="'refund-ticket-' + ticket.id"
+                          class="border-destructive/30 text-destructive hover:bg-destructive/10"
+                          [attr.aria-label]="
+                            'Refund ticket ' +
+                            (index + 1) +
+                            ' for ' +
+                            buyerActionLabel(purchase)
+                          "
+                        >
+                          @if (isRefundingTicket() === ticket.id) {
+                            <z-icon
+                              zType="loader-circle"
+                              class="mr-2 animate-spin"
+                            />
+                          }
+                          Refund
+                        </button>
+                      }
+                    </div>
+                  }
+                </div>
+              </td>
+            </tr>
+          }
+        } @empty {
+          <tr>
+            <td colspan="5" class="px-6 py-12 text-center">
+              <span class="font-mono text-sm text-muted-foreground"
+                >NO RECORDS FOUND</span
+              >
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <div class="space-y-4 md:hidden">
+    @for (purchase of purchases(); track purchase.id) {
+      <z-card class="border-border bg-card/80" data-testid="buyer-entry">
+        <div class="space-y-3">
+          <div>
+            <p class="font-display text-foreground">{{ purchase.userName }}</p>
+            <p class="truncate font-mono text-xs text-muted-foreground">
+              {{ purchase.userEmail || '—' }}
+            </p>
+          </div>
+          <div
+            class="grid grid-cols-2 gap-3 overflow-hidden font-mono text-xs text-foreground/80"
+          >
+            <div>
+              <div class="mb-1 text-muted-foreground uppercase">
+                Tier / Status
+              </div>
+              <div
+                class="uppercase"
+                [class.text-destructive]="purchase.status === 'refunded'"
+                [class.font-bold]="purchase.status === 'refunded'"
+                data-testid="purchase-status"
+                [attr.data-purchase-id]="purchase.id"
+              >
+                {{
+                  purchase.status === 'refunded' ? 'REFUNDED' : purchase.tier
+                }}
+              </div>
+            </div>
+            <div>
+              <div class="mb-1 text-muted-foreground uppercase">Quantity</div>
+              <div>{{ purchase.quantity }}</div>
+            </div>
+            <div>
+              <div class="mb-1 text-muted-foreground uppercase">Amount</div>
+              <div>
+                {{
+                  purchase.amount / 100 | currency: 'USD' : 'symbol' : '1.2-2'
+                }}
+              </div>
+            </div>
+            <div>
+              <div class="mb-1 text-muted-foreground uppercase">Purchased</div>
+              <div>{{ purchase.createdAt | date: 'short' }}</div>
+            </div>
+          </div>
+
+          @if (purchase.tickets.length > 1) {
+            <button
+              type="button"
+              z-button
+              zType="ghost"
+              zSize="sm"
+              (click)="togglePurchaseTickets(purchase.id)"
+              [attr.aria-expanded]="isPurchaseExpanded(purchase.id)"
+              [attr.data-testid]="
+                'toggle-purchase-tickets-mobile-' + purchase.id
+              "
+              class="w-full justify-between text-muted-foreground hover:bg-muted/60"
+              [attr.aria-label]="
+                'Toggle ticket details for ' + buyerActionLabel(purchase)
+              "
+            >
+              <span class="font-mono text-2xs tracking-widest uppercase"
+                >Ticket Details</span
+              >
+              <z-icon
+                [zType]="
+                  isPurchaseExpanded(purchase.id)
+                    ? 'chevron-up'
+                    : 'chevron-down'
+                "
+                class="ml-2"
+              />
+            </button>
+          }
+
+          @if (purchase.tickets.length > 1 && isPurchaseExpanded(purchase.id)) {
+            <div class="space-y-2">
+              @for (
+                ticket of purchase.tickets;
+                track ticket.id;
+                let index = $index
+              ) {
+                <div
+                  class="rounded-md border border-border/60 bg-card px-3 py-2"
+                  [attr.data-testid]="'mobile-ticket-row-' + ticket.id"
+                >
+                  <div class="flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-2">
+                      <span
+                        class="font-mono text-2xs tracking-wider text-muted-foreground uppercase"
+                      >
+                        #{{ index + 1 }}
+                      </span>
+                      <span
+                        class="rounded border px-2 py-0.5 font-mono text-2xs tracking-widest uppercase"
+                        [class.bg-success/10]="ticket.status === 'valid'"
+                        [class.text-success]="ticket.status === 'valid'"
+                        [class.border-success/30]="ticket.status === 'valid'"
+                        [class.bg-muted]="ticket.status === 'used'"
+                        [class.text-muted-foreground]="ticket.status === 'used'"
+                        [class.border-border]="ticket.status === 'used'"
+                        [class.bg-destructive/10]="ticket.status === 'refunded'"
+                        [class.text-destructive]="ticket.status === 'refunded'"
+                        [class.border-destructive/30]="
+                          ticket.status === 'refunded'
+                        "
+                        [class.bg-warning/10]="ticket.status === 'expired'"
+                        [class.text-warning]="ticket.status === 'expired'"
+                        [class.border-warning/30]="ticket.status === 'expired'"
+                        [attr.data-testid]="'mobile-ticket-status-' + ticket.id"
+                      >
+                        {{ ticket.status }}
+                      </span>
+                    </div>
+                    @if (ticket.status === 'valid') {
+                      <button
+                        type="button"
+                        z-button
+                        zType="outline"
+                        zSize="sm"
+                        (click)="refundPurchaseTicket(purchase, ticket)"
+                        [zDisabled]="isPurchaseRefunding(purchase.id)"
+                        [attr.aria-busy]="isRefundingTicket() === ticket.id"
+                        [attr.data-testid]="'mobile-refund-ticket-' + ticket.id"
+                        class="border-destructive/30 text-destructive hover:bg-destructive/10"
+                        [attr.aria-label]="
+                          'Refund ticket ' +
+                          (index + 1) +
+                          ' for ' +
+                          buyerActionLabel(purchase)
+                        "
+                      >
+                        @if (isRefundingTicket() === ticket.id) {
+                          <z-icon
+                            zType="loader-circle"
+                            class="mr-2 animate-spin"
+                          />
+                        }
+                        Refund
+                      </button>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          }
+
+          <div
+            class="relative z-10 flex flex-wrap justify-end gap-2 border-t border-border/50 pt-2"
+          >
+            <button
+              type="button"
+              z-button
+              zType="outline"
+              zSize="sm"
+              (click)="viewTicket(purchase)"
+              [zDisabled]="
+                isGeneratingPdf() === purchase.id || !canViewTicket(purchase)
+              "
+              [attr.aria-busy]="isGeneratingPdf() === purchase.id"
+              data-testid="view-ticket-action"
+              [attr.data-purchase-id]="purchase.id"
+              [attr.aria-label]="
+                'View ticket PDF for ' + buyerActionLabel(purchase)
+              "
+              class="flex-1 border-primary/30 text-primary hover:bg-primary/10"
+            >
+              @if (isGeneratingPdf() === purchase.id) {
+                <z-icon zType="loader-circle" class="mr-2 animate-spin" />
+              } @else {
+                <z-icon zType="file-text" class="mr-2" />
+              }
+              View Ticket
+            </button>
+            <button
+              type="button"
+              z-button
+              zType="outline"
+              zSize="sm"
+              (click)="refundPayment(purchase)"
+              [zDisabled]="
+                isPurchaseRefunding(purchase.id) || !canRefundPayment(purchase)
+              "
+              [attr.aria-busy]="isRefunding() === purchase.id"
+              [attr.aria-label]="
+                (purchase.amount === 0
+                  ? 'Cancel tickets for '
+                  : 'Refund payment for ') + buyerActionLabel(purchase)
+              "
+              data-testid="refund-payment-action"
+              [attr.data-purchase-id]="purchase.id"
+              class="flex-1 border-destructive/30 text-destructive hover:bg-destructive/10"
+            >
+              @if (isRefunding() === purchase.id) {
+                <z-icon zType="loader-circle" class="mr-2 animate-spin" />
+              }
+              {{ purchase.amount === 0 ? 'Cancel' : 'Refund' }}
+            </button>
+            @if (canForceRefundAll(purchase)) {
+              <button
+                type="button"
+                z-button
+                zType="outline"
+                zSize="sm"
+                (click)="forceRefundAll(purchase)"
+                [zDisabled]="isPurchaseRefunding(purchase.id)"
+                [attr.aria-busy]="isRefunding() === purchase.id"
+                data-testid="force-refund-all-action"
+                [attr.data-purchase-id]="purchase.id"
+                class="w-full border-destructive/30 text-destructive hover:bg-destructive/10"
+                [attr.aria-label]="
+                  'Force refund all tickets for ' + buyerActionLabel(purchase)
+                "
+              >
+                @if (isRefunding() === purchase.id) {
+                  <z-icon zType="loader-circle" class="mr-2 animate-spin" />
+                }
+                Force Refund All
+              </button>
+            }
+          </div>
+        </div>
+      </z-card>
+    } @empty {
+      <div
+        class="rounded-lg border border-dashed border-border py-10 text-center font-mono text-muted-foreground"
+      >
+        No completed purchases yet.
+      </div>
+    }
+  </div>
+</div>

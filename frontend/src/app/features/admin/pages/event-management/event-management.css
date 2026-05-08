@@ -1,0 +1,52 @@
+/* ApexCharts Container */
+.sales-chart-container {
+  /* Ensure chart respects container width */
+  width: 100%;
+  min-height: 200px;
+}
+
+/* ApexCharts injects inline styles that can only be overridden with !important */
+:host ::ng-deep .apexcharts-tooltip {
+  background: hsl(var(--card)) !important;
+  border: 1px solid hsl(var(--primary)) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 0 20px hsl(var(--primary) / 0.3) !important;
+}
+
+:host ::ng-deep .apexcharts-tooltip-title {
+  background: hsl(var(--background)) !important;
+  border-bottom: 1px solid hsl(var(--border)) !important;
+  color: hsl(var(--muted-foreground)) !important;
+  font-family: 'Space Mono', monospace !important;
+  font-size: 10px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.1em !important;
+}
+
+:host ::ng-deep .apexcharts-tooltip-text {
+  font-family: 'Space Mono', monospace !important;
+}
+
+:host ::ng-deep .apexcharts-tooltip-text-y-value {
+  color: hsl(var(--primary)) !important;
+  font-weight: bold !important;
+}
+
+:host ::ng-deep .apexcharts-tooltip-text-y-label {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+/* Crosshair styling */
+:host ::ng-deep .apexcharts-xcrosshairs {
+  stroke: hsl(var(--primary)) !important;
+}
+
+/* Grid styling */
+:host ::ng-deep .apexcharts-gridline {
+  stroke: hsl(var(--border)) !important;
+}
+
+/* Area glow effect */
+:host ::ng-deep .apexcharts-area-series .apexcharts-series-markers circle {
+  filter: drop-shadow(0 0 6px hsl(var(--primary)));
+}

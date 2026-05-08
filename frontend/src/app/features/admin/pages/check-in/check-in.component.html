@@ -1,0 +1,590 @@
+<main class="ph-no-capture mx-auto max-w-4xl px-4 py-6 pb-24 md:px-6">
+  <!-- Sticky Header Context -->
+  <div
+    class="sticky top-0 z-20 -mx-4 mb-4 border-b border-border bg-background px-4 pb-4 md:relative md:mx-0 md:mb-6 md:border-0 md:bg-transparent md:px-0 md:backdrop-blur-none"
+  >
+    <div class="flex items-center justify-between gap-4">
+      <div>
+        <h1
+          class="mb-0.5 font-display text-2xl font-bold tracking-tight text-foreground uppercase sm:text-3xl lg:text-4xl"
+        >
+          Check-In
+        </h1>
+        <p class="mono-label text-2xs text-muted-foreground md:text-xs">
+          {{ selectedEventId() ? eventTitle() : panelLabel() }}
+        </p>
+      </div>
+
+      <div class="flex items-center gap-2">
+        @if (selectedEventId()) {
+          <button
+            type="button"
+            (click)="isScannerExpanded.set(!isScannerExpanded())"
+            class="flex h-10 w-10 items-center justify-center rounded border border-border bg-muted text-foreground transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none active:bg-muted/80 md:hidden"
+            aria-label="Toggle scanner visibility"
+            [attr.aria-expanded]="isScannerExpanded()"
+          >
+            @if (isScannerExpanded()) {
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m18 15-6-6-6 6" />
+              </svg>
+            } @else {
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 2v2" />
+                <path d="M12 20v2" />
+                <path d="m4.93 4.93 1.41 1.41" />
+                <path d="m17.66 17.66 1.41 1.41" />
+                <path d="M2 12h2" />
+                <path d="M20 12h2" />
+                <path d="m6.34 17.66-1.41 1.41" />
+                <path d="m19.07 4.93-1.41 1.41" />
+              </svg>
+            }
+          </button>
+        }
+        <z-button
+          [routerLink]="exitRoute()"
+          zType="ghost"
+          zSize="sm"
+          class="shrink-0 font-mono uppercase"
+        >
+          Exit
+        </z-button>
+      </div>
+    </div>
+
+    <div class="mt-4 flex flex-col gap-3 md:flex-row md:items-center">
+      <select
+        zInput
+        [value]="selectedEventId() ?? ''"
+        (change)="onEventSelectionChange($event)"
+        aria-label="Select event"
+        class="native-select w-full border-border bg-muted/60 px-4 py-2.5 font-mono text-sm text-foreground uppercase md:w-64"
+      >
+        <option value="">Select Event...</option>
+        @for (event of events(); track event._id) {
+          <option [value]="event._id">{{ event.title }}</option>
+        }
+      </select>
+    </div>
+  </div>
+
+  @if (selectedEventId()) {
+    <div class="grid items-start gap-6 lg:grid-cols-2">
+      <!-- QR Scanner Section -->
+      <app-check-in-scanner
+        [(isExpanded)]="isScannerExpanded"
+        [isProcessing]="isProcessing()"
+        [lastResult]="lastResult()"
+        [isSoundEnabled]="checkInService.isSoundEnabled()"
+        [showEnableSoundFallback]="checkInService.showEnableSoundFallback()"
+        (scanned)="onQRScanned($event)"
+        (resultCleared)="checkInService.lastResult.set(null)"
+        (soundToggleRequested)="checkInService.toggleSoundEnabled()"
+        (soundEnableRequested)="enableScannerSounds()"
+      />
+
+      <!-- Manual List Section -->
+      <div class="space-y-4">
+        <z-card
+          class="flex min-h-[500px] flex-col border-border bg-card/40 shadow-2xl lg:h-[calc(100vh-160px)]"
+        >
+          <div class="flex h-full min-h-0 flex-col">
+            <div class="border-b border-border bg-muted/20 p-4">
+              <!-- Search & Tabs Sticky Anchor -->
+              <div class="space-y-4">
+                <!-- Tabs -->
+                <div
+                  role="tablist"
+                  tabindex="0"
+                  aria-label="Attendee lists"
+                  class="flex rounded-xl border border-border/50 bg-muted/40 p-1 backdrop-blur-sm dark:bg-background/80"
+                  (keydown.arrowleft)="activeTab.set('tickets')"
+                  (keydown.arrowright)="activeTab.set('guests')"
+                >
+                  <button
+                    type="button"
+                    id="tab-tickets"
+                    role="tab"
+                    [attr.aria-selected]="activeTab() === 'tickets'"
+                    aria-controls="tickets-panel"
+                    [attr.tabindex]="activeTab() === 'tickets' ? 0 : -1"
+                    (click)="activeTab.set('tickets')"
+                    [class.bg-muted]="activeTab() === 'tickets'"
+                    [class.text-foreground]="activeTab() === 'tickets'"
+                    [class.text-muted-foreground]="activeTab() !== 'tickets'"
+                    [class.shadow-lg]="activeTab() === 'tickets'"
+                    class="min-h-[44px] flex-1 rounded-lg py-3 font-mono text-xs tracking-widest uppercase transition-all active:scale-[0.98]"
+                  >
+                    Tickets ({{ filteredTickets().length }})
+                  </button>
+                  <button
+                    type="button"
+                    id="tab-guests"
+                    role="tab"
+                    [attr.aria-selected]="activeTab() === 'guests'"
+                    aria-controls="guests-panel"
+                    [attr.tabindex]="activeTab() === 'guests' ? 0 : -1"
+                    (click)="activeTab.set('guests')"
+                    [class.bg-muted]="activeTab() === 'guests'"
+                    [class.text-foreground]="activeTab() === 'guests'"
+                    [class.text-muted-foreground]="activeTab() !== 'guests'"
+                    [class.shadow-lg]="activeTab() === 'guests'"
+                    class="min-h-[44px] flex-1 rounded-lg py-3 font-mono text-xs tracking-widest uppercase transition-all active:scale-[0.98]"
+                  >
+                    Guestlist ({{ filteredGuests().length }})
+                  </button>
+                </div>
+
+                <!-- Search -->
+                <div class="group relative">
+                  <div
+                    class="pointer-events-none absolute inset-y-0 left-3 flex items-center"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="text-muted-foreground transition-colors group-focus-within:text-primary"
+                    >
+                      <circle cx="11" cy="11" r="8" />
+                      <path d="m21 21-4.3-4.3" />
+                    </svg>
+                  </div>
+                  <input
+                    zInput
+                    type="text"
+                    [formField]="f.filter"
+                    aria-label="Filter attendees"
+                    placeholder="SEARCH..."
+                    class="w-full py-3 pr-4 pl-10 font-mono text-sm tracking-wider text-foreground uppercase"
+                  />
+                </div>
+              </div>
+            </div>
+
+            @if (manualFeedback(); as feedback) {
+              <div
+                role="alert"
+                data-testid="manual-check-in-feedback"
+                [class]="
+                  feedback.kind === 'success'
+                    ? 'mx-4 mt-4 rounded-lg border border-success/30 bg-success/5 px-4 py-3 text-success'
+                    : 'mx-4 mt-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-destructive'
+                "
+              >
+                <p class="font-mono text-xs font-bold uppercase">
+                  {{ feedback.message }}
+                </p>
+              </div>
+            }
+
+            <!-- List -->
+            <div
+              class="md:scrollbar-thin md:scrollbar-thumb-muted md:scrollbar-track-transparent min-h-0 flex-1 space-y-3 overflow-y-auto p-4"
+            >
+              @if (activeTab() === 'tickets') {
+                <div
+                  id="tickets-panel"
+                  role="tabpanel"
+                  aria-labelledby="tab-tickets"
+                >
+                  @if (isLoadingTickets()) {
+                    <div aria-live="polite">
+                      <span class="sr-only">Loading tickets...</span>
+                    </div>
+                    <div class="animate-pulse space-y-3" aria-hidden="true">
+                      @for (i of [1, 2, 3]; track i) {
+                        <div
+                          class="flex items-center justify-between rounded-xl border border-border/40 bg-muted/20 p-4"
+                        >
+                          <div class="flex-1 space-y-2 pr-4">
+                            <z-skeleton class="h-4 w-1/2" />
+                            <z-skeleton class="h-3 w-1/3" />
+                          </div>
+                          <z-skeleton class="h-8 w-16 rounded-lg" />
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+                @if (!isLoadingTickets()) {
+                  @for (
+                    ticket of filteredTickets();
+                    track ticket._id;
+                    let rowIndex = $index
+                  ) {
+                    <div
+                      class="group flex items-center justify-between rounded-xl border border-border/40 bg-muted/40 p-4 transition-all hover:border-border/60 hover:bg-muted/20 dark:bg-muted"
+                      data-testid="buyer-entry"
+                    >
+                      <div class="min-w-0 flex-1 overflow-hidden pr-4">
+                        <div class="mb-1 flex items-center gap-2">
+                          <p
+                            class="truncate text-sm font-bold tracking-tight text-foreground"
+                          >
+                            {{
+                              ticket.user?.name ||
+                                ticket.user?.email ||
+                                ticket.guestEmail ||
+                                'N/A'
+                            }}
+                          </p>
+                          <span
+                            class="shrink-0 rounded-full border border-primary/30 bg-primary/5 px-1.5 py-0.5 font-mono text-[8px] font-black text-primary uppercase"
+                            >{{ ticket.tier }}</span
+                          >
+                        </div>
+                        <div class="flex flex-col gap-0.5">
+                          <p
+                            class="truncate font-mono text-2xs text-muted-foreground lowercase"
+                          >
+                            {{ ticket.user?.email || ticket.guestEmail }}
+                          </p>
+                          <div class="flex items-center gap-1.5 opacity-40">
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              width="8"
+                              height="8"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                            >
+                              <path
+                                d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"
+                              />
+                              <path
+                                d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"
+                              />
+                            </svg>
+                            <p
+                              class="font-mono text-[9px] text-muted-foreground uppercase"
+                            >
+                              {{ ticket._id.slice(0, 12) }}...
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="shrink-0">
+                        @if (
+                          ticket.status === 'valid' &&
+                          !isTicketRecentlyCheckedIn(ticket._id)
+                        ) {
+                          <button
+                            type="button"
+                            (click)="checkInTicket(ticket._id)"
+                            [disabled]="isProcessing()"
+                            [attr.aria-label]="
+                              ticketCheckInLabel(ticket, rowIndex)
+                            "
+                            class="min-h-[44px] rounded-lg bg-foreground px-4 py-3 font-mono text-2xs font-black text-background uppercase shadow-lg transition-all hover:bg-foreground/90 active:scale-95 active:shadow-none disabled:opacity-50"
+                          >
+                            Check-in
+                          </button>
+                        } @else if (
+                          ticket.status === 'used' ||
+                          isTicketRecentlyCheckedIn(ticket._id)
+                        ) {
+                          <div
+                            class="flex flex-col items-end rounded-lg border border-success/20 bg-success/10 px-3 py-1.5 text-success shadow-inner"
+                          >
+                            <div class="flex items-center gap-1">
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="10"
+                                height="10"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="3"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              >
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                              <span
+                                class="font-mono text-2xs font-black tracking-tighter uppercase"
+                                >Verified</span
+                              >
+                            </div>
+                            <span class="font-mono text-[8px] opacity-60">{{
+                              ticketCheckedInAt(ticket) | date: 'HH:mm'
+                            }}</span>
+                          </div>
+                        } @else {
+                          <span
+                            class="rounded-lg border border-border bg-muted px-3 py-1.5 font-mono text-[9px] text-muted-foreground uppercase"
+                          >
+                            {{ ticket.status }}
+                          </span>
+                        }
+                      </div>
+                    </div>
+                  }
+                }
+                @if (!isLoadingTickets() && filteredTickets().length === 0) {
+                  <div
+                    class="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/10 px-4 py-12"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="mb-3 text-muted-foreground"
+                    >
+                      <path
+                        d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"
+                      />
+                      <polyline points="14 2 14 8 20 8" />
+                      <line x1="9" x2="15" y1="13" y2="13" />
+                      <line x1="9" x2="15" y1="17" y2="17" />
+                    </svg>
+                    <p
+                      class="font-mono text-2xs tracking-[0.2em] text-muted-foreground uppercase"
+                    >
+                      No tickets found
+                    </p>
+                  </div>
+                }
+              } @else {
+                <div
+                  id="guests-panel"
+                  role="tabpanel"
+                  aria-labelledby="tab-guests"
+                >
+                  @if (isLoadingGuests()) {
+                    <div aria-live="polite">
+                      <span class="sr-only">Loading guests...</span>
+                    </div>
+                    <div class="animate-pulse space-y-3" aria-hidden="true">
+                      @for (i of [1, 2, 3]; track i) {
+                        <div
+                          class="flex items-center justify-between rounded-xl border border-border/40 bg-muted/20 p-4"
+                        >
+                          <div class="flex-1 space-y-2 pr-4">
+                            <z-skeleton class="h-4 w-1/2" />
+                            <z-skeleton class="h-3 w-1/3" />
+                          </div>
+                          <z-skeleton class="h-8 w-16 rounded-lg" />
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+                @if (!isLoadingGuests()) {
+                  @for (
+                    guest of filteredGuests();
+                    track guest._id;
+                    let rowIndex = $index
+                  ) {
+                    <div
+                      class="group flex items-center justify-between rounded-xl border border-border/40 bg-muted/40 p-4 transition-all hover:border-border/60 hover:bg-muted/20 dark:bg-muted"
+                      data-testid="buyer-entry"
+                    >
+                      <div class="min-w-0 flex-1 overflow-hidden pr-4">
+                        <div class="mb-1 flex items-center gap-2">
+                          <p
+                            class="truncate text-sm font-bold tracking-tight text-foreground"
+                          >
+                            {{ guest.name }}
+                          </p>
+                          <span
+                            class="shrink-0 rounded-full border border-secondary/30 bg-secondary/5 px-1.5 py-0.5 font-mono text-[8px] font-black text-secondary uppercase"
+                            >{{ guest.type }}</span
+                          >
+                        </div>
+                        <div class="flex flex-col gap-0.5">
+                          <p
+                            class="mt-0.5 truncate font-mono text-2xs text-muted-foreground"
+                          >
+                            {{ guest.email || '-- no contact info --' }}
+                          </p>
+                          @if (guest.notes) {
+                            <div class="mt-1 flex items-start gap-1.5">
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="10"
+                                height="10"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                class="mt-0.5 text-muted-foreground"
+                              >
+                                <path
+                                  d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+                                />
+                              </svg>
+                              <p
+                                class="truncate text-2xs leading-tight text-muted-foreground italic"
+                              >
+                                {{ guest.notes }}
+                              </p>
+                            </div>
+                          }
+                        </div>
+                      </div>
+
+                      <div class="shrink-0">
+                        @if (!guestCheckedInAt(guest)) {
+                          <button
+                            type="button"
+                            (click)="checkInGuest(guest._id)"
+                            [disabled]="isProcessing()"
+                            [attr.aria-label]="
+                              guestCheckInLabel(guest, rowIndex)
+                            "
+                            class="min-h-[44px] rounded-lg bg-foreground px-4 py-3 font-mono text-2xs font-black text-background uppercase shadow-lg transition-all hover:bg-foreground/90 active:scale-95 active:shadow-none disabled:opacity-50"
+                          >
+                            Check-in
+                          </button>
+                        } @else {
+                          <div
+                            class="flex flex-col items-end rounded-lg border border-secondary/20 bg-secondary/10 px-3 py-1.5 text-secondary shadow-inner"
+                          >
+                            <div class="flex items-center gap-1">
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="10"
+                                height="10"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="3"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              >
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                              <span
+                                class="font-mono text-2xs font-black tracking-tighter uppercase"
+                                >Checked In</span
+                              >
+                            </div>
+                            <span class="font-mono text-[8px] opacity-60">{{
+                              guestCheckedInAt(guest) | date: 'HH:mm'
+                            }}</span>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+                }
+                @if (!isLoadingGuests() && filteredGuests().length === 0) {
+                  <div
+                    class="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/10 px-4 py-12"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="mb-3 text-muted-foreground"
+                    >
+                      <path
+                        d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"
+                      />
+                      <polyline points="14 2 14 8 20 8" />
+                      <line x1="9" x2="15" y1="13" y2="13" />
+                      <line x1="9" x2="15" y1="17" y2="17" />
+                    </svg>
+                    <p
+                      class="font-mono text-2xs tracking-[0.2em] text-muted-foreground uppercase"
+                    >
+                      No guests found
+                    </p>
+                  </div>
+                }
+              }
+            </div>
+          </div>
+        </z-card>
+      </div>
+    </div>
+  } @else {
+    <div
+      data-testid="event-empty-state"
+      class="mt-12 flex flex-col items-center justify-center space-y-6 rounded-2xl border border-dashed border-border bg-muted/20 p-12 text-center"
+    >
+      <div
+        class="relative flex h-20 w-20 items-center justify-center rounded-3xl border border-border bg-muted"
+      >
+        <div class="absolute inset-0 rounded-full bg-primary/20 blur-2xl"></div>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="32"
+          height="32"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="relative z-10 text-muted-foreground"
+        >
+          <path d="M8 2v4" />
+          <path d="M16 2v4" />
+          <rect width="18" height="18" x="3" y="4" rx="2" />
+          <path d="M3 10h18" />
+        </svg>
+      </div>
+      <div>
+        <h2
+          class="mb-2 font-display text-xl font-bold tracking-tight text-foreground uppercase"
+        >
+          Pick an Event
+        </h2>
+        <p
+          class="mx-auto max-w-xs text-sm leading-relaxed text-muted-foreground"
+        >
+          choose one above to start scanning tickets and checking people in
+        </p>
+      </div>
+    </div>
+  }
+</main>

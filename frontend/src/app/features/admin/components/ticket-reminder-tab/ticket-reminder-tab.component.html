@@ -1,0 +1,100 @@
+<z-card class="border-border bg-card/80" data-testid="ticket-reminder-card">
+  <form class="space-y-4" (submit)="openSendTicketReminderConfirm(); $event.preventDefault()">
+    <div>
+      <p class="text-xs uppercase font-mono text-muted-foreground tracking-widest">
+        Ticket Purchase Reminder
+      </p>
+      <p class="text-xs font-mono text-muted-foreground">
+        Email vetted + approved users without a ticket for this event. Includes a link to purchase tickets.
+      </p>
+    </div>
+
+    <div class="grid gap-4 md:grid-cols-2">
+      <div class="md:col-span-2 space-y-1">
+        <label
+          for="ticket-reminder-subject"
+          class="text-xs uppercase font-mono text-muted-foreground tracking-widest"
+        >
+          Subject
+        </label>
+        <input
+          id="ticket-reminder-subject"
+          type="text"
+          [formField]="reminderForm.subject"
+          data-testid="ticket-reminder-subject"
+          class="w-full rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          placeholder="Ticket reminder subject"
+        />
+        <p class="text-2xs font-mono text-muted-foreground">
+          {{ reminderSubjectLength() }} / {{ maxTicketReminderSubjectLength }}
+        </p>
+      </div>
+
+      <div class="md:col-span-2 space-y-1">
+        <label
+          for="ticket-reminder-message"
+          class="text-xs uppercase font-mono text-muted-foreground tracking-widest"
+        >
+          Message
+        </label>
+        <textarea
+          id="ticket-reminder-message"
+          [formField]="reminderForm.message"
+          data-testid="ticket-reminder-message"
+          rows="5"
+          class="w-full rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          placeholder="Write your reminder message..."
+        ></textarea>
+        <p class="text-2xs font-mono text-muted-foreground">
+          {{ reminderMessageLength() }} / {{ maxTicketReminderMessageLength }}
+        </p>
+      </div>
+    </div>
+
+    @if (hasReminderLengthErrors()) {
+      <p class="text-xs font-mono text-destructive" data-testid="ticket-reminder-length-error">
+        Subject or message exceeds allowed length.
+      </p>
+    }
+
+    @if (isLoadingReminderAudience()) {
+      <p class="text-xs font-mono text-muted-foreground" data-testid="ticket-reminder-audience-loading">
+        Calculating reminder audience...
+      </p>
+    } @else if (reminderAudienceError()) {
+      <p class="text-xs font-mono text-destructive" data-testid="ticket-reminder-audience-error">
+        {{ reminderAudienceError() }}
+      </p>
+    } @else if (reminderMissingCommunity()) {
+      <p class="text-xs font-mono text-warning" data-testid="ticket-reminder-missing-community">
+        This event has no community. Reminder emails are unavailable.
+      </p>
+    } @else {
+      <p
+        class="text-xs font-mono text-muted-foreground"
+        data-testid="ticket-reminder-recipient-count"
+      >
+        {{ reminderRecipientCount() }} eligible recipients will receive this reminder.
+      </p>
+    }
+
+    <button
+      z-button
+      zType="outline"
+      zSize="sm"
+      type="submit"
+      data-testid="send-ticket-reminder"
+      [zDisabled]="isSendReminderDisabled()"
+      [attr.aria-busy]="isSendingTicketReminder()"
+      class="w-full sm:w-auto border-primary/50 text-primary hover:bg-primary/10"
+    >
+      @if (isSendingTicketReminder()) {
+        <z-icon zType="loader-circle" class="mr-2 animate-spin" />
+        Sending...
+      } @else {
+        <z-icon zType="mail" class="mr-2" />
+        Send Reminder
+      }
+    </button>
+  </form>
+</z-card>

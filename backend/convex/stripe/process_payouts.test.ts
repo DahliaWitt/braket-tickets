@@ -1,0 +1,424 @@
+import {beforeEach, describe, expect, it, vi} from 'vitest';
+import {convexTest} from '../setup.testing';
+import {api, internal} from '../_generated/api';
+
+/**
+ * End-to-end coverage for `processScheduledPayouts` — the Connect-account
+ * branch. The platform-organizer branch is covered in
+ * `stripe/actions.test.ts`. Here we exercise the full path:
+ *
+ *   listConnectedAccounts → getSettlementDataForAccount →
+ *   computeEventSettlements → buildPayoutPlan → createPayoutIntent →
+ *   stripe.payouts.create → markPayoutBatchSubmitted
+ *
+ * Stripe SDK calls are mocked. Convex DB state is real via convexTest.
+ */
+const balanceRetrieveMock = vi.hoisted(() => vi.fn());
+const payoutsCreateMock = vi.hoisted(() => vi.fn());
+
+vi.mock('stripe', () => {
+  class StripeMock {
+    static errors = {
+      StripeSignatureVerificationError: class StripeSignatureVerificationError extends Error {},
+    };
+
+    balance = {retrieve: balanceRetrieveMock};
+    payouts = {create: payoutsCreateMock};
+    // Stubs for actions that aren't exercised but share this module.
+    v2 = {
+      core: {
+        accounts: {create: vi.fn(), retrieve: vi.fn(), close: vi.fn()},
+      },
+    };
+    balanceSettings = {update: vi.fn(), retrieve: vi.fn()};
+    accountSessions = {create: vi.fn()};
+    webhooks = {constructEvent: vi.fn()};
+    paymentIntents = {create: vi.fn(), retrieve: vi.fn()};
+    refunds = {create: vi.fn()};
+    checkout = {sessions: {create: vi.fn(), retrieve: vi.fn()}};
+    charges = {retrieve: vi.fn()};
+    accountLinks = {create: vi.fn()};
+
+    constructor(_secretKey: string) {}
+  }
+  return {default: StripeMock};
+});
+
+describe('processScheduledPayouts — Connect account branch', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env['STRIPE_SECRET_KEY'] = 'sk_test_fake';
+    balanceRetrieveMock.mockResolvedValue({
+      available: [{amount: 10_000, currency: 'usd'}],
+    });
+    payoutsCreateMock.mockResolvedValue({id: 'po_test_123'});
+  });
+
+  it('runs the full flow: settlement math → createPayoutIntent → payouts.create → markSubmitted', async () => {
+    const t = convexTest();
+    const organizerId = await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {
+        name: 'Connect Account Org',
+        slug: 'connect-org',
+        stripeConnectedAccountId: 'acct_end_to_end',
+        stripeOnboardingStatus: 'complete',
+        stripeChargesEnabled: true,
+        stripePayoutsEnabled: true,
+        status: 'published',
+      },
+    );
+
+    // Past event — eligible for payout.
+    const eventId = await t.mutation(api.testing.events.seedEvent, {
+      title: 'Past Event',
+      price: 2500,
+      totalTickets: 100,
+      date: '2020-01-01T00:00:00.000Z',
+      status: 'published',
+      visibility: 'public',
+      organizerId,
+    });
+
+    // Seed a ledger row as if a captured charge landed on this event.
+    // The settlement math reads `connectedAccountNetCents` from the
+    // financial event row (Task 7). There's no production-mutation path
+    // that emits a `payment_captured` row with a pre-computed Stripe
+    // net figure — that path requires a real BalanceTransaction from
+    // `recordPaymentCaptured`, which needs a live Stripe round trip.
+    // For this integration test we seed the row directly to stand in
+    // for "Stripe confirmed capture and the webhook recorded net
+    // impact."
+    await t.run(async (ctx) => {
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row; no production mutation emits with a custom BalanceTransaction net.
+      const orderId = await ctx.db.insert('ticket_orders', {
+        eventId,
+        kind: 'primary',
+        quantity: 1,
+        tier: 'regular',
+        amountCents: 2500,
+        currency: 'USD',
+        state: 'completed',
+        expiresAt: Date.now() + 60_000,
+        completedAt: Date.now(),
+        trustSource: 'open_access',
+        connectedAccountId: 'acct_end_to_end',
+      });
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row; no production mutation emits with a custom BalanceTransaction net.
+      await ctx.db.insert('order_financial_events', {
+        orderId,
+        eventId,
+        currency: 'USD',
+        kind: 'payment_captured',
+        amountCents: 2500,
+        connectedAccountId: 'acct_end_to_end',
+        connectedAccountNetCents: 2400,
+        processorFeeCents: 100,
+        platformFeeCents: 50,
+        occurredAt: Date.now(),
+      });
+    });
+
+    await t.action(internal.stripe.actions.processScheduledPayouts, {});
+
+    // Stripe payout created with the deterministic idempotency key.
+    expect(payoutsCreateMock).toHaveBeenCalledTimes(1);
+    const [createParams, createOptions] = payoutsCreateMock.mock.calls[0] as [
+      Record<string, unknown>,
+      Record<string, unknown>,
+    ];
+    expect(createParams).toMatchObject({amount: 2400, currency: 'usd'});
+    expect(createOptions).toMatchObject({
+      stripeAccount: 'acct_end_to_end',
+      idempotencyKey: expect.stringMatching(
+        /^braket-payout-acct_end_to_end-\d{4}-\d{2}-\d{2}$/,
+      ),
+    });
+
+    // Batch landed in submitted state with stripe payout id stamped.
+    const batch = await t.run(async (ctx) =>
+      ctx.db
+        .query('payout_batches')
+        .withIndex('by_connectedAccountId_and_status', (q) =>
+          q.eq('connectedAccountId', 'acct_end_to_end'),
+        )
+        .first(),
+    );
+    expect(batch).toMatchObject({
+      status: 'submitted',
+      amountCents: 2400,
+      stripePayoutId: 'po_test_123',
+    });
+
+    // Allocation persisted and bound to the event.
+    const allocations = await t.run(async (ctx) =>
+      ctx.db
+        .query('payout_allocations')
+        .withIndex('by_connectedAccountId_and_status', (q) =>
+          q.eq('connectedAccountId', 'acct_end_to_end'),
+        )
+        .collect(),
+    );
+    expect(allocations).toHaveLength(1);
+    expect(allocations[0]).toMatchObject({
+      eventId,
+      amountCents: 2400,
+      stripePayoutId: 'po_test_123',
+      status: 'pending_confirmation',
+    });
+  });
+
+  it('reuses a pending batch from a prior date and submits once under the prior idempotency key', async () => {
+    // Crash-recovery scenario: a prior cron run created a pending
+    // batch (via `createPayoutIntent`) but crashed BEFORE
+    // `payouts.create` / `markPayoutBatchSubmitted` landed. Today's
+    // cron must NOT create a new batch — that would surface a second
+    // Stripe idempotency key and double-submit. Instead it reuses the
+    // existing pending batch and finally carries it through to Stripe.
+    const t = convexTest();
+    const organizerId = await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {
+        name: 'Crash Recover Org',
+        slug: 'crash-recover',
+        stripeConnectedAccountId: 'acct_recover',
+        stripeOnboardingStatus: 'complete',
+        stripeChargesEnabled: true,
+        stripePayoutsEnabled: true,
+        status: 'published',
+      },
+    );
+    const eventId = await t.mutation(api.testing.events.seedEvent, {
+      title: 'Recover Event',
+      price: 2500,
+      totalTickets: 100,
+      date: '2020-01-01T00:00:00.000Z',
+      status: 'published',
+      visibility: 'public',
+      organizerId,
+    });
+
+    await t.run(async (ctx) => {
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row; no production mutation emits with a custom BalanceTransaction net.
+      const orderId = await ctx.db.insert('ticket_orders', {
+        eventId,
+        kind: 'primary',
+        quantity: 1,
+        tier: 'regular',
+        amountCents: 2500,
+        currency: 'USD',
+        state: 'completed',
+        expiresAt: Date.now() + 60_000,
+        completedAt: Date.now(),
+        trustSource: 'open_access',
+        connectedAccountId: 'acct_recover',
+      });
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row; no production mutation emits with a custom BalanceTransaction net.
+      await ctx.db.insert('order_financial_events', {
+        orderId,
+        eventId,
+        currency: 'USD',
+        kind: 'payment_captured',
+        amountCents: 2500,
+        connectedAccountId: 'acct_recover',
+        connectedAccountNetCents: 2400,
+        occurredAt: Date.now(),
+      });
+      // Prior cron run left a pending batch with a stale date key.
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: simulates a crash-recovery scenario; `createPayoutIntent` is the only production mutation that inserts and it owns the idempotency-key derivation.
+      await ctx.db.insert('payout_batches', {
+        idempotencyKey: 'braket-payout-acct_recover-2019-12-31',
+        connectedAccountId: 'acct_recover',
+        amountCents: 2400,
+        currency: 'usd',
+        status: 'pending',
+        createdAt: Date.now() - 86_400_000,
+      });
+    });
+
+    await t.action(internal.stripe.actions.processScheduledPayouts, {});
+
+    // Exactly one Stripe payout (recovering the stale pending batch,
+    // not creating a fresh one).
+    expect(payoutsCreateMock).toHaveBeenCalledTimes(1);
+    // AND the submission used the PRIOR idempotency key — proof
+    // that `createPayoutIntent` reused the existing row rather than
+    // inserting today's key.
+    const [, submitOptions] = payoutsCreateMock.mock.calls[0] as [
+      unknown,
+      Record<string, unknown>,
+    ];
+    expect(submitOptions['idempotencyKey']).toBe(
+      'braket-payout-acct_recover-2019-12-31',
+    );
+
+    const batches = await t.run(async (ctx) =>
+      ctx.db
+        .query('payout_batches')
+        .withIndex('by_connectedAccountId_and_status', (q) =>
+          q.eq('connectedAccountId', 'acct_recover'),
+        )
+        .collect(),
+    );
+    expect(batches).toHaveLength(1);
+    expect(batches[0]?.idempotencyKey).toBe(
+      'braket-payout-acct_recover-2019-12-31',
+    );
+  });
+
+  it('skips the Stripe submit when the batch is already submitted', async () => {
+    // If `createPayoutIntent` returns a batch whose status is already
+    // `submitted` (e.g. today's run landed pay but the webhook hasn't
+    // confirmed yet), the action's `batch.status !== 'pending'` guard
+    // must prevent a second Stripe payout call.
+    const t = convexTest();
+    const organizerId = await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {
+        name: 'Dedup Org',
+        slug: 'dedup-org',
+        stripeConnectedAccountId: 'acct_dedup',
+        stripeOnboardingStatus: 'complete',
+        stripeChargesEnabled: true,
+        stripePayoutsEnabled: true,
+        status: 'published',
+      },
+    );
+    const eventId = await t.mutation(api.testing.events.seedEvent, {
+      title: 'Dedup Event',
+      price: 2500,
+      totalTickets: 100,
+      date: '2020-01-01T00:00:00.000Z',
+      status: 'published',
+      visibility: 'public',
+      organizerId,
+    });
+
+    await t.run(async (ctx) => {
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row.
+      const orderId = await ctx.db.insert('ticket_orders', {
+        eventId,
+        kind: 'primary',
+        quantity: 1,
+        tier: 'regular',
+        amountCents: 2500,
+        currency: 'USD',
+        state: 'completed',
+        expiresAt: Date.now() + 60_000,
+        completedAt: Date.now(),
+        trustSource: 'open_access',
+        connectedAccountId: 'acct_dedup',
+      });
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row.
+      await ctx.db.insert('order_financial_events', {
+        orderId,
+        eventId,
+        currency: 'USD',
+        kind: 'payment_captured',
+        amountCents: 2500,
+        connectedAccountId: 'acct_dedup',
+        connectedAccountNetCents: 2400,
+        occurredAt: Date.now(),
+      });
+      // Already-submitted batch awaiting `payout.paid`.
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: simulates the "submitted, awaiting confirmation" state.
+      await ctx.db.insert('payout_batches', {
+        idempotencyKey: 'braket-payout-acct_dedup-2019-12-31',
+        connectedAccountId: 'acct_dedup',
+        amountCents: 2400,
+        currency: 'usd',
+        status: 'submitted',
+        stripePayoutId: 'po_already_submitted',
+        createdAt: Date.now() - 86_400_000,
+        submittedAt: Date.now() - 86_400_000,
+      });
+    });
+
+    await t.action(internal.stripe.actions.processScheduledPayouts, {});
+
+    expect(payoutsCreateMock).not.toHaveBeenCalled();
+  });
+
+  it('fails closed before Stripe when settlement inputs exceed the confirmed-allocation window', async () => {
+    const t = convexTest();
+    const organizerId = await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {
+        name: 'Overflow Org',
+        slug: 'overflow-org',
+        stripeConnectedAccountId: 'acct_overflow',
+        stripeOnboardingStatus: 'complete',
+        stripeChargesEnabled: true,
+        stripePayoutsEnabled: true,
+        status: 'published',
+      },
+    );
+    const eventId = await t.mutation(api.testing.events.seedEvent, {
+      title: 'Overflow Event',
+      price: 2500,
+      totalTickets: 100,
+      date: '2020-01-01T00:00:00.000Z',
+      status: 'published',
+      visibility: 'public',
+      organizerId,
+    });
+
+    await t.run(async (ctx) => {
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row.
+      const orderId = await ctx.db.insert('ticket_orders', {
+        eventId,
+        kind: 'primary',
+        quantity: 1,
+        tier: 'regular',
+        amountCents: 2500,
+        currency: 'USD',
+        state: 'completed',
+        expiresAt: Date.now() + 60_000,
+        completedAt: Date.now(),
+        trustSource: 'open_access',
+        connectedAccountId: 'acct_overflow',
+      });
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row.
+      await ctx.db.insert('order_financial_events', {
+        orderId,
+        eventId,
+        currency: 'USD',
+        kind: 'payment_captured',
+        amountCents: 2500,
+        connectedAccountId: 'acct_overflow',
+        connectedAccountNetCents: 2400,
+        occurredAt: Date.now(),
+      });
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: simulates a historical account with enough paid allocation rows to overflow the settlement guard.
+      const batchId = await ctx.db.insert('payout_batches', {
+        idempotencyKey: 'braket-payout-acct_overflow-old',
+        connectedAccountId: 'acct_overflow',
+        amountCents: 1_001,
+        currency: 'usd',
+        status: 'paid',
+        stripePayoutId: 'po_overflow_old',
+        createdAt: Date.now() - 86_400_000,
+        submittedAt: Date.now() - 86_400_000,
+        confirmedAt: Date.now() - 86_400_000,
+      });
+      for (let index = 0; index < 1_001; index += 1) {
+        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Bulk overflow fixture for payout settlement fail-closed coverage.
+        await ctx.db.insert('payout_allocations', {
+          batchId,
+          connectedAccountId: 'acct_overflow',
+          eventId,
+          amountCents: 1,
+          status: 'paid',
+          stripePayoutId: 'po_overflow_old',
+          createdAt: Date.now() - 86_400_000,
+          confirmedAt: Date.now() - 86_400_000,
+        });
+      }
+    });
+
+    await t.action(internal.stripe.actions.processScheduledPayouts, {});
+
+    expect(balanceRetrieveMock).not.toHaveBeenCalled();
+    expect(payoutsCreateMock).not.toHaveBeenCalled();
+  });
+});

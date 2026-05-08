@@ -1,0 +1,564 @@
+@import 'tailwindcss';
+@plugin "@tailwindcss/typography";
+@custom-variant dark (&:where(.dark, .dark *));
+@source not '../e2e/**/*';
+
+@theme {
+  /* Typography: Font Families */
+  --font-display: 'Syne', sans-serif;
+  --font-sans:
+    'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji',
+    'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  --font-mono:
+    'Space Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    monospace;
+
+  /* Typography: Extended Text Scale */
+  --text-2xs: 0.625rem;
+  --text-2xs--line-height: 1rem;
+
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
+  --color-warning: hsl(var(--warning));
+  --color-warning-foreground: hsl(var(--warning-foreground));
+  --color-info: hsl(var(--info));
+  --color-info-foreground: hsl(var(--info-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+}
+
+@layer base {
+  /* LINT.IfChange */
+  :root {
+    --background: 0 0% 98%;
+    --foreground: 320 10% 8%;
+    --card: 0 0% 97%;
+    --card-foreground: 320 10% 8%;
+    --popover: 0 0% 97%;
+    --popover-foreground: 320 10% 8%;
+    --primary: 335 90% 45%; /* Rich Crimson-Wine */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 280 45% 40%; /* Violet */
+    --secondary-foreground: 0 0% 100%;
+    --secondary-text: 280 45% 35%; /* AA-safe text on light backgrounds (~7.5:1) */
+    --muted: 320 5% 93%;
+    --muted-foreground: 320 10% 25%;
+    --accent: 25 80% 45%; /* Burnt Amber */
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 42%; /* Deep red — AA as text on white (5.5:1) and as button bg with white text (5.5:1); matches success/warning calibration */
+    --destructive-foreground: 0 0% 98%;
+    --success: 160 84% 22%; /* Deep emerald — survives self-tinted bg-success/10 underlay at AA (5.07:1 worst case on bg-muted) */
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 26%; /* Burnt amber — survives self-tinted bg-warning/10 underlay at AA (4.97:1 worst case on bg-muted) */
+    --warning-foreground: 0 0% 100%;
+    --info: 262 72% 50%;
+    --info-foreground: 0 0% 100%;
+    --border: 320 6% 82%;
+    --input: 320 6% 82%;
+    --ring: 335 90% 45%;
+    --radius: 0.25rem;
+  }
+
+  .dark {
+    --background: 320 15% 4%;
+    --foreground: 0 0% 96%;
+    --card: 320 12% 6%;
+    --card-foreground: 0 0% 96%;
+    --popover: 320 12% 6%;
+    --popover-foreground: 0 0% 96%;
+    --primary: 335 90% 52%; /* Rich Crimson-Wine — lightened for AA contrast as text on dark surfaces (4.5:1+); buttons use dark:bg-primary/90 overlay to achieve AA with white text (4.83:1) */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 280 45% 50%; /* Violet */
+    --secondary-foreground: 0 0% 100%;
+    --secondary-text: 280 45% 65%; /* AA-safe text on dark backgrounds (~6.4:1) */
+    --muted: 320 8% 17%;
+    --muted-foreground: 320 6% 65%;
+    --accent: 25 80% 50%; /* Burnt Amber */
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --success: 160 72% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 80% 60%;
+    --warning-foreground: 0 0% 100%;
+    --info: 262 60% 58%;
+    --info-foreground: 0 0% 100%;
+    --border: 320 8% 20%;
+    --input: 320 8% 20%;
+    --ring: 335 90% 52%;
+  }
+  /* LINT.ThenChange("./app/utils/brand-palette.ts") */
+}
+
+@layer base {
+  :root {
+    --ngx-sonner-toast-error-color: hsl(var(--destructive));
+  }
+}
+
+@layer base {
+  html,
+  body {
+    @apply bg-background text-foreground antialiased;
+    line-height: 1.5;
+  }
+
+  /* Ensure proper focus visibility for accessibility */
+  *:focus-visible {
+    @apply outline-3 outline-offset-2;
+    outline-color: hsl(var(--secondary) / 0.9);
+    border-radius: 0.25rem;
+  }
+
+  /* Enhanced focus for interactive elements */
+  button:focus-visible,
+  [role='button']:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: 2px solid hsl(var(--primary)) !important;
+    outline-offset: 2px !important;
+    box-shadow:
+      0 0 0 2px hsl(var(--background)),
+      0 0 0 4px hsl(var(--primary) / 0.55);
+  }
+
+  /* Screen reader only visible content */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  .sr-only:focus {
+    position: static;
+    width: auto;
+    height: auto;
+    padding: inherit;
+    margin: inherit;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Hide number input spinners */
+  input[type='number']::-webkit-inner-spin-button,
+  input[type='number']::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  input[type='number'] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+}
+
+/* Custom Animations */
+@layer utilities {
+  /* Brand mono signature — the most repeated pattern in the codebase (60+ instances).
+     Encapsulates: font-mono uppercase tracking-widest
+     Does NOT set font-size — consumers choose text-2xs or text-xs as needed. */
+  .mono-label {
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  /* Variant with tighter tracking (0.05em) instead of tracking-widest (0.1em).
+     Use when space-constrained contexts need mono label styling. */
+  .mono-label-tight {
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .native-select {
+    -webkit-appearance: none;
+    appearance: none;
+    cursor: pointer;
+    background-image:
+      linear-gradient(45deg, transparent 50%, hsl(var(--muted-foreground)) 50%),
+      linear-gradient(135deg, hsl(var(--muted-foreground)) 50%, transparent 50%);
+    background-position:
+      calc(100% - 1.05rem) calc(50% - 0.1rem),
+      calc(100% - 0.78rem) calc(50% - 0.1rem);
+    background-repeat: no-repeat;
+    background-size:
+      0.32rem 0.32rem,
+      0.32rem 0.32rem;
+    padding-inline-end: 2.5rem;
+    text-overflow: ellipsis;
+  }
+
+  .native-select:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  @media (hover: hover) {
+    .native-select:not(:disabled):hover {
+      border-color: hsl(var(--ring) / 0.7);
+    }
+  }
+
+  @media (forced-colors: active) {
+    .native-select {
+      appearance: auto;
+      background-image: none;
+      padding-inline-end: 0.75rem;
+    }
+  }
+
+  /* Fade-in animation for cards and lists to prevent stutter */
+  .fade-in {
+    animation: fadeIn 0.4s ease-in-out;
+  }
+
+  .fade-in-delay-1 {
+    animation: fadeIn 0.4s ease-in-out 0.1s both;
+  }
+
+  .fade-in-delay-2 {
+    animation: fadeIn 0.4s ease-in-out 0.2s both;
+  }
+
+  .fade-in-delay-3 {
+    animation: fadeIn 0.4s ease-in-out 0.3s both;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Slow pulse animation */
+  @keyframes pulse-slow {
+    0%,
+    100% {
+      opacity: 0.3;
+    }
+    50% {
+      opacity: 0.6;
+    }
+  }
+
+  .animate-pulse-slow {
+    animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  /* Shimmer skeleton animation */
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+
+  .animate-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .animate-shimmer::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent 25%,
+      hsl(var(--foreground) / 0.06) 50%,
+      transparent 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s linear infinite;
+  }
+
+  /* Check-in scanner line animation */
+  @keyframes check-in-scan {
+    0% {
+      transform: translateY(0);
+      opacity: 0;
+    }
+    5% {
+      opacity: 1;
+    }
+    95% {
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(100%);
+      opacity: 0;
+    }
+  }
+
+  /* Slide-in from bottom for modals */
+  .slide-in-bottom {
+    animation: slideInBottom 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes slideInBottom {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Router-outlet flex stretch: routed component hosts don't participate in
+     flex layout by default. This makes them grow within flex containers. */
+  .flex-outlet > *:not(router-outlet) {
+    flex: 1 1 0%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Hide scrollbar while keeping scroll behavior */
+  .no-scrollbar {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE/Edge */
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none; /* Chrome/Safari/WebKit */
+  }
+
+  /* High contrast focus ring for accessibility */
+  .focus-ring {
+    @apply focus-visible:outline-2 focus-visible:outline-offset-2;
+  }
+
+  .focus-ring:focus-visible {
+    outline-color: hsl(var(--secondary) / 0.8);
+  }
+
+  /* Smooth transitions for interactive elements */
+  .transition-smooth {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Waterfall Texture Motif */
+  .bg-waterfall {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .bg-waterfall::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.45;
+    background-image: url('/waterfallTexture.webp');
+    background-size: 150% auto;
+    background-position: center;
+    /* Removed background-attachment: fixed - causes severe scroll jank in Safari.
+       Fixed backgrounds force full-layer repaints on every scroll frame.
+       The texture now scrolls with content, which is a minimal visual trade-off
+       for dramatically improved scroll performance. */
+    transition: opacity 0.7s ease;
+    /* Hardware acceleration hint for smoother compositing */
+    will-change: opacity;
+    transform: translateZ(0);
+  }
+
+  .dark .bg-waterfall::before {
+    filter: invert(1);
+    opacity: 0.3;
+  }
+
+  /* Frosted glass panel — translucent surface over waterfall texture */
+  .glass-panel {
+    background-color: hsl(var(--card) / 0.5);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+
+  .dark .glass-panel {
+    background-color: hsl(var(--card) / 0.72);
+  }
+}
+
+@layer components {
+  [data-testid='help-article-content'] .hljs {
+    display: block;
+    overflow-x: auto;
+    background: transparent;
+    color: hsl(var(--foreground));
+  }
+
+  [data-testid='help-article-content'] .hljs-comment,
+  [data-testid='help-article-content'] .hljs-quote {
+    color: hsl(var(--muted-foreground));
+  }
+
+  [data-testid='help-article-content'] .hljs-keyword,
+  [data-testid='help-article-content'] .hljs-selector-tag,
+  [data-testid='help-article-content'] .hljs-literal {
+    color: hsl(var(--secondary));
+  }
+
+  [data-testid='help-article-content'] .hljs-string,
+  [data-testid='help-article-content'] .hljs-attr,
+  [data-testid='help-article-content'] .hljs-template-tag,
+  [data-testid='help-article-content'] .hljs-template-variable {
+    color: hsl(var(--accent));
+  }
+
+  [data-testid='help-article-content'] .hljs-number,
+  [data-testid='help-article-content'] .hljs-symbol,
+  [data-testid='help-article-content'] .hljs-bullet,
+  [data-testid='help-article-content'] .hljs-variable {
+    color: hsl(var(--primary));
+  }
+
+  [data-testid='help-article-content'] .hljs-title,
+  [data-testid='help-article-content'] .hljs-section,
+  [data-testid='help-article-content'] .hljs-property,
+  [data-testid='help-article-content'] .hljs-attribute {
+    color: hsl(var(--foreground));
+    font-weight: 600;
+  }
+
+  [data-testid='help-article-content'] .hljs-built_in,
+  [data-testid='help-article-content'] .hljs-function,
+  [data-testid='help-article-content'] .hljs-params {
+    color: color-mix(in oklab, hsl(var(--foreground)) 80%, hsl(var(--primary)));
+  }
+}
+
+/* ── View Transition API (route-level crossfade) ─────────────── */
+::view-transition-old(root) {
+  animation: none;
+}
+
+::view-transition-new(root) {
+  animation: viewFadeIn 120ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes viewFadeIn {
+  from {
+    opacity: 0;
+  }
+}
+
+/* After the first route change, suppress entrance animations inside
+   the router outlet — the view transition crossfade handles it.
+   Scoped to .flex-outlet so overlays (tooltips, popovers) still animate. */
+html[data-nav-transition] .flex-outlet [class*='animate-in'],
+html[data-nav-transition] .flex-outlet .fade-in,
+html[data-nav-transition] .flex-outlet .slide-in-bottom {
+  animation: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+/* Respect user motion preferences (WCAG 2.3.3) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* CDK Overlay Styles */
+.cdk-overlay-container {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 100%;
+}
+
+.cdk-overlay-backdrop {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 400ms cubic-bezier(0.25, 0.8, 0.25, 1);
+  opacity: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.cdk-overlay-backdrop.cdk-overlay-backdrop-showing {
+  opacity: 1;
+}
+
+.cdk-global-overlay-wrapper {
+  display: flex;
+  position: absolute;
+  z-index: 1000;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 100%;
+  pointer-events: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.cdk-overlay-pane {
+  position: absolute;
+  pointer-events: auto;
+  box-sizing: border-box;
+  z-index: 1000;
+  display: flex;
+  max-width: 100%;
+  max-height: 100%;
+}

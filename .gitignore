@@ -1,0 +1,121 @@
+node_modules/
+dist/
+.env
+.env.local
+.env.dev
+.env.prod
+.env.backup
+.env.*.backup
+.DS_Store
+.superpowers/
+
+# Package manager lock files (npm - use pnpm instead)
+package-lock.json
+
+debug.log
+
+frontend/public/runtime-env.js
+
+# Convex local backend (binary, databases, logs, storage, port files)
+.convex-local/
+.convex/
+# Sharded E2E shard logs (written to project root by Playwright)
+e2e-shard-*.log
+
+# Playwright
+frontend/playwright-report/
+
+# Code quality reports
+reports/
+coverage/
+frontend/coverage/
+frontend/test-results/
+frontend/playwright/.auth/
+frontend/blob-report/
+frontend/all-blob-reports/
+
+# Generated exports (settlement reports, etc.)
+frontend/*.pdf
+
+.gts_build
+
+# Claude Code (track rules and commands, ignore local state)
+.claude/settings.local.json
+.claude/worktrees/
+.claude/plugins/
+.claude/todos/
+
+# Git worktrees (project-local)
+.worktrees/
+
+# AI tool configurations (local-only)
+.agent/
+.augment/
+.codex/
+.cursor/
+.gemini/settings.json
+.jules/
+.kilocode/
+.opencode/
+.superpowers/
+.firecrawl/
+# .gemini/ is tracked for Gemini Code Assist PR review config
+# AGENTS.md is now tracked (CLAUDE.md symlinks to it)
+.test-credentials.md
+mcp.json
+opencode.json
+
+# Factory mission artifacts (validation files, review logs - generated during missions)
+.factory/
+
+# act (local GitHub Actions runner) — secrets file only; .actrc is tracked
+.act.secrets
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dev-debug.log
+# Dependency directories
+# Environment variables
+# Editor directories and files
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+# OS specific
+
+# Task files
+# tasks.json
+# tasks/
+
+.playwright-mcp/
+*.sqlite3
+*.sqlite3-*
+docs/superpowers
+
+# Generated docs manifest
+frontend/public/docs/manifest.json
+
+# Generated developer docs mirror (synced from docs/ by build-docs-manifest)
+frontend/public/docs/developers/
+
+convex_local_storage/
+convex-local-backend
+convex-local-backend-aarch64-apple-darwin.zip
+convex-local-backend-x86_64-apple-darwin.zip
+convex-local-backend-x86_64-unknown-linux-gnu.zip
+
+# Automated testing stuff
+/qa-patrol-*
+dogfood-output
+.tmp-agent-browser/
+
+docs/plans/
+
+prod-backups/

@@ -1,0 +1,1067 @@
+<app-dashboard-shell
+  [showDefaultTitle]="false"
+  [tabs]="tabs"
+  [tabQueryParams]="tabQueryParams()"
+  [selectedTabId]="activeTab()"
+  [overrideBorder]="isAdminOverride()"
+  [beforeTabChange]="handleBeforeTabChange"
+>
+  <!-- Community identity header -->
+  <div
+    dashboardHeader
+    data-testid="dashboard-custom-header"
+    class="flex min-w-0 flex-col gap-4"
+  >
+    <!-- Top row: context label + community switcher -->
+    <div class="flex items-center justify-between gap-4">
+      <p
+        class="font-mono text-2xs tracking-widest text-muted-foreground uppercase"
+      >
+        Community Admin
+      </p>
+      @if (communityCtx.hasMultipleCommunities()) {
+        <app-community-selector />
+      }
+    </div>
+
+    <!-- Community identity: logo + name + status -->
+    <div class="flex min-w-0 items-center gap-5">
+      @if (unresolvedCommunitySlug()) {
+        <div class="flex min-w-0 items-center gap-4">
+          <h1
+            class="min-w-0 truncate font-display text-3xl font-bold tracking-tight text-foreground uppercase sm:text-4xl lg:text-5xl"
+          >
+            Community not found
+          </h1>
+          <span
+            class="inline-flex shrink-0 items-center rounded bg-destructive/10 px-2 py-0.5 font-mono text-2xs tracking-widest text-destructive uppercase"
+            data-testid="community-status-badge"
+          >
+            invalid
+          </span>
+        </div>
+      } @else if (communityName(); as name) {
+        @if (communityLogo(); as logo) {
+          <div
+            class="relative size-16 shrink-0 overflow-hidden rounded-lg border border-border/50"
+          >
+            <img
+              [src]="logo"
+              [alt]="name + ' logo'"
+              loading="lazy"
+              decoding="async"
+              class="absolute inset-0 h-full w-full object-cover"
+              data-testid="community-logo"
+            />
+          </div>
+        }
+        <div class="flex min-w-0 items-center gap-4">
+          <h1
+            class="min-w-0 truncate font-display text-3xl font-bold tracking-tight text-foreground uppercase sm:text-4xl lg:text-5xl"
+          >
+            {{ name }}
+          </h1>
+          @if (communityDoc()) {
+            <span
+              class="shrink-0 inline-flex items-center rounded px-2 py-0.5 font-mono text-2xs uppercase tracking-widest {{
+                communityStatus() === 'published'
+                  ? 'bg-success/10 text-success'
+                  : 'bg-warning/10 text-warning'
+              }}"
+              data-testid="community-status-badge"
+            >
+              {{ communityStatus() }}
+            </span>
+          }
+        </div>
+      } @else if (communityCtx.selectedCommunityId()) {
+        <div class="flex items-center gap-4">
+          <z-skeleton class="h-10 w-48 rounded sm:h-12 sm:w-64" />
+          <z-skeleton class="h-5 w-20 rounded" />
+        </div>
+      }
+    </div>
+  </div>
+
+  <app-admin-override-banner
+    [isOverride]="isAdminOverride()"
+    [communityName]="communityName() ?? ''"
+  />
+
+  <!-- CREATE LINK button moved inline with info alert inside the magic-links tab -->
+
+  @if (communityCtx.isLoading()) {
+    <!-- Loading State -->
+    <div
+      data-testid="loading-state"
+      class="mb-8 grid grid-cols-1 gap-6 sm:grid-cols-3"
+    >
+      @for (i of [1, 2, 3]; track i) {
+        <div class="rounded-xl border border-border bg-card/80 p-6">
+          <z-skeleton class="mb-3 h-3 w-20" />
+          <z-skeleton class="h-8 w-16" />
+        </div>
+      }
+    </div>
+    <div class="space-y-4">
+      @for (i of [1, 2, 3]; track i) {
+        <div class="space-y-3 rounded-xl border border-border bg-card/80 p-6">
+          <div class="flex items-center justify-between">
+            <z-skeleton class="h-5 w-32" />
+            <z-skeleton class="h-5 w-16" />
+          </div>
+          <z-skeleton class="h-4 w-48" />
+          <div class="flex gap-2">
+            <z-skeleton class="h-8 w-20" />
+            <z-skeleton class="h-8 w-20" />
+          </div>
+        </div>
+      }
+    </div>
+  } @else if (unresolvedCommunitySlug()) {
+    <!-- Unresolved community slug error card -->
+    <div
+      data-testid="unresolved-community-error"
+      class="flex flex-col items-center justify-center gap-6 rounded-xl border border-border/50 bg-card/30 py-24"
+    >
+      <div
+        class="rounded-full border border-destructive/30 bg-destructive/10 p-4"
+      >
+        <z-icon zType="circle-alert" class="h-8 w-8 text-destructive" />
+      </div>
+      <p class="mono-label text-2xs text-destructive">COMMUNITY NOT FOUND</p>
+      <p class="max-w-md text-center text-muted-foreground">
+        Could not find a community matching
+        <strong>{{ unresolvedCommunitySlug() }}</strong
+        >. Pick one from the list below to continue.
+      </p>
+      @if (communityCtx.communities().length > 0) {
+        <div class="flex w-full max-w-xs flex-col gap-2">
+          @for (communityId of communityCtx.communities(); track communityId) {
+            <button
+              type="button"
+              z-button
+              zType="outline"
+              data-testid="unresolved-community-pick"
+              (click)="pickCommunity(communityId)"
+              class="w-full"
+            >
+              {{ communityCtx.resolvedNameFor(communityId) ?? communityId }}
+            </button>
+          }
+        </div>
+      }
+    </div>
+  } @else if (communityCtx.selectedCommunityId() === null) {
+    <!-- No Community Assigned State -->
+    <div
+      data-testid="empty-state"
+      class="flex flex-col items-center justify-center gap-6 rounded-xl border border-border/50 bg-card/30 py-24"
+    >
+      <div class="rounded-full border border-border bg-muted/50 p-4">
+        <z-icon zType="users" class="h-8 w-8 text-muted-foreground" />
+      </div>
+      <p
+        data-testid="empty-state-text"
+        class="mono-label text-2xs text-muted-foreground"
+      >
+        NO COMMUNITY ASSIGNED
+      </p>
+      <p class="max-w-md text-center text-muted-foreground">
+        You are not assigned as an admin for any community. Contact a platform
+        administrator for access.
+      </p>
+    </div>
+  } @else {
+    @switch (activeTab()) {
+      @case ('pending') {
+        <app-admin-applications-table
+          tableType="pending"
+          [organizerId]="communityCtx.selectedCommunityId() ?? undefined"
+        />
+      }
+      @case ('history') {
+        <app-admin-applications-table
+          tableType="history"
+          [organizerId]="communityCtx.selectedCommunityId() ?? undefined"
+        />
+      }
+      @case ('members') {
+        <app-admin-members-table
+          [organizerId]="communityCtx.selectedCommunityId() ?? undefined"
+        />
+      }
+      @case ('events') {
+        <app-admin-events-table
+          [routePrefix]="'/community-admin'"
+          [routeQueryParams]="tabQueryParams()"
+          [organizerId]="communityCtx.selectedCommunityId() ?? undefined"
+        />
+      }
+      @case ('audit-log') {
+        <app-audit-log-table
+          [organizerId]="communityCtx.selectedCommunityId() ?? undefined"
+        />
+      }
+      @case ('settings') {
+        <app-community-admin-settings />
+      }
+      @case ('shared-vetting') {
+        <app-shared-vetting-table
+          [organizerId]="communityCtx.selectedCommunityId() ?? undefined"
+        />
+      }
+      @case ('magic-links') {
+        <div
+          class="ph-no-capture mb-6 flex flex-col gap-4 md:flex-row md:items-center"
+        >
+          <z-alert
+            zType="info"
+            zAppearance="soft"
+            zTitle="What are magic links?"
+            class="flex-1 [&>z-icon]:mt-0 [&>z-icon]:self-center [&>z-icon_svg]:size-5"
+            data-testid="magic-links-info"
+          >
+            <p class="mt-1 text-sm text-info/80">
+              A shortcut past the application process. Share one with someone
+              and they're vetted into your community when they open it. Each
+              link keeps count of how many people have used it.
+            </p>
+          </z-alert>
+          @if (
+            !isLoading() && links().length > 0 && linksFilter() === 'active'
+          ) {
+            <button
+              type="button"
+              data-testid="create-link-button"
+              z-button
+              zType="default"
+              (click)="openCreateDialog()"
+              class="shrink-0 self-start md:self-center"
+            >
+              <z-icon zType="plus" class="mr-2 h-4 w-4" />
+              CREATE LINK
+            </button>
+          }
+        </div>
+        @if (isLoading()) {
+          <!-- Magic Links Loading State -->
+          <div class="ph-no-capture mb-8 grid grid-cols-1 gap-6 sm:grid-cols-3">
+            @for (i of [1, 2, 3]; track i) {
+              <div class="rounded-xl border border-border bg-card/80 p-6">
+                <z-skeleton class="mb-3 h-3 w-20" />
+                <z-skeleton class="h-8 w-16" />
+              </div>
+            }
+          </div>
+          <div class="ph-no-capture space-y-4">
+            @for (i of [1, 2, 3]; track i) {
+              <div
+                class="space-y-3 rounded-xl border border-border bg-card/80 p-6"
+              >
+                <div class="flex items-center justify-between">
+                  <z-skeleton class="h-5 w-32" />
+                  <z-skeleton class="h-5 w-16" />
+                </div>
+                <z-skeleton class="h-4 w-48" />
+                <div class="flex gap-2">
+                  <z-skeleton class="h-8 w-20" />
+                  <z-skeleton class="h-8 w-20" />
+                </div>
+              </div>
+            }
+          </div>
+        } @else if (links().length === 0 && pastLinksCount() === 0) {
+          <!-- Empty State: both lists empty -->
+          <div
+            class="ph-no-capture flex flex-col items-center justify-center gap-6 rounded-xl border border-border/50 bg-card/30 py-24"
+            data-testid="magic-links-empty-state"
+          >
+            <div class="rounded-full border border-border bg-muted/50 p-4">
+              <z-icon zType="link" class="h-8 w-8 text-muted-foreground" />
+            </div>
+            <p class="mono-label text-2xs text-muted-foreground">
+              NO MAGIC LINKS YET
+            </p>
+            <h2
+              class="font-display text-xl font-bold tracking-tight text-foreground uppercase"
+            >
+              Create Your First Link
+            </h2>
+            <p class="max-w-md text-center text-muted-foreground">
+              Share a magic link and anyone who opens it is automatically vetted
+              into the community. No application needed.
+            </p>
+            <button
+              type="button"
+              data-testid="empty-create-link-button"
+              z-button
+              zType="default"
+              (click)="openCreateDialog()"
+              class="border-none bg-primary text-primary-foreground shadow-[0_0_20px_-5px_hsl(var(--primary)/0.4)] hover:bg-primary/90"
+            >
+              <z-icon zType="plus" class="mr-2 h-4 w-4" />
+              CREATE YOUR FIRST LINK
+            </button>
+          </div>
+        } @else {
+          <!-- Filter Pills -->
+          <div class="ph-no-capture mb-6 flex items-center gap-2">
+            <button
+              type="button"
+              z-button
+              [zType]="linksFilter() === 'active' ? 'default' : 'outline'"
+              zSize="sm"
+              data-testid="magic-links-filter-active"
+              (click)="linksFilter.set('active')"
+            >
+              Active
+            </button>
+            <button
+              type="button"
+              z-button
+              [zType]="linksFilter() === 'past' ? 'default' : 'outline'"
+              zSize="sm"
+              data-testid="magic-links-filter-past"
+              (click)="linksFilter.set('past')"
+            >
+              Past
+              @if (pastLinksCount() > 0) {
+                <span
+                  class="ml-1.5 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-muted-foreground/20 px-1.5 font-mono text-2xs text-muted-foreground"
+                  >{{ pastLinksCount() }}</span
+                >
+              }
+            </button>
+          </div>
+
+          @if (clipboardStatus(); as status) {
+            <p
+              class="mb-4 font-mono text-xs text-success"
+              aria-live="polite"
+              data-testid="magic-link-copy-status"
+            >
+              {{ status }}
+            </p>
+          }
+
+          @if (linksFilter() === 'active') {
+            <!-- Summary Cards -->
+            <div
+              class="ph-no-capture mb-8 grid grid-cols-1 gap-6 sm:grid-cols-3"
+            >
+              <div class="rounded-xl border border-border/50 bg-card/80 p-6">
+                <p class="mono-label mb-2 text-2xs text-muted-foreground">
+                  TOTAL LINKS
+                </p>
+                <p class="font-display text-3xl font-bold text-foreground">
+                  {{ totalLinks() }}
+                </p>
+              </div>
+              <div class="rounded-xl border border-border/50 bg-card/80 p-6">
+                <p class="mono-label mb-2 text-2xs text-muted-foreground">
+                  TOTAL REDEMPTIONS
+                </p>
+                <p class="font-display text-3xl font-bold text-foreground">
+                  {{ totalRedemptions() }}
+                </p>
+              </div>
+              <div class="rounded-xl border border-border/50 bg-card/80 p-6">
+                <p class="mono-label mb-2 text-2xs text-muted-foreground">
+                  ACTIVE LINKS
+                </p>
+                <p class="font-display text-3xl font-bold text-success">
+                  {{ activeLinks() }}
+                </p>
+              </div>
+            </div>
+
+            <!-- Desktop Table View -->
+            <div
+              class="ph-no-capture hidden overflow-hidden rounded-xl border border-border/50 bg-card shadow-2xl md:block"
+            >
+              <table class="w-full border-collapse text-left">
+                <thead
+                  class="bg-muted/50 font-mono text-xs tracking-widest text-muted-foreground uppercase"
+                >
+                  <tr>
+                    <th class="border-b border-border p-5 font-medium">
+                      Label
+                    </th>
+                    <th class="border-b border-border p-5 font-medium">
+                      Token
+                    </th>
+                    <th class="border-b border-border p-5 font-medium">
+                      Status
+                    </th>
+                    <th
+                      class="border-b border-border p-5 text-right font-medium"
+                    >
+                      Redeemed
+                    </th>
+                    <th class="border-b border-border p-5 font-medium">
+                      Created
+                    </th>
+                    <th class="border-b border-border p-5 font-medium">
+                      Last Used
+                    </th>
+                    <th class="border-b border-border p-5 font-medium">
+                      Expires
+                    </th>
+                    <th
+                      class="border-b border-border p-5 text-right font-medium"
+                    >
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-border/50">
+                  @for (link of links(); track link._id; let i = $index) {
+                    <tr
+                      class="transition-colors hover:bg-muted/30"
+                      data-testid="magic-link-active-row"
+                    >
+                      <td class="max-w-0 p-5 align-middle">
+                        <span
+                          class="block truncate font-display font-bold tracking-wide text-foreground"
+                          data-testid="magic-link-label"
+                          [title]="
+                            link.label ||
+                            (link.tokenPrefix
+                              ? 'Link ' + link.tokenPrefix
+                              : 'Link')
+                          "
+                        >
+                          {{
+                            link.label ||
+                              (link.tokenPrefix
+                                ? 'Link ' + link.tokenPrefix
+                                : 'Link')
+                          }}
+                        </span>
+                      </td>
+                      <td class="p-5 align-middle">
+                        <span
+                          data-testid="magic-link-token-prefix"
+                          class="font-mono text-xs text-muted-foreground"
+                          >{{ link.tokenPrefix || 'hidden' }}</span
+                        >
+                      </td>
+                      <td class="p-5 align-middle">
+                        @switch (link.status) {
+                          @case ('active') {
+                            <span
+                              class="inline-flex items-center rounded bg-success/10 px-2 py-0.5 font-mono text-2xs tracking-widest text-success uppercase"
+                              >active</span
+                            >
+                          }
+                          @case ('paused') {
+                            <span
+                              class="inline-flex items-center rounded bg-warning/10 px-2 py-0.5 font-mono text-2xs tracking-widest text-warning uppercase"
+                              >paused</span
+                            >
+                          }
+                          @case ('disabled') {
+                            <span
+                              class="inline-flex items-center rounded bg-destructive/10 px-2 py-0.5 font-mono text-2xs tracking-widest text-destructive uppercase"
+                              >disabled</span
+                            >
+                          }
+                        }
+                      </td>
+                      <td
+                        class="p-5 text-right align-middle font-mono text-sm text-foreground"
+                      >
+                        {{ link.redemptionCount }}
+                        @if (link.maxRedemptions !== undefined) {
+                          <span class="text-muted-foreground"
+                            >/{{ link.maxRedemptions }}</span
+                          >
+                        } @else {
+                          <span
+                            class="text-xs text-muted-foreground"
+                            data-testid="max-unlimited"
+                            >/&nbsp;Unlimited</span
+                          >
+                        }
+                      </td>
+                      <td
+                        class="p-5 align-middle font-mono text-xs text-muted-foreground"
+                      >
+                        {{ link._creationTime | date: 'mediumDate' }}
+                      </td>
+                      <td
+                        class="p-5 align-middle font-mono text-xs text-muted-foreground"
+                      >
+                        @if (link.lastUsedAt) {
+                          {{ link.lastUsedAt | date: 'mediumDate' }}
+                        } @else {
+                          <span class="text-muted-foreground">never</span>
+                        }
+                      </td>
+                      <td
+                        class="p-5 align-middle font-mono text-xs text-muted-foreground"
+                      >
+                        @if (link.expiresAt) {
+                          {{ link.expiresAt | date: 'mediumDate' }}
+                        } @else {
+                          <span class="text-muted-foreground">—</span>
+                        }
+                      </td>
+                      <td class="p-5 align-middle">
+                        <div
+                          class="flex items-center justify-end gap-1"
+                          data-testid="magic-link-actions"
+                        >
+                          @if (link.status === 'active') {
+                            <button
+                              type="button"
+                              z-button
+                              zType="ghost"
+                              zSize="sm"
+                              (click)="confirmPause(link._id, link.label)"
+                              [attr.aria-label]="
+                                'Pause link ' + getLinkIdentifier(link)
+                              "
+                              [zTooltip]="'Pause — link stops working until you resume it'"
+                              class="text-muted-foreground hover:text-warning"
+                            >
+                              <z-icon zType="pause" class="h-4 w-4" />
+                            </button>
+                          }
+                          @if (link.status === 'paused') {
+                            <button
+                              type="button"
+                              z-button
+                              zType="ghost"
+                              zSize="sm"
+                              (click)="updateLinkStatus(link._id, 'resume')"
+                              [attr.aria-label]="
+                                'Resume link ' + getLinkIdentifier(link)
+                              "
+                              [zTooltip]="'Resume — make this link work again'"
+                              class="text-muted-foreground hover:text-success"
+                            >
+                              <z-icon zType="play" class="h-4 w-4" />
+                            </button>
+                          }
+                          <button
+                            type="button"
+                            z-button
+                            zType="ghost"
+                            zSize="sm"
+                            (click)="confirmDelete(link._id, link.label)"
+                            [attr.aria-label]="
+                              'Delete link ' + getLinkIdentifier(link)
+                            "
+                            [zTooltip]="'Delete permanently — cannot be undone'"
+                            class="text-muted-foreground hover:text-destructive"
+                          >
+                            <z-icon zType="trash" class="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Mobile Card View -->
+            <div class="ph-no-capture space-y-4 md:hidden">
+              @for (link of links(); track link._id; let i = $index) {
+                <div
+                  class="space-y-4 rounded-xl border border-border/50 bg-card/80 p-5"
+                >
+                  <!-- Card Header -->
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0">
+                      <h3
+                        class="truncate font-display text-lg font-bold tracking-wide text-foreground"
+                        data-testid="magic-link-label"
+                        [title]="
+                          link.label ||
+                          (link.tokenPrefix
+                            ? 'Link ' + link.tokenPrefix
+                            : 'Link')
+                        "
+                      >
+                        {{
+                          link.label ||
+                            (link.tokenPrefix
+                              ? 'Link ' + link.tokenPrefix
+                              : 'Link')
+                        }}
+                      </h3>
+                      <span
+                        data-testid="magic-link-token-prefix"
+                        class="mt-1 block font-mono text-xs text-muted-foreground"
+                        >{{ link.tokenPrefix || 'hidden' }}</span
+                      >
+                    </div>
+                    @switch (link.status) {
+                      @case ('active') {
+                        <span
+                          class="inline-flex shrink-0 items-center rounded bg-success/10 px-2 py-0.5 font-mono text-2xs tracking-widest text-success uppercase"
+                          >active</span
+                        >
+                      }
+                      @case ('paused') {
+                        <span
+                          class="inline-flex shrink-0 items-center rounded bg-warning/10 px-2 py-0.5 font-mono text-2xs tracking-widest text-warning uppercase"
+                          >paused</span
+                        >
+                      }
+                      @case ('disabled') {
+                        <span
+                          class="inline-flex shrink-0 items-center rounded bg-destructive/10 px-2 py-0.5 font-mono text-2xs tracking-widest text-destructive uppercase"
+                          >disabled</span
+                        >
+                      }
+                    }
+                  </div>
+
+                  <!-- Card Stats -->
+                  <div
+                    class="grid grid-cols-2 gap-3 border-t border-b border-border/50 py-3"
+                  >
+                    <div>
+                      <p
+                        class="mono-label mb-0.5 text-2xs text-muted-foreground"
+                      >
+                        Redeemed
+                      </p>
+                      <p class="font-mono text-sm text-foreground">
+                        {{ link.redemptionCount }}
+                        @if (link.maxRedemptions !== undefined) {
+                          <span class="text-muted-foreground"
+                            >/{{ link.maxRedemptions }}</span
+                          >
+                        } @else {
+                          <span
+                            class="text-xs text-muted-foreground"
+                            data-testid="max-unlimited"
+                            >/&nbsp;Unlimited</span
+                          >
+                        }
+                      </p>
+                    </div>
+                    <div>
+                      <p
+                        class="mono-label mb-0.5 text-2xs text-muted-foreground"
+                      >
+                        Created
+                      </p>
+                      <p class="font-mono text-sm text-muted-foreground">
+                        {{ link._creationTime | date: 'shortDate' }}
+                      </p>
+                    </div>
+                    <div>
+                      <p
+                        class="mono-label mb-0.5 text-2xs text-muted-foreground"
+                      >
+                        Last Used
+                      </p>
+                      <p class="font-mono text-sm text-muted-foreground">
+                        @if (link.lastUsedAt) {
+                          {{ link.lastUsedAt | date: 'shortDate' }}
+                        } @else {
+                          never
+                        }
+                      </p>
+                    </div>
+                    <div>
+                      <p
+                        class="mono-label mb-0.5 text-2xs text-muted-foreground"
+                      >
+                        Expires
+                      </p>
+                      <p class="font-mono text-sm text-muted-foreground">
+                        @if (link.expiresAt) {
+                          {{ link.expiresAt | date: 'shortDate' }}
+                        } @else {
+                          —
+                        }
+                      </p>
+                    </div>
+                  </div>
+
+                  <!-- Card Actions -->
+                  <div class="flex gap-2" data-testid="magic-link-actions">
+                    @if (link.status === 'active') {
+                      <button
+                        type="button"
+                        z-button
+                        zType="outline"
+                        zSize="sm"
+                        class="flex-1 border-warning/30 text-warning hover:bg-warning/10"
+                        (click)="confirmPause(link._id, link.label)"
+                        [attr.aria-label]="
+                          'Pause link ' + getLinkIdentifier(link)
+                        "
+                        [zTooltip]="'Pause — link stops working until you resume it'"
+                      >
+                        <z-icon zType="pause" class="mr-1.5 h-3.5 w-3.5" />
+                        PAUSE
+                      </button>
+                    }
+                    @if (link.status === 'paused') {
+                      <button
+                        type="button"
+                        z-button
+                        zType="outline"
+                        zSize="sm"
+                        class="flex-1 border-success/30 text-success hover:bg-success/10"
+                        (click)="updateLinkStatus(link._id, 'resume')"
+                        [attr.aria-label]="
+                          'Resume link ' + getLinkIdentifier(link)
+                        "
+                        [zTooltip]="'Resume — make this link work again'"
+                      >
+                        <z-icon zType="play" class="mr-1.5 h-3.5 w-3.5" />
+                        RESUME
+                      </button>
+                    }
+                    <button
+                      type="button"
+                      z-button
+                      zType="outline"
+                      zSize="sm"
+                      class="flex-1 border-destructive/30 text-destructive hover:bg-destructive/10"
+                      (click)="confirmDelete(link._id, link.label)"
+                      [attr.aria-label]="
+                        'Delete link ' + getLinkIdentifier(link)
+                      "
+                      [zTooltip]="'Delete permanently — cannot be undone'"
+                    >
+                      <z-icon zType="trash" class="mr-1.5 h-3.5 w-3.5" />
+                      DELETE
+                    </button>
+                  </div>
+                </div>
+              }
+            </div>
+          } @else {
+            <!-- Past Links Desktop Table -->
+            <div
+              class="ph-no-capture hidden overflow-hidden rounded-xl border border-border/50 bg-card shadow-2xl md:block"
+            >
+              <table class="w-full border-collapse text-left">
+                <thead
+                  class="bg-muted/50 font-mono text-xs tracking-widest text-muted-foreground uppercase"
+                >
+                  <tr>
+                    <th class="border-b border-border p-5 font-medium">
+                      Label
+                    </th>
+                    <th class="border-b border-border p-5 font-medium">
+                      Token
+                    </th>
+                    <th
+                      class="border-b border-border p-5 text-right font-medium"
+                    >
+                      Redeemed
+                    </th>
+                    <th class="border-b border-border p-5 font-medium">
+                      Created
+                    </th>
+                    <th class="border-b border-border p-5 font-medium">
+                      Last Used
+                    </th>
+                    <th class="border-b border-border p-5 font-medium">
+                      Expires
+                    </th>
+                    <th class="border-b border-border p-5 font-medium">
+                      Deleted
+                    </th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-border/50">
+                  @for (link of pastLinks(); track link._id) {
+                    <tr
+                      class="opacity-70 transition-colors hover:bg-muted/30"
+                      data-testid="magic-link-past-row"
+                    >
+                      <td class="max-w-0 p-5 align-middle">
+                        <span
+                          class="block truncate font-display font-bold tracking-wide text-muted-foreground"
+                          [title]="
+                            link.label ||
+                            (link.tokenPrefix
+                              ? 'Link ' + link.tokenPrefix
+                              : 'Link')
+                          "
+                        >
+                          {{
+                            link.label ||
+                              (link.tokenPrefix
+                                ? 'Link ' + link.tokenPrefix
+                                : 'Link')
+                          }}
+                        </span>
+                      </td>
+                      <td class="p-5 align-middle">
+                        <span class="font-mono text-xs text-muted-foreground">{{
+                          link.tokenPrefix || 'hidden'
+                        }}</span>
+                      </td>
+                      <td
+                        class="p-5 text-right align-middle font-mono text-sm text-muted-foreground"
+                      >
+                        {{ link.redemptionCount }}
+                      </td>
+                      <td
+                        class="p-5 align-middle font-mono text-xs text-muted-foreground"
+                      >
+                        {{ link._creationTime | date: 'mediumDate' }}
+                      </td>
+                      <td
+                        class="p-5 align-middle font-mono text-xs text-muted-foreground"
+                      >
+                        @if (link.lastUsedAt) {
+                          {{ link.lastUsedAt | date: 'mediumDate' }}
+                        } @else {
+                          <span>never</span>
+                        }
+                      </td>
+                      <td
+                        class="p-5 align-middle font-mono text-xs text-muted-foreground"
+                      >
+                        @if (link.expiresAt) {
+                          {{ link.expiresAt | date: 'mediumDate' }}
+                        } @else {
+                          <span>—</span>
+                        }
+                      </td>
+                      <td
+                        class="p-5 align-middle font-mono text-xs text-muted-foreground"
+                      >
+                        {{ link.deletedAt | date: 'mediumDate' }}
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Past Links Mobile Cards -->
+            <div class="ph-no-capture space-y-4 md:hidden">
+              @for (link of pastLinks(); track link._id) {
+                <div
+                  class="space-y-3 rounded-xl border border-border/50 bg-card/80 p-5 opacity-70"
+                  data-testid="magic-link-past-card"
+                >
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0">
+                      <h3
+                        class="truncate font-display text-lg font-bold tracking-wide text-muted-foreground"
+                        [title]="
+                          link.label ||
+                          (link.tokenPrefix
+                            ? 'Link ' + link.tokenPrefix
+                            : 'Link')
+                        "
+                      >
+                        {{
+                          link.label ||
+                            (link.tokenPrefix
+                              ? 'Link ' + link.tokenPrefix
+                              : 'Link')
+                        }}
+                      </h3>
+                      <p class="mt-1 font-mono text-xs text-muted-foreground">
+                        {{ link.tokenPrefix || 'hidden' }}
+                      </p>
+                    </div>
+                    <span
+                      class="inline-flex shrink-0 items-center rounded bg-muted/50 px-2 py-0.5 font-mono text-2xs tracking-widest text-muted-foreground uppercase"
+                      >deleted</span
+                    >
+                  </div>
+                  <div
+                    class="grid grid-cols-2 gap-3 border-t border-b border-border/50 py-3"
+                  >
+                    <div>
+                      <p
+                        class="mono-label mb-0.5 text-2xs text-muted-foreground"
+                      >
+                        Redeemed
+                      </p>
+                      <p class="font-mono text-sm text-muted-foreground">
+                        {{ link.redemptionCount }}
+                      </p>
+                    </div>
+                    <div>
+                      <p
+                        class="mono-label mb-0.5 text-2xs text-muted-foreground"
+                      >
+                        Created
+                      </p>
+                      <p class="font-mono text-sm text-muted-foreground">
+                        {{ link._creationTime | date: 'shortDate' }}
+                      </p>
+                    </div>
+                    <div>
+                      <p
+                        class="mono-label mb-0.5 text-2xs text-muted-foreground"
+                      >
+                        Deleted
+                      </p>
+                      <p class="font-mono text-sm text-muted-foreground">
+                        {{ link.deletedAt | date: 'shortDate' }}
+                      </p>
+                    </div>
+                    <div>
+                      <p
+                        class="mono-label mb-0.5 text-2xs text-muted-foreground"
+                      >
+                        Last Used
+                      </p>
+                      <p class="font-mono text-sm text-muted-foreground">
+                        @if (link.lastUsedAt) {
+                          {{ link.lastUsedAt | date: 'shortDate' }}
+                        } @else {
+                          never
+                        }
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        }
+
+        <!-- Create Link Dialog (inline form) -->
+        @if (isCreateDialogOpen()) {
+          <div
+            class="fixed inset-0 z-50 flex items-center justify-center"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-link-title"
+            (keydown.escape)="closeCreateDialog()"
+          >
+            <!-- Backdrop -->
+            <div
+              class="absolute inset-0 bg-background/80 backdrop-blur-sm"
+              (click)="closeCreateDialog()"
+              (keydown.enter)="closeCreateDialog()"
+              (keydown.space)="closeCreateDialog(); $event.preventDefault()"
+              tabindex="0"
+            ></div>
+            <!-- Dialog Content -->
+            <div
+              class="ph-no-capture relative z-10 mx-4 w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl"
+              cdkTrapFocus
+              [cdkTrapFocusAutoCapture]="true"
+            >
+              <button
+                type="button"
+                z-button
+                zType="ghost"
+                zSize="sm"
+                class="absolute top-2 right-2 text-muted-foreground"
+                (click)="closeCreateDialog()"
+                aria-label="Close dialog"
+              >
+                <z-icon zType="x" class="h-4 w-4" />
+              </button>
+
+              <p class="mono-label mb-1 text-2xs text-muted-foreground">
+                NEW MAGIC LINK
+              </p>
+              <h2
+                id="create-link-title"
+                class="mb-6 font-display text-xl font-bold tracking-tight text-foreground uppercase"
+              >
+                Create Link
+              </h2>
+
+              <div class="space-y-4">
+                <div>
+                  <label
+                    class="mono-label mb-1.5 block text-2xs text-muted-foreground"
+                    for="link-label"
+                  >
+                    Label <span class="text-muted-foreground">(optional)</span>
+                  </label>
+                  <input
+                    id="link-label"
+                    zInput
+                    type="text"
+                    placeholder="e.g., Instagram Bio, Flyer QR"
+                    [(value)]="createFormLabel"
+                    maxlength="100"
+                  />
+                </div>
+                <div>
+                  <label
+                    class="mono-label mb-1.5 block text-2xs text-muted-foreground"
+                    for="link-max"
+                  >
+                    Max Redemptions
+                    <span class="text-muted-foreground">(optional)</span>
+                  </label>
+                  <input
+                    id="link-max"
+                    zInput
+                    type="number"
+                    placeholder="Unlimited"
+                    [(value)]="createFormMaxRedemptions"
+                    min="1"
+                    aria-describedby="link-max-hint"
+                  />
+                  <p
+                    id="link-max-hint"
+                    class="mt-1.5 text-xs text-muted-foreground"
+                    data-testid="max-redemptions-hint"
+                  >
+                    Leave empty for unlimited
+                  </p>
+                </div>
+                <div>
+                  <label
+                    class="mono-label mb-1.5 block text-2xs text-muted-foreground"
+                    for="link-expires"
+                  >
+                    Expires
+                    <span class="text-muted-foreground">(optional)</span>
+                  </label>
+                  <input
+                    id="link-expires"
+                    zInput
+                    type="datetime-local"
+                    [(value)]="createFormExpires"
+                  />
+                </div>
+              </div>
+
+              <div class="mt-6 flex gap-3">
+                <button
+                  type="button"
+                  z-button
+                  zType="outline"
+                  class="flex-1"
+                  (click)="closeCreateDialog()"
+                >
+                  CANCEL
+                </button>
+                <button
+                  type="button"
+                  z-button
+                  zType="default"
+                  class="flex-1 border-none bg-primary text-primary-foreground shadow-[0_0_20px_-5px_hsl(var(--primary)/0.4)] hover:bg-primary/90"
+                  [zLoading]="isCreating()"
+                  [zDisabled]="isCreating()"
+                  (click)="createLink()"
+                >
+                  CREATE
+                </button>
+              </div>
+            </div>
+          </div>
+        }
+      }
+    }
+  }
+</app-dashboard-shell>

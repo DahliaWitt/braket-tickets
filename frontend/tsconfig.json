@@ -1,0 +1,36 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compileOnSave": false,
+  "compilerOptions": {
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": false,
+    "experimentalDecorators": true,
+    "importHelpers": true,
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "module": "preserve",
+    "types": ["vitest/globals"],
+    "paths": {
+      "@convex/_generated/*": ["../backend/convex/_generated/*"],
+      "@shared/*": ["../shared/*"],
+      "@ui/*": ["./src/app/ui/*"],
+      "@/*": ["./src/app/*"]
+    }
+  },
+  "angularCompilerOptions": {
+    "enableI18nLegacyMessageIdFormat": false,
+    "strictInjectionParameters": true,
+    "strictInputAccessModifiers": true,
+    "strictTemplates": true,
+    "extendedDiagnostics": {
+      "checks": {
+        "interpolatedSignalNotInvoked": "error",
+        "unusedStandaloneImports": "error",
+        "uninvokedFunctionInEventBinding": "error",
+        "uninvokedFunctionInTextInterpolation": "error",
+        "uninvokedTrackFunction": "error"
+      }
+    }
+  },
+  "exclude": ["node_modules", "dist", "out-tsc", "vitest.config.ts"]
+}

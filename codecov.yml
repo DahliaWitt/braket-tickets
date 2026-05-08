@@ -1,0 +1,51 @@
+# Codecov configuration
+# Docs: https://docs.codecov.com/docs/codecov-yaml
+
+codecov:
+  require_ci_to_pass: true
+
+coverage:
+  status:
+    project:
+      # Backend (Convex) — matches vitest.config.ts thresholds
+      convex:
+        target: 70%
+        flags:
+          - convex
+      # Frontend (Angular) — matches frontend/vitest.config.ts thresholds
+      frontend:
+        target: 60%
+        flags:
+          - frontend
+    patch:
+      default:
+        target: 80%
+        informational: true
+
+flags:
+  convex:
+    paths:
+      - backend/convex/
+    carryforward: true
+  frontend:
+    paths:
+      - frontend/src/
+    carryforward: true
+
+comment:
+  layout: "condensed_header, condensed_files, condensed_footer"
+  require_changes: true
+  require_base: false
+  require_head: true
+
+ignore:
+  - "backend/convex/_generated/**"
+  - "backend/convex/testing/**"
+  - "frontend/src/test-setup.ts"
+  - "**/*.test.ts"
+  - "**/*.spec.ts"
+  - "**/*.config.ts"
+  - "**/index.ts"
+  - "node_modules/**"
+  - "scripts/**"
+  - "reports/**"

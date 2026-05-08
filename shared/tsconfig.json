@@ -1,0 +1,13 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    "baseUrl": ".",
+    "paths": {
+      "@convex/_generated/*": ["../backend/convex/_generated/*"],
+      "@shared/*": ["./*"]
+    }
+  },
+  "include": ["**/*.ts"]
+}

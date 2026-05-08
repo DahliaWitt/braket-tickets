@@ -1,0 +1,107 @@
+version: 2
+
+updates:
+  # pnpm is configured through Dependabot's npm ecosystem.
+  # Keep all workspace manifests in one update block so changes share the
+  # root pnpm-lock.yaml and cross-package groups stay coherent.
+  - package-ecosystem: 'npm'
+    directories:
+      - '/'
+      - '/backend'
+      - '/frontend'
+    target-branch: 'develop'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '09:00'
+      timezone: 'America/Los_Angeles'
+    open-pull-requests-limit: 8
+    assignees:
+      - 'DahliaWitt'
+    commit-message:
+      prefix: 'chore(deps)'
+      include: 'scope'
+    labels:
+      - 'dependencies'
+      - 'javascript'
+    groups:
+      angular:
+        patterns:
+          - '@angular/*'
+          - '@angular-devkit/*'
+          - '@angular/build'
+          - '@angular/cli'
+          - '@angular/compiler-cli'
+          - 'angular-eslint'
+          - 'ngx-markdown'
+      auth:
+        patterns:
+          - 'better-auth'
+          - '@convex-dev/better-auth'
+          - '@better-auth/*'
+          - '@auth/*'
+      convex:
+        patterns:
+          - 'convex'
+          - 'convex-*'
+          - '@convex-dev/*'
+          - '@djpanda/convex-authz'
+      stripe:
+        patterns:
+          - 'stripe'
+          - '@stripe/*'
+        group-by: 'dependency-name'
+      observability:
+        patterns:
+          - '@sentry/*'
+          - 'posthog-js'
+          - '@codecov/*'
+          - 'codecov'
+        group-by: 'dependency-name'
+      storybook:
+        dependency-type: 'development'
+        patterns:
+          - 'storybook'
+          - '@storybook/*'
+      tests-and-build-tools:
+        dependency-type: 'development'
+        update-types:
+          - 'minor'
+          - 'patch'
+        patterns:
+          - '@playwright/*'
+          - '@ngx-playwright/*'
+          - '@vitest/*'
+          - 'vitest'
+          - 'vite'
+          - 'typescript'
+          - 'tsx'
+          - 'eslint'
+          - 'eslint-*'
+          - '@eslint/*'
+          - 'typescript-eslint'
+          - '@typescript-eslint/*'
+          - 'prettier'
+          - '@types/*'
+          - 'jsdom'
+          - 'wrangler'
+        group-by: 'dependency-name'
+
+  # GitHub Actions workflows pin actions to SHAs with version comments.
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    target-branch: 'develop'
+    schedule:
+      interval: 'monthly'
+      day: 'monday'
+      time: '10:00'
+      timezone: 'America/Los_Angeles'
+    open-pull-requests-limit: 5
+    assignees:
+      - 'DahliaWitt'
+    commit-message:
+      prefix: 'chore(ci)'
+      include: 'scope'
+    labels:
+      - 'dependencies'
+      - 'ci'

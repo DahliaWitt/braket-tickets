@@ -1,0 +1,9 @@
+#!/bin/sh
+
+set -e
+
+echo "Formatting staged files..."
+pnpm format:staged
+
+echo "⚡ Running FAST validation for commit..."
+./scripts/validate.sh fast

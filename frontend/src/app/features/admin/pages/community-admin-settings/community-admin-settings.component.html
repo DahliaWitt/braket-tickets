@@ -1,0 +1,1034 @@
+@if (isLoading()) {
+  <div class="space-y-8" aria-busy="true" data-testid="settings-skeleton">
+    <!-- Profile skeleton -->
+    <div class="space-y-6 p-6">
+      <z-skeleton class="h-3 w-16" />
+      <div class="grid gap-6 md:grid-cols-2">
+        @for (i of [1, 2]; track i) {
+          <div class="space-y-2">
+            <z-skeleton class="h-3 w-20" />
+            <z-skeleton class="h-11 w-full" />
+          </div>
+        }
+        <div class="space-y-2 md:col-span-2">
+          <z-skeleton class="h-3 w-24" />
+          <z-skeleton class="h-11 w-full" />
+        </div>
+        <div class="space-y-2 md:col-span-2">
+          <z-skeleton class="h-3 w-20" />
+          <z-skeleton class="h-20 w-full" />
+        </div>
+        @for (i of [1, 2]; track i) {
+          <div class="space-y-2">
+            <z-skeleton class="h-3 w-16" />
+            <z-skeleton class="h-11 w-full" />
+          </div>
+        }
+        <div class="space-y-2 md:col-span-2">
+          <z-skeleton class="h-3 w-32" />
+          <z-skeleton class="h-10 w-48" />
+        </div>
+        <div class="flex items-start gap-4 md:col-span-2">
+          <z-skeleton class="h-20 w-20 rounded-lg" />
+          <z-skeleton class="h-10 w-32" />
+        </div>
+      </div>
+      <div class="flex justify-end">
+        <z-skeleton class="h-10 w-32" />
+      </div>
+    </div>
+
+    <!-- Payments skeleton -->
+    <div class="space-y-6 border-t border-border p-6">
+      <z-skeleton class="h-3 w-20" />
+      <div class="space-y-4 rounded-lg border border-border bg-muted/30 p-5">
+        <z-skeleton class="h-6 w-32" />
+        <z-skeleton class="h-4 w-64" />
+        <z-skeleton class="h-10 w-48" />
+      </div>
+    </div>
+
+    <!-- Vetting skeleton -->
+    <div class="space-y-6 border-t border-border p-6">
+      <div class="flex items-center justify-between">
+        <div class="space-y-2">
+          <z-skeleton class="h-3 w-32" />
+          <z-skeleton class="h-4 w-64" />
+        </div>
+        <z-skeleton class="h-9 w-32" />
+      </div>
+      @for (i of [1, 2]; track i) {
+        <div class="space-y-4 rounded-lg border border-border bg-muted/50 p-4">
+          <div class="grid gap-4 md:grid-cols-12">
+            <div class="space-y-2 md:col-span-8">
+              <z-skeleton class="h-3 w-16" />
+              <z-skeleton class="h-11 w-full" />
+            </div>
+            <div class="space-y-2 md:col-span-4">
+              <z-skeleton class="h-3 w-12" />
+              <z-skeleton class="h-11 w-full" />
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+
+    <!-- Team skeleton -->
+    <div class="space-y-6 border-t border-border p-6">
+      <z-skeleton class="h-3 w-32" />
+      <z-skeleton class="h-6 w-16" />
+      <z-skeleton class="h-11 w-full" />
+      @for (i of [1, 2]; track i) {
+        <div
+          class="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-3"
+        >
+          <div class="space-y-1">
+            <z-skeleton class="h-4 w-32" />
+            <z-skeleton class="h-3 w-48" />
+          </div>
+          <z-skeleton class="h-8 w-8" />
+        </div>
+      }
+    </div>
+
+    <!-- Notifications skeleton -->
+    <div class="space-y-6 border-t border-border p-6">
+      <z-skeleton class="h-3 w-24" />
+      <z-skeleton class="h-4 w-72" />
+      <div class="space-y-2">
+        <z-skeleton class="h-3 w-28" />
+        <z-skeleton class="h-11 w-full" />
+      </div>
+      <div class="flex justify-end">
+        <z-skeleton class="h-10 w-40" />
+      </div>
+    </div>
+  </div>
+} @else {
+  <div class="space-y-8">
+    <!-- Profile Section -->
+    <div class="space-y-6 p-6">
+      <p
+        data-testid="section-profile"
+        class="mono-label text-2xs text-muted-foreground"
+      >
+        PROFILE
+      </p>
+
+      <div class="grid gap-6 md:grid-cols-2">
+        <div class="space-y-2">
+          <label
+            for="settings-name"
+            class="mono-label pl-1 text-xs text-muted-foreground"
+            >Name *</label
+          >
+          <input
+            id="settings-name"
+            data-testid="profile-name"
+            zInput
+            [formField]="profileForm.name"
+            [attr.aria-invalid]="
+              hasError(profileForm.name, 'maxLength') ? 'true' : null
+            "
+            aria-describedby="name-char-count name-maxlength-error"
+            placeholder="Community Name"
+          />
+          <div class="flex items-center justify-between">
+            @if (hasError(profileForm.name, 'maxLength')) {
+              <p
+                id="name-maxlength-error"
+                data-testid="profile-name-maxlength"
+                role="alert"
+                class="mono-label pl-1 text-2xs text-destructive"
+              >
+                NAME EXCEEDS {{ MAX_COMMUNITY_NAME_LENGTH }} CHARACTER LIMIT
+              </p>
+            } @else {
+              <span id="name-maxlength-error"></span>
+            }
+            <span
+              id="name-char-count"
+              data-testid="profile-name-char-count"
+              class="mono-label pl-1 text-2xs"
+              [class.text-destructive]="
+                nameCharCount() >= MAX_COMMUNITY_NAME_LENGTH
+              "
+              [class.text-warning]="
+                nameCharCount() >= MAX_COMMUNITY_NAME_LENGTH * 0.9 &&
+                nameCharCount() < MAX_COMMUNITY_NAME_LENGTH
+              "
+              [class.text-muted-foreground]="
+                nameCharCount() < MAX_COMMUNITY_NAME_LENGTH * 0.9
+              "
+              >{{ nameCharCount() }}/{{ MAX_COMMUNITY_NAME_LENGTH }}</span
+            >
+          </div>
+        </div>
+        <div class="space-y-2">
+          <label
+            for="settings-email"
+            class="mono-label pl-1 text-xs text-muted-foreground"
+            >Email</label
+          >
+          <input
+            id="settings-email"
+            data-testid="profile-email"
+            zInput
+            [formField]="profileForm.email"
+            type="email"
+            placeholder="contact@example.com"
+          />
+        </div>
+        <div class="space-y-2 md:col-span-2">
+          <label
+            for="settings-contactInfo"
+            class="mono-label pl-1 text-xs text-muted-foreground"
+            >Preferred Contact Instructions</label
+          >
+          <input
+            id="settings-contactInfo"
+            data-testid="profile-contactInfo"
+            zInput
+            [formField]="profileForm.contactInfo"
+            placeholder="DM us @voidcollective on Instagram, text 555-1234, Signal only, etc."
+          />
+          <p class="pl-1 font-sans text-xs text-muted-foreground">
+            Use this for non-email contact directions shown on event pages.
+          </p>
+        </div>
+        <div class="space-y-2 md:col-span-2">
+          <label
+            for="settings-description"
+            class="mono-label pl-1 text-xs text-muted-foreground"
+            >Description</label
+          >
+          <textarea
+            id="settings-description"
+            data-testid="profile-description"
+            zInput
+            [formField]="profileForm.description"
+            [attr.aria-invalid]="
+              hasError(profileForm.description, 'maxLength') ? 'true' : null
+            "
+            aria-describedby="description-char-count description-maxlength-error"
+            rows="3"
+            placeholder="A short blurb about your community"
+          ></textarea>
+          <div class="flex items-center justify-between">
+            @if (hasError(profileForm.description, 'maxLength')) {
+              <p
+                id="description-maxlength-error"
+                data-testid="profile-description-maxlength"
+                role="alert"
+                class="mono-label pl-1 text-2xs text-destructive"
+              >
+                DESCRIPTION EXCEEDS
+                {{ MAX_COMMUNITY_DESCRIPTION_LENGTH }} CHARACTER LIMIT
+              </p>
+            } @else {
+              <span id="description-maxlength-error"></span>
+            }
+            <span
+              id="description-char-count"
+              data-testid="profile-description-char-count"
+              class="mono-label pl-1 text-2xs"
+              [class.text-destructive]="
+                descriptionCharCount() >= MAX_COMMUNITY_DESCRIPTION_LENGTH
+              "
+              [class.text-warning]="
+                descriptionCharCount() >=
+                  MAX_COMMUNITY_DESCRIPTION_LENGTH * 0.9 &&
+                descriptionCharCount() < MAX_COMMUNITY_DESCRIPTION_LENGTH
+              "
+              [class.text-muted-foreground]="
+                descriptionCharCount() < MAX_COMMUNITY_DESCRIPTION_LENGTH * 0.9
+              "
+              >{{ descriptionCharCount() }}/{{
+                MAX_COMMUNITY_DESCRIPTION_LENGTH
+              }}</span
+            >
+          </div>
+        </div>
+        <div class="space-y-2">
+          <label
+            for="settings-website"
+            class="mono-label pl-1 text-xs text-muted-foreground"
+            >Website</label
+          >
+          <input
+            id="settings-website"
+            data-testid="profile-website"
+            zInput
+            [formField]="profileForm.website"
+            type="url"
+            placeholder="https://example.com"
+          />
+        </div>
+        <div class="space-y-2">
+          <label
+            for="settings-slug"
+            class="mono-label pl-1 text-xs text-muted-foreground"
+            >URL Slug</label
+          >
+          <input
+            id="settings-slug"
+            data-testid="profile-slug"
+            zInput
+            [formField]="profileForm.slug"
+            placeholder="e.g., underground-collective"
+          />
+          <p class="pl-1 font-sans text-xs text-muted-foreground">
+            Used in your community's URL. Auto-generated from name if left
+            blank.
+          </p>
+        </div>
+        <div class="space-y-2 md:col-span-2">
+          <p class="mono-label block pl-1 text-xs text-muted-foreground">
+            Community Visibility
+          </p>
+          <div
+            role="group"
+            aria-label="Community visibility"
+            class="flex w-fit rounded-lg border border-border bg-muted/30 p-1"
+          >
+            <button
+              type="button"
+              data-testid="profile-status-draft"
+              [attr.aria-pressed]="profileModel().status === 'draft'"
+              (click)="setProfileStatus('draft')"
+              [class]="
+                profileModel().status === 'draft'
+                  ? 'rounded-md bg-foreground px-3 py-1.5 font-mono text-xs tracking-widest text-background uppercase shadow-sm'
+                  : 'rounded-md px-3 py-1.5 font-mono text-xs tracking-widest text-muted-foreground uppercase hover:text-foreground'
+              "
+            >
+              Draft
+            </button>
+            <button
+              type="button"
+              data-testid="profile-status-published"
+              [attr.aria-pressed]="profileModel().status === 'published'"
+              (click)="setProfileStatus('published')"
+              [disabled]="
+                !canSetPublishedStatus() &&
+                profileModel().status !== 'published'
+              "
+              [class]="
+                profileModel().status === 'published'
+                  ? 'rounded-md bg-foreground px-3 py-1.5 font-mono text-xs tracking-widest text-background uppercase shadow-sm'
+                  : 'rounded-md px-3 py-1.5 font-mono text-xs tracking-widest text-muted-foreground uppercase hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40'
+              "
+            >
+              Published
+            </button>
+          </div>
+          <p class="pl-1 font-sans text-xs text-muted-foreground">
+            Published communities can accept applications and must have at least
+            one vetting question.
+          </p>
+          @if (!hasVettingQuestions()) {
+            <p
+              data-testid="publish-blocked-warning"
+              class="pl-1 font-sans text-xs text-destructive"
+            >
+              Add at least one vetting question before publishing.
+            </p>
+          }
+        </div>
+        <div class="space-y-2 md:col-span-2">
+          <span class="mono-label pl-1 text-xs text-muted-foreground"
+            >Community Logo</span
+          >
+          <div class="flex items-start gap-4">
+            @if (logoPreviewUrl()) {
+              <img
+                [src]="logoPreviewUrl()"
+                alt="Community logo preview"
+                data-testid="logo-preview"
+                class="h-20 w-20 rounded-lg border border-border object-cover"
+              />
+            }
+            <div class="flex flex-col gap-2">
+              <label
+                for="logoUpload"
+                class="inline-block cursor-pointer rounded-lg border border-border bg-muted px-4 py-2 font-mono text-xs tracking-widest text-foreground/80 uppercase transition-all hover:border-primary/30 hover:bg-accent/10"
+              >
+                [ {{ logoFileName() || 'choose file' }} ]
+              </label>
+              <input
+                id="logoUpload"
+                type="file"
+                [attr.accept]="acceptedImageFileInput"
+                data-testid="logo-upload"
+                (change)="onLogoFileChange($event)"
+                class="sr-only"
+              />
+              @if (logoPreviewUrl()) {
+                <button
+                  type="button"
+                  data-testid="remove-logo"
+                  (click)="removeLogo()"
+                  class="text-left font-mono text-xs tracking-widest text-muted-foreground uppercase transition-colors hover:text-destructive"
+                >
+                  Remove Logo
+                </button>
+              }
+            </div>
+          </div>
+          <p class="font-mono text-2xs text-muted-foreground">
+            {{ acceptedImageFormatsMessage }}
+          </p>
+        </div>
+        <div class="space-y-2 md:col-span-2">
+          <div class="flex items-start gap-3">
+            <input
+              type="checkbox"
+              id="settings-publicDirectory"
+              data-testid="public-directory-toggle"
+              [formField]="profileForm.isPublicDirectory"
+              class="h-6 w-6 rounded border-border bg-muted text-primary accent-primary focus:ring-primary/30"
+            />
+            <label
+              for="settings-publicDirectory"
+              class="flex cursor-pointer flex-col gap-1 select-none"
+            >
+              <span class="text-sm text-foreground"
+                >List this community in the public directory</span
+              >
+              <span class="font-sans text-xs text-muted-foreground"
+                >When enabled, your community name, description, and logo will
+                be visible on the homepage</span
+              >
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Code of Conduct Section -->
+    <div class="space-y-6 border-t border-border p-6">
+      <p
+        data-testid="section-code-of-conduct"
+        class="mono-label text-2xs text-muted-foreground"
+      >
+        CODE OF CONDUCT
+      </p>
+
+      <div class="space-y-2">
+        <label
+          for="settings-codeOfConduct"
+          class="mono-label pl-1 text-xs text-muted-foreground"
+          >Code of Conduct</label
+        >
+        <textarea
+          id="settings-codeOfConduct"
+          data-testid="profile-codeOfConduct"
+          zInput
+          [formField]="profileForm.codeOfConduct"
+          rows="6"
+          maxlength="50000"
+          placeholder="Enter your community's code of conduct..."
+        ></textarea>
+      </div>
+
+      <div class="flex justify-end">
+        <button
+          type="button"
+          z-button
+          data-testid="save-profile"
+          (click)="saveProfile()"
+          [zLoading]="isSaving()"
+          [zDisabled]="
+            profileForm().invalid() ||
+            isSaving() ||
+            !profileDirty() ||
+            hasBlockedPublishedState()
+          "
+        >
+          Save Changes
+        </button>
+      </div>
+    </div>
+
+    <!-- Payments Section -->
+    <div class="space-y-6 border-t border-border p-6">
+      <p
+        data-testid="section-payments"
+        class="mono-label text-2xs text-muted-foreground"
+      >
+        PAYMENTS
+      </p>
+
+      <div
+        class="ph-no-capture space-y-4 rounded-lg border border-border bg-muted/30 p-5"
+        data-testid="stripe-connect-section"
+      >
+        <div class="flex items-start justify-between gap-4">
+          <div class="space-y-1">
+            <h2
+              class="font-display text-lg font-bold tracking-wide text-foreground uppercase"
+            >
+              Stripe Connect
+            </h2>
+            <p class="font-sans text-sm text-muted-foreground">
+              Connect a Stripe account to receive payouts for ticket sales. KYC
+              runs on Stripe; once complete, payments, balances, and account
+              management show up inline below.
+            </p>
+          </div>
+        </div>
+
+        @if (organizer()?.isPlatformOrganizer) {
+          <div class="flex items-center gap-3 py-2">
+            <div
+              class="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-muted"
+            >
+              <z-icon zType="info" class="h-4 w-4 text-muted-foreground" />
+            </div>
+            <div>
+              <p class="text-sm font-medium text-foreground">
+                Platform Organizer
+              </p>
+              <p class="mono-label text-xs text-muted-foreground">
+                payouts handled by Braket Tickets
+              </p>
+            </div>
+          </div>
+        } @else if (!stripeConnectedAccountId()) {
+          <div class="space-y-3">
+            <p class="font-sans text-sm leading-relaxed text-muted-foreground">
+              Stripe handles payouts, tax reporting, and compliance. Connect
+              once per community.
+            </p>
+            <button
+              type="button"
+              z-button
+              zType="default"
+              data-testid="connect-with-stripe-btn"
+              (click)="connectWithStripe()"
+              [zLoading]="isStripeActionLoading()"
+              [zDisabled]="isStripeActionLoading()"
+              class="bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              <z-icon zType="credit-card" class="mr-2 h-4 w-4" />
+              Connect with Stripe
+            </button>
+          </div>
+        } @else {
+          @if (organizerPaymentReady()) {
+            <div
+              class="flex items-center gap-3 py-2"
+              data-testid="stripe-connected-status"
+            >
+              <div
+                class="flex h-8 w-8 items-center justify-center rounded-full border border-success/40 bg-success/20"
+              >
+                <z-icon zType="check" class="h-4 w-4 text-success" />
+              </div>
+              <div>
+                <p class="text-sm font-medium text-foreground">
+                  Stripe Connected
+                </p>
+                <p class="mono-label text-xs text-muted-foreground">
+                  payments enabled
+                </p>
+              </div>
+            </div>
+          } @else {
+            <div
+              class="flex flex-col gap-3 py-2"
+              data-testid="stripe-onboarding-incomplete"
+            >
+              <div class="flex items-center gap-3">
+                <div
+                  class="flex h-8 w-8 items-center justify-center rounded-full border border-warning/40 bg-warning/20"
+                >
+                  <z-icon zType="triangle-alert" class="h-4 w-4 text-warning" />
+                </div>
+                <div>
+                  <p class="text-sm font-medium text-foreground">
+                    Onboarding In Progress
+                  </p>
+                  <p class="mono-label text-xs text-muted-foreground">
+                    finish KYC on Stripe to enable payouts
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                z-button
+                zType="default"
+                data-testid="continue-stripe-onboarding-btn"
+                (click)="openStripeOnboarding()"
+                [zLoading]="isStripeActionLoading()"
+                [zDisabled]="isStripeActionLoading()"
+                class="self-start bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                <z-icon zType="arrow-up-right" class="mr-2 h-4 w-4" />
+                Continue Setup on Stripe
+              </button>
+            </div>
+          }
+
+          @if (stripeStatus()) {
+            <div
+              class="mono-label grid grid-cols-1 gap-3 text-xs text-muted-foreground sm:grid-cols-3"
+            >
+              <div class="flex items-center gap-2">
+                <span
+                  class="inline-flex h-2.5 w-2.5 rounded-full"
+                  [class.bg-success]="stripeStatus()!.chargesEnabled"
+                  [class.bg-muted]="!stripeStatus()!.chargesEnabled"
+                ></span>
+                Charges
+              </div>
+              <div class="flex items-center gap-2">
+                <span
+                  class="inline-flex h-2.5 w-2.5 rounded-full"
+                  [class.bg-success]="stripeStatus()!.payoutsEnabled"
+                  [class.bg-muted]="!stripeStatus()!.payoutsEnabled"
+                ></span>
+                Payouts
+              </div>
+              <div class="flex items-center gap-2">
+                <span
+                  class="inline-flex h-2.5 w-2.5 rounded-full"
+                  [class.bg-success]="stripeStatus()!.userRequirementsClear"
+                  [class.bg-muted]="!stripeStatus()!.userRequirementsClear"
+                ></span>
+                User Steps
+              </div>
+            </div>
+          }
+
+          @if (stripeEmbedOrganizerId(); as embedOrganizerId) {
+            <app-stripe-connect-embed
+              [organizerId]="embedOrganizerId"
+              [components]="stripeEmbeddedComponents()"
+              (exited)="onEmbeddedExit()"
+              (loadError)="onEmbeddedLoadError($event)"
+              data-testid="stripe-connect-embed"
+            />
+          }
+        }
+
+        @if (stripeError()) {
+          <p
+            class="font-mono text-sm text-destructive"
+            data-testid="stripe-error"
+          >
+            {{ stripeError() }}
+          </p>
+        }
+      </div>
+    </div>
+
+    <!-- Vetting Questions Section -->
+    <div class="space-y-6 border-t border-border p-6">
+      <div
+        class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <div>
+          <p
+            data-testid="section-vetting"
+            class="mono-label text-2xs text-muted-foreground"
+          >
+            VETTING QUESTIONS
+          </p>
+          <p
+            class="mt-1 font-sans text-sm leading-relaxed text-muted-foreground sm:pb-2"
+          >
+            Customize the questions asked during the vetting process.
+          </p>
+        </div>
+        <div class="flex items-center gap-2 self-start sm:self-auto">
+          <button
+            z-button
+            zType="outline"
+            zSize="sm"
+            data-testid="add-question"
+            (click)="addQuestion()"
+            type="button"
+          >
+            <z-icon zType="plus" class="mr-2" />
+            Add Question
+          </button>
+        </div>
+      </div>
+
+      <div class="ph-no-capture space-y-4">
+        @for (question of vettingModel(); track question.id; let i = $index) {
+          <div
+            data-testid="vetting-question"
+            class="group space-y-4 rounded-lg border border-border bg-muted/50 p-4"
+          >
+            <div class="flex items-start gap-4">
+              <div class="min-w-0 flex-1 space-y-4">
+                <div class="grid gap-4 md:grid-cols-12">
+                  <div class="space-y-2 md:col-span-8">
+                    <label
+                      [for]="'settings-question-' + i"
+                      class="mono-label pl-1 text-xs text-muted-foreground"
+                      >Question</label
+                    >
+                    <input
+                      zInput
+                      autocomplete="off"
+                      [id]="'settings-question-' + i"
+                      [value]="question.question"
+                      placeholder="E.g., Why do you want to join?"
+                      (input)="onQuestionFieldChange(i, 'question', $event)"
+                    />
+                  </div>
+                  <div class="space-y-2 md:col-span-4">
+                    <span
+                      [id]="'settings-type-' + i"
+                      class="mono-label block pl-1 text-xs text-muted-foreground"
+                      >Type</span
+                    >
+                    <z-select
+                      [zValue]="question.type || 'text'"
+                      [zAriaLabelledBy]="'settings-type-' + i"
+                      zPlaceholder="Select question type"
+                      class="w-full font-sans [&_button]:h-11"
+                      (zSelectionChange)="onQuestionTypeChange(i, $event)"
+                    >
+                      <z-select-item zValue="text">Short Text</z-select-item>
+                      <z-select-item zValue="long_text"
+                        >Long Text</z-select-item
+                      >
+                      <z-select-item zValue="boolean">Yes/No</z-select-item>
+                      <z-select-item zValue="select">Dropdown</z-select-item>
+                      <z-select-item zValue="checkbox"
+                        >Checkboxes</z-select-item
+                      >
+                    </z-select>
+                  </div>
+                </div>
+
+                @if (needsOptions(question.type)) {
+                  <div class="space-y-2">
+                    <label
+                      [for]="'settings-options-' + i"
+                      class="mono-label pl-1 text-xs text-muted-foreground"
+                      >Options (comma separated)</label
+                    >
+                    <input
+                      zInput
+                      autocomplete="off"
+                      [id]="'settings-options-' + i"
+                      [value]="question.optionsString"
+                      placeholder="Option 1, Option 2, ..."
+                      (input)="
+                        onQuestionFieldChange(i, 'optionsString', $event)
+                      "
+                    />
+                  </div>
+                }
+
+                <div class="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    [checked]="question.required"
+                    [id]="'settings-req-' + i"
+                    (change)="onRequiredChange(i, $event)"
+                    class="h-4 w-4 rounded border-border bg-muted text-primary accent-primary focus:ring-primary/30"
+                  />
+                  <label
+                    [for]="'settings-req-' + i"
+                    class="mono-label cursor-pointer text-xs text-muted-foreground select-none"
+                    >Required Question</label
+                  >
+                </div>
+              </div>
+              <div class="flex shrink-0 flex-col gap-1">
+                <button
+                  z-button
+                  zType="ghost"
+                  zSize="sm"
+                  type="button"
+                  (click)="moveQuestion(i, -1)"
+                  [zDisabled]="i === 0"
+                  [attr.aria-label]="'Move question ' + (i + 1) + ' up'"
+                  [zTooltip]="'Move question up'"
+                >
+                  <z-icon zType="chevron-up" class="h-4 w-4" />
+                </button>
+                <button
+                  z-button
+                  zType="ghost"
+                  zSize="sm"
+                  type="button"
+                  (click)="moveQuestion(i, 1)"
+                  [zDisabled]="i === vettingModel().length - 1"
+                  [attr.aria-label]="'Move question ' + (i + 1) + ' down'"
+                  [zTooltip]="'Move question down'"
+                >
+                  <z-icon zType="chevron-down" class="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  (click)="removeQuestion(i)"
+                  [attr.aria-label]="'Remove question ' + (i + 1)"
+                  [zTooltip]="'Remove question'"
+                  class="p-1 text-muted-foreground transition-colors hover:text-destructive"
+                >
+                  <z-icon zType="x" class="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+          </div>
+        } @empty {
+          <div
+            data-testid="vetting-empty"
+            class="rounded-lg border border-dashed border-border py-12 text-center text-sm text-muted-foreground"
+          >
+            No vetting questions yet. Add your first question to start screening
+            applicants.
+          </div>
+        }
+      </div>
+
+      @if (vettingDirty()) {
+        <div class="flex justify-end">
+          <button
+            type="button"
+            z-button
+            data-testid="save-vetting"
+            (click)="saveVettingQuestions()"
+            [zLoading]="isSavingVetting()"
+            [zDisabled]="
+              isSavingVetting() ||
+              hasUnsavedStatusChange() ||
+              (profileModel().status === 'published' &&
+                vettingModel().length === 0)
+            "
+          >
+            Save Questions
+          </button>
+        </div>
+      }
+    </div>
+
+    <!-- Team Management Section -->
+    <div class="space-y-6 border-t border-border p-6">
+      <p
+        data-testid="section-team"
+        class="mono-label text-2xs text-muted-foreground"
+      >
+        TEAM MANAGEMENT
+      </p>
+
+      <!-- Admins -->
+      <div class="ph-no-capture space-y-4">
+        <h2
+          class="font-display text-lg font-bold tracking-wide text-foreground uppercase"
+        >
+          Admins
+        </h2>
+
+        <div class="flex gap-2">
+          <input
+            zInput
+            data-testid="admin-email-input"
+            type="email"
+            placeholder="Enter user email"
+            aria-label="Admin email address"
+            [(value)]="newAdminEmail"
+            class="flex-1"
+          />
+          <button
+            type="button"
+            z-button
+            data-testid="grant-admin"
+            (click)="grantAdmin()"
+            [zDisabled]="!newAdminEmail() || isGrantingAdmin()"
+            [zLoading]="isGrantingAdmin()"
+            class="min-h-11"
+          >
+            Grant
+          </button>
+        </div>
+
+        <div data-testid="admin-list" class="ph-no-capture space-y-2">
+          @for (admin of adminList(); track admin._id) {
+            <div
+              class="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-3"
+            >
+              <div class="flex flex-col">
+                <span class="font-sans text-sm text-foreground">{{
+                  admin.displayName
+                }}</span>
+                <span class="font-mono text-2xs text-muted-foreground">{{
+                  admin.email || admin.userId
+                }}</span>
+              </div>
+              <button
+                type="button"
+                z-button
+                zType="ghost"
+                zSize="sm"
+                data-testid="remove-admin"
+                (click)="confirmRemoveAdmin(admin.userId)"
+                [zDisabled]="isLastAdmin()"
+                class="text-muted-foreground hover:text-destructive"
+                [attr.aria-label]="'Remove admin ' + admin.displayName"
+                [zTooltip]="'Remove ' + admin.displayName"
+              >
+                <z-icon zType="x" class="h-4 w-4" />
+              </button>
+            </div>
+          } @empty {
+            <div
+              data-testid="admin-empty"
+              class="rounded-lg border border-dashed border-border py-8 text-center text-sm text-muted-foreground"
+            >
+              No admins assigned yet.
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- Scanners -->
+      <div class="space-y-4">
+        <h2
+          class="font-display text-lg font-bold tracking-wide text-foreground uppercase"
+        >
+          Door Staff
+        </h2>
+
+        <div class="flex gap-2">
+          <input
+            zInput
+            data-testid="scanner-email-input"
+            type="email"
+            placeholder="Enter user email"
+            aria-label="Scanner email address"
+            [(value)]="newScannerEmail"
+            class="flex-1"
+          />
+          <button
+            type="button"
+            z-button
+            data-testid="grant-scanner"
+            (click)="grantScanner()"
+            [zDisabled]="!newScannerEmail() || isGrantingScanner()"
+            [zLoading]="isGrantingScanner()"
+            class="min-h-11"
+          >
+            Grant
+          </button>
+        </div>
+
+        <div data-testid="scanner-list" class="space-y-2">
+          @for (scanner of scannerList(); track scanner._id) {
+            <div
+              class="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-3"
+            >
+              <div class="flex flex-col">
+                <span class="font-sans text-sm text-foreground">{{
+                  scanner.displayName
+                }}</span>
+                <span class="font-mono text-2xs text-muted-foreground">{{
+                  scanner.email || scanner.userId
+                }}</span>
+              </div>
+              <button
+                type="button"
+                z-button
+                zType="ghost"
+                zSize="sm"
+                data-testid="remove-scanner"
+                (click)="confirmRemoveScanner(scanner.userId)"
+                class="text-muted-foreground hover:text-destructive"
+                [attr.aria-label]="'Remove door staff ' + scanner.displayName"
+                [zTooltip]="'Remove ' + scanner.displayName"
+              >
+                <z-icon zType="x" class="h-4 w-4" />
+              </button>
+            </div>
+          } @empty {
+            <div
+              data-testid="scanner-empty"
+              class="rounded-lg border border-dashed border-border py-8 text-center text-sm text-muted-foreground"
+            >
+              No door staff assigned yet. Add scanners who can check in guests
+              at your events.
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+
+    <!-- Notifications Section -->
+    <div
+      data-testid="notifications-section"
+      class="space-y-6 border-t border-border p-6"
+    >
+      <p class="mono-label text-2xs text-muted-foreground">NOTIFICATIONS</p>
+      <p class="font-sans text-sm leading-relaxed text-muted-foreground">
+        Choose how you receive notifications when members submit vetting
+        applications.
+      </p>
+
+      <div class="space-y-4">
+        <div class="space-y-2">
+          <span
+            id="notif-mode-label"
+            class="mono-label pl-1 text-xs text-muted-foreground"
+            >Notification Mode</span
+          >
+          <z-select
+            data-testid="notif-mode-select"
+            [zValue]="notifMode()"
+            zAriaLabelledBy="notif-mode-label"
+            zPlaceholder="Select notification mode"
+            class="w-full font-sans"
+            (zSelectionChange)="onNotifModeChange($event)"
+          >
+            <z-select-item zValue="off">Off</z-select-item>
+            <z-select-item zValue="all">All (immediate)</z-select-item>
+            <z-select-item zValue="digest">Daily digest</z-select-item>
+          </z-select>
+        </div>
+
+        @if (notifMode() === 'digest') {
+          <div data-testid="digest-hour-select" class="space-y-2">
+            <span
+              id="notif-digest-hour-label"
+              class="mono-label pl-1 text-xs text-muted-foreground"
+              >Digest Time (local)</span
+            >
+            <z-select
+              [zValue]="notifDigestHour().toString()"
+              zAriaLabelledBy="notif-digest-hour-label"
+              zPlaceholder="Select time"
+              class="w-full font-sans"
+              (zSelectionChange)="onDigestHourChange($event)"
+            >
+              @for (opt of digestHourOptions(); track opt.utcHour) {
+                <z-select-item [zValue]="opt.utcHour.toString()">{{
+                  opt.label
+                }}</z-select-item>
+              }
+            </z-select>
+          </div>
+        }
+      </div>
+
+      <div class="flex justify-end">
+        <button
+          type="button"
+          z-button
+          data-testid="save-notifications-btn"
+          (click)="saveNotificationPreference()"
+          [zLoading]="notifSaving()"
+          [zDisabled]="notifSaving()"
+          class="bg-primary text-primary-foreground hover:bg-primary/90"
+        >
+          Save Notifications
+        </button>
+      </div>
+    </div>
+  </div>
+}

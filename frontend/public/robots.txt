@@ -1,0 +1,7 @@
+# Events are promoted directly, not through search engines
+
+User-agent: *
+Allow: /$
+Disallow: /
+
+# No sitemap - intentionally keeping event URLs private

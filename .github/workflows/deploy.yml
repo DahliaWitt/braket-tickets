@@ -1,0 +1,262 @@
+name: Deploy to Production
+
+# Deploys backend to Convex (serverless) and frontend to Cloudflare Pages.
+# Note: Legacy self-hosted Docker deployment has been removed.
+# See ops/docker-compose.yml for local development or self-hosting reference.
+
+on:
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
+    branches: ['main']
+
+concurrency:
+  group: deploy-production-${{ github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  changes:
+    runs-on: self-hosted
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' }}
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      observability: ${{ steps.filter.outputs.observability }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/convex/**'
+              - 'convex.json'
+              - 'backend/package.json'
+              - 'backend/scripts/**'
+              - 'package.json'
+              - 'pnpm-workspace.yaml'
+              - 'pnpm-lock.yaml'
+            frontend:
+              - 'frontend/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+            observability:
+              - 'ops/**'
+              - '.github/workflows/deploy.yml'
+
+  deploy-convex:
+    name: Deploy Backend to Convex
+    runs-on: self-hosted
+    environment: production
+    needs: changes
+    if: ${{ needs.changes.outputs.backend == 'true' }}
+    env:
+      AUTH_BASE_URL: ${{ secrets.AUTH_BASE_URL }}
+      BRAKET_DEPLOY_ENV: production
+      BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+      CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+      CONVEX_SITE_URL: ${{ secrets.CONVEX_SITE_URL }}
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
+      DISCORD_CLIENT_SECRET: ${{ secrets.DISCORD_CLIENT_SECRET }}
+      EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+      EMAIL_REPLY_TO: ${{ secrets.EMAIL_REPLY_TO }}
+      POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY || secrets.POSTHOG_KEY }}
+      POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      RESEND_WEBHOOK_SECRET: ${{ secrets.RESEND_WEBHOOK_SECRET }}
+      SITE_URL: ${{ secrets.SITE_URL }}
+      SMTP_FROM: ${{ secrets.SMTP_FROM }}
+      SMTP_HOST: ${{ secrets.SMTP_HOST }}
+      SMTP_PASS: ${{ secrets.SMTP_PASS }}
+      SMTP_PORT: ${{ secrets.SMTP_PORT }}
+      SMTP_REPLY_TO: ${{ secrets.SMTP_REPLY_TO }}
+      SMTP_USER: ${{ secrets.SMTP_USER }}
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+      STRIPE_WEBHOOK_SECRET_CONNECT: ${{ secrets.STRIPE_WEBHOOK_SECRET_CONNECT }}
+      STRIPE_WEBHOOK_SECRET_V2_EVENTS: ${{ secrets.STRIPE_WEBHOOK_SECRET_V2_EVENTS }}
+      TOKEN_DIGEST_SECRET: ${{ secrets.TOKEN_DIGEST_SECRET }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@c336a2788d9774dccfdeb4823a5058ccc9f07453 # v4.3.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+
+      - name: Validate localhost CORS flag for production
+        run: |
+          if [ -z "${ALLOW_LOCALHOST_CORS}" ]; then
+            exit 0
+          fi
+          normalized="$(printf '%s' "${ALLOW_LOCALHOST_CORS}" | tr '[:upper:]' '[:lower:]')"
+          if [ "${normalized}" = "1" ] || [ "${normalized}" = "true" ] || [ "${normalized}" = "yes" ] || [ "${normalized}" = "on" ]; then
+            echo "SAFETY ABORT: ALLOW_LOCALHOST_CORS must be false in preview/prod deployments."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Sync Convex environment
+        working-directory: ./backend
+        run: pnpm sync:env:prod
+
+      - name: Deploy to Convex
+        run: pnpm convex deploy
+
+  deploy-frontend:
+    name: Deploy Frontend to Cloudflare
+    runs-on: self-hosted
+    environment: production
+    needs: [changes, deploy-convex]
+    if: ${{ needs.changes.outputs.frontend == 'true' && (needs.deploy-convex.result == 'success' || needs.deploy-convex.result == 'skipped') }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@c336a2788d9774dccfdeb4823a5058ccc9f07453 # v4.3.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+
+      - name: Install root dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build frontend
+        working-directory: ./frontend
+        run: pnpm build
+        env:
+          CONVEX_URL: ${{ secrets.CONVEX_URL }}
+          POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
+          POSTHOG_KEY: ${{ secrets.POSTHOG_KEY }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+
+      - name: Deploy to Cloudflare Pages
+        working-directory: ./frontend
+        run: pnpm wrangler pages deploy dist/frontend/browser --project-name=braket-tickets-frontend --branch=main
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  deploy-observability:
+    name: Deploy Observability Stack (Whiterose)
+    runs-on: self-hosted
+    environment: production
+    needs: changes
+    concurrency:
+      group: deploy-observability-production
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Ensure backup directory exists
+        run: |
+          mkdir -p /mnt/user/appdata/braket-tickets/convex-backups
+          chown 100:101 /mnt/user/appdata/braket-tickets/convex-backups
+          chmod 0770 /mnt/user/appdata/braket-tickets/convex-backups
+
+      - name: Check observability status
+        id: status
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          changed='${{ needs.changes.outputs.observability }}'
+          needs_deploy='false'
+          reason='none'
+
+          if [ "${changed}" = "true" ]; then
+            needs_deploy='true'
+            reason='config_changed'
+          fi
+
+          for service in convex-log-forwarder convex-backup; do
+            container_id="$(docker compose -f ops/docker-compose.yml ps -q "${service}" 2>/dev/null || true)"
+            if [ -z "${container_id}" ]; then
+              needs_deploy='true'
+              if [ "${reason}" = 'none' ]; then
+                reason="missing:${service}"
+              else
+                reason="${reason},missing:${service}"
+              fi
+              continue
+            fi
+
+            running="$(docker inspect -f '{{.State.Running}}' "${container_id}" || echo false)"
+            if [ "${running}" != 'true' ]; then
+              needs_deploy='true'
+              if [ "${reason}" = 'none' ]; then
+                reason="offline:${service}"
+              else
+                reason="${reason},offline:${service}"
+              fi
+            fi
+          done
+
+          echo "needs_deploy=${needs_deploy}" >> "${GITHUB_OUTPUT}"
+          echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
+
+      - name: Deploy observability services (changed)
+        if: ${{ steps.status.outputs.needs_deploy == 'true' && needs.changes.outputs.observability == 'true' }}
+        run: docker compose -f ops/docker-compose.yml up -d --build
+        env:
+          BACKUP_INCLUDE_FILE_STORAGE: ${{ secrets.BACKUP_INCLUDE_FILE_STORAGE }}
+          BACKUP_INTERVAL_SECONDS: ${{ secrets.BACKUP_INTERVAL_SECONDS }}
+          BACKUP_RETENTION_DAYS: ${{ secrets.BACKUP_RETENTION_DAYS }}
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+          CONVEX_LOG_DEDUP_CACHE_SIZE: ${{ secrets.CONVEX_LOG_DEDUP_CACHE_SIZE }}
+          CONVEX_LOG_FORWARD_ALL: ${{ secrets.CONVEX_LOG_FORWARD_ALL }}
+          CONVEX_LOG_INCLUDE_SUCCESS: ${{ secrets.CONVEX_LOG_INCLUDE_SUCCESS }}
+          CONVEX_LOG_RECONNECT_MS: ${{ secrets.CONVEX_LOG_RECONNECT_MS }}
+          CONVEX_LOG_SINK: ${{ secrets.CONVEX_LOG_SINK }}
+          POSTHOG_LOGS_HOST: ${{ secrets.POSTHOG_LOGS_HOST }}
+          POSTHOG_LOGS_PROJECT_TOKEN: ${{ secrets.POSTHOG_LOGS_PROJECT_TOKEN || secrets.POSTHOG_KEY }}
+          POSTHOG_LOGS_SERVICE_NAME: ${{ secrets.POSTHOG_LOGS_SERVICE_NAME }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          BRAKET_APPDATA_ROOT: /mnt/user/appdata/braket-tickets
+
+      - name: Restore observability services (offline or missing)
+        if: ${{ steps.status.outputs.needs_deploy == 'true' && needs.changes.outputs.observability != 'true' }}
+        run: docker compose -f ops/docker-compose.yml up -d
+        env:
+          BACKUP_INCLUDE_FILE_STORAGE: ${{ secrets.BACKUP_INCLUDE_FILE_STORAGE }}
+          BACKUP_INTERVAL_SECONDS: ${{ secrets.BACKUP_INTERVAL_SECONDS }}
+          BACKUP_RETENTION_DAYS: ${{ secrets.BACKUP_RETENTION_DAYS }}
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+          CONVEX_LOG_DEDUP_CACHE_SIZE: ${{ secrets.CONVEX_LOG_DEDUP_CACHE_SIZE }}
+          CONVEX_LOG_FORWARD_ALL: ${{ secrets.CONVEX_LOG_FORWARD_ALL }}
+          CONVEX_LOG_INCLUDE_SUCCESS: ${{ secrets.CONVEX_LOG_INCLUDE_SUCCESS }}
+          CONVEX_LOG_RECONNECT_MS: ${{ secrets.CONVEX_LOG_RECONNECT_MS }}
+          CONVEX_LOG_SINK: ${{ secrets.CONVEX_LOG_SINK }}
+          POSTHOG_LOGS_HOST: ${{ secrets.POSTHOG_LOGS_HOST }}
+          POSTHOG_LOGS_PROJECT_TOKEN: ${{ secrets.POSTHOG_LOGS_PROJECT_TOKEN || secrets.POSTHOG_KEY }}
+          POSTHOG_LOGS_SERVICE_NAME: ${{ secrets.POSTHOG_LOGS_SERVICE_NAME }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          BRAKET_APPDATA_ROOT: /mnt/user/appdata/braket-tickets

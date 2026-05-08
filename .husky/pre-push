@@ -1,0 +1,51 @@
+#!/bin/sh
+
+z40="0000000000000000000000000000000000000000"
+is_delete=false
+push_remote_sha=""
+
+# ── SAFEGUARD: Block pushes to main/master ────
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [ "$local_sha" = "$z40" ]; then
+    is_delete=true
+    if [ "$remote_ref" = "refs/heads/main" ] || [ "$remote_ref" = "refs/heads/master" ] || [ "$remote_ref" = "refs/heads/develop" ]; then
+      echo ""
+      echo "\033[31mBLOCKED: Cannot delete protected branch ${remote_ref#refs/heads/}\033[0m"
+      echo ""
+      exit 1
+    fi
+  fi
+  if [ "$remote_ref" = "refs/heads/main" ] || [ "$remote_ref" = "refs/heads/master" ]; then
+    echo ""
+    echo "\033[31m╔══════════════════════════════════════════════╗\033[0m"
+    echo "\033[31m║  BLOCKED: Cannot push directly to main       ║\033[0m"
+    echo "\033[31m╚══════════════════════════════════════════════╝\033[0m"
+    echo ""
+    echo "All changes must go through a Pull Request."
+    echo "Push to \033[32mdevelop\033[0m instead: git push origin develop"
+    echo ""
+    exit 1
+  fi
+  # Capture the remote SHA so validation diffs only the commits being pushed.
+  # For new branches (remote_sha is all zeros) we skip — the scripts fall back
+  # to origin/develop which is correct for first push.
+  if [ "$remote_sha" != "$z40" ]; then
+    push_remote_sha="$remote_sha"
+  fi
+done
+
+# Skip validation for branch deletions
+if [ "$is_delete" = true ]; then
+  exit 0
+fi
+
+# Get current branch name
+branch=$(git rev-parse --abbrev-ref HEAD)
+
+if [ "$branch" = "develop" ]; then
+  echo "🚀 Running validation with affected E2E for 'develop'..."
+  VALIDATE_BASE_SHA="$push_remote_sha" ./scripts/validate.sh all
+else
+  echo "⚡ Running FAST validation (typecheck only) for '$branch'..."
+  VALIDATE_BASE_SHA="$push_remote_sha" ./scripts/validate.sh fast
+fi

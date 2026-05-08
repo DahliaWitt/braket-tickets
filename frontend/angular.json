@@ -1,0 +1,218 @@
+{
+  "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
+  "version": 1,
+  "cli": {
+    "packageManager": "pnpm",
+    "schematicCollections": ["angular-eslint"],
+    "analytics": false
+  },
+  "newProjectRoot": "projects",
+  "projects": {
+    "frontend": {
+      "projectType": "application",
+      "schematics": {},
+      "root": "",
+      "sourceRoot": "src",
+      "prefix": "app",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "allowedCommonJsDependencies": ["qrcode"],
+            "browser": "src/main.ts",
+            "externalDependencies": ["canvg", "dompurify", "html2canvas"],
+            "tsConfig": "tsconfig.app.json",
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "public"
+              },
+              {
+                "glob": "**/*",
+                "input": "public/.well-known",
+                "output": ".well-known"
+              }
+            ],
+            "styles": ["src/styles.css"]
+          },
+          "configurations": {
+            "production": {
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "1MB",
+                  "maximumError": "1.1MB"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "4kB",
+                  "maximumError": "8kB"
+                },
+                {
+                  "type": "bundle",
+                  "name": "apexcharts-esm",
+                  "maximumWarning": "550kB",
+                  "maximumError": "650kB"
+                },
+                {
+                  "type": "bundle",
+                  "name": "apexcharts-ssr-esm",
+                  "maximumWarning": "550kB",
+                  "maximumError": "650kB"
+                },
+                {
+                  "type": "bundle",
+                  "name": "jspdf-es-min",
+                  "maximumWarning": "450kB",
+                  "maximumError": "500kB"
+                }
+              ],
+              "outputHashing": "all"
+            },
+            "preview": {
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "1MB",
+                  "maximumError": "1.1MB"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "4kB",
+                  "maximumError": "8kB"
+                },
+                {
+                  "type": "bundle",
+                  "name": "apexcharts-esm",
+                  "maximumWarning": "550kB",
+                  "maximumError": "650kB"
+                },
+                {
+                  "type": "bundle",
+                  "name": "apexcharts-ssr-esm",
+                  "maximumWarning": "550kB",
+                  "maximumError": "650kB"
+                },
+                {
+                  "type": "bundle",
+                  "name": "jspdf-es-min",
+                  "maximumWarning": "450kB",
+                  "maximumError": "500kB"
+                }
+              ],
+              "outputHashing": "all"
+            },
+            "development": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": {
+                "scripts": true,
+                "styles": false,
+                "vendor": false,
+                "hidden": false,
+                "sourcesContent": false
+              }
+            },
+            "test": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": {
+                "scripts": true,
+                "styles": false,
+                "vendor": false,
+                "hidden": false,
+                "sourcesContent": false
+              }
+            },
+            "e2e": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": {
+                "scripts": true,
+                "styles": false,
+                "vendor": false,
+                "hidden": false,
+                "sourcesContent": false
+              },
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "5MB",
+                  "maximumError": "10MB"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "10kB",
+                  "maximumError": "20kB"
+                },
+                {
+                  "type": "any",
+                  "maximumWarning": "2MB",
+                  "maximumError": "5MB"
+                }
+              ],
+              "outputHashing": "none"
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "serve": {
+          "builder": "@angular/build:dev-server",
+          "options": {
+            "prebundle": {
+              "exclude": ["ngx-markdown"]
+            }
+          },
+          "configurations": {
+            "production": {
+              "buildTarget": "frontend:build:production"
+            },
+            "test": {
+              "buildTarget": "frontend:build:test"
+            },
+            "development": {
+              "buildTarget": "frontend:build:development"
+            },
+            "e2e": {
+              "buildTarget": "frontend:build:e2e"
+            }
+          },
+          "defaultConfiguration": "development"
+        },
+        "test": {
+          "builder": "@angular/build:unit-test"
+        },
+        "lint": {
+          "builder": "@angular-eslint/builder:lint",
+          "options": {
+            "cache": true,
+            "cacheLocation": ".angular/cache/eslint",
+            "lintFilePatterns": ["src/**/*.ts", "src/**/*.html"]
+          }
+        },
+        "storybook": {
+          "builder": "@storybook/angular:start-storybook",
+          "options": {
+            "configDir": ".storybook",
+            "browserTarget": "frontend:build:development",
+            "styles": ["src/styles.css"],
+            "compodoc": true,
+            "compodocArgs": ["-e", "json", "-d", ".storybook"],
+            "port": 6006
+          }
+        },
+        "build-storybook": {
+          "builder": "@storybook/angular:build-storybook",
+          "options": {
+            "configDir": ".storybook",
+            "browserTarget": "frontend:build:development",
+            "styles": ["src/styles.css"],
+            "compodoc": true,
+            "compodocArgs": ["-e", "json", "-d", ".storybook"],
+            "outputDir": "storybook-static"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,375 @@
+import {v} from 'convex/values';
+import {action, internalMutation, mutation} from '../_generated/server';
+import {internal} from '../_generated/api';
+import {getAuthUserId, requireUser} from '../lib/auth_identity';
+import {getAppErrorMessage, throwUnauthenticated} from '../lib/errors';
+import {rateLimiter} from '../lib/rate_limits';
+
+// Allowed MIME types for file uploads
+const ALLOWED_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+] as const;
+type AllowedMimeType = (typeof ALLOWED_MIME_TYPES)[number];
+
+const ALLOWED_FORMATS_LABEL = 'JPG, PNG, GIF, WEBP';
+
+function isAllowedMimeType(mimeType: string): mimeType is AllowedMimeType {
+  return ALLOWED_MIME_TYPES.some(
+    (allowedMimeType) => allowedMimeType === mimeType,
+  );
+}
+
+// Maximum file size: 10MB
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+const FILE_TOO_LARGE_ERROR = `File too large. Maximum size is ${MAX_FILE_SIZE_BYTES / 1024 / 1024}MB`;
+
+// Number of header bytes to read for magic byte validation.
+// 256 covers all supported types (PNG needs 8, WebP needs 12, SVG needs up to ~20 for leading whitespace).
+export const MAGIC_BYTES_HEADER_SIZE = 256;
+
+/** Returns true when every byte in `signature` matches the corresponding byte in `buf`. */
+function matchesSignature(
+  buf: Uint8Array,
+  signature: readonly number[],
+): boolean {
+  if (buf.length < signature.length) return false;
+  return signature.every((byte, i) => buf[i] === byte);
+}
+
+// Per-type magic byte signatures (null = use custom validator)
+const MAGIC_SIGNATURES: Record<string, readonly number[][]> = {
+  // JPEG: FF D8 FF
+  'image/jpeg': [[0xff, 0xd8, 0xff]],
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  'image/png': [[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]],
+  // GIF87a: 47 49 46 38 37 61 or GIF89a: 47 49 46 38 39 61
+  'image/gif': [
+    [0x47, 0x49, 0x46, 0x38, 0x37, 0x61],
+    [0x47, 0x49, 0x46, 0x38, 0x39, 0x61],
+  ],
+  // WebP: RIFF at 0-3, WEBP at 8-11 — non-contiguous, validated directly in checkMagicBytes
+};
+
+// WebP has a non-contiguous signature (RIFF at 0, WEBP at 8), checked separately.
+const WEBP_RIFF: readonly number[] = [0x52, 0x49, 0x46, 0x46];
+const WEBP_FOURCC: readonly number[] = [0x57, 0x45, 0x42, 0x50];
+
+/**
+ * Validate file content by checking magic bytes (file header signatures).
+ *
+ * Each image format has a unique byte sequence at the start of the file
+ * that identifies its true type, regardless of what the client declares.
+ *
+ * Exported for unit testing.
+ */
+export function checkMagicBytes(
+  bytes: Uint8Array,
+  mimeType: string,
+): {valid: boolean; error?: string} {
+  if (bytes.length === 0) {
+    return {valid: false, error: 'File content is empty'};
+  }
+
+  if (mimeType === 'image/webp') {
+    const valid =
+      bytes.length >= 12 &&
+      matchesSignature(bytes, WEBP_RIFF) &&
+      matchesSignature(bytes.subarray(8), WEBP_FOURCC);
+    return valid
+      ? {valid: true}
+      : {valid: false, error: 'File magic bytes do not match image/webp'};
+  }
+
+  const signatures = MAGIC_SIGNATURES[mimeType];
+  if (signatures === undefined) {
+    return {
+      valid: false,
+      error: `Unsupported MIME type for validation: ${mimeType}`,
+    };
+  }
+
+  const matched = signatures.some((sig) => matchesSignature(bytes, sig));
+  return matched
+    ? {valid: true}
+    : {valid: false, error: `File magic bytes do not match ${mimeType}`};
+}
+
+/**
+ * Generate a pre-signed upload URL for authenticated users.
+ *
+ * Security Notes:
+ * - Only authenticated users can upload files
+ * - Pre-upload metadata is validated via validateUpload (MIME type, size)
+ * - REQUIRED: call confirmUpload(storageId, mimeType) after upload to
+ *   validate the file content via magic bytes; discard storageId if it
+ *   returns { valid: false }
+ */
+export const generateUploadUrl = mutation({
+  args: {},
+  returns: v.string(),
+  handler: async (ctx) => {
+    const {_id: userId} = await requireUser(ctx);
+    await rateLimiter.limit(ctx, 'generateUpload', {key: userId, throws: true});
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+/**
+ * Validate a file before upload (called from frontend)
+ * Returns validation result without generating URL
+ */
+export const validateUpload = mutation({
+  args: {
+    fileName: v.string(),
+    mimeType: v.string(),
+    fileSize: v.number(),
+  },
+  returns: v.object({
+    valid: v.boolean(),
+    error: v.optional(v.string()),
+  }),
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      return {valid: false, error: 'Unauthenticated'};
+    }
+
+    // Check file size
+    if (args.fileSize > MAX_FILE_SIZE_BYTES) {
+      return {
+        valid: false,
+        error: FILE_TOO_LARGE_ERROR,
+      };
+    }
+
+    // Check MIME type
+    if (!isAllowedMimeType(args.mimeType)) {
+      return {
+        valid: false,
+        error: `Invalid file type. Accepted formats: ${ALLOWED_FORMATS_LABEL}.`,
+      };
+    }
+
+    return {valid: true};
+  },
+});
+
+/**
+ * Internal mutation: delete a file from Convex storage.
+ *
+ * Called by confirmUpload when magic byte validation fails.
+ * Prevents malicious files from persisting in storage.
+ */
+export const _deleteStoredFile = internalMutation({
+  args: {
+    storageId: v.id('_storage'),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.storage.delete(args.storageId);
+    return null;
+  },
+});
+
+/**
+ * Validate a file's content after it has been uploaded to Convex storage.
+ *
+ * Reads the first 256 bytes of the stored file and checks magic byte signatures
+ * to verify the actual file type matches the declared MIME type.
+ *
+ * Security model:
+ * - Client reports MIME type; we verify the file header independently.
+ * - Mismatched or unknown files are deleted from storage immediately.
+ * - Rate-limited to the same bucket as generateUploadUrl (10/min per user).
+ *
+ * Call this immediately after a successful file upload with the storageId
+ * returned by the Convex upload endpoint. Discard the storageId if this
+ * returns { valid: false }.
+ */
+export const confirmUpload = action({
+  args: {
+    storageId: v.id('_storage'),
+    mimeType: v.string(),
+  },
+  returns: v.object({
+    valid: v.boolean(),
+    storageId: v.optional(v.id('_storage')),
+    error: v.optional(v.string()),
+  }),
+  handler: async (ctx, args) => {
+    // Auth: only authenticated users may confirm uploads.
+    // Use the internal query so this works in both production (Better Auth session)
+    // and test environments (convex-test withIdentity).
+    const userId = await ctx.runQuery(
+      internal.lib.auth_helpers.getAuthUserIdInternal,
+      {},
+    );
+    if (!userId) {
+      throwUnauthenticated();
+    }
+
+    // Rate limit: dedicated bucket for confirmUpload (separate from generateUpload)
+    await rateLimiter.limit(ctx, 'confirmUpload', {key: userId, throws: true});
+
+    // MIME type must be in the allow-list before reading storage
+    if (!isAllowedMimeType(args.mimeType)) {
+      return {
+        valid: false,
+        error: `Invalid file type. Accepted formats: ${ALLOWED_FORMATS_LABEL}.`,
+      };
+    }
+
+    // Read file from storage
+    const blob = await ctx.storage.get(args.storageId);
+    if (!blob) {
+      return {valid: false, error: 'File does not exist in storage'};
+    }
+
+    // Enforce size limit against the actual stored blob, not client-reported metadata.
+    if (blob.size > MAX_FILE_SIZE_BYTES) {
+      try {
+        await ctx.runMutation(internal.storage.files._deleteStoredFile, {
+          storageId: args.storageId,
+        });
+      } catch {
+        // File may have already been deleted
+      }
+      return {
+        valid: false,
+        error: FILE_TOO_LARGE_ERROR,
+      };
+    }
+
+    // Read the full blob then view the header — blob.slice().arrayBuffer()
+    // triggers RangeError in the Convex V8 isolate on certain file sizes.
+    const buffer = await blob.arrayBuffer();
+    const headerLength = Math.min(MAGIC_BYTES_HEADER_SIZE, buffer.byteLength);
+    const bytes = new Uint8Array(buffer, 0, headerLength);
+
+    // Validate magic bytes
+    const validation = checkMagicBytes(bytes, args.mimeType);
+    if (!validation.valid) {
+      // Best-effort deletion — ignore errors if the file was already removed
+      try {
+        await ctx.runMutation(internal.storage.files._deleteStoredFile, {
+          storageId: args.storageId,
+        });
+      } catch {
+        // File may have already been deleted; the validation result stands
+      }
+      return {valid: false, error: validation.error};
+    }
+
+    // Record that this file passed magic-byte validation.
+    // Mutations accepting storageIds (events.create, communities.update)
+    // check this table to enforce the confirmUpload gate.
+    try {
+      await ctx.runMutation(internal.storage.files._markUploadConfirmed, {
+        storageId: args.storageId,
+        uploaderUserId: userId,
+      });
+    } catch (error) {
+      return {
+        valid: false,
+        error: getAppErrorMessage(error) ?? 'File upload confirmation failed',
+      };
+    }
+
+    return {valid: true, storageId: args.storageId};
+  },
+});
+
+/**
+ * Records a storageId as having passed magic-byte validation.
+ * Called by confirmUpload after successful validation. Idempotent.
+ */
+export const _markUploadConfirmed = internalMutation({
+  args: {
+    storageId: v.id('_storage'),
+    uploaderUserId: v.id('users'),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query('confirmedUploads')
+      .withIndex('by_storageId', (q) => q.eq('storageId', args.storageId))
+      .first();
+
+    if (existing) {
+      if (
+        existing.uploaderUserId !== undefined &&
+        existing.uploaderUserId !== args.uploaderUserId
+      ) {
+        throw new Error(
+          'File upload is already confirmed for a different user.',
+        );
+      }
+      if (existing.uploaderUserId === undefined) {
+        throw new Error(
+          'File upload confirmation is missing uploader ownership. Upload the file again.',
+        );
+      }
+      return null;
+    }
+
+    await ctx.db.insert('confirmedUploads', {
+      storageId: args.storageId,
+      uploaderUserId: args.uploaderUserId,
+      confirmedAt: Date.now(),
+    });
+    return null;
+  },
+});
+
+const ORPHAN_AGE_THRESHOLD_MS = 60 * 60 * 1000; // 1 hour
+const ORPHAN_DELETE_BATCH_SIZE = 50;
+const ORPHAN_SCAN_LIMIT = 500;
+
+/**
+ * Deletes stored files that were never confirmed via confirmUpload.
+ *
+ * Iterates _storage entries older than 1 hour in ascending creation order.
+ * Files without a matching confirmedUploads record are orphans — uploaded
+ * but never confirmed (abandoned uploads, client crashes, failed flows).
+ *
+ * Scans up to ORPHAN_SCAN_LIMIT entries and deletes at most
+ * ORPHAN_DELETE_BATCH_SIZE orphans per run, so confirmed files don't
+ * exhaust the batch budget. Registered as an hourly cron.
+ */
+export const _cleanupOrphanedUploads = internalMutation({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    const cutoff = Date.now() - ORPHAN_AGE_THRESHOLD_MS;
+    let deleted = 0;
+    let scanned = 0;
+
+    for await (const file of ctx.db.system.query('_storage')) {
+      if (file._creationTime >= cutoff) break;
+      if (deleted >= ORPHAN_DELETE_BATCH_SIZE) break;
+      if (scanned >= ORPHAN_SCAN_LIMIT) break;
+      scanned++;
+
+      const confirmed = await ctx.db
+        .query('confirmedUploads')
+        .withIndex('by_storageId', (q) => q.eq('storageId', file._id))
+        .first();
+
+      if (!confirmed) {
+        await ctx.storage.delete(file._id);
+        deleted++;
+      }
+    }
+
+    return null;
+  },
+});
+
+// Export constants for frontend validation
+export const UPLOAD_LIMITS = {
+  maxFileSizeBytes: MAX_FILE_SIZE_BYTES,
+  allowedMimeTypes: ALLOWED_MIME_TYPES,
+};

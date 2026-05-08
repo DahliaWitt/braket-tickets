@@ -1,0 +1,461 @@
+<!-- Member Filter -->
+<div class="flex items-center gap-2 mb-4" data-testid="member-filter">
+  <button
+    type="button"
+    z-button
+    [zType]="memberFilter() === 'all' ? 'default' : 'outline'"
+    zSize="sm"
+    [attr.aria-pressed]="memberFilter() === 'all'"
+    (click)="setMemberFilter('all')"
+    data-testid="filter-all"
+    [class]="'font-mono text-xs tracking-widest'"
+  >
+    ALL
+  </button>
+  <button
+    type="button"
+    z-button
+    [zType]="memberFilter() === 'ours' ? 'default' : 'outline'"
+    zSize="sm"
+    [attr.aria-pressed]="memberFilter() === 'ours'"
+    (click)="setMemberFilter('ours')"
+    data-testid="filter-ours"
+    [class]="'font-mono text-xs tracking-widest'"
+  >
+    OURS
+  </button>
+  <button
+    type="button"
+    z-button
+    [zType]="memberFilter() === 'shared' ? 'default' : 'outline'"
+    zSize="sm"
+    [attr.aria-pressed]="memberFilter() === 'shared'"
+    (click)="setMemberFilter('shared')"
+    data-testid="filter-shared"
+    [class]="
+      'border-primary/30 font-mono text-xs tracking-widest' +
+      (memberFilter() === 'shared'
+        ? ' bg-primary hover:bg-primary/90 text-primary-foreground border-none'
+        : '')
+    "
+  >
+    SHARED
+  </button>
+</div>
+
+<!-- Desktop Table View -->
+<div
+  class="hidden md:block bg-card rounded-xl border border-border/50 overflow-hidden shadow-2xl"
+>
+  <table class="w-full text-left border-collapse">
+    <thead class="bg-muted/50 text-muted-foreground text-xs mono-label">
+      <tr>
+        <th class="p-5 font-medium border-b border-border">Member</th>
+        <th class="p-5 font-medium border-b border-border">Details</th>
+        <th class="p-5 font-medium border-b border-border w-48">
+          Status/Actions
+        </th>
+      </tr>
+    </thead>
+    <tbody
+      class="divide-y divide-border/50"
+      [attr.aria-busy]="isLoading()"
+      aria-label="Loading members"
+    >
+      @if (isLoading()) {
+        @for (i of [1, 2, 3]; track i) {
+          <tr class="animate-pulse">
+            <td class="p-5 align-top w-72">
+              <div class="flex items-center gap-4">
+                <z-skeleton class="w-10 h-10 rounded-sm" />
+                <div class="space-y-2 flex-1">
+                  <z-skeleton class="h-5 w-32" />
+                  <z-skeleton class="h-3 w-40" />
+                </div>
+              </div>
+            </td>
+            <td class="p-5 align-top">
+              <div class="space-y-2">
+                <z-skeleton class="h-3 w-24" />
+                <z-skeleton class="h-4 w-20" />
+              </div>
+            </td>
+            <td class="p-5 align-top">
+              <z-skeleton class="h-9 w-full rounded" />
+            </td>
+          </tr>
+        }
+      } @else {
+        @for (
+          member of filteredMembers();
+          track member.user._id;
+          let i = $index
+        ) {
+          <tr
+            [class]="
+              'hover:bg-muted/30 transition-smooth group ' +
+              (i % 2 === 0 ? 'fade-in-delay-1' : 'fade-in-delay-2')
+            "
+            role="row"
+            data-testid="member-row"
+          >
+            <td class="p-5 align-top w-72">
+              <div class="flex items-center gap-4">
+                <div
+                  class="w-10 h-10 rounded-sm bg-muted flex items-center justify-center text-sm font-bold shrink-0 font-display border border-border text-foreground/80"
+                >
+                  {{ member.user['name']?.charAt(0)?.toUpperCase() || '?' }}
+                </div>
+                <div>
+                  <div
+                    data-testid="member-name"
+                    class="font-bold text-foreground font-display text-lg tracking-wide"
+                  >
+                    {{ member.user['name'] || 'Unknown' }}
+                  </div>
+                  <div
+                    data-testid="member-email"
+                    class="text-xs text-muted-foreground font-mono truncate max-w-[200px]"
+                  >
+                    {{ member.user['email'] || 'No email' }}
+                  </div>
+                  <div
+                    class="text-2xs text-muted-foreground mt-1 font-mono select-all uppercase tracking-wider truncate max-w-[200px]"
+                  >
+                    ID: {{ member.user._id }}
+                  </div>
+                  @if (member.isCommunityAdmin) {
+                    <span
+                      class="inline-flex items-center rounded px-2 py-0.5 mt-1 text-2xs font-mono uppercase tracking-widest bg-primary/10 text-primary"
+                    >
+                      community admin
+                    </span>
+                  }
+                </div>
+              </div>
+            </td>
+            <td class="p-5 align-top">
+              <div class="space-y-3 text-sm">
+                <div class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2">
+                  <span
+                    class="text-muted-foreground font-mono text-xs uppercase"
+                    >Joined:</span
+                  >
+                  <span class="text-muted-foreground text-xs font-mono">{{
+                    member.user._creationTime | date: 'mediumDate'
+                  }}</span>
+
+                  <span
+                    class="text-muted-foreground font-mono text-xs uppercase"
+                    >Status:</span
+                  >
+                  <span
+                    data-testid="member-status"
+                    class="text-xs font-mono flex flex-col gap-0.5"
+                  >
+                    @if (hasCommunityAccess(member)) {
+                      <span class="text-success">{{
+                        getMemberStatusLabel(member)
+                      }}</span>
+                      @if (shouldShowTrustSource(member)) {
+                        <span
+                          data-testid="trust-source"
+                          class="text-2xs text-muted-foreground lowercase tracking-wide leading-tight"
+                        >
+                          via {{ member['trustedViaOrganizerName'] }}
+                        </span>
+                      }
+                    } @else if (member.application) {
+                      <span
+                        [class.text-warning]="
+                          member.application['status'] === 'pending'
+                        "
+                        [class.text-success]="
+                          member.application['status'] === 'approved'
+                        "
+                        [class.text-destructive]="
+                          member.application['status'] === 'rejected'
+                        "
+                        [class.text-muted-foreground]="
+                          member.application['status'] === 'revoked'
+                        "
+                      >
+                        {{ member.application['status'] | uppercase }}
+                      </span>
+                    } @else {
+                      <span class="text-muted-foreground">NO APPLICATION</span>
+                    }
+                  </span>
+                </div>
+              </div>
+            </td>
+            <td class="p-5 align-top">
+              <div class="flex flex-col gap-2">
+                @if (isSharedAccess(member)) {
+                  <div
+                    data-testid="shared-managed-via"
+                    class="rounded-sm border border-primary/20 bg-primary/5 px-3 py-2 text-2xs font-mono uppercase tracking-widest text-muted-foreground leading-relaxed"
+                  >
+                    Managed via trusted community
+                    @if (member.trustedViaOrganizerName) {
+                      <span class="block text-foreground mt-1">
+                        {{ member.trustedViaOrganizerName }}
+                      </span>
+                    }
+                  </div>
+                } @else if (canRevokeMembership(member)) {
+                  <button
+                    type="button"
+                    z-button
+                    zType="default"
+                    [zFull]="true"
+                    (click)="revokeMembership(member)"
+                    [attr.aria-label]="
+                      'Revoke membership for ' + memberActionLabel(member)
+                    "
+                    class="bg-destructive hover:bg-destructive/90 text-destructive-foreground border-none shadow-[0_0_15px_-3px_hsl(var(--destructive)/0.4)]"
+                  >
+                    REVOKE MEMBERSHIP
+                  </button>
+                } @else if (canReviewApplication(member)) {
+                  <button
+                    type="button"
+                    z-button
+                    zType="default"
+                    [zFull]="true"
+                    (click)="updateAppStatus(member, 'approved')"
+                    class="bg-success hover:bg-success/90 text-success-foreground border-none shadow-[0_0_15px_-3px_hsl(var(--success)/0.4)]"
+                  >
+                    APPROVE
+                  </button>
+                  <button
+                    type="button"
+                    z-button
+                    zType="default"
+                    [zFull]="true"
+                    (click)="updateAppStatus(member, 'rejected')"
+                    [attr.aria-label]="
+                      'Reject application for ' + memberActionLabel(member)
+                    "
+                    class="bg-destructive hover:bg-destructive/90 text-destructive-foreground border-none shadow-[0_0_15px_-3px_hsl(var(--destructive)/0.4)]"
+                  >
+                    REJECT
+                  </button>
+                }
+              </div>
+            </td>
+          </tr>
+        } @empty {
+          <tr data-testid="empty-state">
+            <td
+              colspan="3"
+              class="p-16 text-center text-muted-foreground font-mono"
+            >
+              NO MEMBERS FOUND
+            </td>
+          </tr>
+        }
+      }
+    </tbody>
+  </table>
+</div>
+
+<!-- Mobile Card View -->
+<div
+  class="md:hidden space-y-4"
+  [attr.aria-busy]="isLoading()"
+  aria-label="Loading members"
+>
+  @if (isLoading()) {
+    @for (i of [1, 2, 3]; track i) {
+      <div class="border border-border rounded-xl p-5 bg-card/80 space-y-4">
+        <div class="flex items-center gap-3">
+          <z-skeleton class="w-10 h-10 rounded-sm" />
+          <div class="space-y-2 flex-1">
+            <z-skeleton class="h-5 w-32" />
+            <z-skeleton class="h-3 w-40" />
+          </div>
+        </div>
+        <z-skeleton class="h-4 w-24" />
+        <z-skeleton class="h-9 w-full rounded" />
+      </div>
+    }
+  } @else {
+    @for (member of filteredMembers(); track member.user._id; let i = $index) {
+      <z-card
+        [class]="
+          'border-border bg-card/80 transition-smooth ' +
+          (i % 2 === 0 ? 'fade-in-delay-1' : 'fade-in-delay-2')
+        "
+        [zTitle]="memberHeader"
+        role="article"
+      >
+        <ng-template #memberHeader>
+          <div class="flex items-start justify-between min-w-0">
+            <div class="flex items-center gap-3 min-w-0">
+              <div
+                class="w-10 h-10 rounded-sm bg-muted flex items-center justify-center text-sm font-bold shrink-0 font-display border border-border text-foreground/80"
+              >
+                {{ member.user['name']?.charAt(0)?.toUpperCase() || '?' }}
+              </div>
+              <div class="min-w-0">
+                <div
+                  class="font-bold text-foreground font-display text-lg tracking-wide truncate"
+                >
+                  {{ member.user['name'] || 'Unknown' }}
+                </div>
+                <div class="text-xs text-muted-foreground font-mono truncate">
+                  {{ member.user['email'] || 'No email' }}
+                </div>
+                @if (member.isCommunityAdmin) {
+                  <span
+                    class="inline-flex items-center rounded px-2 py-0.5 mt-1 text-2xs font-mono uppercase tracking-widest bg-primary/10 text-primary"
+                  >
+                    community admin
+                  </span>
+                }
+              </div>
+            </div>
+          </div>
+        </ng-template>
+
+        <div class="space-y-4">
+          <div
+            class="grid grid-cols-1 gap-2 text-sm border-t border-b border-border/50 py-3"
+          >
+            <div>
+              <div
+                class="text-muted-foreground text-2xs uppercase font-mono mb-1"
+              >
+                Status
+              </div>
+              <div class="text-foreground/80 font-mono flex flex-col gap-0.5">
+                @if (hasCommunityAccess(member)) {
+                  <span class="text-success">{{
+                    getMemberStatusLabel(member)
+                  }}</span>
+                  @if (shouldShowTrustSource(member)) {
+                    <span
+                      data-testid="trust-source"
+                      class="text-2xs text-muted-foreground lowercase tracking-wide leading-tight"
+                    >
+                      via {{ member['trustedViaOrganizerName'] }}
+                    </span>
+                  }
+                } @else if (member.application) {
+                  {{ member.application['status'] | uppercase }}
+                } @else {
+                  <span class="text-muted-foreground">NO APPLICATION</span>
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div card-footer class="gap-3 pt-0 flex flex-col w-full">
+          <div class="flex gap-3 w-full">
+            @if (isSharedAccess(member)) {
+              <div
+                data-testid="shared-managed-via"
+                class="w-full rounded-sm border border-primary/20 bg-primary/5 px-3 py-2 text-2xs font-mono uppercase tracking-widest text-muted-foreground leading-relaxed"
+              >
+                Managed via trusted community
+                @if (member.trustedViaOrganizerName) {
+                  <span class="block text-foreground mt-1">
+                    {{ member.trustedViaOrganizerName }}
+                  </span>
+                }
+              </div>
+            } @else if (canRevokeMembership(member)) {
+              <button
+                type="button"
+                z-button
+                zType="default"
+                class="flex-1 bg-destructive hover:bg-destructive/90 text-destructive-foreground border-none shadow-[0_0_15px_-3px_hsl(var(--destructive)/0.4)]"
+                (click)="revokeMembership(member)"
+                [attr.aria-label]="
+                  'Revoke membership for ' + memberActionLabel(member)
+                "
+              >
+                REVOKE MEMBERSHIP
+              </button>
+            } @else if (canReviewApplication(member)) {
+              <button
+                type="button"
+                z-button
+                zType="default"
+                class="flex-1 bg-destructive hover:bg-destructive/90 text-destructive-foreground border-none"
+                (click)="updateAppStatus(member, 'rejected')"
+                [attr.aria-label]="
+                  'Reject application for ' + memberActionLabel(member)
+                "
+              >
+                REJECT
+              </button>
+              <button
+                type="button"
+                z-button
+                zType="default"
+                class="flex-1 bg-success hover:bg-success/90 text-success-foreground border-none"
+                (click)="updateAppStatus(member, 'approved')"
+              >
+                APPROVE
+              </button>
+            }
+          </div>
+        </div>
+      </z-card>
+    } @empty {
+      <div
+        class="border border-border/50 rounded-xl p-8 text-center text-muted-foreground font-mono text-sm"
+      >
+        NO MEMBERS FOUND
+      </div>
+    }
+  }
+</div>
+
+<!-- Pagination / Load More -->
+@if (!isDone() && !isLoading()) {
+  <div
+    class="mt-8 flex justify-center pb-8 animate-in fade-in slide-in-from-bottom-4 duration-700"
+  >
+    <button
+      type="button"
+      z-button
+      zType="default"
+      (click)="loadMore()"
+      [disabled]="isLoadingMore()"
+      class="min-w-[200px] bg-muted hover:bg-muted text-foreground/80 border-border font-mono tracking-widest text-xs h-12"
+    >
+      @if (isLoadingMore()) {
+        <span class="flex items-center gap-2">
+          <svg
+            class="animate-spin h-4 w-4 text-muted-foreground"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <circle
+              class="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              stroke-width="4"
+            />
+            <path
+              class="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            />
+          </svg>
+          LOADING...
+        </span>
+      } @else {
+        LOAD MORE MEMBERS
+      }
+    </button>
+  </div>
+}

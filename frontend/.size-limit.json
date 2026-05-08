@@ -1,0 +1,19 @@
+[
+  {
+    "name": "Braket Tickets Root Entrypoints",
+    "path": [
+      "dist/frontend/browser/main*.js",
+      "dist/frontend/browser/styles*.css"
+    ],
+    "limit": "150 KB",
+    "brotli": true,
+    "running": false
+  },
+  {
+    "name": "Braket Tickets Total JS/CSS",
+    "path": "dist/frontend/browser/**/*.{js,css}",
+    "limit": "1.5 MB",
+    "brotli": true,
+    "running": false
+  }
+]

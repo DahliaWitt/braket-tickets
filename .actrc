@@ -1,0 +1,3 @@
+--container-architecture linux/amd64
+--pull=false
+-P self-hosted=braket-act-runner:latest

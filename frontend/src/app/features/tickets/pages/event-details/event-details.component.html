@@ -1,0 +1,508 @@
+<div class="relative flex flex-1 flex-col md:flex-row">
+  <!-- Main Content (Left) -->
+  <main
+    class="flex-1 p-6 transition-all duration-500 ease-in-out md:p-10 lg:p-16"
+    [class.md:pr-[480px]]="isPaymentSidebarOpen()"
+  >
+    <div class="mx-auto max-w-4xl space-y-8">
+      <!-- Back Link -->
+      <a
+        routerLink="/"
+        class="group inline-flex items-center gap-2 text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <z-icon
+          zType="arrow-left"
+          class="transition-transform group-hover:-translate-x-1"
+        />
+        <span class="font-mono text-xs tracking-widest uppercase"
+          >Back to Home</span
+        >
+      </a>
+
+      @if (hasLoadError()) {
+        <!-- Error State -->
+        <div
+          class="animate-in fade-in zoom-in mx-auto flex w-full max-w-xl flex-col items-center justify-center py-16 text-center duration-500"
+          data-testid="event-details-error-state"
+          role="alert"
+          aria-live="assertive"
+        >
+          <div
+            class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-destructive/20"
+          >
+            <svg
+              class="h-10 w-10 text-destructive"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"
+              />
+            </svg>
+          </div>
+          <h2
+            class="mb-4 font-display text-2xl font-bold tracking-tight text-destructive uppercase md:text-3xl"
+          >
+            hit a snag
+          </h2>
+          <p class="mb-8 font-sans text-lg text-muted-foreground">
+            couldn't load event details — try again later
+          </p>
+          <a
+            routerLink="/"
+            class="font-mono text-sm tracking-widest text-muted-foreground uppercase transition-colors hover:text-foreground"
+          >
+            &#x2190; Back to Home
+          </a>
+        </div>
+      } @else if (loading()) {
+        <!-- Skeleton Layout -->
+        <div
+          class="grid animate-pulse items-start gap-8 md:grid-cols-[300px_1fr]"
+        >
+          <!-- Poster Skeleton -->
+          <div
+            class="aspect-4/5 w-full overflow-hidden rounded-xl border border-border/50 bg-card"
+          >
+            <z-skeleton class="h-full w-full rounded-none" />
+          </div>
+
+          <!-- Details Skeleton -->
+          <div class="space-y-6">
+            <div>
+              <!-- Title -->
+              <z-skeleton class="mb-2 h-12 w-3/4" />
+              <!-- Community byline -->
+              <div class="mb-3 flex items-center gap-2.5">
+                <z-skeleton class="h-6 w-6 rounded-full" />
+                <z-skeleton class="h-3.5 w-28" />
+              </div>
+              <!-- Meta -->
+              <div class="flex gap-4">
+                <z-skeleton class="h-4 w-32" />
+                <z-skeleton class="h-4 w-32" />
+              </div>
+            </div>
+
+            <!-- Description -->
+            <div class="space-y-2">
+              <z-skeleton class="h-4 w-full" />
+              <z-skeleton class="h-4 w-full" />
+              <z-skeleton class="h-4 w-2/3" />
+            </div>
+
+            <!-- Action Bar -->
+            <div class="space-y-4 border-t border-border/50 pt-6">
+              <div class="flex gap-4">
+                <z-skeleton class="h-12 w-32 rounded" />
+                <z-skeleton class="h-12 w-32 rounded" />
+              </div>
+            </div>
+          </div>
+        </div>
+      } @else if (event(); as evt) {
+        <!-- Event Hero -->
+        <div class="grid items-start gap-8 md:grid-cols-[300px_1fr]">
+          <!-- Poster -->
+          <div
+            class="group relative aspect-4/5 max-h-[300px] w-full overflow-hidden rounded-xl border border-border bg-muted shadow-2xl md:max-h-none"
+          >
+            @if (evt.posterUrl) {
+              <img
+                [src]="evt.posterUrl"
+                [alt]="evt.title + ' poster'"
+                fetchpriority="high"
+                decoding="async"
+                class="absolute inset-0 h-full w-full object-cover"
+              />
+            } @else {
+              <div
+                class="mono-label flex h-full w-full items-center justify-center text-xs text-muted-foreground"
+              >
+                No Poster
+              </div>
+            }
+          </div>
+
+          <!-- Details -->
+          <div class="space-y-6">
+            <div>
+              <h1
+                data-testid="event-title"
+                class="mb-1 font-display text-2xl font-bold tracking-tight text-foreground uppercase sm:text-4xl md:text-5xl"
+              >
+                {{ evt.title }}
+              </h1>
+              @if (organizer(); as org) {
+                <div class="mb-3" data-testid="community-link-container">
+                  @if (org.slug) {
+                    <a
+                      [routerLink]="['/c', org.slug]"
+                      class="group inline-flex items-center gap-2.5 font-mono text-xs tracking-widest text-muted-foreground uppercase transition-colors hover:text-secondary"
+                      data-testid="community-link"
+                    >
+                      @if (org.logoUrl) {
+                        <img
+                          [src]="org.logoUrl"
+                          [alt]="org.name"
+                          loading="lazy"
+                          decoding="async"
+                          class="h-6 w-6 rounded-full object-cover ring-1 ring-border/40 transition-[box-shadow] group-hover:ring-secondary/50"
+                        />
+                      }
+                      <span>{{ org.name }}</span>
+                      <z-icon
+                        zType="arrow-up-right"
+                        class="h-3.5 w-3.5 -translate-y-px opacity-0 transition-opacity group-hover:opacity-100"
+                      />
+                    </a>
+                  } @else {
+                    <span
+                      class="inline-flex items-center gap-2.5 font-mono text-xs tracking-widest text-muted-foreground uppercase"
+                      data-testid="community-name"
+                    >
+                      @if (org.logoUrl) {
+                        <img
+                          [src]="org.logoUrl"
+                          [alt]="org.name"
+                          loading="lazy"
+                          decoding="async"
+                          class="h-6 w-6 rounded-full object-cover ring-1 ring-border/40"
+                        />
+                      }
+                      <span>{{ org.name }}</span>
+                    </span>
+                  }
+                </div>
+              }
+              <div
+                class="flex flex-wrap items-center gap-4 font-mono text-sm text-muted-foreground"
+              >
+                <span class="flex items-center gap-2">
+                  <z-icon zType="calendar" class="text-primary" />
+                  {{ evt.date | date: 'longDate' }}
+                </span>
+                <span class="h-1 w-1 rounded-full bg-muted"></span>
+                <span class="flex items-center gap-2 tracking-wider uppercase">
+                  <z-icon zType="map-pin" class="text-primary" />
+                  {{ evt.location || 'Secret Location' }}
+                </span>
+              </div>
+            </div>
+
+            <div class="prose max-w-none prose-invert">
+              <p
+                class="leading-relaxed whitespace-pre-line text-card-foreground/80"
+              >
+                {{ evt.description || 'No description provided.' }}
+              </p>
+            </div>
+
+            <!-- Vetting Status Notice (BRA-255) -->
+            <!-- Guard: event() must be loaded (prevents flash during loading),
+                 visibility must require vetting (not public),
+                 and user must not already be trusted for this community.
+                 Unauthenticated users on public_viewable events get "Sign in for pricing"
+                 in the action bar instead — don't duplicate the CTA here. -->
+            @if (event(); as vettingEvt) {
+              @if (
+                vettingEvt.visibility === EVENT_VISIBILITY.PRIVATE &&
+                !trustResult()?.trusted
+              ) {
+                <div
+                  class="rounded border border-secondary/20 bg-secondary/5 px-5 py-4"
+                  data-testid="vetting-notice"
+                >
+                  @if (!auth.user()) {
+                    <div class="flex items-start gap-3">
+                      <z-icon
+                        zType="shield"
+                        class="mt-0.5 shrink-0 text-secondary/70"
+                      />
+                      <div>
+                        <p
+                          class="mb-1.5 font-mono text-2xs tracking-widest text-secondary uppercase"
+                        >
+                          vetted community
+                        </p>
+                        <p
+                          class="text-sm leading-relaxed text-muted-foreground"
+                        >
+                          this event requires community vetting to purchase
+                          tickets
+                        </p>
+                        <button
+                          type="button"
+                          (click)="navigateToLogin()"
+                          class="mt-3 cursor-pointer border-none bg-transparent p-0 font-mono text-2xs tracking-widest text-secondary uppercase underline decoration-secondary/30 underline-offset-4 transition-colors hover:text-primary hover:decoration-primary/50"
+                          data-testid="vetting-sign-in-btn"
+                        >
+                          sign in to get started
+                        </button>
+                      </div>
+                    </div>
+                  } @else {
+                    <div class="flex items-start gap-3">
+                      <z-icon
+                        zType="shield"
+                        class="mt-0.5 shrink-0 text-secondary/70"
+                      />
+                      <div>
+                        <p
+                          class="mb-1.5 font-mono text-2xs tracking-widest text-secondary uppercase"
+                        >
+                          vetted community
+                        </p>
+                        <p
+                          class="text-sm leading-relaxed text-muted-foreground"
+                        >
+                          you'll need to be vetted before you can grab tickets
+                        </p>
+                        <a
+                          [routerLink]="[
+                            '/vetting',
+                            vettingEvt.organizer?.slug ??
+                              vettingEvt.organizerId,
+                          ]"
+                          class="mt-3 inline-flex items-center gap-1.5 font-mono text-2xs tracking-widest text-secondary uppercase underline decoration-secondary/30 underline-offset-4 transition-colors hover:text-primary hover:decoration-primary/50"
+                          data-testid="apply-for-vetting-link"
+                        >
+                          apply for vetting
+                          <z-icon zType="arrow-right" class="h-3 w-3" />
+                        </a>
+                      </div>
+                    </div>
+                  }
+                </div>
+              } @else if (
+                vettingEvt.visibility === EVENT_VISIBILITY.PUBLIC_VIEWABLE &&
+                auth.user() &&
+                !trustResult()?.trusted
+              ) {
+                <div
+                  class="rounded border border-secondary/20 bg-secondary/5 px-5 py-4"
+                  data-testid="vetting-notice"
+                >
+                  <div class="flex items-start gap-3">
+                    <z-icon
+                      zType="shield"
+                      class="mt-0.5 shrink-0 text-secondary/70"
+                    />
+                    <div>
+                      <p
+                        class="mb-1.5 font-mono text-2xs tracking-widest text-secondary uppercase"
+                      >
+                        vetted community
+                      </p>
+                      <p class="text-sm leading-relaxed text-muted-foreground">
+                        you'll need to be vetted before you can grab tickets
+                      </p>
+                      <a
+                        [routerLink]="[
+                          '/vetting',
+                          vettingEvt.organizer?.slug ?? vettingEvt.organizerId,
+                        ]"
+                        class="mt-3 inline-flex items-center gap-1.5 font-mono text-2xs tracking-widest text-secondary uppercase underline decoration-secondary/30 underline-offset-4 transition-colors hover:text-primary hover:decoration-primary/50"
+                        data-testid="apply-for-vetting-link"
+                      >
+                        apply for vetting
+                        <z-icon zType="arrow-right" class="h-3 w-3" />
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              }
+            }
+
+            <!-- Ticket Sales Status Banner -->
+            @if (
+              ticketSalesStatus() === 'paused' ||
+              ticketSalesStatus() === 'ended' ||
+              isSoldOut()
+            ) {
+              <div class="space-y-4 border-t border-border pt-6">
+                <app-event-ticket-status
+                  [ticketSalesStatus]="ticketSalesStatus()"
+                  [isSoldOut]="isSoldOut()"
+                  [resaleEnabled]="resaleEnabled()"
+                  [resaleAvailable]="resaleAvailable()"
+                  [canSeeResale]="canSeeResale()"
+                  [isSubscribedToResale]="isSubscribedToResale()"
+                  [isSubscribing]="isSubscribing()"
+                  [isUnsubscribing]="isUnsubscribing()"
+                  (subscribeRequested)="subscribeToResaleNotifications()"
+                  (unsubscribeRequested)="unsubscribeFromResaleNotifications()"
+                />
+              </div>
+            }
+
+            <!-- Action Bar -->
+            <div class="space-y-4 border-t border-border pt-6">
+              <div class="flex flex-wrap items-center gap-4">
+                @if (canBuyTickets() && !limitReached()) {
+                  <z-button
+                    zType="default"
+                    (click)="openPaymentSidebar()"
+                    [zDisabled]="isPaymentSidebarOpen()"
+                    data-testid="get-tickets-button"
+                    class="flex-1 border-none bg-primary px-8 py-4 font-display text-sm tracking-wider uppercase shadow-[0_0_20px_-5px_hsl(var(--primary)/0.4)] hover:bg-primary/90 md:w-auto md:flex-none"
+                  >
+                    @if (isPaymentSidebarOpen()) {
+                      Ordering...
+                    } @else if (isResalePurchase()) {
+                      Get Resale Ticket
+                    } @else {
+                      Get Tickets
+                    }
+                    @if (
+                      event()?.visibility !== 'public_viewable' || auth.user()
+                    ) {
+                      @if (evt.price) {
+                        - {{ evt.price / 100 | currency: 'USD' }}
+                      }
+                    } @else {
+                      — Sign in for pricing
+                    }
+                  </z-button>
+                } @else if (limitReached()) {
+                  <div
+                    data-testid="ticket-limit-reached"
+                    class="flex items-center gap-2 rounded border border-secondary/50 bg-secondary/10 px-4 py-3 font-mono text-xs tracking-wider text-secondary uppercase"
+                  >
+                    <z-icon zType="circle-check" />
+                    Ticket Limit Reached ({{ userTicketCount() }} owned)
+                  </div>
+                } @else if (!canBuyTickets() && !isSoldOut()) {
+                  @if (
+                    event()?.visibility === EVENT_VISIBILITY.PUBLIC_VIEWABLE &&
+                    !auth.user()
+                  ) {
+                    <z-button
+                      zType="outline"
+                      (click)="navigateToLogin()"
+                      class="w-full border-secondary/50 px-6 py-4 font-display text-sm tracking-wider text-secondary uppercase hover:bg-secondary/10 sm:w-auto"
+                    >
+                      <z-icon zType="arrow-right" class="mr-2" />
+                      Sign in for pricing
+                    </z-button>
+                  } @else if (
+                    trustResult()?.source === 'shared' && trustResult()?.trusted
+                  ) {
+                    <div
+                      role="status"
+                      class="flex items-center gap-2 rounded border border-success/50 bg-success/10 px-4 py-3 font-mono text-xs tracking-wider text-success uppercase"
+                    >
+                      <z-icon zType="shield-check" />
+                      Approved via {{ trustResult()?.via?.name }}
+                    </div>
+                  } @else if (
+                    event()?.visibility !== 'public' && !trustResult()?.trusted
+                  ) {
+                    <div
+                      class="rounded border border-warning/40 bg-warning/10 px-4 py-3 font-mono text-xs tracking-wider text-foreground uppercase dark:text-warning"
+                    >
+                      <div class="flex items-center gap-2">
+                        <z-icon zType="circle-alert" />
+                        Vetting Required to Purchase
+                      </div>
+                      @if (auth.user() && event(); as abEvt) {
+                        <a
+                          [routerLink]="[
+                            '/vetting',
+                            abEvt.organizer?.slug ?? abEvt.organizerId,
+                          ]"
+                          class="mt-2 inline-block font-mono text-2xs tracking-wider text-foreground uppercase underline decoration-warning/30 underline-offset-4 hover:decoration-warning dark:text-warning"
+                          data-testid="action-bar-vetting-link"
+                        >
+                          apply for vetting
+                        </a>
+                      }
+                    </div>
+                  }
+                }
+
+                @if (organizer(); as org) {
+                  <z-button
+                    zType="outline"
+                    (click)="contactOrganizer()"
+                    data-testid="contact-community-button"
+                    class="w-full border-secondary/50 px-6 py-4 font-display text-sm tracking-wider text-secondary uppercase hover:bg-secondary/10 sm:w-auto"
+                  >
+                    <z-icon zType="mail" class="mr-2" />
+                    Contact Community
+                  </z-button>
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+      } @else if (eventNotFound()) {
+        <div
+          class="py-20"
+          data-testid="event-details-not-found-state"
+          role="status"
+          aria-live="polite"
+        >
+          <app-empty-state
+            title="Event Not Found"
+            description="The event link is invalid, expired, or no longer available."
+            isStatus
+          >
+            <a
+              routerLink="/"
+              class="mt-4 inline-flex font-mono text-sm tracking-widest text-primary uppercase transition-colors hover:text-primary/80"
+              data-testid="event-not-found-home-link"
+            >
+              Back to home
+            </a>
+          </app-empty-state>
+        </div>
+      }
+    </div>
+  </main>
+
+  <!-- Checkout Sidebar -->
+  @if (event(); as evt) {
+    <app-checkout-sidebar
+      [event]="evt"
+      [isOpen]="isPaymentSidebarOpen()"
+      (isOpenChange)="onSidebarOpenChange($event)"
+      [initialized]="initialized()"
+      [paymentStatus]="paymentStatus()"
+      [paymentErrorMessage]="paymentErrorMessage()"
+      [ticketQuantity]="ticketQuantity()"
+      [selectedTier]="selectedTier()"
+      [purchaseBlockedByVetting]="checkoutBlockedByVetting()"
+      [customAmount]="customAmount()"
+      [slidingScaleError]="slidingScaleError()"
+      [totalAmount]="totalAmount()"
+      [maxTickets]="maxTickets()"
+      [isAtMaxTickets]="isAtMaxTickets()"
+      [checkoutLocked]="checkoutLocked()"
+      [checkoutSessionFetcher]="createCheckoutSession"
+      [orderId]="activeOrderId()"
+      [connectedAccountId]="activeConnectedAccountId()"
+      [stripeResetKey]="stripeResetKey()"
+      [buyerEmail]="buyerEmail()"
+      [isGuest]="!auth.user()"
+      [guestEmail]="guestEmail()"
+      [isResalePurchase]="isResalePurchase()"
+      [checkoutKind]="checkoutKind()"
+      (guestEmailCollected)="onGuestEmailCollected($event)"
+      (closeRequested)="closePaymentSidebar()"
+      (quantityChanged)="updateQuantity($event)"
+      (tierSelected)="selectTier($event)"
+      (sliderChanged)="onSliderChange($event)"
+      (customAmountInput)="onCustomAmountInput($event)"
+      (paymentConfirmed)="onStripePaymentConfirmed()"
+      (paymentError)="onStripePaymentError($event)"
+      (freeTicketClaimed)="onFreeTicketClaimed()"
+      (retryPayment)="retryPayment()"
+    />
+  }
+</div>

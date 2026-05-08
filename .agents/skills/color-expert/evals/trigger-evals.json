@@ -1,0 +1,114 @@
+[
+  {
+    "query": "i need a 10-step OKLCH ramp for a warning color that still keeps body text readable on white and near-black backgrounds",
+    "should_trigger": true
+  },
+  {
+    "query": "why does my print proof look duller than the display-p3 mockup even though the hex values match in figma",
+    "should_trigger": true
+  },
+  {
+    "query": "can you name these paint swatches in a way that feels like real historical bird-book color names, not marketing names",
+    "should_trigger": true
+  },
+  {
+    "query": "i'm building a css theme generator and want gradients that do not go muddy halfway through. should i use oklch, lab, or color-mix somehow",
+    "should_trigger": true
+  },
+  {
+    "query": "help me explain to my team why hsl saturation 100% does not mean two colors are equally vivid",
+    "should_trigger": true
+  },
+  {
+    "query": "what's a good way to simulate blue plus yellow paint making green in code instead of getting grayish rgb mush",
+    "should_trigger": true
+  },
+  {
+    "query": "i have a palette extracted from an image and want to sort it so neighboring colors feel smooth and intentional rather than random",
+    "should_trigger": true
+  },
+  {
+    "query": "is there a color system better than complementary and triadic rules if i'm trying to make a calm interface that still has clear emphasis",
+    "should_trigger": true
+  },
+  {
+    "query": "what is the difference between chroma, saturation, colorfulness, brightness, and lightness in plain english",
+    "should_trigger": true
+  },
+  {
+    "query": "i need to convert a bunch of files from png to webp and keep the folder structure the same",
+    "should_trigger": false
+  },
+  {
+    "query": "write me a react color picker component with keyboard support and no external dependencies",
+    "should_trigger": false
+  },
+  {
+    "query": "summarize this css file and tell me which variables are unused",
+    "should_trigger": false
+  },
+  {
+    "query": "i want a nice landing page for my design studio, maybe use orange and blue somewhere",
+    "should_trigger": false
+  },
+  {
+    "query": "make this chart more readable for stakeholders and reduce visual clutter",
+    "should_trigger": false
+  },
+  {
+    "query": "give me brand adjectives for this startup: trustworthy, energetic, slightly technical",
+    "should_trigger": false
+  },
+  {
+    "query": "find the bug in my shader, the normals are flipped and the lighting looks wrong",
+    "should_trigger": false
+  },
+  {
+    "query": "rename all the image assets from uppercase to lowercase and update imports",
+    "should_trigger": false
+  },
+  {
+    "query": "what fonts pair well with this poster layout",
+    "should_trigger": false
+  },
+  {
+    "query": "turn this csv into a dashboard and use our brand palette from the figma file",
+    "should_trigger": false
+  },
+  {
+    "query": "wire these figma color tokens into our tailwind config and replace the hardcoded hex values across the app",
+    "should_trigger": false
+  },
+  {
+    "query": "build a theme switcher that toggles between our light, dark, and high-contrast palettes and persists the choice in local storage",
+    "should_trigger": false
+  },
+  {
+    "query": "can you refactor this d3 chart so the series colors come from a config object instead of being scattered through the code",
+    "should_trigger": false
+  },
+  {
+    "query": "our marketing team wants three hero-section options using the same brand colors but different moods. can you mock up the copy and layout directions",
+    "should_trigger": false
+  },
+  {
+    "query": "i need a script that scans screenshots and flags any pixels that are not one of our approved brand colors",
+    "should_trigger": false
+  },
+  {
+    "query": "make this svg logo animate from grayscale into the brand palette on hover",
+    "should_trigger": false
+  },
+  {
+    "query": "can you update our storybook examples so each component shows all semantic color variants in a tidy grid",
+    "should_trigger": false
+  },
+  {
+    "query": "i want a reusable chart-color assignment function that picks the next unused series color and wraps safely when there are too many lines",
+    "should_trigger": false
+  },
+  {
+    "query": "why does this jpeg get smaller when i export with 4:2:0 subsampling",
+    "should_trigger": true
+  }
+]

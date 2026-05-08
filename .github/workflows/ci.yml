@@ -1,0 +1,280 @@
+name: CI
+
+concurrency:
+  # PRs: cancel stale runs on re-push (github.head_ref = PR branch name)
+  # Branch pushes (develop/main): one run at a time, newest cancels in-progress
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  lint:
+    name: Lint + Typecheck (ESLint + tsc)
+    runs-on: self-hosted
+    timeout-minutes: 10
+    environment: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' && 'production' || github.event_name == 'pull_request' && github.base_ref == 'develop' && 'development' || github.ref_name == 'main' && 'production' || 'development' }}
+    env:
+      CONVEX_DEPLOYMENT: ${{ secrets.CONVEX_DEPLOYMENT }}
+      CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Install root dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: pnpm install --frozen-lockfile
+      - name: Check Convex generated files are fresh
+        run: pnpm check:convex-generated
+      - name: Lint (root eslint + convex eslint + angular-eslint rules + ifttt-lint)
+        env:
+          CI: true
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: pnpm lint
+      - name: Typecheck (frontend tsc + convex typecheck)
+        run: pnpm typecheck
+
+      - name: Enforce Convex sanitized logging
+        run: pnpm check:convex-logging
+
+  test:
+    name: Unit Tests
+    runs-on: self-hosted
+    timeout-minutes: 10
+    environment: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' && 'production' || github.event_name == 'pull_request' && github.base_ref == 'develop' && 'development' || github.ref_name == 'main' && 'production' || 'development' }}
+    env:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Install root dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: pnpm install --frozen-lockfile
+      - name: Unit tests (frontend)
+        working-directory: ./frontend
+        # Frontend's package script already includes a `--` shim for forwarding args through `sh -c`,
+        # so coverage flags must be passed with `pnpm test -- --coverage ...`.
+        run: pnpm test -- --coverage --reporter=json --outputFile=../reports/frontend-test-results.json
+        env:
+          CONVEX_URL: https://placeholder.convex.cloud
+      - name: Unit tests (convex)
+        # Coverage, JSON reporter, and outputFile are configured in backend/vitest.config.ts
+        # when CI=true. No extra flags needed — just `--` to forward `--coverage` through pnpm.
+        run: pnpm test:convex -- --coverage
+      - name: Assert frontend coverage report exists
+        id: assert_frontend_coverage
+        if: always()
+        run: |
+          test -f frontend/coverage/coverage-final.json || {
+            echo "Missing frontend coverage report: frontend/coverage/coverage-final.json"
+            exit 1
+          }
+      - name: Assert convex coverage report exists
+        id: assert_convex_coverage
+        if: always()
+        run: |
+          test -f backend/coverage/coverage-final.json || {
+            echo "Missing convex coverage report: backend/coverage/coverage-final.json"
+            echo "This usually means the convex tests did not run or coverage generation failed."
+            exit 1
+          }
+      - name: Upload frontend coverage to Codecov
+        if: ${{ always() && env.CODECOV_TOKEN != '' && steps.assert_frontend_coverage.outcome == 'success' && steps.assert_convex_coverage.outcome == 'success' }}
+        uses: codecov/codecov-action@1f60566a86da84c4b4b64c17662a90de97fbb8d7 # v5.4.2
+        with:
+          token: ${{ env.CODECOV_TOKEN }}
+          files: frontend/coverage/coverage-final.json
+          flags: frontend
+          slug: ${{ github.repository }}
+          disable_search: true
+          fail_ci_if_error: true
+      - name: Upload convex coverage to Codecov
+        if: ${{ always() && env.CODECOV_TOKEN != '' && steps.assert_frontend_coverage.outcome == 'success' && steps.assert_convex_coverage.outcome == 'success' }}
+        uses: codecov/codecov-action@1f60566a86da84c4b4b64c17662a90de97fbb8d7 # v5.4.2
+        with:
+          token: ${{ env.CODECOV_TOKEN }}
+          files: backend/coverage/coverage-final.json
+          flags: convex
+          slug: ${{ github.repository }}
+          disable_search: true
+          fail_ci_if_error: true
+
+  stripe-contracts:
+    name: Stripe Sandbox Contracts
+    runs-on: self-hosted
+    timeout-minutes: 12
+    needs: [lint]
+    # Stripe sandbox contracts must always run against sandbox/test credentials.
+    # Pin this job to the GitHub "development" environment (Doppler stg sync).
+    environment: development
+    env:
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+      STRIPE_WEBHOOK_SECRET_V2_EVENTS: ${{ secrets.STRIPE_WEBHOOK_SECRET_V2_EVENTS }}
+      STRIPE_SANDBOX_CONNECTED_ACCOUNT_ID: ${{ secrets.STRIPE_SANDBOX_CONNECTED_ACCOUNT_ID }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Install root dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run Stripe sandbox preflight checks
+        run: pnpm test:convex:sandbox:preflight
+      - name: Run Stripe sandbox contract tests
+        run: pnpm test:convex:sandbox
+
+  build:
+    name: Build Frontend
+    runs-on: self-hosted
+    timeout-minutes: 10
+    environment: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' && 'production' || github.event_name == 'pull_request' && github.base_ref == 'develop' && 'development' || github.ref_name == 'main' && 'production' || 'development' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Install root dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: pnpm install --frozen-lockfile
+      - name: Build frontend with stats
+        id: build_frontend
+        working-directory: ./frontend
+        run: pnpm build --stats-json
+        env:
+          # Use placeholder values for CI build validation
+          CONVEX_URL: https://placeholder.convex.cloud
+      - name: Create reports directory
+        run: mkdir -p reports
+      - name: Run size-limit
+        id: size_limit
+        working-directory: ./frontend
+        run: pnpm exec size-limit --json > ../reports/bundle-size.json
+        env:
+          CHROMIUM_EXECUTABLE_PATH: ''
+          PUPPETEER_EXECUTABLE_PATH: ''
+      - name: Upload bundle analysis
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: bundle-analysis
+          path: |
+            frontend/dist/frontend/stats.json
+            reports/bundle-size.json
+          retention-days: 1
+      - name: Report bundle size
+        if: always()
+        run: |
+          echo "## Frontend Build" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' "- build outcome: \`${{ steps.build_frontend.outcome }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Bundle Size Analysis" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' "- size-limit outcome: \`${{ steps.size_limit.outcome }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ -s reports/bundle-size.json ]; then
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat reports/bundle-size.json >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "size-limit did not produce a JSON report. See the 'Run size-limit' step logs." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  e2e-check:
+    name: E2E Gate
+    runs-on: self-hosted
+    timeout-minutes: 5
+    needs: [lint, test, build]
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Check affected E2E tests
+        id: check
+        run: npx tsx scripts/run-affected-e2e.ts --check-only
+
+  e2e:
+    name: E2E Tests
+    runs-on: self-hosted
+    timeout-minutes: 15
+    needs: [e2e-check]
+    if: needs.e2e-check.outputs.should_run == 'true'
+    # Never expose production environment secrets to pull_request workflows.
+    # PR E2E runs always use development secrets; production is only for direct main pushes.
+    environment: ${{ github.event_name == 'pull_request' && 'development' || github.ref_name == 'main' && 'production' || 'development' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Install root dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Fix interrupted dpkg state
+        run: sudo dpkg --configure -a 2>/dev/null || true
+
+      - name: Install Playwright browsers
+        working-directory: ./frontend
+        run: |
+          if [ -n "${PLAYWRIGHT_BROWSERS_PATH:-}" ] && [ -d "$PLAYWRIGHT_BROWSERS_PATH" ]; then
+            echo "Using pre-installed browsers at $PLAYWRIGHT_BROWSERS_PATH"
+            # Ensure the currently locked Playwright browser revisions exist.
+            # install-deps only installs system packages and won't download missing browsers.
+            pnpm exec playwright install chromium webkit
+            pnpm exec playwright install-deps chromium webkit 2>/dev/null || true
+          else
+            echo "PLAYWRIGHT_BROWSERS_PATH not set or missing — installing browsers"
+            pnpm exec playwright install --with-deps chromium webkit
+          fi
+
+      - name: Run E2E tests
+        run: npx tsx scripts/e2e.ts --build
+        env:
+          # Safety defaults: E2E must target a local ephemeral Convex backend.
+          # e2e.ts will replace these with per-run ephemeral ports.
+          CONVEX_URL: http://127.0.0.1:3210
+          CONVEX_SITE_URL: http://127.0.0.1:3211
+          PW_WORKERS: '5'
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+
+      - name: Upload E2E logs (failure)
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: e2e-logs
+          path: |
+            e2e-shard-*.log
+            .convex-local/convex-local-backend*.log
+          retention-days: 3
+
+      - name: Upload HTML report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: playwright-report
+          path: frontend/playwright-report
+          retention-days: 3

@@ -1,0 +1,120 @@
+<div class="space-y-8">
+  <div>
+    <h2 class="text-xl font-display text-foreground mb-1">Vetting Reminders</h2>
+    <p class="text-xs font-mono text-muted-foreground">
+      Send reminder emails to users who haven't started the vetting process.
+    </p>
+  </div>
+
+  <z-card class="border-border bg-card/80" data-testid="vetting-reminder-card">
+    <form class="space-y-4" (submit)="sendReminder(); $event.preventDefault()">
+      <div>
+        <p class="text-xs uppercase font-mono text-muted-foreground tracking-widest">
+          Vetting Application Reminder
+        </p>
+        <p class="text-xs font-mono text-muted-foreground">
+          Sends an email with a custom message and a link to the vetting page.
+        </p>
+      </div>
+
+      <div class="grid gap-4 md:grid-cols-2">
+        <div class="md:col-span-2 space-y-1">
+          <label
+            for="vetting-reminder-subject"
+            class="text-xs uppercase font-mono text-muted-foreground tracking-widest"
+          >
+            Subject
+          </label>
+          <input
+            id="vetting-reminder-subject"
+            type="text"
+            [formField]="reminderForm.subject"
+            data-testid="vetting-reminder-subject"
+            class="w-full rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            placeholder="Reminder subject"
+            [attr.aria-describedby]="hasLengthErrors() ? 'reminder-length-error' : null"
+            [attr.aria-invalid]="hasLengthErrors()"
+          />
+          <p class="text-2xs font-mono text-muted-foreground">
+            {{ subjectLength() }} / {{ maxSubjectLength }}
+          </p>
+        </div>
+
+        <div class="md:col-span-2 space-y-1">
+          <label
+            for="vetting-reminder-message"
+            class="text-xs uppercase font-mono text-muted-foreground tracking-widest"
+          >
+            Message
+          </label>
+          <textarea
+            id="vetting-reminder-message"
+            [formField]="reminderForm.message"
+            data-testid="vetting-reminder-message"
+            rows="5"
+            class="w-full rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            placeholder="Write your reminder message..."
+            [attr.aria-describedby]="hasLengthErrors() ? 'reminder-length-error' : null"
+            [attr.aria-invalid]="hasLengthErrors()"
+          ></textarea>
+          <p class="text-2xs font-mono text-muted-foreground">
+            {{ messageLength() }} / {{ maxMessageLength }}
+          </p>
+        </div>
+      </div>
+
+      @if (hasLengthErrors()) {
+        <p
+          id="reminder-length-error"
+          class="text-xs font-mono text-destructive"
+          data-testid="vetting-reminder-length-error"
+          role="alert"
+        >
+          Subject or message exceeds allowed length.
+        </p>
+      }
+
+      @if (isLoadingAudience()) {
+        <p
+          class="text-xs font-mono text-muted-foreground"
+          data-testid="vetting-reminder-audience-loading"
+        >
+          Calculating audience...
+        </p>
+      } @else if (audienceError()) {
+        <p
+          class="text-xs font-mono text-destructive"
+          data-testid="vetting-reminder-audience-error"
+        >
+          {{ audienceError() }}
+        </p>
+      } @else {
+        <p
+          class="text-xs font-mono text-muted-foreground"
+          data-testid="vetting-reminder-recipient-count"
+        >
+          {{ recipientCount() }} users have not started the vetting process.
+        </p>
+      }
+
+      <button
+        z-button
+        zType="outline"
+        zSize="sm"
+        type="submit"
+        data-testid="send-vetting-reminder"
+        [zDisabled]="isSendDisabled()"
+        [attr.aria-busy]="isSending()"
+        class="w-full sm:w-auto border-primary/50 text-primary hover:bg-primary/10"
+      >
+        @if (isSending()) {
+          <z-icon zType="loader-circle" class="mr-2 animate-spin" />
+          Sending...
+        } @else {
+          <z-icon zType="mail" class="mr-2" />
+          Send Reminder
+        }
+      </button>
+    </form>
+  </z-card>
+</div>

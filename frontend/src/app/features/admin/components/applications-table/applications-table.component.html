@@ -1,0 +1,394 @@
+@if (isLoading()) {
+  <!-- Loading Skeleton - Desktop -->
+  <div
+    class="hidden overflow-hidden rounded-xl border border-border/50 bg-card shadow-2xl md:block"
+    aria-busy="true"
+    aria-label="Loading applications"
+  >
+    <div class="overflow-x-auto">
+      <table class="min-w-full border-collapse text-left">
+        <thead class="mono-label bg-muted/50 text-xs text-muted-foreground">
+          <tr>
+            <th class="border-b border-border p-5 font-medium">Applicant</th>
+            <th class="border-b border-border p-5 font-medium">
+              Registration Details
+            </th>
+            <th class="w-48 border-b border-border p-5 font-medium">
+              Status/Actions
+            </th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-border/50">
+          @for (i of [1, 2, 3]; track i) {
+            <tr>
+              <td class="w-72 p-5 align-top">
+                <div class="flex items-center gap-4">
+                  <z-skeleton class="h-10 w-10 rounded-sm" />
+                  <div class="flex-1 space-y-2">
+                    <z-skeleton class="h-5 w-32" />
+                    <z-skeleton class="h-3 w-40" />
+                  </div>
+                </div>
+              </td>
+              <td class="p-5 align-top">
+                <div class="space-y-3">
+                  <z-skeleton class="h-3 w-24" />
+                  <z-skeleton class="h-4 w-full" />
+                  <z-skeleton class="h-4 w-3/4" />
+                </div>
+              </td>
+              <td class="p-5 align-top">
+                <div class="space-y-2">
+                  <z-skeleton class="h-9 w-full rounded" />
+                  <z-skeleton class="h-9 w-full rounded" />
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Loading Skeleton - Mobile -->
+  <div
+    class="space-y-4 md:hidden"
+    aria-busy="true"
+    aria-label="Loading applications"
+  >
+    @for (i of [1, 2, 3]; track i) {
+      <div class="space-y-4 rounded-xl border border-border bg-card/80 p-5">
+        <div class="flex items-center gap-3">
+          <z-skeleton class="h-10 w-10 rounded-sm" />
+          <div class="flex-1 space-y-2">
+            <z-skeleton class="h-5 w-32" />
+            <z-skeleton class="h-3 w-40" />
+          </div>
+        </div>
+        <z-skeleton class="h-4 w-full" />
+        <z-skeleton class="h-4 w-3/4" />
+        <z-skeleton class="h-4 w-1/2" />
+      </div>
+    }
+  </div>
+} @else {
+  <!-- Desktop Table View -->
+  <div
+    class="ph-no-capture hidden overflow-hidden rounded-xl border border-border/50 bg-card shadow-2xl md:block"
+  >
+    <div class="overflow-x-auto">
+      <table class="min-w-full border-collapse text-left">
+        <thead class="mono-label bg-muted/50 text-xs text-muted-foreground">
+          <tr>
+            <th class="border-b border-border p-5 font-medium">Applicant</th>
+            <th class="border-b border-border p-5 font-medium">
+              Registration Details
+            </th>
+            <th class="w-48 border-b border-border p-5 font-medium">
+              Status/Actions
+            </th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-border/50">
+          @for (app of allApplications(); track app._id; let i = $index) {
+            <tr
+              [class]="
+                'transition-smooth group hover:bg-muted/30 ' +
+                (i % 2 === 0 ? 'fade-in-delay-1' : 'fade-in-delay-2')
+              "
+              role="row"
+              data-testid="application-row"
+            >
+              <td class="w-72 p-5 align-top">
+                <div class="flex items-center gap-4">
+                  <div
+                    class="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm border border-border bg-muted font-display text-sm font-bold text-foreground/80"
+                  >
+                    {{ app.user?.name?.charAt(0)?.toUpperCase() || '?' }}
+                  </div>
+                  <div>
+                    <div
+                      class="font-display text-lg font-bold tracking-wide text-foreground"
+                    >
+                      {{ app.user?.name || 'Unknown' }}
+                    </div>
+                    <div class="font-mono text-xs text-muted-foreground">
+                      {{ app.user?.email }}
+                    </div>
+                    <div
+                      class="mt-1 font-mono text-2xs tracking-wider text-muted-foreground uppercase select-all"
+                    >
+                      ID: {{ app.user?._id }}
+                    </div>
+                  </div>
+                </div>
+              </td>
+              <td class="p-5 align-top">
+                <div class="space-y-4 text-sm">
+                  <div class="grid grid-cols-[140px_1fr] gap-x-4 gap-y-3">
+                    <span
+                      class="font-mono text-2xs tracking-wider text-muted-foreground uppercase"
+                      >Submitted:</span
+                    >
+                    <span class="font-mono text-xs text-muted-foreground">{{
+                      app._creationTime | date: 'medium'
+                    }}</span>
+
+                    @for (item of getVettingAnswers(app); track item.label) {
+                      <span
+                        class="pt-0.5 font-mono text-2xs tracking-wider text-muted-foreground uppercase"
+                        >{{ item.label }}:</span
+                      >
+                      <div class="font-sans leading-relaxed text-foreground/80">
+                        @if (isArray(item.value)) {
+                          <div class="mt-0.5 flex flex-wrap gap-1.5">
+                            @for (val of asArray(item.value); track val) {
+                              <span
+                                class="rounded border border-border bg-muted px-2 py-0.5 text-2xs text-muted-foreground"
+                                >{{ val }}</span
+                              >
+                            }
+                          </div>
+                        } @else if (isBoolean(item.value)) {
+                          <span
+                            [class]="
+                              item.value ? 'text-success' : 'text-destructive'
+                            "
+                            >{{ item.value ? 'YES' : 'NO' }}</span
+                          >
+                        } @else {
+                          <span class="whitespace-pre-wrap">{{
+                            item.value || '-'
+                          }}</span>
+                        }
+                      </div>
+                    } @empty {
+                      <span
+                        class="col-span-2 mt-1 font-mono text-xs text-muted-foreground italic"
+                        data-testid="no-vetting-answers"
+                        >No vetting answers provided</span
+                      >
+                    }
+                  </div>
+                </div>
+              </td>
+              <td class="p-5 align-top">
+                @if (app.status === 'pending') {
+                  <div class="flex flex-col gap-2">
+                    <button
+                      type="button"
+                      z-button
+                      zType="default"
+                      [zFull]="true"
+                      [attr.aria-label]="
+                        'Approve application for ' +
+                        (app.user?.name || 'applicant')
+                      "
+                      class="border-none bg-success text-success-foreground shadow-[0_0_15px_-3px_hsl(var(--success)/0.4)] hover:bg-success/90"
+                      data-testid="approve-application"
+                      (click)="updateStatus(app, 'approved')"
+                    >
+                      APPROVE
+                    </button>
+                    <button
+                      type="button"
+                      z-button
+                      zType="destructive"
+                      [zFull]="true"
+                      [attr.aria-label]="
+                        'Reject application for ' +
+                        (app.user?.name || 'applicant')
+                      "
+                      data-testid="reject-application"
+                      (click)="updateStatus(app, 'rejected')"
+                    >
+                      REJECT
+                    </button>
+                  </div>
+                } @else {
+                  <div class="flex flex-col gap-2">
+                    <div
+                      class="inline-flex w-full items-center justify-center rounded border px-3 py-1 text-xs font-bold tracking-wider uppercase"
+                      data-testid="application-status"
+                      [class.bg-success/10]="app.status === 'approved'"
+                      [class.text-success]="app.status === 'approved'"
+                      [class.border-success/20]="app.status === 'approved'"
+                      [class.bg-destructive/10]="app.status === 'rejected'"
+                      [class.text-destructive]="app.status === 'rejected'"
+                      [class.border-destructive/20]="app.status === 'rejected'"
+                      [class.bg-muted-foreground/10]="app.status === 'revoked'"
+                      [class.text-muted-foreground]="app.status === 'revoked'"
+                      [class.border-muted-foreground/20]="
+                        app.status === 'revoked'
+                      "
+                    >
+                      {{ app.status }}
+                    </div>
+                    <div
+                      class="text-center font-mono text-2xs text-muted-foreground uppercase"
+                    >
+                      By: {{ app.processor?.name || 'SYSTEM' }}
+                    </div>
+                  </div>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td
+                colspan="3"
+                class="p-16 text-center font-mono tracking-widest text-muted-foreground uppercase"
+              >
+                NO {{ tableType() }} APPLICATIONS FOUND
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Mobile Card View -->
+  <div class="ph-no-capture space-y-3 md:hidden">
+    @for (app of allApplications(); track app._id; let i = $index) {
+      <div
+        [class]="
+          'transition-smooth overflow-hidden rounded-xl border border-border bg-card/80 ' +
+          (i % 2 === 0 ? 'fade-in-delay-1' : 'fade-in-delay-2')
+        "
+        role="article"
+        data-testid="application-row"
+      >
+        <!-- Card Header: Name + Status -->
+        <div class="border-b border-border/50 p-4 pb-3">
+          <div class="flex min-w-0 items-center gap-3">
+            <div
+              class="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm border border-border bg-muted font-display text-sm font-bold text-foreground/80"
+            >
+              {{ app.user?.name?.charAt(0)?.toUpperCase() || '?' }}
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center justify-between gap-2">
+                <div
+                  class="truncate font-display text-base font-bold tracking-wide text-foreground"
+                >
+                  {{ app.user?.name || 'Unknown' }}
+                </div>
+                <div
+                  class="shrink-0 rounded-sm border px-2 py-0.5 text-2xs font-bold tracking-wider uppercase"
+                  [class.bg-warning/10]="app.status === 'pending'"
+                  [class.text-warning]="app.status === 'pending'"
+                  [class.border-warning/20]="app.status === 'pending'"
+                  [class.bg-success/10]="app.status === 'approved'"
+                  [class.text-success]="app.status === 'approved'"
+                  [class.border-success/20]="app.status === 'approved'"
+                  [class.bg-destructive/10]="app.status === 'rejected'"
+                  [class.text-destructive]="app.status === 'rejected'"
+                  [class.border-destructive/20]="app.status === 'rejected'"
+                  [class.bg-muted-foreground/10]="app.status === 'revoked'"
+                  [class.text-muted-foreground]="app.status === 'revoked'"
+                  [class.border-muted-foreground/20]="app.status === 'revoked'"
+                >
+                  {{ app.status }}
+                </div>
+              </div>
+              <div class="truncate font-mono text-xs text-muted-foreground">
+                {{ app.user?.email }}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card Body: Vetting Answers -->
+        <div class="space-y-3 p-4">
+          @for (item of getVettingAnswers(app); track item.label) {
+            <div>
+              <div
+                class="mb-1 font-mono text-2xs tracking-widest text-muted-foreground uppercase"
+              >
+                {{ item.label }}
+              </div>
+              <div
+                class="font-sans text-sm leading-relaxed break-words text-foreground"
+              >
+                @if (isArray(item.value)) {
+                  <div class="mt-1 flex flex-wrap gap-1.5">
+                    @for (val of asArray(item.value); track val) {
+                      <span
+                        class="rounded border border-border bg-muted px-2 py-0.5 text-xs text-foreground/80"
+                        >{{ val }}</span
+                      >
+                    }
+                  </div>
+                } @else if (isBoolean(item.value)) {
+                  <span
+                    [class]="
+                      'font-bold ' +
+                      (item.value ? 'text-success' : 'text-destructive')
+                    "
+                    >{{ item.value ? 'YES' : 'NO' }}</span
+                  >
+                } @else {
+                  <span class="break-words whitespace-pre-wrap">{{
+                    item.value || '-'
+                  }}</span>
+                }
+              </div>
+            </div>
+          } @empty {
+            <p
+              class="font-mono text-xs text-muted-foreground italic"
+              data-testid="no-vetting-answers"
+            >
+              No vetting answers provided
+            </p>
+          }
+
+          <div
+            class="mt-2 border-t border-border/50 pt-2 font-mono text-2xs text-muted-foreground uppercase"
+          >
+            Submitted: {{ app._creationTime | date: 'short' }}
+          </div>
+        </div>
+
+        <!-- Card Footer: Actions -->
+        @if (app.status === 'pending') {
+          <div class="flex border-t border-border/50">
+            <button
+              type="button"
+              z-button
+              zType="destructive"
+              class="flex-1 rounded-none border-0 border-r border-border/50"
+              [attr.aria-label]="
+                'Reject application for ' + (app.user?.name || 'applicant')
+              "
+              data-testid="reject-application"
+              (click)="updateStatus(app, 'rejected')"
+            >
+              REJECT
+            </button>
+            <button
+              type="button"
+              z-button
+              zType="default"
+              class="flex-1 rounded-none border-0 bg-success hover:bg-success/90"
+              [attr.aria-label]="
+                'Approve application for ' + (app.user?.name || 'applicant')
+              "
+              data-testid="approve-application"
+              (click)="updateStatus(app, 'approved')"
+            >
+              APPROVE
+            </button>
+          </div>
+        }
+      </div>
+    } @empty {
+      <div
+        class="mono-label rounded-lg border border-dashed border-border py-12 text-center text-sm text-muted-foreground"
+      >
+        NO {{ tableType() }} APPLICATIONS FOUND
+      </div>
+    }
+  </div>
+}

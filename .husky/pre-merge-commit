@@ -1,0 +1,12 @@
+#!/bin/sh
+set -e
+
+case "${GIT_REFLOG_ACTION:-}" in
+  pull|pull\ *)
+    echo "Skipping pre-merge validation for git pull."
+    exit 0
+    ;;
+esac
+
+echo "Running validation before merge (LLM-selected E2E)..."
+./scripts/validate.sh all 1200

@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="660" viewBox="0 0 1120 660" role="img" aria-labelledby="title desc">
+  <title id="title">Braket Tickets architecture</title>
+  <desc id="desc">Angular frontend connects to Convex, Stripe, PostHog, Sentry, Better Auth, guest sessions, and test layers.</desc>
+  <defs>
+    <style>
+      .bg{fill:#111114}
+      .group{fill:#18181d;stroke:#3f3f46;stroke-width:2}
+      .box{fill:#24242b;stroke:#71717a;stroke-width:2}
+      .accent{fill:#292524;stroke:#f59e0b}
+      .text{fill:#f4f4f5;font:600 18px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+      .small{fill:#d4d4d8;font:500 14px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+      .line{stroke:#a1a1aa;stroke-width:2.5;fill:none;marker-end:url(#arrow)}
+      .muted{stroke:#52525b}
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0l10 5-10 5z" fill="#a1a1aa"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="1120" height="660" rx="20"/>
+  <rect class="box accent" x="60" y="250" width="170" height="78" rx="10"/>
+  <text class="text" x="145" y="283" text-anchor="middle">User Browser</text>
+  <text class="small" x="145" y="307" text-anchor="middle">buyers, admins, scanners</text>
+
+  <rect class="box accent" x="310" y="238" width="210" height="102" rx="10"/>
+  <text class="text" x="415" y="275" text-anchor="middle">Angular Frontend</text>
+  <text class="small" x="415" y="300" text-anchor="middle">zoneless + signals</text>
+
+  <rect class="box" x="620" y="238" width="190" height="102" rx="10"/>
+  <text class="text" x="715" y="275" text-anchor="middle">Convex Backend</text>
+  <text class="small" x="715" y="300" text-anchor="middle">queries, mutations, actions</text>
+
+  <rect class="box" x="900" y="78" width="160" height="64" rx="10"/>
+  <text class="text" x="980" y="116" text-anchor="middle">Database</text>
+  <rect class="box" x="900" y="178" width="160" height="64" rx="10"/>
+  <text class="text" x="980" y="216" text-anchor="middle">Stripe APIs</text>
+  <rect class="box" x="900" y="278" width="160" height="64" rx="10"/>
+  <text class="text" x="980" y="316" text-anchor="middle">Email Jobs</text>
+  <rect class="box" x="900" y="378" width="160" height="64" rx="10"/>
+  <text class="text" x="980" y="416" text-anchor="middle">PostHog</text>
+  <rect class="box" x="900" y="478" width="160" height="64" rx="10"/>
+  <text class="text" x="980" y="516" text-anchor="middle">Sentry</text>
+
+  <rect class="group" x="280" y="420" width="250" height="150" rx="14"/>
+  <text class="text" x="405" y="455" text-anchor="middle">Authentication</text>
+  <rect class="box" x="310" y="482" width="190" height="36" rx="7"/>
+  <text class="small" x="405" y="505" text-anchor="middle">Better Auth</text>
+  <rect class="box" x="310" y="526" width="190" height="36" rx="7"/>
+  <text class="small" x="405" y="549" text-anchor="middle">Guest Sessions</text>
+
+  <rect class="group" x="560" y="420" width="280" height="150" rx="14"/>
+  <text class="text" x="700" y="455" text-anchor="middle">Test Layers</text>
+  <rect class="box" x="590" y="482" width="220" height="36" rx="7"/>
+  <text class="small" x="700" y="505" text-anchor="middle">Frontend Unit</text>
+  <rect class="box" x="590" y="526" width="220" height="36" rx="7"/>
+  <text class="small" x="700" y="549" text-anchor="middle">Convex Unit + E2E</text>
+
+  <path class="line" d="M230 289h80"/>
+  <path class="line" d="M520 289h100"/>
+  <path class="line" d="M810 270c54-80 72-150 90-160"/>
+  <path class="line" d="M810 289h90"/>
+  <path class="line" d="M810 308h90"/>
+  <path class="line" d="M520 323c150 74 252 93 380 87"/>
+  <path class="line" d="M520 338c120 145 236 180 380 172"/>
+  <path class="line muted" d="M405 420v-80"/>
+  <path class="line muted" d="M700 420v-80"/>
+</svg>

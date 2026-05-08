@@ -1,0 +1,79 @@
+# Secrets and environment files
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Dependencies
+node_modules
+**/node_modules
+
+# Build and test outputs
+dist
+**/dist
+coverage
+**/coverage
+reports
+**/reports
+**/.angular
+**/out-tsc
+**/test-results
+**/playwright-report
+**/blob-report
+**/all-blob-reports
+**/tmp
+**/.cache
+
+# Local Convex backend
+convex-local-backend
+convex-local-backend-*.zip
+convex_local_backend.sqlite3
+convex_local_storage
+convex_shard_*.sqlite3
+shard.sqlite3
+.convex-local
+
+# Test artifacts
+*.log
+*.txt
+*.sqlite3
+*.sqlite3-*
+*.db
+*.pem
+*.key
+*.crt
+*.p12
+*.csr
+
+# QA/dev artifacts
+qa-patrol-*.md
+qa-patrol-*.json
+frontend/public/runtime-env.js
+frontend/playwright/.auth
+.playwright-mcp
+
+# Documentation
+docs
+
+# Dev tooling config (not needed in container)
+.claude
+.husky
+skills
+skills-lock.json
+opencode.json
+knip.json
+
+# Editor
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

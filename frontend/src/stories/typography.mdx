@@ -1,0 +1,47 @@
+import { Meta, Typeset } from '@storybook/addon-docs/blocks';
+
+<Meta title="Design System/Typography" />
+
+# Typography
+
+## Font Families
+
+| Role | Font | CSS Class | Usage |
+|---|---|---|---|
+| Display / Headings | Syne | `font-display` | Page titles, hero text |
+| Body | Inter | `font-sans` | Paragraphs, descriptions |
+| Labels / Code | Space Mono | `font-mono` | Buttons, badges, data labels |
+
+## The Mono Signature
+
+The brand's DNA is: **`font-mono uppercase tracking-widest text-2xs`**
+
+This pattern appears on 400+ elements across the app. It is what makes the UI feel like Pulp instead of generic SaaS. Every new UI element should consider whether its labels should use this pattern.
+
+Examples of where it appears:
+- Badge text (`z-badge`)
+- Navigation items
+- Section headers and metadata labels
+- Status indicators
+- Form field labels
+
+<Typeset
+  fontFamily="Syne, sans-serif"
+  fontSizes={[14, 16, 20, 24, 32, 48]}
+  fontWeight={700}
+  sampleText="Pulp"
+/>
+
+<Typeset
+  fontFamily="Inter, sans-serif"
+  fontSizes={[12, 14, 16, 18]}
+  fontWeight={400}
+  sampleText="The quick brown fox jumps over the lazy dog."
+/>
+
+<Typeset
+  fontFamily="Space Mono, monospace"
+  fontSizes={[10, 12, 14]}
+  fontWeight={400}
+  sampleText="TICKETS · VETTING · COMMUNITY"
+/>

@@ -1,0 +1,13 @@
+node_modules
+dist
+.angular
+.convex
+_generated
+.wrangler
+coverage
+playwright-report
+storybook-static
+test-results
+frontend/storybook-static
+*.log
+.agent

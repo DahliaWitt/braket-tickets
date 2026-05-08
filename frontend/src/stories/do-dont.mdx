@@ -1,0 +1,52 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Design System/Do & Don't" />
+
+# Do & Don't — Pulp Identity
+
+This page exists because contributors will default to familiar patterns. These guidelines protect the brand.
+
+## Typography
+
+| Do | Don't |
+|---|---|
+| `font-mono uppercase tracking-widest text-2xs` for labels | Sentence case labels in Inter/system font |
+| Syne for page headings and hero text | Inter or system sans for headings |
+| Space Mono for data, status, metadata | Code-font aesthetic (JetBrains Mono, Fira Code) |
+
+## Color & Theme
+
+| Do | Don't |
+|---|---|
+| Design dark-first, verify light — both must work | Treat light mode as an afterthought |
+| Tint dark backgrounds warm (plum undertone) | Use cold blue-shifted blacks or pure `#000` |
+| Use `--primary` (plum/wine) for CTAs and active states | Neon colors, cyan-on-dark, purple-to-blue gradients (AI aesthetic) |
+
+## Layout
+
+| Do | Don't |
+|---|---|
+| Vary spacing: tight groupings + generous separations | Same padding everywhere |
+| Use 16px (`gap-4`) base rhythm, 24px for section breaks | Arbitrary pixel values or uniform 24px everywhere |
+| Dense, print-inspired compositions | Rounded-everything with drop shadows (generic SaaS) |
+
+## Components
+
+| Do | Don't |
+|---|---|
+| Use ZardUI components with CVA variants | Build one-off styled `<div>` equivalents |
+| Sharp or mixed radius (0–4px) | Uniform 8px radius on everything (SaaS default) |
+| Gradient text (plum → violet) sparingly for emphasis | Gradient text on every heading |
+| Chromatic aberration / color offset on display type | CSS glitch animations (2019 codepen energy) |
+
+## Anti-References
+
+This app must NOT look like:
+- **Generic startup SaaS** — gradient hero sections, stock photos, rounded-everything, 8px radius
+- **Eventbrite / corporate ticketing** — template-y, overly functional, no soul
+- **Overly polished editorial** (Resident Advisor) — too clean for this brand
+- **AI-generated aesthetics** — cookie-cutter component libraries, JetBrains Mono, neon-on-dark defaults, CSS glitch effects
+
+## Reference Universe
+
+Underground techno flyers, avant-garde web design, zine culture, warehouse party aesthetics, print design.

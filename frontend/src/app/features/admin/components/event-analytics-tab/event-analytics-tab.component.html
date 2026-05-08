@@ -1,0 +1,499 @@
+<div class="space-y-8">
+  <div class="grid gap-4 lg:grid-cols-2">
+    <z-card class="border-border bg-card/80">
+      <div class="space-y-4">
+        <div class="flex items-center justify-between">
+          <p class="text-xs mono-label text-muted-foreground">Revenue</p>
+          @if (purchasesCount() > 0) {
+            <button
+              type="button"
+              z-button
+              zType="outline"
+              zSize="sm"
+              [zDisabled]="
+                isGeneratingSettlement() || !isSettlementExportReady()
+              "
+              (click)="exportSettlementReport.emit()"
+              [attr.aria-describedby]="
+                !isSettlementExportReady()
+                  ? 'settlement-report-unavailable'
+                  : null
+              "
+              class="border-primary/50 text-primary hover:bg-primary/10"
+            >
+              @if (isGeneratingSettlement()) {
+                <z-icon zType="loader-circle" class="mr-2 animate-spin" />
+                Generating...
+              } @else {
+                <z-icon zType="file-text" class="mr-2" />
+                Settlement Report
+              }
+            </button>
+            @if (!isSettlementExportReady()) {
+              <span id="settlement-report-unavailable" class="sr-only">
+                Settlement report data is still loading
+              </span>
+            }
+          }
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <div class="text-xs font-mono text-muted-foreground uppercase">
+              Gross
+            </div>
+            <div class="text-2xl font-display text-foreground">
+              {{
+                data().revenue.grossCents / 100
+                  | currency: 'USD' : 'symbol' : '1.2-2'
+              }}
+            </div>
+          </div>
+          <div>
+            <div class="text-xs font-mono text-muted-foreground uppercase">
+              Net
+            </div>
+            <div class="text-2xl font-display text-success">
+              {{
+                data().revenue.netCents / 100
+                  | currency: 'USD' : 'symbol' : '1.2-2'
+              }}
+            </div>
+          </div>
+        </div>
+        <div
+          class="rounded-lg border border-border/60 bg-muted/40 p-4 text-xs font-mono text-muted-foreground space-y-2"
+        >
+          @if (data().revenue.processingFeeCents > 0) {
+            <div class="flex items-center justify-between">
+              <span>Processing fee (2.9% + $0.30)</span>
+              <span class="text-foreground">{{
+                data().revenue.processingFeeCents / 100
+                  | currency: 'USD' : 'symbol' : '1.2-2'
+              }}</span>
+            </div>
+          }
+          <div class="flex items-center justify-between">
+            <span>Platform fee (2%)</span>
+            <span class="text-foreground">{{
+              data().revenue.platformFeeCents / 100
+                | currency: 'USD' : 'symbol' : '1.2-2'
+            }}</span>
+          </div>
+          @if (data().revenue.refundedCents > 0) {
+            <div
+              class="flex items-center justify-between text-destructive"
+              data-testid="revenue-refunds"
+            >
+              <span>Refunds</span>
+              <span
+                >-{{
+                  data().revenue.refundedCents / 100
+                    | currency: 'USD' : 'symbol' : '1.2-2'
+                }}</span
+              >
+            </div>
+          }
+        </div>
+      </div>
+    </z-card>
+
+    <z-card class="border-border bg-card/80">
+      <div class="space-y-4">
+        <p class="text-xs mono-label text-muted-foreground">
+          Revenue by ticket type
+        </p>
+        <div class="space-y-3 text-xs font-mono">
+          <div
+            data-testid="revenue-tier-regular"
+            class="flex items-center justify-between rounded-lg border border-border/60 bg-muted/40 px-4 py-3"
+          >
+            <div class="space-y-1">
+              <div class="text-muted-foreground uppercase">Regular</div>
+              <div class="text-2xs text-muted-foreground">
+                Qty {{ data().revenueByTier.regular.quantity }}
+              </div>
+            </div>
+            <div class="text-right">
+              <div class="text-foreground">
+                Gross
+                {{
+                  data().revenueByTier.regular.grossCents / 100
+                    | currency: 'USD' : 'symbol' : '1.2-2'
+                }}
+              </div>
+              <div class="text-success">
+                Net
+                {{
+                  data().revenueByTier.regular.netCents / 100
+                    | currency: 'USD' : 'symbol' : '1.2-2'
+                }}
+              </div>
+            </div>
+          </div>
+          <div
+            data-testid="revenue-tier-notaflof"
+            class="flex items-center justify-between rounded-lg border border-border/60 bg-muted/40 px-4 py-3"
+          >
+            <div class="space-y-1">
+              <div class="text-muted-foreground uppercase">Notaflof</div>
+              <div class="text-2xs text-muted-foreground">
+                Qty {{ data().revenueByTier.notaflof.quantity }}
+              </div>
+            </div>
+            <div class="text-right">
+              <div class="text-foreground">
+                Gross
+                {{
+                  data().revenueByTier.notaflof.grossCents / 100
+                    | currency: 'USD' : 'symbol' : '1.2-2'
+                }}
+              </div>
+              <div class="text-success">
+                Net
+                {{
+                  data().revenueByTier.notaflof.netCents / 100
+                    | currency: 'USD' : 'symbol' : '1.2-2'
+                }}
+              </div>
+            </div>
+          </div>
+          <div
+            data-testid="revenue-tier-supporter"
+            class="flex items-center justify-between rounded-lg border border-border/60 bg-muted/40 px-4 py-3"
+          >
+            <div class="space-y-1">
+              <div class="text-muted-foreground uppercase">Supporter</div>
+              <div class="text-2xs text-muted-foreground">
+                Qty {{ data().revenueByTier.supporter.quantity }}
+              </div>
+            </div>
+            <div class="text-right">
+              <div class="text-foreground">
+                Gross
+                {{
+                  data().revenueByTier.supporter.grossCents / 100
+                    | currency: 'USD' : 'symbol' : '1.2-2'
+                }}
+              </div>
+              <div class="text-success">
+                Net
+                {{
+                  data().revenueByTier.supporter.netCents / 100
+                    | currency: 'USD' : 'symbol' : '1.2-2'
+                }}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </z-card>
+  </div>
+
+  <!-- Ticket Sales Controls -->
+  <z-card class="border-border bg-card/80">
+    <div class="space-y-4">
+      <div class="flex items-center justify-between">
+        <p class="text-xs mono-label text-muted-foreground">
+          Ticket Sales Control
+        </p>
+        <div class="flex items-center gap-2">
+          @if (!canControlTicketSales() && ticketSalesUnavailableLabel()) {
+            <span
+              class="rounded-full border border-muted-foreground/30 bg-muted/40 px-2 py-0.5 text-2xs font-mono text-muted-foreground uppercase"
+              data-testid="ticket-sales-unavailable-label"
+              >{{ ticketSalesUnavailableLabel() }}</span
+            >
+          } @else if (ticketSalesStatus() === 'active') {
+            <span
+              class="rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-2xs font-mono text-success uppercase"
+              >Active</span
+            >
+          } @else if (ticketSalesStatus() === 'paused') {
+            <span
+              class="rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-2xs font-mono text-warning uppercase"
+              >Paused</span
+            >
+          } @else if (ticketSalesStatus() === 'ended') {
+            <span
+              class="rounded-full border border-destructive/30 bg-destructive/10 px-2 py-0.5 text-2xs font-mono text-destructive uppercase"
+              >Ended</span
+            >
+          }
+        </div>
+      </div>
+
+      <p class="text-xs text-muted-foreground font-mono">
+        Control whether users can purchase tickets for this event.
+      </p>
+
+      <div class="flex flex-wrap gap-2">
+        @if (!canControlTicketSales() && ticketSalesUnavailableMessage()) {
+          <p
+            class="text-2xs text-muted-foreground font-mono"
+            data-testid="ticket-sales-unavailable-message"
+          >
+            {{ ticketSalesUnavailableMessage() }}
+          </p>
+        } @else if (ticketSalesStatus() === 'paused') {
+          <button
+            type="button"
+            z-button
+            zType="outline"
+            class="border-success/50 text-success hover:bg-success/10"
+            [zDisabled]="isUpdatingStatus() || isSoldOut()"
+            (click)="updateTicketSalesStatus.emit('active')"
+            aria-label="Resume ticket sales"
+            data-testid="resume-sales-button"
+          >
+            @if (isUpdatingStatus()) {
+              <z-icon zType="loader-circle" class="animate-spin mr-2" />
+            }
+            Resume Sales
+          </button>
+        }
+        @if (canControlTicketSales() && ticketSalesStatus() === 'active') {
+          <button
+            type="button"
+            z-button
+            zType="outline"
+            class="border-warning/50 text-warning hover:bg-warning/10"
+            [zDisabled]="isUpdatingStatus()"
+            (click)="updateTicketSalesStatus.emit('paused')"
+            aria-label="Pause ticket sales"
+            data-testid="pause-sales-button"
+          >
+            @if (isUpdatingStatus()) {
+              <z-icon zType="loader-circle" class="animate-spin mr-2" />
+            }
+            Pause Sales
+          </button>
+        }
+        @if (canControlTicketSales() && ticketSalesStatus() !== 'ended') {
+          <button
+            type="button"
+            z-button
+            zType="outline"
+            class="border-destructive/50 text-destructive hover:bg-destructive/10"
+            [zDisabled]="isUpdatingStatus()"
+            (click)="updateTicketSalesStatus.emit('ended')"
+            aria-label="End ticket sales permanently"
+            data-testid="end-sales-button"
+          >
+            @if (isUpdatingStatus()) {
+              <z-icon zType="loader-circle" class="animate-spin mr-2" />
+            }
+            End Sales
+          </button>
+        }
+      </div>
+
+      @if (isSoldOut() && ticketSalesStatus() !== 'active') {
+        <p class="text-2xs text-muted-foreground font-mono">
+          Note: Event is sold out. Resuming sales will have no effect until more
+          tickets are added.
+        </p>
+      }
+    </div>
+  </z-card>
+
+  <z-card class="border-border bg-card/80">
+    <div class="space-y-4">
+      <div class="flex items-center justify-between">
+        <p class="text-xs mono-label text-muted-foreground">Sales per day</p>
+        <span class="text-2xs mono-label text-muted-foreground"
+          >Timezone: {{ platformTimeZone }}</span
+        >
+      </div>
+      @if (hasSalesData()) {
+        @defer (on immediate) {
+          <app-sales-chart [options]="chartOptions()" />
+        } @placeholder {
+          <div
+            class="h-64 rounded-lg border border-border/60 bg-muted/40 animate-pulse flex items-center justify-center"
+          >
+            <p class="text-xs font-mono text-muted-foreground">
+              Loading chart...
+            </p>
+          </div>
+        }
+      } @else {
+        <div class="text-sm text-muted-foreground font-mono">No sales yet.</div>
+      }
+    </div>
+  </z-card>
+  @if (hasCheckInData()) {
+    <z-card
+      class="lg:col-span-2 border-border bg-card/80"
+      data-testid="check-in-chart-card"
+    >
+      <div class="space-y-4">
+        <p class="text-xs mono-label text-muted-foreground">Check-in flow</p>
+        @defer (on immediate) {
+          <app-check-in-chart [options]="checkInChartOptions()!" />
+        } @placeholder {
+          <div
+            class="h-64 rounded-lg border border-border/60 bg-muted/40 animate-pulse flex items-center justify-center"
+          >
+            <p class="text-xs font-mono text-muted-foreground">
+              Loading chart...
+            </p>
+          </div>
+        }
+      </div>
+    </z-card>
+  }
+  @if (tierPricingStats().length > 0) {
+    <div class="lg:col-span-2 space-y-3">
+      <p class="text-xs mono-label text-muted-foreground">
+        Pricing distribution by tier
+      </p>
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        @for (tier of tierPricingStats(); track tier.tier) {
+          <z-card
+            class="border-border bg-card/80"
+            data-testid="tier-pricing-card"
+          >
+            <div class="space-y-3">
+              <div class="flex items-center justify-between">
+                <span
+                  class="text-sm font-display font-bold text-foreground uppercase tracking-wide"
+                >
+                  {{
+                    tier.tier === 'notaflof'
+                      ? 'NOTAFLOF'
+                      : tier.tier === 'supporter'
+                        ? 'Supporter'
+                        : 'Regular'
+                  }}
+                </span>
+                <span
+                  class="text-2xs font-mono text-muted-foreground bg-muted/60 rounded-full px-2 py-0.5"
+                >
+                  {{ tier.count }}
+                  {{ tier.count === 1 ? 'ticket' : 'tickets' }}
+                </span>
+              </div>
+              <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm font-mono">
+                <div>
+                  <span class="text-muted-foreground text-xs">Min</span>
+                  <p class="text-foreground" data-testid="tier-stat-min">
+                    {{ tier.min / 100 | currency: 'USD' }}
+                  </p>
+                </div>
+                <div>
+                  <span class="text-muted-foreground text-xs">Max</span>
+                  <p class="text-foreground" data-testid="tier-stat-max">
+                    {{ tier.max / 100 | currency: 'USD' }}
+                  </p>
+                </div>
+                <div>
+                  <span class="text-muted-foreground text-xs">Mean</span>
+                  <p class="text-foreground" data-testid="tier-stat-mean">
+                    {{ tier.mean / 100 | currency: 'USD' }}
+                  </p>
+                </div>
+                <div>
+                  <span class="text-muted-foreground text-xs">Median</span>
+                  <p class="text-foreground" data-testid="tier-stat-median">
+                    {{ tier.median / 100 | currency: 'USD' }}
+                  </p>
+                </div>
+              </div>
+              <div class="text-sm font-mono">
+                <span class="text-muted-foreground text-xs">Mode</span>
+                <p class="text-foreground" data-testid="tier-stat-mode">
+                  @for (m of tier.mode; track m; let last = $last) {
+                    {{ m / 100 | currency: 'USD' }}
+                    @if (!last) {
+                      <span class="text-muted-foreground">,&nbsp;</span>
+                    }
+                  }
+                </p>
+              </div>
+            </div>
+          </z-card>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- ── Check-In Analytics Section ──────────────────────────────── -->
+  @if (eventId()) {
+    <div
+      class="space-y-6"
+      data-testid="checkin-analytics-section"
+      [attr.data-mode]="checkInMode()"
+    >
+      <!-- Summary strip — always pinned at top -->
+      <div class="border-b border-border/40 pb-4">
+        <p class="text-xs mono-label text-muted-foreground mb-3">Check-in</p>
+        <app-check-in-summary-strip
+          [eventId]="eventId()!"
+          [mode]="checkInMode()"
+        />
+      </div>
+
+      @if (checkInMode() === 'pre-event') {
+        <!-- Pre-event: show the post-event layout populated with zeros + waiting state -->
+        <div
+          class="flex items-center justify-center py-8"
+          data-testid="checkin-pre-event-state"
+        >
+          <span
+            class="font-mono text-xs uppercase tracking-widest text-muted-foreground"
+          >
+            WAITING FOR DOORS
+          </span>
+        </div>
+      } @else if (checkInMode() === 'door-rush') {
+        <!-- Door-rush: feed is visual hero, roster below -->
+        <div class="grid gap-6 lg:grid-cols-3">
+          <!-- Activity feed — hero (2 of 3 cols on desktop) -->
+          <div class="lg:col-span-2 space-y-3" data-testid="feed-section">
+            <p class="text-xs mono-label text-muted-foreground">
+              Live check-ins
+            </p>
+            <div
+              class="rounded-xl border border-border/60 bg-card/60 p-4 min-h-64 max-h-[28rem] overflow-y-auto"
+            >
+              <app-check-in-activity-feed [eventId]="eventId()!" />
+            </div>
+          </div>
+
+          <!-- Roster — search-first, collapsed on mobile -->
+          <div class="space-y-3" data-testid="roster-section">
+            <p class="text-xs mono-label text-muted-foreground">Roster</p>
+            <app-attendee-roster-table
+              [eventId]="eventId()!"
+              [canExport]="canExport()"
+            />
+          </div>
+        </div>
+      } @else {
+        <!-- Post-event: roster + export are hero, feed is static log -->
+        <div class="space-y-6">
+          <!-- Roster — hero -->
+          <div class="space-y-3" data-testid="roster-section">
+            <p class="text-xs mono-label text-muted-foreground">
+              Attendee roster
+            </p>
+            <app-attendee-roster-table
+              [eventId]="eventId()!"
+              [canExport]="canExport()"
+            />
+          </div>
+
+          <!-- Activity feed — static scrollable log -->
+          <div class="space-y-3" data-testid="feed-section">
+            <p class="text-xs mono-label text-muted-foreground">Check-in log</p>
+            <div
+              class="rounded-xl border border-border/60 bg-card/60 p-4 max-h-64 overflow-y-auto"
+            >
+              <app-check-in-activity-feed [eventId]="eventId()!" />
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+  }
+</div>

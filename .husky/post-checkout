@@ -1,0 +1,35 @@
+#!/bin/sh
+
+# post-checkout: Auto-install dependencies in fresh worktrees.
+# Fired by git checkout ($3=1 branch, $3=0 file) and git worktree add ($3=1).
+
+# Skip file-only checkouts (e.g., git checkout -- somefile)
+[ "$3" = "0" ] && exit 0
+
+# If root node_modules exists, this isn't a fresh worktree — nothing to do.
+[ -d "node_modules" ] && exit 0
+
+echo ""
+echo "📦 Fresh worktree detected — installing dependencies..."
+echo ""
+
+pnpm install
+if [ -d "frontend" ]; then
+  (cd frontend && pnpm install)
+fi
+
+# Copy .env files from the main worktree (they're gitignored, so worktrees don't get them)
+MAIN_ROOT="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"
+MAIN_ROOT="${MAIN_ROOT%/.git}"
+
+if [ "$(pwd -P)" != "$MAIN_ROOT" ]; then
+  for envfile in .env.local .env.dev; do
+    if [ -f "$MAIN_ROOT/$envfile" ] && [ ! -f "$envfile" ]; then
+      cp "$MAIN_ROOT/$envfile" "$envfile"
+      echo "📋 Copied $envfile from main worktree"
+    fi
+  done
+fi
+
+echo ""
+echo "✅ Worktree dependencies installed."

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreExportsUsedInFile": true,
+  "entry": [
+    "convex/*.ts!",
+    "convex/*/*.ts!",
+    "convex/*/*/*.ts!",
+    "!convex/**/_impl/**!",
+    "!convex/lib/**!",
+    "!convex/testing/**!",
+    "!convex/migrations/**!",
+    "!convex/**/*.test.ts!"
+  ],
+  "project": [
+    "convex/**/*.ts!",
+    "!convex/**/*.test.ts!",
+    "!convex/_generated/**!",
+    "!convex/testing/**!",
+    "!convex/migrations/**!"
+  ]
+}

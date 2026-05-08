@@ -1,0 +1,33 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreExportsUsedInFile": true,
+  "entry": ["src/main.ts!", "functions/**/*.ts!"],
+  "project": [
+    "src/**/*.ts!",
+    "functions/**/*.ts!",
+    "!src/**/*.spec.ts!",
+    "!src/**/*.harness.ts!",
+    "!src/**/*.stories.ts!",
+    "!src/stories/**!",
+    "!src/test-setup.ts!",
+    "!src/testing/**!",
+    "!src/app/testing/**!"
+  ],
+  "ignoreFiles": [
+    "src/app/features/admin/components/reminders/reminders.component.ts",
+    "src/app/features/admin/models/admin-reminders.model.ts",
+    "src/app/features/admin/services/admin-reminders.service.ts",
+    "src/app/ui/components/primitives/status-badge/status-badge.component.ts",
+    "src/app/ui/components/primitives/status-badge/status-badge.variants.ts",
+    "src/app/ui/components/primitives/switch/switch.component.ts",
+    "src/app/ui/components/primitives/switch/switch.variants.ts",
+    "src/app/ui/components/primitives/tabs/tabs.component.ts",
+    "src/app/ui/components/primitives/tabs/tabs.variants.ts"
+  ],
+  "ignoreIssues": {
+    "src/app/ui/components/primitives/form-field/form-field.component.ts": [
+      "exports"
+    ]
+  },
+  "ignoreBinaries": ["tsx"]
+}

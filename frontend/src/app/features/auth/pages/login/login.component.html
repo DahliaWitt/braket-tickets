@@ -1,0 +1,755 @@
+<main
+  class="bg-waterfall ph-no-capture flex min-h-screen items-center justify-center bg-background p-4 selection:bg-primary selection:text-primary-foreground"
+>
+  <z-card
+    class="glass-panel animate-fade-in relative z-10 w-full max-w-md border-border shadow-lg transition-[opacity,transform] duration-300"
+  >
+    <div class="pb-2">
+      <div class="mb-2 flex items-center justify-between">
+        <a
+          routerLink="/"
+          aria-label="Return to home page"
+          class="inline-flex min-h-11 items-center gap-2 font-mono text-xs tracking-widest text-muted-foreground uppercase transition-colors hover:text-foreground"
+        >
+          <z-icon zType="arrow-left" class="h-3 w-3" /> Back
+        </a>
+        <span class="font-mono text-xs text-muted-foreground/80">AUTH</span>
+      </div>
+
+      <h1 class="sr-only">Authentication</h1>
+
+      @if (!isResetMode()) {
+        <div class="flex gap-4 border-b border-border pb-0" role="tablist">
+          <button
+            type="button"
+            id="tab-login"
+            role="tab"
+            [attr.aria-selected]="activeTab() === 'login'"
+            [attr.aria-controls]="'login-panel'"
+            [attr.tabindex]="activeTab() === 'login' ? 0 : -1"
+            (click)="switchTab('login')"
+            class="min-h-11 border-b-4 pb-2 font-display text-sm tracking-wider uppercase transition-colors"
+            [class.text-foreground]="activeTab() === 'login'"
+            [class.border-primary]="activeTab() === 'login'"
+            [class.text-muted-foreground]="activeTab() !== 'login'"
+            [class.border-transparent]="activeTab() !== 'login'"
+            [class.hover:text-foreground]="activeTab() !== 'login'"
+          >
+            Login
+          </button>
+          <button
+            type="button"
+            id="tab-register"
+            role="tab"
+            [attr.aria-selected]="activeTab() === 'register'"
+            [attr.aria-controls]="'register-panel'"
+            [attr.tabindex]="activeTab() === 'register' ? 0 : -1"
+            (click)="switchTab('register')"
+            class="min-h-11 border-b-4 pb-2 font-display text-sm tracking-wider uppercase transition-colors"
+            [class.text-foreground]="activeTab() === 'register'"
+            [class.border-primary]="activeTab() === 'register'"
+            [class.text-muted-foreground]="activeTab() !== 'register'"
+            [class.border-transparent]="activeTab() !== 'register'"
+            [class.hover:text-foreground]="activeTab() !== 'register'"
+          >
+            Register
+          </button>
+        </div>
+      } @else {
+        <h3 class="font-display tracking-wide text-foreground uppercase">
+          Reset Password
+        </h3>
+      }
+    </div>
+
+    <div class="space-y-6 pt-6">
+      <!-- LOGIN FORM -->
+      @if (activeTab() === 'login' && !isResetMode()) {
+        <div
+          id="login-panel"
+          data-testid="login-form"
+          class="ph-no-capture space-y-4"
+          role="tabpanel"
+          aria-labelledby="tab-login"
+          tabindex="-1"
+        >
+          @if (socialProviders.length > 0) {
+            @for (provider of socialProviders; track provider.provider) {
+              <button
+                [id]="provider.provider + '-login'"
+                z-button
+                type="button"
+                zType="outline"
+                (click)="loginWithProvider(provider.provider)"
+                [zDisabled]="loading()"
+                class="w-full border-border/80 font-mono text-xs tracking-widest text-foreground uppercase transition-colors hover:border-primary/40 hover:text-foreground"
+              >
+                @if (provider.provider === 'discord') {
+                  <z-icon
+                    zType="discord"
+                    class="mr-2 h-4 w-4"
+                    aria-hidden="true"
+                  />
+                } @else if (provider.provider === 'google') {
+                  <z-icon
+                    zType="google"
+                    class="mr-2 h-4 w-4"
+                    aria-hidden="true"
+                  />
+                }
+                Sign in with {{ provider.displayName }}
+              </button>
+            }
+          }
+
+          @if (socialProviders.length > 0) {
+            <div class="relative">
+              <div class="absolute inset-0 flex items-center">
+                <span class="w-full border-t border-border"></span>
+              </div>
+              <div class="relative flex justify-center text-xs uppercase">
+                <span class="bg-card px-2 font-mono text-muted-foreground"
+                  >OR USE EMAIL</span
+                >
+              </div>
+            </div>
+          }
+
+          <form
+            (submit)="onLogin(); $event.preventDefault()"
+            class="space-y-4"
+            novalidate
+          >
+            <div class="space-y-2">
+              <label z-form-label for="login-email">Email</label>
+              <input
+                id="login-email"
+                type="email"
+                zInput
+                autocomplete="email"
+                [formField]="loginForm.email"
+                placeholder="user@example.com"
+                class="font-sans"
+                [zStatus]="
+                  isFieldInvalid(loginForm.email, loginSubmitted())
+                    ? 'error'
+                    : undefined
+                "
+                [attr.aria-describedby]="
+                  isFieldInvalid(loginForm.email, loginSubmitted())
+                    ? 'login-email-error'
+                    : null
+                "
+              />
+              @if (isFieldInvalid(loginForm.email, loginSubmitted())) {
+                <div id="login-email-error" z-form-message zType="error">
+                  @if (hasError(loginForm.email, 'required')) {
+                    Email is required
+                  } @else if (hasError(loginForm.email, 'maxLength')) {
+                    Email must be 254 characters or fewer
+                  } @else {
+                    Please enter a valid email address
+                  }
+                </div>
+              }
+            </div>
+            <div class="space-y-2">
+              <div class="flex items-baseline justify-between">
+                <label z-form-label for="login-password">Password</label>
+                <button
+                  type="button"
+                  (click)="enterResetMode()"
+                  aria-label="Recover forgotten password"
+                  data-testid="forgot-password-btn"
+                  class="inline-flex items-center px-0 py-2 font-mono text-2xs tracking-widest text-primary uppercase hover:text-primary/80"
+                >
+                  Forgot?
+                </button>
+              </div>
+              <div class="relative">
+                <input
+                  id="login-password"
+                  [type]="loginPasswordVisible() ? 'text' : 'password'"
+                  zInput
+                  autocomplete="current-password"
+                  [formField]="loginForm.password"
+                  class="ph-no-capture pr-10 font-sans"
+                  [zStatus]="
+                    isFieldInvalid(loginForm.password, loginSubmitted())
+                      ? 'error'
+                      : undefined
+                  "
+                  [attr.aria-describedby]="
+                    isFieldInvalid(loginForm.password, loginSubmitted())
+                      ? 'login-password-error'
+                      : null
+                  "
+                />
+                <button
+                  type="button"
+                  (click)="loginPasswordVisible.set(!loginPasswordVisible())"
+                  class="absolute top-1/2 right-2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:ring-4 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
+                  [attr.aria-label]="
+                    loginPasswordVisible() ? 'Hide password' : 'Show password'
+                  "
+                >
+                  <z-icon
+                    [zType]="loginPasswordVisible() ? 'eye-off' : 'eye'"
+                    class="h-4 w-4"
+                  />
+                </button>
+              </div>
+              @if (isFieldInvalid(loginForm.password, loginSubmitted())) {
+                <div id="login-password-error" z-form-message zType="error">
+                  @if (hasError(loginForm.password, 'required')) {
+                    Password is required
+                  } @else if (hasError(loginForm.password, 'maxLength')) {
+                    Password must be 72 characters or fewer
+                  }
+                </div>
+              }
+            </div>
+
+            @if (message()) {
+              <div
+                id="auth-message"
+                role="status"
+                aria-live="polite"
+                class="border border-secondary/20 bg-secondary/10 p-3 font-mono text-xs text-secondary dark:text-secondary"
+              >
+                SUCCESS: {{ message() }}
+              </div>
+            }
+            @if (error()) {
+              <div
+                id="auth-error"
+                role="alert"
+                aria-live="assertive"
+                class="space-y-2 border border-destructive/20 bg-destructive/10 p-3 font-mono text-xs text-destructive"
+              >
+                <div>ERROR: {{ error() }}</div>
+                @if (isEmailVerificationError()) {
+                  <button
+                    type="button"
+                    (click)="resendVerificationEmail()"
+                    [disabled]="
+                      resendingVerification() ||
+                      loading() ||
+                      resendCooldown() > 0
+                    "
+                    class="inline-flex min-h-11 items-center font-mono text-2xs tracking-widest text-primary uppercase underline hover:text-primary/80 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    @if (resendingVerification()) {
+                      Sending...
+                    } @else if (resendCooldown() > 0) {
+                      Resend in {{ resendCooldown() }}s
+                    } @else {
+                      Resend verification email
+                    }
+                  </button>
+                }
+              </div>
+            }
+
+            <div class="pt-2">
+              <button
+                id="login-submit"
+                z-button
+                type="submit"
+                zType="default"
+                [zLoading]="loading()"
+                [zDisabled]="loading()"
+                class="focus-ring transition-smooth w-full bg-foreground font-display tracking-wider text-background uppercase hover:bg-foreground/90"
+                aria-label="Submit login form"
+              >
+                Log In
+              </button>
+            </div>
+          </form>
+        </div>
+      }
+
+      <!-- REGISTER FORM -->
+      @if (activeTab() === 'register' && !isResetMode()) {
+        <div
+          id="register-panel"
+          class="ph-no-capture space-y-4"
+          role="tabpanel"
+          aria-labelledby="tab-register"
+          tabindex="-1"
+        >
+          @if (socialProviders.length > 0) {
+            @for (provider of socialProviders; track provider.provider) {
+              <button
+                [id]="provider.provider + '-register'"
+                z-button
+                type="button"
+                zType="outline"
+                (click)="loginWithProvider(provider.provider)"
+                [zDisabled]="loading()"
+                class="w-full border-border/80 font-mono text-xs tracking-widest text-foreground uppercase transition-colors hover:border-primary/40 hover:text-foreground"
+              >
+                @if (provider.provider === 'discord') {
+                  <z-icon
+                    zType="discord"
+                    class="mr-2 h-4 w-4"
+                    aria-hidden="true"
+                  />
+                } @else if (provider.provider === 'google') {
+                  <z-icon
+                    zType="google"
+                    class="mr-2 h-4 w-4"
+                    aria-hidden="true"
+                  />
+                }
+                Sign up with {{ provider.displayName }}
+              </button>
+            }
+          }
+
+          @if (socialProviders.length > 0) {
+            <div class="relative">
+              <div class="absolute inset-0 flex items-center">
+                <span class="w-full border-t border-border"></span>
+              </div>
+              <div class="relative flex justify-center text-xs uppercase">
+                <span class="bg-card px-2 font-mono text-muted-foreground"
+                  >OR CREATE ACCOUNT</span
+                >
+              </div>
+            </div>
+          }
+
+          <form
+            (submit)="onRegister(); $event.preventDefault()"
+            class="ph-no-capture space-y-4"
+            novalidate
+          >
+            <div class="space-y-2">
+              <div class="flex items-center gap-1 leading-none">
+                <label z-form-label for="register-name">Name</label>
+                <button
+                  type="button"
+                  class="flex min-h-11 min-w-11 cursor-help items-center justify-center self-center rounded-sm text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  zTooltip="First name only is okay. Please use your preferred name."
+                  zPosition="top"
+                  aria-label="More information about name requirements"
+                >
+                  <z-icon zType="info" class="block h-3 w-3" />
+                </button>
+              </div>
+              <input
+                id="register-name"
+                type="text"
+                zInput
+                autocomplete="name"
+                [formField]="registerForm.name"
+                placeholder="Your name"
+                class="font-sans"
+                [zStatus]="
+                  isFieldInvalid(registerForm.name, registerSubmitted())
+                    ? 'error'
+                    : undefined
+                "
+                [attr.aria-describedby]="
+                  isFieldInvalid(registerForm.name, registerSubmitted())
+                    ? 'register-name-error'
+                    : null
+                "
+              />
+              @if (isFieldInvalid(registerForm.name, registerSubmitted())) {
+                <div id="register-name-error" z-form-message zType="error">
+                  @if (hasError(registerForm.name, 'required')) {
+                    Name is required
+                  } @else if (hasError(registerForm.name, 'minLength')) {
+                    Must be at least 2 characters
+                  } @else if (hasError(registerForm.name, 'maxLength')) {
+                    Name must be 100 characters or fewer
+                  } @else {
+                    Name is invalid
+                  }
+                </div>
+              }
+            </div>
+            <div class="space-y-2">
+              <label z-form-label for="register-email">Email</label>
+              <input
+                id="register-email"
+                type="email"
+                zInput
+                autocomplete="email"
+                [formField]="registerForm.email"
+                placeholder="user@example.com"
+                class="font-sans"
+                [zStatus]="
+                  isFieldInvalid(registerForm.email, registerSubmitted())
+                    ? 'error'
+                    : undefined
+                "
+                [attr.aria-describedby]="
+                  isFieldInvalid(registerForm.email, registerSubmitted())
+                    ? 'register-email-error'
+                    : null
+                "
+              />
+              @if (isFieldInvalid(registerForm.email, registerSubmitted())) {
+                <div id="register-email-error" z-form-message zType="error">
+                  @if (hasError(registerForm.email, 'required')) {
+                    Email is required
+                  } @else if (hasError(registerForm.email, 'maxLength')) {
+                    Email must be 254 characters or fewer
+                  } @else {
+                    Please enter a valid email address
+                  }
+                </div>
+              }
+            </div>
+            <div class="space-y-2">
+              <label z-form-label for="register-password">Password</label>
+              <div class="relative">
+                <input
+                  id="register-password"
+                  [type]="registerPasswordVisible() ? 'text' : 'password'"
+                  zInput
+                  autocomplete="new-password"
+                  [formField]="registerForm.password"
+                  class="ph-no-capture pr-10 font-sans"
+                  [zStatus]="
+                    isFieldInvalid(registerForm.password, registerSubmitted())
+                      ? 'error'
+                      : undefined
+                  "
+                  [attr.aria-describedby]="
+                    isFieldInvalid(registerForm.password, registerSubmitted())
+                      ? 'register-password-error'
+                      : null
+                  "
+                />
+                <button
+                  type="button"
+                  (click)="
+                    registerPasswordVisible.set(!registerPasswordVisible())
+                  "
+                  class="absolute top-1/2 right-2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:ring-4 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
+                  [attr.aria-label]="
+                    registerPasswordVisible()
+                      ? 'Hide password'
+                      : 'Show password'
+                  "
+                >
+                  <z-icon
+                    [zType]="registerPasswordVisible() ? 'eye-off' : 'eye'"
+                    class="h-4 w-4"
+                  />
+                </button>
+              </div>
+              @if (isFieldInvalid(registerForm.password, registerSubmitted())) {
+                <div id="register-password-error" z-form-message zType="error">
+                  @if (hasError(registerForm.password, 'required')) {
+                    Password is required
+                  } @else if (hasError(registerForm.password, 'minLength')) {
+                    Must be at least 8 characters
+                  } @else if (hasError(registerForm.password, 'maxLength')) {
+                    Password must be 72 characters or fewer
+                  } @else {
+                    Password is invalid
+                  }
+                </div>
+              }
+            </div>
+            <div class="space-y-2">
+              <label z-form-label for="register-password-confirm"
+                >Confirm Password</label
+              >
+              <div class="relative">
+                <input
+                  id="register-password-confirm"
+                  [type]="
+                    registerConfirmPasswordVisible() ? 'text' : 'password'
+                  "
+                  zInput
+                  autocomplete="new-password"
+                  [formField]="registerForm.passwordConfirm"
+                  class="ph-no-capture pr-10 font-sans"
+                  [zStatus]="
+                    isFieldInvalid(
+                      registerForm.passwordConfirm,
+                      registerSubmitted()
+                    ) ||
+                    (registerPasswordsMismatch() && registerSubmitted())
+                      ? 'error'
+                      : undefined
+                  "
+                  [attr.aria-describedby]="
+                    isFieldInvalid(
+                      registerForm.passwordConfirm,
+                      registerSubmitted()
+                    ) ||
+                    (registerPasswordsMismatch() && registerSubmitted())
+                      ? 'register-password-confirm-error'
+                      : null
+                  "
+                />
+                <button
+                  type="button"
+                  (click)="
+                    registerConfirmPasswordVisible.set(
+                      !registerConfirmPasswordVisible()
+                    )
+                  "
+                  class="absolute top-1/2 right-2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:ring-4 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
+                  [attr.aria-label]="
+                    registerConfirmPasswordVisible()
+                      ? 'Hide password'
+                      : 'Show password'
+                  "
+                >
+                  <z-icon
+                    [zType]="
+                      registerConfirmPasswordVisible() ? 'eye-off' : 'eye'
+                    "
+                    class="h-4 w-4"
+                  />
+                </button>
+              </div>
+              @if (
+                isFieldInvalid(
+                  registerForm.passwordConfirm,
+                  registerSubmitted()
+                ) ||
+                (registerPasswordsMismatch() && registerSubmitted())
+              ) {
+                <div
+                  id="register-password-confirm-error"
+                  z-form-message
+                  zType="error"
+                >
+                  @if (hasError(registerForm.passwordConfirm, 'required')) {
+                    Please confirm your password
+                  } @else if (
+                    hasError(registerForm.passwordConfirm, 'maxLength')
+                  ) {
+                    Password must be 72 characters or fewer
+                  } @else if (registerPasswordsMismatch()) {
+                    Passwords do not match
+                  } @else {
+                    Confirmation is invalid
+                  }
+                </div>
+              }
+            </div>
+
+            <div class="flex items-start gap-3 pt-2">
+              <input
+                id="register-terms"
+                type="checkbox"
+                [formField]="registerForm.termsAccepted"
+                class="mt-0.5 h-6 w-6 rounded border-muted-foreground bg-background text-primary focus:ring-primary focus:ring-offset-background"
+                [attr.aria-describedby]="
+                  registerSubmitted() && !registerModel().termsAccepted
+                    ? 'register-terms-error'
+                    : null
+                "
+              />
+              <label
+                for="register-terms"
+                class="cursor-pointer font-sans text-sm leading-relaxed text-muted-foreground"
+              >
+                I agree to the
+                <a
+                  routerLink="/terms"
+                  class="text-primary hover:underline"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  >Terms of Service</a
+                >
+                and
+                <a
+                  routerLink="/privacy"
+                  class="text-primary hover:underline"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  >Privacy Policy</a
+                >
+              </label>
+            </div>
+            @if (registerSubmitted() && !registerModel().termsAccepted) {
+              <div id="register-terms-error" z-form-message zType="error">
+                Please accept the terms to join the community
+              </div>
+            }
+
+            @if (message()) {
+              <div
+                id="auth-message"
+                role="status"
+                aria-live="polite"
+                class="space-y-2 border border-secondary/20 bg-secondary/10 p-3 font-mono text-xs text-secondary dark:text-secondary"
+              >
+                <div>SUCCESS: {{ message() }}</div>
+                @if (isEmailVerificationError()) {
+                  <button
+                    type="button"
+                    (click)="resendVerificationEmail()"
+                    [disabled]="
+                      resendingVerification() ||
+                      loading() ||
+                      resendCooldown() > 0
+                    "
+                    class="inline-flex min-h-11 items-center font-mono text-2xs tracking-widest text-primary uppercase underline hover:text-primary/80 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    @if (resendingVerification()) {
+                      Sending...
+                    } @else if (resendCooldown() > 0) {
+                      Resend in {{ resendCooldown() }}s
+                    } @else {
+                      Resend verification email
+                    }
+                  </button>
+                }
+              </div>
+            }
+            @if (error()) {
+              <div
+                id="auth-error"
+                role="alert"
+                aria-live="assertive"
+                class="border border-destructive/20 bg-destructive/10 p-3 font-mono text-xs text-destructive"
+              >
+                ERROR: {{ error() }}
+              </div>
+            }
+
+            <div class="pt-2">
+              <button
+                id="register-submit"
+                z-button
+                type="submit"
+                zType="default"
+                [zLoading]="loading()"
+                [zDisabled]="loading()"
+                class="focus-ring transition-smooth w-full border-none bg-primary font-display tracking-wider uppercase shadow-[0_0_15px_-3px_hsl(var(--primary)/0.4)] hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="Submit registration form"
+              >
+                Sign Up
+              </button>
+            </div>
+          </form>
+        </div>
+      }
+
+      <!-- RESET FORM -->
+      @if (isResetMode()) {
+        @if (resetEmailSent()) {
+          <div
+            id="reset-success"
+            role="status"
+            aria-live="polite"
+            class="ph-no-capture space-y-4"
+            data-testid="reset-success-state"
+          >
+            <div
+              class="border border-secondary/20 bg-secondary/10 p-4 font-mono text-xs text-secondary dark:text-secondary"
+            >
+              SUCCESS: {{ message() }}
+            </div>
+            <button
+              z-button
+              type="button"
+              zType="outline"
+              (click)="exitResetMode()"
+              class="w-full font-mono text-xs tracking-widest uppercase"
+            >
+              Back to login
+            </button>
+          </div>
+        } @else {
+          <form
+            (submit)="onReset(); $event.preventDefault()"
+            class="ph-no-capture space-y-4"
+            novalidate
+          >
+            <p class="font-sans text-sm text-card-foreground">
+              Enter your email address and we'll send you a link to reset your
+              password.
+            </p>
+
+            <div class="space-y-2">
+              <label z-form-label for="reset-email">Email</label>
+              <input
+                id="reset-email"
+                type="email"
+                zInput
+                [formField]="resetForm.email"
+                placeholder="user@example.com"
+                class="font-sans"
+                (blur)="resetEmailBlurred.set(true)"
+                [zStatus]="resetEmailInvalid() ? 'error' : undefined"
+                [attr.aria-describedby]="
+                  resetEmailInvalid() ? 'reset-email-error' : null
+                "
+              />
+              @if (resetEmailInvalid()) {
+                <div id="reset-email-error" z-form-message zType="error">
+                  @if (hasError(resetForm.email, 'required')) {
+                    Email is required
+                  } @else if (hasError(resetForm.email, 'maxLength')) {
+                    Email must be 254 characters or fewer
+                  } @else {
+                    Enter a valid email address.
+                  }
+                </div>
+              }
+            </div>
+
+            @if (message()) {
+              <div
+                id="auth-message"
+                role="status"
+                aria-live="polite"
+                class="border border-secondary/20 bg-secondary/10 p-3 font-mono text-xs text-secondary dark:text-secondary"
+              >
+                SUCCESS: {{ message() }}
+              </div>
+            }
+            @if (error()) {
+              <div
+                id="auth-error"
+                role="alert"
+                aria-live="assertive"
+                class="border border-destructive/20 bg-destructive/10 p-3 font-mono text-xs text-destructive"
+              >
+                ERROR: {{ error() }}
+              </div>
+            }
+
+            <div class="flex gap-3 pt-2">
+              <button
+                z-button
+                type="button"
+                zType="outline"
+                (click)="exitResetMode()"
+                [zDisabled]="loading()"
+                class="flex-1 font-mono text-xs tracking-widest uppercase"
+              >
+                Cancel
+              </button>
+              <button
+                id="reset-submit"
+                z-button
+                type="submit"
+                zType="default"
+                [zLoading]="loading()"
+                [zDisabled]="resetSubmitDisabled()"
+                class="focus-ring transition-smooth flex-1 bg-foreground font-display tracking-wider text-background uppercase hover:bg-foreground/90"
+                aria-label="Send password reset link"
+              >
+                Send Link
+              </button>
+            </div>
+          </form>
+        }
+      }
+    </div>
+  </z-card>
+</main>

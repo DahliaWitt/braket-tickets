@@ -1,0 +1,637 @@
+<!-- Force dark mode so theme tokens resolve to dark-mode values; light mode is not supported on this page -->
+<div
+  class="dark ph-no-capture flex min-h-screen flex-col bg-background font-mono text-foreground selection:bg-primary selection:text-primary-foreground"
+  style="
+    --background: 320 15% 4%;
+    --foreground: 0 0% 96%;
+    --input: 320 8% 20%;
+    --border: 320 8% 20%;
+    --muted-foreground: 320 6% 65%;
+    --color-background: hsl(320 15% 4%);
+    --color-foreground: hsl(0 0% 96%);
+    --color-input: hsl(320 8% 20%);
+    --color-border: hsl(320 8% 20%);
+    --color-muted-foreground: hsl(320 6% 65%);
+    color: #f5f5f5;
+    background-color: #0c090b;
+  "
+>
+  <!-- Header -->
+  <header
+    class="flex items-center justify-between border-b border-border p-6 md:p-12"
+  >
+    <h1
+      class="font-display text-2xl font-bold tracking-tight text-foreground uppercase sm:text-3xl lg:text-4xl"
+    >
+      Community Vetting
+    </h1>
+  </header>
+
+  <main
+    [class]="
+      submissionComplete() ||
+      isExistingApplicationGateLoading() ||
+      existingApplicationGateErrorMessage() ||
+      existingApplication()?.status === 'pending' ||
+      existingApplication()?.status === 'approved'
+        ? 'flex grow items-center justify-center p-6 md:p-12'
+        : 'mx-auto w-full max-w-3xl grow p-6 md:p-12'
+    "
+  >
+    <!-- Success State - shown after submission -->
+    @if (submissionComplete()) {
+      <div
+        class="animate-in fade-in zoom-in flex w-full max-w-xl flex-col items-center justify-center text-center duration-500"
+        role="alert"
+        aria-live="assertive"
+      >
+        <div
+          class="animate-in fade-in zoom-in mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-success/20 duration-500"
+        >
+          <svg
+            class="h-10 w-10 text-success"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M5 13l4 4L19 7"
+            />
+          </svg>
+        </div>
+        <h2
+          class="mb-4 font-display text-2xl font-bold tracking-tight text-success uppercase md:text-3xl"
+        >
+          application sent
+        </h2>
+        <p class="mb-6 font-sans text-lg text-muted-foreground">
+          we'll get back to you soon
+        </p>
+        <p class="flex items-center gap-2 text-sm text-muted-foreground">
+          <span
+            class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent"
+          ></span>
+          Redirecting to home...
+        </p>
+      </div>
+    } @else if (isExistingApplicationGateLoading()) {
+      <div
+        class="w-full max-w-xl space-y-6"
+        data-testid="vetting-gate-loading-state"
+        role="status"
+        aria-live="polite"
+      >
+        <span class="sr-only">Checking your application status...</span>
+        <div class="space-y-3">
+          <z-skeleton class="h-10 w-2/3" />
+          <z-skeleton class="h-5 w-full" />
+          <z-skeleton class="h-5 w-5/6" />
+        </div>
+        <div class="space-y-4">
+          @for (i of [1, 2, 3]; track i) {
+            <div class="space-y-3">
+              <z-skeleton class="h-4 w-1/3" />
+              <z-skeleton class="h-12 w-full rounded-md" />
+            </div>
+          }
+        </div>
+      </div>
+    } @else if (existingApplicationGateErrorMessage()) {
+      <div
+        class="animate-in fade-in zoom-in flex w-full max-w-xl flex-col items-center justify-center text-center duration-500"
+        data-testid="vetting-gate-error-state"
+        role="alert"
+        aria-live="assertive"
+      >
+        <div
+          class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-destructive/10"
+        >
+          <svg
+            class="h-10 w-10 text-destructive"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 9v2m0 4h.01M5.07 19h13.86a2 2 0 001.72-3L13.72 5a2 2 0 00-3.44 0L3.35 16a2 2 0 001.72 3z"
+            />
+          </svg>
+        </div>
+        <h2
+          class="mb-4 font-display text-2xl font-bold tracking-tight text-destructive uppercase md:text-3xl"
+        >
+          status unavailable
+        </h2>
+        <p class="mb-8 font-sans text-lg text-muted-foreground">
+          {{ existingApplicationGateErrorMessage() }}
+        </p>
+        <a
+          routerLink="/"
+          class="font-mono text-sm tracking-widest text-muted-foreground uppercase transition-colors hover:text-foreground"
+        >
+          ← Back to Home
+        </a>
+      </div>
+    } @else if (existingApplication()?.status === 'pending') {
+      <!-- Existing pending application -->
+      <div
+        class="animate-in fade-in zoom-in flex w-full max-w-xl flex-col items-center justify-center text-center duration-500"
+        data-testid="vetting-pending-state"
+      >
+        <div
+          class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-warning/20"
+        >
+          <svg
+            class="h-10 w-10 text-warning"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+        </div>
+        <h2
+          class="mb-4 font-display text-2xl font-bold tracking-tight text-warning uppercase md:text-3xl"
+        >
+          still in the queue
+        </h2>
+        <p class="mb-8 font-sans text-lg text-muted-foreground">
+          your application is being reviewed — we'll reach out when there's an
+          update
+        </p>
+        <a
+          routerLink="/"
+          class="font-mono text-sm tracking-widest text-muted-foreground uppercase transition-colors hover:text-foreground"
+        >
+          ← Back to Home
+        </a>
+      </div>
+    } @else if (existingApplication()?.status === 'approved') {
+      <!-- Already approved -->
+      <div
+        class="animate-in fade-in zoom-in flex w-full max-w-xl flex-col items-center justify-center text-center duration-500"
+        data-testid="vetting-approved-state"
+      >
+        <div
+          class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-success/20"
+        >
+          <svg
+            class="h-10 w-10 text-success"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M5 13l4 4L19 7"
+            />
+          </svg>
+        </div>
+        <h2
+          class="mb-4 font-display text-2xl font-bold tracking-tight text-success uppercase md:text-3xl"
+        >
+          you're already in
+        </h2>
+        <p class="mb-8 font-sans text-lg text-muted-foreground">
+          head to your dashboard to find events and get tickets
+        </p>
+        <a
+          routerLink="/"
+          class="font-mono text-sm tracking-widest text-muted-foreground uppercase transition-colors hover:text-foreground"
+        >
+          ← Back to Home
+        </a>
+      </div>
+    } @else {
+      @if (existingApplication()?.status === 'rejected') {
+        <div
+          class="animate-in fade-in zoom-in mb-8 w-full max-w-xl rounded-none border border-destructive/30 bg-destructive/10 p-6 text-center duration-500"
+          data-testid="vetting-rejected-state"
+          role="status"
+          aria-live="polite"
+        >
+          <div class="mb-4 flex items-center justify-center">
+            <svg
+              class="h-10 w-10 text-destructive"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 9v2m0 4h.01M5.07 19h13.86a2 2 0 001.72-3L13.72 5a2 2 0 00-3.44 0L3.35 16a2 2 0 001.72 3z"
+              />
+            </svg>
+          </div>
+          <h2
+            class="mb-3 font-display text-2xl font-bold tracking-tight text-destructive uppercase md:text-3xl"
+          >
+            your application was not accepted
+          </h2>
+          <p class="font-sans text-base text-muted-foreground md:text-lg">
+            You may revise your answers and re-submit below.
+          </p>
+          @if (rejectionReason()) {
+            <p
+              class="mt-4 font-sans text-sm text-muted-foreground"
+              data-testid="vetting-rejected-state-reason"
+            >
+              Reason: {{ rejectionReason() }}
+            </p>
+          }
+        </div>
+      }
+
+      @if (applicationUnavailable()) {
+        <div
+          class="animate-in fade-in zoom-in flex w-full max-w-xl flex-col items-center justify-center text-center duration-500"
+          data-testid="vetting-unavailable-state"
+          role="status"
+          aria-live="polite"
+        >
+          <div
+            class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-muted/50"
+          >
+            <svg
+              class="h-10 w-10 text-muted-foreground"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M18.364 5.636l-12.728 12.728M6 6l12 12"
+              />
+            </svg>
+          </div>
+          <h2
+            class="mb-4 font-display text-2xl font-bold tracking-tight text-foreground uppercase md:text-3xl"
+          >
+            applications unavailable
+          </h2>
+          <p class="mb-8 font-sans text-lg text-muted-foreground">
+            {{ unavailableMessage() }}
+          </p>
+          <a
+            routerLink="/"
+            class="font-mono text-sm tracking-widest text-muted-foreground uppercase transition-colors hover:text-foreground"
+          >
+            ← Back to Home
+          </a>
+        </div>
+      } @else {
+        <p
+          class="mb-12 font-sans text-xl leading-relaxed text-muted-foreground md:text-2xl"
+        >
+          To keep our space safe (and cool), we need to know you're not a cop or
+          a jerk.
+          <br /><br />
+          Please answer honestly.
+        </p>
+
+        <form
+          (submit)="onSubmit($event)"
+          (input)="onFormInput()"
+          (change)="onFormInput()"
+          class="space-y-8"
+        >
+          <div aria-live="polite" aria-atomic="true">
+            @if (isLoading()) {
+              <span class="sr-only">Loading vetting questions...</span>
+              <div class="animate-pulse space-y-12" aria-hidden="true">
+                @for (i of [1, 2, 3]; track i) {
+                  <div class="space-y-4">
+                    <z-skeleton class="h-4 w-1/3" />
+                    <z-skeleton class="h-12 w-full rounded-md" />
+                  </div>
+                }
+              </div>
+            }
+          </div>
+          @if (!isLoading() && vettingForm()) {
+            @for (q of questions(); track q.id; let i = $index) {
+              @let field = getField(q.id);
+              <fieldset
+                class="mb-8 space-y-4 border-none p-0"
+                [attr.aria-required]="q.required"
+              >
+                <legend
+                  class="mb-2 block text-sm tracking-widest text-foreground uppercase"
+                >
+                  {{ q.label }}
+                  @if (q.required) {
+                    <span class="ml-1 text-destructive" aria-hidden="true"
+                      >*</span
+                    >
+                    <span class="sr-only">(required)</span>
+                  }
+                </legend>
+
+                @if (field) {
+                  @if (q.type === 'long_text' || q.type === 'paragraph') {
+                    <textarea
+                      [id]="q.id"
+                      [formField]="asStringField(field)!"
+                      rows="3"
+                      zInput
+                      [zStatus]="
+                        isFieldInvalid(field, false) ? 'error' : undefined
+                      "
+                      [placeholder]="q.placeholder || ''"
+                      class="resize-none border-border bg-input text-foreground placeholder:text-muted-foreground"
+                      [attr.aria-label]="q.label"
+                      [attr.aria-required]="q.required"
+                      [attr.maxlength]="MAX_ANSWER_STRING_LENGTH"
+                    ></textarea>
+                  } @else if (q.type === 'boolean') {
+                    <fieldset
+                      role="group"
+                      [attr.aria-required]="q.required"
+                      [attr.aria-describedby]="
+                        isFieldInvalid(field, false)
+                          ? q.id +
+                            '-required-error ' +
+                            q.id +
+                            '-minlength-error'
+                          : null
+                      "
+                      class="m-0 border-none p-0"
+                    >
+                      <legend class="sr-only">{{ q.label }}</legend>
+                      <div class="flex gap-6">
+                        <label
+                          [for]="q.id + '-yes'"
+                          [attr.data-testid]="q.id + '-yes-label'"
+                          class="group flex min-h-11 cursor-pointer items-center gap-2"
+                        >
+                          <input
+                            type="radio"
+                            [id]="q.id + '-yes'"
+                            [attr.name]="q.id + '-answer'"
+                            [checked]="isRadioSelected(field, 'true')"
+                            (change)="onRadioChange(q.id, 'true', $event)"
+                            value="true"
+                            [attr.data-testid]="q.id + '-yes-radio'"
+                            class="h-5 w-5 border-border bg-input text-primary focus:ring-primary/50"
+                          />
+                          <span
+                            class="text-foreground transition-colors group-hover:text-foreground"
+                            >Yes</span
+                          >
+                        </label>
+                        <label
+                          [for]="q.id + '-no'"
+                          [attr.data-testid]="q.id + '-no-label'"
+                          class="group flex min-h-11 cursor-pointer items-center gap-2"
+                        >
+                          <input
+                            type="radio"
+                            [id]="q.id + '-no'"
+                            [attr.name]="q.id + '-answer'"
+                            [checked]="isRadioSelected(field, 'false')"
+                            (change)="onRadioChange(q.id, 'false', $event)"
+                            value="false"
+                            [attr.data-testid]="q.id + '-no-radio'"
+                            class="h-5 w-5 border-border bg-input text-primary focus:ring-primary/50"
+                          />
+                          <span
+                            class="text-foreground transition-colors group-hover:text-foreground"
+                            >No</span
+                          >
+                        </label>
+                      </div>
+                    </fieldset>
+                  } @else if (q.type === 'select') {
+                    <label [for]="q.id" class="sr-only">{{ q.label }}</label>
+                    <select
+                      zInput
+                      [id]="q.id"
+                      [formField]="asStringField(field)!"
+                      class="native-select h-12 w-full px-4 text-sm text-foreground"
+                      style="
+                        color: #f5f5f5;
+                        background-color: #241f22;
+                        border-color: #443842;
+                      "
+                      [attr.aria-label]="q.label"
+                      [attr.aria-required]="q.required"
+                      [attr.aria-describedby]="
+                        isFieldInvalid(field, false)
+                          ? q.id +
+                            '-required-error ' +
+                            q.id +
+                            '-minlength-error'
+                          : null
+                      "
+                    >
+                      <option value="">Select an option</option>
+                      @for (opt of q.options; track opt) {
+                        <option [value]="opt">{{ opt }}</option>
+                      }
+                    </select>
+                  } @else if (q.type === 'checkbox') {
+                    <div class="space-y-3">
+                      @for (opt of q.options; track opt; let j = $index) {
+                        <label
+                          [for]="q.id + '-' + j"
+                          class="group flex cursor-pointer items-center gap-3"
+                        >
+                          <input
+                            type="checkbox"
+                            [id]="q.id + '-' + j"
+                            [value]="opt"
+                            [checked]="isCheckboxSelected(field, opt)"
+                            (change)="onCheckboxChange(q.id, opt, $event)"
+                            class="h-5 w-5 rounded border-border bg-input text-primary focus:ring-primary/50"
+                            [attr.aria-describedby]="
+                              isFieldInvalid(field, false)
+                                ? q.id +
+                                  '-required-error ' +
+                                  q.id +
+                                  '-minlength-error'
+                                : null
+                            "
+                          />
+                          <span
+                            class="text-foreground transition-colors group-hover:text-foreground"
+                            >{{ opt }}</span
+                          >
+                        </label>
+                      }
+                    </div>
+                  } @else {
+                    <label [for]="q.id" class="sr-only">{{ q.label }}</label>
+                    <input
+                      type="text"
+                      [id]="q.id"
+                      [formField]="asStringField(field)!"
+                      zInput
+                      [zStatus]="
+                        isFieldInvalid(field, false) ? 'error' : undefined
+                      "
+                      class="border-border bg-input text-foreground placeholder:text-muted-foreground"
+                      [placeholder]="q.placeholder || ''"
+                      [attr.aria-label]="q.label"
+                      [attr.aria-required]="q.required"
+                      [attr.maxlength]="MAX_ANSWER_STRING_LENGTH"
+                    />
+                  }
+                }
+
+                @if (
+                  field &&
+                  isFieldInvalid(field, false) &&
+                  hasError(field, 'required')
+                ) {
+                  <p
+                    class="pt-1 text-xs text-destructive uppercase"
+                    [id]="q.id + '-required-error'"
+                  >
+                    This field is required
+                  </p>
+                }
+                @if (
+                  field &&
+                  isFieldInvalid(field, false) &&
+                  hasError(field, 'minLength')
+                ) {
+                  <p
+                    class="pt-1 text-xs text-destructive uppercase"
+                    [id]="q.id + '-minlength-error'"
+                  >
+                    Tell us a bit more (min {{ q.minLength }} chars)
+                  </p>
+                }
+                @if (
+                  field &&
+                  isFieldInvalid(field, false) &&
+                  hasError(field, 'maxLength')
+                ) {
+                  <p
+                    class="pt-1 text-xs text-destructive uppercase"
+                    [id]="q.id + '-maxlength-error'"
+                  >
+                    Answer must be
+                    {{ MAX_ANSWER_STRING_LENGTH.toLocaleString() }} characters
+                    or fewer
+                  </p>
+                }
+              </fieldset>
+            }
+          }
+
+          <!-- Conduct -->
+          @if (vettingForm() && hasCodeOfConduct()) {
+            @let conductField = getField('conduct');
+            @if (conductField) {
+              <div class="space-y-2" data-testid="conduct-agreement">
+                <label class="flex cursor-pointer items-start gap-3">
+                  <input
+                    type="checkbox"
+                    data-testid="conduct-checkbox"
+                    [formField]="asBoolField(conductField)!"
+                    [attr.aria-describedby]="
+                      isFieldInvalid(conductField, false)
+                        ? 'conduct-error'
+                        : null
+                    "
+                    class="mt-0.5 h-5 w-5 shrink-0 cursor-pointer rounded border-border bg-muted accent-primary"
+                  />
+                  <span
+                    class="block font-sans text-sm leading-tight text-foreground select-none md:text-base"
+                  >
+                    I agree to the
+                    <button
+                      type="button"
+                      data-testid="code-of-conduct-button"
+                      class="cursor-pointer text-primary underline hover:text-primary/80"
+                      (click)="showCodeOfConduct(); $event.stopPropagation()"
+                    >
+                      Code of Conduct
+                    </button>
+                    and understand consent is mandatory and zero-tolerance.
+                  </span>
+                </label>
+                @if (isFieldInvalid(conductField, false)) {
+                  <p
+                    class="mt-2 ml-8 text-xs text-destructive uppercase"
+                    id="conduct-error"
+                  >
+                    You must agree to continue
+                  </p>
+                }
+              </div>
+            }
+          }
+
+          @if (errorMsg()) {
+            <div
+              class="border border-destructive/50 bg-destructive/10 p-4 text-sm tracking-widest text-destructive uppercase"
+              id="form-error"
+              role="alert"
+              aria-live="assertive"
+            >
+              {{ errorMsg() }}
+            </div>
+          }
+
+          <div>
+            <button
+              z-button
+              id="submit-btn"
+              zType="ghost"
+              zSize="lg"
+              type="submit"
+              [zLoading]="isSubmitting()"
+              [zDisabled]="
+                isSubmitting() ||
+                isLoading() ||
+                !vettingForm() ||
+                vettingForm()!().invalid()
+              "
+              class="transition-smooth focus-ring w-full rounded-none border-2 border-foreground px-10 py-4 text-xl tracking-widest uppercase hover:bg-foreground hover:text-background disabled:cursor-not-allowed disabled:opacity-50 md:w-auto"
+              [attr.aria-label]="
+                isSubmitting()
+                  ? 'Submitting application...'
+                  : isRejected()
+                    ? 'Re-submit vetting application'
+                    : 'Submit vetting application'
+              "
+            >
+              {{
+                isSubmitting()
+                  ? 'Submitting...'
+                  : isRejected()
+                    ? 'Re-submit Application'
+                    : 'Submit Application'
+              }}
+            </button>
+          </div>
+        </form>
+      }
+    }
+  </main>
+</div>
