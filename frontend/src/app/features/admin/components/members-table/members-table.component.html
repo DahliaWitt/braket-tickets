@@ -224,6 +224,9 @@
                     zType="default"
                     [zFull]="true"
                     (click)="updateAppStatus(member, 'approved')"
+                    [attr.aria-label]="
+                      'Approve application for ' + memberActionLabel(member)
+                    "
                     class="bg-success hover:bg-success/90 text-success-foreground border-none shadow-[0_0_15px_-3px_hsl(var(--success)/0.4)]"
                   >
                     APPROVE
