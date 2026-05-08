@@ -19,7 +19,7 @@ permissions:
 jobs:
   lint:
     name: Lint + Typecheck (ESLint + tsc)
-    runs-on: self-hosted
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'self-hosted' }}
     timeout-minutes: 10
     environment: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' && 'production' || github.event_name == 'pull_request' && github.base_ref == 'develop' && 'development' || github.ref_name == 'main' && 'production' || 'development' }}
     env:
@@ -28,12 +28,21 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Setup pnpm
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork
+        uses: pnpm/action-setup@c336a2788d9774dccfdeb4823a5058ccc9f07453 # v4.3.0
+      - name: Setup Node.js
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
       - name: Install root dependencies
         run: pnpm install --frozen-lockfile
       - name: Install frontend dependencies
         working-directory: ./frontend
         run: pnpm install --frozen-lockfile
       - name: Check Convex generated files are fresh
+        if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
         run: pnpm check:convex-generated
       - name: Lint (root eslint + convex eslint + angular-eslint rules + ifttt-lint)
         env:
@@ -48,7 +57,7 @@ jobs:
 
   test:
     name: Unit Tests
-    runs-on: self-hosted
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'self-hosted' }}
     timeout-minutes: 10
     environment: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' && 'production' || github.event_name == 'pull_request' && github.base_ref == 'develop' && 'development' || github.ref_name == 'main' && 'production' || 'development' }}
     env:
@@ -56,6 +65,14 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Setup pnpm
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork
+        uses: pnpm/action-setup@c336a2788d9774dccfdeb4823a5058ccc9f07453 # v4.3.0
+      - name: Setup Node.js
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
       - name: Install root dependencies
         run: pnpm install --frozen-lockfile
       - name: Install frontend dependencies
@@ -112,6 +129,7 @@ jobs:
 
   stripe-contracts:
     name: Stripe Sandbox Contracts
+    if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
     runs-on: self-hosted
     timeout-minutes: 12
     needs: [lint]
@@ -135,12 +153,20 @@ jobs:
 
   build:
     name: Build Frontend
-    runs-on: self-hosted
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'self-hosted' }}
     timeout-minutes: 10
     environment: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' && 'production' || github.event_name == 'pull_request' && github.base_ref == 'develop' && 'development' || github.ref_name == 'main' && 'production' || 'development' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Setup pnpm
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork
+        uses: pnpm/action-setup@c336a2788d9774dccfdeb4823a5058ccc9f07453 # v4.3.0
+      - name: Setup Node.js
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
       - name: Install root dependencies
         run: pnpm install --frozen-lockfile
       - name: Install frontend dependencies
@@ -192,6 +218,7 @@ jobs:
 
   e2e-check:
     name: E2E Gate
+    if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
     runs-on: self-hosted
     timeout-minutes: 5
     needs: [lint, test, build]
@@ -212,7 +239,7 @@ jobs:
     runs-on: self-hosted
     timeout-minutes: 15
     needs: [e2e-check]
-    if: needs.e2e-check.outputs.should_run == 'true'
+    if: ${{ needs.e2e-check.outputs.should_run == 'true' && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
     # Never expose production environment secrets to pull_request workflows.
     # PR E2E runs always use development secrets; production is only for direct main pushes.
     environment: ${{ github.event_name == 'pull_request' && 'development' || github.ref_name == 'main' && 'production' || 'development' }}
