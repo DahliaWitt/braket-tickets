@@ -15,6 +15,10 @@ export class AppErrorHandler implements ErrorHandler {
     }
 
     logger.error('[AppErrorHandler] Caught unhandled error:', error);
-    handleSentryError(error, environment);
+    void handleSentryError(error, environment).then((handledBySentry) => {
+      if (!handledBySentry) {
+        this.globalErrorHandler.handleError(error);
+      }
+    });
   }
 }

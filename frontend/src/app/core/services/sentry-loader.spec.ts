@@ -1,4 +1,5 @@
 import {Injector} from '@angular/core';
+import {Router} from '@angular/router';
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 
 const addIntegrationMock = vi.fn();
@@ -8,7 +9,12 @@ const createErrorHandlerMock = vi.fn();
 const handleErrorMock = vi.fn();
 const initMock = vi.fn();
 const lazyLoadIntegrationMock = vi.fn();
-class TraceServiceMock {}
+const traceServiceConstructorMock = vi.fn();
+class TraceServiceMock {
+  constructor(router: Router) {
+    traceServiceConstructorMock(router);
+  }
+}
 let runtimeConfig = {
   enableSentry: true,
   sentryDsn: 'https://examplePublicKey@o0.ingest.us.sentry.io/0',
@@ -40,6 +46,7 @@ describe('sentry-loader', () => {
     handleErrorMock.mockReset();
     initMock.mockReset();
     lazyLoadIntegrationMock.mockReset();
+    traceServiceConstructorMock.mockReset();
     runtimeConfig = {
       enableSentry: true,
       sentryDsn: 'https://examplePublicKey@o0.ingest.us.sentry.io/0',
@@ -86,16 +93,10 @@ describe('sentry-loader', () => {
   });
 
   it('starts Angular route tracing through TraceService injection', async () => {
-    const traceServiceFactory = vi.fn(() => ({}));
     const {initializeSentryAngularTracing} = await import('./sentry-loader');
-    const Sentry = await import('@sentry/angular');
+    const router = {};
     const injector = Injector.create({
-      providers: [
-        {
-          provide: Sentry.TraceService,
-          useFactory: traceServiceFactory,
-        },
-      ],
+      providers: [{provide: Router, useValue: router}],
     });
 
     await expect(
@@ -103,7 +104,7 @@ describe('sentry-loader', () => {
     ).resolves.toBeUndefined();
 
     expect(initMock).toHaveBeenCalledOnce();
-    expect(traceServiceFactory).toHaveBeenCalledOnce();
+    expect(traceServiceConstructorMock).toHaveBeenCalledWith(router);
   });
 
   it('lazy-loads replay when requested', async () => {
@@ -121,15 +122,26 @@ describe('sentry-loader', () => {
     const error = new Error('boom');
     const {handleSentryError} = await import('./sentry-loader');
 
-    handleSentryError(error, runtimeConfig);
+    await expect(handleSentryError(error, runtimeConfig)).resolves.toBe(true);
 
-    await vi.waitFor(() =>
-      expect(createErrorHandlerMock).toHaveBeenCalledWith({
-        showDialog: false,
-        logErrors: false,
-      }),
-    );
+    expect(createErrorHandlerMock).toHaveBeenCalledWith({
+      showDialog: false,
+      logErrors: false,
+    });
     expect(handleErrorMock).toHaveBeenCalledWith(error);
+    expect(captureExceptionMock).not.toHaveBeenCalled();
+  });
+
+  it('reports when Sentry Angular error handling fails', async () => {
+    const error = new Error('boom');
+    createErrorHandlerMock.mockImplementation(() => {
+      throw new Error('handler setup failed');
+    });
+    const {handleSentryError} = await import('./sentry-loader');
+
+    await expect(handleSentryError(error, runtimeConfig)).resolves.toBe(false);
+    expect(createErrorHandlerMock).toHaveBeenCalledOnce();
+    expect(handleErrorMock).not.toHaveBeenCalled();
     expect(captureExceptionMock).not.toHaveBeenCalled();
   });
 
@@ -141,9 +153,10 @@ describe('sentry-loader', () => {
     };
     const {handleSentryError} = await import('./sentry-loader');
 
-    handleSentryError(new Error('boom'), runtimeConfig);
+    await expect(
+      handleSentryError(new Error('boom'), runtimeConfig),
+    ).resolves.toBe(false);
 
-    await new Promise((resolve) => globalThis.setTimeout(resolve));
     expect(createErrorHandlerMock).not.toHaveBeenCalled();
     expect(handleErrorMock).not.toHaveBeenCalled();
     expect(initMock).not.toHaveBeenCalled();
@@ -155,16 +168,9 @@ describe('sentry-loader', () => {
       enableSentry: false,
       sentryDsn: '',
     };
-    const traceServiceFactory = vi.fn(() => ({}));
     const {initializeSentryAngularTracing} = await import('./sentry-loader');
-    const Sentry = await import('@sentry/angular');
     const injector = Injector.create({
-      providers: [
-        {
-          provide: Sentry.TraceService,
-          useFactory: traceServiceFactory,
-        },
-      ],
+      providers: [],
     });
 
     await expect(
@@ -172,7 +178,7 @@ describe('sentry-loader', () => {
     ).resolves.toBeUndefined();
 
     expect(initMock).not.toHaveBeenCalled();
-    expect(traceServiceFactory).not.toHaveBeenCalled();
+    expect(traceServiceConstructorMock).not.toHaveBeenCalled();
   });
 
   it('schedules replay loading during browser idle time', async () => {

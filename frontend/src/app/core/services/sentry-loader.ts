@@ -4,6 +4,7 @@ import {
   type Injector,
   runInInjectionContext,
 } from '@angular/core';
+import {Router} from '@angular/router';
 import {logger} from '@/utils/logger';
 import type {AppEnvironment} from '../../../environments/environment.model';
 import type * as SentryAngular from '@sentry/angular';
@@ -86,7 +87,7 @@ export async function initializeSentryAngularTracing(
   }
 
   runInInjectionContext(injector, () => {
-    inject(Sentry.TraceService);
+    new Sentry.TraceService(inject(Router));
   });
 }
 
@@ -111,17 +112,22 @@ async function getSentryErrorHandler(
   return sentryErrorHandlerPromise;
 }
 
-export function handleSentryError(
+export async function handleSentryError(
   error: unknown,
   config: SentryRuntimeConfig,
-): void {
-  void getSentryErrorHandler(config)
-    .then((errorHandler) => {
-      errorHandler?.handleError(error);
-    })
-    .catch((captureError: unknown) => {
-      logger.error('Failed to capture Sentry exception', captureError);
-    });
+): Promise<boolean> {
+  try {
+    const errorHandler = await getSentryErrorHandler(config);
+    if (!errorHandler) {
+      return false;
+    }
+
+    errorHandler.handleError(error);
+    return true;
+  } catch (captureError: unknown) {
+    logger.error('Failed to capture Sentry exception', captureError);
+    return false;
+  }
 }
 
 export async function ensureSentryReplay(

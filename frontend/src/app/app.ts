@@ -11,6 +11,7 @@ import {BraToastComponent} from '@ui/components/composites/toast/toast.component
 import {OfflineBannerComponent} from '@ui/components/primitives/offline-banner/offline-banner.component';
 import {DevOverlayComponent} from '@ui/components/composites/dev-overlay/dev-overlay.component';
 import {SeoService} from '@/core/services/seo.service';
+import {logger} from '@/utils/logger';
 
 @Component({
   selector: 'app-root',
@@ -40,13 +41,15 @@ export class App {
     this.seo.init();
     afterNextRender({
       read: () => {
-        void import('./core/services/analytics.service').then(
-          ({AnalyticsService}) => {
-            runInInjectionContext(this.injector, () => {
-              void inject(AnalyticsService).warmup();
-            });
-          },
-        );
+        void import('./core/services/analytics.service')
+          .then(({AnalyticsService}) => {
+            return runInInjectionContext(this.injector, () =>
+              inject(AnalyticsService).warmup(),
+            );
+          })
+          .catch((error: unknown) => {
+            logger.error('AnalyticsService.warmup failed', error);
+          });
       },
     });
   }

@@ -17,31 +17,22 @@ if (environment.production) {
   );
 }
 
-function scheduleMonitoringLoad(appRef: ApplicationRef): void {
+function initializeMonitoring(appRef: ApplicationRef): void {
   if (typeof window === 'undefined' || !isSentryEnabled(environment)) {
     return;
   }
 
-  const startMonitoring = () => {
-    void initializeSentryAngularTracing(environment, appRef.injector)
-      .then(() => {
-        scheduleSentryReplayLoad(environment);
-      })
-      .catch((error: unknown) => {
-        console.error('Failed to initialize Sentry monitoring', error);
-      });
-  };
-
-  if ('requestIdleCallback' in window) {
-    window.requestIdleCallback(() => startMonitoring(), {timeout: 5_000});
-    return;
-  }
-
-  globalThis.setTimeout(startMonitoring, 5_000);
+  void initializeSentryAngularTracing(environment, appRef.injector)
+    .then(() => {
+      scheduleSentryReplayLoad(environment);
+    })
+    .catch((error: unknown) => {
+      console.error('Failed to initialize Sentry monitoring', error);
+    });
 }
 
 bootstrapApplication(App, appConfig)
   .then((appRef) => {
-    scheduleMonitoringLoad(appRef);
+    initializeMonitoring(appRef);
   })
   .catch((err) => console.error(err));
