@@ -4,11 +4,10 @@ import type {MutationCtx, QueryCtx} from '../../_generated/server';
 import {getLatestApplicationForOrganizer} from '../applications/read_models';
 import {stripSensitiveUserFields} from './helpers';
 import {
-  authz,
-  authzUserId,
+  isCommunityAdmin,
+  isCommunityMember,
   listDirectTrustedOrganizers,
   listOrganizerMembers,
-  organizerScope,
   paginateTrustingOrganizerIds,
 } from '../../lib/authz';
 import {batchGetUsers} from '../../lib/batch_utils';
@@ -83,11 +82,10 @@ async function getTrustedViaOrganizerName(
   ).filter((organizer): organizer is Doc<'organizers'> => organizer !== null);
 
   for (const trustedOrganizer of trustedOrganizers) {
-    const isTrustedMember = await authz.hasRole(
+    const isTrustedMember = await isCommunityMember(
       ctx,
-      authzUserId(userId),
-      'member',
-      organizerScope(trustedOrganizer._id),
+      userId,
+      trustedOrganizer._id,
     );
     if (isTrustedMember) {
       return trustedOrganizer.name;
@@ -177,7 +175,7 @@ async function buildDirectoryEntry(
     user,
     latestApplication,
     isDirectMember,
-    isCommunityAdmin,
+    userIsCommunityAdmin,
     hasMagicLinkAccess,
   ] = await Promise.all([
     ctx.db.get('users', userId),
@@ -188,18 +186,8 @@ async function buildDirectoryEntry(
         userId,
       },
     ),
-    authz.hasRole(
-      ctx,
-      authzUserId(userId),
-      'member',
-      organizerScope(organizerId),
-    ),
-    authz.hasRole(
-      ctx,
-      authzUserId(userId),
-      'community_admin',
-      organizerScope(organizerId),
-    ),
+    isCommunityMember(ctx, userId, organizerId),
+    isCommunityAdmin(ctx, userId, organizerId),
     hasOrganizerMagicLinkRedemption(ctx, organizerId, userId),
   ]);
 
@@ -244,7 +232,7 @@ async function buildDirectoryEntry(
       latestApplication?._creationTime ?? 0,
     ),
     ...toDirectoryApplicationSnapshot(latestApplication),
-    ...(isCommunityAdmin ? {isCommunityAdmin: true} : {}),
+    ...(userIsCommunityAdmin ? {isCommunityAdmin: true} : {}),
     communityAccessSource,
     ...(communityAccessSource === 'shared' && trustedViaOrganizerName
       ? {trustedViaOrganizerName}
