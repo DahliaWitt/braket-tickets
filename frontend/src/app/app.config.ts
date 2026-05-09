@@ -6,8 +6,9 @@ import {
   provideBrowserGlobalErrorListeners,
   provideZonelessChangeDetection,
 } from '@angular/core';
-import {DOCUMENT} from '@angular/common';
+import {DOCUMENT, IMAGE_CONFIG, IMAGE_LOADER} from '@angular/common';
 import {provideHttpClient} from '@angular/common/http';
+import {braketImageLoaderFactory} from './core/image-loader/braket-image-loader';
 import {
   provideRouter,
   Router,
@@ -59,6 +60,11 @@ export const appConfig: ApplicationConfig = {
     provideHttpClient(),
     provideBra(),
     {provide: STRIPE_CONFIG, useValue: environment.stripe},
+    {provide: IMAGE_LOADER, useFactory: braketImageLoaderFactory},
+    {
+      provide: IMAGE_CONFIG,
+      useValue: {breakpoints: [320, 640, 1024, 1600]},
+    },
     provideEnvironmentInitializer(() => {
       inject(AuthService);
     }),
