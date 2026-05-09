@@ -107,8 +107,8 @@ describe('email_delivery', () => {
         for (let i = 0; i < 502; i++) {
           // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- test setup for emailDeliveryFailures
           await ctx.db.insert('emailDeliveryFailures', {
-            source: 'reminder',
-            sourceId: `rem-${i}`,
+            source: 'broadcast',
+            sourceId: `br-${i}`,
             recipient: `r${i}@example.com`,
             error: 'err',
             failedAt: thirtyOneDaysAgo,
@@ -183,8 +183,8 @@ describe('email_delivery', () => {
           // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- test setup for emailDeliveries
           await ctx.db.insert('emailDeliveries', {
             emailId: `old-email-${i}`,
-            source: 'reminder',
-            sourceId: `rem-${i}`,
+            source: 'broadcast',
+            sourceId: `br-${i}`,
             recipient: `r${i}@example.com`,
             critical: false,
             manual: false,

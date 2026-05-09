@@ -1,11 +1,9 @@
-import {type HarnessLoader} from '@angular/cdk/testing';
 import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
 import {provideZonelessChangeDetection} from '@angular/core';
 import {type ComponentFixture, TestBed} from '@angular/core/testing';
 import {vi} from 'vitest';
 import {BraDatePickerComponent} from './date-picker.component';
-import {BraDatePickerHarness} from './date-picker.component.harness';
-import {BraDatePickerComponentHarness} from './date-picker.harness';
+import {BraDatePickerComponentHarness} from './date-picker.component.harness';
 
 interface DatePickerTestApi {
   displayText: () => string;
@@ -16,10 +14,15 @@ interface DatePickerTestApi {
 describe('BraDatePickerComponent', () => {
   let fixture: ComponentFixture<BraDatePickerComponent>;
   let component: BraDatePickerComponent;
-  let loader: HarnessLoader;
 
   const getApi = (): DatePickerTestApi =>
     component as unknown as DatePickerTestApi;
+
+  const getPicker = (): Promise<BraDatePickerComponentHarness> =>
+    TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      BraDatePickerComponentHarness,
+    );
 
   const setPopoverDirectiveStub = (
     hideSpy = vi.fn(),
@@ -49,7 +52,6 @@ describe('BraDatePickerComponent', () => {
     component = fixture.componentInstance;
     fixture.detectChanges();
     await fixture.whenStable();
-    loader = TestbedHarnessEnvironment.loader(fixture);
   });
 
   afterEach(() => {
@@ -62,9 +64,9 @@ describe('BraDatePickerComponent', () => {
     component.writeValue(null);
     fixture.detectChanges();
 
-    const picker = await loader.getHarness(BraDatePickerHarness);
+    const picker = await getPicker();
     expect(getApi().displayText()).toBe('Select event date');
-    expect(await picker.getTriggerText()).toContain('Select event date');
+    expect(await picker.getDisplayText()).toContain('Select event date');
   });
 
   it('should format selected date using configured format', async () => {
@@ -102,8 +104,8 @@ describe('BraDatePickerComponent', () => {
     fixture.detectChanges();
     await fixture.whenStable();
 
-    const picker = await loader.getHarness(BraDatePickerHarness);
-    expect(await picker.getTriggerText()).toContain('2026-04-21');
+    const picker = await getPicker();
+    expect(await picker.getDisplayText()).toContain('2026-04-21');
     const host = fixture.nativeElement as HTMLElement;
     const trigger = host.querySelector('button');
     if (!trigger) {
@@ -120,10 +122,7 @@ describe('BraDatePickerComponent', () => {
     fixture.detectChanges();
     await fixture.whenStable();
 
-    const picker = await TestbedHarnessEnvironment.harnessForFixture(
-      fixture,
-      BraDatePickerComponentHarness,
-    );
+    const picker = await getPicker();
     expect(await picker.getDisplayText()).toContain('Pick a date');
     expect(await picker.getAriaLabel()).toBe('Pick a date');
 
@@ -175,7 +174,7 @@ describe('BraDatePickerComponent', () => {
     component.setDisabledState(true);
     fixture.detectChanges();
 
-    const picker = await loader.getHarness(BraDatePickerHarness);
+    const picker = await getPicker();
     expect(await picker.isDisabled()).toBe(true);
   });
 });

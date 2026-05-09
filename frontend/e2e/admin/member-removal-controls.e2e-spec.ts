@@ -1,6 +1,6 @@
 import {test, expect, createEnvironment} from '../helpers/test-setup';
 import {api} from '@convex/_generated/api';
-import {BraDialogComponentHarness} from '../../src/app/ui/components/composites/dialog/dialog.harness';
+import {BraDialogHarness} from '../../src/app/ui/components/composites/dialog/dialog.component.harness';
 import {BraToastHarness} from '../../src/app/ui/components/composites/toast/toast.component.harness';
 
 test.describe('Admin Member Removal Controls', () => {
@@ -59,7 +59,7 @@ test.describe('Admin Member Removal Controls', () => {
     await memberRow.getByRole('button', {name: /REVOKE MEMBERSHIP/i}).click();
 
     const env = createEnvironment(adminPage);
-    const dialog = await env.getHarness(BraDialogComponentHarness);
+    const dialog = await env.getHarness(BraDialogHarness);
     await expect
       .poll(() => dialog.getTitleText(), {timeout: 5000})
       .toBe('Revoke Membership');

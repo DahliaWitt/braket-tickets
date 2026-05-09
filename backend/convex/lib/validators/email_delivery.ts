@@ -5,6 +5,9 @@ export const EMAIL_DELIVERY_SOURCES = [
   'announcement',
   'broadcast',
   'digest',
+  // 'reminder' has no current producer — kept so historical emailDeliveries /
+  // emailDeliveryFailures rows from the deleted vetting-reminder feature
+  // continue to read-validate. Live ticket-purchase reminders use 'event'.
   'reminder',
   'application',
   'admin_invite',
@@ -14,7 +17,7 @@ export const EMAIL_DELIVERY_SOURCES = [
   'resale_available',
   'auth',
 ] as const;
-export type EmailDeliverySource = typeof EMAIL_DELIVERY_SOURCES[number];
+export type EmailDeliverySource = (typeof EMAIL_DELIVERY_SOURCES)[number];
 
 export const emailDeliverySourceValidator = v.union(
   v.literal(EMAIL_DELIVERY_SOURCES[0]),
