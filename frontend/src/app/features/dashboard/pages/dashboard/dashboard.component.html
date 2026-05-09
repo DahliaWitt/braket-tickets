@@ -479,7 +479,6 @@
           <!-- Featured event -->
           <a
             [routerLink]="['/events', featured._id]"
-            [queryParams]="featuredCanPurchase() ? {buy: 'true'} : {}"
             class="grid grid-cols-1 border-t border-border transition-colors hover:bg-foreground/[0.02] md:grid-cols-[auto_1fr]"
             data-testid="featured-event"
             [attr.aria-label]="'View details for ' + featured.title"

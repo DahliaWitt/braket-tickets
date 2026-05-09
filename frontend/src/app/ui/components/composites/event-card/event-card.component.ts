@@ -160,14 +160,13 @@ export interface EventCardData {
               data-testid="event-card-buy"
               zType="default"
               [routerLink]="isBuyDisabled() ? null : ['/events', event()._id]"
-              [queryParams]="isBuyDisabled() ? null : {buy: 'true'}"
               class="flex-1"
               [attr.aria-label]="'Get tickets for ' + event().title"
               [zDisabled]="isBuyDisabled()"
             >
-              Buy
+              Tickets
               <span class="ml-1 font-mono opacity-80">
-                - {{ event().price / 100 | currency: 'USD' }}
+                {{ event().price / 100 | currency: 'USD' }}
               </span>
             </z-button>
           }
