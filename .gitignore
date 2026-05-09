@@ -65,6 +65,9 @@ frontend/*.pdf
 mcp.json
 opencode.json
 
+# Local scratch / triage notes (not for shipping)
+.scratch/
+
 # Factory mission artifacts (validation files, review logs - generated during missions)
 .factory/
 
