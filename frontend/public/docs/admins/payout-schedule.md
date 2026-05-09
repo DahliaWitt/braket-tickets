@@ -1,7 +1,7 @@
 ---
 title: Payout Schedule
 category: Payments
-categoryOrder: 3
+categoryOrder: 5
 order: 1
 description: When and how you get paid after your event
 access: public

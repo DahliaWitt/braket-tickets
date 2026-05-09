@@ -1,7 +1,7 @@
 ---
 title: Set Up Stripe
 category: Payments
-categoryOrder: 3
+categoryOrder: 5
 order: 0
 description: Connect Stripe so your community can sell paid tickets and receive payouts
 access: public
