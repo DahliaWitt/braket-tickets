@@ -30,20 +30,29 @@ describe('FooterFeedbackDialogComponent', () => {
   let fixture: ComponentFixture<HostComponent>;
   let harness: FooterFeedbackDialogHarness;
   let loader: HarnessLoader;
-  let analyticsMock: {captureFeedback: ReturnType<typeof vi.fn>};
+  let analyticsMock: {
+    captureFeedback: ReturnType<typeof vi.fn>;
+    startFeedbackReplayCapture: ReturnType<typeof vi.fn>;
+  };
   let dialogRefMock: {close: ReturnType<typeof vi.fn>};
-  let toastMock: {success: ReturnType<typeof vi.fn>};
+  let toastMock: {
+    success: ReturnType<typeof vi.fn>;
+    error: ReturnType<typeof vi.fn>;
+  };
   let router: Router;
 
   beforeEach(async () => {
     analyticsMock = {
       captureFeedback: vi.fn(),
+      startFeedbackReplayCapture: vi.fn(),
     };
+    analyticsMock.captureFeedback.mockResolvedValue(true);
     dialogRefMock = {
       close: vi.fn(),
     };
     toastMock = {
       success: vi.fn(),
+      error: vi.fn(),
     };
 
     await TestBed.configureTestingModule({
@@ -72,18 +81,43 @@ describe('FooterFeedbackDialogComponent', () => {
   });
 
   it('captures feedback and closes when submit is pressed', async () => {
+    expect(analyticsMock.startFeedbackReplayCapture).toHaveBeenCalledOnce();
+
     await harness.clickCategory('feature_request');
     await harness.setMessage('Add a keyboard shortcut for admin search');
     expect(await harness.submitDisabled()).toBe(false);
     await harness.clickSubmit();
 
-    expect(analyticsMock.captureFeedback).toHaveBeenCalledWith({
-      category: 'feature_request',
-      message: 'Add a keyboard shortcut for admin search',
-      route: '/help',
-    });
-    expect(dialogRefMock.close).toHaveBeenCalledOnce();
+    await vi.waitFor(() =>
+      expect(analyticsMock.captureFeedback).toHaveBeenCalledWith({
+        category: 'feature_request',
+        message: 'Add a keyboard shortcut for admin search',
+        route: '/help',
+      }),
+    );
+    await vi.waitFor(() => expect(dialogRefMock.close).toHaveBeenCalledOnce());
     expect(toastMock.success).toHaveBeenCalledWith('Thanks for the feedback.');
+    expect(toastMock.error).not.toHaveBeenCalled();
+  });
+
+  it('keeps the dialog open when PostHog does not accept the feedback event', async () => {
+    analyticsMock.captureFeedback.mockResolvedValueOnce(false);
+
+    await harness.setMessage('This should not get a success toast');
+    await harness.clickSubmit();
+
+    await vi.waitFor(() =>
+      expect(analyticsMock.captureFeedback).toHaveBeenCalledWith({
+        category: null,
+        message: 'This should not get a success toast',
+        route: '/help',
+      }),
+    );
+    expect(dialogRefMock.close).not.toHaveBeenCalled();
+    expect(toastMock.success).not.toHaveBeenCalled();
+    expect(toastMock.error).toHaveBeenCalledWith(
+      'Feedback could not be sent. Please try again.',
+    );
   });
 
   it('keeps category optional and toggles the selected chip off', async () => {
@@ -107,10 +141,12 @@ describe('FooterFeedbackDialogComponent', () => {
     await harness.setMessage('Bug report is intermittent on mobile Safari.');
     await harness.clickSubmit();
 
-    expect(analyticsMock.captureFeedback).toHaveBeenCalledWith({
-      category: null,
-      message: 'Bug report is intermittent on mobile Safari.',
-      route: '/help',
-    });
+    await vi.waitFor(() =>
+      expect(analyticsMock.captureFeedback).toHaveBeenCalledWith({
+        category: null,
+        message: 'Bug report is intermittent on mobile Safari.',
+        route: '/help',
+      }),
+    );
   });
 });

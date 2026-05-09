@@ -23,6 +23,10 @@ const mockPosthog = vi.hoisted(() => ({
   capture: vi.fn(),
   isFeatureEnabled: vi.fn(),
   getFeatureFlagResult: vi.fn(),
+  get_session_replay_url: vi.fn(),
+  startSessionRecording: vi.fn(),
+  sessionRecordingStarted: vi.fn(),
+  get_distinct_id: vi.fn(),
   onFeatureFlags: vi.fn(),
 }));
 
@@ -82,6 +86,10 @@ describe('AnalyticsService', () => {
     });
 
     service = TestBed.inject(AnalyticsService);
+    mockPosthog.capture.mockReturnValue({event: 'captured', properties: {}});
+    mockPosthog.get_distinct_id.mockReturnValue('distinct-test-id');
+    mockPosthog.sessionRecordingStarted.mockReturnValue(false);
+    mockPosthog.get_session_replay_url.mockReturnValue('');
   });
 
   afterEach(() => {
@@ -122,6 +130,9 @@ describe('AnalyticsService', () => {
       expect(options).toMatchObject({
         defaults: '2026-01-30',
         person_profiles: 'identified_only',
+        respect_dnt: true,
+        opt_out_capturing_by_default: false,
+        opt_out_persistence_by_default: false,
         mask_all_text: true,
         mask_all_element_attributes: true,
         capture_pageview: 'history_change',
@@ -132,6 +143,36 @@ describe('AnalyticsService', () => {
           css_selector_allowlist: ['[data-analytics]'],
         },
         loaded: expect.any(Function) as unknown,
+      });
+    });
+
+    it('opts out of PostHog capture and persistence by default when DNT is enabled', async () => {
+      vi.stubGlobal('navigator', {doNotTrack: '1'});
+
+      await service.warmup();
+      await waitForInit();
+
+      const [, options] = vi.mocked(posthog.init).mock.calls[0];
+
+      expect(options).toMatchObject({
+        respect_dnt: true,
+        opt_out_capturing_by_default: true,
+        opt_out_persistence_by_default: true,
+      });
+    });
+
+    it('opts out of PostHog capture and persistence by default when GPC is enabled', async () => {
+      vi.stubGlobal('navigator', {globalPrivacyControl: true});
+
+      await service.warmup();
+      await waitForInit();
+
+      const [, options] = vi.mocked(posthog.init).mock.calls[0];
+
+      expect(options).toMatchObject({
+        respect_dnt: true,
+        opt_out_capturing_by_default: true,
+        opt_out_persistence_by_default: true,
       });
     });
 
@@ -321,6 +362,44 @@ describe('AnalyticsService', () => {
       });
     });
 
+    it('only preserves feedback_message on feedback_submitted events', async () => {
+      await service.warmup();
+      await waitForInit();
+
+      const [, options] = vi.mocked(posthog.init).mock.calls[0];
+      const feedbackEvent = {
+        event: 'feedback_submitted',
+        properties: {
+          feedback_message: 'The exact feedback body',
+        },
+      };
+      const unrelatedEvent = {
+        event: 'checkout_panel_opened',
+        properties: {
+          feedback_message: 'Should not leak through another event',
+        },
+      };
+
+      expect(
+        options?.before_send && typeof options.before_send === 'function'
+          ? options.before_send(feedbackEvent as never)
+          : undefined,
+      ).toMatchObject({
+        properties: {
+          feedback_message: 'The exact feedback body',
+        },
+      });
+      expect(
+        options?.before_send && typeof options.before_send === 'function'
+          ? options.before_send(unrelatedEvent as never)
+          : undefined,
+      ).toMatchObject({
+        properties: {
+          feedback_message: '[redacted]',
+        },
+      });
+    });
+
     it('should register onFeatureFlags callback when loaded', async () => {
       await service.warmup();
       await waitForInit();
@@ -392,32 +471,199 @@ describe('AnalyticsService', () => {
     });
   });
 
-  describe('captureFeedback', () => {
-    it('should not capture feedback when message is blank', async () => {
-      service.captureFeedback({
-        category: 'bug',
-        message: '   ',
-        route: '/about',
-      });
+  describe('startFeedbackReplayCapture', () => {
+    it('starts PostHog replay for feedback with ingestion controls overridden', async () => {
+      service.startFeedbackReplayCapture();
 
-      await vi.waitFor(() => expect(posthog.capture).not.toHaveBeenCalled());
+      await vi.waitFor(() =>
+        expect(posthog.startSessionRecording).toHaveBeenCalledWith({
+          sampling: true,
+          linked_flag: true,
+          url_trigger: true,
+          event_trigger: true,
+        }),
+      );
+    });
+
+    it('does not start feedback replay when analytics is disabled', async () => {
+      analyticsRuntimeConfig.posthog.apiKey = '';
+
+      service.startFeedbackReplayCapture();
+
+      await vi.waitFor(() => expect(posthog.init).not.toHaveBeenCalled());
+      expect(posthog.startSessionRecording).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('captureFeedback', () => {
+    let fetchMock: Mock;
+
+    beforeEach(() => {
+      fetchMock = vi.fn().mockResolvedValue(new Response('{}', {status: 200}));
+      vi.stubGlobal('fetch', fetchMock);
+    });
+
+    const getLastFeedbackPayload = (): Record<string, unknown> => {
+      const fetchInit = fetchMock.mock.calls.at(-1)?.[1] as
+        | RequestInit
+        | undefined;
+      const body = fetchInit?.body;
+      if (typeof body !== 'string') {
+        throw new Error('Expected feedback request body to be a string');
+      }
+      return JSON.parse(body) as Record<string, unknown>;
+    };
+
+    it('should not capture feedback when message is blank', async () => {
+      await expect(
+        service.captureFeedback({
+          category: 'bug',
+          message: '   ',
+          route: '/about',
+        }),
+      ).resolves.toBe(false);
+
+      expect(posthog.capture).not.toHaveBeenCalled();
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('should return false when PostHog rejects the feedback capture request', async () => {
+      const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(vi.fn());
+      fetchMock.mockResolvedValueOnce(new Response('{}', {status: 503}));
+
+      await expect(
+        service.captureFeedback({
+          category: 'bug',
+          message: 'Bug still happens',
+          route: '/help',
+        }),
+      ).resolves.toBe(false);
+
+      expect(posthog.capture).not.toHaveBeenCalled();
+      expect(fetchMock).toHaveBeenCalledOnce();
+      expect(warnSpy).toHaveBeenCalledWith('PostHog feedback capture failed', {
+        status: 503,
+      });
+      warnSpy.mockRestore();
+    });
+
+    it('should return false when PostHog capture request throws', async () => {
+      const error = new Error('network failed');
+      const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(vi.fn());
+      fetchMock.mockRejectedValueOnce(error);
+
+      await expect(
+        service.captureFeedback({
+          category: 'bug',
+          message: 'Bug still happens',
+          route: '/help',
+        }),
+      ).resolves.toBe(false);
+
+      expect(posthog.capture).not.toHaveBeenCalled();
+      expect(fetchMock).toHaveBeenCalledOnce();
+      expect(warnSpy).toHaveBeenCalledWith(
+        'PostHog feedback capture failed',
+        error,
+      );
+      warnSpy.mockRestore();
     });
 
     it('should capture feedback metadata for anonymous users', async () => {
-      service.captureFeedback({
-        category: null,
-        message: '  The footer link order is confusing.  ',
-        route: '/about',
-      });
+      await expect(
+        service.captureFeedback({
+          category: null,
+          message: '  The footer link order is confusing.  ',
+          route: '/about',
+        }),
+      ).resolves.toBe(true);
 
-      await vi.waitFor(() =>
-        expect(posthog.capture).toHaveBeenCalledWith('feedback_submitted', {
-          feedback_category: 'general_feedback',
-          message_length: 'The footer link order is confusing.'.length,
-          signed_in: false,
-          has_replay_url: false,
+      expect(posthog.capture).not.toHaveBeenCalled();
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://test.posthog.com/i/v0/e/',
+        expect.objectContaining({
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+          },
         }),
       );
+
+      expect(getLastFeedbackPayload()).toEqual({
+        api_key: 'test-api-key',
+        event: 'feedback_submitted',
+        distinct_id: 'distinct-test-id',
+        properties: {
+          feedback_category: 'general_feedback',
+          feedback_message: 'The footer link order is confusing.',
+          message_length: 'The footer link order is confusing.'.length,
+          route_template: '/about',
+          signed_in: false,
+          has_replay_url: false,
+          schema_version: 1,
+          environment: 'preview',
+          build_commit_hash: 'abc123',
+          build_branch: 'develop',
+          build_timestamp: '2026-04-09T00:00:00.000Z',
+          $process_person_profile: false,
+        },
+      });
+      expect(posthog.get_session_replay_url).not.toHaveBeenCalled();
+    });
+
+    it('should use the same-origin ingest proxy for deployed feedback capture', async () => {
+      analyticsRuntimeConfig.posthog.host = '/ingest';
+
+      await expect(
+        service.captureFeedback({
+          category: 'bug',
+          message: 'Bug still happens',
+          route: '/help',
+        }),
+      ).resolves.toBe(true);
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/ingest/i/v0/e/',
+        expect.objectContaining({
+          method: 'POST',
+        }),
+      );
+    });
+
+    it('should include a timestamped replay URL when session recording is active', async () => {
+      vi.mocked(posthog.sessionRecordingStarted).mockReturnValue(true);
+      vi.mocked(posthog.get_session_replay_url).mockReturnValue(
+        'https://us.posthog.com/project/test-api-key/replay/session-id?t=45',
+      );
+
+      await expect(
+        service.captureFeedback({
+          category: 'feature_request',
+          message: 'Please show this exact path in context.',
+          route: '/events/01j2k3l4m5n6o7p8q9?token=secret',
+        }),
+      ).resolves.toBe(true);
+
+      expect(posthog.capture).not.toHaveBeenCalled();
+      expect(getLastFeedbackPayload()).toMatchObject({
+        api_key: 'test-api-key',
+        event: 'feedback_submitted',
+        distinct_id: 'distinct-test-id',
+        properties: {
+          feedback_category: 'feature_request',
+          feedback_message: 'Please show this exact path in context.',
+          feedback_replay_url:
+            'https://us.posthog.com/project/test-api-key/replay/session-id?t=45',
+          message_length: 'Please show this exact path in context.'.length,
+          route_template: '/events/:id',
+          signed_in: false,
+          has_replay_url: true,
+        },
+      });
+      expect(posthog.get_session_replay_url).toHaveBeenCalledWith({
+        withTimestamp: true,
+        timestampLookBack: 30,
+      });
     });
 
     it('should mark logged in users as signed_in and preserve bug category', async () => {
@@ -428,20 +674,33 @@ describe('AnalyticsService', () => {
         name: 'User Example',
       });
 
-      service.captureFeedback({
-        category: 'bug',
-        message: 'Bug still happens',
-        route: '/help',
-      });
+      await expect(
+        service.captureFeedback({
+          category: 'bug',
+          message: 'Bug still happens',
+          route: '/help',
+        }),
+      ).resolves.toBe(true);
 
-      await vi.waitFor(() =>
-        expect(posthog.capture).toHaveBeenCalledWith('feedback_submitted', {
+      expect(posthog.capture).not.toHaveBeenCalled();
+      expect(getLastFeedbackPayload()).toEqual({
+        api_key: 'test-api-key',
+        event: 'feedback_submitted',
+        distinct_id: 'distinct-test-id',
+        properties: {
           feedback_category: 'bug',
+          feedback_message: 'Bug still happens',
           message_length: 'Bug still happens'.length,
+          route_template: '/help',
           signed_in: true,
           has_replay_url: false,
-        }),
-      );
+          schema_version: 1,
+          environment: 'preview',
+          build_commit_hash: 'abc123',
+          build_branch: 'develop',
+          build_timestamp: '2026-04-09T00:00:00.000Z',
+        },
+      });
     });
   });
 

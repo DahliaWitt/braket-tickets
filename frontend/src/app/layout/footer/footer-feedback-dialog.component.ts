@@ -33,7 +33,7 @@ const CATEGORY_OPTIONS: readonly CategoryOption[] = [
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [ZardButtonComponent, ZardInputDirective],
   template: `
-    <section class="ph-no-capture flex flex-col gap-3">
+    <section class="flex flex-col gap-3">
       <div
         id="feedback-category-label"
         class="text-xs font-medium text-foreground"
@@ -106,8 +106,9 @@ export class FooterFeedbackDialogComponent {
   protected readonly CATEGORY_OPTIONS = CATEGORY_OPTIONS;
   protected readonly selectedCategory = signal<FooterFeedbackCategory>(null);
   protected readonly message = signal('');
+  protected readonly submitting = signal(false);
   protected readonly canSubmit = computed(
-    () => this.message().trim().length > 0,
+    () => this.message().trim().length > 0 && !this.submitting(),
   );
 
   protected readonly analytics = inject(AnalyticsService);
@@ -116,6 +117,10 @@ export class FooterFeedbackDialogComponent {
   );
   protected readonly router = inject(Router);
   protected readonly toast = inject(BraToastService);
+
+  constructor() {
+    this.analytics.startFeedbackReplayCapture();
+  }
 
   setCategory(value: FeedbackCategory): void {
     this.selectedCategory.update((current) =>
@@ -135,15 +140,30 @@ export class FooterFeedbackDialogComponent {
     this.message.set(target.value);
   }
 
-  submit(): void {
+  async submit(): Promise<void> {
     if (!this.canSubmit()) {
       return;
     }
-    this.analytics.captureFeedback({
-      category: this.selectedCategory(),
-      message: this.message(),
-      route: this.router.url,
-    });
+
+    this.submitting.set(true);
+    let captured: boolean;
+    try {
+      captured = await this.analytics.captureFeedback({
+        category: this.selectedCategory(),
+        message: this.message(),
+        route: this.router.url,
+      });
+    } catch {
+      captured = false;
+    } finally {
+      this.submitting.set(false);
+    }
+
+    if (!captured) {
+      this.toast.error('Feedback could not be sent. Please try again.');
+      return;
+    }
+
     this.dialogRef.close();
     this.toast.success('Thanks for the feedback.');
   }

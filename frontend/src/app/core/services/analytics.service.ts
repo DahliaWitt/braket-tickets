@@ -40,6 +40,16 @@ export interface FeedbackCaptureInput {
   route: string;
 }
 
+interface PostHogCapturePayload {
+  api_key: string;
+  event: AnalyticsEventName;
+  distinct_id: string;
+  properties: Record<string, unknown>;
+}
+
+const DEFAULT_POSTHOG_API_HOST = 'https://us.i.posthog.com';
+const POSTHOG_SINGLE_EVENT_PATH = '/i/v0/e/';
+
 function getPostHogUiHost(apiHost: string | undefined): string {
   if (
     apiHost?.includes('eu.i.posthog.com') ||
@@ -49,6 +59,14 @@ function getPostHogUiHost(apiHost: string | undefined): string {
   }
 
   return 'https://us.posthog.com';
+}
+
+function getPostHogApiHost(apiHost: string | undefined): string {
+  return apiHost || DEFAULT_POSTHOG_API_HOST;
+}
+
+function getPostHogSingleEventUrl(apiHost: string | undefined): string {
+  return `${getPostHogApiHost(apiHost).replace(/\/+$/, '')}${POSTHOG_SINGLE_EVENT_PATH}`;
 }
 
 function isAnalyticsEnvironment(value: string): value is AnalyticsEnvironment {
@@ -98,6 +116,42 @@ function shouldDisableAnalyticsOnHost(): boolean {
   return typeof location !== 'undefined' && isLocalhost(location.hostname);
 }
 
+function isEnabledPrivacySignal(value: unknown): boolean {
+  return value === true || value === '1' || value === 'yes';
+}
+
+function isGlobalPrivacyControlEnabled(): boolean {
+  return (
+    typeof navigator !== 'undefined' &&
+    (navigator as Navigator & {globalPrivacyControl?: boolean})
+      .globalPrivacyControl === true
+  );
+}
+
+function isDoNotTrackEnabled(): boolean {
+  if (typeof navigator === 'undefined') {
+    return false;
+  }
+
+  const legacyNavigator = navigator as Navigator & {
+    msDoNotTrack?: string | null;
+  };
+  const browserWindow =
+    typeof window === 'undefined'
+      ? undefined
+      : (window as Window & {doNotTrack?: string | null});
+
+  return [
+    navigator.doNotTrack,
+    legacyNavigator.msDoNotTrack,
+    browserWindow?.doNotTrack,
+  ].some(isEnabledPrivacySignal);
+}
+
+function shouldOptOutAnalyticsByDefault(): boolean {
+  return isGlobalPrivacyControlEnabled() || isDoNotTrackEnabled();
+}
+
 function toProperties(value: unknown): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return {};
@@ -115,18 +169,23 @@ function tagEventWithEnvironment(
   }
 
   const originalProperties = toProperties(event.properties);
-  const sanitizedProperties = sanitizeAnalyticsProperties({
-    ...originalProperties,
-    schema_version: 1,
-    environment: getAnalyticsEnvironment(config),
-    build_commit_hash: config.build.commitHash,
-    build_branch: config.build.branch,
-    build_timestamp: config.build.timestamp,
-    route_template:
-      typeof globalThis.location?.pathname === 'string'
-        ? toRouteTemplate(globalThis.location.pathname)
-        : undefined,
-  });
+  const sanitizedProperties = sanitizeAnalyticsProperties(
+    {
+      ...originalProperties,
+      schema_version: 1,
+      environment: getAnalyticsEnvironment(config),
+      build_commit_hash: config.build.commitHash,
+      build_branch: config.build.branch,
+      build_timestamp: config.build.timestamp,
+      route_template:
+        typeof globalThis.location?.pathname === 'string'
+          ? toRouteTemplate(globalThis.location.pathname)
+          : undefined,
+    },
+    {
+      allowFeedbackMessage: event.event === 'feedback_submitted',
+    },
+  );
 
   if (originalProperties['token'] === config.posthog.apiKey) {
     sanitizedProperties['token'] = config.posthog.apiKey;
@@ -136,6 +195,34 @@ function tagEventWithEnvironment(
     ...event,
     properties: sanitizedProperties,
   };
+}
+
+function buildFeedbackProperties(
+  input: FeedbackCaptureInput,
+  trimmedMessage: string,
+  routeTemplate: string,
+  signedIn: boolean,
+  replayUrl: string | undefined,
+  config: AnalyticsRuntimeConfig,
+): Record<string, unknown> {
+  return sanitizeAnalyticsProperties(
+    {
+      feedback_category: input.category ?? 'general_feedback',
+      feedback_message: trimmedMessage,
+      ...(replayUrl ? {feedback_replay_url: replayUrl} : {}),
+      message_length: trimmedMessage.length,
+      route_template: routeTemplate,
+      signed_in: signedIn,
+      has_replay_url: Boolean(replayUrl),
+      schema_version: 1,
+      environment: getAnalyticsEnvironment(config),
+      build_commit_hash: config.build.commitHash,
+      build_branch: config.build.branch,
+      build_timestamp: config.build.timestamp,
+      ...(signedIn ? {} : {$process_person_profile: false}),
+    },
+    {allowFeedbackMessage: true},
+  );
 }
 
 /**
@@ -149,7 +236,7 @@ function tagEventWithEnvironment(
  *
  * ## Privacy Compliance
  * - Respects browser's Do Not Track (DNT) setting via `respect_dnt`
- * - Respects Global Privacy Control (GPC) by opting out when enabled
+ * - Respects DNT/GPC by opting out of capture and persistence when enabled
  * - Uses `identified_only` person profiles to minimize data collection
  *
  * ## Usage
@@ -243,20 +330,15 @@ export class AnalyticsService {
   private async loadClient(): Promise<PostHogInterface> {
     const {default: posthog} = await import('posthog-js');
 
-    // Check for Global Privacy Control (GPC) signal
-    // https://globalprivacycontrol.github.io/gpc-spec/
-    const gpcEnabled =
-      typeof navigator !== 'undefined' &&
-      (navigator as Navigator & {globalPrivacyControl?: boolean})
-        .globalPrivacyControl === true;
+    const optOutAnalyticsByDefault = shouldOptOutAnalyticsByDefault();
 
     const config: Partial<PostHogConfig> = {
-      api_host: this.runtimeConfig.posthog.host || 'https://us.i.posthog.com',
+      api_host: getPostHogApiHost(this.runtimeConfig.posthog.host),
       ui_host: getPostHogUiHost(this.runtimeConfig.posthog.host),
       defaults: '2026-01-30',
       person_profiles: 'identified_only', // Optimizes costs and privacy
       disable_compression: true, // Keep event payloads JSON so the ingest proxy can enrich them.
-      respect_dnt: true, // Respect browser's Do Not Track setting
+      respect_dnt: true, // Keep PostHog's built-in DNT guard enabled too.
       mask_all_text: true,
       mask_all_element_attributes: true,
       capture_pageview: 'history_change',
@@ -280,8 +362,8 @@ export class AnalyticsService {
         recordBody: false,
         maskCapturedNetworkRequestFn: sanitizeReplayNetworkRequest,
       },
-      opt_out_capturing_by_default: gpcEnabled, // Opt out if GPC is enabled
-      opt_out_persistence_by_default: gpcEnabled, // Don't write cookies/localStorage when GPC is active
+      opt_out_capturing_by_default: optOutAnalyticsByDefault,
+      opt_out_persistence_by_default: optOutAnalyticsByDefault,
       before_send: ((event) =>
         tagEventWithEnvironment(
           event,
@@ -383,20 +465,98 @@ export class AnalyticsService {
     }
   }
 
-  captureFeedback(input: FeedbackCaptureInput): void {
-    const trimmedMessage = input.message.trim();
-    if (!trimmedMessage) {
+  startFeedbackReplayCapture(): void {
+    if (!this.isPostHogEnabled()) {
       return;
     }
 
-    const signedIn = Boolean(this.auth.currentUser());
-
-    this.capture('feedback_submitted', {
-      feedback_category: input.category ?? 'general_feedback',
-      message_length: trimmedMessage.length,
-      signed_in: signedIn,
-      has_replay_url: false,
+    void this.ensureClient().then((client) => {
+      client?.startSessionRecording({
+        sampling: true,
+        linked_flag: true,
+        url_trigger: true,
+        event_trigger: true,
+      });
     });
+  }
+
+  async captureFeedback(input: FeedbackCaptureInput): Promise<boolean> {
+    const trimmedMessage = input.message.trim();
+    if (!trimmedMessage) {
+      return false;
+    }
+
+    const signedIn = Boolean(this.auth.currentUser());
+    const routeTemplate = toRouteTemplate(input.route);
+
+    if (!this.isPostHogEnabled()) {
+      return false;
+    }
+
+    const client = await this.ensureClient();
+    if (!client) {
+      return false;
+    }
+
+    const replayUrl = this.getCurrentSessionReplayUrl(client);
+    const distinctId = client.get_distinct_id();
+    if (!distinctId) {
+      return false;
+    }
+
+    const payload: PostHogCapturePayload = {
+      api_key: this.runtimeConfig.posthog.apiKey,
+      event: 'feedback_submitted',
+      distinct_id: distinctId,
+      properties: buildFeedbackProperties(
+        input,
+        trimmedMessage,
+        routeTemplate,
+        signedIn,
+        replayUrl,
+        this.runtimeConfig,
+      ),
+    };
+
+    try {
+      const response = await fetch(
+        getPostHogSingleEventUrl(this.runtimeConfig.posthog.host),
+        {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        },
+      );
+
+      if (!response.ok) {
+        logger.warn('PostHog feedback capture failed', {
+          status: response.status,
+        });
+        return false;
+      }
+
+      return true;
+    } catch (error: unknown) {
+      logger.warn('PostHog feedback capture failed', error);
+      return false;
+    }
+  }
+
+  private getCurrentSessionReplayUrl(
+    client: PostHogInterface,
+  ): string | undefined {
+    if (!client.sessionRecordingStarted()) {
+      return undefined;
+    }
+
+    const replayUrl = client.get_session_replay_url({
+      withTimestamp: true,
+      timestampLookBack: 30,
+    });
+
+    return replayUrl || undefined;
   }
 
   /**
