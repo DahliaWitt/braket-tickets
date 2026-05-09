@@ -12,6 +12,7 @@ import {
   provideRouter,
   Router,
   withComponentInputBinding,
+  withRouterConfig,
   withViewTransitions,
 } from '@angular/router';
 import * as Sentry from '@sentry/angular';
@@ -35,6 +36,7 @@ export const appConfig: ApplicationConfig = {
     provideRouter(
       routes,
       withComponentInputBinding(),
+      withRouterConfig({onSameUrlNavigation: 'reload'}),
       withViewTransitions({
         onViewTransitionCreated: ({transition}) => {
           const router = inject(Router);

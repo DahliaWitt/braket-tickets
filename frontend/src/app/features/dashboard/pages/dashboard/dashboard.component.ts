@@ -73,6 +73,7 @@ export class DashboardComponent {
       entries.push({
         organizerId: a.organizerId,
         organizerName: a.organizerName,
+        organizerLogoUrl: a.organizerLogoUrl,
         status: 'access',
         source: a.source,
         viaOrganizerName: a.viaOrganizerName,
