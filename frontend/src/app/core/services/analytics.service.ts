@@ -205,24 +205,20 @@ function buildFeedbackProperties(
   replayUrl: string | undefined,
   config: AnalyticsRuntimeConfig,
 ): Record<string, unknown> {
-  return sanitizeAnalyticsProperties(
-    {
-      feedback_category: input.category ?? 'general_feedback',
-      feedback_message: trimmedMessage,
-      ...(replayUrl ? {feedback_replay_url: replayUrl} : {}),
-      message_length: trimmedMessage.length,
-      route_template: routeTemplate,
-      signed_in: signedIn,
-      has_replay_url: Boolean(replayUrl),
-      schema_version: 1,
-      environment: getAnalyticsEnvironment(config),
-      build_commit_hash: config.build.commitHash,
-      build_branch: config.build.branch,
-      build_timestamp: config.build.timestamp,
-      ...(signedIn ? {} : {$process_person_profile: false}),
-    },
-    {allowFeedbackMessage: true},
-  );
+  return sanitizeAnalyticsProperties({
+    feedback_category: input.category ?? 'general_feedback',
+    ...(replayUrl ? {feedback_replay_url: replayUrl} : {}),
+    message_length: trimmedMessage.length,
+    route_template: routeTemplate,
+    signed_in: signedIn,
+    has_replay_url: Boolean(replayUrl),
+    schema_version: 1,
+    environment: getAnalyticsEnvironment(config),
+    build_commit_hash: config.build.commitHash,
+    build_branch: config.build.branch,
+    build_timestamp: config.build.timestamp,
+    ...(signedIn ? {} : {$process_person_profile: false}),
+  });
 }
 
 /**
@@ -518,6 +514,9 @@ export class AnalyticsService {
       ),
     };
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
     try {
       const response = await fetch(
         getPostHogSingleEventUrl(this.runtimeConfig.posthog.host),
@@ -527,6 +526,7 @@ export class AnalyticsService {
             'content-type': 'application/json',
           },
           body: JSON.stringify(payload),
+          signal: controller.signal,
         },
       );
 
@@ -541,6 +541,8 @@ export class AnalyticsService {
     } catch (error: unknown) {
       logger.warn('PostHog feedback capture failed', error);
       return false;
+    } finally {
+      clearTimeout(timeout);
     }
   }
 

@@ -255,7 +255,9 @@
                 class="p-16 text-center font-mono tracking-widest text-muted-foreground uppercase"
               >
                 @if (searchQuery()) {
-                  NO RESULTS FOR &ldquo;{{ searchQuery() }}&rdquo;
+                  <span data-testid="no-results-empty-state"
+                    >NO RESULTS FOR &ldquo;{{ searchQuery() }}&rdquo;</span
+                  >
                 } @else {
                   NO {{ tableType() }} APPLICATIONS FOUND
                 }
@@ -407,7 +409,9 @@
         class="mono-label rounded-lg border border-dashed border-border py-12 text-center text-sm text-muted-foreground"
       >
         @if (searchQuery()) {
-          NO RESULTS FOR &ldquo;{{ searchQuery() }}&rdquo;
+          <span data-testid="no-results-empty-state"
+            >NO RESULTS FOR &ldquo;{{ searchQuery() }}&rdquo;</span
+          >
         } @else {
           NO {{ tableType() }} APPLICATIONS FOUND
         }

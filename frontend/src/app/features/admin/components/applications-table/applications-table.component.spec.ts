@@ -434,7 +434,7 @@ describe('AdminApplicationsTableComponent', () => {
     it('should filter applications by name', async () => {
       expect(component.filteredApplications().length).toBe(3);
 
-      component.searchQuery.set('Alice');
+      await harness.setSearchValue('Alice');
       await fixture.whenStable();
 
       expect(component.filteredApplications().length).toBe(1);
@@ -444,7 +444,7 @@ describe('AdminApplicationsTableComponent', () => {
     });
 
     it('should filter applications by email', async () => {
-      component.searchQuery.set('bob@test');
+      await harness.setSearchValue('bob@test');
       await fixture.whenStable();
 
       expect(component.filteredApplications().length).toBe(1);
@@ -452,17 +452,17 @@ describe('AdminApplicationsTableComponent', () => {
     });
 
     it('should show all applications when search is cleared', async () => {
-      component.searchQuery.set('Alice');
+      await harness.setSearchValue('Alice');
       await fixture.whenStable();
       expect(component.filteredApplications().length).toBe(1);
 
-      component.searchQuery.set('');
+      await harness.setSearchValue('');
       await fixture.whenStable();
       expect(component.filteredApplications().length).toBe(3);
     });
 
     it('should filter case-insensitively', async () => {
-      component.searchQuery.set('aLiCe');
+      await harness.setSearchValue('aLiCe');
       await fixture.whenStable();
 
       expect(component.filteredApplications().length).toBe(1);
@@ -472,12 +472,12 @@ describe('AdminApplicationsTableComponent', () => {
     });
 
     it('should show no-results empty state when search has no matches', async () => {
-      component.searchQuery.set('nonexistent');
+      await harness.setSearchValue('nonexistent');
       await fixture.whenStable();
 
       expect(component.filteredApplications().length).toBe(0);
-      const nativeEl = fixture.nativeElement as HTMLElement;
-      const emptyText = nativeEl.textContent ?? '';
+      expect(await harness.hasNoResultsState()).toBe(true);
+      const emptyText = await harness.getNoResultsText();
       expect(emptyText).toContain('NO RESULTS FOR');
       expect(emptyText).toContain('nonexistent');
     });

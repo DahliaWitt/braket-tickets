@@ -49,7 +49,7 @@ each other's working directory. There is no task small enough to skip isolation.
 Before creating a worktree, check: is the current working directory already inside a worktree?
 
 ```bash
-[[ "$(pwd)" == */braket-tickets/.claude/worktrees/* ]] && echo "IN_WORKTREE" || echo "NOT_IN_WORKTREE"
+git_dir="$(git rev-parse --git-dir 2>/dev/null)" && [[ "$git_dir" == *"/worktrees/"* ]] && echo "IN_WORKTREE" || echo "NOT_IN_WORKTREE"
 ```
 
 **If already in a worktree:** skip worktree creation entirely. You are already isolated. Work

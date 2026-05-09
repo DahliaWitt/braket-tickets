@@ -24,10 +24,8 @@ export class AdminApplicationsTableHarness extends ComponentHarness {
   async setSearchValue(value: string): Promise<void> {
     const input = await this.getSearchInput();
     if (!input) throw new Error('Search input not found');
-    await input.clear();
-    if (value) {
-      await input.sendKeys(value);
-    }
+    await input.setInputValue(value);
+    await input.dispatchEvent('input');
   }
 
   async getSearchValue(): Promise<string> {
@@ -74,5 +72,18 @@ export class AdminApplicationsTableHarness extends ComponentHarness {
 
   async getNoAnswersCount(): Promise<number> {
     return (await this.getNoAnswersIndicators()).length;
+  }
+
+  private getNoResultsEl = this.locatorForOptional(
+    '[data-testid="no-results-empty-state"]',
+  );
+
+  async hasNoResultsState(): Promise<boolean> {
+    return (await this.getNoResultsEl()) !== null;
+  }
+
+  async getNoResultsText(): Promise<string> {
+    const el = await this.getNoResultsEl();
+    return el ? (await el.text()).trim() : '';
   }
 }
