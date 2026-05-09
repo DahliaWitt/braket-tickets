@@ -444,12 +444,11 @@
             }
           </div>
 
-          <!-- Featured event -->
-          <a
-            [routerLink]="['/events', featured._id]"
-            class="grid grid-cols-1 border-t border-border transition-colors hover:bg-foreground/[0.02] md:grid-cols-[auto_1fr]"
+          <!-- Featured event: card with two interactive targets.
+               Title link covers the card via ::after; Get Tickets sits above it. -->
+          <div
+            class="relative grid grid-cols-1 border-t border-border transition-colors hover:bg-foreground/[0.02] md:grid-cols-[auto_1fr]"
             data-testid="featured-event"
-            [attr.aria-label]="'View details for ' + featured.title"
           >
             @if (featured.posterUrl) {
               <div
@@ -478,7 +477,13 @@
                 data-testid="dashboard-event-title"
                 class="line-clamp-2 font-display text-2xl font-bold tracking-tight text-foreground uppercase md:text-3xl"
               >
-                {{ featured.title }}
+                <a
+                  [routerLink]="['/events', featured._id]"
+                  class="text-foreground after:absolute after:inset-0"
+                  [attr.aria-label]="'View details for ' + featured.title"
+                >
+                  {{ featured.title }}
+                </a>
               </h3>
               <p class="mono-label text-2xs text-muted-foreground">
                 {{ featured.date | date: 'mediumDate' }},
@@ -491,14 +496,17 @@
                   featured.price / 100 | currency: 'USD' : 'symbol' : '1.0-2'
                 }}
               </p>
-              <div class="pt-1">
+              <div class="relative z-10 pt-1">
                 @if (featuredCanPurchase()) {
-                  <span
+                  <a
+                    [routerLink]="['/events', featured._id]"
+                    [queryParams]="{buy: 'true'}"
                     data-testid="dashboard-get-tickets"
                     class="inline-block border-2 border-primary px-6 py-2 font-mono text-2xs tracking-widest text-foreground uppercase transition-colors hover:bg-primary hover:text-white"
+                    [attr.aria-label]="'Get tickets for ' + featured.title"
                   >
                     Get Tickets &rarr;
-                  </span>
+                  </a>
                 } @else {
                   <span
                     class="font-mono text-2xs tracking-widest text-primary uppercase"
@@ -515,7 +523,7 @@
                 </p>
               }
             </div>
-          </a>
+          </div>
         </section>
 
         <!-- Overflow events -->
