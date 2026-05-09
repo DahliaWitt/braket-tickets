@@ -6,7 +6,6 @@ import {
   payoutSentTemplate,
   purchasedTicketTemplate,
   vettingDigestTemplate,
-  vettingReminderTemplate,
   vettingSubmissionTemplate,
 } from './templates';
 
@@ -281,86 +280,6 @@ describe('purchasedTicketTemplate — code of conduct', () => {
     expect(html).not.toContain('code of conduct');
   });
 });
-
-describe('vettingReminderTemplate', () => {
-  it('uses the gentle vetting-reminder preheader', () => {
-    const {html} = vettingReminderTemplate({
-      message: "finish your app when you're ready",
-      siteUrl: 'https://braket.gay',
-      unsubToken: 'preheader-unsub-token',
-      preferenceCenterUrl: 'https://braket.gay/account#email-preferences',
-    });
-
-    expect(html).toContain(
-      'Still need to finish vetting? Your app is waiting :3',
-    );
-    expect(html).not.toContain('complete ur app 2 join teh underground');
-  });
-});
-
-describe('vettingReminderTemplate', () => {
-  it('includes unsubscribe links, a preference link, and RFC 8058 headers', () => {
-    const {html, text, headers} = vettingReminderTemplate({
-      message: 'Start your application before Friday.',
-      siteUrl: 'https://braket.gay',
-      unsubToken: 'vetting-reminder-token',
-      preferenceCenterUrl: 'https://braket.gay/account#email-preferences',
-    });
-
-    expect(html).toContain(
-      'https://braket.gay/api/unsubscribe?token=vetting-reminder-token',
-    );
-    expect(html).toContain('https://braket.gay/account#email-preferences');
-    expect(text).toContain(
-      'Unsubscribe from future vetting reminders: https://braket.gay/api/unsubscribe?token=vetting-reminder-token',
-    );
-    expect(text).toContain(
-      'Manage all email preferences: https://braket.gay/account#email-preferences',
-    );
-    expect(headers['List-Unsubscribe']).toContain(
-      'https://braket.gay/api/unsubscribe/one-click?token=vetting-reminder-token',
-    );
-    expect(headers['List-Unsubscribe-Post']).toBe('List-Unsubscribe=One-Click');
-  });
-
-  it('links to the valid communities route instead of the parameterized vetting route', () => {
-    const {html, text} = vettingReminderTemplate({
-      message: 'Start your application before Friday.',
-      siteUrl: 'https://braket.gay',
-      unsubToken: 'vetting-reminder-token',
-      preferenceCenterUrl: 'https://braket.gay/account#email-preferences',
-    });
-
-    expect(html).toContain('https://braket.gay/communities');
-    expect(text).toContain('Open vetting app: https://braket.gay/communities');
-    expect(html).not.toContain('https://braket.gay/vetting');
-  });
-
-  it('uses the API site URL for unsubscribe links when it differs from the frontend site', () => {
-    const {html, text, headers} = vettingReminderTemplate({
-      message: 'Start your application before Friday.',
-      siteUrl: 'http://127.0.0.1:4200',
-      apiSiteUrl: 'http://127.0.0.1:3211',
-      unsubToken: 'vetting-reminder-token',
-      preferenceCenterUrl: 'http://127.0.0.1:4200/account#email-preferences',
-    });
-
-    expect(html).toContain(
-      'http://127.0.0.1:3211/api/unsubscribe?token=vetting-reminder-token',
-    );
-    expect(html).toContain('http://127.0.0.1:4200/account#email-preferences');
-    expect(text).toContain(
-      'Unsubscribe from future vetting reminders: http://127.0.0.1:3211/api/unsubscribe?token=vetting-reminder-token',
-    );
-    expect(text).toContain(
-      'Manage all email preferences: http://127.0.0.1:4200/account#email-preferences',
-    );
-    expect(headers['List-Unsubscribe']).toContain(
-      'http://127.0.0.1:3211/api/unsubscribe/one-click?token=vetting-reminder-token',
-    );
-  });
-});
-
 describe('applicationApprovedTemplate', () => {
   it('links approved applicants to events filtered to their community', () => {
     process.env.SITE_URL = 'https://community.braket.gay';

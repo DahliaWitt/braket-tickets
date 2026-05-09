@@ -123,6 +123,7 @@ export function createUnsubscribeHandlers(config: HttpEnvironmentConfig): {
         return jsonBodyResponse({error: 'rate_limited'}, 429, {
           ...corsHeaders,
           'Retry-After': '60',
+          'Cache-Control': 'no-store',
         });
       }
 
@@ -151,6 +152,7 @@ export function createUnsubscribeHandlers(config: HttpEnvironmentConfig): {
         return jsonBodyResponse({error: 'rate_limited'}, 429, {
           ...corsHeaders,
           'Retry-After': '60',
+          'Cache-Control': 'no-store',
         });
       }
 
@@ -188,6 +190,7 @@ export function createUnsubscribeHandlers(config: HttpEnvironmentConfig): {
         return jsonBodyResponse({error: 'rate_limited'}, 429, {
           ...corsHeaders,
           'Retry-After': '60',
+          'Cache-Control': 'no-store',
         });
       }
 

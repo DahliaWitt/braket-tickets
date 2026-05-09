@@ -106,6 +106,7 @@ export async function initiateGuestSessionHandler(
   const resumableSessionFromToken = args.existingSessionToken
     ? await ctx.runQuery(internal.guest_sessions.core.getBySessionToken, {
         sessionToken: args.existingSessionToken,
+        now: Date.now(),
       })
     : null;
   const hasValidExistingSessionToken =
@@ -118,6 +119,7 @@ export async function initiateGuestSessionHandler(
       internal.guest_sessions.core.getReusableByEmail,
       {
         email,
+        now: Date.now(),
       },
     );
 

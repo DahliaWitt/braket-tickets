@@ -36,16 +36,21 @@ export function isGuestSessionActive(
   return true;
 }
 
-export async function getActiveGuestSession(
+/**
+ * Pure token-to-session lookup. Does NOT check freshness or conversion state —
+ * deterministic and safe to call from query handlers. Use this when the caller
+ * gates on something else (e.g. the order's `guestSessionId` match) and only
+ * needs to resolve the session row.
+ */
+export async function findGuestSessionByToken(
   ctx: SessionLookupCtx,
   sessionToken: string,
-  now: number,
 ): Promise<Doc<'guest_sessions'> | null> {
   const sessionTokenDigest = await digestBearerToken(
     'guest_session',
     sessionToken,
   );
-  const session =
+  return (
     (await ctx.db
       .query('guest_sessions')
       .withIndex('by_sessionTokenDigest', (q) =>
@@ -61,8 +66,16 @@ export async function getActiveGuestSession(
     (await ctx.db
       .query('guest_sessions')
       .withIndex('by_sessionToken', (q) => q.eq('sessionToken', sessionToken))
-      .first());
+      .first())
+  );
+}
 
+export async function getActiveGuestSession(
+  ctx: SessionLookupCtx,
+  sessionToken: string,
+  now: number,
+): Promise<Doc<'guest_sessions'> | null> {
+  const session = await findGuestSessionByToken(ctx, sessionToken);
   if (!session || !isGuestSessionActive(session, now)) return null;
   return session;
 }

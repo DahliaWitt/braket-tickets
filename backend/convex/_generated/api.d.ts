@@ -519,20 +519,6 @@ export declare const api: {
           null
         >;
       };
-      reminders: {
-        getVettingReminderAudience: FunctionReference<
-          "query",
-          "public",
-          {},
-          { recipientCount: number; segment: "no_application" }
-        >;
-        sendVettingReminder: FunctionReference<
-          "mutation",
-          "public",
-          { message: string; subject: string },
-          { recipientCount: number; segment: "no_application" }
-        >;
-      };
     };
     profile: {
       create: FunctionReference<
@@ -1233,6 +1219,7 @@ export declare const api: {
             completedAt?: number;
             eventId: Id<"events">;
             lostProcessingFeeCents?: number;
+            pendingOrderId?: Id<"ticket_orders">;
             resaleFeeCents?: number;
             sellerEmail?: string;
             sellerId: Id<"users">;
@@ -1935,6 +1922,7 @@ export declare const api: {
           completedAt?: number;
           eventId: Id<"events">;
           lostProcessingFeeCents?: number;
+          pendingOrderId?: Id<"ticket_orders">;
           resaleFeeCents?: number;
           sellerId: Id<"users">;
           sellerRefundAmountCents?: number;
@@ -1962,6 +1950,7 @@ export declare const api: {
             completedAt?: number;
             eventId: Id<"events">;
             lostProcessingFeeCents?: number;
+            pendingOrderId?: Id<"ticket_orders">;
             resaleFeeCents?: number;
             sellerId: Id<"users">;
             sellerRefundAmountCents?: number;
@@ -3288,6 +3277,7 @@ export declare const api: {
                 string,
                 string | Array<string> | boolean | number
               >;
+              denyReason?: string;
               organizerId?: Id<"organizers">;
               processedBy?: Id<"users">;
               reason?: string;
@@ -3845,179 +3835,6 @@ export declare const internal: {
         },
         null
       >;
-      handleProviderEvent: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          event:
-            | {
-                created_at: string;
-                data: {
-                  bcc?: string | Array<string>;
-                  broadcast_id?: string;
-                  cc?: string | Array<string>;
-                  created_at: string;
-                  email_id: string;
-                  from: string | Array<string>;
-                  headers?: Array<{ name: string; value: string }>;
-                  reply_to?: string | Array<string>;
-                  subject: string;
-                  tags?:
-                    | Record<string, string>
-                    | Array<{ name: string; value: string }>;
-                  to: string | Array<string>;
-                };
-                type: "email.sent";
-              }
-            | {
-                created_at: string;
-                data: {
-                  bcc?: string | Array<string>;
-                  broadcast_id?: string;
-                  cc?: string | Array<string>;
-                  created_at: string;
-                  email_id: string;
-                  from: string | Array<string>;
-                  headers?: Array<{ name: string; value: string }>;
-                  reply_to?: string | Array<string>;
-                  subject: string;
-                  tags?:
-                    | Record<string, string>
-                    | Array<{ name: string; value: string }>;
-                  to: string | Array<string>;
-                };
-                type: "email.delivered";
-              }
-            | {
-                created_at: string;
-                data: {
-                  bcc?: string | Array<string>;
-                  broadcast_id?: string;
-                  cc?: string | Array<string>;
-                  created_at: string;
-                  email_id: string;
-                  from: string | Array<string>;
-                  headers?: Array<{ name: string; value: string }>;
-                  reply_to?: string | Array<string>;
-                  subject: string;
-                  tags?:
-                    | Record<string, string>
-                    | Array<{ name: string; value: string }>;
-                  to: string | Array<string>;
-                };
-                type: "email.delivery_delayed";
-              }
-            | {
-                created_at: string;
-                data: {
-                  bcc?: string | Array<string>;
-                  broadcast_id?: string;
-                  cc?: string | Array<string>;
-                  created_at: string;
-                  email_id: string;
-                  from: string | Array<string>;
-                  headers?: Array<{ name: string; value: string }>;
-                  reply_to?: string | Array<string>;
-                  subject: string;
-                  tags?:
-                    | Record<string, string>
-                    | Array<{ name: string; value: string }>;
-                  to: string | Array<string>;
-                };
-                type: "email.complained";
-              }
-            | {
-                created_at: string;
-                data: {
-                  bcc?: string | Array<string>;
-                  bounce: { message: string; subType: string; type: string };
-                  broadcast_id?: string;
-                  cc?: string | Array<string>;
-                  created_at: string;
-                  email_id: string;
-                  from: string | Array<string>;
-                  headers?: Array<{ name: string; value: string }>;
-                  reply_to?: string | Array<string>;
-                  subject: string;
-                  tags?:
-                    | Record<string, string>
-                    | Array<{ name: string; value: string }>;
-                  to: string | Array<string>;
-                };
-                type: "email.bounced";
-              }
-            | {
-                created_at: string;
-                data: {
-                  bcc?: string | Array<string>;
-                  broadcast_id?: string;
-                  cc?: string | Array<string>;
-                  created_at: string;
-                  email_id: string;
-                  from: string | Array<string>;
-                  headers?: Array<{ name: string; value: string }>;
-                  open: {
-                    ipAddress: string;
-                    timestamp: string;
-                    userAgent: string;
-                  };
-                  reply_to?: string | Array<string>;
-                  subject: string;
-                  tags?:
-                    | Record<string, string>
-                    | Array<{ name: string; value: string }>;
-                  to: string | Array<string>;
-                };
-                type: "email.opened";
-              }
-            | {
-                created_at: string;
-                data: {
-                  bcc?: string | Array<string>;
-                  broadcast_id?: string;
-                  cc?: string | Array<string>;
-                  click: {
-                    ipAddress: string;
-                    link: string;
-                    timestamp: string;
-                    userAgent: string;
-                  };
-                  created_at: string;
-                  email_id: string;
-                  from: string | Array<string>;
-                  headers?: Array<{ name: string; value: string }>;
-                  reply_to?: string | Array<string>;
-                  subject: string;
-                  tags?:
-                    | Record<string, string>
-                    | Array<{ name: string; value: string }>;
-                  to: string | Array<string>;
-                };
-                type: "email.clicked";
-              }
-            | {
-                created_at: string;
-                data: {
-                  bcc?: string | Array<string>;
-                  broadcast_id?: string;
-                  cc?: string | Array<string>;
-                  created_at: string;
-                  email_id: string;
-                  failed: { reason: string };
-                  from: string | Array<string>;
-                  headers?: Array<{ name: string; value: string }>;
-                  reply_to?: string | Array<string>;
-                  subject: string;
-                  tags?:
-                    | Record<string, string>
-                    | Array<{ name: string; value: string }>;
-                  to: string | Array<string>;
-                };
-                type: "email.failed";
-              };
-        },
-        null
-      >;
       recordResendSuccess: FunctionReference<"mutation", "internal", {}, null>;
       recordTransientFailure: FunctionReference<
         "mutation",
@@ -4308,6 +4125,7 @@ export declare const internal: {
             completedAt?: number;
             eventId: Id<"events">;
             lostProcessingFeeCents?: number;
+            pendingOrderId?: Id<"ticket_orders">;
             resaleFeeCents?: number;
             sellerEmail?: string;
             sellerId: Id<"users">;
@@ -4462,7 +4280,7 @@ export declare const internal: {
       getBySessionToken: FunctionReference<
         "query",
         "internal",
-        { now?: number; sessionToken: string },
+        { now: number; sessionToken: string },
         {
           _creationTime: number;
           _id: Id<"guest_sessions">;
@@ -4482,7 +4300,7 @@ export declare const internal: {
       getReusableByEmail: FunctionReference<
         "query",
         "internal",
-        { email: string; now?: number },
+        { email: string; now: number },
         {
           _creationTime: number;
           _id: Id<"guest_sessions">;

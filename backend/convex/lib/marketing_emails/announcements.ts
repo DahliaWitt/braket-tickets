@@ -4,7 +4,7 @@ import type {DatabaseWriter, MutationCtx} from '../../_generated/server';
 import {ADMIN_AUDIT_ACTIONS} from '../../lib/admin_audit_actions';
 import type {AudienceScope} from '../../lib/validators/marketing';
 import {eventAnnouncementTemplate} from '../../email/templates';
-import {guardEmailDedup} from '../../lib/email_dedup';
+import {guardEmailDedup, hasEmailDedup} from '../../lib/email_dedup';
 import {enqueueEmailDelivery} from '../../lib/email_delivery_wrapper';
 import {collectAllQueryUnsafe} from '../../lib/query_scan';
 import {resolveEmailApiBaseUrl} from '../../lib/public_site_urls';
@@ -246,8 +246,9 @@ export async function sendScheduledAnnouncementBatch(
   // re-fan-out the same emails. Key scopes the guard to the parent send +
   // batch position so distinct batches of one announcement all run.
   const dedupKey = `announcement:${args.eventMarketingEmailId}:${args.batchIndex}`;
-  const alreadySent = await guardEmailDedup(ctx, dedupKey);
-  if (alreadySent) return;
+
+  // Dedup READ — cheap early exit for scheduler retries of committed sends.
+  if (await hasEmailDedup(ctx, dedupKey)) return;
 
   const record = await ctx.db.get(
     'eventMarketingEmails',
@@ -265,6 +266,10 @@ export async function sendScheduledAnnouncementBatch(
   if (!event) {
     return;
   }
+
+  // Dedup INSERT — only burns the slot when committed to sending.
+  const alreadySent = await guardEmailDedup(ctx, dedupKey);
+  if (alreadySent) return;
 
   const organizer = await ctx.db.get('organizers', args.organizerId);
   const organizerName = organizer?.name ?? 'your organizer';
