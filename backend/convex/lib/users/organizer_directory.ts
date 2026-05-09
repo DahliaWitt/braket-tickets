@@ -480,7 +480,7 @@ export async function searchUserApplicationsInDirectory(
     for await (const user of ctx.db
       .query('users')
       .withIndex('email', (q) =>
-        q.gte('email', lowerTerm).lt('email', lowerTerm + '￿'),
+        q.gte('email', lowerTerm).lt('email', lowerTerm + '\uffff'),
       )) {
       if (entries.length >= SCOPED_RESULT_LIMIT) break;
       if (!user.email?.toLowerCase().includes(lowerTerm)) continue;
