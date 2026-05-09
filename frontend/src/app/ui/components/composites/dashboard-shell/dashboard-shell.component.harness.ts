@@ -22,6 +22,7 @@ export class DashboardShellHarness extends ComponentHarness {
   private getMobileSectionSelect = this.locatorForOptional(
     '[data-testid="mobile-section-select"]',
   );
+  private getMainContent = this.locatorForOptional('#main-content');
   private getActionsSlot = this.locatorForOptional(
     '[data-testid="actions-slot"]',
   );
@@ -55,6 +56,16 @@ export class DashboardShellHarness extends ComponentHarness {
 
   async getDesktopSectionNavClass(): Promise<string | null> {
     const nav = await this.getDesktopSectionNav();
+    return nav ? nav.getAttribute('class') : null;
+  }
+
+  async getMainContentClass(): Promise<string | null> {
+    const main = await this.getMainContent();
+    return main ? main.getAttribute('class') : null;
+  }
+
+  async getMobileSectionNavClass(): Promise<string | null> {
+    const nav = await this.getMobileSectionNav();
     return nav ? nav.getAttribute('class') : null;
   }
 

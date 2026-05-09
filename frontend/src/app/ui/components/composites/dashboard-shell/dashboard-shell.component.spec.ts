@@ -139,6 +139,18 @@ describe('DashboardShellComponent', () => {
     expect(navClass).toContain('sticky');
     expect(navClass).toContain('w-48');
     expect(navClass).toContain('overflow-y-auto');
+    expect(navClass).toContain('hidden');
+    expect(navClass).toContain('lg:block');
+  });
+
+  it('uses overflow-clip on the main content to enable sticky positioning', async () => {
+    const mainClass = await harness.getMainContentClass();
+    expect(mainClass).toContain('overflow-clip');
+  });
+
+  it('hides the mobile section nav on large screens', async () => {
+    const mobileNavClass = await harness.getMobileSectionNavClass();
+    expect(mobileNavClass).toContain('lg:hidden');
   });
 
   it('should project default content', async () => {
