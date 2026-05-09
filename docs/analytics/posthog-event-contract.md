@@ -220,7 +220,8 @@ Session replay launch posture:
 ## Do Not Add
 
 - No ad hoc event names.
-- No raw free text.
+- No raw free text (exception: `feedback_message` on `feedback_submitted` — see
+  [Allowed Properties](#allowed-properties) for the event-scoped sanitizer opt-in).
 - No PII.
 - No client-only payment success events.
 - No capture calls from Angular templates.
