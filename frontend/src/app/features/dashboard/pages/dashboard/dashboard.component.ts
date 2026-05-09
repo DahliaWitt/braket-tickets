@@ -5,7 +5,7 @@ import {
   signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
-import {DatePipe, CurrencyPipe} from '@angular/common';
+import {DatePipe, CurrencyPipe, NgTemplateOutlet} from '@angular/common';
 import {AuthService} from '@/core/services/auth.service';
 import {DashboardDataService} from '@/features/dashboard/services/dashboard-data.service';
 import {DashboardPageDataService} from '@/features/dashboard/services/dashboard-page-data.service';
@@ -21,6 +21,7 @@ import {BrowserPlatformService} from '@/core/services/browser-platform.service';
   imports: [
     DatePipe,
     CurrencyPipe,
+    NgTemplateOutlet,
     RouterLink,
     ContentLayoutComponent,
     ZardSkeletonComponent,
