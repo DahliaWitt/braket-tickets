@@ -1,4 +1,9 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  inject,
+  signal,
+} from '@angular/core';
 import {
   Router,
   RouterOutlet,
@@ -6,16 +11,16 @@ import {
   type Routes,
   withComponentInputBinding,
 } from '@angular/router';
-import type { Meta, StoryObj } from '@storybook/angular';
-import { applicationConfig } from '@storybook/angular';
+import type {Meta, StoryObj} from '@storybook/angular';
+import {applicationConfig} from '@storybook/angular';
 
-import { AuthService } from '@/core/services/auth.service';
+import {AuthService} from '@/core/services/auth.service';
 
-import { HelpShellComponent } from './help-shell.component';
-import { HelpManifestService } from '../../services/help-manifest.service';
-import { HelpSearchService } from '../../services/help-search.service';
-import { SectionLandingComponent } from '../section-landing/section-landing.component';
-import { type HelpArticle, type HelpAccessLevel } from '../../models/help.models';
+import {HelpShellComponent} from './help-shell.component';
+import {HelpManifestService} from '../../services/help-manifest.service';
+import {HelpSearchService} from '../../services/help-search.service';
+import {SectionLandingComponent} from '../section-landing/section-landing.component';
+import {type HelpArticle, type HelpAccessLevel} from '../../models/help.models';
 
 type HelpShellStoryRole = 'root_admin' | 'community_admin' | 'user';
 type HelpShellStoryUserRole = HelpShellStoryRole | undefined;
@@ -52,7 +57,8 @@ const USERS_ARTICLES: HelpArticle[] = [
     title: 'Buying Tickets',
     category: 'Tickets',
     order: 1,
-    description: 'Ticket flow, payment options, and what happens after checkout.',
+    description:
+      'Ticket flow, payment options, and what happens after checkout.',
     access: 'public',
     section: 'users',
     body: 'Learn how to purchase tickets, manage your order, and check your confirmation.',
@@ -85,7 +91,8 @@ const ADMIN_ARTICLES: HelpArticle[] = [
     title: 'Moderation Overview',
     category: 'Operations',
     order: 1,
-    description: 'Review submissions, approvals, and safe publishing workflows.',
+    description:
+      'Review submissions, approvals, and safe publishing workflows.',
     access: 'community_admin',
     section: 'admins',
     body: 'Use the moderation queue to review pending applications and event changes.',
@@ -119,12 +126,12 @@ const STORY_ROUTES: Routes = [
     path: 'help',
     component: HelpShellComponent,
     children: [
-      { path: '', redirectTo: 'users', pathMatch: 'full' },
-      { path: ':section', component: SectionLandingComponent },
-      { path: '**', redirectTo: 'users' },
+      {path: '', redirectTo: 'users', pathMatch: 'full'},
+      {path: ':section', component: SectionLandingComponent},
+      {path: '**', redirectTo: 'users'},
     ],
   },
-  { path: '**', redirectTo: 'help/users' },
+  {path: '**', redirectTo: 'help/users'},
 ];
 
 class StoryHelpManifestService {
@@ -134,7 +141,9 @@ class StoryHelpManifestService {
     const state = helpShellStoryState();
     if (state.loadError) {
       this.articles.set([]);
-      return Promise.reject(new Error('Storybook help manifest failed to load'));
+      return Promise.reject(
+        new Error('Storybook help manifest failed to load'),
+      );
     }
 
     this.articles.set(state.articles);
@@ -159,8 +168,13 @@ class StoryHelpManifestService {
     }));
   }
 
-  getArticle(section: HelpArticle['section'], slug: string): HelpArticle | undefined {
-    return this.articles().find((article) => article.section === section && article.slug === slug);
+  getArticle(
+    section: HelpArticle['section'],
+    slug: string,
+  ): HelpArticle | undefined {
+    return this.articles().find(
+      (article) => article.section === section && article.slug === slug,
+    );
   }
 
   getArticleAccess(article: HelpArticle): HelpAccessLevel {
@@ -168,7 +182,9 @@ class StoryHelpManifestService {
   }
 
   getAccessibleArticles(userRole: HelpShellStoryUserRole): HelpArticle[] {
-    return this.articles().filter((article) => this.canAccess(article, userRole));
+    return this.articles().filter((article) =>
+      this.canAccess(article, userRole),
+    );
   }
 
   canAccess(article: HelpArticle, userRole: HelpShellStoryUserRole): boolean {
@@ -201,7 +217,9 @@ class HelpShellStoryRouteHostComponent {
   private readonly router = inject(Router);
 
   ngOnInit(): void {
-    void this.router.navigateByUrl(helpShellStoryState().targetUrl, { replaceUrl: true });
+    void this.router.navigateByUrl(helpShellStoryState().targetUrl, {
+      replaceUrl: true,
+    });
   }
 }
 
@@ -220,9 +238,9 @@ const meta: Meta<HelpShellComponent> = {
     applicationConfig({
       providers: [
         provideRouter(STORY_ROUTES, withComponentInputBinding()),
-        { provide: HelpManifestService, useClass: StoryHelpManifestService },
-        { provide: HelpSearchService, useClass: HelpSearchService },
-        { provide: AuthService, useClass: StoryAuthService },
+        {provide: HelpManifestService, useClass: StoryHelpManifestService},
+        {provide: HelpSearchService, useClass: HelpSearchService},
+        {provide: AuthService, useClass: StoryAuthService},
       ],
     }),
   ],
@@ -243,7 +261,7 @@ type Story = StoryObj<HelpShellComponent>;
 function renderHelpShellStory() {
   return {
     template: `<bt-story-help-shell-route-host />`,
-    moduleMetadata: { imports: [HelpShellStoryRouteHostComponent] },
+    moduleMetadata: {imports: [HelpShellStoryRouteHostComponent]},
   };
 }
 
@@ -271,10 +289,8 @@ export const MobileUsersGuide: Story = {
     });
     return renderHelpShellStory();
   },
-  parameters: {
-    viewport: {
-      defaultViewport: 'mobile1',
-    },
+  globals: {
+    viewport: {value: 'mobile'},
   },
 };
 
