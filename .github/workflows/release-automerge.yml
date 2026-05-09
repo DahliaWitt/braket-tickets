@@ -1,0 +1,82 @@
+name: Release Automerge
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+    branches: ['main']
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  enable-automerge:
+    if: >-
+      ${{
+        !github.event.pull_request.draft &&
+        startsWith(github.event.pull_request.head.ref, 'release-please--branches--main') &&
+        startsWith(github.event.pull_request.title, 'chore: release')
+      }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate Release Please pull request
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$PR_BASE_REF" != "main" ]]; then
+            echo "Unexpected base branch: $PR_BASE_REF" >&2
+            exit 1
+          fi
+
+          if [[ "$PR_HEAD_REF" != release-please--branches--main* ]]; then
+            echo "Unexpected head branch: $PR_HEAD_REF" >&2
+            exit 1
+          fi
+
+          if [[ "$PR_TITLE" != chore:\ release* ]]; then
+            echo "Unexpected PR title: $PR_TITLE" >&2
+            exit 1
+          fi
+
+          case "$PR_AUTHOR" in
+            github-actions\[bot\]|DahliaWitt) ;;
+            *)
+              echo "Unexpected PR author: $PR_AUTHOR" >&2
+              exit 1
+              ;;
+          esac
+
+          mapfile -t files < <(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json files --jq '.files[].path')
+          if [[ "${#files[@]}" -eq 0 ]]; then
+            echo "Release PR has no changed files." >&2
+            exit 1
+          fi
+
+          for file in "${files[@]}"; do
+            case "$file" in
+              CHANGELOG.md|.release-please-manifest.json|package.json|pnpm-lock.yaml) ;;
+              *)
+                echo "Unexpected Release Please file: $file" >&2
+                exit 1
+                ;;
+            esac
+          done
+
+      - name: Enable auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          gh pr merge "$PR_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --squash \
+            --auto \
+            --delete-branch
