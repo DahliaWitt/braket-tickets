@@ -4,14 +4,41 @@ name: Deploy Preview (develop)
 # Dev site: https://dev.community.braket.gay
 
 on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Git SHA to deploy.
+        required: true
+        type: string
+      branch:
+        description: Source branch for concurrency scoping.
+        required: true
+        type: string
+      force_all:
+        description: Force all preview deploy slices to run.
+        required: false
+        default: false
+        type: boolean
   workflow_dispatch:
-  workflow_run:
-    workflows: ['CI']
-    types: [completed]
-    branches: ['develop']
+    inputs:
+      ref:
+        description: Optional Git SHA override for manual preview deploys.
+        required: false
+        default: ''
+        type: string
+      branch:
+        description: Optional branch label override for manual preview deploys.
+        required: false
+        default: ''
+        type: string
+      force_all:
+        description: Force all preview deploy slices to run.
+        required: false
+        default: true
+        type: boolean
 
 concurrency:
-  group: deploy-development-${{ github.event.workflow_run.head_branch || github.ref_name }}
+  group: deploy-development-${{ inputs.branch || github.ref_name }}
   cancel-in-progress: true
 
 permissions:
@@ -21,34 +48,71 @@ permissions:
 jobs:
   changes:
     runs-on: self-hosted
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'develop') }}
     outputs:
-      backend: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.backend }}
-      frontend: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.frontend }}
-      observability: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.observability }}
+      backend: ${{ steps.detect.outputs.backend }}
+      frontend: ${{ steps.detect.outputs.frontend }}
+      observability: ${{ steps.detect.outputs.observability }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
-        id: filter
-        with:
-          filters: |
-            backend:
-              - 'backend/convex/**'
-              - 'convex.json'
-              - 'backend/package.json'
-              - 'backend/scripts/**'
-              - 'package.json'
-              - 'pnpm-workspace.yaml'
-              - 'pnpm-lock.yaml'
-            frontend:
-              - 'frontend/**'
-              - 'package.json'
-              - 'pnpm-lock.yaml'
-            observability:
-              - 'ops/**'
-              - '.github/workflows/deploy-preview.yml'
+          ref: ${{ inputs.ref || github.sha }}
+          fetch-depth: 0
+      - name: Detect changed deployment slices
+        id: detect
+        env:
+          DEPLOY_REF: ${{ inputs.ref || github.sha }}
+          EVENT_BEFORE: ${{ github.event.before }}
+          FORCE_ALL: ${{ inputs.force_all && 'true' || 'false' }}
+        run: |
+          set -euo pipefail
+
+          backend=false
+          frontend=false
+          observability=false
+
+          if [ "${FORCE_ALL}" = 'true' ]; then
+            backend=true
+            frontend=true
+            observability=true
+          else
+            changed_file_list="$(mktemp)"
+            if [ -n "${EVENT_BEFORE}" ] && [ "${EVENT_BEFORE}" != '0000000000000000000000000000000000000000' ]; then
+              git diff --name-only "${EVENT_BEFORE}" "${DEPLOY_REF}" > "${changed_file_list}"
+            else
+              git show --name-only --format='' "${DEPLOY_REF}" > "${changed_file_list}"
+            fi
+
+            while IFS= read -r path; do
+              [ -n "${path}" ] || continue
+              case "${path}" in
+                .github/workflows/ci.yml|.github/workflows/deploy-preview.yml)
+                  backend=true
+                  frontend=true
+                  observability=true
+                  continue
+                  ;;
+              esac
+              case "${path}" in
+                backend/convex/*|backend/package.json|backend/scripts/*|convex.json|package.json|pnpm-lock.yaml|pnpm-workspace.yaml|shared/*)
+                  backend=true
+                  ;;
+              esac
+              case "${path}" in
+                frontend/*|package.json|pnpm-lock.yaml|shared/*)
+                  frontend=true
+                  ;;
+              esac
+              case "${path}" in
+                ops/*|shared/log-sanitizer.mjs)
+                  observability=true
+                  ;;
+              esac
+            done < "${changed_file_list}"
+          fi
+
+          echo "backend=${backend}" >> "${GITHUB_OUTPUT}"
+          echo "frontend=${frontend}" >> "${GITHUB_OUTPUT}"
+          echo "observability=${observability}" >> "${GITHUB_OUTPUT}"
 
   deploy-convex-dev:
     name: Deploy Backend to Convex (Dev)
@@ -92,7 +156,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ inputs.ref || github.sha }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@c336a2788d9774dccfdeb4823a5058ccc9f07453 # v4.3.0
@@ -136,7 +200,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ inputs.ref || github.sha }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@c336a2788d9774dccfdeb4823a5058ccc9f07453 # v4.3.0
@@ -183,7 +247,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ inputs.ref || github.sha }}
 
       - name: Check forwarder status
         id: status
@@ -282,4 +346,4 @@ jobs:
     environment: development
     steps:
       - name: Record deployment
-        run: echo "Development deployment completed for ${{ github.event.workflow_run.head_sha || github.sha }}"
+        run: echo "Development deployment completed for ${{ inputs.ref || github.sha }}"

@@ -590,7 +590,12 @@ describe('Resend email delivery wrapper', () => {
       });
     });
 
-    await t.mutation(internal.email.resend.handleProviderEvent, {
+    // The Resend component invokes `handleEmailEvent` (wired via
+    // `lib/resend_component.ts` `onEmailEvent`) for every event it processes,
+    // passing the component's internal `id` (matches `emailDeliveries.emailId`)
+    // and the raw provider `event` payload.
+    await t.mutation(internal.email.resend.handleEmailEvent, {
+      id: 'component-email-id',
       event: {
         type: 'email.bounced',
         created_at: new Date().toISOString(),

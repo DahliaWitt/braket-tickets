@@ -140,12 +140,21 @@ describe('notification_digests.sendDailyDigests', () => {
       name: 'Batch Community',
     });
 
+    // Seed 101 admin prefs across two pages of 100. Only the first and last
+    // admin have email addresses so each page sends exactly one digest —
+    // avoids the workpool race that would crash convex-test if all 101
+    // admins scheduled emails concurrently.
     for (let i = 0; i < 101; i += 1) {
-      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- admin users intentionally have no email so sendDailyDigests bails before scheduling email actions; 101 concurrent schedules in Promise.all would race on the workpool globals singleton and crash the mutation
-      const adminUserId = await t.run(async (ctx) =>
-        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- test setup for users
-        ctx.db.insert('users', {name: `Admin ${i}`}),
-      );
+      const adminWithEmail = i === 0 || i === 100;
+      const adminUserId = adminWithEmail
+        ? await t.mutation(api.testing.users.createUserDirectly, {
+            name: `Admin ${i}`,
+            email: `admin-${i}@test.com`,
+          })
+        : await t.run(async (ctx) =>
+            // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- emailless admins intentionally bail before enqueueEmailDelivery; production mutation requires email
+            ctx.db.insert('users', {name: `Admin ${i}`}),
+          );
       const applicantUserId = await t.mutation(
         api.testing.users.createUserDirectly,
         {
@@ -182,9 +191,12 @@ describe('notification_digests.sendDailyDigests', () => {
       paginationOpts: {numItems: 100, cursor: secondBatchCursor},
     });
 
+    // If pagination advances correctly: page 1 sends to admin 0, page 2 sends
+    // to admin 100 → 2 distinct dedup rows. If pagination re-reads page 1
+    // forever, only admin 0 sends and the second call dedups → 1 row.
     const dedupKeys = await t.run(async (ctx) =>
       ctx.db.query('emailDedup').collect(),
     );
-    expect(dedupKeys).toHaveLength(101);
+    expect(dedupKeys).toHaveLength(2);
   });
 });

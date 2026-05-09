@@ -1,18 +1,24 @@
-import { type CanActivateFn, type CanMatchFn, Router, type RouterStateSnapshot, type Routes } from '@angular/router';
-import { inject } from '@angular/core';
-import { isConvexId } from '@/core/utils/convex-id';
-import { of } from 'rxjs';
-import { catchError, map } from 'rxjs/operators';
-import { AuthService } from '@/core/services/auth.service';
+import {
+  type CanActivateFn,
+  type CanMatchFn,
+  Router,
+  type RouterStateSnapshot,
+  type Routes,
+} from '@angular/router';
+import {inject} from '@angular/core';
+import {isConvexId} from '@/core/utils/convex-id';
+import {of} from 'rxjs';
+import {catchError, map} from 'rxjs/operators';
+import {AuthService} from '@/core/services/auth.service';
 import {
   createAccessDeniedRedirect,
   createSocialSignupCompletionUrlTree,
   requiresSocialSignupCompletion,
   waitForAuthSettled$,
 } from '@/core/guards/auth.guards';
-import { unsavedChangesGuard } from '@/features/admin/guards/unsaved-changes.guard';
-import { BraToastService } from '@ui/components/composites/toast/toast.service';
-import { logger } from '@/utils/logger';
+import {unsavedChangesGuard} from '@/features/admin/guards/unsaved-changes.guard';
+import {BraToastService} from '@ui/components/composites/toast/toast.service';
+import {logger} from '@/utils/logger';
 
 /**
  * Admin guard that waits for auth to fully settle before checking permissions.
@@ -32,7 +38,7 @@ const adminGuard: CanActivateFn = (route, state: RouterStateSnapshot) => {
 
   const redirectToLogin = () =>
     router.createUrlTree(['/login'], {
-      queryParams: { ...route.queryParams, returnUrl: state.url },
+      queryParams: {...route.queryParams, returnUrl: state.url},
     });
 
   return waitForAuthSettled$(auth).pipe(
@@ -48,7 +54,9 @@ const adminGuard: CanActivateFn = (route, state: RouterStateSnapshot) => {
         return createAccessDeniedRedirect(router, toast);
       }
       if (requiresSocialSignupCompletion(user)) {
-        logger.debug('AdminGuard: user must complete social signup, redirecting');
+        logger.debug(
+          'AdminGuard: user must complete social signup, redirecting',
+        );
         return createSocialSignupCompletionUrlTree(router, state);
       }
       if (auth.userRole() !== 'root_admin') {
@@ -81,7 +89,7 @@ export const ADMIN_ROUTES: Routes = [
     path: '',
     canActivate: [adminGuard],
     children: [
-      { path: '', redirectTo: 'communities', pathMatch: 'full' },
+      {path: '', redirectTo: 'communities', pathMatch: 'full'},
       {
         path: 'check-in',
         redirectTo: '/scanner',
@@ -104,29 +112,35 @@ export const ADMIN_ROUTES: Routes = [
       {
         path: 'events/new',
         loadComponent: () =>
-          import('./pages/event-editor/event-editor.component').then((m) => m.EventEditorComponent),
+          import('./pages/event-editor/event-editor.component').then(
+            (m) => m.EventEditorComponent,
+          ),
         canDeactivate: [unsavedChangesGuard],
       },
       {
         path: 'events/:id/manage',
         canMatch: [eventIdMatchGuard],
         loadComponent: () =>
-          import('./pages/event-management/event-management').then((m) => m.EventManagement),
+          import('./pages/event-management/event-management').then(
+            (m) => m.EventManagement,
+          ),
       },
       {
         path: 'events/:id/edit',
         canMatch: [eventIdMatchGuard],
         loadComponent: () =>
-          import('./pages/event-editor/event-editor.component').then((m) => m.EventEditorComponent),
+          import('./pages/event-editor/event-editor.component').then(
+            (m) => m.EventEditorComponent,
+          ),
         canDeactivate: [unsavedChangesGuard],
       },
-      { path: 'reminders', redirectTo: '/admin', pathMatch: 'full' },
       {
         path: ':tab',
         canMatch: [adminTabGuard],
-        loadComponent: () => import('./pages/admin.component').then((m) => m.AdminComponent),
+        loadComponent: () =>
+          import('./pages/admin.component').then((m) => m.AdminComponent),
       },
-      { path: '**', redirectTo: '/not-found' },
+      {path: '**', redirectTo: '/not-found'},
     ],
   },
 ];

@@ -17,10 +17,13 @@
   "project": [
     "convex/**/*.ts!",
     "convex/**/*.tsx!",
+    "convex/lib/**/*.ts!",
+    "convex/**/_impl/**/*.ts!",
     "!convex/**/*.test.ts!",
     "!convex/**/*.test.tsx!",
     "!convex/_generated/**!",
     "!convex/testing/**!",
     "!convex/migrations/**!"
-  ]
+  ],
+  "ignoreDependencies": ["agent"]
 }

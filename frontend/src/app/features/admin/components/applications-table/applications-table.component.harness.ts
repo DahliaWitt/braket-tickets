@@ -3,19 +3,19 @@ import {ComponentHarness} from '@angular/cdk/testing';
 export class AdminApplicationsTableHarness extends ComponentHarness {
   static hostSelector = 'app-admin-applications-table';
 
-  private getRows = this.locatorForAll('[data-testid="application-row"]');
+  private getRows = this.locatorForAll('tr[data-testid="application-row"]');
   private getApproveButtons = this.locatorForAll(
-    '[data-testid="approve-application"]',
+    'tr[data-testid="application-row"] [data-testid="approve-application"]',
   );
   private getRejectButtons = this.locatorForAll(
-    '[data-testid="reject-application"]',
+    'tr[data-testid="application-row"] [data-testid="reject-application"]',
   );
   private getStatusBadges = this.locatorForAll(
-    '[data-testid="application-status"]',
+    'tr[data-testid="application-row"] [data-testid="application-status"]',
   );
   private getLoadingIndicator = this.locatorForOptional('[aria-busy="true"]');
   private getNoAnswersIndicators = this.locatorForAll(
-    '[data-testid="no-vetting-answers"]',
+    'tr[data-testid="application-row"] [data-testid="no-vetting-answers"]',
   );
   private getSearchInput = this.locatorForOptional(
     'input[data-testid="applications-search"]',
@@ -36,6 +36,30 @@ export class AdminApplicationsTableHarness extends ComponentHarness {
 
   async hasSearchInput(): Promise<boolean> {
     return (await this.getSearchInput()) !== null;
+  }
+
+  // Empty state
+  private getEmptyStateEl = this.locatorForOptional(
+    'tr[data-testid="empty-state"]',
+  );
+
+  async hasEmptyState(): Promise<boolean> {
+    return (await this.getEmptyStateEl()) !== null;
+  }
+
+  async getEmptyStateText(): Promise<string> {
+    const el = await this.getEmptyStateEl();
+    return el ? (await el.text()).trim() : '';
+  }
+
+  // Per-row name (first column display name)
+  private getNameEls = this.locatorForAll(
+    'tr[data-testid="application-row"] [data-testid="applicant-name"]',
+  );
+
+  async getNameAt(index: number): Promise<string> {
+    const els = await this.getNameEls();
+    return els[index] ? (await els[index].text()).trim() : '';
   }
 
   async getRowCount(): Promise<number> {

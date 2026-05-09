@@ -6,9 +6,9 @@
       "entry": [
         "ops/**/*.ts!",
         "ops/**/*.mjs!",
-        "scripts/*.ts!",
-        "backend/scripts/*.ts!",
-        "frontend/scripts/*.ts!",
+        "scripts/**/*.ts!",
+        "backend/scripts/**/*.ts!",
+        "frontend/scripts/**/*.ts!",
         "!ops/**/*.test.ts!",
         "!scripts/**/*.test.ts!",
         "!backend/scripts/**/*.test.ts!",
@@ -36,8 +36,12 @@
     "@compodoc/compodoc",
     "vite-bundle-analyzer",
     "@tailwindcss/typography",
-    "agent"
+    "agent",
+    "chokidar",
+    "gray-matter",
+    "tree-kill",
+    "ts-morph"
   ],
   "ignoreFiles": ["scripts/codemods/__fixtures__/**!"],
-  "ignoreBinaries": ["build", "serve"]
+  "ignoreBinaries": ["build", "serve", "size-limit", "playwright", "wrangler"]
 }

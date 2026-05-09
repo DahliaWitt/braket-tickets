@@ -33,17 +33,19 @@ Jump to:
 
 ## Pipeline Map
 
-| Workflow                   | Trigger                                                                            | Jobs                                                                                                       |
-| -------------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `CI`                       | Pushes to `main` or `develop`; pull requests targeting `main` or `develop`         | `lint`, `test`, `stripe-contracts`, `build`, `e2e-check`, conditional `e2e`                                |
-| `Release`                  | Pushes to `main`                                                                   | Creates or updates the Release Please PR using `RELEASE_PLEASE_TOKEN`                                      |
-| `Release Automerge`        | Release Please pull requests targeting `main`                                      | Validates the release PR branch, title, author, and changed files, then enables squash auto-merge          |
-| `Deploy to Production`     | Successful `CI` workflow run on a push to `main`                                   | `changes`, `deploy-convex`, `deploy-frontend`, `deploy-observability`, `record-deployment`                 |
-| `Deploy Preview (develop)` | Successful `CI` workflow run on a push to `develop`, or manual `workflow_dispatch` | `changes`, `deploy-convex-dev`, `deploy-frontend-preview`, `deploy-observability-dev`, `record-deployment` |
+| Workflow                   | Trigger                                                                                              | Jobs                                                                                                               |
+| -------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `CI`                       | Pushes to `main` or `develop`; pull requests targeting `main` or `develop`                           | `lint`, `test`, `stripe-contracts`, `build`, `storybook`, `e2e-check`, conditional `e2e`, branch-gated deploy call |
+| `Release`                  | Pushes to `main`                                                                                     | Creates or updates the Release Please PR using `RELEASE_PLEASE_TOKEN`                                              |
+| `Release Automerge`        | Release Please pull requests targeting `main`                                                        | Validates the release PR branch, title, author, and changed files, then enables squash auto-merge                  |
+| `Deploy to Production`     | Reusable workflow called from a successful `CI` push run on `main`                                   | `changes`, `deploy-convex`, `deploy-frontend`, `deploy-observability`, `record-deployment`                         |
+| `Deploy Preview (develop)` | Reusable workflow called from a successful `CI` push run on `develop`, or manual `workflow_dispatch` | `changes`, `deploy-convex-dev`, `deploy-frontend-preview`, `deploy-observability-dev`, `record-deployment`         |
 
-PRs do not deploy. The deploy workflows are wired to `workflow_run` on branch pushes.
+PRs do not deploy. Automatic deploys are invoked directly from the top-level `CI` workflow after its required jobs succeed, instead of chaining through `workflow_run`.
 
 GitHub Actions jobs that need environment-scoped secrets use the selected GitHub environment. CI and component deploy jobs set `deployment: false` so they can read those secrets without adding entries to the repository Deployments sidebar. Only the final `record-deployment` job in each deploy workflow creates the GitHub Deployment record, after the actual backend, frontend, or observability work has completed successfully.
+
+When troubleshooting automatic deploys, start from the parent `CI` run on the branch push, then expand the reusable `Deploy Preview (develop)` or `Deploy to Production` job to inspect the nested deploy jobs.
 
 ## Fix Release Please automation
 
@@ -174,22 +176,27 @@ If `e2e` is skipped unexpectedly, inspect the `e2e-check` output first. The depl
 
 ## Explain why a deploy was skipped
 
-If a deploy workflow never started or the expected job is marked `skipped`, check these conditions first:
+If an automatic deploy never started or the expected job is marked `skipped`, check these conditions first:
 
-1. The upstream `CI` run must have succeeded.
+1. The parent `CI` run must have succeeded.
 2. The triggering event must be a branch push, not a pull request.
 3. The branch must be `main` for production or `develop` for preview.
 4. The `changes` job must have marked the affected slice as changed.
 
-Current path filters:
+Current slice detection:
 
-| Slice           | Files that trigger it                                                                                                                     |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `backend`       | `backend/convex/**`, `convex.json`, `backend/package.json`, `backend/scripts/**`, `package.json`, `pnpm-workspace.yaml`, `pnpm-lock.yaml` |
-| `frontend`      | `frontend/**`, `package.json`, `pnpm-lock.yaml`                                                                                           |
-| `observability` | `ops/**`, `.github/workflows/deploy.yml`, `.github/workflows/deploy-preview.yml`                                                          |
+| Slice           | Files that trigger it                                                                                                                                  |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `backend`       | `backend/convex/**`, `convex.json`, `backend/package.json`, `backend/scripts/**`, `shared/**`, `package.json`, `pnpm-workspace.yaml`, `pnpm-lock.yaml` |
+| `frontend`      | `frontend/**`, `shared/**`, `package.json`, `pnpm-lock.yaml`                                                                                           |
+| `observability` | `ops/**`, `shared/log-sanitizer.mjs`                                                                                                                   |
 
-If the wrong slice was skipped, fix the path filter in the workflow instead of force-running an unrelated deploy step.
+The deploy workflows also force all slices when their own orchestration changes:
+
+- production: `.github/workflows/ci.yml` or `.github/workflows/deploy.yml`
+- preview: `.github/workflows/ci.yml` or `.github/workflows/deploy-preview.yml`
+
+If the wrong slice was skipped, fix the slice-detection logic in the workflow instead of force-running an unrelated deploy step.
 
 ## Restore a failed Convex deploy
 

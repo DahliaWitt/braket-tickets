@@ -324,13 +324,8 @@ describe('AdminApplicationsTableComponent', () => {
 
     fixture.componentRef.setInput('tableType', 'history');
     await fixture.whenStable();
-    fixture.detectChanges();
 
-    const nativeEl = fixture.nativeElement as HTMLElement;
-    const noAnswersElements = nativeEl.querySelectorAll(
-      '[data-testid="no-vetting-answers"]',
-    );
-    expect(noAnswersElements.length).toBeGreaterThan(0);
+    expect(await harness.getNoAnswersCount()).toBeGreaterThan(0);
   });
 
   it('should show no-vetting-answers indicator when answers contain only source key', async () => {
@@ -356,26 +351,16 @@ describe('AdminApplicationsTableComponent', () => {
 
     fixture.componentRef.setInput('tableType', 'history');
     await fixture.whenStable();
-    fixture.detectChanges();
 
-    const nativeEl = fixture.nativeElement as HTMLElement;
-    const noAnswersElements = nativeEl.querySelectorAll(
-      '[data-testid="no-vetting-answers"]',
-    );
-    expect(noAnswersElements.length).toBeGreaterThan(0);
+    expect(await harness.getNoAnswersCount()).toBeGreaterThan(0);
   });
 
   it('should not show no-vetting-answers indicator when answers are provided', async () => {
     // mockApps[0] has answers; verifies the fallback is NOT shown for normal applications
     fixture.componentRef.setInput('tableType', 'pending');
     await fixture.whenStable();
-    fixture.detectChanges();
 
-    const nativeEl = fixture.nativeElement as HTMLElement;
-    const noAnswersElements = nativeEl.querySelectorAll(
-      '[data-testid="no-vetting-answers"]',
-    );
-    expect(noAnswersElements.length).toBe(0);
+    expect(await harness.getNoAnswersCount()).toBe(0);
   });
 
   describe('search filtering', () => {
@@ -432,50 +417,46 @@ describe('AdminApplicationsTableComponent', () => {
     });
 
     it('should filter applications by name', async () => {
-      expect(component.filteredApplications().length).toBe(3);
+      expect(await harness.getRowCount()).toBe(3);
 
       await harness.setSearchValue('Alice');
       await fixture.whenStable();
 
-      expect(component.filteredApplications().length).toBe(1);
-      expect(component.filteredApplications()[0].user?.name).toBe(
-        'Alice Smith',
-      );
+      expect(await harness.getRowCount()).toBe(1);
+      expect(await harness.getNameAt(0)).toBe('Alice Smith');
     });
 
     it('should filter applications by email', async () => {
       await harness.setSearchValue('bob@test');
       await fixture.whenStable();
 
-      expect(component.filteredApplications().length).toBe(1);
-      expect(component.filteredApplications()[0].user?.name).toBe('Bob Jones');
+      expect(await harness.getRowCount()).toBe(1);
+      expect(await harness.getNameAt(0)).toBe('Bob Jones');
     });
 
     it('should show all applications when search is cleared', async () => {
       await harness.setSearchValue('Alice');
       await fixture.whenStable();
-      expect(component.filteredApplications().length).toBe(1);
+      expect(await harness.getRowCount()).toBe(1);
 
       await harness.setSearchValue('');
       await fixture.whenStable();
-      expect(component.filteredApplications().length).toBe(3);
+      expect(await harness.getRowCount()).toBe(3);
     });
 
     it('should filter case-insensitively', async () => {
       await harness.setSearchValue('aLiCe');
       await fixture.whenStable();
 
-      expect(component.filteredApplications().length).toBe(1);
-      expect(component.filteredApplications()[0].user?.name).toBe(
-        'Alice Smith',
-      );
+      expect(await harness.getRowCount()).toBe(1);
+      expect(await harness.getNameAt(0)).toBe('Alice Smith');
     });
 
     it('should show no-results empty state when search has no matches', async () => {
       await harness.setSearchValue('nonexistent');
       await fixture.whenStable();
 
-      expect(component.filteredApplications().length).toBe(0);
+      expect(await harness.getRowCount()).toBe(0);
       expect(await harness.hasNoResultsState()).toBe(true);
       const emptyText = await harness.getNoResultsText();
       expect(emptyText).toContain('NO RESULTS FOR');
