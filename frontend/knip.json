@@ -1,10 +1,11 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "ignoreExportsUsedInFile": true,
-  "entry": ["src/main.ts!", "functions/**/*.ts!"],
+  "entry": ["src/main.ts!", "functions/**/*.ts!", "e2e/**/*.ts!"],
   "project": [
     "src/**/*.ts!",
     "functions/**/*.ts!",
+    "e2e/**/*.ts!",
     "!src/**/*.spec.ts!",
     "!src/**/*.harness.ts!",
     "!src/**/*.stories.ts!",
@@ -14,6 +15,7 @@
     "!src/app/testing/**!"
   ],
   "ignoreFiles": [
+    ".storybook/typings.d.ts",
     "src/app/features/admin/components/reminders/reminders.component.ts",
     "src/app/features/admin/models/admin-reminders.model.ts",
     "src/app/features/admin/services/admin-reminders.service.ts",
@@ -29,5 +31,13 @@
       "exports"
     ]
   },
-  "ignoreBinaries": ["tsx"]
+  "ignoreDependencies": [
+    "agent",
+    "@tailwindcss/typography",
+    "@compodoc/compodoc",
+    "@angular-eslint/builder",
+    "concurrently",
+    "vite-bundle-analyzer"
+  ],
+  "ignoreBinaries": ["tsx", "eslint"]
 }

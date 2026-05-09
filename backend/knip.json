@@ -22,5 +22,6 @@
     "!convex/_generated/**!",
     "!convex/testing/**!",
     "!convex/migrations/**!"
-  ]
+  ],
+  "ignoreDependencies": ["agent"]
 }
