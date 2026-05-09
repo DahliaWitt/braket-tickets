@@ -127,19 +127,31 @@ export class BraDialogHarness extends ComponentHarness {
 
   async clickHeaderClose(): Promise<void> {
     const btn = await this.closeHeaderButton();
-    if (!btn) throw new Error('Close button is not present in the dialog');
+    if (!btn) {
+      throw new Error(
+        'Close button [data-testid="z-close-header-button"] is not present in the dialog',
+      );
+    }
     await btn.click();
   }
 
   async clickCancel(): Promise<void> {
     const btn = await this.cancelButton();
-    if (!btn) throw new Error('Cancel button is not present in the dialog');
+    if (!btn) {
+      throw new Error(
+        'Cancel button [data-testid="z-cancel-button"] is not present in the dialog',
+      );
+    }
     await btn.click();
   }
 
   async clickOk(): Promise<void> {
     const btn = await this.okButton();
-    if (!btn) throw new Error('OK button is not present in the dialog');
+    if (!btn) {
+      throw new Error(
+        'OK button [data-testid="z-ok-button"] is not present in the dialog',
+      );
+    }
     await btn.click();
   }
 }
