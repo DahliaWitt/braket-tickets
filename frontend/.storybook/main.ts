@@ -1,9 +1,19 @@
-import type { StorybookConfig } from '@storybook/angular';
+import type {StorybookConfig} from '@storybook/angular';
+import remarkGfm from 'remark-gfm';
 
 const config: StorybookConfig = {
   stories: ['../src/**/*.stories.@(ts|mdx)', '../src/**/*.mdx'],
   addons: [
-    '@storybook/addon-docs',
+    {
+      name: '@storybook/addon-docs',
+      options: {
+        mdxPluginOptions: {
+          mdxCompileOptions: {
+            remarkPlugins: [remarkGfm],
+          },
+        },
+      },
+    },
     '@storybook/addon-a11y',
     '@storybook/addon-themes',
   ],

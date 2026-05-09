@@ -198,6 +198,7 @@
             "styles": ["src/styles.css"],
             "compodoc": true,
             "compodocArgs": ["-e", "json", "-d", ".storybook"],
+            "experimentalZoneless": true,
             "port": 6006
           }
         },
@@ -209,6 +210,7 @@
             "styles": ["src/styles.css"],
             "compodoc": true,
             "compodocArgs": ["-e", "json", "-d", ".storybook"],
+            "experimentalZoneless": true,
             "outputDir": "storybook-static"
           }
         }
