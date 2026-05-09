@@ -16,9 +16,6 @@
   ],
   "ignoreFiles": [
     ".storybook/typings.d.ts",
-    "src/app/features/admin/components/reminders/reminders.component.ts",
-    "src/app/features/admin/models/admin-reminders.model.ts",
-    "src/app/features/admin/services/admin-reminders.service.ts",
     "src/app/ui/components/primitives/status-badge/status-badge.component.ts",
     "src/app/ui/components/primitives/status-badge/status-badge.variants.ts",
     "src/app/ui/components/primitives/switch/switch.component.ts",
