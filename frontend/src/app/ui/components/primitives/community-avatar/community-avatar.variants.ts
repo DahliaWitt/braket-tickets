@@ -41,9 +41,3 @@ export const communityAvatarInitialVariants = cva('font-display font-bold', {
 export type BraCommunityAvatarVariants = VariantProps<
   typeof communityAvatarContainerVariants
 >;
-
-export function communityAvatarShapeClass(
-  shape: NonNullable<BraCommunityAvatarVariants['shape']>,
-): string {
-  return shapeVariants[shape];
-}

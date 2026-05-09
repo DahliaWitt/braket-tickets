@@ -45,6 +45,18 @@ describe('BraCommunityAvatarComponent', () => {
     expect(await harness.getInitialText()).toBe('T');
   });
 
+  it('should show fallback when image loading fails', async () => {
+    const {fixture, harness} = await setup(
+      `<bra-community-avatar name="Braket" logoUrl="https://example.com/missing.png" />`,
+    );
+
+    await harness.triggerImageError();
+    fixture.detectChanges();
+
+    expect(await harness.hasImage()).toBe(false);
+    expect(await harness.getInitialText()).toBe('B');
+  });
+
   it('should expose size via data attribute', async () => {
     const {harness} = await setup(
       `<bra-community-avatar name="X" size="lg" />`,

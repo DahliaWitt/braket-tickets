@@ -1,39 +1,14 @@
-import { bootstrapApplication } from '@angular/platform-browser';
-import * as Sentry from '@sentry/angular';
-import { appConfig } from './app/app.config';
-import { App } from './app/app';
-import { scheduleSentryReplayLoad } from './app/core/services/sentry-loader';
-import { environment } from './environments/environment';
+import type {ApplicationRef} from '@angular/core';
+import {bootstrapApplication} from '@angular/platform-browser';
+import {appConfig} from './app/app.config';
+import {App} from './app/app';
+import {
+  initializeSentryAngularTracing,
+  isSentryEnabled,
+  scheduleSentryReplayLoad,
+} from './app/core/services/sentry-loader';
+import {environment} from './environments/environment';
 
-// Initialize Sentry error tracking (only when enabled and DSN is configured)
-if (environment.enableSentry && environment.sentryDsn) {
-  Sentry.init({
-    dsn: environment.sentryDsn,
-    environment: environment.sentryEnvironment,
-    tunnel: '/monitor',
-    integrations: [Sentry.browserTracingIntegration()],
-    // Restrict trace header propagation to our own backend origins only.
-    // Without this, Sentry would add sentry-trace/baggage headers to ALL
-    // outbound requests, potentially leaking trace context to third parties.
-    tracePropagationTargets: [
-      /^https:\/\/.*\.convex\.cloud/,
-      /^https?:\/\/localhost/,
-      /^https?:\/\/127\.0\.0\.1/,
-    ],
-    // Capture 10% of transactions for performance monitoring
-    tracesSampleRate: 0.1,
-    replaysSessionSampleRate: environment.enableSentryReplay
-      ? environment.sentryReplaySessionSampleRate
-      : 0,
-    replaysOnErrorSampleRate: environment.enableSentryReplay
-      ? environment.sentryReplayOnErrorSampleRate
-      : 0,
-    // Send 100% of errors
-    sampleRate: 1.0,
-    // Don't send PII like user IPs
-    sendDefaultPii: false,
-  });
-}
 if (environment.production) {
   // Intentional logger bypass: this is a production easter egg, not an app log.
   console.log(
@@ -42,8 +17,22 @@ if (environment.production) {
   );
 }
 
+function initializeMonitoring(appRef: ApplicationRef): void {
+  if (typeof window === 'undefined' || !isSentryEnabled(environment)) {
+    return;
+  }
+
+  void initializeSentryAngularTracing(environment, appRef.injector)
+    .then(() => {
+      scheduleSentryReplayLoad(environment);
+    })
+    .catch((error: unknown) => {
+      console.error('Failed to initialize Sentry monitoring', error);
+    });
+}
+
 bootstrapApplication(App, appConfig)
-  .then(() => {
-    scheduleSentryReplayLoad(environment);
+  .then((appRef) => {
+    initializeMonitoring(appRef);
   })
   .catch((err) => console.error(err));

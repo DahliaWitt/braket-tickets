@@ -65,10 +65,10 @@ export class CommunityEventsComponentHarness extends ComponentHarness {
   }
 
   async getHeaderAvatar(): Promise<BraCommunityAvatarHarness | null> {
-    const header = await this.locatorForOptional(
-      '[data-testid="community-events-header"]',
+    return this.locatorForOptional(
+      BraCommunityAvatarHarness.with({
+        ancestor: '[data-testid="community-events-header"]',
+      }),
     )();
-    if (!header) return null;
-    return this.locatorForOptional(BraCommunityAvatarHarness)();
   }
 }

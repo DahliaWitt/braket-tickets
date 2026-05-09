@@ -1,7 +1,19 @@
-import {ComponentHarness} from '@angular/cdk/testing';
+import {
+  type BaseHarnessFilters,
+  ComponentHarness,
+  HarnessPredicate,
+} from '@angular/cdk/testing';
+
+export type BraCommunityAvatarHarnessFilters = BaseHarnessFilters;
 
 export class BraCommunityAvatarHarness extends ComponentHarness {
   static hostSelector = 'bra-community-avatar';
+
+  static with(
+    options: BraCommunityAvatarHarnessFilters = {},
+  ): HarnessPredicate<BraCommunityAvatarHarness> {
+    return new HarnessPredicate(BraCommunityAvatarHarness, options);
+  }
 
   async hasImage(): Promise<boolean> {
     const img = await this.locatorForOptional('img')();
@@ -27,5 +39,10 @@ export class BraCommunityAvatarHarness extends ComponentHarness {
 
   async getSize(): Promise<string | null> {
     return (await this.host()).getAttribute('data-size');
+  }
+
+  async triggerImageError(): Promise<void> {
+    const img = await this.locatorFor('img')();
+    await img.dispatchEvent('error');
   }
 }
