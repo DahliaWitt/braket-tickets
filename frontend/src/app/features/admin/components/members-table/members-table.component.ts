@@ -8,6 +8,7 @@ import {
   computed,
   ChangeDetectionStrategy,
 } from '@angular/core';
+import {ConvexError} from 'convex/values';
 import {
   MembersService,
   type MemberWithApplication,
@@ -220,7 +221,9 @@ export class AdminMembersTableComponent {
 
     this.dialog.create<ReasonDialogComponent, {visibilityLabel: string}>({
       zTitle: 'Revoke Membership',
-      zDescription: `Are you sure you want to revoke membership for ${member.user['name']}? This will remove their ticket access.`,
+      zDescription: member.isCommunityAdmin
+        ? `Are you sure you want to revoke membership for ${member.user['name']}? this will also revoke their community admin role and remove their ticket access.`
+        : `Are you sure you want to revoke membership for ${member.user['name']}? this will remove their ticket access.`,
       zOkText: 'Yes, Revoke',
       zOkDestructive: true,
       zCancelText: 'Cancel',
@@ -256,9 +259,20 @@ export class AdminMembersTableComponent {
 
       toast.success('Membership revoked');
       this.refreshData();
-    } catch (e) {
+    } catch (e: unknown) {
       logger.error('Operation failed', e);
-      toast.error('Failed to revoke membership');
+      if (
+        e instanceof ConvexError &&
+        typeof e.data === 'object' &&
+        e.data !== null &&
+        (e.data as Record<string, unknown>)['code'] === 'LAST_ADMIN'
+      ) {
+        toast.error(
+          'cannot revoke the last community admin. assign another admin first.',
+        );
+      } else {
+        toast.error('failed to revoke membership');
+      }
     }
   }
 
