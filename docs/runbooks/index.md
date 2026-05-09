@@ -61,6 +61,17 @@ When an incident is reported:
 | Production Site  | https://community.braket.gay                                                                                                                                       |
 | Preview Site     | Cloudflare Pages `develop` branch; use `https://dev.community.braket.gay` for preview and the direct Pages branch URL only to isolate custom-domain routing issues |
 
+## Convex Deployments
+
+Single source of truth for deployment hostnames. Source: `doppler secrets get CONVEX_URL --plain --config <env>`.
+
+| Environment | API host (`.convex.cloud`)          | HTTP-actions host (`.convex.site`) | Used by                    |
+| ----------- | ----------------------------------- | ---------------------------------- | -------------------------- |
+| Production  | `modest-impala-722.convex.cloud`    | `modest-impala-722.convex.site`    | `community.braket.gay`     |
+| Staging     | `bright-swordfish-194.convex.cloud` | `bright-swordfish-194.convex.site` | `dev.community.braket.gay` |
+
+The `.convex.cloud` host serves the API and storage URLs (e.g., poster `posterUrl` strings). The `.convex.site` host serves HTTP actions (auth callbacks, marketing tracking endpoints). When configuring third-party integrations against a deployment, pick the variant that matches what the integration calls — see [Social Auth Setup](./social-auth-setup.md) for OAuth callback URLs and [Frontend & CDN](./frontend-cdn.md) for image transformation source allowlists.
+
 ## Related Documentation
 
 - [Deployment Guide](../deployment.md) — how deployments work
