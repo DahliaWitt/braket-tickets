@@ -339,6 +339,8 @@ export class AnalyticsService {
       person_profiles: 'identified_only', // Optimizes costs and privacy
       disable_compression: true, // Keep event payloads JSON so the ingest proxy can enrich them.
       respect_dnt: true, // Keep PostHog's built-in DNT guard enabled too.
+      secure_cookie: true,
+      cross_subdomain_cookie: false,
       mask_all_text: true,
       mask_all_element_attributes: true,
       capture_pageview: 'history_change',
