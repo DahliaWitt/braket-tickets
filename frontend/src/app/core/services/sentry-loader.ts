@@ -26,15 +26,36 @@ let sentryErrorHandlerPromise: Promise<ErrorHandler | null> | null = null;
 let replayLoadPromise: Promise<void> | null = null;
 let replayScheduled = false;
 
+/**
+ * Determines whether Sentry reporting is enabled for the given runtime config.
+ *
+ * @param config - Runtime Sentry configuration
+ * @returns `true` if `config.enableSentry` is truthy and `config.sentryDsn` is not an empty string, `false` otherwise.
+ */
 export function isSentryEnabled(config: SentryRuntimeConfig): boolean {
   return config.enableSentry && config.sentryDsn !== '';
 }
 
+/**
+ * Lazily loads the `@sentry/angular` module and caches the import for reuse.
+ *
+ * @returns The imported `@sentry/angular` module
+ */
 function loadSentry(): Promise<SentryModule> {
   sentryLoadPromise ??= import('@sentry/angular');
   return sentryLoadPromise;
 }
 
+/**
+ * Initialize and configure the Sentry SDK using the provided runtime config.
+ *
+ * Initializes Sentry (lazily loading the `@sentry/angular` module) and applies configuration
+ * such as DSN, environment, tracing, and replay sampling based on `config`. If Sentry is
+ * disabled by the runtime configuration, no initialization is performed.
+ *
+ * @param config - Runtime Sentry configuration controlling DSN, environment, tracing, and replay options
+ * @returns `SentryModule` if Sentry was initialized, `null` if Sentry is disabled
+ */
 export async function initializeSentry(
   config: SentryRuntimeConfig,
 ): Promise<SentryModule | null> {
@@ -76,6 +97,14 @@ export async function initializeSentry(
   return sentryInitPromise;
 }
 
+/**
+ * Ensures Sentry is initialized and registers its TraceService in the provided Angular injector.
+ *
+ * If Sentry is not enabled or fails to initialize, this function returns without side effects.
+ *
+ * @param config - Runtime Sentry configuration controlling initialization and replay behavior
+ * @param injector - Angular injector used to register Sentry.TraceService into the DI context
+ */
 export async function initializeSentryAngularTracing(
   config: SentryRuntimeConfig,
   injector: Injector,
@@ -90,6 +119,12 @@ export async function initializeSentryAngularTracing(
   });
 }
 
+/**
+ * Get a cached Sentry ErrorHandler when Sentry is enabled and initialized.
+ *
+ * @param config - Runtime Sentry configuration used to determine whether Sentry should be initialized
+ * @returns An Angular `ErrorHandler` created by Sentry, or `null` if Sentry is disabled or initialization yielded no Sentry module
+ */
 async function getSentryErrorHandler(
   config: SentryRuntimeConfig,
 ): Promise<ErrorHandler | null> {
@@ -111,6 +146,12 @@ async function getSentryErrorHandler(
   return sentryErrorHandlerPromise;
 }
 
+/**
+ * Captures an error with Sentry using the configured error handler without awaiting the result.
+ *
+ * @param error - The error or value to report to Sentry.
+ * @param config - Runtime Sentry configuration that controls whether Sentry is enabled and how reporting is performed.
+ */
 export function handleSentryError(
   error: unknown,
   config: SentryRuntimeConfig,
@@ -124,6 +165,12 @@ export function handleSentryError(
     });
 }
 
+/**
+ * Ensures the Sentry Replay integration is loaded and registered when Sentry is enabled.
+ *
+ * @param config - Runtime Sentry configuration used to initialize Sentry and decide whether replay should be loaded
+ * @throws Any error encountered while lazy-loading or registering the replay integration; on failure the load attempt is reset so it can be retried later
+ */
 export async function ensureSentryReplay(
   config: SentryRuntimeConfig,
 ): Promise<void> {

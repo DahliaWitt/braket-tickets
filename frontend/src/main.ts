@@ -17,6 +17,15 @@ if (environment.production) {
   );
 }
 
+/**
+ * Defers initialization of Sentry monitoring for the running Angular application.
+ *
+ * If the global `window` is unavailable or Sentry is disabled for the current environment, no work is scheduled.
+ * Otherwise schedules monitoring initialization to run during browser idle time (using `requestIdleCallback` with a 5000ms timeout)
+ * or falls back to a 5000ms `setTimeout` when `requestIdleCallback` is not supported.
+ *
+ * @param appRef - The Angular ApplicationRef whose injector is used when initializing tracing
+ */
 function scheduleMonitoringLoad(appRef: ApplicationRef): void {
   if (typeof window === 'undefined' || !isSentryEnabled(environment)) {
     return;
