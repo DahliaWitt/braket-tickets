@@ -13,6 +13,7 @@ import {
   provideRouter,
   Router,
   withComponentInputBinding,
+  withInMemoryScrolling,
   withRouterConfig,
   withViewTransitions,
 } from '@angular/router';
@@ -36,6 +37,10 @@ export const appConfig: ApplicationConfig = {
     provideRouter(
       routes,
       withComponentInputBinding(),
+      withInMemoryScrolling({
+        anchorScrolling: 'enabled',
+        scrollPositionRestoration: 'enabled',
+      }),
       withRouterConfig({onSameUrlNavigation: 'reload'}),
       withViewTransitions({
         onViewTransitionCreated: ({transition}) => {
