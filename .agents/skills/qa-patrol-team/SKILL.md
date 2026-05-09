@@ -178,7 +178,7 @@ Mark routes as visited in state.
 
 Known routes (from `frontend/src/app/app.routes.ts`):
 
-```
+```text
 /, /login, /about, /support, /privacy, /terms, /communities, /events, /unsubscribe,
 /tickets, /account,
 /admin/communities,
@@ -470,7 +470,7 @@ Log it in state, send next task. Do NOT retry the same task more than once.
 
 Check with `ps aux | grep convex` / `ps aux | grep ng`. Restart if dead:
 
-```
+```bash
 npx convex dev > /tmp/qa-convex.log 2>&1 &
 cd frontend && pnpm start > /tmp/qa-frontend.log 2>&1 &
 ```
