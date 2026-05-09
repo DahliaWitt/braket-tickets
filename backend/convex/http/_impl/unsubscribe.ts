@@ -5,7 +5,7 @@ import {
   parseUnsubscribeAllBody,
   parseUnsubscribeToggleBody,
 } from './request_parsing';
-import {checkPublicEndpointRateLimit} from './rate_limits';
+import {isPublicEndpointRateLimited} from './rate_limits';
 
 function jsonBodyResponse(
   body: unknown,
@@ -60,15 +60,9 @@ export function createUnsubscribeHandlers(config: HttpEnvironmentConfig): {
         return redirectUnsubscribe(config, 'error=invalid');
       }
 
-      const rateLimit = await checkPublicEndpointRateLimit(
-        ctx,
-        request,
-        'unsubscribeEndpoint',
-      );
-      if (rateLimit === 'missing-ip') {
-        return redirectUnsubscribe(config, 'error=invalid');
-      }
-      if (rateLimit === 'limited') {
+      if (
+        await isPublicEndpointRateLimited(ctx, request, 'unsubscribeEndpoint')
+      ) {
         return redirectUnsubscribe(config, 'error=rate_limited');
       }
 
@@ -123,15 +117,9 @@ export function createUnsubscribeHandlers(config: HttpEnvironmentConfig): {
         return jsonBodyResponse({error: 'missing_token'}, 400, corsHeaders);
       }
 
-      const rateLimit = await checkPublicEndpointRateLimit(
-        ctx,
-        request,
-        'unsubscribeEndpoint',
-      );
-      if (rateLimit === 'missing-ip') {
-        return jsonBodyResponse({error: 'missing_client_ip'}, 400, corsHeaders);
-      }
-      if (rateLimit === 'limited') {
+      if (
+        await isPublicEndpointRateLimited(ctx, request, 'unsubscribeEndpoint')
+      ) {
         return jsonBodyResponse({error: 'rate_limited'}, 429, {
           ...corsHeaders,
           'Retry-After': '60',
@@ -158,15 +146,9 @@ export function createUnsubscribeHandlers(config: HttpEnvironmentConfig): {
         request.headers.get('origin'),
         config,
       );
-      const rateLimit = await checkPublicEndpointRateLimit(
-        ctx,
-        request,
-        'unsubscribeEndpoint',
-      );
-      if (rateLimit === 'missing-ip') {
-        return jsonBodyResponse({error: 'missing_client_ip'}, 400, corsHeaders);
-      }
-      if (rateLimit === 'limited') {
+      if (
+        await isPublicEndpointRateLimited(ctx, request, 'unsubscribeEndpoint')
+      ) {
         return jsonBodyResponse({error: 'rate_limited'}, 429, {
           ...corsHeaders,
           'Retry-After': '60',
@@ -202,15 +184,9 @@ export function createUnsubscribeHandlers(config: HttpEnvironmentConfig): {
         request.headers.get('origin'),
         config,
       );
-      const rateLimit = await checkPublicEndpointRateLimit(
-        ctx,
-        request,
-        'unsubscribeEndpoint',
-      );
-      if (rateLimit === 'missing-ip') {
-        return jsonBodyResponse({error: 'missing_client_ip'}, 400, corsHeaders);
-      }
-      if (rateLimit === 'limited') {
+      if (
+        await isPublicEndpointRateLimited(ctx, request, 'unsubscribeEndpoint')
+      ) {
         return jsonBodyResponse({error: 'rate_limited'}, 429, {
           ...corsHeaders,
           'Retry-After': '60',
