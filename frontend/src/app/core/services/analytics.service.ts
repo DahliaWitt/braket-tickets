@@ -469,6 +469,9 @@ export class AnalyticsService {
     if (!this.isPostHogEnabled()) {
       return;
     }
+    if (shouldOptOutAnalyticsByDefault()) {
+      return;
+    }
 
     void this.ensureClient().then((client) => {
       client?.startSessionRecording({
@@ -490,6 +493,9 @@ export class AnalyticsService {
     const routeTemplate = toRouteTemplate(input.route);
 
     if (!this.isPostHogEnabled()) {
+      return false;
+    }
+    if (shouldOptOutAnalyticsByDefault()) {
       return false;
     }
 

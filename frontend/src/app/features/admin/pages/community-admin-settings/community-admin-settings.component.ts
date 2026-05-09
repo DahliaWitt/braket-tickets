@@ -44,6 +44,7 @@ import {
   isAcceptedImageMimeType,
 } from '@/features/admin/utils/image-upload-policy';
 import {readInputChecked, readInputValue} from '@ui/utils/dom-event';
+import {extractErrorMessage} from '@/core/utils/error-message.utils';
 import {
   isSignalFormFieldInvalid,
   signalFormFieldHasError,
@@ -586,21 +587,12 @@ export class CommunityAdminSettingsComponent {
 
     this.isGrantingAdmin.set(true);
     try {
-      const result = await grantCommunityAdmin(
-        this.convex,
-        emailInput,
-        organizerId,
-      );
-      if (result === 'granted') {
-        this.newAdminEmail.set('');
-        toast.success('Admin granted');
-      } else {
-        this.newAdminEmail.set('');
-        toast.success('Invite sent to ' + emailInput);
-      }
+      await grantCommunityAdmin(this.convex, emailInput, organizerId);
+      this.newAdminEmail.set('');
+      toast.success('Admin granted');
     } catch (e) {
       logger.error('Failed to grant admin', e);
-      const message = e instanceof Error ? e.message : 'Failed to grant admin';
+      const message = extractErrorMessage(e) || 'Failed to grant admin';
       toast.error(message);
     } finally {
       this.isGrantingAdmin.set(false);
@@ -640,6 +632,26 @@ export class CommunityAdminSettingsComponent {
     const organizerId = this.communityCtx.selectedCommunityId();
     if (!emailInput || !organizerId) return;
 
+    const normalizedEmail = emailInput.toLowerCase();
+    if (
+      this.adminList().some(
+        (admin) => admin.email?.toLowerCase() === normalizedEmail,
+      )
+    ) {
+      toast.error(
+        'This user is already an admin. Admins can already check in guests.',
+      );
+      return;
+    }
+    if (
+      this.scannerList().some(
+        (scanner) => scanner.email?.toLowerCase() === normalizedEmail,
+      )
+    ) {
+      toast.error('This user is already door staff.');
+      return;
+    }
+
     this.isGrantingScanner.set(true);
     try {
       await grantCommunityScanner(this.convex, emailInput, organizerId);
@@ -647,8 +659,7 @@ export class CommunityAdminSettingsComponent {
       toast.success('Scanner granted');
     } catch (e) {
       logger.error('Failed to grant scanner', e);
-      const message =
-        e instanceof Error ? e.message : 'Failed to grant scanner';
+      const message = extractErrorMessage(e) || 'Failed to grant scanner';
       toast.error(message);
     } finally {
       this.isGrantingScanner.set(false);

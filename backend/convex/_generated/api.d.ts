@@ -3209,6 +3209,12 @@ export declare const api: {
           termsAcceptedAt?: number;
         } | null
       >;
+      findByExactEmailForAdmin: FunctionReference<
+        "query",
+        "public",
+        { email: string; organizerId: Id<"organizers"> },
+        { _id: Id<"users">; email?: string } | null
+      >;
       get: FunctionReference<
         "query",
         "public",

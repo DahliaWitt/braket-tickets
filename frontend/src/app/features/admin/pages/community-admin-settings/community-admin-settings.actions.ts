@@ -1,9 +1,9 @@
-import type { ConvexClient } from 'convex/browser';
-import { api } from '@convex/_generated/api';
-import type { Id } from '@convex/_generated/dataModel';
-import { getAcceptedImageFormatsMessage } from '@/features/admin/utils/image-upload-policy';
+import type {ConvexClient} from 'convex/browser';
+import {api} from '@convex/_generated/api';
+import type {Id} from '@convex/_generated/dataModel';
+import {getAcceptedImageFormatsMessage} from '@/features/admin/utils/image-upload-policy';
 
-import type { CommunityProfileFormValue } from './community-admin-settings.helpers';
+import type {CommunityProfileFormValue} from './community-admin-settings.helpers';
 
 function parseStorageUploadResponse(payload: unknown): string {
   if (typeof payload !== 'object' || payload === null) {
@@ -34,17 +34,25 @@ export async function saveCommunityProfile(
       fileSize: file.size,
     });
     if (!validation.valid) {
-      throw new Error(validation.error ?? `File validation failed. ${getAcceptedImageFormatsMessage()}`);
+      throw new Error(
+        validation.error ??
+          `File validation failed. ${getAcceptedImageFormatsMessage()}`,
+      );
     }
 
-    const uploadUrl = await convex.mutation(api.storage.files.generateUploadUrl, {});
+    const uploadUrl = await convex.mutation(
+      api.storage.files.generateUploadUrl,
+      {},
+    );
     const response = await fetch(uploadUrl, {
       method: 'POST',
-      headers: { 'Content-Type': file.type },
+      headers: {'Content-Type': file.type},
       body: file,
     });
     if (!response.ok) {
-      throw new Error(`Logo upload failed: ${response.status} ${response.statusText}`);
+      throw new Error(
+        `Logo upload failed: ${response.status} ${response.statusText}`,
+      );
     }
     const storageId = parseStorageUploadResponse(await response.json());
     const typedStorageId = storageId as Id<'_storage'>;
@@ -71,33 +79,27 @@ export async function saveCommunityProfile(
     status: profile.status,
     isPublicDirectory: profile.isPublicDirectory,
     codeOfConduct: profile.codeOfConduct,
-    ...(logoStorageId !== undefined ? { logoStorageId } : {}),
+    ...(logoStorageId !== undefined ? {logoStorageId} : {}),
   });
 }
-
-export type GrantAdminResult = 'granted' | 'invited';
 
 export async function grantCommunityAdmin(
   convex: ConvexClient,
   emailInput: string,
   organizerId: Id<'organizers'>,
-): Promise<GrantAdminResult> {
-  const users = await convex.query(api.users.profile.search, { query: emailInput, organizerId });
-  const user = users.find((u) => u.email?.toLowerCase() === emailInput.toLowerCase());
-
-  if (user) {
-    await convex.mutation(api.communities.admins.grant, {
-      userId: user._id,
-      organizerId,
-    });
-    return 'granted';
-  }
-
-  await convex.mutation(api.communities.management.invites.inviteToExisting, {
+): Promise<void> {
+  const user = await convex.query(api.users.profile.findByExactEmailForAdmin, {
     email: emailInput,
     organizerId,
   });
-  return 'invited';
+  if (!user) {
+    throw new Error('No Braket account exists for that email yet.');
+  }
+
+  await convex.mutation(api.communities.admins.grant, {
+    userId: user._id,
+    organizerId,
+  });
 }
 
 export async function revokeCommunityAdmin(
@@ -116,10 +118,12 @@ export async function grantCommunityScanner(
   emailInput: string,
   organizerId: Id<'organizers'>,
 ): Promise<void> {
-  const users = await convex.query(api.users.profile.search, { query: emailInput, organizerId });
-  const user = users.find((u) => u.email?.toLowerCase() === emailInput.toLowerCase());
+  const user = await convex.query(api.users.profile.findByExactEmailForAdmin, {
+    email: emailInput,
+    organizerId,
+  });
   if (!user) {
-    throw new Error('No user found with that email.');
+    throw new Error('No Braket account exists for that email yet.');
   }
 
   await convex.mutation(api.communities.scanners.grant, {
@@ -145,9 +149,13 @@ export async function saveCommunityAdminNotificationPreference(
   mode: 'off' | 'all' | 'digest',
   digestHour: number,
 ): Promise<void> {
-  await convex.mutation(api.communities.management.notification_preferences.setMyNotificationPreference, {
-    organizerId,
-    mode,
-    ...(mode === 'digest' ? { digestHour } : {}),
-  });
+  await convex.mutation(
+    api.communities.management.notification_preferences
+      .setMyNotificationPreference,
+    {
+      organizerId,
+      mode,
+      ...(mode === 'digest' ? {digestHour} : {}),
+    },
+  );
 }

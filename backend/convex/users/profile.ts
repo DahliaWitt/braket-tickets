@@ -8,8 +8,8 @@ import {
   requireUser,
 } from '../lib/auth_identity';
 import {adapterFindMany} from '../lib/better_auth_adapter';
-import {sanitizeName} from '../lib/validation';
-import {isPlatformAdmin} from '../lib/access';
+import {normalizeEmail, sanitizeName} from '../lib/validation';
+import {isPlatformAdmin, requireManageCommunity} from '../lib/access';
 import {
   connectedAccountValidator,
   currentUserValidator,
@@ -32,6 +32,11 @@ import {
 } from '../lib/users/membership';
 import {getUserCommunities} from '../lib/authz';
 import {loadUserApplicationPageForOrganizerFromDirectory} from '../lib/users/organizer_directory';
+
+const teamManagementUserLookupValidator = v.object({
+  _id: v.id('users'),
+  email: v.optional(v.string()),
+});
 
 type UserApplicationRow = {
   user: ReturnType<typeof stripSensitiveUserFields>;
@@ -227,6 +232,33 @@ export const search = query({
       query: args.query,
       organizerId: organizerScope,
     });
+  },
+});
+
+/**
+ * Resolves an existing platform user by exact email for community team
+ * management flows. The organizer argument gates access to callers who can
+ * manage that community, but the lookup is intentionally not scoped to current
+ * community members.
+ */
+export const findByExactEmailForAdmin = query({
+  args: {email: v.string(), organizerId: v.id('organizers')},
+  returns: v.union(teamManagementUserLookupValidator, v.null()),
+  handler: async (ctx, args) => {
+    const user = await getAuthUser(ctx);
+    if (!user) return null;
+
+    await requireManageCommunity(ctx, user._id, args.organizerId);
+
+    const email = normalizeEmail(args.email);
+    if (!email) return null;
+
+    const match = await ctx.db
+      .query('users')
+      .withIndex('email', (q) => q.eq('email', email))
+      .first();
+
+    return match ? {_id: match._id, email: match.email} : null;
   },
 });
 

@@ -5,6 +5,7 @@ import {
   authz,
   authzUserId,
   grantCommunityScannerRole,
+  isCommunityAdmin,
   isCommunityScanner,
   listCommunityScannerIds,
   revokeCommunityScannerRole,
@@ -14,6 +15,7 @@ import {rateLimiter} from '../../lib/rate_limits';
 import {insertAdminAuditLog} from '../../lib/admin_audit_log';
 import {mapEventsWithPosterUrls} from '../../lib/events/read_models';
 import {buildCommunityUserRows} from '../../lib/users/helpers';
+import {throwAppError} from '../../lib/errors';
 
 export async function grantCommunityScanner(
   ctx: MutationCtx,
@@ -22,6 +24,13 @@ export async function grantCommunityScanner(
   const {_id: callerId} = await requireUser(ctx);
 
   await requireManageCommunity(ctx, callerId, args.organizerId);
+
+  if (await isCommunityAdmin(ctx, args.userId, args.organizerId)) {
+    throwAppError(
+      'ALREADY_COMMUNITY_ADMIN',
+      'This user is already an admin. Admins can already check in guests.',
+    );
+  }
 
   const roleAdded = !(await isCommunityScanner(
     ctx,
