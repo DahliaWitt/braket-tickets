@@ -64,10 +64,19 @@ context resets and lets you resume if the orchestrator itself restarts.
     {"area": "audit-log", "source": "git:BRA-58", "tested": true}
   ],
   "issuesFiled": [
-    {"id": "BRA-70", "title": "Console error on /admin/events", "route": "/admin/events", "state": "open"}
+    {
+      "id": "BRA-70",
+      "title": "Console error on /admin/events",
+      "route": "/admin/events",
+      "state": "open"
+    }
   ],
   "issuesReopened": [
-    {"id": "BRA-65", "title": "Login form broken on mobile", "previousState": "Done"}
+    {
+      "id": "BRA-65",
+      "title": "Login form broken on mobile",
+      "previousState": "Done"
+    }
   ],
   "teammateLog": [
     {"time": "...", "task": "smoke:/about", "result": "pass", "duration": "45s"}
@@ -95,6 +104,7 @@ results via SendMessage — the orchestrator merges results into state.
    Poll log every 5s for "Compiled successfully" (max 120s).
 
 4. **Create the team**:
+
    ```
    TeamCreate({
      team_name: "qa-patrol",
@@ -154,6 +164,7 @@ digraph loop {
 ### Time Budget
 
 Record `Date.now()` at startup. Before each dispatch, check elapsed time:
+
 - **> 11.5 hours**: Write summary report and exit.
 - **> 11 hours**: Only dispatch quick smoke tests, no complex journeys.
 
@@ -166,16 +177,18 @@ You do NOT have a fixed CUJ list. You discover what to test incrementally.
 Mark routes as visited in state.
 
 Known routes (from `frontend/src/app/app.routes.ts`):
+
 ```
 /, /login, /about, /support, /privacy, /terms, /communities, /events, /unsubscribe,
 /tickets, /account,
-/admin/communities, /admin/reminders,
+/admin/communities,
 /community-admin/pending, /community-admin/history, /community-admin/members,
 /community-admin/events, /community-admin/magic-links, /community-admin/audit-log,
 /community-admin/settings, /community-admin/shared-vetting,
 /help, /help/users, /help/admins, /help/developers,
 /scanner, /not-found
 ```
+
 Note: /vetting-info redirects to /communities, /dashboard redirects to /
 
 **Phase 2 — Discovery (after smoke):** Send the browser teammate a discovery task:
@@ -446,25 +459,33 @@ To create a new user:
 The orchestrator handles recovery — teammates just return what they have.
 
 ### Browser teammate reports auth failure
+
 Send the auth bootstrap task to the browser teammate, then send the retry task.
 
 ### Browser teammate returns nothing / crashes
+
 Log it in state, send next task. Do NOT retry the same task more than once.
 
 ### Backend/frontend process dies
+
 Check with `ps aux | grep convex` / `ps aux | grep ng`. Restart if dead:
+
 ```
 npx convex dev > /tmp/qa-convex.log 2>&1 &
 cd frontend && pnpm start > /tmp/qa-frontend.log 2>&1 &
 ```
+
 Wait for ready, then send auth bootstrap task to browser teammate before resuming.
 
 ### State file corrupted
+
 If JSON parse fails, rename the broken file to `.bak` and start fresh.
 
 ### Teammate unresponsive
+
 If SendMessage to a teammate gets no response or errors, the teammate may have hit
 a fatal error. Re-spawn it with the same team_name and name:
+
 ```
 Agent({
   team_name: "qa-patrol",
@@ -483,6 +504,7 @@ At exit (time expired), write `/tmp/qa-patrol-report-{timestamp}.md`:
 # QA Patrol Report — {date}
 
 ## Stats
+
 - Duration: X hours Y minutes
 - Browser tasks dispatched: N
 - Routes visited: N / total
@@ -491,26 +513,33 @@ At exit (time expired), write `/tmp/qa-patrol-report-{timestamp}.md`:
 - Issues filed: N
 
 ## Issues Filed
+
 - BRA-XX: title (P1/P2/P3/P4)
 - ...
 
 ## Issues Reopened
+
 - BRA-XX: title (was: Done/Cancelled)
 - ...
 
 ## Duplicates Skipped
+
 - "title" → matched BRA-XX (state: open/in-progress)
 
 ## Routes Status
+
 - [pass/fail per route]
 
 ## Areas Tested
+
 - [area]: [result summary]
 
 ## Untested Areas
+
 - [areas discovered but not yet tested]
 
 ## Notes
+
 - [observations that didn't warrant issues]
 ```
 
