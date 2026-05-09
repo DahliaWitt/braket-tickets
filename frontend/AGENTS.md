@@ -27,6 +27,7 @@ Applies to everything under `/frontend`.
 
 Before building any new shared/UI component from scratch, **check ZardUI first**
 (use context7 MCP or https://zardui.com/). If ZardUI has a matching primitive:
+
 1. Pull it via `ng add` or copy the source
 2. Prefix with `z-` (it's ZardUI-derived)
 3. Customize variants, styling, and behavior to meet Braket's needs
@@ -38,6 +39,7 @@ semantic color mapping, `bra-page-header` with back-nav pattern).
 ## New Component Requirements
 
 All new components (both `z-` and `bra-`) must:
+
 - Use Angular signals for state (no zone.js, no RxJS BehaviorSubject for component state)
 - Include a CDK test harness (`ComponentHarness` subclass) alongside the component
 - Meet WCAG 2.1 AA accessibility: proper ARIA roles, keyboard navigation, focus management,
@@ -52,6 +54,7 @@ All new components (both `z-` and `bra-`) must:
 - Do not use `nativeElement.querySelector`, `fixture.nativeElement`, or ad-hoc DOM selectors in specs
 - If a component/page lacks a harness, add one alongside the component before adding behavior tests
 - Prefer `TestbedHarnessEnvironment` plus focused harness methods over asserting raw DOM structure
+- One harness file per component. Canonical filename is `<name>.component.harness.ts`. Before adding a harness, check for an existing one in the same directory and extend it rather than creating a sibling `<name>.harness.ts`.
 
 ## Shared Components
 
