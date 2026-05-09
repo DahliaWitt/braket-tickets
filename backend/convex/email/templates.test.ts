@@ -238,6 +238,22 @@ describe('purchasedTicketTemplate', () => {
     );
     expect(html).not.toContain('/auth/register');
   });
+
+  it('omits the account creation CTA for authenticated purchasers', () => {
+    process.env.SITE_URL = 'https://community.braket.gay';
+
+    const {html} = purchasedTicketTemplate(
+      {
+        title: 'Warehouse Communion',
+        date: '2026-05-01T20:00:00.000Z',
+      },
+      'Authed Buyer',
+      'https://qr.example/ticket.png',
+    );
+
+    expect(html).not.toContain('Create Account');
+    expect(html).not.toContain('login?signup=true');
+  });
 });
 
 describe('applicationApprovedTemplate', () => {

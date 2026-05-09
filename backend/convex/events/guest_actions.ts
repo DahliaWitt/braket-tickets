@@ -106,6 +106,7 @@ export const sendTicket = action({
       {title: event.title, date: event.date, location: event.location},
       guest.name,
       'cid:qrcode',
+      true,
     );
 
     await sendEmailDeliveryNow(
