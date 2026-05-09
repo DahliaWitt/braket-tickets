@@ -18,39 +18,28 @@ if (environment.production) {
 }
 
 /**
- * Defers initialization of Sentry monitoring for the running Angular application.
+ * Initializes Sentry monitoring for the running Angular application.
  *
- * If the global `window` is unavailable or Sentry is disabled for the current environment, no work is scheduled.
- * Otherwise schedules monitoring initialization to run during browser idle time (using `requestIdleCallback` with a 5000ms timeout)
- * or falls back to a 5000ms `setTimeout` when `requestIdleCallback` is not supported.
+ * If the global `window` is unavailable or Sentry is disabled for the current environment, no work is performed.
  *
  * @param appRef - The Angular ApplicationRef whose injector is used when initializing tracing
  */
-function scheduleMonitoringLoad(appRef: ApplicationRef): void {
+function initializeMonitoring(appRef: ApplicationRef): void {
   if (typeof window === 'undefined' || !isSentryEnabled(environment)) {
     return;
   }
 
-  const startMonitoring = () => {
-    void initializeSentryAngularTracing(environment, appRef.injector)
-      .then(() => {
-        scheduleSentryReplayLoad(environment);
-      })
-      .catch((error: unknown) => {
-        console.error('Failed to initialize Sentry monitoring', error);
-      });
-  };
-
-  if ('requestIdleCallback' in window) {
-    window.requestIdleCallback(() => startMonitoring(), {timeout: 5_000});
-    return;
-  }
-
-  globalThis.setTimeout(startMonitoring, 5_000);
+  void initializeSentryAngularTracing(environment, appRef.injector)
+    .then(() => {
+      scheduleSentryReplayLoad(environment);
+    })
+    .catch((error: unknown) => {
+      console.error('Failed to initialize Sentry monitoring', error);
+    });
 }
 
 bootstrapApplication(App, appConfig)
   .then((appRef) => {
-    scheduleMonitoringLoad(appRef);
+    initializeMonitoring(appRef);
   })
   .catch((err) => console.error(err));

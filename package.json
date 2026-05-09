@@ -94,9 +94,10 @@
   "pnpm": {
     "overrides": {
       "@modelcontextprotocol/sdk>@hono/node-server": "1.19.14",
-      "@modelcontextprotocol/sdk>hono": "4.12.14",
-      "convex-helpers>hono": "4.12.14",
+      "@modelcontextprotocol/sdk>hono": "4.12.18",
+      "convex-helpers>hono": "4.12.18",
       "mermaid>uuid": "14.0.0",
+      "postcss": "8.5.10",
       "webpack": "5.105.4",
       "esbuild": "0.27.3"
     }

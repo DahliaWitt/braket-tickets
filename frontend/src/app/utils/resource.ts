@@ -31,10 +31,3 @@ export function queryLoadState<T>(query: QueryStateSource<T>): AsyncLoadState {
   if (query.error()) return 'error';
   return query.data() === undefined ? 'loading' : 'ready';
 }
-
-export function resourceLoadState<T>(res: Resource<T>): AsyncLoadState {
-  if (res.error()) return 'error';
-  if (res.isLoading()) return 'loading';
-  if (res.hasValue()) return 'ready';
-  return 'idle';
-}

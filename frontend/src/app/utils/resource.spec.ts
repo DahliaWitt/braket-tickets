@@ -4,7 +4,6 @@ import {describe, expect, it, vi} from 'vitest';
 
 import {
   queryLoadState,
-  resourceLoadState,
   safeResourceValue,
   type QueryStateSource,
 } from './resource';
@@ -93,31 +92,5 @@ describe('queryLoadState', () => {
 
   it('keeps undefined data in loading state', () => {
     expect(queryLoadState(makeQuery({data: undefined}))).toBe('loading');
-  });
-});
-
-describe('resourceLoadState', () => {
-  it('returns error when the resource errored', () => {
-    const res = makeResource({error: () => new Error('failed')});
-
-    expect(resourceLoadState(res)).toBe('error');
-  });
-
-  it('returns loading while the resource is loading', () => {
-    const res = makeResource({isLoading: () => true});
-
-    expect(resourceLoadState(res)).toBe('loading');
-  });
-
-  it('returns ready when the resource has a value', () => {
-    const res = makeResource({hasValue: () => true, value: () => 1});
-
-    expect(resourceLoadState(res)).toBe('ready');
-  });
-
-  it('returns idle when the resource has no active state', () => {
-    const res = makeResource({});
-
-    expect(resourceLoadState(res)).toBe('idle');
   });
 });

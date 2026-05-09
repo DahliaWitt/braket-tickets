@@ -4,6 +4,7 @@ import {
   type Injector,
   runInInjectionContext,
 } from '@angular/core';
+import {Router} from '@angular/router';
 import {logger} from '@/utils/logger';
 import type {AppEnvironment} from '../../../environments/environment.model';
 import type * as SentryAngular from '@sentry/angular';
@@ -100,7 +101,7 @@ export async function initializeSentry(
 /**
  * Ensures Sentry is initialized and registers its TraceService in the provided Angular injector.
  *
- * If Sentry is not enabled or fails to initialize, this function returns without side effects.
+ * If Sentry is not enabled, this function returns without side effects. Initialization errors propagate to the caller.
  *
  * @param config - Runtime Sentry configuration controlling initialization and replay behavior
  * @param injector - Angular injector used to register Sentry.TraceService into the DI context
@@ -115,7 +116,7 @@ export async function initializeSentryAngularTracing(
   }
 
   runInInjectionContext(injector, () => {
-    inject(Sentry.TraceService);
+    new Sentry.TraceService(inject(Router));
   });
 }
 
@@ -147,22 +148,28 @@ async function getSentryErrorHandler(
 }
 
 /**
- * Captures an error with Sentry using the configured error handler without awaiting the result.
+ * Captures an error with Sentry using the configured error handler.
  *
  * @param error - The error or value to report to Sentry.
  * @param config - Runtime Sentry configuration that controls whether Sentry is enabled and how reporting is performed.
+ * @returns `true` when the error was reported to Sentry, `false` when Sentry is disabled or reporting failed.
  */
-export function handleSentryError(
+export async function handleSentryError(
   error: unknown,
   config: SentryRuntimeConfig,
-): void {
-  void getSentryErrorHandler(config)
-    .then((errorHandler) => {
-      errorHandler?.handleError(error);
-    })
-    .catch((captureError: unknown) => {
-      logger.error('Failed to capture Sentry exception', captureError);
-    });
+): Promise<boolean> {
+  try {
+    const errorHandler = await getSentryErrorHandler(config);
+    if (!errorHandler) {
+      return false;
+    }
+
+    errorHandler.handleError(error);
+    return true;
+  } catch (captureError: unknown) {
+    logger.error('Failed to capture Sentry exception', captureError);
+    return false;
+  }
 }
 
 /**
