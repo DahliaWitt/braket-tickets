@@ -15,13 +15,20 @@ import {PublicCommunitiesService} from '@/core/services/public-communities.servi
 import {PublicEventsService} from '@/core/services/public-events.service';
 import {Router, RouterLink} from '@angular/router';
 import {ContentLayoutComponent} from '@/layout/content-layout/content-layout.component';
+import {BraCommunityAvatarComponent} from '@ui/components/primitives/community-avatar/community-avatar.component';
 import {logger} from '@/utils/logger';
 import {safeResourceValue} from '@/utils/resource';
 
 @Component({
   selector: 'app-landing',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, ContentLayoutComponent, DatePipe, CurrencyPipe],
+  imports: [
+    RouterLink,
+    ContentLayoutComponent,
+    DatePipe,
+    CurrencyPipe,
+    BraCommunityAvatarComponent,
+  ],
   template: `
     <app-content-layout>
       <div
@@ -203,25 +210,11 @@ import {safeResourceValue} from '@/utils/resource';
                   class="flex flex-shrink-0 items-center gap-1.5 transition-colors hover:text-primary"
                   [attr.aria-label]="'View ' + community.name + ' community'"
                 >
-                  @if (community.logoUrl) {
-                    <img
-                      [src]="community.logoUrl"
-                      [alt]="community.name + ' logo'"
-                      loading="lazy"
-                      decoding="async"
-                      class="h-5 w-5 rounded-sm border border-border object-cover"
-                    />
-                  } @else {
-                    <div
-                      class="flex h-5 w-5 items-center justify-center rounded-sm border border-border bg-card"
-                    >
-                      <span
-                        class="font-display text-2xs font-bold text-primary"
-                      >
-                        {{ community.name.charAt(0) }}
-                      </span>
-                    </div>
-                  }
+                  <bra-community-avatar
+                    [name]="community.name"
+                    [logoUrl]="community.logoUrl"
+                    size="xs"
+                  />
                   <span
                     class="max-w-[10rem] truncate font-display text-sm font-bold text-foreground"
                   >

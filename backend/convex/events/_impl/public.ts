@@ -101,9 +101,15 @@ export async function listEventsByOrganizer(
     availabilityByEventId,
   );
 
+  const organizerLogoUrl = await resolveCommunityLogoUrl(
+    ctx,
+    organizer.logoStorageId,
+  );
+
   return {
     organizerName: organizer.name,
     organizerDescription: organizer.description,
+    organizerLogoUrl,
     events: eventsWithAvailability,
   };
 }
