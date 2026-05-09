@@ -157,6 +157,24 @@ function communityAdminEventUrl(
   return `${siteUrl}/community-admin/events/${encodeURIComponent(eventId)}/manage?community=${encodeURIComponent(communityParam)}`;
 }
 
+function buildCodeOfConductEmailBlock(community?: {
+  slug?: string;
+  hasCodeOfConduct?: boolean;
+}): string {
+  if (!community?.hasCodeOfConduct || !community.slug) return '';
+  const siteUrl = resolveSiteUrl();
+  const cocUrl = `${siteUrl}/c/${encodeURIComponent(community.slug)}`;
+  return `
+      <div style="margin: 24px 0 0 0; padding: 16px 0 0 0; border-top: 1px solid ${baseStyles.border};">
+          <p style="margin: 0; font-size: 12px; line-height: 1.6; color: ${baseStyles.textDim};">
+              please review the community's
+              <a href="${escapeHtml(cocUrl)}" target="_blank" rel="noopener" style="color: ${baseStyles.accentViolet}; text-decoration: underline;">code of conduct</a>
+              before the event~ respect the space and each other.
+          </p>
+      </div>
+  `;
+}
+
 export function verificationTemplate(
   url: string,
   _token = '',
@@ -248,6 +266,7 @@ export function purchasedTicketTemplate(
   buyerName: string,
   qrCodeSource: string,
   isGuest = false,
+  community?: {slug?: string; hasCodeOfConduct?: boolean},
 ): {subject: string; html: string} {
   const dateStr = new Date(event.date).toLocaleDateString(undefined, {
     weekday: 'long',
@@ -288,6 +307,7 @@ export function purchasedTicketTemplate(
       <p style="margin: 24px 0 0 0; font-size: 14px; line-height: 1.6; color: ${baseStyles.textDim};">
           See u there &lt;3 have fun, stay safe, look out for each other.
       </p>
+      ${buildCodeOfConductEmailBlock(community)}
       ${
         isGuest
           ? `

@@ -241,6 +241,47 @@ describe('purchasedTicketTemplate', () => {
   });
 });
 
+describe('purchasedTicketTemplate — code of conduct', () => {
+  it('includes a code of conduct link when community has CoC and slug', () => {
+    process.env.SITE_URL = 'https://community.braket.gay';
+
+    const {html} = purchasedTicketTemplate(
+      {title: 'Warehouse Communion', date: '2026-05-01T20:00:00.000Z'},
+      'Attendee',
+      'https://qr.example/ticket.png',
+      false,
+      {slug: 'test-community', hasCodeOfConduct: true},
+    );
+
+    expect(html).toContain('code of conduct');
+    expect(html).toContain('https://community.braket.gay/c/test-community');
+  });
+
+  it('omits code of conduct block when community has no CoC', () => {
+    process.env.SITE_URL = 'https://community.braket.gay';
+
+    const {html} = purchasedTicketTemplate(
+      {title: 'Warehouse Communion', date: '2026-05-01T20:00:00.000Z'},
+      'Attendee',
+      'https://qr.example/ticket.png',
+      false,
+      {slug: 'test-community', hasCodeOfConduct: false},
+    );
+
+    expect(html).not.toContain('code of conduct');
+  });
+
+  it('omits code of conduct block when no community info provided', () => {
+    const {html} = purchasedTicketTemplate(
+      {title: 'Warehouse Communion', date: '2026-05-01T20:00:00.000Z'},
+      'Attendee',
+      'https://qr.example/ticket.png',
+    );
+
+    expect(html).not.toContain('code of conduct');
+  });
+});
+
 describe('vettingReminderTemplate', () => {
   it('uses the gentle vetting-reminder preheader', () => {
     const {html} = vettingReminderTemplate({
