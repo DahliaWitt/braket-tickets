@@ -29,6 +29,7 @@ import {ZardButtonComponent} from '@ui/components/primitives/button/button.compo
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
 import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton.component';
 import {EmptyStateComponent} from '@ui/components/primitives/empty-state/empty-state.component';
+import {BraCommunityAvatarComponent} from '@ui/components/primitives/community-avatar/community-avatar.component';
 import {BraDialogService} from '@ui/components/composites/dialog/dialog.service';
 import {CheckoutSidebarComponent} from '../../components/checkout-sidebar/checkout-sidebar.component';
 import {toast} from 'ngx-sonner';
@@ -62,6 +63,7 @@ type EventOrganizer = NonNullable<EventDetail['organizer']>;
     ZardIconComponent,
     ZardSkeletonComponent,
     EmptyStateComponent,
+    BraCommunityAvatarComponent,
     CheckoutSidebarComponent,
     EventTicketStatusComponent,
   ],

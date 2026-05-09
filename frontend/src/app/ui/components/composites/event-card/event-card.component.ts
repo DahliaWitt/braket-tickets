@@ -114,7 +114,8 @@ export interface EventCardData {
             data-testid="event-card-date"
             class="font-mono text-sm font-bold text-muted-foreground"
           >
-            {{ event().date | date: 'mediumDate' }}
+            {{ event().date | date: 'mediumDate' }},
+            {{ event().date | date: 'shortTime' }}
           </p>
           @if (event().location) {
             <p

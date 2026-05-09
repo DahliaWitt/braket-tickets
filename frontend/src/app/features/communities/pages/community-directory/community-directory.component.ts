@@ -14,6 +14,7 @@ import {type FunctionReturnType} from 'convex/server';
 import {injectQuery, skipToken} from 'convex-angular';
 import {AuthService} from '@/core/services/auth.service';
 import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton.component';
+import {BraCommunityAvatarComponent} from '@ui/components/primitives/community-avatar/community-avatar.component';
 import {safeResourceValue} from '@/utils/resource';
 
 type CommunityListItem = FunctionReturnType<
@@ -23,7 +24,12 @@ type CommunityListItem = FunctionReturnType<
 @Component({
   selector: 'app-community-directory',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ContentLayoutComponent, RouterLink, ZardSkeletonComponent],
+  imports: [
+    ContentLayoutComponent,
+    RouterLink,
+    ZardSkeletonComponent,
+    BraCommunityAvatarComponent,
+  ],
   template: `
     <app-content-layout>
       <div class="space-y-6 py-16 md:py-24">
@@ -120,30 +126,14 @@ type CommunityListItem = FunctionReturnType<
                   data-testid="community-logo-slot"
                   [routerLink]="['/c', community.slug]"
                   [attr.aria-label]="'View ' + community.name + ' community'"
-                  class="relative block h-16 w-16 overflow-hidden rounded-lg border border-border bg-muted/50 transition-colors group-hover:border-primary/40"
                 >
-                  @if (community.logoUrl) {
-                    <img
-                      data-testid="community-logo-image"
-                      [src]="community.logoUrl"
-                      [alt]="community.name + ' logo'"
-                      loading="lazy"
-                      decoding="async"
-                      class="absolute inset-0 h-full w-full object-cover"
-                    />
-                  } @else {
-                    <div
-                      data-testid="community-logo-fallback"
-                      aria-hidden="true"
-                      class="flex h-full w-full items-center justify-center bg-primary/[0.06] text-primary"
-                    >
-                      <span
-                        class="font-display text-2xl font-bold tracking-[0.08em]"
-                      >
-                        {{ communityInitial(community.name) }}
-                      </span>
-                    </div>
-                  }
+                  <bra-community-avatar
+                    [name]="community.name"
+                    [logoUrl]="community.logoUrl"
+                    size="2xl"
+                    shape="rounded-lg"
+                    class="transition-opacity group-hover:opacity-90"
+                  />
                 </a>
                 <div class="space-y-2">
                   <h2
@@ -364,10 +354,6 @@ export class CommunityDirectoryComponent {
       return map;
     },
   );
-
-  protected communityInitial(name: string): string {
-    return name.trim().charAt(0).toUpperCase() || '?';
-  }
 
   protected retryDirectoryLoad(): void {
     if (this.auth.isAuthenticated()) {

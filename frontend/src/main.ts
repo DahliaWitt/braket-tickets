@@ -17,6 +17,13 @@ if (environment.production) {
   );
 }
 
+/**
+ * Initializes Sentry monitoring for the running Angular application.
+ *
+ * If the global `window` is unavailable or Sentry is disabled for the current environment, no work is performed.
+ *
+ * @param appRef - The Angular ApplicationRef whose injector is used when initializing tracing
+ */
 function initializeMonitoring(appRef: ApplicationRef): void {
   if (typeof window === 'undefined' || !isSentryEnabled(environment)) {
     return;
