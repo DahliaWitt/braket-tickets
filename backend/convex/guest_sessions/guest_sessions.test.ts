@@ -219,6 +219,7 @@ describe('guest_sessions', () => {
         internal.guest_sessions.core.getBySessionToken,
         {
           sessionToken: 'existing-reuse-session-token',
+          now: Date.now(),
         },
       );
       expect(oldSession).toBeNull();
@@ -281,6 +282,7 @@ describe('guest_sessions', () => {
         internal.guest_sessions.core.getBySessionToken,
         {
           sessionToken: oldSessionToken,
+          now: Date.now(),
         },
       );
       expect(oldSession).toBeNull();
@@ -289,6 +291,7 @@ describe('guest_sessions', () => {
         internal.guest_sessions.core.getBySessionToken,
         {
           sessionToken: result.sessionToken,
+          now: Date.now(),
         },
       );
       expect(newSession).not.toBeNull();
@@ -478,6 +481,7 @@ describe('guest_sessions', () => {
         internal.guest_sessions.core.getBySessionToken,
         {
           sessionToken: 'valid-token',
+          now: Date.now(),
         },
       );
 
@@ -505,6 +509,7 @@ describe('guest_sessions', () => {
         internal.guest_sessions.core.getBySessionToken,
         {
           sessionToken: 'pending-resume-token',
+          now: Date.now(),
         },
       );
 
@@ -542,6 +547,7 @@ describe('guest_sessions', () => {
         internal.guest_sessions.core.getBySessionToken,
         {
           sessionToken: 'promoted-resume-token',
+          now: Date.now(),
         },
       );
 
@@ -617,12 +623,14 @@ describe('guest_sessions', () => {
         internal.guest_sessions.core.getBySessionToken,
         {
           sessionToken: 'first-pending-token',
+          now: Date.now(),
         },
       );
       const secondResult = await t.query(
         internal.guest_sessions.core.getBySessionToken,
         {
           sessionToken: 'second-pending-token',
+          now: Date.now(),
         },
       );
 
@@ -656,6 +664,7 @@ describe('guest_sessions', () => {
         internal.guest_sessions.core.getBySessionToken,
         {
           sessionToken: 'first-pending-token',
+          now: Date.now(),
         },
       );
 
@@ -687,6 +696,7 @@ describe('guest_sessions', () => {
         internal.guest_sessions.core.getBySessionToken,
         {
           sessionToken: 'current-token',
+          now: Date.now(),
         },
       );
 
@@ -720,12 +730,14 @@ describe('guest_sessions', () => {
         internal.guest_sessions.core.getBySessionToken,
         {
           sessionToken: 'cleared-resume-token',
+          now: Date.now(),
         },
       );
       const currentResult = await t.query(
         internal.guest_sessions.core.getBySessionToken,
         {
           sessionToken: 'current-token',
+          now: Date.now(),
         },
       );
 
@@ -756,6 +768,7 @@ describe('guest_sessions', () => {
         internal.guest_sessions.core.getBySessionToken,
         {
           sessionToken: 'expired-token',
+          now: Date.now(),
         },
       );
 
@@ -785,6 +798,7 @@ describe('guest_sessions', () => {
         internal.guest_sessions.core.getBySessionToken,
         {
           sessionToken: 'inactive-token',
+          now: Date.now(),
         },
       );
 
@@ -798,6 +812,7 @@ describe('guest_sessions', () => {
         internal.guest_sessions.core.getBySessionToken,
         {
           sessionToken: 'does-not-exist',
+          now: Date.now(),
         },
       );
 
@@ -818,6 +833,7 @@ describe('guest_sessions', () => {
         internal.guest_sessions.core.getBySessionToken,
         {
           sessionToken: 'converted-session-token',
+          now: Date.now(),
         },
       );
 
@@ -840,6 +856,7 @@ describe('guest_sessions', () => {
         internal.guest_sessions.core.getBySessionToken,
         {
           sessionToken: 'trusted-token',
+          now: Date.now(),
         },
       );
 

@@ -18,6 +18,7 @@ export async function handleListPublicEvents(
       status: 429,
       headers: {
         ...getPublicCorsHeaders(),
+        'Cache-Control': 'no-store',
         'Retry-After': '60',
       },
     });

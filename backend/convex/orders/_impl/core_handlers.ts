@@ -24,6 +24,7 @@ import {
   completeResaleOrderState,
 } from '../../lib/orders/complete';
 import {appendFinancialEvent} from '../../lib/orders/financial_events';
+import {findGuestSessionByToken} from '../../lib/guest_sessions/lifecycle';
 import {
   markLateInvalidRefundedState,
   prepareLateInvalidRefundState,
@@ -279,11 +280,13 @@ async function resolveOrderCallerForQuery(
     throwOrderError('FORBIDDEN', 'Guest session required');
   }
 
-  const guestSession = await ctx.runQuery(
-    internal.guest_sessions.core.getBySessionToken,
-    {sessionToken},
-  );
-  if (!guestSession) {
+  // Pure token lookup — query handlers must stay deterministic, so freshness
+  // is intentionally NOT checked here. The order's `guestSessionId` match in
+  // getOrderForCaller is the access control; the order state itself encodes
+  // whether checkout is still viable. Mutations re-check freshness against
+  // wall-clock independently.
+  const guestSession = await findGuestSessionByToken(ctx, sessionToken);
+  if (!guestSession || guestSession.convertedToUserId) {
     throwOrderError(
       'RESERVATION_EXPIRED',
       'Guest session is invalid or expired',
@@ -654,27 +657,32 @@ export async function releaseForPaymentFailureHandler(
   ctx: MutationCtx,
   args: ReleaseForPaymentFailureArgs,
 ) {
+  // Single read: gate on current state, then either release + emit analytics
+  // or no-op. releaseOpenOrder is the only path that flips state to 'released'
+  // and sets releaseReason, and it short-circuits on non-open state, so there
+  // is no need to re-read the order after the release call.
+  const order = await ctx.db.get('ticket_orders', args.orderId);
+  if (order?.state !== 'open') {
+    return null;
+  }
   await releaseOrderState(ctx.db, {
     orderId: args.orderId,
     reason: 'payment_failed',
   });
-  const releasedOrder = await ctx.db.get('ticket_orders', args.orderId);
-  if (releasedOrder?.releaseReason === 'payment_failed') {
-    await captureBackendEvent(ctx, {
-      distinctId: await distinctIdForOrder(releasedOrder),
-      event: 'checkout_failed',
-      uuid: `checkout_failed:${releasedOrder._id}`,
-      properties: {
-        actor_role: releasedOrder.userId ? 'user' : 'guest',
-        auth_state: releasedOrder.userId ? 'signed_in' : 'guest',
-        order_id: releasedOrder._id,
-        event_id: releasedOrder.eventId,
-        checkout_kind: checkoutKindForOrder(releasedOrder),
-        error_code: args.errorCode ?? 'payment_failed',
-        failure_stage: args.failureStage ?? 'payment_intent',
-      },
-    });
-  }
+  await captureBackendEvent(ctx, {
+    distinctId: await distinctIdForOrder(order),
+    event: 'checkout_failed',
+    uuid: `checkout_failed:${order._id}`,
+    properties: {
+      actor_role: order.userId ? 'user' : 'guest',
+      auth_state: order.userId ? 'signed_in' : 'guest',
+      order_id: order._id,
+      event_id: order.eventId,
+      checkout_kind: checkoutKindForOrder(order),
+      error_code: args.errorCode ?? 'payment_failed',
+      failure_stage: args.failureStage ?? 'payment_intent',
+    },
+  });
   return null;
 }
 

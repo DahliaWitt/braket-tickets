@@ -1,12 +1,12 @@
 import '../../../../../test-setup';
-import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
-import { type HarnessLoader } from '@angular/cdk/testing';
-import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
-import { type ComponentFixture, TestBed } from '@angular/core/testing';
-import { By } from '@angular/platform-browser';
-import { vi } from 'vitest';
-import { ZardSelectItemComponent } from './select-item.component';
-import { SelectItemHarness } from './select-item.component.harness';
+import {ChangeDetectionStrategy, Component, signal} from '@angular/core';
+import {type HarnessLoader} from '@angular/cdk/testing';
+import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
+import {type ComponentFixture, TestBed} from '@angular/core/testing';
+import {By} from '@angular/platform-browser';
+import {vi} from 'vitest';
+import {ZardSelectItemComponent} from './select-item.component';
+import {ZardSelectItemComponentHarness} from './select-item.component.harness';
 
 interface SelectHostMock {
   selectedValue(): string[];
@@ -16,7 +16,11 @@ interface SelectHostMock {
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <z-select-item [zValue]="value()" [zDisabled]="disabled()" [class]="itemClass()">
+    <z-select-item
+      [zValue]="value()"
+      [zDisabled]="disabled()"
+      [class]="itemClass()"
+    >
       {{ label() }}
     </z-select-item>
   `,
@@ -57,7 +61,7 @@ describe('ZardSelectItemComponent', () => {
   });
 
   it('should delegate click to select host with value and label', async () => {
-    const harness = await loader.getHarness(SelectItemHarness);
+    const harness = await loader.getHarness(ZardSelectItemComponentHarness);
     await harness.click();
 
     expect(selectHost.selectItem).toHaveBeenCalledWith('alpha', 'Alpha Label');
@@ -66,11 +70,11 @@ describe('ZardSelectItemComponent', () => {
   it('should ignore click when disabled and set data-disabled attribute', async () => {
     fixture.componentInstance.disabled.set(true);
     fixture.detectChanges();
-    const harness = await loader.getHarness(SelectItemHarness);
+    const harness = await loader.getHarness(ZardSelectItemComponentHarness);
 
     await harness.click();
 
-    expect(await harness.getDataDisabled()).toBe('');
+    expect(await harness.isDisabled()).toBe(true);
     expect(selectHost.selectItem).not.toHaveBeenCalled();
   });
 
@@ -78,23 +82,27 @@ describe('ZardSelectItemComponent', () => {
     selectHost.selectedValue = vi.fn(() => ['alpha']);
     component.setSelectHost(selectHost);
     fixture.detectChanges();
-    const harness = await loader.getHarness(SelectItemHarness);
+    const harness = await loader.getHarness(ZardSelectItemComponentHarness);
 
-    expect(await harness.getDataSelected()).toBe('');
+    expect(await harness.isSelected()).toBe(true);
   });
 
   it('should fallback to false selected state when no select host is attached', () => {
     const localFixture = TestBed.createComponent(SelectItemHostComponent);
     localFixture.detectChanges();
-    const localComponent = localFixture.debugElement.query(By.directive(ZardSelectItemComponent))
-      .componentInstance as ZardSelectItemComponent;
+    const localComponent = localFixture.debugElement.query(
+      By.directive(ZardSelectItemComponent),
+    ).componentInstance as ZardSelectItemComponent;
 
-    const isSelected = (localComponent as unknown as { isSelected: () => boolean }).isSelected;
+    const isSelected = (
+      localComponent as unknown as {isSelected: () => boolean}
+    ).isSelected;
     expect(isSelected()).toBe(false);
   });
 
   it('should use compact stroke width branch for selected icon', () => {
-    const strokeWidth = (component as unknown as { strokeWidth: () => number }).strokeWidth;
+    const strokeWidth = (component as unknown as {strokeWidth: () => number})
+      .strokeWidth;
 
     component.zMode.set('compact');
     fixture.detectChanges();
@@ -125,8 +133,9 @@ describe('ZardSelectItemComponent', () => {
 
     const emptyFixture = TestBed.createComponent(SelectItemHostComponent);
     emptyFixture.detectChanges();
-    const emptyComponent = emptyFixture.debugElement.query(By.directive(ZardSelectItemComponent))
-      .componentInstance as ZardSelectItemComponent;
+    const emptyComponent = emptyFixture.debugElement.query(
+      By.directive(ZardSelectItemComponent),
+    ).componentInstance as ZardSelectItemComponent;
     const emptyElement = emptyComponent.elementRef.nativeElement;
 
     Object.defineProperty(emptyElement, 'textContent', {

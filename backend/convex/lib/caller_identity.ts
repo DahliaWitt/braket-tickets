@@ -134,7 +134,7 @@ export async function resolveCallerIdentityAction(
   if (sessionToken) {
     const session = await ctx.runQuery(
       internal.guest_sessions.core.getBySessionToken,
-      {sessionToken},
+      {sessionToken, now: Date.now()},
     );
     if (session) {
       await ctx.runMutation(internal.guest_sessions.core.updateLastActive, {

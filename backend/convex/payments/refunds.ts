@@ -4,6 +4,7 @@ import type {Id} from '../_generated/dataModel';
 import {internal} from '../_generated/api';
 import {logger} from '../lib/logger';
 import {ErrorMessages, throwInvalidState, throwNotFound} from '../lib/errors';
+import {withRetry} from '../lib/resilience';
 import {generateStripeIdempotencyKey} from '../lib/payments/refunds';
 import {
   refundableAmountValidator,
@@ -85,21 +86,52 @@ async function executeAndApplyOrderRefund(
     });
   }
 
-  await ctx.runMutation(internal.orders.core.applyExternalRefund, {
-    orderId: args.orderId,
-    refundedAmountCents: args.refundedAmountCents,
-    ticketIdsToRefund: args.ticketIdsToRefund,
-    stripeRefundId: stripeRefund?.refundId,
-    ledgerRefundAmountCents:
-      stripeRefund?.refundId === undefined ? undefined : args.refundAmountCents,
-    processorFeeCents: stripeRefund?.processorFeeCents,
-    platformFeeCents: stripeRefund?.platformFeeCents,
-    connectedAccountNetCents: stripeRefund?.connectedAccountNetCents,
-    refundedBy: args.refundedBy,
-    lostProcessingFeeCents: args.lostProcessingFeeCents,
-    auditAction: args.auditAction,
-    auditSource: args.auditSource,
-  });
+  // Stripe is committed at this point. If applyExternalRefund fails (e.g.
+  // transient OCC conflict), we must converge local state so the order does
+  // not silently diverge from Stripe. The mutation is idempotent: it bounds
+  // refundedAmountCents with Math.max(previous, ...) and skips already-
+  // refunded tickets, so re-running with the same args is safe. Stripe is
+  // NOT re-called — the outer action body only runs once. Client errors
+  // (ConvexError with structured data) short-circuit retries via withRetry's
+  // isClientError detection, so validator drift surfaces immediately.
+  await withRetry(
+    () =>
+      ctx.runMutation(internal.orders.core.applyExternalRefund, {
+        orderId: args.orderId,
+        refundedAmountCents: args.refundedAmountCents,
+        ticketIdsToRefund: args.ticketIdsToRefund,
+        stripeRefundId: stripeRefund?.refundId,
+        ledgerRefundAmountCents:
+          stripeRefund?.refundId === undefined
+            ? undefined
+            : args.refundAmountCents,
+        processorFeeCents: stripeRefund?.processorFeeCents,
+        platformFeeCents: stripeRefund?.platformFeeCents,
+        connectedAccountNetCents: stripeRefund?.connectedAccountNetCents,
+        refundedBy: args.refundedBy,
+        lostProcessingFeeCents: args.lostProcessingFeeCents,
+        auditAction: args.auditAction,
+        auditSource: args.auditSource,
+      }),
+    {
+      maxAttempts: 3,
+      initialBackoffMs: 500,
+      base: 2,
+      onRetry: (attempt, error) => {
+        logger.warn(
+          'payments',
+          'applyExternalRefund retry after Stripe-side commit',
+          {
+            attempt,
+            orderId: args.orderId,
+            stripeRefundId: stripeRefund?.refundId,
+            stripeIdempotencyKey: args.stripeIdempotencyKey,
+            error,
+          },
+        );
+      },
+    },
+  );
 }
 
 async function loadCompletedOrderForRefund(
