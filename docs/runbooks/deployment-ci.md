@@ -70,6 +70,23 @@ The repository auto-merge setting must also be enabled because `Release Automerg
 gh api repos/DahliaWitt/braket-tickets --jq '{allow_auto_merge,default_branch}'
 ```
 
+Release Please reads conventional commits from `main` history when it builds the release pull request body and `CHANGELOG.md`. Keep GitHub merge commits disabled for this repository so a conventional PR title does not become an extra changelog entry in addition to the original branch commit. Verify the merge policy with:
+
+```bash
+gh api repos/DahliaWitt/braket-tickets \
+  --jq '{allow_merge_commit,allow_squash_merge,allow_rebase_merge}'
+```
+
+Expected values:
+
+```json
+{
+  "allow_merge_commit": false,
+  "allow_squash_merge": true,
+  "allow_rebase_merge": true
+}
+```
+
 ## Fix a failing CI job
 
 ### `lint`
