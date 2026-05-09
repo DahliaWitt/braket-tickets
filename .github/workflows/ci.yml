@@ -224,6 +224,35 @@ jobs:
             echo "size-limit did not produce a JSON report. See the 'Run size-limit' step logs." >> "$GITHUB_STEP_SUMMARY"
           fi
 
+  storybook:
+    name: Build Storybook
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'self-hosted' }}
+    timeout-minutes: 10
+    environment:
+      name: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' && 'production' || github.event_name == 'pull_request' && github.base_ref == 'develop' && 'development' || github.ref_name == 'main' && 'production' || 'development' }}
+      deployment: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Setup pnpm
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork
+        uses: pnpm/action-setup@c336a2788d9774dccfdeb4823a5058ccc9f07453 # v4.3.0
+      - name: Setup Node.js
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Install root dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: pnpm install --frozen-lockfile
+      - name: Build Storybook
+        working-directory: ./frontend
+        run: pnpm build-storybook
+        env:
+          CONVEX_URL: https://placeholder.convex.cloud
+
   e2e-check:
     name: E2E Gate
     if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}

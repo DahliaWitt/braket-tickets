@@ -1,21 +1,12 @@
-import type { Preview } from '@storybook/angular';
-import { applicationConfig } from '@storybook/angular';
-import { withThemeByClassName } from '@storybook/addon-themes';
-import { provideZonelessChangeDetection } from '@angular/core';
-import { setCompodocJson } from '@storybook/addon-docs/angular';
+import type {Preview} from '@storybook/angular';
+import {withThemeByClassName} from '@storybook/addon-themes';
+import {setCompodocJson} from '@storybook/addon-docs/angular';
+import docJson from './documentation.json';
 
-try {
-  const docJson = await import('./documentation.json');
-  setCompodocJson(docJson.default);
-} catch (_e) {
-  // Skip compodoc if file is missing (e.g. in fresh CI builds)
-}
+setCompodocJson(docJson);
 
 const preview: Preview = {
   decorators: [
-    applicationConfig({
-      providers: [provideZonelessChangeDetection()],
-    }),
     withThemeByClassName({
       themes: {
         dark: 'dark',
@@ -25,7 +16,7 @@ const preview: Preview = {
     }),
   ],
   parameters: {
-    backgrounds: { disable: true },
+    backgrounds: {disable: true},
     controls: {
       matchers: {
         color: /(background|color)$/i,
@@ -33,11 +24,27 @@ const preview: Preview = {
       },
     },
     viewport: {
-      viewports: {
-        mobileNarrow: { name: 'Mobile Narrow', styles: { width: '320px', height: '568px' } },
-        mobile: { name: 'Mobile', styles: { width: '375px', height: '812px' } },
-        tablet: { name: 'Tablet', styles: { width: '768px', height: '1024px' } },
-        desktop: { name: 'Desktop', styles: { width: '1440px', height: '900px' } },
+      options: {
+        mobileNarrow: {
+          name: 'Mobile Narrow',
+          styles: {width: '320px', height: '568px'},
+          type: 'mobile',
+        },
+        mobile: {
+          name: 'Mobile',
+          styles: {width: '375px', height: '812px'},
+          type: 'mobile',
+        },
+        tablet: {
+          name: 'Tablet',
+          styles: {width: '768px', height: '1024px'},
+          type: 'tablet',
+        },
+        desktop: {
+          name: 'Desktop',
+          styles: {width: '1440px', height: '900px'},
+          type: 'desktop',
+        },
       },
     },
     a11y: {},
