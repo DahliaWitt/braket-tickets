@@ -99,4 +99,17 @@ describe('public communities HTTP handlers', () => {
     expect(response.headers.get('Cache-Control')).toBe('no-store');
     expect(ctx.runQuery).not.toHaveBeenCalled();
   });
+
+  it('serves loopback requests without proxy headers (self-hosted dev/E2E path)', async () => {
+    const ctx = createTestContext();
+    (ctx.runQuery as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
+
+    const response = await handleListPublicCommunities(
+      ctx,
+      new Request('http://127.0.0.1:35331/api/communities'),
+    );
+
+    expect(response.status).toBe(200);
+    expect(ctx.runQuery).toHaveBeenCalledTimes(1);
+  });
 });

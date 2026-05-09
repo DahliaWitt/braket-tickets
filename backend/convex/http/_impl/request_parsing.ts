@@ -38,14 +38,23 @@ export function parseUnsubscribeAllBody(
   return {token};
 }
 
+const LOOPBACK_HOSTNAMES: ReadonlySet<string> = new Set([
+  '127.0.0.1',
+  'localhost',
+  '::1',
+]);
+
 /**
  * Resolve the client IP from proxy headers.
  *
- * Returns `null` when neither `x-real-ip` nor `x-forwarded-for` is present.
- * On Convex Cloud the platform proxy injects `x-forwarded-for`, so production
- * traffic should always have one of these headers. Callers MUST treat a `null`
- * result as a hard failure (e.g. 400 Bad Request) rather than coalescing all
- * header-less traffic into a shared rate-limit bucket.
+ * Returns `null` when neither `x-real-ip` nor `x-forwarded-for` is present
+ * AND the request hostname is not loopback. On Convex Cloud the platform proxy
+ * always injects `x-forwarded-for`, so production traffic always returns a real
+ * IP. Self-hosted dev/E2E backends accept requests on `127.0.0.1`/`localhost`
+ * with no proxy in front; for those we return a stable `'loopback'` sentinel so
+ * rate limiting still works without coalescing real header-less production
+ * traffic into a shared bucket. Callers MUST treat a `null` result as a hard
+ * failure (e.g. 400 Bad Request).
  */
 export function getClientIp(request: Request): string | null {
   const realIp = request.headers.get('x-real-ip');
@@ -60,6 +69,14 @@ export function getClientIp(request: Request): string | null {
       const trimmed = first.trim();
       if (trimmed) return trimmed;
     }
+  }
+  try {
+    const hostname = new URL(request.url).hostname;
+    if (LOOPBACK_HOSTNAMES.has(hostname)) {
+      return 'loopback';
+    }
+  } catch {
+    // Unparseable URL falls through to null.
   }
   return null;
 }
