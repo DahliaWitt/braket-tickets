@@ -431,7 +431,7 @@ test.describe('RBAC Community Admin Scoping', () => {
       expect(revokeAuditLog).toMatchObject({
         action: 'community_scanner.revoke',
         organizerId: orgId,
-        source: `target:${scannerUserId}`,
+        targetUserId: scannerUserId,
       });
     });
   });
