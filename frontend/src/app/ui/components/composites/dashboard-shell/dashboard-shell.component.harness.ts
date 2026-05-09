@@ -13,9 +13,6 @@ export class DashboardShellHarness extends ComponentHarness {
   private getDesktopSectionNav = this.locatorForOptional(
     '[data-testid="desktop-section-nav"]',
   );
-  private getDesktopTabScroll = this.locatorForOptional(
-    '[data-testid="desktop-tab-scroll"]',
-  );
   private getMobileSectionOptions = this.locatorForAll(
     '[data-testid="mobile-section-select"] option',
   );
@@ -25,6 +22,7 @@ export class DashboardShellHarness extends ComponentHarness {
   private getMobileSectionSelect = this.locatorForOptional(
     '[data-testid="mobile-section-select"]',
   );
+  private getMainContent = this.locatorForOptional('#main-content');
   private getActionsSlot = this.locatorForOptional(
     '[data-testid="actions-slot"]',
   );
@@ -61,14 +59,14 @@ export class DashboardShellHarness extends ComponentHarness {
     return nav ? nav.getAttribute('class') : null;
   }
 
-  async getDesktopTabScrollClass(): Promise<string | null> {
-    const scroller = await this.getDesktopTabScroll();
-    return scroller ? scroller.getAttribute('class') : null;
+  async getMainContentClass(): Promise<string | null> {
+    const main = await this.getMainContent();
+    return main ? main.getAttribute('class') : null;
   }
 
-  async getDesktopTabScrollTabindex(): Promise<string | null> {
-    const scroller = await this.getDesktopTabScroll();
-    return scroller ? scroller.getAttribute('tabindex') : null;
+  async getMobileSectionNavClass(): Promise<string | null> {
+    const nav = await this.getMobileSectionNav();
+    return nav ? nav.getAttribute('class') : null;
   }
 
   async clickTab(label: string): Promise<void> {
