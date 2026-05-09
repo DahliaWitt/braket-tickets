@@ -1,7 +1,7 @@
 import {internal} from '../../_generated/api';
 import type {ActionCtx} from '../../_generated/server';
 import {getPublicCorsHeaders} from './config';
-import {isPublicEndpointRateLimited} from './rate_limits';
+import {checkPublicEndpointRateLimit} from './rate_limits';
 
 const publicCacheHeaders = {
   ...getPublicCorsHeaders(),
@@ -9,11 +9,27 @@ const publicCacheHeaders = {
   'Cache-Control': 'public, max-age=60, stale-while-revalidate=300',
 };
 
+const uncachedPublicErrorHeaders = {
+  ...getPublicCorsHeaders(),
+  'Cache-Control': 'no-store',
+};
+
 export async function handleListPublicEvents(
   ctx: ActionCtx,
   request: Request,
 ): Promise<Response> {
-  if (await isPublicEndpointRateLimited(ctx, request, 'listPublicEvents')) {
+  const rateLimit = await checkPublicEndpointRateLimit(
+    ctx,
+    request,
+    'listPublicEvents',
+  );
+  if (rateLimit === 'missing-ip') {
+    return new Response('Bad Request', {
+      status: 400,
+      headers: uncachedPublicErrorHeaders,
+    });
+  }
+  if (rateLimit === 'limited') {
     return new Response('Too Many Requests', {
       status: 429,
       headers: {

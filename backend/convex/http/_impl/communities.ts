@@ -3,7 +3,7 @@ import type {ActionCtx} from '../../_generated/server';
 import {getPublicCorsHeaders} from './config';
 import {parseCommunitySlugFromPath} from './request_parsing';
 import {getAppErrorMessage} from '../../lib/errors';
-import {isPublicEndpointRateLimited} from './rate_limits';
+import {checkPublicEndpointRateLimit} from './rate_limits';
 
 const publicJsonHeaders = {
   ...getPublicCorsHeaders(),
@@ -43,11 +43,26 @@ function serviceUnavailableResponse(): Response {
   });
 }
 
+function badRequestResponse(): Response {
+  return new Response('Bad Request', {
+    status: 400,
+    headers: uncachedPublicErrorHeaders,
+  });
+}
+
 export async function handleListPublicCommunities(
   ctx: ActionCtx,
   request: Request,
 ): Promise<Response> {
-  if (await isPublicEndpointRateLimited(ctx, request, 'listPublicCommunity')) {
+  const rateLimit = await checkPublicEndpointRateLimit(
+    ctx,
+    request,
+    'listPublicCommunity',
+  );
+  if (rateLimit === 'missing-ip') {
+    return badRequestResponse();
+  }
+  if (rateLimit === 'limited') {
     return new Response('Too Many Requests', {
       status: 429,
       headers: {
@@ -88,9 +103,15 @@ export async function handleGetPublicCommunityBySlug(
     });
   }
 
-  if (
-    await isPublicEndpointRateLimited(ctx, request, 'getPublicCommunityBySlug')
-  ) {
+  const rateLimit = await checkPublicEndpointRateLimit(
+    ctx,
+    request,
+    'getPublicCommunityBySlug',
+  );
+  if (rateLimit === 'missing-ip') {
+    return badRequestResponse();
+  }
+  if (rateLimit === 'limited') {
     return new Response('Too Many Requests', {
       status: 429,
       headers: {

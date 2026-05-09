@@ -12,6 +12,10 @@ function createTestContext() {
   } as unknown as ActionCtx;
 }
 
+// Mirrors the proxy header Convex Cloud injects on every request so we exercise
+// the same rate-limit path production sees, instead of the fail-closed branch.
+const PROXY_HEADERS = {'x-forwarded-for': '127.0.0.1'} as const;
+
 describe('public communities HTTP handlers', () => {
   it('returns 503 for directory capacity errors without caching the response', async () => {
     const ctx = createTestContext();
@@ -23,7 +27,9 @@ describe('public communities HTTP handlers', () => {
 
     const response = await handleListPublicCommunities(
       ctx,
-      new Request('https://braket.gay/api/communities'),
+      new Request('https://braket.gay/api/communities', {
+        headers: PROXY_HEADERS,
+      }),
     );
 
     expect(response.status).toBe(503);
@@ -42,7 +48,10 @@ describe('public communities HTTP handlers', () => {
 
     const response = await handleGetPublicCommunityBySlug(
       ctx,
-      new Request('https://braket.gay/api/communities/overflow-slug-community'),
+      new Request(
+        'https://braket.gay/api/communities/overflow-slug-community',
+        {headers: PROXY_HEADERS},
+      ),
     );
 
     expect(response.status).toBe(503);
@@ -56,10 +65,38 @@ describe('public communities HTTP handlers', () => {
 
     const response = await handleGetPublicCommunityBySlug(
       ctx,
-      new Request('https://braket.gay/api/communities/%E0%A4%A'),
+      new Request('https://braket.gay/api/communities/%E0%A4%A', {
+        headers: PROXY_HEADERS,
+      }),
     );
 
     expect(response.status).toBe(404);
+    expect(ctx.runQuery).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when the slug request is missing both proxy IP headers', async () => {
+    const ctx = createTestContext();
+
+    const response = await handleGetPublicCommunityBySlug(
+      ctx,
+      new Request('https://braket.gay/api/communities/some-slug'),
+    );
+
+    expect(response.status).toBe(400);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(ctx.runQuery).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when the directory request is missing both proxy IP headers', async () => {
+    const ctx = createTestContext();
+
+    const response = await handleListPublicCommunities(
+      ctx,
+      new Request('https://braket.gay/api/communities'),
+    );
+
+    expect(response.status).toBe(400);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
     expect(ctx.runQuery).not.toHaveBeenCalled();
   });
 });

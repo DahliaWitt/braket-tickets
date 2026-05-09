@@ -1,6 +1,5 @@
 import {httpRouter} from 'convex/server';
 import {httpAction} from './_generated/server';
-import {internal} from './_generated/api';
 import {authComponent, createAuth} from './lib/better_auth';
 import {resend} from './lib/resend_component';
 import {
@@ -106,19 +105,15 @@ http.route({
   handler: httpAction(marketingTrackingHandlers.handleMarketingClickGet),
 });
 
+// The Resend component invokes `onEmailEvent: handleEmailEvent` (wired in
+// `lib/resend_component.ts`) for every event it processes, so we let the
+// component drive the bridge to `emailDeliveryFailures` rather than re-invoking
+// a duplicate mutation here. Both paths terminate at the same dedup'd record.
 http.route({
   path: '/resend-webhook',
   method: 'POST',
   handler: httpAction(async (ctx, req) => {
-    const eventReq = req.clone();
-    const response = await resend.handleResendEventWebhook(ctx, req);
-    if (!response.ok) {
-      return response;
-    }
-
-    const event = await eventReq.json();
-    await ctx.runMutation(internal.email.resend.handleProviderEvent, {event});
-    return response;
+    return await resend.handleResendEventWebhook(ctx, req);
   }),
 });
 

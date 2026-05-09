@@ -12,6 +12,7 @@ export const resaleListingFields = {
   sellerId: v.id('users'),
   status: resaleListingStatusValidator,
   buyerId: v.optional(v.id('users')),
+  pendingOrderId: v.optional(v.id('ticket_orders')),
   sellerRefundAmountCents: v.optional(v.number()),
   lostProcessingFeeCents: v.optional(v.number()),
   resaleFeeCents: v.optional(v.number()),

@@ -38,15 +38,30 @@ export function parseUnsubscribeAllBody(
   return {token};
 }
 
-export function getClientIp(request: Request): string {
+/**
+ * Resolve the client IP from proxy headers.
+ *
+ * Returns `null` when neither `x-real-ip` nor `x-forwarded-for` is present.
+ * On Convex Cloud the platform proxy injects `x-forwarded-for`, so production
+ * traffic should always have one of these headers. Callers MUST treat a `null`
+ * result as a hard failure (e.g. 400 Bad Request) rather than coalescing all
+ * header-less traffic into a shared rate-limit bucket.
+ */
+export function getClientIp(request: Request): string | null {
   const realIp = request.headers.get('x-real-ip');
-  if (realIp) return realIp.trim();
+  if (realIp) {
+    const trimmed = realIp.trim();
+    if (trimmed) return trimmed;
+  }
   const forwarded = request.headers.get('x-forwarded-for');
   if (forwarded) {
     const first = forwarded.split(',')[0];
-    if (first) return first.trim();
+    if (first) {
+      const trimmed = first.trim();
+      if (trimmed) return trimmed;
+    }
   }
-  return 'unknown';
+  return null;
 }
 
 export function parseCommunitySlugFromPath(request: Request): string | null {

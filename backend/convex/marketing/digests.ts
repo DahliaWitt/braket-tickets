@@ -2,7 +2,7 @@ import {internalMutation} from '../_generated/server';
 import {v} from 'convex/values';
 import {paginationOptsValidator} from 'convex/server';
 import {internal} from '../_generated/api';
-import {guardEmailDedup} from '../lib/email_dedup';
+import {guardEmailDedup, hasEmailDedup} from '../lib/email_dedup';
 import {vettingDigestTemplate} from '../email/templates';
 import {enqueueEmailDelivery} from '../lib/email_delivery_wrapper';
 
@@ -36,7 +36,18 @@ export const sendDailyDigests = internalMutation({
     // Process all preferences in parallel
     await Promise.all(
       prefs.map(async (pref) => {
-        // Check if there are any recent applications before claiming the dedup slot
+        // Dedup READ — cheap early exit for retries of committed sends.
+        const dedupKey = `vetting-digest-${pref.userId}-${pref.organizerId}-${today}`;
+        if (await hasEmailDedup(ctx, dedupKey)) return;
+
+        // Cheap recipient eligibility checks first — skip the recentApps scan
+        // and the per-applicant user fan-out when this pref will never send.
+        const adminUser = await ctx.db.get('users', pref.userId);
+        if (!adminUser?.email) return;
+
+        const organizer = await ctx.db.get('organizers', pref.organizerId);
+        if (!organizer) return;
+
         const recentApps = await ctx.db
           .query('applications')
           .withIndex('by_organizer_and_creation', (q) =>
@@ -46,12 +57,6 @@ export const sendDailyDigests = internalMutation({
 
         if (recentApps.length === 0) return;
 
-        // Guard against double-send on the same day
-        const dedupKey = `vetting-digest-${pref.userId}-${pref.organizerId}-${today}`;
-        const alreadySent = await guardEmailDedup(ctx, dedupKey);
-        if (alreadySent) return;
-
-        // Batch-fetch all applicant names
         const applicantUsers = await Promise.all(
           recentApps.map((app) => ctx.db.get('users', app.userId)),
         );
@@ -61,12 +66,9 @@ export const sendDailyDigests = internalMutation({
           submittedAt: app._creationTime,
         }));
 
-        // Fetch admin info
-        const adminUser = await ctx.db.get('users', pref.userId);
-        if (!adminUser?.email) return;
-
-        const organizer = await ctx.db.get('organizers', pref.organizerId);
-        if (!organizer) return;
+        // Dedup INSERT — only burns the slot when committed to sending.
+        const alreadySent = await guardEmailDedup(ctx, dedupKey);
+        if (alreadySent) return;
 
         const {subject, html} = vettingDigestTemplate(
           adminUser.name ?? 'Admin',
