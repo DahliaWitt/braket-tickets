@@ -9,7 +9,11 @@ Cross-layer development pipeline using Agent Teams. You are the **team lead**.
 
 Phases 1-3 (Brainstorm, Research, Plan), 3.5 (Audit Design), and 4.5-6 (Verify, Review, Land) are identical to `/go`. This skill replaces **Phase 4: Implement** only.
 
+**Worktree detection from `/go` applies here.** If already inside a worktree, skip worktree
+creation — you are already isolated.
+
 **You MUST follow `/go` for all non-Phase-4 phases — including:**
+
 - **Phase 3.5**: Invoke `convex-audit-design` on approved plans touching `convex/`. Do NOT skip.
 - **Phase 6**: Invoke `finishing-a-development-branch` to merge and clean up. Do NOT merge or clean up manually.
 
@@ -47,11 +51,11 @@ TaskCreate({
 
 **Partition by file ownership.** Two teammates editing the same file = overwrites. Use this split:
 
-| Teammate | Owns | Never touches |
-|----------|------|---------------|
-| `backend` | `convex/**` | `frontend/**` |
-| `frontend` | `frontend/src/**` | `convex/**` |
-| `tester` | `**/*.test.ts`, `**/*.e2e-spec.ts` | Implementation files |
+| Teammate   | Owns                               | Never touches        |
+| ---------- | ---------------------------------- | -------------------- |
+| `backend`  | `convex/**`                        | `frontend/**`        |
+| `frontend` | `frontend/src/**`                  | `convex/**`          |
+| `tester`   | `**/*.test.ts`, `**/*.e2e-spec.ts` | Implementation files |
 
 Use 2 teammates for medium features, 3 for large. Backend + frontend is the minimum useful team.
 
@@ -116,6 +120,7 @@ digraph lead_loop {
 ```
 
 As lead:
+
 - Messages from teammates arrive automatically — do NOT poll
 - Resolve interface mismatches (e.g., frontend expects a field backend hasn't added)
 - Assign new tasks as they emerge
@@ -136,12 +141,12 @@ Send shutdown to each teammate individually. Do NOT broadcast shutdown requests.
 
 ## Red Flags: You Spawned Subagents, Not Teammates
 
-| Symptom | Cause | Fix |
-|---------|-------|-----|
-| Agent returns a result summary inline | Missing `team_name` on Agent call | Add `team_name` parameter |
-| No idle notifications appear | Missing `team_name` on Agent call | Add `team_name` parameter |
-| TeamCreate was never called | Skipped Step 1 | Call TeamCreate first |
-| Agent can't find TaskList | Team doesn't exist yet | Call TeamCreate before Agent |
+| Symptom                               | Cause                             | Fix                          |
+| ------------------------------------- | --------------------------------- | ---------------------------- |
+| Agent returns a result summary inline | Missing `team_name` on Agent call | Add `team_name` parameter    |
+| No idle notifications appear          | Missing `team_name` on Agent call | Add `team_name` parameter    |
+| TeamCreate was never called           | Skipped Step 1                    | Call TeamCreate first        |
+| Agent can't find TaskList             | Team doesn't exist yet            | Call TeamCreate before Agent |
 
 If ANY of these happen, stop. Delete the subagents. Start over from Step 1.
 
