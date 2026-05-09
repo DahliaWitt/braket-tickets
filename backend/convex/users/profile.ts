@@ -31,7 +31,10 @@ import {
   revokeMembershipAndCreateAuditLog,
 } from '../lib/users/membership';
 import {getUserCommunities} from '../lib/authz';
-import {loadUserApplicationPageForOrganizerFromDirectory} from '../lib/users/organizer_directory';
+import {
+  loadUserApplicationPageForOrganizerFromDirectory,
+  searchUserApplicationsInDirectory,
+} from '../lib/users/organizer_directory';
 
 type UserApplicationRow = {
   user: ReturnType<typeof stripSensitiveUserFields>;
@@ -245,6 +248,7 @@ export const listWithApplications = query({
   args: {
     paginationOpts: paginationOptsValidator,
     organizerId: v.id('organizers'),
+    search: v.optional(v.string()),
   },
   returns: userApplicationPageValidator,
   handler: async (ctx, args) => {
@@ -258,6 +262,15 @@ export const listWithApplications = query({
     );
     if (!organizerScope) {
       return EMPTY_USER_APPLICATION_PAGE;
+    }
+
+    const searchTerm = args.search?.trim();
+    if (searchTerm) {
+      return await searchUserApplicationsInDirectory(
+        ctx,
+        organizerScope,
+        searchTerm,
+      );
     }
 
     return await loadUserApplicationPageForOrganizerFromDirectory(

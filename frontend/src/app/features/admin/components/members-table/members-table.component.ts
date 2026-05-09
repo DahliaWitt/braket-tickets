@@ -1,6 +1,7 @@
 import {DatePipe, UpperCasePipe} from '@angular/common';
 import {
   Component,
+  DestroyRef,
   inject,
   input,
   signal,
@@ -52,14 +53,23 @@ export class AdminMembersTableComponent {
 
   readonly organizerId = input<Id<'organizers'> | undefined>(undefined);
 
+  private readonly destroyRef = inject(DestroyRef);
   private readonly pageSize = 20;
   private readonly showLoadMoreErrorToast = signal(false);
+  private searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  readonly memberFilter = signal<MemberFilter>('all');
+  /** Immediate signal for binding to the input value. */
+  readonly searchQuery = signal('');
+  /** Debounced signal sent to the Convex query. */
+  private readonly debouncedSearch = signal<string | undefined>(undefined);
 
   private readonly membersQuery = injectPaginatedQuery(
     api.users.profile.listWithApplications,
     () => {
       const orgId = this.organizerId();
-      return orgId ? {organizerId: orgId} : skipToken;
+      const search = this.debouncedSearch();
+      return orgId ? {organizerId: orgId, search} : skipToken;
     },
     {
       initialNumItems: this.pageSize,
@@ -81,9 +91,6 @@ export class AdminMembersTableComponent {
 
   isLoading = this.membersQuery.isLoadingFirstPage;
 
-  readonly memberFilter = signal<MemberFilter>('all');
-  readonly searchQuery = signal('');
-
   readonly activeMembers = computed(() =>
     this.members().filter((member) => this.hasCommunityAccess(member)),
   );
@@ -91,27 +98,13 @@ export class AdminMembersTableComponent {
   readonly filteredMembers = computed(() => {
     const activeMembers = this.activeMembers();
     const filter = this.memberFilter();
-    let result: MemberWithApplication[];
     if (filter === 'all') {
-      result = activeMembers;
+      return activeMembers;
     } else if (filter === 'ours') {
-      result = activeMembers.filter(
-        (m) => m.communityAccessSource !== 'shared',
-      );
+      return activeMembers.filter((m) => m.communityAccessSource !== 'shared');
     } else {
-      result = activeMembers.filter(
-        (m) => m.communityAccessSource === 'shared',
-      );
+      return activeMembers.filter((m) => m.communityAccessSource === 'shared');
     }
-    const query = this.searchQuery().toLowerCase().trim();
-    if (query) {
-      result = result.filter((m) => {
-        const name = (m.user['name'] ?? '').toLowerCase();
-        const email = (m.user['email'] ?? '').toLowerCase();
-        return name.includes(query) || email.includes(query);
-      });
-    }
-    return result;
   });
 
   setMemberFilter(filter: MemberFilter): void {
@@ -121,6 +114,12 @@ export class AdminMembersTableComponent {
   onSearchInput(event: Event): void {
     const target = event.target as HTMLInputElement;
     this.searchQuery.set(target.value);
+
+    if (this.searchDebounceTimer) clearTimeout(this.searchDebounceTimer);
+    const trimmed = target.value.trim();
+    this.searchDebounceTimer = setTimeout(() => {
+      this.debouncedSearch.set(trimmed || undefined);
+    }, 300);
   }
 
   constructor() {
@@ -130,6 +129,9 @@ export class AdminMembersTableComponent {
       if (!isLoadingMore && !error) {
         this.showLoadMoreErrorToast.set(false);
       }
+    });
+    this.destroyRef.onDestroy(() => {
+      if (this.searchDebounceTimer) clearTimeout(this.searchDebounceTimer);
     });
   }
 
