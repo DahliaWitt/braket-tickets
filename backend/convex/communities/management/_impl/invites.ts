@@ -1,7 +1,7 @@
 import type {Doc, Id} from '../../../_generated/dataModel';
 import type {MutationCtx} from '../../../_generated/server';
 import {requireUser} from '../../../lib/auth_identity';
-import {authz, authzUserId, addMember} from '../../../lib/authz';
+import {grantCommunityAdminMembership} from '../../../lib/authz';
 import {canManageCommunity, requireManageCommunity} from '../../../lib/access';
 import {rateLimiter} from '../../../lib/rate_limits';
 import {findMatchingInQuery} from '../../../lib/query_scan';
@@ -135,19 +135,7 @@ export async function redeemInvite(
   }
   // LINT.ThenChange("../../../../../frontend/src/app/features/invite-redeem/invite-redeem.component.ts")
 
-  const scope = {
-    type: 'organizer' as const,
-    id: invite.organizerId as string,
-  };
-  await authz.assignRole(
-    ctx,
-    authzUserId(userId),
-    'community_admin',
-    scope,
-    undefined,
-    authzUserId(invite.invitedBy),
-  );
-  await addMember(ctx, userId, invite.organizerId, {
+  await grantCommunityAdminMembership(ctx, userId, invite.organizerId, {
     actorId: invite.invitedBy,
   });
   await ensureApprovedMarketingPreference(ctx.db, {

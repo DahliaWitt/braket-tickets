@@ -236,36 +236,6 @@ All email templates use the distinctive "Pulp" voice: warm, playful, kaomoji-fri
 
 ---
 
-### 9. Vetting Reminder Email
-
-**Template Function**: `vettingReminderTemplate()` in `backend/convex/email/templates.ts`
-
-**When Triggered**:
-
-- Root admin triggers a vetting reminder via `reminders.sendVettingReminder`
-
-**Subject**: Admin-authored
-
-**CTA Button**: `Open Vetting App`
-
-**Flow**:
-
-1. Root admin sends a vetting reminder from the admin reminders screen
-2. `reminders.getVettingReminderAudience` excludes users who already started vetting, globally opted out users, and users who opted out of Braket platform reminders
-3. `reminders.sendVettingReminder` ensures a platform-scoped marketing preference row exists for each recipient before fan-out
-4. Each delivered email includes:
-   - A visible unsubscribe link
-   - `List-Unsubscribe`
-   - `List-Unsubscribe-Post: List-Unsubscribe=One-Click`
-5. Delivery failures are recorded through Resend webhook events or explicit fallback failure records
-
-**Compliance Notes**:
-
-- Vetting reminders are treated as Braket platform marketing reminders, not transactional mail
-- Future reminder sends honor both `globalMarketingOptOut` and the platform organizer preference row
-
----
-
 ## Template Locations
 
 | Template            | Location                                     |

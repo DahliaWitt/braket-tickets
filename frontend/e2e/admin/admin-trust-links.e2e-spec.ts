@@ -1,7 +1,7 @@
 import {test, expect, createEnvironment} from '../helpers/test-setup';
 import {type Page} from '@playwright/test';
 import {SharedVettingTableHarness} from '../../src/app/features/admin/components/shared-vetting-table/shared-vetting-table.harness';
-import {BraDialogComponentHarness} from '../../src/app/ui/components/composites/dialog/dialog.harness';
+import {BraDialogHarness} from '../../src/app/ui/components/composites/dialog/dialog.component.harness';
 import {BraToastHarness} from '../../src/app/ui/components/composites/toast/toast.component.harness';
 import {api} from '@convex/_generated/api';
 
@@ -204,7 +204,7 @@ test.describe('Admin Trust Link Management', () => {
 
     // Confirm
     const env = createEnvironment(adminPage);
-    const createDialogHarness = await env.getHarness(BraDialogComponentHarness);
+    const createDialogHarness = await env.getHarness(BraDialogHarness);
     const toastHarness = await env.getHarness(BraToastHarness);
     await createDialogHarness.clickOk();
 
@@ -304,7 +304,7 @@ test.describe('Admin Trust Link Management', () => {
     );
 
     // Cancel first — link should remain present
-    const cancelDialogHarness = await env.getHarness(BraDialogComponentHarness);
+    const cancelDialogHarness = await env.getHarness(BraDialogHarness);
     await cancelDialogHarness.clickCancel();
     await expect(dialog).not.toBeVisible({timeout: 3000});
     await expect

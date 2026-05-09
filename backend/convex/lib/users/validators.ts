@@ -62,6 +62,7 @@ export const userApplicationValidator = v.object({
   organizerId: v.optional(v.id('organizers')),
   status: applicationStatusValidator,
   processedBy: v.optional(v.id('users')),
+  denyReason: v.optional(v.string()),
   reason: v.optional(v.string()),
   answers: applicationAnswersValidator,
 });

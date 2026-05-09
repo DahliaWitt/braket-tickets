@@ -13,7 +13,7 @@ import {BraDialogService} from '@ui/components/composites/dialog/dialog.service'
 import {FooterFeedbackDialogComponent} from './footer-feedback-dialog.component';
 import {FooterFeedbackDialogHarness} from './footer-feedback-dialog.component.harness';
 import {type BraDialogOptions} from '@ui/components/composites/dialog/dialog.component';
-import {BraDialogComponentHarness} from '@ui/components/composites/dialog/dialog.harness';
+import {BraDialogHarness} from '@ui/components/composites/dialog/dialog.component.harness';
 import {AnalyticsService} from '@/core/services/analytics.service';
 
 @Component({
@@ -101,7 +101,7 @@ describe('FooterComponent feedback overlay', () => {
 
     const documentLoader =
       TestbedHarnessEnvironment.documentRootLoader(fixture);
-    const dialog = await documentLoader.getHarness(BraDialogComponentHarness);
+    const dialog = await documentLoader.getHarness(BraDialogHarness);
     const feedbackDialog = await documentLoader.getHarness(
       FooterFeedbackDialogHarness,
     );

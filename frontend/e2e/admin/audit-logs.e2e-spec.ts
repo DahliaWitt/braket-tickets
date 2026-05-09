@@ -7,7 +7,7 @@ import {
 import {api} from '@convex/_generated/api';
 import {Id} from '@convex/_generated/dataModel';
 import {CheckInComponentHarness} from '../../src/app/features/admin/pages/check-in/check-in.component.harness';
-import {BraDatePickerComponentHarness} from '../../src/app/ui/components/composites/date-picker/date-picker.harness';
+import {BraDatePickerComponentHarness} from '../../src/app/ui/components/composites/date-picker/date-picker.component.harness';
 
 test.describe('Admin Audit Logs', () => {
   test.slow();
