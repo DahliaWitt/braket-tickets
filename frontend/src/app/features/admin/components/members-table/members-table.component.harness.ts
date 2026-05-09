@@ -103,6 +103,30 @@ export class AdminMembersTableHarness extends ComponentHarness {
     return !labels.some((l) => l.includes('REVOKE MEMBERSHIP'));
   }
 
+  // Search input
+  private getSearchInputEl = this.locatorForOptional(
+    'input[data-testid="members-search"]',
+  );
+
+  async setSearchValue(value: string): Promise<void> {
+    const input = await this.getSearchInputEl();
+    if (!input) throw new Error('Search input not found');
+    await input.clear();
+    if (value) {
+      await input.sendKeys(value);
+    }
+  }
+
+  async getSearchValue(): Promise<string> {
+    const input = await this.getSearchInputEl();
+    if (!input) return '';
+    return (await input.getProperty<string>('value')) ?? '';
+  }
+
+  async hasSearchInput(): Promise<boolean> {
+    return (await this.getSearchInputEl()) !== null;
+  }
+
   private getFilterButtonEls = this.locatorForAll(
     '[data-testid="member-filter"] button',
   );
