@@ -164,7 +164,8 @@ interface TicketResaleInfo {
                       <p
                         class="mt-1 font-mono text-2xs text-muted-foreground uppercase"
                       >
-                        {{ ticket.resolvedEvent?.date | date: 'longDate' }}
+                        {{ ticket.resolvedEvent?.date | date: 'longDate' }},
+                        {{ ticket.resolvedEvent?.date | date: 'shortTime' }}
                       </p>
                       <p
                         class="mono-label mt-0.5 text-2xs text-muted-foreground"

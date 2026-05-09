@@ -137,7 +137,8 @@ type RouteQueryParams = Readonly<
                 </td>
                 <td class="p-5 align-top">
                   <div class="font-mono text-sm text-foreground/80">
-                    {{ event.date | date: 'mediumDate' }}
+                    {{ event.date | date: 'mediumDate' }},
+                    {{ event.date | date: 'shortTime' }}
                   </div>
                 </td>
                 <td class="p-5 align-top">
@@ -234,7 +235,8 @@ type RouteQueryParams = Readonly<
                     </span>
                   </div>
                   <div class="mt-1 font-mono text-xs text-muted-foreground">
-                    {{ event.date | date: 'mediumDate' }}
+                    {{ event.date | date: 'mediumDate' }},
+                    {{ event.date | date: 'shortTime' }}
                   </div>
                 </div>
               </div>
