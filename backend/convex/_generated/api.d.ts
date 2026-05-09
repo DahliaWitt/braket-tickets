@@ -519,20 +519,6 @@ export declare const api: {
           null
         >;
       };
-      reminders: {
-        getVettingReminderAudience: FunctionReference<
-          "query",
-          "public",
-          {},
-          { recipientCount: number; segment: "no_application" }
-        >;
-        sendVettingReminder: FunctionReference<
-          "mutation",
-          "public",
-          { message: string; subject: string },
-          { recipientCount: number; segment: "no_application" }
-        >;
-      };
     };
     profile: {
       create: FunctionReference<

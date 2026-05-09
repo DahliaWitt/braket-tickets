@@ -31,8 +31,7 @@ export const ADMIN_AUDIT_ACTIONS = {
   EVENT_CREATE: 'event.create',
   EVENT_DELETE: 'event.delete',
   EVENT_MANAGEMENT_VIEW: 'event.management.view',
-  EVENT_MARKETING_EMAIL_AUTO_CANCELLED:
-    'event.marketing-email.auto-cancelled',
+  EVENT_MARKETING_EMAIL_AUTO_CANCELLED: 'event.marketing-email.auto-cancelled',
   EVENT_ORGANIZER_REASSIGN_FROM: 'event.organizer_reassign.from',
   EVENT_ORGANIZER_REASSIGN_TO: 'event.organizer_reassign.to',
   EVENT_REMINDER_EMAIL_SEND_APPROVED_NO_TICKET:
@@ -50,14 +49,11 @@ export const ADMIN_AUDIT_ACTIONS = {
   MARKETING_EMAIL_CANCELLED: 'marketing_email.cancelled',
   MARKETING_EMAIL_SCHEDULED: 'marketing_email.scheduled',
   MARKETING_EMAIL_SENT: 'marketing_email.sent',
-  ORGANIZER_CASCADE_UNPUBLISH_EVENTS:
-    'organizer.cascadeUnpublishEvents',
-  ORGANIZER_CLEANUP_ORPHANED_ANSWERS:
-    'organizer.cleanupOrphanedAnswers',
+  ORGANIZER_CASCADE_UNPUBLISH_EVENTS: 'organizer.cascadeUnpublishEvents',
+  ORGANIZER_CLEANUP_ORPHANED_ANSWERS: 'organizer.cleanupOrphanedAnswers',
   ORGANIZER_SET_PLATFORM_ORGANIZER_FALSE:
     'organizer.setPlatformOrganizer:false',
-  ORGANIZER_SET_PLATFORM_ORGANIZER_TRUE:
-    'organizer.setPlatformOrganizer:true',
+  ORGANIZER_SET_PLATFORM_ORGANIZER_TRUE: 'organizer.setPlatformOrganizer:true',
   ORGANIZER_UPDATE: 'organizer.update',
   PAYMENT_FORCE_REFUND_ALL: 'payment.force-refund-all',
   PAYMENT_REFUND: 'payment.refund',
@@ -70,6 +66,9 @@ export const ADMIN_AUDIT_ACTIONS = {
   TRUST_LINK_RESUMED: 'trust_link_resumed',
   TRUST_LINK_REVOKED: 'trust_link_revoked',
   USER_REVOKE: 'user.revoke',
+  // No current producer — the vetting-reminder feature was deleted. Kept so
+  // historical adminAuditLogs rows continue to read-validate against the
+  // adminAuditActionValidator union below.
   VETTING_REMINDER_EMAIL_SEND_NO_APPLICATION:
     'vetting.reminder-email.send.no_application',
 } as const;
@@ -228,7 +227,10 @@ const actionCategoryEntries = Object.entries(
   ADMIN_AUDIT_ACTIONS_BY_CATEGORY,
 ) as [AdminAuditActionCategory, readonly AdminAuditAction[]][];
 
-const adminAuditCategoryByAction = new Map<AdminAuditAction, AdminAuditActionCategory>(
+const adminAuditCategoryByAction = new Map<
+  AdminAuditAction,
+  AdminAuditActionCategory
+>(
   actionCategoryEntries.flatMap(([category, actions]) =>
     actions.map((action) => [action, category] as const),
   ),
@@ -240,8 +242,6 @@ export function getAdminAuditCategoryForAction(
   return adminAuditCategoryByAction.get(action);
 }
 
-export function isScannerWritableAdminAuditAction(
-  action: string,
-): boolean {
+export function isScannerWritableAdminAuditAction(action: string): boolean {
   return scannerWritableActionSet.has(action);
 }

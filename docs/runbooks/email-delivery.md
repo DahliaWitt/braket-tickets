@@ -23,7 +23,6 @@ Jump to:
 - [Restore transactional email delivery](#restore-transactional-email-delivery)
 - [Restore daily vetting digests](#restore-daily-vetting-digests)
 - [Verify bulk email unsubscribe compliance](#verify-bulk-email-unsubscribe-compliance)
-- [Verify vetting reminder unsubscribe compliance](#verify-vetting-reminder-unsubscribe-compliance)
 - [Verify ticket purchase reminder delivery](#verify-ticket-purchase-reminder-delivery)
 - [Investigate a bounce spike](#investigate-a-bounce-spike)
 
@@ -112,26 +111,6 @@ Source of truth:
 - `backend/convex/events/broadcasts.ts`
 - `backend/convex/email/templates.ts`
 - `backend/convex/marketing/emails.ts`
-
-## Verify vetting reminder unsubscribe compliance
-
-**Symptom:** Vetting reminder emails are missing unsubscribe affordances or still reach opted-out users.
-
-Check these items in order:
-
-1. Trigger a vetting reminder via `reminders.sendVettingReminder` (Convex dashboard or CLI) and inspect the delivered message source.
-2. Confirm the body contains a visible unsubscribe link and a link to `/account#email-preferences`.
-3. Confirm the raw headers contain both `List-Unsubscribe` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click`.
-4. If an opted-out user still appears in the reminder audience, inspect:
-   - `users.globalMarketingOptOut`
-   - `marketingEmailPreferences` for the organizer where `isPlatformOrganizer: true`
-5. If no platform organizer exists, `reminders.sendVettingReminder` will create one with slug `braket-platform-marketing` before issuing tokens.
-
-Source of truth:
-
-- `backend/convex/communities/management/reminders.ts`
-- `backend/convex/email/templates.ts`
-- `backend/convex/lib/marketing_emails/preferences.ts`
 
 ## Verify ticket purchase reminder delivery
 

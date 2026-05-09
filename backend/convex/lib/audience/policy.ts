@@ -10,8 +10,8 @@ import type {Doc} from '../../_generated/dataModel';
  * - `marketing-opt-in`: explicit opt-in required. Used for direct-vetted
  *   community announcements where the organizer must earn the send.
  * - `marketing-opt-out`: include unless a negative signal is present. Used for
- *   trust-linked announcements, ticket-purchase reminders, and platform
- *   vetting reminders — the user is already in-scope; honor opt-outs only.
+ *   trust-linked announcements and ticket-purchase reminders — the user is
+ *   already in-scope; honor opt-outs only.
  */
 export type ConsentPolicy =
   | {kind: 'operational'}
