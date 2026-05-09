@@ -147,12 +147,12 @@
                       data-testid="community-link"
                     >
                       @if (org.logoUrl) {
-                        <img
-                          [src]="org.logoUrl"
-                          [alt]="org.name"
-                          loading="lazy"
-                          decoding="async"
-                          class="h-6 w-6 rounded-full object-cover ring-1 ring-border/40 transition-[box-shadow] group-hover:ring-secondary/50"
+                        <bra-community-avatar
+                          [name]="org.name"
+                          [logoUrl]="org.logoUrl"
+                          size="sm"
+                          shape="circle"
+                          class="ring-1 ring-border/40 transition-[box-shadow] group-hover:ring-secondary/50"
                         />
                       }
                       <span>{{ org.name }}</span>
@@ -167,12 +167,12 @@
                       data-testid="community-name"
                     >
                       @if (org.logoUrl) {
-                        <img
-                          [src]="org.logoUrl"
-                          [alt]="org.name"
-                          loading="lazy"
-                          decoding="async"
-                          class="h-6 w-6 rounded-full object-cover ring-1 ring-border/40"
+                        <bra-community-avatar
+                          [name]="org.name"
+                          [logoUrl]="org.logoUrl"
+                          size="sm"
+                          shape="circle"
+                          class="ring-1 ring-border/40"
                         />
                       }
                       <span>{{ org.name }}</span>

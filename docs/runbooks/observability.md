@@ -32,11 +32,11 @@ Jump to:
 
 **Symptom:** PostHog stops receiving Convex logs even though users report backend failures.
 
-The `convex-log-forwarder` Docker service streams Convex logs to the provider selected by `CONVEX_LOG_SINK`. The profile service reads `CONVEX_DEV_LOG_SINK` for preview/dev and maps it to runtime sink config in the same container.
+The `convex-log-forwarder` Docker service streams Convex logs to the provider selected by `CONVEX_LOG_SINK`. Supported values are `posthog`, `sentry`, `both`, and `none`. The profile service reads `CONVEX_DEV_LOG_SINK` for preview/dev and maps it to runtime sink config in the same container.
 
 Before delivery, the forwarder sanitizes the log message, raw Convex line, and structured Convex payload with `shared/log-sanitizer.mjs`. This is defense-in-depth for runtime or third-party log lines that bypass the backend `logger` wrapper.
 
-Sentry remains configured in compose as rollback-only.
+Use `both` when Convex logs should land in PostHog and Sentry at the same time. The forwarder attempts both deliveries before reporting a partial sink failure.
 
 If PostHog ingest is degraded in production, set `CONVEX_LOG_SINK=sentry` in Doppler and rerun the production deploy workflow.
 If using the preview/dev profile, set `CONVEX_DEV_LOG_SINK=sentry` in Doppler and rerun the preview deploy workflow.
@@ -59,7 +59,9 @@ docker logs convex-log-forwarder 2>&1 | grep -i "connect\|error\|disconnect"
 | Cause                         | Fix                                                                                                                                                                           |
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Missing PostHog project token | Set `POSTHOG_LOGS_PROJECT_TOKEN` (or `POSTHOG_DEV_LOGS_PROJECT_TOKEN`) in Doppler and rerun the matching deploy workflow                                                      |
-| Sink misconfigured            | Confirm `CONVEX_LOG_SINK` is `posthog` in production or `CONVEX_DEV_LOG_SINK` is `posthog` for observability profiles                                                         |
+| Missing Sentry DSN            | Set `SENTRY_DSN` in the target Doppler config when the selected sink is `sentry` or `both`                                                                                    |
+| Sink misconfigured            | Confirm `CONVEX_LOG_SINK` / `CONVEX_DEV_LOG_SINK` is one of `posthog`, `sentry`, `both`, or `none`                                                                            |
+| Dual forwarding required      | Set `CONVEX_LOG_SINK=both` and rerun production deploy, or set `CONVEX_DEV_LOG_SINK=both` and rerun preview deploy                                                            |
 | Rollback to Sentry required   | Set `CONVEX_LOG_SINK=sentry` and rerun production deploy, or set `CONVEX_DEV_LOG_SINK=sentry` and rerun preview deploy                                                        |
 | Container crashed             | `docker compose -f ops/docker-compose.yml up -d convex-log-forwarder` (prod) or `docker compose -f ops/docker-compose.yml up -d convex-log-forwarder-dev` (dev-observability) |
 | Convex deploy key expired     | Rotate `CONVEX_DEPLOY_KEY` and restart the service                                                                                                                            |

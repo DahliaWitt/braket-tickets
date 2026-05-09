@@ -1,5 +1,6 @@
-import { ComponentHarness } from '@angular/cdk/testing';
-import { EventCardHarness } from '@ui/components/composites/event-card/event-card.harness';
+import {ComponentHarness} from '@angular/cdk/testing';
+import {EventCardHarness} from '@ui/components/composites/event-card/event-card.harness';
+import {BraCommunityAvatarHarness} from '@ui/components/primitives/community-avatar/community-avatar.harness';
 
 export class CommunityEventsComponentHarness extends ComponentHarness {
   static hostSelector = 'app-community-events';
@@ -11,17 +12,23 @@ export class CommunityEventsComponentHarness extends ComponentHarness {
   }
 
   async isPickerStateVisible(): Promise<boolean> {
-    const el = await this.locatorForOptional('[data-testid="community-events-picker"]')();
+    const el = await this.locatorForOptional(
+      '[data-testid="community-events-picker"]',
+    )();
     return !!el;
   }
 
   async getPickerCardCount(): Promise<number> {
-    const cards = await this.locatorForAll('[data-testid="community-picker-card"]')();
+    const cards = await this.locatorForAll(
+      '[data-testid="community-picker-card"]',
+    )();
     return cards.length;
   }
 
   async isErrorStateVisible(): Promise<boolean> {
-    const el = await this.locatorForOptional('[data-testid="community-events-error"]')();
+    const el = await this.locatorForOptional(
+      '[data-testid="community-events-error"]',
+    )();
     return !!el;
   }
 
@@ -30,7 +37,9 @@ export class CommunityEventsComponentHarness extends ComponentHarness {
   }
 
   async isEmptyStateVisible(): Promise<boolean> {
-    const el = await this.locatorForOptional('[data-testid="community-events-empty"]')();
+    const el = await this.locatorForOptional(
+      '[data-testid="community-events-empty"]',
+    )();
     return !!el;
   }
 
@@ -40,14 +49,26 @@ export class CommunityEventsComponentHarness extends ComponentHarness {
   }
 
   async getCommunityNameHeaderText(): Promise<string | null> {
-    const el = await this.locatorForOptional('[data-testid="community-events-header"]')();
+    const el = await this.locatorForOptional(
+      '[data-testid="community-events-header"]',
+    )();
     if (!el) return null;
     return (await el.text()).trim();
   }
 
   async getDescription(): Promise<string | null> {
-    const el = await this.locatorForOptional('[data-testid="community-events-description"]')();
+    const el = await this.locatorForOptional(
+      '[data-testid="community-events-description"]',
+    )();
     if (!el) return null;
     return (await el.text()).trim();
+  }
+
+  async getHeaderAvatar(): Promise<BraCommunityAvatarHarness | null> {
+    return this.locatorForOptional(
+      BraCommunityAvatarHarness.with({
+        ancestor: '[data-testid="community-events-header"]',
+      }),
+    )();
   }
 }

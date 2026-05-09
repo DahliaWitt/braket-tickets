@@ -14,6 +14,7 @@ import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
 import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton.component';
 import {EmptyStateComponent} from '@ui/components/primitives/empty-state/empty-state.component';
 import {EventCardComponent} from '@ui/components/composites/event-card/event-card.component';
+import {BraCommunityAvatarComponent} from '@ui/components/primitives/community-avatar/community-avatar.component';
 import {api} from '@convex/_generated/api';
 import {queryLoadState} from '@/utils/resource';
 
@@ -27,6 +28,7 @@ import {queryLoadState} from '@/utils/resource';
     ZardSkeletonComponent,
     EmptyStateComponent,
     EventCardComponent,
+    BraCommunityAvatarComponent,
   ],
   template: `
     <main
@@ -69,29 +71,12 @@ import {queryLoadState} from '@/utils/resource';
                       [style.animation-fill-mode]="'backwards'"
                       [attr.aria-label]="'View events for ' + community.name"
                     >
-                      @if (community.logoUrl) {
-                        <div
-                          class="relative h-14 w-14 overflow-hidden rounded-lg border border-border bg-muted/50"
-                        >
-                          <img
-                            [src]="community.logoUrl"
-                            [alt]="community.name + ' logo'"
-                            loading="lazy"
-                            decoding="async"
-                            class="absolute inset-0 h-full w-full object-cover"
-                          />
-                        </div>
-                      } @else {
-                        <div
-                          class="flex h-14 w-14 items-center justify-center rounded-lg border border-border bg-muted"
-                        >
-                          <span
-                            class="font-display text-2xl font-bold text-primary"
-                          >
-                            {{ community.name.charAt(0) }}
-                          </span>
-                        </div>
-                      }
+                      <bra-community-avatar
+                        [name]="community.name"
+                        [logoUrl]="community.logoUrl"
+                        size="xl"
+                        shape="rounded-lg"
+                      />
                       <div class="space-y-1">
                         <h2
                           class="font-display text-lg font-bold tracking-wide text-foreground transition-colors group-hover:text-primary"
@@ -185,12 +170,20 @@ import {queryLoadState} from '@/utils/resource';
           @case ('empty') {
             <h1
               data-testid="community-events-header"
-              class="animate-in fade-in slide-in-from-left-4 font-display text-2xl font-bold tracking-tight text-foreground uppercase duration-500 sm:text-3xl lg:text-4xl"
+              class="animate-in fade-in slide-in-from-left-4 flex items-center gap-4 font-display text-2xl font-bold tracking-tight text-foreground uppercase duration-500 sm:text-3xl lg:text-4xl"
               [class.mb-2]="organizerDescription()"
               [class.mb-6]="!organizerDescription()"
             >
+              @if (organizerLogoUrl()) {
+                <bra-community-avatar
+                  [name]="organizerName()"
+                  [logoUrl]="organizerLogoUrl()"
+                  size="xl"
+                  shape="rounded-lg"
+                />
+              }
               {{ organizerName() }}
-              <span class="inline-block h-px grow bg-border"></span>
+              <span class="h-px grow bg-border"></span>
             </h1>
             @if (organizerDescription()) {
               <p
@@ -212,6 +205,14 @@ import {queryLoadState} from '@/utils/resource';
               [class.mb-2]="organizerDescription()"
               [class.mb-6]="!organizerDescription()"
             >
+              @if (organizerLogoUrl()) {
+                <bra-community-avatar
+                  [name]="organizerName()"
+                  [logoUrl]="organizerLogoUrl()"
+                  size="xl"
+                  shape="rounded-lg"
+                />
+              }
               {{ organizerName() }}
               <span class="hidden h-px grow bg-border sm:block"></span>
             </h1>
@@ -298,6 +299,9 @@ export class CommunityEventsComponent {
   );
   readonly organizerDescription = computed(
     () => this.queryData()?.organizerDescription ?? '',
+  );
+  readonly organizerLogoUrl = computed(
+    () => this.queryData()?.organizerLogoUrl,
   );
   readonly events = computed(() => this.queryData()?.events ?? []);
 

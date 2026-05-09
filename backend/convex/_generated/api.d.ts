@@ -1594,6 +1594,7 @@ export declare const api: {
             visibility: "private" | "public_viewable" | "public";
           }>;
           organizerDescription?: string;
+          organizerLogoUrl?: string;
           organizerName: string;
         }
       >;
@@ -5275,16 +5276,6 @@ export declare const internal: {
   };
   stripe: {
     actions: {
-      backfillPaymentMethodDomains: FunctionReference<
-        "action",
-        "internal",
-        {},
-        {
-          failed: Array<{ accountId: string; error: string }>;
-          processed: number;
-          succeeded: number;
-        }
-      >;
       processScheduledPayouts: FunctionReference<
         "action",
         "internal",

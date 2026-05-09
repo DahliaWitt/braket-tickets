@@ -289,7 +289,7 @@ Preview/dev observability uses the same compose file with profile `dev-observabi
 
 - `convex-log-forwarder-dev`
 
-The observability deploy jobs pass the compose-consumed values from the Doppler-synced GitHub environment into `docker compose`, including PostHog log-forwarder tokens, sink settings, and production backup retention settings. For PostHog forwarding, the workflows prefer dedicated log-forwarder tokens when present and fall back to the existing `POSTHOG_KEY` secret.
+The observability deploy jobs pass the compose-consumed values from the Doppler-synced GitHub environment into `docker compose`, including PostHog log-forwarder tokens, Sentry DSNs, sink settings, and production backup retention settings. For PostHog forwarding, the workflows prefer dedicated log-forwarder tokens when present and fall back to the existing `POSTHOG_KEY` secret. Set the sink to `both` when Convex logs should be forwarded to PostHog and Sentry together.
 
 Manual status checks:
 
