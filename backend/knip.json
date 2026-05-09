@@ -3,8 +3,11 @@
   "ignoreExportsUsedInFile": true,
   "entry": [
     "convex/*.ts!",
+    "convex/*.tsx!",
     "convex/*/*.ts!",
+    "convex/*/*.tsx!",
     "convex/*/*/*.ts!",
+    "convex/*/*/*.tsx!",
     "!convex/**/_impl/**!",
     "!convex/lib/**!",
     "!convex/testing/**!",
@@ -13,7 +16,9 @@
   ],
   "project": [
     "convex/**/*.ts!",
+    "convex/**/*.tsx!",
     "!convex/**/*.test.ts!",
+    "!convex/**/*.test.tsx!",
     "!convex/_generated/**!",
     "!convex/testing/**!",
     "!convex/migrations/**!"

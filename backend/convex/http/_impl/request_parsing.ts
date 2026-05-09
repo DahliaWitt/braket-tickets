@@ -52,7 +52,12 @@ export function getClientIp(request: Request): string {
 export function parseCommunitySlugFromPath(request: Request): string | null {
   const pathPrefix = '/api/communities/';
   const url = new URL(request.url);
-  const slug = decodeURIComponent(url.pathname.slice(pathPrefix.length));
+  let slug: string;
+  try {
+    slug = decodeURIComponent(url.pathname.slice(pathPrefix.length));
+  } catch {
+    return null;
+  }
   if (!slug || slug.includes('/')) return null;
   return slug;
 }
