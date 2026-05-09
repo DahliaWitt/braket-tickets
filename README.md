@@ -17,6 +17,23 @@ We're a queer collective in San Francisco who built this because nothing else fi
 
 **[community.braket.gay](https://community.braket.gay)** is the live platform. If you run a community and this sounds like something you'd use, you're welcome on ours. [Reach out](mailto:contact@braket.gay). You're also free to self-host if your organization aligns with the [license](LICENSE).
 
+<br />
+
+<p align="center">
+  <img src="docs/screenshots/landing.webp" alt="Landing page" width="720" />
+</p>
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/event-detail.webp" alt="Event detail page" width="100%" /></td>
+    <td><img src="docs/screenshots/my-tickets.webp" alt="My tickets with QR codes" width="100%" /></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/community-admin-events.webp" alt="Community admin event management" width="100%" /></td>
+    <td><img src="docs/screenshots/community-admin-applications.webp" alt="Application review" width="100%" /></td>
+  </tr>
+</table>
+
 ## What it does
 
 - **Community vetting**: multi-step application flow with admin review, referral tracing, and trust networks between organizer communities

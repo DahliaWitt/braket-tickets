@@ -15,11 +15,14 @@ Source of truth:
 - `.github/workflows/ci.yml`
 - `.github/workflows/deploy.yml`
 - `.github/workflows/deploy-preview.yml`
+- `.github/workflows/release.yml`
+- `.github/workflows/release-automerge.yml`
 - `ops/docker-compose.yml`
 
 Jump to:
 
 - [Fix a failing CI job](#fix-a-failing-ci-job)
+- [Fix Release Please automation](#fix-release-please-automation)
 - [Explain why a deploy was skipped](#explain-why-a-deploy-was-skipped)
 - [Restore a failed Convex deploy](#restore-a-failed-convex-deploy)
 - [Restore a failed frontend deploy](#restore-a-failed-frontend-deploy)
@@ -30,13 +33,42 @@ Jump to:
 
 ## Pipeline Map
 
-| Workflow                   | Trigger                                                                            | Jobs                                                                                  |
-| -------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `CI`                       | Pushes to `main` or `develop`; pull requests targeting `main` or `develop`         | `lint`, `test`, `stripe-contracts`, `build`, `e2e-check`, conditional `e2e`           |
-| `Deploy to Production`     | Successful `CI` workflow run on a push to `main`                                   | `changes`, `deploy-convex`, `deploy-frontend`, `deploy-observability`                 |
-| `Deploy Preview (develop)` | Successful `CI` workflow run on a push to `develop`, or manual `workflow_dispatch` | `changes`, `deploy-convex-dev`, `deploy-frontend-preview`, `deploy-observability-dev` |
+| Workflow                   | Trigger                                                                            | Jobs                                                                                                       |
+| -------------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `CI`                       | Pushes to `main` or `develop`; pull requests targeting `main` or `develop`         | `lint`, `test`, `stripe-contracts`, `build`, `e2e-check`, conditional `e2e`                                |
+| `Release`                  | Pushes to `main`                                                                   | Creates or updates the Release Please PR using `RELEASE_PLEASE_TOKEN`                                      |
+| `Release Automerge`        | Release Please pull requests targeting `main`                                      | Validates the release PR branch, title, author, and changed files, then enables squash auto-merge          |
+| `Deploy to Production`     | Successful `CI` workflow run on a push to `main`                                   | `changes`, `deploy-convex`, `deploy-frontend`, `deploy-observability`, `record-deployment`                 |
+| `Deploy Preview (develop)` | Successful `CI` workflow run on a push to `develop`, or manual `workflow_dispatch` | `changes`, `deploy-convex-dev`, `deploy-frontend-preview`, `deploy-observability-dev`, `record-deployment` |
 
 PRs do not deploy. The deploy workflows are wired to `workflow_run` on branch pushes.
+
+GitHub Actions jobs that need environment-scoped secrets use the selected GitHub environment. CI and component deploy jobs set `deployment: false` so they can read those secrets without adding entries to the repository Deployments sidebar. Only the final `record-deployment` job in each deploy workflow creates the GitHub Deployment record, after the actual backend, frontend, or observability work has completed successfully.
+
+## Fix Release Please automation
+
+The `Release` workflow uses the repository secret `RELEASE_PLEASE_TOKEN`, not the default `GITHUB_TOKEN`, so Release Please pull requests can trigger follow-up workflows. The token needs repository-scoped `Contents: Read and write`, `Pull requests: Read and write`, and `Issues: Read and write` permissions.
+
+The repository Actions workflow permission must allow GitHub Actions to create and approve pull requests. Verify it with:
+
+```bash
+gh api repos/DahliaWitt/braket-tickets/actions/permissions/workflow --jq '.'
+```
+
+Expected values:
+
+```json
+{
+  "default_workflow_permissions": "write",
+  "can_approve_pull_request_reviews": true
+}
+```
+
+The repository auto-merge setting must also be enabled because `Release Automerge` runs `gh pr merge --auto`:
+
+```bash
+gh api repos/DahliaWitt/braket-tickets --jq '{allow_auto_merge,default_branch}'
+```
 
 ## Fix a failing CI job
 
@@ -257,7 +289,7 @@ Preview/dev observability uses the same compose file with profile `dev-observabi
 
 - `convex-log-forwarder-dev`
 
-The observability deploy jobs pass the compose-consumed values from the Doppler-synced GitHub environment into `docker compose`, including PostHog log-forwarder tokens, sink settings, and production backup retention settings. For PostHog forwarding, the workflows prefer dedicated log-forwarder tokens when present and fall back to the existing `POSTHOG_KEY` secret.
+The observability deploy jobs pass the compose-consumed values from the Doppler-synced GitHub environment into `docker compose`, including PostHog log-forwarder tokens, Sentry DSNs, sink settings, and production backup retention settings. For PostHog forwarding, the workflows prefer dedicated log-forwarder tokens when present and fall back to the existing `POSTHOG_KEY` secret. Set the sink to `both` when Convex logs should be forwarded to PostHog and Sentry together.
 
 Manual status checks:
 

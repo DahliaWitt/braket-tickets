@@ -10,7 +10,6 @@ import {
 } from '../lib/orders/validators';
 import {connectedAccountStatusFields} from '../lib/validators/stripe_connect';
 import {
-  backfillPaymentMethodDomainsImpl,
   checkAccountStatusImpl,
   createAccountOnboardingLinkImpl,
   createAccountSessionImpl,
@@ -168,18 +167,5 @@ export const processScheduledPayouts = internalAction({
   returns: v.null(),
   handler: async (ctx) => {
     return await processScheduledPayoutsImpl(ctx);
-  },
-});
-
-/** One-time backfill — delete after running. */
-export const backfillPaymentMethodDomains = internalAction({
-  args: {},
-  returns: v.object({
-    processed: v.number(),
-    succeeded: v.number(),
-    failed: v.array(v.object({accountId: v.string(), error: v.string()})),
-  }),
-  handler: async (ctx) => {
-    return await backfillPaymentMethodDomainsImpl(ctx);
   },
 });

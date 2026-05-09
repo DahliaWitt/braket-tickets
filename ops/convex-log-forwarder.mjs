@@ -280,6 +280,20 @@ async function sendNormalizedEvent(event, config) {
     await sendToSentry(event, config);
     return;
   }
+  if (config.sink === 'both') {
+    const results = await Promise.allSettled([
+      sendToPostHog(event, config),
+      sendToSentry(event, config),
+    ]);
+    const failures = results.filter((result) => result.status === 'rejected');
+    if (failures.length > 0) {
+      throw new AggregateError(
+        failures.map((failure) => failure.reason),
+        'Failed to forward Convex log to every configured sink',
+      );
+    }
+    return;
+  }
   await sendToPostHog(event, config);
 }
 
@@ -548,6 +562,7 @@ function normalizeSink(value) {
   if (
     normalized === 'posthog' ||
     normalized === 'sentry' ||
+    normalized === 'both' ||
     normalized === 'none'
   ) {
     return normalized;
@@ -573,16 +588,32 @@ export function buildRuntimeConfig(env = process.env) {
     sink,
   };
 
-  if (sink === 'posthog') {
+  if (sink === 'posthog' || sink === 'both') {
     const posthogProjectToken = source.POSTHOG_LOGS_PROJECT_TOKEN?.trim();
     if (!posthogProjectToken) {
       throw new Error(
-        'POSTHOG_LOGS_PROJECT_TOKEN is required when sink is posthog',
+        `POSTHOG_LOGS_PROJECT_TOKEN is required when sink is ${sink}`,
       );
     }
     const posthogServiceName = resolvePostHogServiceName(source);
     const posthogHost = source.POSTHOG_LOGS_HOST ?? DEFAULT_POSTHOG_HOST;
     const posthogEndpoint = buildPostHogEndpoint(posthogHost);
+    if (sink === 'both') {
+      const sentryDsn = source.SENTRY_DSN?.trim() ?? '';
+      if (!sentryDsn) {
+        throw new Error('SENTRY_DSN is required when sink is both');
+      }
+      const sentryEnvelopeEndpoint = buildSentryEnvelopeEndpoint(sentryDsn);
+      return {
+        ...config,
+        posthogServiceName,
+        posthogHost,
+        posthogEndpoint,
+        posthogProjectToken,
+        sentryDsn,
+        sentryEnvelopeEndpoint,
+      };
+    }
     return {
       ...config,
       posthogServiceName,
@@ -593,7 +624,7 @@ export function buildRuntimeConfig(env = process.env) {
   }
 
   if (sink === 'sentry') {
-    const sentryDsn = source.SENTRY_DSN ?? '';
+    const sentryDsn = source.SENTRY_DSN?.trim() ?? '';
     if (!sentryDsn) {
       throw new Error('SENTRY_DSN is required when sink is sentry');
     }

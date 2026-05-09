@@ -30,7 +30,7 @@ declare module './convex-log-forwarder.mjs' {
     convexEnvFile: string;
     reconnectDelayMs: number;
     maxInMemoryDedup: number;
-    sink: 'posthog' | 'sentry' | 'none';
+    sink: 'posthog' | 'sentry' | 'both' | 'none';
   }
 
   interface PostHogConfig extends BaseConfig {
@@ -47,6 +47,16 @@ declare module './convex-log-forwarder.mjs' {
     sentryEnvelopeEndpoint: string;
   }
 
+  interface BothConfig extends BaseConfig {
+    sink: 'both';
+    posthogServiceName: string;
+    posthogHost: string;
+    posthogEndpoint: string;
+    posthogProjectToken: string;
+    sentryDsn: string;
+    sentryEnvelopeEndpoint: string;
+  }
+
   interface NoneConfig extends BaseConfig {
     sink: 'none';
     posthogProjectToken: undefined;
@@ -56,7 +66,7 @@ declare module './convex-log-forwarder.mjs' {
     sentryEnvelopeEndpoint: undefined;
   }
 
-  type RuntimeConfig = PostHogConfig | SentryConfig | NoneConfig;
+  type RuntimeConfig = PostHogConfig | SentryConfig | BothConfig | NoneConfig;
 
   // ── PostHog OTLP payload ──────────────────────────────────────────
 

@@ -53,7 +53,9 @@ jobs:
   deploy-convex-dev:
     name: Deploy Backend to Convex (Dev)
     runs-on: self-hosted
-    environment: development
+    environment:
+      name: development
+      deployment: false
     needs: changes
     if: ${{ needs.changes.outputs.backend == 'true' }}
     env:
@@ -124,7 +126,9 @@ jobs:
   deploy-frontend-preview:
     name: Deploy Frontend to Cloudflare (Preview)
     runs-on: self-hosted
-    environment: development
+    environment:
+      name: development
+      deployment: false
     needs: [changes, deploy-convex-dev]
     if: ${{ needs.changes.outputs.frontend == 'true' && (needs.deploy-convex-dev.result == 'success' || needs.deploy-convex-dev.result == 'skipped') }}
 
@@ -165,8 +169,12 @@ jobs:
   deploy-observability-dev:
     name: Deploy Observability Stack (Dev Forwarder)
     runs-on: self-hosted
-    environment: development
+    environment:
+      name: development
+      deployment: false
     needs: changes
+    outputs:
+      deployed: ${{ steps.status.outputs.needs_deploy }}
     concurrency:
       group: deploy-observability-development
       cancel-in-progress: false
@@ -247,3 +255,31 @@ jobs:
           POSTHOG_DEV_LOGS_PROJECT_TOKEN: ${{ secrets.POSTHOG_DEV_LOGS_PROJECT_TOKEN || secrets.POSTHOG_KEY }}
           POSTHOG_DEV_LOGS_SERVICE_NAME: ${{ secrets.POSTHOG_DEV_LOGS_SERVICE_NAME }}
           SENTRY_DSN_DEVELOPMENT: ${{ secrets.SENTRY_DSN }}
+
+  record-deployment:
+    name: Record Development Deployment
+    runs-on: self-hosted
+    needs:
+      [
+        changes,
+        deploy-convex-dev,
+        deploy-frontend-preview,
+        deploy-observability-dev,
+      ]
+    if: >-
+      ${{
+        always() &&
+        needs.changes.result == 'success' &&
+        (needs.deploy-convex-dev.result == 'success' || needs.deploy-convex-dev.result == 'skipped') &&
+        (needs.deploy-frontend-preview.result == 'success' || needs.deploy-frontend-preview.result == 'skipped') &&
+        (needs.deploy-observability-dev.result == 'success' || needs.deploy-observability-dev.result == 'skipped') &&
+        (
+          needs.changes.outputs.backend == 'true' ||
+          needs.changes.outputs.frontend == 'true' ||
+          needs.deploy-observability-dev.outputs.deployed == 'true'
+        )
+      }}
+    environment: development
+    steps:
+      - name: Record deployment
+        run: echo "Development deployment completed for ${{ github.event.workflow_run.head_sha || github.sha }}"

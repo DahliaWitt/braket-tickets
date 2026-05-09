@@ -21,6 +21,7 @@ import {
 } from './analytics-config.token';
 import {BrowserPlatformService} from './browser-platform.service';
 import type {
+  AnalyticsEnvironment,
   AnalyticsEventMap,
   AnalyticsEventName,
   FeedbackCategory,
@@ -50,11 +51,31 @@ function getPostHogUiHost(apiHost: string | undefined): string {
   return 'https://us.posthog.com';
 }
 
-function getAnalyticsEnvironment(config: AnalyticsRuntimeConfig): string {
+function isAnalyticsEnvironment(value: string): value is AnalyticsEnvironment {
   return (
-    config.sentryEnvironment ||
-    (config.production ? 'production' : 'development')
+    value === 'production' ||
+    value === 'preview' ||
+    value === 'development' ||
+    value === 'test' ||
+    value === 'e2e'
   );
+}
+
+function getAnalyticsEnvironment(
+  config: AnalyticsRuntimeConfig,
+): AnalyticsEnvironment {
+  if (
+    typeof config.sentryEnvironment === 'string' &&
+    isAnalyticsEnvironment(config.sentryEnvironment)
+  ) {
+    return config.sentryEnvironment;
+  }
+
+  if (config.isE2E) {
+    return 'e2e';
+  }
+
+  return config.production ? 'production' : 'development';
 }
 
 function isLocalhost(hostname: string | undefined): boolean {

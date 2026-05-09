@@ -21,7 +21,9 @@ jobs:
     name: Lint + Typecheck (ESLint + tsc)
     runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'self-hosted' }}
     timeout-minutes: 10
-    environment: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' && 'production' || github.event_name == 'pull_request' && github.base_ref == 'develop' && 'development' || github.ref_name == 'main' && 'production' || 'development' }}
+    environment:
+      name: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' && 'production' || github.event_name == 'pull_request' && github.base_ref == 'develop' && 'development' || github.ref_name == 'main' && 'production' || 'development' }}
+      deployment: false
     env:
       CONVEX_DEPLOYMENT: ${{ secrets.CONVEX_DEPLOYMENT }}
       CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
@@ -59,7 +61,9 @@ jobs:
     name: Unit Tests
     runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'self-hosted' }}
     timeout-minutes: 10
-    environment: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' && 'production' || github.event_name == 'pull_request' && github.base_ref == 'develop' && 'development' || github.ref_name == 'main' && 'production' || 'development' }}
+    environment:
+      name: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' && 'production' || github.event_name == 'pull_request' && github.base_ref == 'develop' && 'development' || github.ref_name == 'main' && 'production' || 'development' }}
+      deployment: false
     env:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     steps:
@@ -135,7 +139,9 @@ jobs:
     needs: [lint]
     # Stripe sandbox contracts must always run against sandbox/test credentials.
     # Pin this job to the GitHub "development" environment (Doppler stg sync).
-    environment: development
+    environment:
+      name: development
+      deployment: false
     env:
       STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
       STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
@@ -155,7 +161,9 @@ jobs:
     name: Build Frontend
     runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'self-hosted' }}
     timeout-minutes: 10
-    environment: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' && 'production' || github.event_name == 'pull_request' && github.base_ref == 'develop' && 'development' || github.ref_name == 'main' && 'production' || 'development' }}
+    environment:
+      name: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' && 'production' || github.event_name == 'pull_request' && github.base_ref == 'develop' && 'development' || github.ref_name == 'main' && 'production' || 'development' }}
+      deployment: false
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -242,7 +250,9 @@ jobs:
     if: ${{ needs.e2e-check.outputs.should_run == 'true' && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
     # Never expose production environment secrets to pull_request workflows.
     # PR E2E runs always use development secrets; production is only for direct main pushes.
-    environment: ${{ github.event_name == 'pull_request' && 'development' || github.ref_name == 'main' && 'production' || 'development' }}
+    environment:
+      name: ${{ github.event_name == 'pull_request' && 'development' || github.ref_name == 'main' && 'production' || 'development' }}
+      deployment: false
 
     steps:
       - name: Checkout code

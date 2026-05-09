@@ -36,6 +36,51 @@ describe('convex-log-forwarder runtime config', () => {
         CONVEX_LOG_SINK: 'sentry',
       }),
     ).toThrowError(/SENTRY_DSN is required when sink is sentry/i);
+
+    expect(() =>
+      buildRuntimeConfig({
+        CONVEX_LOG_SINK: 'sentry',
+        SENTRY_DSN: '   ',
+      }),
+    ).toThrowError(/SENTRY_DSN is required when sink is sentry/i);
+  });
+
+  it('requires both PostHog and Sentry credentials when sink is both', () => {
+    expect(() =>
+      buildRuntimeConfig({
+        CONVEX_LOG_SINK: 'both',
+        SENTRY_DSN: 'https://public:private@o0.ingest.sentry.io/123',
+      }),
+    ).toThrowError(/POSTHOG_LOGS_PROJECT_TOKEN is required when sink is both/i);
+
+    expect(() =>
+      buildRuntimeConfig({
+        CONVEX_LOG_SINK: 'both',
+        POSTHOG_LOGS_PROJECT_TOKEN: 'test-token',
+        SENTRY_DSN: '   ',
+      }),
+    ).toThrowError(/SENTRY_DSN is required when sink is both/i);
+
+    expect(() =>
+      buildRuntimeConfig({
+        CONVEX_LOG_SINK: 'both',
+        POSTHOG_LOGS_PROJECT_TOKEN: 'test-token',
+      }),
+    ).toThrowError(/SENTRY_DSN is required when sink is both/i);
+
+    const config = buildRuntimeConfig({
+      CONVEX_LOG_SINK: 'both',
+      POSTHOG_LOGS_PROJECT_TOKEN: 'test-token',
+      SENTRY_DSN: 'https://public:private@o0.ingest.sentry.io/123',
+    });
+
+    expect(config.sink).toBe('both');
+    expect((config as {posthogProjectToken: string}).posthogProjectToken).toBe(
+      'test-token',
+    );
+    expect((config as {sentryDsn: string}).sentryDsn).toBe(
+      'https://public:private@o0.ingest.sentry.io/123',
+    );
   });
 });
 
@@ -497,6 +542,79 @@ describe('convex-log-forwarder sender routing', () => {
     expect(serialized).not.toContain('sk_live_secret');
     expect(serialized).not.toContain('4242 4242 4242 4242');
     expect(serialized).not.toContain('session-secret');
+    fetchSpy.mockRestore();
+  });
+
+  it('routes sink=both to PostHog and Sentry', async () => {
+    const config = buildRuntimeConfig({
+      CONVEX_LOG_SINK: 'both',
+      POSTHOG_LOGS_PROJECT_TOKEN: 'test-token',
+      SENTRY_DSN: 'https://public:private@o0.ingest.sentry.io/123',
+    });
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      text: () => Promise.resolve(''),
+    } as Response);
+
+    await sendNormalizedEvent(
+      {
+        functionName: 'tickets.createTicket',
+        isErrorLike: true,
+        level: 'error',
+        message: 'forwarded',
+        rawLine: 'no-op',
+        requestId: 'req-1',
+        sentryTraceId: '',
+        structured: null,
+      },
+      config,
+    );
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    const urls = fetchSpy.mock.calls.map(([url]) => String(url));
+    expect(urls).toContain('https://us.i.posthog.com/i/v1/logs');
+    expect(urls).toContain(
+      (config as {sentryEnvelopeEndpoint: string}).sentryEnvelopeEndpoint,
+    );
+    fetchSpy.mockRestore();
+  });
+
+  it('attempts both sinks before reporting a partial sink failure', async () => {
+    const config = buildRuntimeConfig({
+      CONVEX_LOG_SINK: 'both',
+      POSTHOG_LOGS_PROJECT_TOKEN: 'test-token',
+      SENTRY_DSN: 'https://public:private@o0.ingest.sentry.io/123',
+    });
+
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce({
+        ok: false,
+        text: () => Promise.resolve('bad token'),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(''),
+      } as Response);
+
+    await expect(
+      sendNormalizedEvent(
+        {
+          functionName: 'tickets.createTicket',
+          isErrorLike: true,
+          level: 'error',
+          message: 'forwarded',
+          rawLine: 'no-op',
+          requestId: 'req-1',
+          sentryTraceId: '',
+          structured: null,
+        },
+        config,
+      ),
+    ).rejects.toThrow(/Failed to forward Convex log to every configured sink/i);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
     fetchSpy.mockRestore();
   });
 });

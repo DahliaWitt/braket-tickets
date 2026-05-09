@@ -140,19 +140,25 @@ Forwarding for Convex logs is controlled by the Docker observability services in
 The deploy workflows pass these values from the Doppler-synced GitHub environment into `docker compose`.
 For PostHog forwarding, the workflows prefer the dedicated `POSTHOG_LOGS_PROJECT_TOKEN` / `POSTHOG_DEV_LOGS_PROJECT_TOKEN` values when present and fall back to the existing project `POSTHOG_KEY`.
 
-- **`CONVEX_LOG_SINK`**: sink for production logs. Defaults to `posthog` in compose.
+- **`CONVEX_LOG_SINK`**: sink for production logs. Supported values are `posthog`, `sentry`, `both`, and `none`; compose defaults to `posthog`.
 - **`POSTHOG_LOGS_PROJECT_TOKEN`**: PostHog project token used by the production forwarder.
 - **`POSTHOG_LOGS_HOST`**: PostHog ingest host for production, default `https://us.i.posthog.com`.
 - **`POSTHOG_LOGS_SERVICE_NAME`**: optional identifier for production service correlation.
-- **`CONVEX_DEV_LOG_SINK`**: sink for development logs, defaulting to `posthog` in compose.
+- **`CONVEX_DEV_LOG_SINK`**: sink for development logs. Supported values are `posthog`, `sentry`, `both`, and `none`; compose defaults to `posthog`.
 - **`POSTHOG_DEV_LOGS_PROJECT_TOKEN`**: PostHog project token for development.
 - **`POSTHOG_DEV_LOGS_HOST`**: PostHog ingest host for development, default `https://us.i.posthog.com`.
 - **`POSTHOG_DEV_LOGS_SERVICE_NAME`**: optional identifier for development service correlation.
 
-Sentry DSN values remain present for rollback:
+The selected Doppler deployment configs use `SENTRY_DSN` for Sentry. `ops/docker-compose.yml` passes that value into the production forwarder directly; the preview/dev workflow maps the development environment's `SENTRY_DSN` secret into the dev forwarder. `SENTRY_DSN_DEVELOPMENT` remains only as a local compose override for the dev observability profile.
 
-- **`SENTRY_DSN`**: production DSN
-- **`SENTRY_DSN_DEVELOPMENT`**: development DSN
+- **`SENTRY_DSN`**: Sentry DSN for the active Doppler config. Required when the selected sink is `sentry` or `both`.
+- **`SENTRY_DSN_DEVELOPMENT`**: optional local override for `convex-log-forwarder-dev`; compose falls back to `SENTRY_DSN` when this is unset.
+
+Dual forwarding path:
+
+1. Set `CONVEX_LOG_SINK=both` (or `CONVEX_DEV_LOG_SINK=both`) in Doppler for the target environment.
+2. Confirm the matching PostHog token and Sentry DSN are present. The forwarder fails fast if either credential is missing.
+3. Rerun the matching deploy workflow, or restart the forwarder container from a shell that exports the same env locally.
 
 Rollback path when PostHog ingestion is failing:
 
