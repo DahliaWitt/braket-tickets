@@ -21,9 +21,9 @@ Find the community (through the directory, an event page, or a friend's link) an
 
 Depends on the community. Some admins review applications within hours, others take a few days. You can check your status from your dashboard anytime.
 
-## I was denied — can I reapply?
+## I was rejected — can I reapply?
 
-That's up to the community. If the admins included a denial reason, read it carefully. Some communities allow reapplication, others don't.
+That's up to the community. If the admins included a reason, read it carefully. Some communities allow reapplication, others don't.
 
 ## Where's my ticket?
 

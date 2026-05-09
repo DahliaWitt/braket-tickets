@@ -32,7 +32,7 @@ Your dashboard shows the status of all your vetting applications. You'll see one
 
 - **Pending** — the admins haven't reviewed it yet. Hang tight.
 - **Approved** — you're in \o/ You can now access that community's private events and buy tickets.
-- **Denied** — the admins decided not to approve you this time. They may include a reason.
+- **Rejected** — the admins decided not to approve you this time. They may include a reason.
 
 You'll also get an email when a decision is made.
 

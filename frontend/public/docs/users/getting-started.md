@@ -31,7 +31,7 @@ To apply:
 2. Fill out the vetting application
 3. Hang tight while the admins review it
 
-You can check your status from your dashboard anytime. If you're approved, you get access to that community's private events. If you're denied, the admins can include a reason.
+You can check your status from your dashboard anytime. If you're approved, you get access to that community's private events. If you're rejected, the admins can include a reason.
 
 Some communities also share vetting through trust links — if you're already vetted in one community, a linked community might accept you automatically. More on that in the [Vetting](./vetting.md) guide.
 

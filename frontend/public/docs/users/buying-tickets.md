@@ -43,7 +43,7 @@ More on this in [Guest checkout](./guest-checkout.md).
 
 ## After you buy
 
-Your ticket and QR code show up on your Tickets page right away, and you'll get a confirmation email too.
+If you're signed in, your ticket and QR code show up on your Tickets page right away. Either way, you'll get a confirmation email too.
 
 Hold onto that QR code — you'll need it at the door (^\_^)
 
