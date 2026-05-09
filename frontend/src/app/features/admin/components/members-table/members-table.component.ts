@@ -64,6 +64,10 @@ export class AdminMembersTableComponent {
   /** Debounced signal sent to the Convex query. */
   private readonly debouncedSearch = signal<string | undefined>(undefined);
 
+  // NOTE: injectPaginatedQuery always sends paginationOpts even when searching.
+  // The backend ignores them when a search term is present and returns a single
+  // non-paginated page (isDone: true). This is inherent to the paginated query
+  // API — no clean workaround without a separate non-paginated query.
   private readonly membersQuery = injectPaginatedQuery(
     api.users.profile.listWithApplications,
     () => {
