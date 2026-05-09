@@ -12,6 +12,7 @@ import {
   getMyApplicationForOrganizer as getMyApplicationForOrganizerHandler,
   getMyApplications as getMyApplicationsHandler,
   listApplications as listApplicationsHandler,
+  reinstateApplication as reinstateApplicationHandler,
   revokeApplication as revokeApplicationHandler,
   reviewApplication as reviewApplicationHandler,
   submitApplication as submitApplicationHandler,
@@ -62,6 +63,21 @@ export const revoke = mutation({
   },
   returns: v.null(),
   handler: revokeApplicationHandler,
+});
+
+export const reinstate = mutation({
+  args: {
+    applicationId: v.id('applications'),
+    force: v.optional(v.boolean()),
+  },
+  returns: v.union(
+    v.null(),
+    v.object({
+      conflict: v.literal('newer_application'),
+      newerStatus: applicationStatusValidator,
+    }),
+  ),
+  handler: reinstateApplicationHandler,
 });
 
 export const list = query({

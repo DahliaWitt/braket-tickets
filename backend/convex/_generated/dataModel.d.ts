@@ -83,6 +83,7 @@ export type DataModel = {
         | "admin_invite.cancel"
         | "admin_invite.create"
         | "admin_invite.redeem"
+        | "application.reinstate"
         | "application.review"
         | "application.revoke"
         | "auth.social_signin.blocked"

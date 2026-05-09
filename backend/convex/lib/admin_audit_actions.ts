@@ -13,6 +13,7 @@ export const ADMIN_AUDIT_ACTIONS = {
   ADMIN_INVITE_CANCEL: 'admin_invite.cancel',
   ADMIN_INVITE_CREATE: 'admin_invite.create',
   ADMIN_INVITE_REDEEM: 'admin_invite.redeem',
+  APPLICATION_REINSTATE: 'application.reinstate',
   APPLICATION_REVIEW: 'application.review',
   APPLICATION_REVOKE: 'application.revoke',
   AUTH_SOCIAL_SIGNIN_BLOCKED: 'auth.social_signin.blocked',
@@ -31,8 +32,7 @@ export const ADMIN_AUDIT_ACTIONS = {
   EVENT_CREATE: 'event.create',
   EVENT_DELETE: 'event.delete',
   EVENT_MANAGEMENT_VIEW: 'event.management.view',
-  EVENT_MARKETING_EMAIL_AUTO_CANCELLED:
-    'event.marketing-email.auto-cancelled',
+  EVENT_MARKETING_EMAIL_AUTO_CANCELLED: 'event.marketing-email.auto-cancelled',
   EVENT_ORGANIZER_REASSIGN_FROM: 'event.organizer_reassign.from',
   EVENT_ORGANIZER_REASSIGN_TO: 'event.organizer_reassign.to',
   EVENT_REMINDER_EMAIL_SEND_APPROVED_NO_TICKET:
@@ -50,14 +50,11 @@ export const ADMIN_AUDIT_ACTIONS = {
   MARKETING_EMAIL_CANCELLED: 'marketing_email.cancelled',
   MARKETING_EMAIL_SCHEDULED: 'marketing_email.scheduled',
   MARKETING_EMAIL_SENT: 'marketing_email.sent',
-  ORGANIZER_CASCADE_UNPUBLISH_EVENTS:
-    'organizer.cascadeUnpublishEvents',
-  ORGANIZER_CLEANUP_ORPHANED_ANSWERS:
-    'organizer.cleanupOrphanedAnswers',
+  ORGANIZER_CASCADE_UNPUBLISH_EVENTS: 'organizer.cascadeUnpublishEvents',
+  ORGANIZER_CLEANUP_ORPHANED_ANSWERS: 'organizer.cleanupOrphanedAnswers',
   ORGANIZER_SET_PLATFORM_ORGANIZER_FALSE:
     'organizer.setPlatformOrganizer:false',
-  ORGANIZER_SET_PLATFORM_ORGANIZER_TRUE:
-    'organizer.setPlatformOrganizer:true',
+  ORGANIZER_SET_PLATFORM_ORGANIZER_TRUE: 'organizer.setPlatformOrganizer:true',
   ORGANIZER_UPDATE: 'organizer.update',
   PAYMENT_FORCE_REFUND_ALL: 'payment.force-refund-all',
   PAYMENT_REFUND: 'payment.refund',
@@ -129,6 +126,7 @@ export const ADMIN_AUDIT_ACTIONS_BY_CATEGORY = {
     ADMIN_AUDIT_ACTIONS.GUEST_ADD,
   ],
   application: [
+    ADMIN_AUDIT_ACTIONS.APPLICATION_REINSTATE,
     ADMIN_AUDIT_ACTIONS.APPLICATION_REVIEW,
     ADMIN_AUDIT_ACTIONS.APPLICATION_REVOKE,
   ],
@@ -228,7 +226,10 @@ const actionCategoryEntries = Object.entries(
   ADMIN_AUDIT_ACTIONS_BY_CATEGORY,
 ) as [AdminAuditActionCategory, readonly AdminAuditAction[]][];
 
-const adminAuditCategoryByAction = new Map<AdminAuditAction, AdminAuditActionCategory>(
+const adminAuditCategoryByAction = new Map<
+  AdminAuditAction,
+  AdminAuditActionCategory
+>(
   actionCategoryEntries.flatMap(([category, actions]) =>
     actions.map((action) => [action, category] as const),
   ),
@@ -240,8 +241,6 @@ export function getAdminAuditCategoryForAction(
   return adminAuditCategoryByAction.get(action);
 }
 
-export function isScannerWritableAdminAuditAction(
-  action: string,
-): boolean {
+export function isScannerWritableAdminAuditAction(action: string): boolean {
   return scannerWritableActionSet.has(action);
 }

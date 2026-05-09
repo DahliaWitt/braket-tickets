@@ -3,7 +3,7 @@ import {injectConvex} from 'convex-angular';
 import {api} from '@convex/_generated/api';
 import {type Application} from '../models/application.model';
 import {type Id} from '@convex/_generated/dataModel';
-import {type FunctionArgs} from 'convex/server';
+import {type FunctionArgs, type FunctionReturnType} from 'convex/server';
 
 /**
  * Service for managing vetting applications.
@@ -203,5 +203,17 @@ export class ApplicationsService {
       ...(reason ? {reason} : {}),
     });
     return {_id: applicationId, status: 'revoked'} as Application;
+  }
+
+  async reinstate(
+    applicationId: Id<'applications'>,
+    force?: boolean,
+  ): Promise<
+    FunctionReturnType<typeof api.communities.applications.reinstate>
+  > {
+    return await this.convex.mutation(api.communities.applications.reinstate, {
+      applicationId,
+      ...(force ? {force} : {}),
+    });
   }
 }

@@ -229,6 +229,25 @@
                     >
                       By: {{ app.processor?.name || 'SYSTEM' }}
                     </div>
+                    @if (
+                      app.status === 'revoked' && tableType() === 'history'
+                    ) {
+                      <button
+                        type="button"
+                        z-button
+                        zType="default"
+                        [zFull]="true"
+                        [attr.aria-label]="
+                          'Reinstate membership for ' +
+                          (app.user?.name || 'applicant')
+                        "
+                        class="mt-2"
+                        data-testid="reinstate-application"
+                        (click)="reinstateApplication(app)"
+                      >
+                        REINSTATE
+                      </button>
+                    }
                   </div>
                 }
               </td>
@@ -379,6 +398,23 @@
               (click)="updateStatus(app, 'approved')"
             >
               APPROVE
+            </button>
+          </div>
+        }
+        @if (app.status === 'revoked' && tableType() === 'history') {
+          <div class="border-t border-border/50">
+            <button
+              type="button"
+              z-button
+              zType="default"
+              class="w-full rounded-none border-0"
+              [attr.aria-label]="
+                'Reinstate membership for ' + (app.user?.name || 'applicant')
+              "
+              data-testid="reinstate-application"
+              (click)="reinstateApplication(app)"
+            >
+              REINSTATE
             </button>
           </div>
         }

@@ -223,6 +223,15 @@ export declare const api: {
           userId: Id<"users">;
         }>
       >;
+      reinstate: FunctionReference<
+        "mutation",
+        "public",
+        { applicationId: Id<"applications">; force?: boolean },
+        null | {
+          conflict: "newer_application";
+          newerStatus: "pending" | "approved" | "rejected" | "revoked";
+        }
+      >;
       review: FunctionReference<
         "mutation",
         "public",
@@ -418,6 +427,7 @@ export declare const api: {
                 | "admin_invite.cancel"
                 | "admin_invite.create"
                 | "admin_invite.redeem"
+                | "application.reinstate"
                 | "application.review"
                 | "application.revoke"
                 | "auth.social_signin.blocked"
@@ -2252,6 +2262,7 @@ export declare const api: {
             | "admin_invite.cancel"
             | "admin_invite.create"
             | "admin_invite.redeem"
+            | "application.reinstate"
             | "application.review"
             | "application.revoke"
             | "auth.social_signin.blocked"
@@ -3487,6 +3498,7 @@ export declare const internal: {
               | "admin_invite.cancel"
               | "admin_invite.create"
               | "admin_invite.redeem"
+              | "application.reinstate"
               | "application.review"
               | "application.revoke"
               | "auth.social_signin.blocked"
