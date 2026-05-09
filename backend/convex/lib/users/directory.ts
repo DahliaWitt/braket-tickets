@@ -21,10 +21,7 @@ export async function listUsersForCommunityAdmin(
   return members.map(stripSensitiveUserFields).map(stripCommunityAdminFields);
 }
 
-export async function searchUsersByNameOrEmail(
-  db: UsersDirectoryDb,
-  query: string,
-) {
+async function searchUsersByNameOrEmail(db: UsersDirectoryDb, query: string) {
   const lowerQuery = query.toLowerCase();
   const nameResults = await db
     .query('users')
