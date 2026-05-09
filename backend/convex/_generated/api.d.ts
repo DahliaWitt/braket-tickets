@@ -3263,6 +3263,7 @@ export declare const api: {
             maximumRowsRead?: number;
             numItems: number;
           };
+          search?: string;
         },
         {
           continueCursor: string;
