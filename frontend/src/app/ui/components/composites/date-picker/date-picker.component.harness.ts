@@ -9,6 +9,7 @@ export class BraDatePickerComponentHarness extends ComponentHarness {
   async getDisplayText(): Promise<string> {
     const btn = await this.getTriggerButton();
     const span = await btn.text();
+    // Strip leading/trailing whitespace and the calendar icon text
     return span.trim();
   }
 

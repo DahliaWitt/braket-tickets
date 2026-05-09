@@ -18,6 +18,12 @@ describe('BraDatePickerComponent', () => {
   const getApi = (): DatePickerTestApi =>
     component as unknown as DatePickerTestApi;
 
+  const getPicker = (): Promise<BraDatePickerComponentHarness> =>
+    TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      BraDatePickerComponentHarness,
+    );
+
   const setPopoverDirectiveStub = (
     hideSpy = vi.fn(),
   ): ReturnType<typeof vi.fn> => {
@@ -58,10 +64,7 @@ describe('BraDatePickerComponent', () => {
     component.writeValue(null);
     fixture.detectChanges();
 
-    const picker = await TestbedHarnessEnvironment.harnessForFixture(
-      fixture,
-      BraDatePickerComponentHarness,
-    );
+    const picker = await getPicker();
     expect(getApi().displayText()).toBe('Select event date');
     expect(await picker.getDisplayText()).toContain('Select event date');
   });
@@ -101,10 +104,7 @@ describe('BraDatePickerComponent', () => {
     fixture.detectChanges();
     await fixture.whenStable();
 
-    const picker = await TestbedHarnessEnvironment.harnessForFixture(
-      fixture,
-      BraDatePickerComponentHarness,
-    );
+    const picker = await getPicker();
     expect(await picker.getDisplayText()).toContain('2026-04-21');
     const host = fixture.nativeElement as HTMLElement;
     const trigger = host.querySelector('button');
@@ -122,10 +122,7 @@ describe('BraDatePickerComponent', () => {
     fixture.detectChanges();
     await fixture.whenStable();
 
-    const picker = await TestbedHarnessEnvironment.harnessForFixture(
-      fixture,
-      BraDatePickerComponentHarness,
-    );
+    const picker = await getPicker();
     expect(await picker.getDisplayText()).toContain('Pick a date');
     expect(await picker.getAriaLabel()).toBe('Pick a date');
 
@@ -177,10 +174,7 @@ describe('BraDatePickerComponent', () => {
     component.setDisabledState(true);
     fixture.detectChanges();
 
-    const picker = await TestbedHarnessEnvironment.harnessForFixture(
-      fixture,
-      BraDatePickerComponentHarness,
-    );
+    const picker = await getPicker();
     expect(await picker.isDisabled()).toBe(true);
   });
 });

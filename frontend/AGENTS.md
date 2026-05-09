@@ -54,7 +54,7 @@ All new components (both `z-` and `bra-`) must:
 - Do not use `nativeElement.querySelector`, `fixture.nativeElement`, or ad-hoc DOM selectors in specs
 - If a component/page lacks a harness, add one alongside the component before adding behavior tests
 - Prefer `TestbedHarnessEnvironment` plus focused harness methods over asserting raw DOM structure
-- One harness file per component. Canonical filename is `<name>.component.harness.ts`. Before adding a harness, check for an existing one in the same directory and extend it rather than creating a sibling `<name>.harness.ts`.
+- One harness file per component. New harnesses use the `<name>.component.harness.ts` filename. Before adding a harness, check for an existing one in the same directory and extend it instead of creating a sibling — even if the existing file uses the older `<name>.harness.ts` naming.
 
 ## Shared Components
 
