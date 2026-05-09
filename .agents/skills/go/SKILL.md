@@ -40,9 +40,22 @@ digraph triage {
 }
 ```
 
-**ALL tasks use worktrees.** Multiple `/go` sessions, Cyrus autonomous runs, and interactive
-work can happen concurrently. Without worktrees, they corrupt each other's working directory.
-There is no task small enough to skip isolation.
+**ALL tasks use worktrees — unless you are already in one.** Multiple `/go` sessions, Cyrus
+autonomous runs, and interactive work can happen concurrently. Without worktrees, they corrupt
+each other's working directory. There is no task small enough to skip isolation.
+
+### Worktree Detection
+
+Before creating a worktree, check: is the current working directory already inside a worktree?
+
+```bash
+[[ "$(pwd)" == */braket-tickets/.claude/worktrees/* ]] && echo "IN_WORKTREE" || echo "NOT_IN_WORKTREE"
+```
+
+**If already in a worktree:** skip worktree creation entirely. You are already isolated. Work
+directly in the current directory on its existing branch. Do NOT create a nested worktree.
+
+**If NOT in a worktree:** create one as usual via `superpowers-extended-cc:using-git-worktrees`.
 
 If unsure about size, ask: "This looks [size] — full pipeline or just implementation?"
 
@@ -58,13 +71,13 @@ Automatically invoke — no permission needed.
 
 **Determine affected domains first**, then load the right skills and tools:
 
-| Domain | Skills to invoke | MCP tools |
-|--------|-----------------|-----------|
-| Backend (`convex/`) | `convex-functions`, `convex-best-practices`, plus any specific skill (`convex-realtime`, `convex-schema-validator`, `convex-file-storage`, `convex-security-check`, etc.) | `functionSpec`, `tables`, `status` |
-| Frontend (`frontend/`) | `frontend-design` + Angular CLI `get_best_practices` + `search_documentation`. Also load any relevant Impeccable skills (`animate`, `adapt`, `arrange`, `typeset`, `colorize`, `delight`, `onboard`, `harden`, `clarify`, `polish`, `distill`, `overdrive`, `bolder`, `quieter`, `normalize`, `extract`, `critique`, `audit`, `optimize`) based on the task. | Context7 for ZardUI or new deps |
-| Auth | `convex-setup-auth` | — |
-| Migrations | `convex-migration-helper`, `convex-migrations` | — |
-| Both | Load both domain skill sets | Both MCP tool sets |
+| Domain                 | Skills to invoke                                                                                                                                                                                                                                                                                                                                             | MCP tools                          |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------- |
+| Backend (`convex/`)    | `convex-functions`, `convex-best-practices`, plus any specific skill (`convex-realtime`, `convex-schema-validator`, `convex-file-storage`, `convex-security-check`, etc.)                                                                                                                                                                                    | `functionSpec`, `tables`, `status` |
+| Frontend (`frontend/`) | `frontend-design` + Angular CLI `get_best_practices` + `search_documentation`. Also load any relevant Impeccable skills (`animate`, `adapt`, `arrange`, `typeset`, `colorize`, `delight`, `onboard`, `harden`, `clarify`, `polish`, `distill`, `overdrive`, `bolder`, `quieter`, `normalize`, `extract`, `critique`, `audit`, `optimize`) based on the task. | Context7 for ZardUI or new deps    |
+| Auth                   | `convex-setup-auth`                                                                                                                                                                                                                                                                                                                                          | —                                  |
+| Migrations             | `convex-migration-helper`, `convex-migrations`                                                                                                                                                                                                                                                                                                               | —                                  |
+| Both                   | Load both domain skill sets                                                                                                                                                                                                                                                                                                                                  | Both MCP tool sets                 |
 
 **This is mandatory, not optional.** If the task touches `convex/`, at minimum `convex-functions` and `convex-best-practices` must be loaded. If it touches `frontend/`, Angular CLI best practices and `frontend-design` must be loaded. Load specific Convex skills (realtime, file-storage, cron-jobs, etc.) when the task clearly involves those patterns.
 
@@ -92,7 +105,7 @@ Proceed automatically after audit — no pause needed.
 
 ## Phase 4: Implement
 
-1. Create worktree via `superpowers-extended-cc:using-git-worktrees` (ALL tasks — no exceptions)
+1. Create worktree via `superpowers-extended-cc:using-git-worktrees` — unless already in a worktree (see Worktree Detection above)
 2. Follow `superpowers-extended-cc:test-driven-development` — write tests before implementation code
 3. **Dispatch subagents** via `superpowers-extended-cc:dispatching-parallel-agents`
    - Subagents default to `model: "sonnet"`
@@ -103,6 +116,7 @@ Proceed automatically after audit — no pause needed.
 If a plan has 2+ independent tasks, dispatch them as parallel subagents. If tasks are sequential, dispatch them one at a time. Either way, use the Agent tool — not inline implementation.
 
 **Red flags that you're doing it inline (STOP and dispatch instead):**
+
 - You're about to call Edit/Write on an implementation file
 - You're writing component code, queries, mutations, or test files directly
 - You rationalize "it's faster to just do it here" or "I already have the context"
@@ -127,6 +141,7 @@ All three must pass before proceeding to review. Do NOT run E2E again later — 
 Invoke `superpowers-extended-cc:requesting-code-review`.
 
 **Domain-specific review criteria** — the code reviewer MUST check:
+
 - **Convex code**: RLS usage on public endpoints, argument validation, proper use of `query`/`mutation`/`action` boundaries, no `any` types, index usage. Invoke `convex-security-check` on any new/modified Convex functions.
 - **Angular code**: Zoneless patterns, signal-based reactivity, CDK harness testability, no deprecated APIs. Verify against Angular CLI `get_best_practices`.
 - **Both**: TypeScript strict compliance, no `any`.
@@ -160,11 +175,11 @@ Announce each transition — don't ask permission:
 
 ## Skip Rules
 
-| User says | Effect |
-|-----------|--------|
-| "skip brainstorm" or provides spec | Start at Plan |
-| "just do it" or provides plan | Start at Implement (still uses worktree) |
-| "bugfix" with obvious cause | Use `superpowers-extended-cc:systematic-debugging`, skip brainstorm |
+| User says                          | Effect                                                              |
+| ---------------------------------- | ------------------------------------------------------------------- |
+| "skip brainstorm" or provides spec | Start at Plan                                                       |
+| "just do it" or provides plan      | Start at Implement (still uses worktree)                            |
+| "bugfix" with obvious cause        | Use `superpowers-extended-cc:systematic-debugging`, skip brainstorm |
 
 ## NEVER
 
@@ -173,10 +188,10 @@ Announce each transition — don't ask permission:
 - Run E2E tests twice (once in Verify, commit hook handles the rest)
 - Pause between Research and Plan (no decision needed)
 - Ask permission to research — just do it
-- Skip worktree creation — even for "small" or "quick" tasks. Multiple sessions (interactive,
-  Cyrus, parallel `/go` runs) share the working directory. Without a worktree, they corrupt
-  each other's uncommitted changes, staged files, and git state. There is no task small
-  enough to justify this risk.
+- Skip worktree creation when running from the main working directory — even for "small" or
+  "quick" tasks. Multiple sessions share the working directory. Without a worktree, they
+  corrupt each other's uncommitted changes, staged files, and git state. (Exception: if
+  already inside a worktree, you are already isolated — do not create a nested one.)
 - Merge or clean up worktrees manually instead of invoking `finishing-a-development-branch`.
   The skill exists because merge + cleanup must happen together. Doing the merge yourself and
   then listing cleanup as "remaining work for the user" is the exact failure mode this rule

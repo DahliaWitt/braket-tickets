@@ -24,13 +24,32 @@ Each phase MUST complete before the next begins. Announce each transition explic
 ## Input
 
 Accepts any of:
+
 - PR number: `42`
 - PR URL: `https://github.com/org/repo/pull/42`
 - Branch name: `feat/bra-42-magic-links`
 
 ## Phase 1: Checkout
 
-Create an isolated worktree for the PR branch.
+### Worktree Detection
+
+Before creating a worktree, check if you are already inside one:
+
+```bash
+[[ "$(pwd)" == */braket-tickets/.claude/worktrees/* ]] && echo "IN_WORKTREE" || echo "NOT_IN_WORKTREE"
+```
+
+**If already in a worktree:** skip worktree creation. Verify the working tree is clean
+(`git status --short`). If dirty, commit owned changes first or stop and report. Then
+fetch and checkout the PR branch directly in the current worktree:
+
+```bash
+gh pr view <PR> --json headRefName,number,title,url
+git fetch origin <branch>
+git checkout -B <branch> origin/<branch>
+```
+
+**If NOT in a worktree:** create an isolated worktree for the PR branch:
 
 ```bash
 # Get PR info
@@ -46,7 +65,7 @@ git checkout -B <branch> origin/<branch>
 pnpm install && cd frontend && pnpm install && cd ..
 ```
 
-**Do NOT work in the main working directory.** Always use a worktree.
+**Do NOT work in the main working directory.** Always use a worktree (or be in one already).
 
 ## Phase 2: Fix CI Failures
 
@@ -94,12 +113,12 @@ gh run view <run-id> --log-failed
 
 Failure types and how to handle them:
 
-| Failure Type | Approach |
-|-------------|----------|
-| **Build errors** | Fix TypeScript/compilation errors. Read the exact error, fix the source. |
+| Failure Type           | Approach                                                                                                                    |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **Build errors**       | Fix TypeScript/compilation errors. Read the exact error, fix the source.                                                    |
 | **Unit test failures** | Fix the implementation code, NOT the tests. If a test expectation is genuinely wrong, flag it but still fix the code first. |
-| **E2E test failures** | Run the failing test locally with `pnpm test:e2e:run --grep "test name"`. Fix the implementation, not the test. |
-| **Lint/format** | Run `./scripts/validate.sh all` and fix what it reports. |
+| **E2E test failures**  | Run the failing test locally with `pnpm test:e2e:run --grep "test name"`. Fix the implementation, not the test.             |
+| **Lint/format**        | Run `./scripts/validate.sh all` and fix what it reports.                                                                    |
 
 ### Step 4: Verify locally
 
@@ -159,12 +178,14 @@ digraph comments {
 ### Comment Source Rules
 
 **Human comments — treat as authoritative:**
+
 - Apply the requested change unless it would break something
 - If it contradicts project conventions, apply anyway and note the conflict
 - If it's ambiguous, make your best interpretation and implement it
 - If it would introduce a bug, flag it but still attempt the spirit of the request
 
 **AI comments (Gemini Code Assist, Copilot, etc.) — treat with skepticism:**
+
 - AI reviewers are frequently wrong about project-specific patterns
 - Evaluate each suggestion against the actual codebase conventions
 - Common AI false positives:
@@ -176,6 +197,7 @@ digraph comments {
 - **If you disagree** → skip it and leave a brief note in your commit message explaining why
 
 **How to identify AI reviewers:**
+
 - Username contains "bot", "assist", "copilot", "gemini", "coderabbit"
 - Comment has structured format with severity labels
 - Profile shows `[bot]` badge
@@ -188,6 +210,7 @@ After applying all fixes from Phases 2 and 3, run your own review.
 Invoke `superpowers-extended-cc:requesting-code-review` on the full PR diff (not just your fixes — review ALL changes in the PR).
 
 **Domain-specific criteria:**
+
 - **Convex code**: RLS on public endpoints, argument validation, `query`/`mutation`/`action` boundaries, no `any`, index usage
 - **Angular code**: Zoneless patterns, signal-based reactivity, CDK harness usage, no deprecated APIs
 - **Both**: TypeScript strict compliance, no `any`
@@ -253,14 +276,20 @@ This updates the existing PR automatically.
 
 ### Step 3: Cleanup worktree
 
+**If you created the worktree in Phase 1:**
+
 ```bash
 cd <original-directory>
 git worktree remove ../braket-tickets-pr-<number>
 ```
 
+**If you were already in a pre-existing worktree:** do NOT remove it. You did not create it.
+Skip this step.
+
 ### Step 4: Confirm
 
 Output a summary:
+
 ```
 PR #<number> updated: <url>
 - CI fixes: <count>
@@ -284,23 +313,24 @@ PR #<number> updated: <url>
 
 If you catch yourself thinking any of these, STOP and follow the pipeline:
 
-| Excuse | Reality |
-|--------|---------|
-| "CI is already green, skip Phase 2" | Verify it yourself. `gh pr checks` first. If green, Phase 2 is fast. |
-| "No review comments, skip Phase 3" | Verify it yourself. `gh api` for comments first. If none, Phase 3 is fast. |
-| "I already fixed everything, skip Phase 4 code review" | Your fixes may have introduced new issues. Review is not optional. |
-| "My changes are small, skip Phase 5 validation" | Small changes break builds. Run `validate.sh all`. Every time. |
-| "That failure isn't from my change" | You own the PR now. Fix it or the PR stays broken. |
-| "I'll push later / in the next step" | Push NOW. Phase 6 is MANDATORY and comes LAST. No "later." |
-| "The worktree cleanup isn't important" | Abandoned worktrees accumulate. Clean up after yourself. NEVER list as "remaining work." |
-| "I can do Phases 2 and 3 together" | No. Fix CI first, then address comments. CI fixes may resolve some comments. |
-| "Code review found nothing, skip Phase 5" | Validation catches what review misses (lint, types, build). Always run it. |
+| Excuse                                                 | Reality                                                                                  |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| "CI is already green, skip Phase 2"                    | Verify it yourself. `gh pr checks` first. If green, Phase 2 is fast.                     |
+| "No review comments, skip Phase 3"                     | Verify it yourself. `gh api` for comments first. If none, Phase 3 is fast.               |
+| "I already fixed everything, skip Phase 4 code review" | Your fixes may have introduced new issues. Review is not optional.                       |
+| "My changes are small, skip Phase 5 validation"        | Small changes break builds. Run `validate.sh all`. Every time.                           |
+| "That failure isn't from my change"                    | You own the PR now. Fix it or the PR stays broken.                                       |
+| "I'll push later / in the next step"                   | Push NOW. Phase 6 is MANDATORY and comes LAST. No "later."                               |
+| "The worktree cleanup isn't important"                 | Abandoned worktrees accumulate. Clean up after yourself. NEVER list as "remaining work." |
+| "I can do Phases 2 and 3 together"                     | No. Fix CI first, then address comments. CI fixes may resolve some comments.             |
+| "Code review found nothing, skip Phase 5"              | Validation catches what review misses (lint, types, build). Always run it.               |
 
 ## NEVER
 
 - Skip the commit+push+cleanup phase — this is the entire point
-- Leave a worktree behind — not after pushing, not as "remaining work," not ever. You created
-  it, you remove it in Phase 6 Step 3. Period.
+- Leave a worktree behind that you created — not after pushing, not as "remaining work," not
+  ever. You created it, you remove it in Phase 6 Step 3. (Exception: pre-existing worktrees
+  you did not create — leave those alone.)
 - Blindly accept AI reviewer suggestions
 - Blindly reject AI reviewer suggestions (evaluate each one)
 - Modify tests to make CI pass instead of fixing implementation

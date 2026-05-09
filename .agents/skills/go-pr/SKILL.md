@@ -8,7 +8,8 @@ description: Use when a less powerful model (Sonnet, Haiku) needs to implement a
 Safe development pipeline for autonomous or less powerful models. Always isolated, always submits a PR for human review.
 
 **Two non-negotiable rules:**
-1. **Always work from a worktree and new branch** — no exceptions, no "it's small enough" bypass
+
+1. **Always work from a worktree and new branch** — unless already in a worktree (see Worktree Detection below)
 2. **Always submit a PR** — never merge directly into develop
 
 ## Linear Ticket Detection
@@ -25,13 +26,13 @@ If no Linear ticket is provided, skip this section entirely.
 
 **Determine affected domains**, then load the right skills and tools:
 
-| Domain | Skills to invoke | MCP tools |
-|--------|-----------------|-----------|
-| Backend (`convex/`) | `convex-functions`, `convex-best-practices`, plus any specific skill (`convex-realtime`, `convex-schema-validator`, `convex-file-storage`, `convex-security-check`, etc.) | `functionSpec`, `tables`, `status` |
-| Frontend (`frontend/`) | `frontend-design` + Angular CLI `get_best_practices` + `search_documentation`. Also load relevant Impeccable skills based on the task. | Context7 for ZardUI or new deps |
-| Auth | `convex-setup-auth` | — |
-| Migrations | `convex-migration-helper`, `convex-migrations` | — |
-| Both | Load both domain skill sets | Both MCP tool sets |
+| Domain                 | Skills to invoke                                                                                                                                                          | MCP tools                          |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| Backend (`convex/`)    | `convex-functions`, `convex-best-practices`, plus any specific skill (`convex-realtime`, `convex-schema-validator`, `convex-file-storage`, `convex-security-check`, etc.) | `functionSpec`, `tables`, `status` |
+| Frontend (`frontend/`) | `frontend-design` + Angular CLI `get_best_practices` + `search_documentation`. Also load relevant Impeccable skills based on the task.                                    | Context7 for ZardUI or new deps    |
+| Auth                   | `convex-setup-auth`                                                                                                                                                       | —                                  |
+| Migrations             | `convex-migration-helper`, `convex-migrations`                                                                                                                            | —                                  |
+| Both                   | Load both domain skill sets                                                                                                                                               | Both MCP tool sets                 |
 
 **This is mandatory, not optional.** If the task touches `convex/`, at minimum `convex-functions` and `convex-best-practices` must be loaded. If it touches `frontend/`, Angular CLI best practices and `frontend-design` must be loaded.
 
@@ -57,7 +58,21 @@ Proceed automatically after audit — no pause needed.
 
 ## Phase 3: Implement
 
-### Step 1: Create Worktree (MANDATORY)
+### Worktree Detection
+
+Before creating a worktree, check if you are already inside one:
+
+```bash
+[[ "$(pwd)" == */braket-tickets/.claude/worktrees/* ]] && echo "IN_WORKTREE" || echo "NOT_IN_WORKTREE"
+```
+
+**If already in a worktree:** skip worktree creation. You are already isolated. Work directly
+in the current directory on its existing branch. Ensure you are on a feature branch (not
+`develop`) — if on `develop`, create and checkout a feature branch in place.
+
+**If NOT in a worktree:** proceed with Step 1 below.
+
+### Step 1: Create Worktree (when not already in one)
 
 ```dot
 digraph worktree {
@@ -77,12 +92,11 @@ Create a worktree and feature branch. Use `superpowers-extended-cc:using-git-wor
 **Branch naming:** `<type>/<ticket-or-slug>` (e.g. `feat/bra-42-magic-links`, `fix/bra-55-date-format`)
 
 **Red flags — STOP if you catch yourself doing any of these:**
+
 - Implementing in the main working directory instead of the worktree
 - Working on `develop` directly instead of a feature branch
 - Rationalizing "it's just a one-line fix, I don't need a worktree"
-- Skipping worktree because "the task is small"
-
-**There are NO small tasks. ALL tasks use a worktree.**
+- Skipping worktree because "the task is small" (unless already in a worktree)
 
 ### Step 2: Implement
 
@@ -111,6 +125,7 @@ All three must pass before proceeding. Do NOT skip verification because "the PR 
 Invoke `superpowers-extended-cc:requesting-code-review`.
 
 **Domain-specific review criteria** — the code reviewer MUST check:
+
 - **Convex code**: RLS usage on public endpoints, argument validation, proper use of `query`/`mutation`/`action` boundaries, no `any` types, index usage. Invoke `convex-security-check` on any new/modified Convex functions.
 - **Angular code**: Zoneless patterns, signal-based reactivity, CDK harness testability, no deprecated APIs. Verify against Angular CLI `get_best_practices`.
 - **Both**: TypeScript strict compliance, no `any`.
@@ -214,6 +229,7 @@ Invoke the `pr-code-review` skill on the PR. This runs a full multi-agent review
 **This is NOT optional.** Do NOT substitute your own review, do NOT skip because "Phase 5 already reviewed the code." Phase 5 is a pre-PR self-review on the working tree. This step reviews the actual PR diff against `develop` after rebasing — a fundamentally different perspective.
 
 **Red flags — STOP if you catch yourself thinking:**
+
 - "I already reviewed this in Phase 5" — Phase 5 was pre-rebase, pre-PR. Different context.
 - "The changes are small, review is overkill" — small changes break things too.
 - "I'll just do a quick scan myself" — invoke the skill. Your scan is not equivalent.
@@ -224,6 +240,7 @@ Invoke the `pr-code-review` skill on the PR. This runs a full multi-agent review
 Address every finding from the code review. Do NOT cherry-pick which findings to fix.
 
 After fixing, re-run verification:
+
 1. Unit tests must pass
 2. `./scripts/validate.sh all` must pass
 
@@ -235,9 +252,9 @@ git push
 
 **If the review found zero issues:** Skip this step and proceed to cleanup. But this must be because the review genuinely found nothing — not because you skipped the review.
 
-### Step 8: Clean Up Worktree (MANDATORY)
+### Step 8: Clean Up Worktree
 
-After the PR is fully reviewed, fixed, and pushed, remove the worktree immediately:
+**If you created the worktree:** remove it immediately after the PR is pushed:
 
 ```bash
 # Return to main working directory
@@ -247,9 +264,12 @@ cd <original-directory>
 git worktree remove <worktree-path>
 ```
 
-**Do NOT skip this step.** Do NOT list worktree cleanup as "remaining work for the user."
+Do NOT skip this step. Do NOT list worktree cleanup as "remaining work for the user."
 If you created the worktree, you own its removal. The branch is preserved on the remote —
 the worktree is disposable scaffolding.
+
+**If you were already in a pre-existing worktree:** do NOT remove it. You did not create it,
+and another process or session may own it. Skip this step.
 
 ## Phase Transitions
 
@@ -267,14 +287,15 @@ Announce each transition:
 
 ## Skip Rules
 
-| User says | Effect |
-|-----------|--------|
-| "skip plan" or provides plan | Start at Implement |
-| "bugfix" with obvious cause | Use `superpowers-extended-cc:systematic-debugging`, skip plan |
-| Task is a single-file obvious fix (typo, config tweak) | Skip plan, go straight to worktree + implement |
+| User says                                              | Effect                                                        |
+| ------------------------------------------------------ | ------------------------------------------------------------- |
+| "skip plan" or provides plan                           | Start at Implement                                            |
+| "bugfix" with obvious cause                            | Use `superpowers-extended-cc:systematic-debugging`, skip plan |
+| Task is a single-file obvious fix (typo, config tweak) | Skip plan, go straight to worktree + implement                |
 
 **You CANNOT skip:**
-- Worktree creation (never)
+
+- Worktree creation (unless already in a worktree — see Worktree Detection)
 - Verification (never)
 - PR submission (never — this is the whole point)
 - Post-PR rebase on origin/develop (never)
@@ -285,7 +306,8 @@ Announce each transition:
 
 - Merge directly into `develop` — always create a PR
 - Push to `main` — PRs target `develop` only
-- Skip worktree creation — not even for one-line fixes
+- Skip worktree creation from the main working directory — not even for one-line fixes
+  (exception: already inside a worktree — do not nest)
 - Skip verification before PR submission
 - Skip post-PR rebase on origin/develop
 - Skip post-PR code review (`pr-code-review`) — Phase 5 self-review is NOT a substitute
@@ -293,7 +315,7 @@ Announce each transition:
 - Mark Linear tickets as "Done" — only "In Review" (human merges = human marks done)
 - Implement in the main working directory
 - Force-push without explicit user request
-- Leave orphaned worktrees or list cleanup as "remaining work for the user." You created it,
-  you remove it.
+- Leave orphaned worktrees you created, or list cleanup as "remaining work for the user."
+  You created it, you remove it. (Pre-existing worktrees are not yours to remove.)
 - Skip `convex-audit-design` for Convex-touching plans. A single-pass "looks fine" review is
   not equivalent to four sequential audit passes that build on each other.
