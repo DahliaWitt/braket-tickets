@@ -33,7 +33,7 @@ export async function handleListPublicEvents(
     return new Response('Too Many Requests', {
       status: 429,
       headers: {
-        ...getPublicCorsHeaders(),
+        ...uncachedPublicErrorHeaders,
         'Retry-After': '60',
       },
     });
