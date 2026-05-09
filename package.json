@@ -8,7 +8,7 @@
     "bundle-analyze": "pnpm --filter frontend analyze",
     "bundle-size": "pnpm --filter frontend bundle-size",
     "check:convex-logging": "pnpm --filter backend check:logging",
-    "check:convex-generated": "pnpm --filter backend check:generated",
+    "check:convex-generated": "DOPPLER_CONFIG=stg tsx scripts/with-env.ts pnpm --filter backend check:generated",
     "check:authz-boundaries": "pnpm --filter backend check:authz-boundaries",
     "clean": "rm -rf scripts/dist shared/dist",
     "complexity": "tsx scripts/complexity-report.ts",
