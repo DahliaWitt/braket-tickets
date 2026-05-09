@@ -7,6 +7,7 @@ import {
   signal,
   ViewEncapsulation,
 } from '@angular/core';
+import {NgOptimizedImage} from '@angular/common';
 
 import {
   communityAvatarContainerVariants,
@@ -19,6 +20,7 @@ import {mergeClasses} from '@ui/utils/merge-classes';
   selector: 'bra-community-avatar',
   changeDetection: ChangeDetectionStrategy.OnPush,
   encapsulation: ViewEncapsulation.None,
+  imports: [NgOptimizedImage],
   host: {
     '[class]': 'hostClasses()',
     '[attr.data-size]': 'size()',
@@ -26,10 +28,11 @@ import {mergeClasses} from '@ui/utils/merge-classes';
   template: `
     @if (showImage()) {
       <img
-        [src]="logoUrl()"
+        [ngSrc]="logoUrl()!"
         [alt]="name() + ' logo'"
-        loading="lazy"
-        decoding="async"
+        fill
+        ngSrcset="80w, 160w"
+        sizes="64px"
         [class]="imageClasses()"
         (error)="onLogoError()"
       />
@@ -58,7 +61,8 @@ export class BraCommunityAvatarComponent {
 
   protected readonly hostClasses = computed(() =>
     mergeClasses(
-      'inline-flex',
+      // `relative` is required so child `<img fill>` positions against the host.
+      'relative inline-flex',
       communityAvatarContainerVariants({
         size: this.size(),
         shape: this.shape(),
@@ -75,9 +79,9 @@ export class BraCommunityAvatarComponent {
     this.failedLogoUrl.set(this.logoUrl() ?? null);
   }
 
-  protected readonly imageClasses = computed(() =>
-    mergeClasses('h-full w-full object-cover'),
-  );
+  // `fill` already sets position: absolute / inset: 0 / 100% × 100% inline,
+  // so only object-fit is load-bearing here.
+  protected readonly imageClasses = computed(() => 'object-cover');
 
   protected readonly initial = computed(
     () => this.name().trim().charAt(0).toUpperCase() || '?',

@@ -9,7 +9,7 @@ import {
   signal,
   untracked,
 } from '@angular/core';
-import {DatePipe, CurrencyPipe} from '@angular/common';
+import {DatePipe, CurrencyPipe, NgOptimizedImage} from '@angular/common';
 import {AuthService} from '@/core/services/auth.service';
 import {PublicCommunitiesService} from '@/core/services/public-communities.service';
 import {PublicEventsService} from '@/core/services/public-events.service';
@@ -27,6 +27,7 @@ import {safeResourceValue} from '@/utils/resource';
     ContentLayoutComponent,
     DatePipe,
     CurrencyPipe,
+    NgOptimizedImage,
     BraCommunityAvatarComponent,
   ],
   template: `
@@ -87,11 +88,13 @@ import {safeResourceValue} from '@/utils/resource';
                   class="relative h-64 w-full overflow-hidden bg-card md:h-80 md:w-56 lg:w-64"
                 >
                   <img
-                    [src]="event.posterUrl"
+                    [ngSrc]="event.posterUrl"
                     [alt]="event.title + ' event poster'"
-                    fetchpriority="high"
-                    decoding="async"
-                    class="absolute inset-0 h-full w-full object-contain"
+                    fill
+                    priority
+                    ngSrcset="320w, 640w, 1024w"
+                    sizes="(min-width: 1024px) 256px, (min-width: 768px) 224px, 100vw"
+                    class="object-contain"
                   />
                 </div>
               }
@@ -161,11 +164,11 @@ import {safeResourceValue} from '@/utils/resource';
                   >
                     @if (event.posterUrl) {
                       <img
-                        [src]="event.posterUrl"
+                        [ngSrc]="event.posterUrl"
                         [alt]="event.title + ' poster'"
-                        loading="lazy"
-                        decoding="async"
-                        class="absolute inset-0 h-full w-full object-cover"
+                        fill
+                        sizes="(min-width: 768px) 33vw, 100vw"
+                        class="object-cover"
                       />
                     }
                   </div>

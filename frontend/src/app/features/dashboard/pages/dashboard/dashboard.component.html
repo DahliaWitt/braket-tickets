@@ -145,11 +145,12 @@
                 <div class="relative aspect-video overflow-hidden bg-card">
                   @if (event.posterUrl) {
                     <img
-                      [src]="event.posterUrl"
+                      [ngSrc]="event.posterUrl"
                       [alt]="event.title + ' poster'"
-                      loading="lazy"
-                      decoding="async"
-                      class="absolute inset-0 h-full w-full object-cover"
+                      fill
+                      ngSrcset="320w, 640w"
+                      sizes="(min-width: 768px) 25vw, 224px"
+                      class="object-cover"
                     />
                   }
                 </div>
@@ -206,11 +207,12 @@
                 <div class="relative aspect-video overflow-hidden bg-card">
                   @if (event.posterUrl) {
                     <img
-                      [src]="event.posterUrl"
+                      [ngSrc]="event.posterUrl"
                       [alt]="event.title + ' poster'"
-                      loading="lazy"
-                      decoding="async"
-                      class="absolute inset-0 h-full w-full object-cover"
+                      fill
+                      ngSrcset="320w, 640w"
+                      sizes="(min-width: 768px) 25vw, 224px"
+                      class="object-cover"
                     />
                   }
                 </div>
@@ -454,11 +456,13 @@
                 class="relative h-64 w-full overflow-hidden bg-card md:h-80 md:w-56 lg:w-64"
               >
                 <img
-                  [src]="featured.posterUrl"
+                  [ngSrc]="featured.posterUrl"
                   [alt]="featured.title + ' event poster'"
-                  fetchpriority="high"
-                  decoding="async"
-                  class="absolute inset-0 h-full w-full object-contain"
+                  fill
+                  priority
+                  ngSrcset="320w, 640w, 1024w"
+                  sizes="(min-width: 1024px) 256px, (min-width: 768px) 224px, 100vw"
+                  class="object-contain"
                 />
               </div>
             }
@@ -529,11 +533,12 @@
                   <div class="relative aspect-video overflow-hidden bg-card">
                     @if (event.posterUrl) {
                       <img
-                        [src]="event.posterUrl"
+                        [ngSrc]="event.posterUrl"
                         [alt]="event.title + ' poster'"
-                        loading="lazy"
-                        decoding="async"
-                        class="absolute inset-0 h-full w-full object-cover"
+                        fill
+                        ngSrcset="320w, 640w"
+                        sizes="(min-width: 768px) 25vw, 224px"
+                        class="object-cover"
                       />
                     }
                   </div>

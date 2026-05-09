@@ -13,7 +13,7 @@ import {
   type AfterRenderRef,
 } from '@angular/core';
 import {toSignal} from '@angular/core/rxjs-interop';
-import {DatePipe, CurrencyPipe} from '@angular/common';
+import {DatePipe, CurrencyPipe, NgOptimizedImage} from '@angular/common';
 import {ActivatedRoute, Router, RouterLink} from '@angular/router';
 import {AuthService} from '@/core/services/auth.service';
 import {AnalyticsService} from '@/core/services/analytics.service';
@@ -59,6 +59,7 @@ type EventOrganizer = NonNullable<EventDetail['organizer']>;
     DatePipe,
     CurrencyPipe,
     RouterLink,
+    NgOptimizedImage,
     ZardButtonComponent,
     ZardIconComponent,
     ZardSkeletonComponent,

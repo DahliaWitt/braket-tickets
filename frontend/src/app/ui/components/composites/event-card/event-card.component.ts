@@ -9,7 +9,7 @@ import {
   afterNextRender,
   type OnDestroy,
 } from '@angular/core';
-import {DatePipe, CurrencyPipe} from '@angular/common';
+import {DatePipe, CurrencyPipe, NgOptimizedImage} from '@angular/common';
 import {RouterLink} from '@angular/router';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 import {ZardCardComponent} from '@ui/components/primitives/card/card.component';
@@ -37,6 +37,7 @@ export interface EventCardData {
     DatePipe,
     CurrencyPipe,
     RouterLink,
+    NgOptimizedImage,
     ZardButtonComponent,
     ZardCardComponent,
   ],
@@ -64,12 +65,12 @@ export interface EventCardData {
           [attr.aria-label]="'View details for ' + event().title"
         >
           <img
-            [src]="event().posterUrl!"
+            [ngSrc]="event().posterUrl!"
             [alt]="event().title + ' poster'"
-            class="absolute inset-0 h-full w-full object-cover"
-            [attr.loading]="priority() ? null : 'lazy'"
-            [attr.fetchpriority]="priority() ? 'high' : null"
-            decoding="async"
+            fill
+            [priority]="priority()"
+            sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw"
+            class="object-cover"
           />
         </a>
       } @else {

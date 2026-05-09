@@ -114,11 +114,13 @@
           >
             @if (evt.posterUrl) {
               <img
-                [src]="evt.posterUrl"
+                [ngSrc]="evt.posterUrl"
                 [alt]="evt.title + ' poster'"
-                fetchpriority="high"
-                decoding="async"
-                class="absolute inset-0 h-full w-full object-cover"
+                fill
+                priority
+                ngSrcset="320w, 640w, 1024w"
+                sizes="(min-width: 768px) 300px, 100vw"
+                class="object-cover"
               />
             } @else {
               <div
