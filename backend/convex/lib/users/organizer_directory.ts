@@ -452,23 +452,33 @@ export async function searchUserApplicationsInDirectory(
 ): Promise<UserApplicationPage> {
   const matchingUsers = await searchUsersByNameOrEmail(ctx.db, searchTerm);
 
+  // Parallel index lookups — each is an independent read on
+  // by_organizer_and_user, so no need to serialize.
+  const directoryEntries = await Promise.all(
+    matchingUsers.map((user) =>
+      ctx.db
+        .query('organizer_user_directory')
+        .withIndex('by_organizer_and_user', (q) =>
+          q.eq('organizerId', organizerId).eq('userId', user._id),
+        )
+        .unique(),
+    ),
+  );
+
+  // Parallel resolution — mirrors loadUserApplicationPageForOrganizerFromDirectory.
+  const resolvedEntries = await Promise.all(
+    directoryEntries.map((entry) =>
+      entry ? resolveActiveDirectoryEntry(ctx, entry) : null,
+    ),
+  );
+
   const entries: DirectoryEntryFields[] = [];
   const usersById = new Map<Id<'users'>, Doc<'users'>>();
-
-  for (const user of matchingUsers) {
-    const entry = await ctx.db
-      .query('organizer_user_directory')
-      .withIndex('by_organizer_and_user', (q) =>
-        q.eq('organizerId', organizerId).eq('userId', user._id),
-      )
-      .unique();
-
-    if (entry) {
-      const resolved = await resolveActiveDirectoryEntry(ctx, entry);
-      if (resolved) {
-        entries.push(resolved);
-        usersById.set(user._id, user);
-      }
+  for (let i = 0; i < matchingUsers.length; i++) {
+    const resolved = resolvedEntries[i];
+    if (resolved) {
+      entries.push(resolved);
+      usersById.set(matchingUsers[i]._id, matchingUsers[i]);
     }
   }
 
