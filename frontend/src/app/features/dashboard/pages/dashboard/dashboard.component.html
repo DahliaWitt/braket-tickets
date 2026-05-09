@@ -92,23 +92,11 @@
                 data-testid="dashboard-apply-link"
                 class="group flex items-center gap-4 border-b border-border px-4 py-5 transition-colors hover:bg-foreground/[0.02]"
               >
-                @if (community.logoUrl) {
-                  <img
-                    [src]="community.logoUrl"
-                    [alt]="community.name + ' logo'"
-                    loading="lazy"
-                    decoding="async"
-                    class="h-10 w-10 flex-shrink-0 rounded-sm border border-border object-cover"
-                  />
-                } @else {
-                  <div
-                    class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-sm border border-border bg-card"
-                  >
-                    <span class="font-display text-base font-bold text-primary">
-                      {{ community.name.charAt(0) }}
-                    </span>
-                  </div>
-                }
+                <bra-community-avatar
+                  [name]="community.name"
+                  [logoUrl]="community.logoUrl"
+                  size="lg"
+                />
                 <div class="min-w-0 flex-1">
                   <p
                     class="truncate font-display text-base font-bold tracking-tight text-foreground uppercase md:text-lg"
@@ -275,15 +263,10 @@
                 class="flex flex-col gap-2 border-l-[3px] border-l-success/50 bg-card/40 p-4 transition-all hover:border-l-success/80 hover:bg-card/70"
               >
                 <div class="flex min-w-0 items-center gap-2.5">
-                  <ng-container
-                    *ngTemplateOutlet="
-                      communityAvatar;
-                      context: {
-                        logoUrl: entry.organizerLogoUrl,
-                        name: entry.organizerName,
-                        muted: false,
-                      }
-                    "
+                  <bra-community-avatar
+                    [name]="entry.organizerName"
+                    [logoUrl]="entry.organizerLogoUrl"
+                    size="sm"
                   />
                   <span
                     class="truncate font-display text-base font-bold text-foreground"
@@ -323,15 +306,11 @@
                 class="flex flex-col gap-2 border-l-[3px] border-l-warning/50 bg-card/40 p-4"
               >
                 <div class="flex min-w-0 items-center gap-2.5">
-                  <ng-container
-                    *ngTemplateOutlet="
-                      communityAvatar;
-                      context: {
-                        logoUrl: entry.organizerLogoUrl,
-                        name: entry.organizerName,
-                        muted: true,
-                      }
-                    "
+                  <bra-community-avatar
+                    [name]="entry.organizerName"
+                    [logoUrl]="entry.organizerLogoUrl"
+                    size="sm"
+                    muted
                   />
                   <span
                     class="truncate font-display text-base font-bold text-muted-foreground/70"
@@ -353,15 +332,11 @@
                 class="flex flex-col gap-2 border-l-[3px] border-l-destructive/50 bg-card/30 p-4"
               >
                 <div class="flex min-w-0 items-center gap-2.5">
-                  <ng-container
-                    *ngTemplateOutlet="
-                      communityAvatar;
-                      context: {
-                        logoUrl: entry.organizerLogoUrl,
-                        name: entry.organizerName,
-                        muted: true,
-                      }
-                    "
+                  <bra-community-avatar
+                    [name]="entry.organizerName"
+                    [logoUrl]="entry.organizerLogoUrl"
+                    size="sm"
+                    muted
                   />
                   <span
                     class="truncate font-display text-base font-bold text-muted-foreground/70"
@@ -415,23 +390,11 @@
                 data-testid="dashboard-discover-apply"
                 class="group flex items-center gap-4 border-b border-border px-4 py-4 transition-colors hover:bg-foreground/[0.02]"
               >
-                @if (community.logoUrl) {
-                  <img
-                    [src]="community.logoUrl"
-                    [alt]="community.name + ' logo'"
-                    class="h-8 w-8 flex-shrink-0 rounded-sm border border-border object-cover"
-                    loading="lazy"
-                    decoding="async"
-                  />
-                } @else {
-                  <div
-                    class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-sm border border-border bg-card"
-                  >
-                    <span class="font-display text-sm font-bold text-primary">
-                      {{ community.name.charAt(0) }}
-                    </span>
-                  </div>
-                }
+                <bra-community-avatar
+                  [name]="community.name"
+                  [logoUrl]="community.logoUrl"
+                  size="md"
+                />
                 <div class="min-w-0 flex-1">
                   <p
                     class="truncate font-display text-sm font-bold tracking-tight text-foreground uppercase"
@@ -608,31 +571,3 @@
     }
   </div>
 </app-content-layout>
-
-<ng-template
-  #communityAvatar
-  let-logoUrl="logoUrl"
-  let-name="name"
-  let-muted="muted"
->
-  @if (logoUrl) {
-    <img
-      [src]="logoUrl"
-      [alt]="name + ' logo'"
-      loading="lazy"
-      decoding="async"
-      class="h-6 w-6 flex-shrink-0 rounded-sm border border-border object-cover"
-    />
-  } @else {
-    <div
-      class="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-sm border border-border bg-card"
-    >
-      <span
-        class="font-display text-xs font-bold"
-        [class]="muted ? 'text-muted-foreground/60' : 'text-primary'"
-      >
-        {{ name.charAt(0) }}
-      </span>
-    </div>
-  }
-</ng-template>

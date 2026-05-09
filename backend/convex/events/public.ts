@@ -49,6 +49,7 @@ export const listByOrganizer = query({
     v.object({
       organizerName: v.string(),
       organizerDescription: v.optional(v.string()),
+      organizerLogoUrl: v.optional(v.string()),
       events: v.array(eventWithPosterUrlValidator),
     }),
   ),

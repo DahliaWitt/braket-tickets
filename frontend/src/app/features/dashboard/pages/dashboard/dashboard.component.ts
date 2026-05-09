@@ -5,12 +5,13 @@ import {
   signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
-import {DatePipe, CurrencyPipe, NgTemplateOutlet} from '@angular/common';
+import {DatePipe, CurrencyPipe} from '@angular/common';
 import {AuthService} from '@/core/services/auth.service';
 import {DashboardDataService} from '@/features/dashboard/services/dashboard-data.service';
 import {DashboardPageDataService} from '@/features/dashboard/services/dashboard-page-data.service';
 import {RouterLink} from '@angular/router';
 import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton.component';
+import {BraCommunityAvatarComponent} from '@ui/components/primitives/community-avatar/community-avatar.component';
 import {ContentLayoutComponent} from '@/layout/content-layout/content-layout.component';
 import {EVENT_VISIBILITY} from '@shared/domain/event-visibility';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
@@ -21,10 +22,10 @@ import {BrowserPlatformService} from '@/core/services/browser-platform.service';
   imports: [
     DatePipe,
     CurrencyPipe,
-    NgTemplateOutlet,
     RouterLink,
     ContentLayoutComponent,
     ZardSkeletonComponent,
+    BraCommunityAvatarComponent,
   ],
   templateUrl: './dashboard.component.html',
   providers: [DashboardPageDataService],
