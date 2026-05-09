@@ -24,19 +24,20 @@ export async function listUsersForCommunityAdmin(
 export async function searchUsersByNameOrEmail(
   db: UsersDirectoryDb,
   query: string,
+  limit = 50,
 ) {
   const lowerQuery = query.toLowerCase();
   const nameResults = await db
     .query('users')
     .withSearchIndex('search_name_email', (q) => q.search('name', query))
-    .take(50);
+    .take(limit);
 
   const emailResults = await db
     .query('users')
     .withIndex('email', (q) =>
       q.gte('email', lowerQuery).lt('email', lowerQuery + '\uffff'),
     )
-    .take(50);
+    .take(limit);
 
   const seen = new Set(nameResults.map((user) => user._id));
   const emailMatches = emailResults.filter(
@@ -44,7 +45,7 @@ export async function searchUsersByNameOrEmail(
       !seen.has(user._id) && user.email?.toLowerCase().includes(lowerQuery),
   );
 
-  return [...nameResults, ...emailMatches].slice(0, 50);
+  return [...nameResults, ...emailMatches].slice(0, limit);
 }
 
 async function filterUsersByApprovedOrganizerMembership(

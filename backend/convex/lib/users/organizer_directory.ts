@@ -438,7 +438,7 @@ export async function searchUserApplicationsInDirectory(
   organizerId: Id<'organizers'>,
   searchTerm: string,
 ): Promise<UserApplicationPage> {
-  const matchingUsers = await searchUsersByNameOrEmail(ctx.db, searchTerm);
+  const matchingUsers = await searchUsersByNameOrEmail(ctx.db, searchTerm, 256);
 
   // Parallel index lookups — each is an independent read on
   // by_organizer_and_user, so no need to serialize.
