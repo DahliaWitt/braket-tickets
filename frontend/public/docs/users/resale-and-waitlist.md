@@ -33,7 +33,7 @@ When someone buys a resale ticket, a few things happen:
 
 - The buyer gets a new ticket and QR code.
 - Your original ticket is deactivated.
-- You get refunded the ticket price.
+- You get refunded the ticket price, minus any resale fee the organizer has set.
 
 Resale tickets are sold one at a time, even if the buyer would normally be able to purchase multiple. The price is always whatever the original ticket cost.
 

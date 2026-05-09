@@ -39,4 +39,4 @@ Links you no longer need can be deactivated. Once deactivated, the URL stops wor
 
 The person clicking the link lands on a page that either signs them in or prompts account creation, then confirms they've been added to your community. The whole thing takes about ten seconds.
 
-They show up in your Members list and App History like any other approved member.
+They show up in your Members list right away. They won't appear in App History since they never submitted an application — magic link redemptions are logged in the Audit Log instead.
