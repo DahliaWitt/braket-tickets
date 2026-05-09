@@ -108,13 +108,19 @@ describe('sentry-loader', () => {
   });
 
   it('lazy-loads replay when requested', async () => {
-    lazyLoadIntegrationMock.mockResolvedValue(() => ({name: 'replay'}));
+    const replayIntegrationFactory = vi.fn(() => ({name: 'replay'}));
+    lazyLoadIntegrationMock.mockResolvedValue(replayIntegrationFactory);
 
     const {ensureSentryReplay} = await import('./sentry-loader');
 
     await expect(ensureSentryReplay(runtimeConfig)).resolves.toBeUndefined();
     expect(initMock).toHaveBeenCalledOnce();
     expect(lazyLoadIntegrationMock).toHaveBeenCalledWith('replayIntegration');
+    expect(replayIntegrationFactory).toHaveBeenCalledWith({
+      maskAllText: true,
+      maskAllInputs: true,
+      blockAllMedia: true,
+    });
     expect(addIntegrationMock).toHaveBeenCalledOnce();
   });
 

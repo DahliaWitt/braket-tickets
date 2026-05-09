@@ -136,9 +136,10 @@
         <p>
           Analytics identity is limited to internal account identifiers and role
           metadata; we do not send your name or email address as PostHog
-          identity properties. If you submit feedback, raw feedback text is not
-          sent as a PostHog analytics property. We may use masked session replay
-          for quality and support, with text and form inputs hidden by default.
+          identity properties. If you submit feedback, the message text is sent
+          to PostHog so we can review and act on it. We may use masked session
+          replay for quality and support, with text and form inputs hidden by
+          default.
         </p>
         <p>
           Sensitive checkout, authentication, vetting, QR code, ticket PDF,
@@ -359,10 +360,14 @@
         <p>
           <strong class="text-foreground">We honor both signals.</strong> When
           your browser sends a Do Not Track signal or a Global Privacy Control
-          signal, we disable all analytics data collection (PostHog). No usage
-          events are captured, no analytics cookies or local storage entries are
-          created, and no personally identifiable analytics data is sent to
-          third parties.
+          signal, we disable passive analytics and replay collection (PostHog).
+          No passive usage events are captured, and no analytics cookies or
+          local storage entries are created.
+        </p>
+        <p>
+          If you explicitly submit the footer feedback form, we send that
+          feedback message and limited diagnostic context to PostHog so we can
+          receive and act on your request.
         </p>
         <p>
           Essential cookies and local storage required for authentication,

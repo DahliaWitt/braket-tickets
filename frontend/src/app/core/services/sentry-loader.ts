@@ -193,7 +193,13 @@ export async function ensureSentryReplay(
 
     const replayIntegration =
       await Sentry.lazyLoadIntegration('replayIntegration');
-    Sentry.addIntegration(replayIntegration());
+    Sentry.addIntegration(
+      replayIntegration({
+        maskAllText: true,
+        maskAllInputs: true,
+        blockAllMedia: true,
+      }),
+    );
   })().catch((error: unknown) => {
     replayLoadPromise = null;
     logger.error('Failed to lazy-load Sentry replay integration', error);

@@ -88,15 +88,15 @@ Do not introduce unsupported visibility values such as `gated`, `unlisted`, or
 
 ## P0 Frontend Events
 
-| Event                               | Source                                        | Required properties                                                               |
-| ----------------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------- |
-| `event_viewed`                      | Angular event details page                    | `event_id`, optional `organizer_id`, `event_visibility`, `purchase_access_source` |
-| `checkout_panel_opened`             | Angular checkout sidebar/event details action | `event_id`, `checkout_kind`, optional `ticket_count`, `tier`                      |
-| `stripe_checkout_mounted`           | Angular Stripe embedded checkout component    | `order_id`, `event_id`, `checkout_kind`                                           |
-| `stripe_connect_onboarding_started` | Angular admin Connect entry point             | `organizer_id`, `connected_account_present`                                       |
-| `feedback_submitted`                | Angular feedback dialog                       | `feedback_category`, `message_length`, `signed_in`, `has_replay_url`              |
-| `trust_link_created`                | Existing Angular vetting trust links service  | existing safe properties after sanitizer                                          |
-| `trust_link_removed`                | Existing Angular vetting trust links service  | existing safe properties after sanitizer                                          |
+| Event                               | Source                                        | Required properties                                                                                                                        |
+| ----------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `event_viewed`                      | Angular event details page                    | `event_id`, optional `organizer_id`, `event_visibility`, `purchase_access_source`                                                          |
+| `checkout_panel_opened`             | Angular checkout sidebar/event details action | `event_id`, `checkout_kind`, optional `ticket_count`, `tier`                                                                               |
+| `stripe_checkout_mounted`           | Angular Stripe embedded checkout component    | `order_id`, `event_id`, `checkout_kind`                                                                                                    |
+| `stripe_connect_onboarding_started` | Angular admin Connect entry point             | `organizer_id`, `connected_account_present`                                                                                                |
+| `feedback_submitted`                | Angular feedback dialog                       | `feedback_category`, `feedback_message`, optional `feedback_replay_url`, `message_length`, `route_template`, `signed_in`, `has_replay_url` |
+| `trust_link_created`                | Existing Angular vetting trust links service  | existing safe properties after sanitizer                                                                                                   |
+| `trust_link_removed`                | Existing Angular vetting trust links service  | existing safe properties after sanitizer                                                                                                   |
 
 ## P0 Backend Events
 
@@ -119,8 +119,15 @@ Do not introduce unsupported visibility values such as `gated`, `unlisted`, or
 
 ## Allowed Properties
 
-Allowed properties are bounded identifiers and product-state values that do not
-contain personal, payment, secret, or free-text content. Examples:
+Allowed properties are normally bounded identifiers and product-state values that
+do not contain personal, payment, secret, or free-text content. The explicit
+exception is `feedback_message` on `feedback_submitted`, which is intentionally
+the user-submitted feedback body and must only be preserved through the
+event-scoped sanitizer opt-in in `AnalyticsService.captureFeedback`. That
+feedback path posts the event through PostHog's documented
+[single-event ingest API](https://posthog.com/docs/api/capture#single-event)
+and treats the submission as successful only after PostHog returns a successful
+HTTP response. Examples:
 
 - `event_id`
 - `organizer_id`
@@ -139,6 +146,7 @@ contain personal, payment, secret, or free-text content. Examples:
 - `stripe_charges_enabled`
 - `stripe_payouts_enabled`
 - `route_template`
+- `feedback_replay_url`
 
 Hash ticket, guest, and application IDs before using them as analytics
 properties unless direct operational debugging requires the raw ID and this
@@ -152,7 +160,8 @@ Never send these to PostHog:
 - full names
 - phone numbers
 - postal addresses
-- raw feedback messages
+- raw feedback messages outside the explicit `feedback_message` property on
+  `feedback_submitted`
 - vetting answers
 - admin review notes
 - Stripe client secrets
@@ -199,8 +208,14 @@ Session replay launch posture:
 - disable recording of request headers and bodies
 - redact query strings and token-like path segments from replay network metadata
 - add `.ph-no-capture` to sensitive UI regions
-- use 25 percent general sampling unless cost or privacy review requires lower
-  sampling
+- start PostHog session recording when the feedback dialog opens, overriding
+  sampling, linked-flag, URL-trigger, and event-trigger controls for that
+  session when replay is enabled in PostHog project settings
+- manage the replay sampling percentage in PostHog replay ingestion settings,
+  not in app code; PostHog documents replay sampling as deterministic by session
+  ID in its [recording controls guide](https://posthog.com/docs/session-replay/how-to-control-which-sessions-you-record#sampling)
+- configure Sentry replay with explicit `maskAllText`, `maskAllInputs`, and
+  `blockAllMedia` privacy options even though those are Sentry defaults
 
 ## Do Not Add
 

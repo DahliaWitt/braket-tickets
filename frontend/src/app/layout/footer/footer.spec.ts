@@ -80,7 +80,13 @@ describe('FooterComponent feedback overlay', () => {
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([]),
-        {provide: AnalyticsService, useValue: {captureFeedback: vi.fn()}},
+        {
+          provide: AnalyticsService,
+          useValue: {
+            captureFeedback: vi.fn(),
+            startFeedbackReplayCapture: vi.fn(),
+          },
+        },
       ],
     }).compileComponents();
 
