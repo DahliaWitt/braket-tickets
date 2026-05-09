@@ -1,6 +1,8 @@
 import '../../../../../test-setup';
 import {type ComponentFixture, TestBed} from '@angular/core/testing';
+import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
 import {AdminApplicationsTableComponent} from './applications-table.component';
+import {AdminApplicationsTableHarness} from './applications-table.component.harness';
 import {ApplicationsService} from '@/features/vetting/services/applications.service';
 import {AuthService} from '@/core/services/auth.service';
 import {CONVEX} from 'convex-angular';
@@ -21,6 +23,7 @@ import {vi} from 'vitest';
 describe('AdminApplicationsTableComponent', () => {
   let component: AdminApplicationsTableComponent;
   let fixture: ComponentFixture<AdminApplicationsTableComponent>;
+  let harness: AdminApplicationsTableHarness;
 
   interface ApplicationsServiceMock {
     mapApplications: ReturnType<typeof vi.fn>;
@@ -41,6 +44,7 @@ describe('AdminApplicationsTableComponent', () => {
   let convexClientMock: MockConvexClient;
   let authServiceMock: AuthServiceMock;
   let braDialogMock: BraDialogMock;
+  let latestOnData: ((apps: Application[]) => void) | null = null;
 
   const appId = '1' as Id<'applications'>;
   const userId = 'u1' as Id<'users'>;
@@ -103,7 +107,12 @@ describe('AdminApplicationsTableComponent', () => {
     const onUpdate = vi
       .fn()
       .mockImplementation(
-        (_query, _args, onData: (apps: Application[]) => void) => {
+        (
+          _query: unknown,
+          _args: unknown,
+          onData: (apps: Application[]) => void,
+        ) => {
+          latestOnData = onData;
           onData(mockApps);
           return () => void 0;
         },
@@ -155,6 +164,10 @@ describe('AdminApplicationsTableComponent', () => {
     // Set required input
     fixture.componentRef.setInput('tableType', 'pending');
     await fixture.whenStable();
+    harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      AdminApplicationsTableHarness,
+    );
   });
 
   it('should load pending applications on init', async () => {
@@ -363,5 +376,110 @@ describe('AdminApplicationsTableComponent', () => {
       '[data-testid="no-vetting-answers"]',
     );
     expect(noAnswersElements.length).toBe(0);
+  });
+
+  describe('search filtering', () => {
+    const multiApps: Application[] = [
+      {
+        _id: 'app1' as Id<'applications'>,
+        _creationTime: 100,
+        userId: 'u1' as Id<'users'>,
+        status: 'pending',
+        answers: {},
+        user: {
+          _id: 'u1' as Id<'users'>,
+          name: 'Alice Smith',
+          email: 'alice@example.com',
+        } as Application['user'],
+        organizer: null,
+      },
+      {
+        _id: 'app2' as Id<'applications'>,
+        _creationTime: 200,
+        userId: 'u2' as Id<'users'>,
+        status: 'pending',
+        answers: {},
+        user: {
+          _id: 'u2' as Id<'users'>,
+          name: 'Bob Jones',
+          email: 'bob@test.org',
+        } as Application['user'],
+        organizer: null,
+      },
+      {
+        _id: 'app3' as Id<'applications'>,
+        _creationTime: 300,
+        userId: 'u3' as Id<'users'>,
+        status: 'pending',
+        answers: {},
+        user: {
+          _id: 'u3' as Id<'users'>,
+          name: 'Charlie Brown',
+          email: 'charlie@example.com',
+        } as Application['user'],
+        organizer: null,
+      },
+    ];
+
+    beforeEach(async () => {
+      // Push multi-app data through the existing subscription
+      latestOnData?.(multiApps);
+      await fixture.whenStable();
+    });
+
+    it('should render the search input', async () => {
+      expect(await harness.hasSearchInput()).toBe(true);
+    });
+
+    it('should filter applications by name', async () => {
+      expect(component.filteredApplications().length).toBe(3);
+
+      component.searchQuery.set('Alice');
+      await fixture.whenStable();
+
+      expect(component.filteredApplications().length).toBe(1);
+      expect(component.filteredApplications()[0].user?.name).toBe(
+        'Alice Smith',
+      );
+    });
+
+    it('should filter applications by email', async () => {
+      component.searchQuery.set('bob@test');
+      await fixture.whenStable();
+
+      expect(component.filteredApplications().length).toBe(1);
+      expect(component.filteredApplications()[0].user?.name).toBe('Bob Jones');
+    });
+
+    it('should show all applications when search is cleared', async () => {
+      component.searchQuery.set('Alice');
+      await fixture.whenStable();
+      expect(component.filteredApplications().length).toBe(1);
+
+      component.searchQuery.set('');
+      await fixture.whenStable();
+      expect(component.filteredApplications().length).toBe(3);
+    });
+
+    it('should filter case-insensitively', async () => {
+      component.searchQuery.set('aLiCe');
+      await fixture.whenStable();
+
+      expect(component.filteredApplications().length).toBe(1);
+      expect(component.filteredApplications()[0].user?.name).toBe(
+        'Alice Smith',
+      );
+    });
+
+    it('should show no-results empty state when search has no matches', async () => {
+      component.searchQuery.set('nonexistent');
+      await fixture.whenStable();
+
+      expect(component.filteredApplications().length).toBe(0);
+      const nativeEl = fixture.nativeElement as HTMLElement;
+      const emptyText = nativeEl.textContent ?? '';
+      expect(emptyText).toContain('NO RESULTS FOR');
+      expect(emptyText).toContain('nonexistent');
+    });
   });
 });

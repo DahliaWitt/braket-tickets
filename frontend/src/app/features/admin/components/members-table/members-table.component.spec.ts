@@ -865,4 +865,157 @@ describe('AdminMembersTableComponent', () => {
       expect(rows[0].email).toBe('No email');
     });
   });
+
+  describe('search filtering', () => {
+    let searchFixture: ComponentFixture<AdminMembersTableComponent>;
+    let searchComponent: AdminMembersTableComponent;
+    let searchHarness: AdminMembersTableHarness;
+
+    const alice: MemberWithApplication = {
+      user: {
+        _id: 'uAlice' as Id<'users'>,
+        name: 'Alice Wonderland',
+        email: 'alice@example.com',
+        _creationTime: 1234567890,
+      } as Doc<'users'>,
+      application: null,
+      communityAccessSource: 'approved_application',
+    };
+
+    const bob: MemberWithApplication = {
+      user: {
+        _id: 'uBob' as Id<'users'>,
+        name: 'Bob Builder',
+        email: 'bob@builder.org',
+        _creationTime: 1234567890,
+      } as Doc<'users'>,
+      application: null,
+      communityAccessSource: 'direct_member',
+    };
+
+    const charlie: MemberWithApplication = {
+      user: {
+        _id: 'uCharlie' as Id<'users'>,
+        name: 'Charlie Shared',
+        email: 'charlie@shared.com',
+        _creationTime: 1234567890,
+      } as Doc<'users'>,
+      application: null,
+      communityAccessSource: 'shared',
+      trustedViaOrganizerName: 'Partner Org',
+    };
+
+    beforeEach(async () => {
+      const searchConvexMock = createMockConvexClient();
+      const searchLoad = vi
+        .fn()
+        .mockImplementation(
+          (
+            _query: unknown,
+            _args: unknown,
+            _options: unknown,
+            onData: (data: unknown) => void,
+          ) => {
+            onData({
+              results: [alice, bob, charlie],
+              status: 'Exhausted',
+              loadMore: vi.fn().mockReturnValue(false),
+            });
+            return () => {
+              // unsubscribe noop
+            };
+          },
+        );
+      searchConvexMock.onPaginatedUpdate_experimental = searchLoad;
+      searchConvexMock.client.onPaginatedUpdate_experimental = searchLoad;
+
+      TestBed.resetTestingModule();
+      await TestBed.configureTestingModule({
+        imports: [AdminMembersTableComponent],
+        providers: [
+          provideZonelessChangeDetection(),
+          {provide: MembersService, useValue: mockMembersService},
+          {provide: ApplicationsService, useValue: mockAppsService},
+          {provide: AuthService, useValue: mockAuthService},
+          {provide: CONVEX, useValue: searchConvexMock},
+          {provide: BraDialogService, useValue: mockDialogService},
+        ],
+      }).compileComponents();
+
+      searchFixture = TestBed.createComponent(AdminMembersTableComponent);
+      searchComponent = searchFixture.componentInstance;
+      setOrganizerInput(searchFixture);
+      searchFixture.detectChanges();
+      await searchFixture.whenStable();
+
+      searchHarness = await TestbedHarnessEnvironment.harnessForFixture(
+        searchFixture,
+        AdminMembersTableHarness,
+      );
+    });
+
+    it('should render the search input', async () => {
+      expect(await searchHarness.hasSearchInput()).toBe(true);
+    });
+
+    it('should filter members by name', async () => {
+      await searchHarness.setSearchValue('Alice');
+      await searchFixture.whenStable();
+
+      expect(await searchHarness.getRowCount()).toBe(1);
+      expect(await searchHarness.getNameAt(0)).toBe('Alice Wonderland');
+    });
+
+    it('should filter members by email', async () => {
+      await searchHarness.setSearchValue('builder.org');
+      await searchFixture.whenStable();
+
+      expect(await searchHarness.getRowCount()).toBe(1);
+      expect(await searchHarness.getNameAt(0)).toBe('Bob Builder');
+    });
+
+    it('should clear search and show all members again', async () => {
+      await searchHarness.setSearchValue('Alice');
+      await searchFixture.whenStable();
+      expect(await searchHarness.getRowCount()).toBe(1);
+
+      await searchHarness.setSearchValue('');
+      await searchFixture.whenStable();
+      expect(await searchHarness.getRowCount()).toBe(3);
+    });
+
+    it('should be case-insensitive', async () => {
+      await searchHarness.setSearchValue('aLiCe');
+      await searchFixture.whenStable();
+
+      expect(await searchHarness.getRowCount()).toBe(1);
+      expect(await searchHarness.getNameAt(0)).toBe('Alice Wonderland');
+    });
+
+    it('should combine with member filter', async () => {
+      // Filter to "ours" (excludes shared), then search
+      searchComponent.setMemberFilter('ours');
+      await searchHarness.setSearchValue('Bob');
+      await searchFixture.whenStable();
+
+      expect(await searchHarness.getRowCount()).toBe(1);
+      expect(await searchHarness.getNameAt(0)).toBe('Bob Builder');
+
+      // Search for shared member while filter is "ours" — no results
+      await searchHarness.setSearchValue('Charlie');
+      await searchFixture.whenStable();
+      expect(await searchHarness.getRowCount()).toBe(0);
+    });
+
+    it('should show search-specific empty state when no results match', async () => {
+      await searchHarness.setSearchValue('nonexistent');
+      await searchFixture.whenStable();
+
+      expect(await searchHarness.getRowCount()).toBe(0);
+      expect(await searchHarness.hasEmptyState()).toBe(true);
+      const emptyText = await searchHarness.getEmptyStateText();
+      expect(emptyText).toContain('NO RESULTS FOR');
+      expect(emptyText).toContain('nonexistent');
+    });
+  });
 });
