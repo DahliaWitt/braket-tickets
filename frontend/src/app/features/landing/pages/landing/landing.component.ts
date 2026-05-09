@@ -107,7 +107,8 @@ import {safeResourceValue} from '@/utils/resource';
                   {{ event.title }}
                 </h2>
                 <p class="mono-label text-2xs text-muted-foreground">
-                  {{ event.date | date: 'mediumDate' }}
+                  {{ event.date | date: 'mediumDate' }},
+                  {{ event.date | date: 'shortTime' }}
                   @if (event.location) {
                     <span> · {{ event.location }}</span>
                   }
@@ -177,7 +178,8 @@ import {safeResourceValue} from '@/utils/resource';
                     <p
                       class="mono-label truncate text-2xs text-muted-foreground"
                     >
-                      {{ event.date | date: 'mediumDate' }}
+                      {{ event.date | date: 'mediumDate' }},
+                      {{ event.date | date: 'shortTime' }}
                       ·
                       {{
                         event.price / 100 | currency: 'USD' : 'symbol' : '1.0-2'

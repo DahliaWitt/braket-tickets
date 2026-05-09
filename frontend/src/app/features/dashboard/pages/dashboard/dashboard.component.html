@@ -161,7 +161,8 @@
                     {{ event.title }}
                   </h3>
                   <p class="mono-label text-2xs text-muted-foreground/60">
-                    {{ event.date | date: 'mediumDate' }}
+                    {{ event.date | date: 'mediumDate' }},
+                    {{ event.date | date: 'shortTime' }}
                     &middot;
                     {{
                       event.price / 100 | currency: 'USD' : 'symbol' : '1.0-2'
@@ -221,7 +222,8 @@
                     {{ event.title }}
                   </h3>
                   <p class="mono-label text-2xs text-muted-foreground/60">
-                    {{ event.date | date: 'mediumDate' }}
+                    {{ event.date | date: 'mediumDate' }},
+                    {{ event.date | date: 'shortTime' }}
                   </p>
                   <p
                     class="w-fit rounded-sm border border-accent/20 bg-accent/10 px-2 py-0.5 font-mono text-2xs tracking-widest text-accent uppercase"
@@ -281,7 +283,8 @@
                   <p
                     class="truncate font-mono text-2xs text-muted-foreground/50"
                   >
-                    {{ nextEvt.date | date: 'mediumDate' }} —
+                    {{ nextEvt.date | date: 'mediumDate' }},
+                    {{ nextEvt.date | date: 'shortTime' }} &mdash;
                     {{ nextEvt.title }}
                   </p>
                 }
@@ -475,7 +478,8 @@
                 {{ featured.title }}
               </h3>
               <p class="mono-label text-2xs text-muted-foreground">
-                {{ featured.date | date: 'mediumDate' }}
+                {{ featured.date | date: 'mediumDate' }},
+                {{ featured.date | date: 'shortTime' }}
                 @if (featured.location) {
                   <span> &middot; {{ featured.location }}</span>
                 }
@@ -542,7 +546,8 @@
                       {{ event.title }}
                     </h3>
                     <p class="mono-label text-2xs text-muted-foreground/60">
-                      {{ event.date | date: 'mediumDate' }}
+                      {{ event.date | date: 'mediumDate' }},
+                      {{ event.date | date: 'shortTime' }}
                       &middot;
                       {{
                         event.price / 100 | currency: 'USD' : 'symbol' : '1.0-2'
