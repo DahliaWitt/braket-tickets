@@ -134,20 +134,11 @@ describe('DashboardShellComponent', () => {
     expect(await harness.getTabCount()).toBe(8);
   });
 
-  it('keeps the desktop tab scroller out of the tab order and vertically locked', async () => {
-    expect(await harness.getDesktopTabScrollTabindex()).toBe('-1');
-    expect(await harness.getDesktopSectionNavClass()).toContain(
-      'overflow-y-clip',
-    );
-    expect(await harness.getDesktopTabScrollClass()).toContain(
-      'overflow-x-auto',
-    );
-    expect(await harness.getDesktopTabScrollClass()).toContain(
-      'overflow-y-hidden',
-    );
-    expect(await harness.getDesktopTabScrollClass()).toContain(
-      'overscroll-y-none',
-    );
+  it('renders the desktop nav as a sticky vertical rail with overflow handling', async () => {
+    const navClass = await harness.getDesktopSectionNavClass();
+    expect(navClass).toContain('sticky');
+    expect(navClass).toContain('w-48');
+    expect(navClass).toContain('overflow-y-auto');
   });
 
   it('should project default content', async () => {
