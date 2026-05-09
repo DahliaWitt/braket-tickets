@@ -1,5 +1,6 @@
 import {ComponentHarness} from '@angular/cdk/testing';
 import type {TestElement} from '@angular/cdk/testing';
+import {BraCommunityAvatarHarness} from '@ui/components/primitives/community-avatar/community-avatar.harness';
 
 export class CommunityDirectoryComponentHarness extends ComponentHarness {
   static hostSelector = 'app-community-directory';
@@ -72,12 +73,26 @@ export class CommunityDirectoryComponentHarness extends ComponentHarness {
     return this.locatorForAll('[data-testid="community-logo-slot"]')();
   }
 
-  async getCommunityLogoImages(): Promise<TestElement[]> {
-    return this.locatorForAll('[data-testid="community-logo-image"]')();
+  async getCommunityLogoImages(): Promise<BraCommunityAvatarHarness[]> {
+    const avatars = await this.locatorForAll(BraCommunityAvatarHarness)();
+    const withImages: BraCommunityAvatarHarness[] = [];
+    for (const avatar of avatars) {
+      if (await avatar.hasImage()) {
+        withImages.push(avatar);
+      }
+    }
+    return withImages;
   }
 
-  async getCommunityLogoFallbacks(): Promise<TestElement[]> {
-    return this.locatorForAll('[data-testid="community-logo-fallback"]')();
+  async getCommunityLogoFallbacks(): Promise<BraCommunityAvatarHarness[]> {
+    const avatars = await this.locatorForAll(BraCommunityAvatarHarness)();
+    const withFallback: BraCommunityAvatarHarness[] = [];
+    for (const avatar of avatars) {
+      if (!(await avatar.hasImage())) {
+        withFallback.push(avatar);
+      }
+    }
+    return withFallback;
   }
 
   async getCommunityDescriptions(): Promise<TestElement[]> {

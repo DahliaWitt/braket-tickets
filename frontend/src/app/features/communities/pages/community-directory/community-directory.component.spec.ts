@@ -714,7 +714,7 @@ describe('CommunityDirectoryComponent', () => {
       const {harness} = await setup({communities: mockCommunities});
       const fallbackLogos = await harness.getCommunityLogoFallbacks();
       expect(fallbackLogos.length).toBe(1);
-      expect(await fallbackLogos[0].text()).toContain('T');
+      expect(await fallbackLogos[0].getInitialText()).toContain('T');
     });
 
     it('should still render uploaded community logos when available', async () => {

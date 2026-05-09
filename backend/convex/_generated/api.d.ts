@@ -1594,6 +1594,7 @@ export declare const api: {
             visibility: "private" | "public_viewable" | "public";
           }>;
           organizerDescription?: string;
+          organizerLogoUrl?: string;
           organizerName: string;
         }
       >;
