@@ -40,27 +40,33 @@ export class BraDialogHarness extends ComponentHarness {
 
   async getTitleText(): Promise<string | null> {
     const el = await this.title();
-    return el ? el.text() : null;
+    return el ? (await el.text()).trim() : null;
   }
 
   async getDescriptionText(): Promise<string | null> {
     const el = await this.description();
-    return el ? el.text() : null;
+    return el ? (await el.text()).trim() : null;
   }
 
   async getContentText(): Promise<string | null> {
     const el = await this.content();
-    return el ? el.text() : null;
+    return el ? (await el.text()).trim() : null;
   }
 
   async getCancelText(): Promise<string | null> {
     const btn = await this.cancelButton();
-    return btn ? btn.text() : null;
+    return btn ? (await btn.text()).trim() : null;
   }
 
   async getOkText(): Promise<string | null> {
     const btn = await this.okButton();
-    return btn ? btn.text() : null;
+    return btn ? (await btn.text()).trim() : null;
+  }
+
+  async isOkDisabled(): Promise<boolean> {
+    const btn = await this.okButton();
+    if (!btn) return false;
+    return (await btn.getAttribute('disabled')) !== null;
   }
 
   async hasCloseHeaderButton(): Promise<boolean> {
