@@ -209,13 +209,12 @@ describe('trust_links', () => {
     const userId = await createUser(t, 'Member');
 
     // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- seeding logoStorageId to test URL resolution; no production mutation accepts unconfirmed uploads
-    const logoStorageId = await t.run(async (ctx) => {
+    await t.run(async (ctx) => {
       const id = await ctx.storage.store(
         new Blob(['fake-logo'], {type: 'image/png'}),
       );
       await ctx.db.patch('organizers', organizerId, {logoStorageId: id});
       await addMember(ctx, userId, organizerId);
-      return id;
     });
 
     const asUser = t.withIdentity({subject: userId});
@@ -249,7 +248,6 @@ describe('trust_links', () => {
     );
     expect(noLogoApproval?.organizerLogoUrl).toBeUndefined();
   });
-
   it('rejects creating a trust link beyond the configured cap', async () => {
     const t = convexTest();
     const trustingOrganizerId = await createOrganizer(t, 'Trusting Org');
