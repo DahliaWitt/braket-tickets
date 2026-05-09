@@ -19,6 +19,7 @@ import {ZardButtonComponent} from '@ui/components/primitives/button/button.compo
 import {ZardCardComponent} from '@ui/components/primitives/card/card.component';
 import {BraDialogService} from '@ui/components/composites/dialog/dialog.service';
 import {ReasonDialogComponent} from '../reason-dialog/reason-dialog.component';
+import {ZardInputDirective} from '@ui/components/primitives/input/input.directive';
 import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton.component';
 import {toast} from 'ngx-sonner';
 import {logger} from '@/utils/logger';
@@ -35,6 +36,7 @@ type MemberFilter = 'all' | 'ours' | 'shared';
     UpperCasePipe,
     ZardButtonComponent,
     ZardCardComponent,
+    ZardInputDirective,
     ZardSkeletonComponent,
   ],
   templateUrl: './members-table.component.html',
@@ -80,6 +82,7 @@ export class AdminMembersTableComponent {
   isLoading = this.membersQuery.isLoadingFirstPage;
 
   readonly memberFilter = signal<MemberFilter>('all');
+  readonly searchQuery = signal('');
 
   readonly activeMembers = computed(() =>
     this.members().filter((member) => this.hasCommunityAccess(member)),
@@ -88,15 +91,36 @@ export class AdminMembersTableComponent {
   readonly filteredMembers = computed(() => {
     const activeMembers = this.activeMembers();
     const filter = this.memberFilter();
-    if (filter === 'all') return activeMembers;
-    if (filter === 'ours') {
-      return activeMembers.filter((m) => m.communityAccessSource !== 'shared');
+    let result: MemberWithApplication[];
+    if (filter === 'all') {
+      result = activeMembers;
+    } else if (filter === 'ours') {
+      result = activeMembers.filter(
+        (m) => m.communityAccessSource !== 'shared',
+      );
+    } else {
+      result = activeMembers.filter(
+        (m) => m.communityAccessSource === 'shared',
+      );
     }
-    return activeMembers.filter((m) => m.communityAccessSource === 'shared');
+    const query = this.searchQuery().toLowerCase().trim();
+    if (query) {
+      result = result.filter((m) => {
+        const name = (m.user['name'] ?? '').toLowerCase();
+        const email = (m.user['email'] ?? '').toLowerCase();
+        return name.includes(query) || email.includes(query);
+      });
+    }
+    return result;
   });
 
   setMemberFilter(filter: MemberFilter): void {
     this.memberFilter.set(filter);
+  }
+
+  onSearchInput(event: Event): void {
+    const target = event.target as HTMLInputElement;
+    this.searchQuery.set(target.value);
   }
 
   constructor() {

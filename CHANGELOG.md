@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.1.8](https://github.com/DahliaWitt/braket-tickets/compare/v0.1.7...v0.1.8) (2026-05-09)
+
+### Features
+
+- **ops:** forward Convex logs to both sinks ([f68337a](https://github.com/DahliaWitt/braket-tickets/commit/f68337ad2779e91ea850a9746ef3594240bec853))
+- **ui:** add bra-community-avatar shared component ([d0b54a1](https://github.com/DahliaWitt/braket-tickets/commit/d0b54a1b7984abf9bce3c2efc15a50c7490bb95e))
+
+### Bug Fixes
+
+- **dashboard:** add a11y attrs to truncated nav labels and lock down responsive assertions ([3901bdb](https://github.com/DahliaWitt/braket-tickets/commit/3901bdbd53fa12d2fd7aa0cd100ffa685216c040))
+- **dashboard:** replace horizontal tab scroll with vertical nav rail ([2c334c7](https://github.com/DahliaWitt/braket-tickets/commit/2c334c760a276bd2f6d2de82529b873210b8291f))
+- **dashboard:** resolve duplicate class binding ([357f96c](https://github.com/DahliaWitt/braket-tickets/commit/357f96cf45a7ced30985ead0ac8470f9b38ce8de))
+- **frontend:** address monitoring review findings ([bf9e72e](https://github.com/DahliaWitt/braket-tickets/commit/bf9e72e1936107836774a700e0475e1906e70a9e))
+- **frontend:** display event times alongside dates ([5a067bf](https://github.com/DahliaWitt/braket-tickets/commit/5a067bf52982631594f8ec25bbdc2320c1b2401c))
+- **frontend:** display event times alongside dates across all surfaces ([76c5922](https://github.com/DahliaWitt/braket-tickets/commit/76c59220ff82cf029b08a7e3f3b304fd362ca867))
+- **frontend:** finish event time display PR ([919d1d4](https://github.com/DahliaWitt/braket-tickets/commit/919d1d4ad755ca93609920e75cac9dcc04c0464b))
+- **frontend:** resolve docstring PR feedback ([435d14b](https://github.com/DahliaWitt/braket-tickets/commit/435d14b915e904e05c1fb90045c97aaeb5c3142f))
+- **tickets:** stop auto-opening checkout sidebar on event navigation ([6d01552](https://github.com/DahliaWitt/braket-tickets/commit/6d015522021f90aa0cb47ed3606934e15d16365f))
+- **ui:** resolve avatar PR feedback ([3868965](https://github.com/DahliaWitt/braket-tickets/commit/3868965b565be1b0c5a6fe954d2fd87e43160176))
+
+### Performance
+
+- **frontend:** trim initial app bundle ([ce9e84f](https://github.com/DahliaWitt/braket-tickets/commit/ce9e84f9ca1c0c4936800fef52629664b0b402a5))
+
+### Documentation
+
+- add dark mode screenshots to README ([2f841e9](https://github.com/DahliaWitt/braket-tickets/commit/2f841e909cf163ef67077c50cb9d22c85074b613))
+
 ## [0.1.7](https://github.com/DahliaWitt/braket-tickets/compare/v0.1.6...v0.1.7) (2026-05-09)
 
 ### Bug Fixes

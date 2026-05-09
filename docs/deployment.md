@@ -22,7 +22,7 @@ This guide covers deploying Braket Tickets to production and preview environment
 
 The Angular frontend deploys to Cloudflare Pages for global CDN distribution.
 
-**Automatic deployment**: The GitHub Actions workflow (`.github/workflows/deploy.yml`) automatically deploys when pushing to `main`. The `deploy-frontend` job builds the Angular app and deploys `dist/frontend/browser` to Cloudflare Pages.
+**Automatic deployment**: The `CI` workflow automatically calls `.github/workflows/deploy.yml` after a successful push run on `main`. The nested `deploy-frontend` job builds the Angular app and deploys `dist/frontend/browser` to Cloudflare Pages.
 
 The Angular frontend is built as a client-rendered single-page app. Cloudflare Pages serves the compiled browser assets from `dist/frontend/browser` and falls back to the app shell for client-side routes.
 
@@ -113,7 +113,7 @@ Preview builds force `POSTHOG_HOST=/ingest` automatically. Use PostHog filters l
 git push origin develop
 ```
 
-Check GitHub Actions for the "Deploy Preview" workflow. Once complete, access `https://dev.community.braket.gay`.
+Check GitHub Actions for the `CI` run on `develop`, then expand the nested `Deploy Preview (develop)` workflow job. Once complete, access `https://dev.community.braket.gay`.
 
 ### Promoting to Production
 
@@ -123,7 +123,7 @@ git merge develop
 git push origin main
 ```
 
-This triggers the production deployment workflow.
+This triggers `CI`, which then calls the production deployment workflow after the required jobs succeed.
 
 ---
 

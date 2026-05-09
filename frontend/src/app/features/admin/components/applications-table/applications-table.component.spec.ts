@@ -23,6 +23,7 @@ import {vi} from 'vitest';
 describe('AdminApplicationsTableComponent', () => {
   let component: AdminApplicationsTableComponent;
   let fixture: ComponentFixture<AdminApplicationsTableComponent>;
+  let harness: AdminApplicationsTableHarness;
 
   interface ApplicationsServiceMock {
     mapApplications: ReturnType<typeof vi.fn>;
@@ -44,6 +45,7 @@ describe('AdminApplicationsTableComponent', () => {
   let convexClientMock: MockConvexClient;
   let authServiceMock: AuthServiceMock;
   let braDialogMock: BraDialogMock;
+  let latestOnData: ((apps: Application[]) => void) | null = null;
 
   const appId = '1' as Id<'applications'>;
   const userId = 'u1' as Id<'users'>;
@@ -107,7 +109,12 @@ describe('AdminApplicationsTableComponent', () => {
     const onUpdate = vi
       .fn()
       .mockImplementation(
-        (_query, _args, onData: (apps: Application[]) => void) => {
+        (
+          _query: unknown,
+          _args: unknown,
+          onData: (apps: Application[]) => void,
+        ) => {
+          latestOnData = onData;
           onData(mockApps);
           return () => void 0;
         },
@@ -159,6 +166,10 @@ describe('AdminApplicationsTableComponent', () => {
     // Set required input
     fixture.componentRef.setInput('tableType', 'pending');
     await fixture.whenStable();
+    harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      AdminApplicationsTableHarness,
+    );
   });
 
   it('should load pending applications on init', async () => {
@@ -315,13 +326,8 @@ describe('AdminApplicationsTableComponent', () => {
 
     fixture.componentRef.setInput('tableType', 'history');
     await fixture.whenStable();
-    fixture.detectChanges();
 
-    const nativeEl = fixture.nativeElement as HTMLElement;
-    const noAnswersElements = nativeEl.querySelectorAll(
-      '[data-testid="no-vetting-answers"]',
-    );
-    expect(noAnswersElements.length).toBeGreaterThan(0);
+    expect(await harness.getNoAnswersCount()).toBeGreaterThan(0);
   });
 
   it('should show no-vetting-answers indicator when answers contain only source key', async () => {
@@ -347,26 +353,117 @@ describe('AdminApplicationsTableComponent', () => {
 
     fixture.componentRef.setInput('tableType', 'history');
     await fixture.whenStable();
-    fixture.detectChanges();
 
-    const nativeEl = fixture.nativeElement as HTMLElement;
-    const noAnswersElements = nativeEl.querySelectorAll(
-      '[data-testid="no-vetting-answers"]',
-    );
-    expect(noAnswersElements.length).toBeGreaterThan(0);
+    expect(await harness.getNoAnswersCount()).toBeGreaterThan(0);
   });
 
   it('should not show no-vetting-answers indicator when answers are provided', async () => {
     // mockApps[0] has answers; verifies the fallback is NOT shown for normal applications
     fixture.componentRef.setInput('tableType', 'pending');
     await fixture.whenStable();
-    fixture.detectChanges();
 
-    const nativeEl = fixture.nativeElement as HTMLElement;
-    const noAnswersElements = nativeEl.querySelectorAll(
-      '[data-testid="no-vetting-answers"]',
-    );
-    expect(noAnswersElements.length).toBe(0);
+    expect(await harness.getNoAnswersCount()).toBe(0);
+  });
+
+  describe('search filtering', () => {
+    const multiApps: Application[] = [
+      {
+        _id: 'app1' as Id<'applications'>,
+        _creationTime: 100,
+        userId: 'u1' as Id<'users'>,
+        status: 'pending',
+        answers: {},
+        user: {
+          _id: 'u1' as Id<'users'>,
+          name: 'Alice Smith',
+          email: 'alice@example.com',
+        } as Application['user'],
+        organizer: null,
+      },
+      {
+        _id: 'app2' as Id<'applications'>,
+        _creationTime: 200,
+        userId: 'u2' as Id<'users'>,
+        status: 'pending',
+        answers: {},
+        user: {
+          _id: 'u2' as Id<'users'>,
+          name: 'Bob Jones',
+          email: 'bob@test.org',
+        } as Application['user'],
+        organizer: null,
+      },
+      {
+        _id: 'app3' as Id<'applications'>,
+        _creationTime: 300,
+        userId: 'u3' as Id<'users'>,
+        status: 'pending',
+        answers: {},
+        user: {
+          _id: 'u3' as Id<'users'>,
+          name: 'Charlie Brown',
+          email: 'charlie@example.com',
+        } as Application['user'],
+        organizer: null,
+      },
+    ];
+
+    beforeEach(async () => {
+      // Push multi-app data through the existing subscription
+      latestOnData?.(multiApps);
+      await fixture.whenStable();
+    });
+
+    it('should render the search input', async () => {
+      expect(await harness.hasSearchInput()).toBe(true);
+    });
+
+    it('should filter applications by name', async () => {
+      expect(await harness.getRowCount()).toBe(3);
+
+      await harness.setSearchValue('Alice');
+      await fixture.whenStable();
+
+      expect(await harness.getRowCount()).toBe(1);
+      expect(await harness.getNameAt(0)).toBe('Alice Smith');
+    });
+
+    it('should filter applications by email', async () => {
+      await harness.setSearchValue('bob@test');
+      await fixture.whenStable();
+
+      expect(await harness.getRowCount()).toBe(1);
+      expect(await harness.getNameAt(0)).toBe('Bob Jones');
+    });
+
+    it('should show all applications when search is cleared', async () => {
+      await harness.setSearchValue('Alice');
+      await fixture.whenStable();
+      expect(await harness.getRowCount()).toBe(1);
+
+      await harness.setSearchValue('');
+      await fixture.whenStable();
+      expect(await harness.getRowCount()).toBe(3);
+    });
+
+    it('should filter case-insensitively', async () => {
+      await harness.setSearchValue('aLiCe');
+      await fixture.whenStable();
+
+      expect(await harness.getRowCount()).toBe(1);
+      expect(await harness.getNameAt(0)).toBe('Alice Smith');
+    });
+
+    it('should show no-results empty state when search has no matches', async () => {
+      await harness.setSearchValue('nonexistent');
+      await fixture.whenStable();
+
+      expect(await harness.getRowCount()).toBe(0);
+      expect(await harness.hasEmptyState()).toBe(true);
+      const emptyText = await harness.getEmptyStateText();
+      expect(emptyText).toContain('NO RESULTS FOR');
+      expect(emptyText).toContain('nonexistent');
+    });
   });
 
   describe('reinstate button', () => {

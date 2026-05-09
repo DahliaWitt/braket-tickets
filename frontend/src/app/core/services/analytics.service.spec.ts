@@ -131,6 +131,8 @@ describe('AnalyticsService', () => {
         defaults: '2026-01-30',
         person_profiles: 'identified_only',
         respect_dnt: true,
+        secure_cookie: true,
+        cross_subdomain_cookie: false,
         opt_out_capturing_by_default: false,
         opt_out_persistence_by_default: false,
         mask_all_text: true,

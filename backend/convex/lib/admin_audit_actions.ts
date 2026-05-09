@@ -67,6 +67,9 @@ export const ADMIN_AUDIT_ACTIONS = {
   TRUST_LINK_RESUMED: 'trust_link_resumed',
   TRUST_LINK_REVOKED: 'trust_link_revoked',
   USER_REVOKE: 'user.revoke',
+  // No current producer — the vetting-reminder feature was deleted. Kept so
+  // historical adminAuditLogs rows continue to read-validate against the
+  // adminAuditActionValidator union below.
   VETTING_REMINDER_EMAIL_SEND_NO_APPLICATION:
     'vetting.reminder-email.send.no_application',
 } as const;

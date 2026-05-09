@@ -58,7 +58,7 @@ function getMagicLinkErrorMessage(error: string | undefined): string {
 }
 
 export const getReusableByEmail = internalQuery({
-  args: {email: v.string(), now: v.optional(v.number())},
+  args: {email: v.string(), now: v.number()},
   returns: v.union(guestSessionDocValidator, v.null()),
   handler: async (ctx, args) => {
     const session = await ctx.db
@@ -68,21 +68,15 @@ export const getReusableByEmail = internalQuery({
       .first();
 
     if (!session) return null;
-    return isGuestSessionActive(session, args.now ?? Date.now())
-      ? session
-      : null;
+    return isGuestSessionActive(session, args.now) ? session : null;
   },
 });
 
 export const getBySessionToken = internalQuery({
-  args: {sessionToken: v.string(), now: v.optional(v.number())},
+  args: {sessionToken: v.string(), now: v.number()},
   returns: v.union(guestSessionDocValidator, v.null()),
   handler: async (ctx, args) => {
-    return await getActiveGuestSession(
-      ctx,
-      args.sessionToken,
-      args.now ?? Date.now(),
-    );
+    return await getActiveGuestSession(ctx, args.sessionToken, args.now);
   },
 });
 
