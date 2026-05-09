@@ -131,6 +131,7 @@ export class EventDetailsComponent {
           logoUrl: community.logoUrl,
           email: community.email,
           contactInfo: community.contactInfo,
+          codeOfConduct: community.codeOfConduct,
         };
       } catch (e) {
         logger.error('Error loading organizer', e);
