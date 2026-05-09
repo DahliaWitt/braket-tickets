@@ -49,7 +49,7 @@ The table below lists the common runtime causes:
 | CSP violation in the console | A CSP directive blocks a required resource | Check `frontend/public/_headers` and continue with [Fix CSP violations](#fix-csp-violations) |
 | `Application error`          | Angular failed during bootstrap            | Check Sentry for the stack trace                                                             |
 
-If you need to redeploy, rerun the production deploy workflow or rerun the `deploy-frontend` job path described in [Deployment & CI](./deployment-ci.md).
+If you need to redeploy unchanged frontend assets, use [Deployment & CI: Manually deploy Angular production](./deployment-ci.md#manually-deploy-angular-production). Rerunning the parent `CI` workflow on `main` only re-runs `deploy-frontend` when that run's `changes` job selected the frontend slice.
 
 ## Fix a frontend build or deploy failure
 
@@ -101,7 +101,7 @@ Use `https://dev.community.braket.gay` for preview incidents. Use Cloudflare's d
 
 Then check:
 
-1. the latest `Deploy Preview (develop)` workflow run
+1. the latest `CI` run on `develop`, then the nested `Deploy Preview (develop)` reusable workflow job
 2. the frontend build output from `deploy-frontend-preview`
 3. the Convex development deployment health
 
