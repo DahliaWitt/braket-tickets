@@ -595,6 +595,7 @@ describe('AnalyticsService', () => {
         distinct_id: 'distinct-test-id',
         properties: {
           feedback_category: 'general_feedback',
+          feedback_message: 'The footer link order is confusing.',
           message_length: 'The footer link order is confusing.'.length,
           route_template: '/about',
           signed_in: false,
@@ -650,6 +651,7 @@ describe('AnalyticsService', () => {
         distinct_id: 'distinct-test-id',
         properties: {
           feedback_category: 'feature_request',
+          feedback_message: 'Please show this exact path in context.',
           feedback_replay_url:
             'https://us.posthog.com/project/test-api-key/replay/session-id?t=45',
           message_length: 'Please show this exact path in context.'.length,
@@ -687,6 +689,7 @@ describe('AnalyticsService', () => {
         distinct_id: 'distinct-test-id',
         properties: {
           feedback_category: 'bug',
+          feedback_message: 'Bug still happens',
           message_length: 'Bug still happens'.length,
           route_template: '/help',
           signed_in: true,
