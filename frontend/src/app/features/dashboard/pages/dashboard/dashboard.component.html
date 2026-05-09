@@ -275,13 +275,23 @@
                 class="flex flex-col gap-2 border-l-[3px] border-l-success/50 bg-card/40 p-4 transition-all hover:border-l-success/80 hover:bg-card/70"
               >
                 <div class="flex min-w-0 items-center gap-2.5">
-                  <div
-                    class="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-sm border border-border bg-card"
-                  >
-                    <span class="font-display text-xs font-bold text-primary">
-                      {{ entry.organizerName.charAt(0) }}
-                    </span>
-                  </div>
+                  @if (entry.organizerLogoUrl) {
+                    <img
+                      [src]="entry.organizerLogoUrl"
+                      [alt]="entry.organizerName + ' logo'"
+                      loading="lazy"
+                      decoding="async"
+                      class="h-6 w-6 flex-shrink-0 rounded-sm border border-border object-cover"
+                    />
+                  } @else {
+                    <div
+                      class="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-sm border border-border bg-card"
+                    >
+                      <span class="font-display text-xs font-bold text-primary">
+                        {{ entry.organizerName.charAt(0) }}
+                      </span>
+                    </div>
+                  }
                   <span
                     class="truncate font-display text-base font-bold text-foreground"
                   >
@@ -320,15 +330,25 @@
                 class="flex flex-col gap-2 border-l-[3px] border-l-warning/50 bg-card/40 p-4"
               >
                 <div class="flex min-w-0 items-center gap-2.5">
-                  <div
-                    class="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-sm border border-border bg-card"
-                  >
-                    <span
-                      class="font-display text-xs font-bold text-muted-foreground/60"
+                  @if (entry.organizerLogoUrl) {
+                    <img
+                      [src]="entry.organizerLogoUrl"
+                      [alt]="entry.organizerName + ' logo'"
+                      loading="lazy"
+                      decoding="async"
+                      class="h-6 w-6 flex-shrink-0 rounded-sm border border-border object-cover"
+                    />
+                  } @else {
+                    <div
+                      class="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-sm border border-border bg-card"
                     >
-                      {{ entry.organizerName.charAt(0) }}
-                    </span>
-                  </div>
+                      <span
+                        class="font-display text-xs font-bold text-muted-foreground/60"
+                      >
+                        {{ entry.organizerName.charAt(0) }}
+                      </span>
+                    </div>
+                  }
                   <span
                     class="truncate font-display text-base font-bold text-muted-foreground/70"
                   >
@@ -349,15 +369,25 @@
                 class="flex flex-col gap-2 border-l-[3px] border-l-destructive/50 bg-card/30 p-4"
               >
                 <div class="flex min-w-0 items-center gap-2.5">
-                  <div
-                    class="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-sm border border-border bg-card"
-                  >
-                    <span
-                      class="font-display text-xs font-bold text-muted-foreground/60"
+                  @if (entry.organizerLogoUrl) {
+                    <img
+                      [src]="entry.organizerLogoUrl"
+                      [alt]="entry.organizerName + ' logo'"
+                      loading="lazy"
+                      decoding="async"
+                      class="h-6 w-6 flex-shrink-0 rounded-sm border border-border object-cover"
+                    />
+                  } @else {
+                    <div
+                      class="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-sm border border-border bg-card"
                     >
-                      {{ entry.organizerName.charAt(0) }}
-                    </span>
-                  </div>
+                      <span
+                        class="font-display text-xs font-bold text-muted-foreground/60"
+                      >
+                        {{ entry.organizerName.charAt(0) }}
+                      </span>
+                    </div>
+                  }
                   <span
                     class="truncate font-display text-base font-bold text-muted-foreground/70"
                   >

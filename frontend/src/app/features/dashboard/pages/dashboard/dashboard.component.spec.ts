@@ -7,7 +7,10 @@ import {
   DashboardDataService,
   type EventAvailability,
 } from '@/features/dashboard/services/dashboard-data.service';
-import {DashboardPageDataService} from '@/features/dashboard/services/dashboard-page-data.service';
+import {
+  DashboardPageDataService,
+  type DashboardApproval,
+} from '@/features/dashboard/services/dashboard-page-data.service';
 import {provideRouter} from '@angular/router';
 import {provideZonelessChangeDetection, signal} from '@angular/core';
 import {type UpcomingEvent} from '@/core/models/event.types';
@@ -66,14 +69,6 @@ const mockViewableEvent: UpcomingEvent = {
   visibility: 'public_viewable',
 } as never;
 
-interface Approval {
-  organizerId: Id<'organizers'>;
-  organizerName: string;
-  source: 'direct' | 'shared';
-  viaOrganizerId?: Id<'organizers'>;
-  viaOrganizerName?: string;
-}
-
 interface PublicCommunity {
   _id: Id<'organizers'>;
   name: string;
@@ -83,7 +78,7 @@ interface PublicCommunity {
   logoUrl?: string;
 }
 
-const mockApprovals: Approval[] = [
+const mockApprovals: DashboardApproval[] = [
   {
     organizerId: ORG_ID_A,
     organizerName: 'Underground Collective',
@@ -132,7 +127,7 @@ const communitiesSignal = signal<Community[]>([]);
 const eventAvailabilitySignal = signal<Record<string, EventAvailability>>({});
 const isLoadingSignal = signal(false);
 const hasLoadErrorSignal = signal(false);
-const approvalsSignal = signal<Approval[]>([]);
+const approvalsSignal = signal<DashboardApproval[]>([]);
 const approvalsLoadingSignal = signal(false);
 const myApplicationsSignal = signal<typeof myApplicationsData>([]);
 const myApplicationsLoadingSignal = signal(false);
@@ -172,7 +167,7 @@ const authServiceMock = {
   logout: vi.fn(),
 };
 
-let approvalsData: Approval[] = [];
+let approvalsData: DashboardApproval[] = [];
 let myApplicationsData: {
   _id: string;
   _creationTime: number;
@@ -210,7 +205,7 @@ describe('DashboardComponent', () => {
   });
 
   function setup(options?: {
-    approvals?: Approval[];
+    approvals?: DashboardApproval[];
     myApplications?: typeof myApplicationsData;
     publicCommunities?: PublicCommunity[];
     events?: UpcomingEvent[];
@@ -392,7 +387,7 @@ describe('DashboardComponent', () => {
     });
 
     it('should render multiple community cells', async () => {
-      const multiApprovals: Approval[] = [
+      const multiApprovals: DashboardApproval[] = [
         {organizerId: ORG_ID_A, organizerName: 'Community A', source: 'direct'},
         {
           organizerId: ORG_ID_B,
@@ -410,7 +405,7 @@ describe('DashboardComponent', () => {
     });
 
     it('should show "via" text for shared approvals', async () => {
-      const sharedApprovals: Approval[] = [
+      const sharedApprovals: DashboardApproval[] = [
         {
           organizerId: ORG_ID_B,
           organizerName: 'Shared Community',
@@ -427,11 +422,14 @@ describe('DashboardComponent', () => {
     });
 
     it('should cap visible communities to 6 and show "Show All" button', async () => {
-      const manyApprovals: Approval[] = Array.from({length: 8}, (_, i) => ({
-        organizerId: `org-${i}` as Id<'organizers'>,
-        organizerName: `Community ${i}`,
-        source: 'direct' as const,
-      }));
+      const manyApprovals: DashboardApproval[] = Array.from(
+        {length: 8},
+        (_, i) => ({
+          organizerId: `org-${i}` as Id<'organizers'>,
+          organizerName: `Community ${i}`,
+          source: 'direct' as const,
+        }),
+      );
       setup({approvals: manyApprovals});
       await createComponent();
 

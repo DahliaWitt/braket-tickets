@@ -15,6 +15,7 @@ import {
 import {requireManageCommunity} from '../../lib/access';
 import {resolvePurchaseAccessForUser} from '../../lib/access/purchase';
 import {throwAppError} from '../../lib/errors';
+import {batchGetStorageUrls} from '../../lib/storage_urls';
 import {assertTrustLinkLimit} from '../../lib/trust_links';
 import {enqueueOrganizerDirectoryRebuild} from '../../lib/users/organizer_directory';
 
@@ -268,6 +269,7 @@ export async function getUserApprovalsHandler(ctx: QueryCtx) {
   const approvals: Array<{
     organizerId: Id<'organizers'>;
     organizerName: string;
+    logoStorageId?: string;
     source: 'direct' | 'shared';
     viaOrganizerId?: Id<'organizers'>;
     viaOrganizerName?: string;
@@ -284,6 +286,7 @@ export async function getUserApprovalsHandler(ctx: QueryCtx) {
     approvals.push({
       organizerId,
       organizerName: organizer.name,
+      logoStorageId: organizer.logoStorageId ?? undefined,
       source: 'direct',
     });
     seenOrganizerIds.add(organizerId);
@@ -309,6 +312,7 @@ export async function getUserApprovalsHandler(ctx: QueryCtx) {
       approvals.push({
         organizerId,
         organizerName: organizer.name,
+        logoStorageId: organizer.logoStorageId ?? undefined,
         source: 'shared',
         viaOrganizerId: viaOrganizer._id,
         viaOrganizerName: viaOrganizer.name,
@@ -317,5 +321,15 @@ export async function getUserApprovalsHandler(ctx: QueryCtx) {
     }
   }
 
-  return approvals;
+  const logoUrlMap = await batchGetStorageUrls(
+    ctx,
+    approvals.map((a) => a.logoStorageId),
+  );
+
+  return approvals.map(({logoStorageId, ...approval}) => ({
+    ...approval,
+    organizerLogoUrl: logoStorageId
+      ? (logoUrlMap.get(logoStorageId) ?? undefined)
+      : undefined,
+  }));
 }

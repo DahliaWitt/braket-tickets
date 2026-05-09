@@ -780,6 +780,7 @@ export declare const api: {
         {},
         Array<{
           organizerId: Id<"organizers">;
+          organizerLogoUrl?: string;
           organizerName: string;
           source: "direct" | "shared";
           viaOrganizerId?: Id<"organizers">;
