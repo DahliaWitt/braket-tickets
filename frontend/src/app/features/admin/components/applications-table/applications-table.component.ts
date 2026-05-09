@@ -3,6 +3,7 @@ import {
   Component,
   inject,
   input,
+  signal,
   computed,
   ChangeDetectionStrategy,
 } from '@angular/core';
@@ -11,6 +12,7 @@ import {AuthService} from '@/core/services/auth.service';
 import {injectQuery} from 'convex-angular';
 import {type Application} from '@/features/vetting/models/application.model';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
+import {ZardInputDirective} from '@ui/components/primitives/input/input.directive';
 import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton.component';
 import {BraDialogService} from '@ui/components/composites/dialog/dialog.service';
 import {ReasonDialogComponent} from '@/features/admin/components/reason-dialog/reason-dialog.component';
@@ -27,7 +29,12 @@ interface VettingAnswer {
 @Component({
   selector: 'app-admin-applications-table',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, ZardButtonComponent, ZardSkeletonComponent],
+  imports: [
+    DatePipe,
+    ZardButtonComponent,
+    ZardInputDirective,
+    ZardSkeletonComponent,
+  ],
   templateUrl: './applications-table.component.html',
 })
 export class AdminApplicationsTableComponent {
@@ -61,6 +68,19 @@ export class AdminApplicationsTableComponent {
     return this.tableType() === 'pending'
       ? this.appsService.mapApplications(docs)
       : this.appsService.mapHistoryApplications(docs);
+  });
+
+  readonly searchQuery = signal('');
+
+  readonly filteredApplications = computed<Application[]>(() => {
+    const apps = this.allApplications();
+    const query = this.searchQuery().trim().toLowerCase();
+    if (!query) return apps;
+    return apps.filter((app) => {
+      const name = app.user?.name?.toLowerCase() ?? '';
+      const email = app.user?.email?.toLowerCase() ?? '';
+      return name.includes(query) || email.includes(query);
+    });
   });
 
   isLoading = this.applicationsQuery.isLoading;
@@ -138,6 +158,11 @@ export class AdminApplicationsTableComponent {
 
   asArray(val: unknown): unknown[] {
     return Array.isArray(val) ? val : [];
+  }
+
+  onSearchInput(event: Event): void {
+    const target = event.target as HTMLInputElement;
+    this.searchQuery.set(target.value);
   }
 
   updateStatus(app: Application, status: 'approved' | 'rejected') {

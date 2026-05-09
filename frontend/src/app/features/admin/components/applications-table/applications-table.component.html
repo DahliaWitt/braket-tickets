@@ -1,3 +1,18 @@
+<div class="mb-4">
+  <div class="max-w-sm min-w-48">
+    <input
+      zInput
+      type="search"
+      placeholder="Search applications..."
+      [value]="searchQuery()"
+      (input)="onSearchInput($event)"
+      class="w-full text-sm"
+      aria-label="Search applications by name or email"
+      data-testid="applications-search"
+    />
+  </div>
+</div>
+
 @if (isLoading()) {
   <!-- Loading Skeleton - Desktop -->
   <div
@@ -90,7 +105,7 @@
           </tr>
         </thead>
         <tbody class="divide-y divide-border/50">
-          @for (app of allApplications(); track app._id; let i = $index) {
+          @for (app of filteredApplications(); track app._id; let i = $index) {
             <tr
               [class]="
                 'transition-smooth group hover:bg-muted/30 ' +
@@ -239,7 +254,11 @@
                 colspan="3"
                 class="p-16 text-center font-mono tracking-widest text-muted-foreground uppercase"
               >
-                NO {{ tableType() }} APPLICATIONS FOUND
+                @if (searchQuery()) {
+                  NO RESULTS FOR &ldquo;{{ searchQuery() }}&rdquo;
+                } @else {
+                  NO {{ tableType() }} APPLICATIONS FOUND
+                }
               </td>
             </tr>
           }
@@ -250,7 +269,7 @@
 
   <!-- Mobile Card View -->
   <div class="ph-no-capture space-y-3 md:hidden">
-    @for (app of allApplications(); track app._id; let i = $index) {
+    @for (app of filteredApplications(); track app._id; let i = $index) {
       <div
         [class]="
           'transition-smooth overflow-hidden rounded-xl border border-border bg-card/80 ' +
@@ -387,7 +406,11 @@
       <div
         class="mono-label rounded-lg border border-dashed border-border py-12 text-center text-sm text-muted-foreground"
       >
-        NO {{ tableType() }} APPLICATIONS FOUND
+        @if (searchQuery()) {
+          NO RESULTS FOR &ldquo;{{ searchQuery() }}&rdquo;
+        } @else {
+          NO {{ tableType() }} APPLICATIONS FOUND
+        }
       </div>
     }
   </div>
