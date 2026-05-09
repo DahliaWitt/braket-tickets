@@ -13,6 +13,14 @@ import {
 
 type ResaleNotificationMutationCtx = MutationCtx;
 
+/**
+ * Per-subscription cooldown applied to "resale ticket available" alerts.
+ * `resale_notifications` rows are scoped per (userId, eventId), so this
+ * suppresses repeat notifications for the same subscriber/event pair within
+ * the window without affecting other events the subscriber follows.
+ */
+const NOTIFICATION_COOLDOWN_MS = 60 * 60 * 1000;
+
 export async function notifySubscribersForListedTicketState(
   ctx: ResaleNotificationMutationCtx,
   args: {eventId: Id<'events'>; sellerId: Id<'users'>},
@@ -44,14 +52,21 @@ export async function notifySubscribersForListedTicketState(
     .take(500);
   if (subscribers.length === 0) return 0;
 
+  const notifiedAt = Date.now();
+  const eligibleSubscribers = subscribers.filter(
+    (subscription) =>
+      subscription.notifiedAt === undefined ||
+      notifiedAt - subscription.notifiedAt >= NOTIFICATION_COOLDOWN_MS,
+  );
+  if (eligibleSubscribers.length === 0) return 0;
+
   const {subject, html} = resaleAvailableTemplate(
     {title: event.title, date: event.date, location: event.location},
     args.eventId,
   );
-  const notifiedAt = Date.now();
 
   const results = await Promise.all(
-    subscribers.map(async (subscription) => {
+    eligibleSubscribers.map(async (subscription) => {
       if (subscription.userId === args.sellerId) return 0;
       const access = await canPurchaseEventForUser(
         ctx,

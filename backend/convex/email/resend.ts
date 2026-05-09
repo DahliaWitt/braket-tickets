@@ -1,8 +1,4 @@
-import {
-  vEmailEvent,
-  vOnEmailEventArgs,
-  type EmailEvent,
-} from '@convex-dev/resend';
+import {vOnEmailEventArgs} from '@convex-dev/resend';
 import {v} from 'convex/values';
 import {
   internalMutation,
@@ -136,44 +132,6 @@ export const handleEmailEvent = internalMutation({
     const delivery = await ctx.db
       .query('emailDeliveries')
       .withIndex('by_emailId', (q) => q.eq('emailId', args.id))
-      .first();
-    if (!delivery) {
-      return null;
-    }
-
-    const message =
-      event.type === 'email.bounced'
-        ? event.data.bounce.message
-        : event.type === 'email.failed'
-          ? event.data.failed.reason
-          : 'Recipient marked email as spam';
-
-    await recordTerminalProviderFailure(ctx, {
-      source: delivery.source,
-      sourceId: delivery.sourceId,
-      recipient: delivery.recipient,
-      error: message,
-    });
-    return null;
-  },
-});
-
-export const handleProviderEvent = internalMutation({
-  args: {event: vEmailEvent},
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const event: EmailEvent = args.event;
-    if (
-      event.type !== 'email.bounced' &&
-      event.type !== 'email.failed' &&
-      event.type !== 'email.complained'
-    ) {
-      return null;
-    }
-
-    const delivery = await ctx.db
-      .query('emailDeliveries')
-      .withIndex('by_resendId', (q) => q.eq('resendId', event.data.email_id))
       .first();
     if (!delivery) {
       return null;

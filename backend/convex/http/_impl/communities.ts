@@ -51,7 +51,7 @@ export async function handleListPublicCommunities(
     return new Response('Too Many Requests', {
       status: 429,
       headers: {
-        ...getPublicCorsHeaders(),
+        ...uncachedPublicErrorHeaders,
         'Retry-After': '60',
       },
     });
@@ -94,7 +94,7 @@ export async function handleGetPublicCommunityBySlug(
     return new Response('Too Many Requests', {
       status: 429,
       headers: {
-        ...getPublicCorsHeaders(),
+        ...uncachedPublicErrorHeaders,
         'Retry-After': '60',
       },
     });
