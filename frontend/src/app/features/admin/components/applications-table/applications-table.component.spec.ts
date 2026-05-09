@@ -536,11 +536,8 @@ describe('AdminApplicationsTableComponent', () => {
         })
         .mockResolvedValueOnce(null);
 
-      let callCount = 0;
       braDialogMock.create.mockImplementation(
         (options: BraDialogOptions<unknown, unknown>) => {
-          callCount++;
-          // Auto-confirm both dialogs
           if (options.zOnOk) {
             (options.zOnOk as (result: unknown) => void)(null);
           }

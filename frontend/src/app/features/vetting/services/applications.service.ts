@@ -211,7 +211,7 @@ export class ApplicationsService {
   ): Promise<
     FunctionReturnType<typeof api.communities.applications.reinstate>
   > {
-    return await this.convex.mutation(api.communities.applications.reinstate, {
+    return this.convex.mutation(api.communities.applications.reinstate, {
       applicationId,
       ...(force ? {force} : {}),
     });
