@@ -480,6 +480,7 @@ export declare const api: {
               magicLinkLabel?: string;
               reason?: string;
               source?: string;
+              targetUserName?: string;
               trustLinkLabel?: string;
             }>;
             pageStatus?: "SplitRecommended" | "SplitRequired" | null;
@@ -2323,6 +2324,7 @@ export declare const api: {
           organizerId?: Id<"organizers">;
           reason?: string;
           source?: string;
+          targetUserId?: Id<"users">;
           trustedOrganizerId?: Id<"organizers">;
           trustingOrganizerId?: Id<"organizers">;
         } | null
@@ -3545,6 +3547,7 @@ export declare const internal: {
             eventId?: Id<"events">;
             organizerId?: Id<"organizers">;
             source?: string;
+            targetUserId?: Id<"users">;
           },
           null
         >;

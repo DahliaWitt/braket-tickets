@@ -145,6 +145,14 @@ export class AuditLogTableHarness extends ComponentHarness {
     return els[index] ? (await els[index].text()).trim() : null;
   }
 
+  /** Returns the text content of the target-user element in the expanded detail at the given index. */
+  async getTargetUserText(index = 0): Promise<string | null> {
+    const els = await this.locatorForAll(
+      '[data-testid="expanded-target-user"]',
+    )();
+    return els[index] ? (await els[index].text()).trim() : null;
+  }
+
   /** Clicks a desktop detail trigger to toggle its expanded detail view. */
   async clickDesktopDetailTrigger(index: number): Promise<void> {
     const triggers = await this.getDetailTriggerEls();

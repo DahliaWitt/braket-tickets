@@ -171,7 +171,8 @@ export async function redeemInvite(
       adminId: invite.invitedBy,
       action: 'admin_invite.redeem',
       organizerId: invite.organizerId,
-      source: `redeemer:${userId} invite:${invite._id}`,
+      targetUserId: userId,
+      source: `invite:${invite._id}`,
     },
   );
 
