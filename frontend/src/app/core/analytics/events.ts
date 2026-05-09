@@ -46,7 +46,10 @@ export interface AnalyticsEventMap {
   };
   feedback_submitted: {
     feedback_category: FeedbackCategory;
+    feedback_message: string;
+    feedback_replay_url?: string;
     message_length: number;
+    route_template: string;
     signed_in: boolean;
     has_replay_url: boolean;
   };

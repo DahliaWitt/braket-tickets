@@ -29,6 +29,67 @@ describe('sanitizeAnalyticsProperties', () => {
     });
   });
 
+  it('preserves explicit footer feedback messages when the caller opts in', () => {
+    const result = sanitizeAnalyticsProperties(
+      {
+        feedback_message: 'The footer feedback button should send this.',
+        feedback_replay_url:
+          'https://us.posthog.com/project/test-api-key/replay/session-id?t=30',
+        raw_feedback: 'legacy raw key stays blocked',
+      },
+      {allowFeedbackMessage: true},
+    );
+
+    expect(result).toEqual({
+      feedback_message: 'The footer feedback button should send this.',
+      feedback_replay_url:
+        'https://us.posthog.com/project/test-api-key/replay/session-id?t=30',
+      raw_feedback: '[redacted]',
+    });
+  });
+
+  it('redacts feedback messages unless the caller opts in', () => {
+    const result = sanitizeAnalyticsProperties({
+      feedback_message: 'This should only be allowed on feedback_submitted',
+    });
+
+    expect(result).toEqual({
+      feedback_message: '[redacted]',
+    });
+  });
+
+  it('redacts feedback replay URLs that are not PostHog replay links', () => {
+    const result = sanitizeAnalyticsProperties({
+      feedback_replay_url:
+        'https://example.com/checkout/abcdefghijklmnopqrstuvwxyz?token=secret',
+    });
+
+    expect(result).toEqual({
+      feedback_replay_url: '[redacted]',
+    });
+  });
+
+  it('redacts feedback replay URLs with unexpected query or path data', () => {
+    expect(
+      sanitizeAnalyticsProperties({
+        feedback_replay_url:
+          'https://us.posthog.com/project/test-api-key/replay/session-id/extra?t=30',
+      }),
+    ).toEqual({feedback_replay_url: '[redacted]'});
+    expect(
+      sanitizeAnalyticsProperties({
+        feedback_replay_url:
+          'https://us.posthog.com/project/test-api-key/replay/session-id?t=30&token=secret',
+      }),
+    ).toEqual({feedback_replay_url: '[redacted]'});
+    expect(
+      sanitizeAnalyticsProperties({
+        feedback_replay_url:
+          'https://user:password@us.posthog.com/project/test-api-key/replay/session-id?t=30',
+      }),
+    ).toEqual({feedback_replay_url: '[redacted]'});
+  });
+
   it('preserves route_template while normalizing its value', () => {
     const result = sanitizeAnalyticsProperties({
       route_template:
