@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.1.7](https://github.com/DahliaWitt/braket-tickets/compare/v0.1.6...v0.1.7) (2026-05-09)
+
+
+### Bug Fixes
+
+* **dashboard:** show community logos instead of fallback initials ([d7b49cf](https://github.com/DahliaWitt/braket-tickets/commit/d7b49cf8e8fc012b536ffef3ba51ef02aa79fdc1))
+* **dashboard:** show community logos instead of fallback initials ([4c247cc](https://github.com/DahliaWitt/braket-tickets/commit/4c247cc6364bdb2aa0e4bf2594bf03bdfa9575b8))
+* **frontend:** add missing aria-label to member approve button ([64b1baa](https://github.com/DahliaWitt/braket-tickets/commit/64b1baa705c33b4d4eddddf8c05ad21632bdae6a))
+* **frontend:** show landing page instead of dashboard after logout ([d63f680](https://github.com/DahliaWitt/braket-tickets/commit/d63f6805a1caa1fb8a336027ff0df96095dd6890))
+
+
+### Code Refactoring
+
+* **dashboard:** extract community avatar into ng-template ([4b879e9](https://github.com/DahliaWitt/braket-tickets/commit/4b879e9a40bda2b269c3a6199a12c6ebeea1da11))
+
+
+### CI/CD
+
+* route fork PRs to GitHub-hosted runners ([1b0a6c2](https://github.com/DahliaWitt/braket-tickets/commit/1b0a6c2e538296cb86e288a9b5eb9289863f0c84))
+
 ## [0.1.6](https://github.com/DahliaWitt/braket-tickets/compare/v0.1.5...v0.1.6) (2026-05-08)
 
 ### Bug Fixes
