@@ -18,12 +18,10 @@ export async function listUsersForCommunityAdmin(
   organizerId: OrganizerId,
 ) {
   const members = await getCommunityMembers(ctx, organizerId);
-  return members
-    .map(stripSensitiveUserFields)
-    .map(stripCommunityAdminFields);
+  return members.map(stripSensitiveUserFields).map(stripCommunityAdminFields);
 }
 
-async function searchUsersByNameOrEmail(
+export async function searchUsersByNameOrEmail(
   db: UsersDirectoryDb,
   query: string,
 ) {
@@ -116,7 +114,9 @@ async function searchApprovedOrganizerMembersByNameOrEmail(
       db
         .query('users')
         .withIndex('email', (emailQuery) =>
-          emailQuery.gte('email', lowerQuery).lt('email', lowerQuery + '\uffff'),
+          emailQuery
+            .gte('email', lowerQuery)
+            .lt('email', lowerQuery + '\uffff'),
         ),
     );
   }
@@ -134,14 +134,13 @@ export async function searchUsersForAdminScope(
   const query = args.query.trim();
   if (!query) return [];
 
-  const matches =
-    args.organizerId ?
-      await searchApprovedOrganizerMembersByNameOrEmail(
+  const matches = args.organizerId
+    ? await searchApprovedOrganizerMembersByNameOrEmail(
         db,
         args.organizerId,
         query,
-      ) :
-      await searchUsersByNameOrEmail(db, query);
+      )
+    : await searchUsersByNameOrEmail(db, query);
 
   return matches.map(stripSensitiveUserFields);
 }

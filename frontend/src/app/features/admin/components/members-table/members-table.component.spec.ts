@@ -389,7 +389,7 @@ describe('AdminMembersTableComponent', () => {
     // The most recent call should include organizerId in args (args are resolved before being passed)
     const lastCall = calls[calls.length - 1];
     const resolvedArgs = lastCall[1] as Record<string, unknown>;
-    expect(resolvedArgs).toEqual({organizerId: 'org42'});
+    expect(resolvedArgs).toMatchObject({organizerId: 'org42'});
   });
 
   describe('loadMore error handling', () => {
@@ -866,10 +866,11 @@ describe('AdminMembersTableComponent', () => {
     });
   });
 
-  describe('search filtering', () => {
+  describe('search filtering (server-side)', () => {
     let searchFixture: ComponentFixture<AdminMembersTableComponent>;
     let searchComponent: AdminMembersTableComponent;
     let searchHarness: AdminMembersTableHarness;
+    let searchConvexMock: MockConvexClient;
 
     const alice: MemberWithApplication = {
       user: {
@@ -905,9 +906,11 @@ describe('AdminMembersTableComponent', () => {
       trustedViaOrganizerName: 'Partner Org',
     };
 
-    beforeEach(async () => {
-      const searchConvexMock = createMockConvexClient();
-      const searchLoad = vi
+    const allSearchMembers = [alice, bob, charlie];
+
+    /** Simulates server-side search filtering in the mock. */
+    function createResponsiveSearchMock() {
+      return vi
         .fn()
         .mockImplementation(
           (
@@ -916,8 +919,25 @@ describe('AdminMembersTableComponent', () => {
             _options: unknown,
             onData: (data: unknown) => void,
           ) => {
+            const args = _args as {
+              organizerId: string;
+              search?: string;
+            };
+            let results = [...allSearchMembers];
+            if (args.search) {
+              const term = args.search.toLowerCase();
+              results = results.filter((m) => {
+                const name = (
+                  (m.user as {name?: string}).name ?? ''
+                ).toLowerCase();
+                const email = (
+                  (m.user as {email?: string}).email ?? ''
+                ).toLowerCase();
+                return name.includes(term) || email.includes(term);
+              });
+            }
             onData({
-              results: [alice, bob, charlie],
+              results,
               status: 'Exhausted',
               loadMore: vi.fn().mockReturnValue(false),
             });
@@ -926,6 +946,23 @@ describe('AdminMembersTableComponent', () => {
             };
           },
         );
+    }
+
+    /**
+     * Types into the search input and waits for the 300ms debounce + Angular
+     * stabilization so the server-side query fires with the new search arg.
+     */
+    async function searchAndWait(value: string) {
+      await searchHarness.setSearchValue(value);
+      await vi.advanceTimersByTimeAsync(300);
+      await searchFixture.whenStable();
+    }
+
+    beforeEach(async () => {
+      vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout']});
+
+      searchConvexMock = createMockConvexClient();
+      const searchLoad = createResponsiveSearchMock();
       searchConvexMock.onPaginatedUpdate_experimental = searchLoad;
       searchConvexMock.client.onPaginatedUpdate_experimental = searchLoad;
 
@@ -954,62 +991,61 @@ describe('AdminMembersTableComponent', () => {
       );
     });
 
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
     it('should render the search input', async () => {
       expect(await searchHarness.hasSearchInput()).toBe(true);
     });
 
-    it('should filter members by name', async () => {
-      await searchHarness.setSearchValue('Alice');
-      await searchFixture.whenStable();
+    it('should pass search term to query after debounce', async () => {
+      await searchAndWait('Alice');
+
+      const calls =
+        searchConvexMock.client.onPaginatedUpdate_experimental.mock.calls;
+      const lastCall = calls[calls.length - 1];
+      const args = lastCall[1] as Record<string, unknown>;
+      expect(args).toMatchObject({search: 'Alice'});
+    });
+
+    it('should filter members by name via server-side search', async () => {
+      await searchAndWait('Alice');
 
       expect(await searchHarness.getRowCount()).toBe(1);
       expect(await searchHarness.getNameAt(0)).toBe('Alice Wonderland');
     });
 
-    it('should filter members by email', async () => {
-      await searchHarness.setSearchValue('builder.org');
-      await searchFixture.whenStable();
+    it('should filter members by email via server-side search', async () => {
+      await searchAndWait('builder.org');
 
       expect(await searchHarness.getRowCount()).toBe(1);
       expect(await searchHarness.getNameAt(0)).toBe('Bob Builder');
     });
 
     it('should clear search and show all members again', async () => {
-      await searchHarness.setSearchValue('Alice');
-      await searchFixture.whenStable();
+      await searchAndWait('Alice');
       expect(await searchHarness.getRowCount()).toBe(1);
 
-      await searchHarness.setSearchValue('');
-      await searchFixture.whenStable();
+      await searchAndWait('');
       expect(await searchHarness.getRowCount()).toBe(3);
-    });
-
-    it('should be case-insensitive', async () => {
-      await searchHarness.setSearchValue('aLiCe');
-      await searchFixture.whenStable();
-
-      expect(await searchHarness.getRowCount()).toBe(1);
-      expect(await searchHarness.getNameAt(0)).toBe('Alice Wonderland');
     });
 
     it('should combine with member filter', async () => {
       // Filter to "ours" (excludes shared), then search
       searchComponent.setMemberFilter('ours');
-      await searchHarness.setSearchValue('Bob');
-      await searchFixture.whenStable();
+      await searchAndWait('Bob');
 
       expect(await searchHarness.getRowCount()).toBe(1);
       expect(await searchHarness.getNameAt(0)).toBe('Bob Builder');
 
       // Search for shared member while filter is "ours" — no results
-      await searchHarness.setSearchValue('Charlie');
-      await searchFixture.whenStable();
+      await searchAndWait('Charlie');
       expect(await searchHarness.getRowCount()).toBe(0);
     });
 
     it('should show search-specific empty state when no results match', async () => {
-      await searchHarness.setSearchValue('nonexistent');
-      await searchFixture.whenStable();
+      await searchAndWait('nonexistent');
 
       expect(await searchHarness.getRowCount()).toBe(0);
       expect(await searchHarness.hasEmptyState()).toBe(true);

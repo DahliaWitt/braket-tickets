@@ -2,6 +2,7 @@ import type {Doc, Id} from '../../_generated/dataModel';
 import {internal} from '../../_generated/api';
 import type {MutationCtx, QueryCtx} from '../../_generated/server';
 import {getLatestApplicationForOrganizer} from '../applications/read_models';
+import {searchUsersByNameOrEmail} from './directory';
 import {stripSensitiveUserFields} from './helpers';
 import {
   authz,
@@ -434,6 +435,51 @@ export async function enqueueMembershipPropagation(
       .propagateMembershipChangeToTrustingOrganizersInternal,
     args,
   );
+}
+
+/**
+ * Searches the organizer directory by user name or email using the
+ * `search_name_email` search index on the users table. Matched users are then
+ * resolved against the organizer directory to include application data and
+ * access-source metadata.
+ *
+ * Returns a single non-paginated page (`isDone: true`) capped at 50 results.
+ */
+export async function searchUserApplicationsInDirectory(
+  ctx: DirectoryCtx,
+  organizerId: Id<'organizers'>,
+  searchTerm: string,
+): Promise<UserApplicationPage> {
+  const matchingUsers = await searchUsersByNameOrEmail(ctx.db, searchTerm);
+
+  const entries: DirectoryEntryFields[] = [];
+  const usersById = new Map<Id<'users'>, Doc<'users'>>();
+
+  for (const user of matchingUsers) {
+    const entry = await ctx.db
+      .query('organizer_user_directory')
+      .withIndex('by_organizer_and_user', (q) =>
+        q.eq('organizerId', organizerId).eq('userId', user._id),
+      )
+      .unique();
+
+    if (entry) {
+      const resolved = await resolveActiveDirectoryEntry(ctx, entry);
+      if (resolved) {
+        entries.push(resolved);
+        usersById.set(user._id, user);
+      }
+    }
+  }
+
+  return {
+    page: entries.flatMap((entry) => {
+      const user = usersById.get(entry.userId);
+      return user ? [toUserApplicationRow(entry, user)] : [];
+    }),
+    isDone: true,
+    continueCursor: '',
+  };
 }
 
 export async function loadUserApplicationPageForOrganizerFromDirectory(
