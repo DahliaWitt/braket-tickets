@@ -628,10 +628,8 @@
       class="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-sm border border-border bg-card"
     >
       <span
-        [class]="
-          'font-display text-xs font-bold ' +
-          (muted ? 'text-muted-foreground/60' : 'text-primary')
-        "
+        class="font-display text-xs font-bold"
+        [ngClass]="muted ? 'text-muted-foreground/60' : 'text-primary'"
       >
         {{ name.charAt(0) }}
       </span>
