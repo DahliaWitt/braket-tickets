@@ -457,8 +457,8 @@ describe('AdminApplicationsTableComponent', () => {
       await fixture.whenStable();
 
       expect(await harness.getRowCount()).toBe(0);
-      expect(await harness.hasEmptyState()).toBe(true);
-      const emptyText = await harness.getEmptyStateText();
+      expect(await harness.hasNoResultsState()).toBe(true);
+      const emptyText = await harness.getNoResultsText();
       expect(emptyText).toContain('NO RESULTS FOR');
       expect(emptyText).toContain('nonexistent');
     });

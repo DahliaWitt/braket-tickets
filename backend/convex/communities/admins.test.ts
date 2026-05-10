@@ -241,7 +241,7 @@ describe('community_admins', () => {
       expect(logs[0].action).toBe('community_admin.grant');
       expect(logs[0].adminId).toBe(rootAdminId);
       expect(logs[0].organizerId).toBe(orgId);
-      expect(logs[0].source).toContain(regularUserId);
+      expect(logs[0].targetUserId).toBe(regularUserId);
     });
 
     it('keeps the granted admin listed for the community', async () => {

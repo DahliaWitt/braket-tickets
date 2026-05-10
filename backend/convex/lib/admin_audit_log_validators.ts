@@ -10,6 +10,7 @@ export const adminAuditLogFields = {
   actionCategory: v.optional(adminAuditActionCategoryValidator),
   eventId: v.optional(v.id('events')),
   applicationId: v.optional(v.id('applications')),
+  targetUserId: v.optional(v.id('users')),
   magicLinkId: v.optional(v.id('magic_links')),
   organizerId: v.optional(v.id('organizers')),
   trustingOrganizerId: v.optional(v.id('organizers')),

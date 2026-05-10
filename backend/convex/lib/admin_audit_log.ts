@@ -31,18 +31,29 @@ export async function insertAdminAuditLog(
     action: entry.action,
     ...(actionCategory !== undefined ? {actionCategory} : {}),
     ...(entry.eventId !== undefined ? {eventId: entry.eventId} : {}),
-    ...(entry.applicationId !== undefined ? {applicationId: entry.applicationId} : {}),
-    ...(entry.magicLinkId !== undefined ? {magicLinkId: entry.magicLinkId} : {}),
-    ...(entry.trustingOrganizerId !== undefined ?
-      {trustingOrganizerId: entry.trustingOrganizerId} :
-      {}),
-    ...(entry.trustedOrganizerId !== undefined ?
-      {trustedOrganizerId: entry.trustedOrganizerId} :
-      {}),
-    ...(entry.organizerId !== undefined ? {organizerId: entry.organizerId} : {}),
+    ...(entry.applicationId !== undefined
+      ? {applicationId: entry.applicationId}
+      : {}),
+    ...(entry.targetUserId !== undefined
+      ? {targetUserId: entry.targetUserId}
+      : {}),
+    ...(entry.magicLinkId !== undefined
+      ? {magicLinkId: entry.magicLinkId}
+      : {}),
+    ...(entry.trustingOrganizerId !== undefined
+      ? {trustingOrganizerId: entry.trustingOrganizerId}
+      : {}),
+    ...(entry.trustedOrganizerId !== undefined
+      ? {trustedOrganizerId: entry.trustedOrganizerId}
+      : {}),
+    ...(entry.organizerId !== undefined
+      ? {organizerId: entry.organizerId}
+      : {}),
     ...(entry.source !== undefined ? {source: entry.source} : {}),
     ...(entry.reason !== undefined ? {reason: entry.reason} : {}),
-    ...(entry.deletedEventName !== undefined ? {deletedEventName: entry.deletedEventName} : {}),
+    ...(entry.deletedEventName !== undefined
+      ? {deletedEventName: entry.deletedEventName}
+      : {}),
   };
 
   return await ctx.db.insert('adminAuditLogs', document);
