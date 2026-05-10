@@ -465,6 +465,12 @@
             </div>
           </div>
 
+          @if (event().organizer?.codeOfConduct; as coc) {
+            <div class="flex justify-center" data-testid="checkout-coc-link">
+              <bra-code-of-conduct-link [codeOfConduct]="coc" />
+            </div>
+          }
+
           <!-- Payment Button / Form -->
           @if (purchaseBlockedByVetting()) {
             <div

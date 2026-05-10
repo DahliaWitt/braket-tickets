@@ -182,6 +182,11 @@
                   }
                 </div>
               }
+              @if (organizer()?.codeOfConduct; as coc) {
+                <div class="mb-3" data-testid="event-coc-link">
+                  <bra-code-of-conduct-link [codeOfConduct]="coc" />
+                </div>
+              }
               <div
                 class="flex flex-wrap items-center gap-4 font-mono text-sm text-muted-foreground"
               >

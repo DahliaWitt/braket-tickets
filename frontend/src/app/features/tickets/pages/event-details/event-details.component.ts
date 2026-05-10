@@ -30,6 +30,7 @@ import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
 import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton.component';
 import {EmptyStateComponent} from '@ui/components/primitives/empty-state/empty-state.component';
 import {BraCommunityAvatarComponent} from '@ui/components/primitives/community-avatar/community-avatar.component';
+import {BraCodeOfConductLinkComponent} from '@ui/components/primitives/code-of-conduct-link/code-of-conduct-link.component';
 import {BraDialogService} from '@ui/components/composites/dialog/dialog.service';
 import {CheckoutSidebarComponent} from '../../components/checkout-sidebar/checkout-sidebar.component';
 import {toast} from 'ngx-sonner';
@@ -65,6 +66,7 @@ type EventOrganizer = NonNullable<EventDetail['organizer']>;
     ZardSkeletonComponent,
     EmptyStateComponent,
     BraCommunityAvatarComponent,
+    BraCodeOfConductLinkComponent,
     CheckoutSidebarComponent,
     EventTicketStatusComponent,
   ],
@@ -129,6 +131,7 @@ export class EventDetailsComponent {
           logoUrl: community.logoUrl,
           email: community.email,
           contactInfo: community.contactInfo,
+          codeOfConduct: community.codeOfConduct,
         };
       } catch (e) {
         logger.error('Error loading organizer', e);

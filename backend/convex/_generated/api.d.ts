@@ -1388,6 +1388,7 @@ export declare const api: {
           maxTicketsPerUser?: number;
           organizer: {
             _id: Id<"organizers">;
+            codeOfConduct?: string;
             contactInfo?: string;
             email?: string;
             logoUrl?: string;
@@ -1580,6 +1581,7 @@ export declare const api: {
             totalTickets: number;
             visibility: "private" | "public_viewable" | "public";
           }>;
+          organizerCodeOfConduct?: string;
           organizerDescription?: string;
           organizerLogoUrl?: string;
           organizerName: string;
