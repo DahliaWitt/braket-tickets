@@ -329,6 +329,10 @@ export const sendTicketsAction = internalAction({
       buyerName || 'Attendee',
       'cid:qrcode',
       isGuest,
+      {
+        slug: organizer?.slug,
+        hasCodeOfConduct: !!organizer?.codeOfConduct,
+      },
     );
 
     // Add QR code image as a CID attachment for inline display

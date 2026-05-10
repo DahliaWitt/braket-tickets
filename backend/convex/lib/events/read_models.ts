@@ -154,6 +154,7 @@ function toEventOrganizerSummary(
     logoUrl: organizerLogoUrl,
     email: organizer.email,
     contactInfo: organizer.contactInfo,
+    codeOfConduct: organizer.codeOfConduct,
   };
 }
 
