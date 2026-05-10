@@ -113,11 +113,13 @@ describe('FooterFeedbackDialogComponent', () => {
         route: '/help',
       }),
     );
-    expect(dialogRefMock.close).not.toHaveBeenCalled();
-    expect(toastMock.success).not.toHaveBeenCalled();
-    expect(toastMock.error).toHaveBeenCalledWith(
-      'Feedback could not be sent. Please try again.',
+    await vi.waitFor(() =>
+      expect(toastMock.error).toHaveBeenCalledWith(
+        'Feedback could not be sent. Please try again.',
+      ),
     );
+    await vi.waitFor(() => expect(dialogRefMock.close).not.toHaveBeenCalled());
+    await vi.waitFor(() => expect(toastMock.success).not.toHaveBeenCalled());
   });
 
   it('keeps category optional and toggles the selected chip off', async () => {

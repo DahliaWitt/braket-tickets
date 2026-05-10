@@ -1728,13 +1728,13 @@ describe('CommunityAdminSettingsComponent', () => {
       expect(fixture.componentInstance.isLastAdmin()).toBe(true);
     });
 
-    it('grantAdmin calls communities.admins.grant when user exists (BRA-149)', async () => {
+    it('grantAdmin calls communities.admins.grant when a platform user exists', async () => {
       const {fixture, harness, convexMock} = await setup();
 
-      // Mock users.search to return a matching user
-      convexMock.client.query.mockResolvedValue([
-        {_id: 'user-existing' as Id<'users'>, email: 'existing@example.com'},
-      ]);
+      convexMock.client.query.mockResolvedValue({
+        _id: 'user-existing' as Id<'users'>,
+        email: 'existing@example.com',
+      });
 
       await harness.typeAdminEmail('existing@example.com');
       fixture.detectChanges();
@@ -1749,7 +1749,6 @@ describe('CommunityAdminSettingsComponent', () => {
           organizerId: FAKE_ORG_ID,
         }),
       );
-      // Should NOT have called inviteToExisting
       const mutationCalls = convexMock.mutation.mock.calls as unknown[][];
       const inviteCalled = mutationCalls.some((args) => {
         const callArgs = args[1] as Record<string, unknown> | undefined;
@@ -1763,45 +1762,107 @@ describe('CommunityAdminSettingsComponent', () => {
       expect(inviteCalled).toBe(false);
     });
 
-    it('grantAdmin falls back to admin_invites.inviteToExisting when user not found (BRA-149)', async () => {
+    it('grantAdmin does not invite when no platform user exists', async () => {
       const {fixture, harness, convexMock} = await setup();
 
-      // Mock users.search to return no matching user
-      convexMock.client.query.mockResolvedValue([]);
+      convexMock.client.query.mockResolvedValue(null);
 
       await harness.typeAdminEmail('newuser@example.com');
       fixture.detectChanges();
       await fixture.whenStable();
       await harness.clickGrantAdmin();
+      await fixture.whenStable();
+
+      expect(convexMock.mutation).not.toHaveBeenCalled();
+    });
+
+    it('grantAdmin keeps the email input when no platform user exists', async () => {
+      const {fixture, harness, convexMock} = await setup();
+
+      convexMock.client.query.mockResolvedValue(null);
+      await harness.typeAdminEmail('newuser@example.com');
+      fixture.detectChanges();
+      await fixture.whenStable();
+      await harness.clickGrantAdmin();
+      await fixture.whenStable();
+
+      expect(fixture.componentInstance.newAdminEmail()).toBe(
+        'newuser@example.com',
+      );
+    });
+
+    it('shows copy that admins already have door staff access', async () => {
+      const {harness} = await setup();
+
+      expect(await harness.getDoorStaffHelpText()).toContain(
+        'Admins already have door staff access.',
+      );
+    });
+
+    it('grantScanner calls communities.scanners.grant when a platform user exists', async () => {
+      const {fixture, harness, convexMock} = await setup();
+
+      convexMock.client.query.mockResolvedValue({
+        _id: 'scanner-existing' as Id<'users'>,
+        email: 'scanner@example.com',
+      });
+
+      await harness.setScannerEmail('scanner@example.com');
+      fixture.detectChanges();
+      await fixture.whenStable();
+      await harness.clickGrantScanner();
       await fixture.whenStable();
 
       expect(convexMock.mutation).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({
-          email: 'newuser@example.com',
+          userId: 'scanner-existing',
           organizerId: FAKE_ORG_ID,
         }),
       );
-      // Should NOT have called communities.admins.grant (no userId arg)
-      const mutationCalls = convexMock.mutation.mock.calls as unknown[][];
-      const grantCalled = mutationCalls.some((args) => {
-        const callArgs = args[1] as Record<string, unknown> | undefined;
-        return callArgs && 'userId' in callArgs;
-      });
-      expect(grantCalled).toBe(false);
     });
 
-    it('grantAdmin clears the email input after invite (BRA-149)', async () => {
+    it('grantScanner does not invite when no platform user exists', async () => {
       const {fixture, harness, convexMock} = await setup();
 
-      convexMock.client.query.mockResolvedValue([]);
-      await harness.typeAdminEmail('newuser@example.com');
+      convexMock.client.query.mockResolvedValue(null);
+
+      await harness.setScannerEmail('missing@example.com');
       fixture.detectChanges();
       await fixture.whenStable();
-      await harness.clickGrantAdmin();
+      await harness.clickGrantScanner();
       await fixture.whenStable();
 
-      expect(fixture.componentInstance.newAdminEmail()).toBe('');
+      expect(convexMock.mutation).not.toHaveBeenCalled();
+      expect(fixture.componentInstance.newScannerEmail()).toBe(
+        'missing@example.com',
+      );
+    });
+
+    it('grantScanner does not grant explicit scanner access to an admin', async () => {
+      const {fixture, harness, convexMock} = await setup({
+        adminData: [
+          {
+            _id: 'admin-1' as Id<'users'>,
+            userId: 'admin-1' as Id<'users'>,
+            organizerId: FAKE_ORG_ID,
+            displayName: 'Existing Admin',
+            email: 'admin@example.com',
+          },
+        ],
+      });
+
+      await harness.setScannerEmail('admin@example.com');
+      fixture.detectChanges();
+      await fixture.whenStable();
+      await harness.clickGrantScanner();
+      await fixture.whenStable();
+
+      expect(convexMock.client.query).not.toHaveBeenCalled();
+      expect(convexMock.mutation).not.toHaveBeenCalled();
+      expect(fixture.componentInstance.newScannerEmail()).toBe(
+        'admin@example.com',
+      );
     });
   });
 

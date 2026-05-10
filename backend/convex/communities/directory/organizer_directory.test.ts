@@ -235,6 +235,66 @@ describe('Users', () => {
     expect(results.map((user) => user._id)).not.toContain(otherCommunityUserId);
   });
 
+  it('findByExactEmailForAdmin resolves existing non-member users for community team management', async () => {
+    const t = convexTest();
+
+    const adminId = (await t.mutation(api.testing.users.createUserDirectly, {
+      name: 'Community Admin',
+      email: 'team-admin@example.com',
+    })) as Id<'users'>;
+    const organizerId = (await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {
+        name: 'Team Management Community',
+      },
+    )) as Id<'organizers'>;
+    await seedCommunityAdmin(t, adminId, organizerId);
+
+    const targetId = (await t.mutation(api.testing.users.createUserDirectly, {
+      name: 'Existing Non Member',
+      email: 'existing-non-member@example.com',
+    })) as Id<'users'>;
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const result = await asAdmin.query(
+      api.users.profile.findByExactEmailForAdmin,
+      {
+        email: ' Existing-Non-Member@Example.com ',
+        organizerId,
+      },
+    );
+
+    expect(result?._id).toBe(targetId);
+    expect(Object.keys(result ?? {}).sort()).toEqual(['_id', 'email']);
+  });
+
+  it('findByExactEmailForAdmin denies callers who cannot manage the organizer', async () => {
+    const t = convexTest();
+
+    const organizerId = (await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {
+        name: 'Private Team Management Community',
+      },
+    )) as Id<'organizers'>;
+    const outsiderId = (await t.mutation(api.testing.users.createUserDirectly, {
+      name: 'Outsider',
+      email: 'team-outsider@example.com',
+    })) as Id<'users'>;
+    await t.mutation(api.testing.users.createUserDirectly, {
+      name: 'Existing User',
+      email: 'existing-user@example.com',
+    });
+
+    const asOutsider = t.withIdentity({subject: outsiderId});
+    await expect(
+      asOutsider.query(api.users.profile.findByExactEmailForAdmin, {
+        email: 'existing-user@example.com',
+        organizerId,
+      }),
+    ).rejects.toThrow('Unauthorized');
+  });
+
   it('uses the latest organizer application status when scoping community admin search', async () => {
     const t = convexTest();
 

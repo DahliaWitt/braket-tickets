@@ -8,6 +8,8 @@ import {
   getUserCommunities,
   isCommunityAdmin,
   isCommunityMember,
+  isCommunityScanner,
+  revokeCommunityScannerRole,
 } from '../../lib/authz';
 import {
   canManageCommunity,
@@ -90,10 +92,15 @@ export async function grantCommunityAdmin(
     isCommunityAdmin(ctx, args.userId, organizerId),
     isCommunityMember(ctx, args.userId, organizerId),
   ]);
+  const hasScannerRole = await isCommunityScanner(
+    ctx,
+    args.userId,
+    organizerId,
+  );
   const roleAdded = !hasRole;
   const memberAdded = !hasMember;
 
-  if (!roleAdded && !memberAdded) {
+  if (!roleAdded && !memberAdded && !hasScannerRole) {
     return null;
   }
 
@@ -105,6 +112,12 @@ export async function grantCommunityAdmin(
   await grantCommunityAdminMembership(ctx, args.userId, organizerId, {
     actorId: callerId,
   });
+
+  if (hasScannerRole) {
+    await revokeCommunityScannerRole(ctx, args.userId, organizerId, {
+      actorId: callerId,
+    });
+  }
 
   if (memberAdded) {
     await ensureApprovedMarketingPreference(ctx.db, {
