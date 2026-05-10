@@ -61,3 +61,25 @@ export function buildApplicationRevocationPatch(
     reason,
   };
 }
+
+export function assertValidApplicationReinstateTransition(
+  currentStatus: ApplicationStatus,
+): void {
+  if (currentStatus === 'revoked') return;
+
+  throwAppError(
+    'INVALID_STATE',
+    `Only revoked applications can be reinstated (current status: ${currentStatus})`,
+  );
+}
+
+export function buildApplicationReinstatePatch(
+  processedBy: Id<'users'>,
+): ApplicationPatch {
+  return {
+    status: 'approved',
+    processedBy,
+    denyReason: undefined,
+    reason: undefined,
+  };
+}

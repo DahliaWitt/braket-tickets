@@ -29,8 +29,10 @@ import {
 import {rateLimiter} from '../../lib/rate_limits';
 import {enqueueEmailDelivery} from '../../lib/email_delivery_wrapper';
 import {
+  assertValidApplicationReinstateTransition,
   assertValidApplicationReviewTransition,
   assertValidApplicationRevocationTransition,
+  buildApplicationReinstatePatch,
   buildApplicationReviewPatch,
   buildApplicationRevocationPatch,
 } from '../../lib/application_transitions';
@@ -435,6 +437,71 @@ export async function revokeApplication(
     organizerId: app.organizerId ?? undefined,
     source: 'admin-ui',
     reason: args.reason,
+  });
+
+  return null;
+}
+
+export async function reinstateApplication(
+  ctx: MutationCtx,
+  args: {
+    applicationId: Id<'applications'>;
+    force?: boolean;
+  },
+) {
+  const {_id: actorId} = await requireUser(ctx);
+
+  const app = await ctx.db.get('applications', args.applicationId);
+  if (!app) throwNotFound('Application');
+
+  await requireApplicationAdmin(ctx, actorId, app.organizerId);
+
+  assertValidApplicationReinstateTransition(app.status);
+
+  if (app.organizerId && !args.force) {
+    const latestApp = await getLatestApplicationForOrganizer(ctx, {
+      userId: app.userId,
+      organizerId: app.organizerId,
+    });
+    if (latestApp && latestApp._id !== args.applicationId) {
+      return {
+        conflict: 'newer_application' as const,
+        newerStatus: latestApp.status,
+      };
+    }
+  }
+
+  await ctx.db.patch(
+    'applications',
+    args.applicationId,
+    buildApplicationReinstatePatch(actorId),
+  );
+
+  if (app.organizerId) {
+    await ensureApprovedMarketingPreference(ctx.db, {
+      userId: app.userId,
+      organizerId: app.organizerId,
+    });
+    await addMember(ctx, app.userId, app.organizerId, {actorId});
+    await refreshOrganizerDirectoryForMembershipChange(ctx, {
+      organizerId: app.organizerId,
+      userId: app.userId,
+    });
+
+    await sendApplicationDecisionEmail(ctx, {
+      applicationId: args.applicationId,
+      organizerId: app.organizerId,
+      recipientUserId: app.userId,
+      status: 'approved',
+    });
+  }
+
+  await insertAdminAuditLog(ctx, {
+    adminId: actorId,
+    action: 'application.reinstate',
+    applicationId: args.applicationId,
+    organizerId: app.organizerId ?? undefined,
+    source: 'admin-ui',
   });
 
   return null;
