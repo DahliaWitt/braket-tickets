@@ -10,6 +10,9 @@ export class AdminApplicationsTableHarness extends ComponentHarness {
   private getRejectButtons = this.locatorForAll(
     'tr[data-testid="application-row"] [data-testid="reject-application"]',
   );
+  private getReinstateButtons = this.locatorForAll(
+    'tr[data-testid="application-row"] [data-testid="reinstate-application"]',
+  );
   private getStatusBadges = this.locatorForAll(
     'tr[data-testid="application-row"] [data-testid="application-status"]',
   );
@@ -92,6 +95,15 @@ export class AdminApplicationsTableHarness extends ComponentHarness {
 
   async getApproveButtonCount(): Promise<number> {
     return (await this.getApproveButtons()).length;
+  }
+
+  async getReinstateButtonCount(): Promise<number> {
+    return (await this.getReinstateButtons()).length;
+  }
+
+  async clickReinstateAtIndex(index: number): Promise<void> {
+    const buttons = await this.getReinstateButtons();
+    await buttons[index]?.click();
   }
 
   async getNoAnswersCount(): Promise<number> {
