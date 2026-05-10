@@ -45,7 +45,7 @@ export async function grantCommunityScanner(
       adminId: callerId,
       action: 'community_scanner.grant',
       organizerId: args.organizerId,
-      source: `target:${args.userId}`,
+      targetUserId: args.userId,
     },
   );
 
@@ -85,7 +85,7 @@ export async function revokeCommunityScanner(
       adminId: callerId,
       action: 'community_scanner.revoke',
       organizerId: args.organizerId,
-      source: `target:${args.userId}`,
+      targetUserId: args.userId,
     },
   );
 

@@ -154,6 +154,7 @@ export type DataModel = {
       organizerId?: Id<"organizers">;
       reason?: string;
       source?: string;
+      targetUserId?: Id<"users">;
       trustedOrganizerId?: Id<"organizers">;
       trustingOrganizerId?: Id<"organizers">;
       _id: Id<"adminAuditLogs">;
@@ -172,6 +173,7 @@ export type DataModel = {
       | "organizerId"
       | "reason"
       | "source"
+      | "targetUserId"
       | "trustedOrganizerId"
       | "trustingOrganizerId";
     indexes: {

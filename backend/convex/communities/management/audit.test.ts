@@ -45,6 +45,7 @@ async function insertAuditLog(
     magicLinkId?: Id<'magic_links'>;
     trustingOrganizerId?: Id<'organizers'>;
     trustedOrganizerId?: Id<'organizers'>;
+    targetUserId?: Id<'users'>;
     source?: string;
     reason?: string;
   },
@@ -801,5 +802,109 @@ describe('admin_audit.listAuditLogs', () => {
     // Before the fix, RLS blocked ctx.db.get(rootAdminId) for community admins
     // because the root admin had no application to the community, causing 'Unknown'.
     expect(result.page[0].adminName).toBe('Root Admin');
+  });
+
+  it('denormalizes targetUserName when targetUserId is present', async () => {
+    const t = convexTest();
+
+    const orgId = await t.mutation(api.testing.communities.seedOrganizer, {
+      name: 'Test Org',
+    });
+    const adminId = await createRootAdmin(t, {
+      name: 'Admin',
+      email: 'admin-target@example.com',
+    });
+    const targetId = await t.mutation(api.testing.users.createUserDirectly, {
+      name: 'Target User',
+      email: 'target@example.com',
+    });
+
+    await insertAuditLog(t, {
+      adminId,
+      action: ADMIN_AUDIT_ACTIONS.COMMUNITY_ADMIN_GRANT,
+      organizerId: orgId,
+      targetUserId: targetId,
+    });
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const result = await asAdmin.query(
+      api.communities.management.audit.listAuditLogs,
+      {
+        organizerId: orgId,
+        paginationOpts: {numItems: 10, cursor: null},
+      },
+    );
+
+    expect(result.page).toHaveLength(1);
+    expect(result.page[0].targetUserName).toBe('Target User');
+  });
+
+  it('returns "Unknown" for targetUserName when target user is deleted', async () => {
+    const t = convexTest();
+
+    const orgId = await t.mutation(api.testing.communities.seedOrganizer, {
+      name: 'Test Org',
+    });
+    const adminId = await createRootAdmin(t, {
+      name: 'Admin',
+      email: 'admin-deleted@example.com',
+    });
+    const targetId = await t.mutation(api.testing.users.createUserDirectly, {
+      name: 'Soon Deleted',
+      email: 'deleted@example.com',
+    });
+
+    await insertAuditLog(t, {
+      adminId,
+      action: ADMIN_AUDIT_ACTIONS.COMMUNITY_SCANNER_REVOKE,
+      organizerId: orgId,
+      targetUserId: targetId,
+    });
+
+    await t.run(async (ctx) => {
+      await ctx.db.delete('users', targetId);
+    });
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const result = await asAdmin.query(
+      api.communities.management.audit.listAuditLogs,
+      {
+        organizerId: orgId,
+        paginationOpts: {numItems: 10, cursor: null},
+      },
+    );
+
+    expect(result.page).toHaveLength(1);
+    expect(result.page[0].targetUserName).toBe('Unknown');
+  });
+
+  it('omits targetUserName when targetUserId is not set', async () => {
+    const t = convexTest();
+
+    const orgId = await t.mutation(api.testing.communities.seedOrganizer, {
+      name: 'Test Org',
+    });
+    const adminId = await createRootAdmin(t, {
+      name: 'Admin',
+      email: 'admin-notarget@example.com',
+    });
+
+    await insertAuditLog(t, {
+      adminId,
+      action: ADMIN_AUDIT_ACTIONS.EVENT_CREATE,
+      organizerId: orgId,
+    });
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const result = await asAdmin.query(
+      api.communities.management.audit.listAuditLogs,
+      {
+        organizerId: orgId,
+        paginationOpts: {numItems: 10, cursor: null},
+      },
+    );
+
+    expect(result.page).toHaveLength(1);
+    expect(result.page[0].targetUserName).toBeUndefined();
   });
 });

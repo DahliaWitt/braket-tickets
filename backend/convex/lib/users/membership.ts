@@ -74,6 +74,7 @@ export async function revokeMembershipAndCreateAuditLog(
   await insertAdminAuditLog(ctx, {
     adminId: args.adminId,
     action: 'user.revoke',
+    targetUserId: args.userId,
     source: 'admin-ui',
     organizerId: args.organizerId,
   });

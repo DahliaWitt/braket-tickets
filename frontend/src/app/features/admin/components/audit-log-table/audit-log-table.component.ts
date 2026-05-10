@@ -177,6 +177,7 @@ function detailSummary(entry: AuditLogEntry): string {
   if (entry.eventName) return entry.eventName;
   if (entry.deletedEventName) return `${entry.deletedEventName} (deleted)`;
   if (entry.applicationUserName) return entry.applicationUserName;
+  if (entry.targetUserName) return entry.targetUserName;
   if (entry.magicLinkLabel) return entry.magicLinkLabel;
   if (entry.trustLinkLabel) return entry.trustLinkLabel;
   if (entry.reason) return entry.reason;

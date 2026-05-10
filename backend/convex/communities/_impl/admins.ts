@@ -124,7 +124,7 @@ export async function grantCommunityAdmin(
         adminId: callerId,
         action: 'community_admin.grant',
         organizerId,
-        source: `target:${args.userId}`,
+        targetUserId: args.userId,
       },
     );
   } else if (memberAdded) {
@@ -134,7 +134,7 @@ export async function grantCommunityAdmin(
         adminId: callerId,
         action: 'community_admin.member_repair',
         organizerId,
-        source: `target:${args.userId}`,
+        targetUserId: args.userId,
       },
     );
   }
@@ -211,7 +211,7 @@ export async function revokeCommunityAdmin(
       adminId: callerId,
       action: 'community_admin.revoke',
       organizerId,
-      source: `target:${args.userId}`,
+      targetUserId: args.userId,
     },
   );
 

@@ -17,6 +17,7 @@ type AuditLogPageRow = {
   eventName?: string;
   deletedEventName?: string;
   applicationUserName?: string;
+  targetUserName?: string;
   magicLinkLabel?: string;
   trustLinkLabel?: string;
   reason?: string;
@@ -50,13 +51,16 @@ export async function recordCheckInLog(
     source?: string;
   },
 ): Promise<null> {
-  await insertAdminAuditLog({db: ctx.db}, {
-    adminId: args.adminId,
-    action: args.action,
-    eventId: args.eventId,
-    organizerId: args.organizerId,
-    source: args.source,
-  });
+  await insertAdminAuditLog(
+    {db: ctx.db},
+    {
+      adminId: args.adminId,
+      action: args.action,
+      eventId: args.eventId,
+      organizerId: args.organizerId,
+      source: args.source,
+    },
+  );
   return null;
 }
 
@@ -67,6 +71,7 @@ export async function logAdminAccess(
     action: AdminAuditAction;
     eventId?: Id<'events'>;
     applicationId?: Id<'applications'>;
+    targetUserId?: Id<'users'>;
     organizerId?: Id<'organizers'>;
     source?: string;
   },
@@ -81,14 +86,18 @@ export async function logAdminAccess(
     organizerId = app?.organizerId ?? undefined;
   }
 
-  await insertAdminAuditLog({db: ctx.db}, {
-    adminId: args.adminId,
-    action: args.action,
-    eventId: args.eventId,
-    applicationId: args.applicationId,
-    organizerId,
-    source: args.source,
-  });
+  await insertAdminAuditLog(
+    {db: ctx.db},
+    {
+      adminId: args.adminId,
+      action: args.action,
+      eventId: args.eventId,
+      applicationId: args.applicationId,
+      targetUserId: args.targetUserId,
+      organizerId,
+      source: args.source,
+    },
+  );
   return null;
 }
 
@@ -149,6 +158,12 @@ export async function listAuditLogs(
         }
       }
 
+      let targetUserName: string | undefined;
+      if (log.targetUserId !== undefined) {
+        const targetUser = await ctx.db.get('users', log.targetUserId);
+        targetUserName = targetUser?.name ?? 'Unknown';
+      }
+
       let magicLinkLabel: string | undefined;
       if (log.magicLinkId !== undefined) {
         const link = await ctx.db.get('magic_links', log.magicLinkId);
@@ -175,6 +190,7 @@ export async function listAuditLogs(
         eventName,
         deletedEventName,
         applicationUserName,
+        targetUserName,
         magicLinkLabel,
         trustLinkLabel,
         reason: log.reason,
