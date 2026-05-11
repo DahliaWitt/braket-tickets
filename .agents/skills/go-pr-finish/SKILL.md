@@ -36,7 +36,7 @@ Accepts any of:
 Before creating a worktree, check if you are already inside one:
 
 ```bash
-[[ "$(pwd)" == */braket-tickets/.claude/worktrees/* ]] && echo "IN_WORKTREE" || echo "NOT_IN_WORKTREE"
+[[ "$(pwd)" == */.claude/worktrees/* ]] && echo "IN_WORKTREE" || echo "NOT_IN_WORKTREE"
 ```
 
 **If already in a worktree:** skip worktree creation. Verify the working tree is clean

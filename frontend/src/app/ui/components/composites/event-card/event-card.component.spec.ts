@@ -109,4 +109,16 @@ describe('EventCardComponent', () => {
     const harness = await loader.getHarness(EventCardHarness);
     expect(await harness.getLocation()).toBeNull();
   });
+
+  it('renders Tickets button with buy=true query param to auto-open checkout', async () => {
+    const harness = await loader.getHarness(EventCardHarness);
+    expect(await harness.getBuyHref()).toBe('/events/test-id-123?buy=true');
+  });
+
+  it('does not emit href when buy button is disabled (sold out)', async () => {
+    host.event.set({...host.event(), isSoldOut: true});
+    const harness = await loader.getHarness(EventCardHarness);
+    expect(await harness.isBuyDisabled()).toBe(true);
+    expect(await harness.getBuyHref()).toBeNull();
+  });
 });

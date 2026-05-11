@@ -561,6 +561,65 @@ describe('DashboardComponent', () => {
       expect(hasCta).toBe(false);
     });
 
+    it('should link featured event card to details without buy param', async () => {
+      setup({
+        approvals: mockApprovals,
+        events: [mockEvent],
+        applicationStatus: 'approved',
+        eventAvailability: {
+          '1': {
+            isSoldOut: false,
+            userTicketCount: 0,
+            ticketSalesStatus: 'active',
+            purchaseAccess: {allowed: true, source: 'direct'},
+          },
+        },
+      });
+      await createComponent();
+
+      const href = await harness.getFeaturedEventHref();
+      expect(href).toBe('/events/1');
+    });
+
+    it('should link Get Tickets CTA with buy=true when user can purchase', async () => {
+      setup({
+        approvals: mockApprovals,
+        events: [mockEvent],
+        applicationStatus: 'approved',
+        eventAvailability: {
+          '1': {
+            isSoldOut: false,
+            userTicketCount: 0,
+            ticketSalesStatus: 'active',
+            purchaseAccess: {allowed: true, source: 'direct'},
+          },
+        },
+      });
+      await createComponent();
+
+      const href = await harness.getGetTicketsHref();
+      expect(href).toBe('/events/1?buy=true');
+    });
+
+    it('should not render Get Tickets CTA when event is sold out', async () => {
+      setup({
+        approvals: mockApprovals,
+        events: [mockEvent],
+        eventAvailability: {
+          '1': {
+            isSoldOut: true,
+            userTicketCount: 0,
+            ticketSalesStatus: 'active',
+            purchaseAccess: {allowed: true, source: 'direct'},
+          },
+        },
+      });
+      await createComponent();
+
+      expect(await harness.hasGetTicketsCta()).toBe(false);
+      expect(await harness.getGetTicketsHref()).toBeNull();
+    });
+
     it('should hide events when availability is unavailable', async () => {
       setup({
         approvals: mockApprovals,

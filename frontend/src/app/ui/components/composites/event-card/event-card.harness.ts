@@ -61,9 +61,13 @@ export class EventCardHarness extends ComponentHarness {
     return btn.click();
   }
 
+  async getBuyHref(): Promise<string | null> {
+    const btn = await this.locatorFor('[data-testid="event-card-buy"]')();
+    return btn.getAttribute('href');
+  }
+
   async isBuyDisabled(): Promise<boolean> {
     const btn = await this.locatorFor('[data-testid="event-card-buy"]')();
-    // Use property check — Angular may set disabled via property, not attribute
-    return btn.getProperty<boolean>('disabled');
+    return (await btn.getAttribute('aria-disabled')) === 'true';
   }
 }
