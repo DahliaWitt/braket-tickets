@@ -38,6 +38,19 @@ export function formatUsdCents(cents: number): string {
   return USD_FORMATTER.format(cents / 100);
 }
 
+/**
+ * Builds buyer-facing ticket price copy from a {@link BuyerPricingInput}.
+ *
+ * Pricing mode precedence is intentional:
+ * 1. `canSeePrice === false` hides prices and returns sign-in-required copy.
+ * 2. `isResale === true` returns resale unit/total copy.
+ * 3. `slidingScaleEnabled === true` returns sliding-scale range copy.
+ * 4. Otherwise, regular all-in pricing is returned.
+ *
+ * @param input Event or ticket pricing fields plus display-context flags.
+ * @returns A {@link BuyerPricingSummary} with display text, accessible label,
+ * and canonical unit/total cents where visible.
+ */
 export function getBuyerPricingSummary(
   input: BuyerPricingInput,
 ): BuyerPricingSummary {

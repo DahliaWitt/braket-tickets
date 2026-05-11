@@ -448,15 +448,16 @@ interface TicketResaleInfo {
                                       {{ disclosure.expectedRefund }}
                                     </dd>
                                   </div>
-                                  <p
-                                    class="pt-2 leading-relaxed text-muted-foreground"
-                                  >
-                                    Stripe processing fees from the original
-                                    purchase are not returned; estimated lost
-                                    processing fee:
-                                    {{ disclosure.lostProcessingFee }}.
-                                  </p>
                                 </dl>
+                                <p
+                                  class="pt-2 font-mono text-2xs leading-relaxed text-muted-foreground"
+                                  data-testid="resale-seller-disclosure-note"
+                                >
+                                  Stripe processing fees from the original
+                                  purchase are not returned; estimated lost
+                                  processing fee:
+                                  {{ disclosure.lostProcessingFee }}.
+                                </p>
                               } @else {
                                 <div
                                   class="mt-3 rounded border border-warning/30 bg-warning/10 p-3 font-mono text-2xs leading-relaxed text-warning"

@@ -128,6 +128,13 @@ describe('EventCardComponent', () => {
     expect(await harness.getBuyText()).toContain('$0-$25 all-in sliding scale');
   });
 
+  it('includes pricing context in the buy button accessible name', async () => {
+    const harness = await loader.getHarness(EventCardHarness);
+    expect(await harness.getBuyAriaLabel()).toBe(
+      'Get tickets for Test Event - $25 all-in regular ticket price',
+    );
+  });
+
   it('does not emit href when buy button is disabled (sold out)', async () => {
     host.event.set({...host.event(), isSoldOut: true});
     const harness = await loader.getHarness(EventCardHarness);

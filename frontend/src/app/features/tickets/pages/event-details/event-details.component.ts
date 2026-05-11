@@ -293,8 +293,7 @@ export class EventDetailsComponent {
       ...evt,
       isResale: this.isResalePurchase(),
       canSeePrice:
-        evt.visibility !== EVENT_VISIBILITY.PUBLIC_VIEWABLE ||
-        this.auth.user() !== null,
+        evt.visibility !== 'public_viewable' || this.auth.isAuthenticated(),
     });
   });
 

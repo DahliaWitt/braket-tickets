@@ -9,6 +9,8 @@ import {CommunityEventsComponent} from './community-events.component';
 import {CommunityEventsComponentHarness} from './community-events.component.harness';
 import {CONVEX} from 'convex-angular';
 import {AuthService} from '@/core/services/auth.service';
+import type {api} from '@convex/_generated/api';
+import type {FunctionReturnType} from 'convex/server';
 import {
   createMockConvexClient,
   type MockConvexClient,
@@ -23,43 +25,31 @@ interface MockPublicCommunity {
   logoUrl: string | null;
 }
 
-// Shape of a single event as returned by api.events.public.listByOrganizer
-interface MockOrganizerEvent {
-  _id: string;
-  _creationTime: number;
-  title: string;
-  date: string;
-  price: number;
-  posterUrl: string | null;
-  location?: string;
-  description?: string;
-  status: 'published';
-  visibility?: 'public' | 'public_viewable' | 'private';
-  slidingScaleEnabled?: boolean;
-  slidingScaleMin?: number;
-  slidingScaleMax?: number;
-  supporterDefaultPrice?: number;
-}
-
-interface MockListByOrganizerResult {
-  organizerName: string;
-  organizerDescription?: string;
-  organizerLogoUrl?: string;
-  events: MockOrganizerEvent[];
-}
+type MockListByOrganizerResult = NonNullable<
+  FunctionReturnType<typeof api.events.public.listByOrganizer>
+>;
+type MockOrganizerEvent = MockListByOrganizerResult['events'][number];
 
 function makeMockEvent(
-  overrides: Partial<MockOrganizerEvent> = {},
+  overrides: Partial<Omit<MockOrganizerEvent, '_id' | 'organizerId'>> & {
+    _id?: string;
+    organizerId?: string;
+  } = {},
 ): MockOrganizerEvent {
+  const {_id = 'evt1', organizerId = 'org1', ...eventOverrides} = overrides;
   return {
-    _id: 'evt1',
+    _id: _id as MockOrganizerEvent['_id'],
     _creationTime: Date.now(),
     title: 'Test Event',
     date: '2026-06-01',
     price: 2000,
+    totalTickets: 100,
+    organizerId: organizerId as MockOrganizerEvent['organizerId'],
+    ticketSalesStatus: 'active',
     posterUrl: null,
     status: 'published',
-    ...overrides,
+    visibility: 'public',
+    ...eventOverrides,
   };
 }
 

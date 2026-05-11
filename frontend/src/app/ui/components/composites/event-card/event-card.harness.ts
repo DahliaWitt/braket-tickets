@@ -71,6 +71,11 @@ export class EventCardHarness extends ComponentHarness {
     return btn.text();
   }
 
+  async getBuyAriaLabel(): Promise<string | null> {
+    const btn = await this.locatorFor('[data-testid="event-card-buy"]')();
+    return btn.getAttribute('aria-label');
+  }
+
   async isBuyDisabled(): Promise<boolean> {
     const btn = await this.locatorFor('[data-testid="event-card-buy"]')();
     return (await btn.getAttribute('aria-disabled')) === 'true';

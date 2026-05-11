@@ -169,14 +169,11 @@ export interface EventCardData {
               [routerLink]="isBuyDisabled() ? null : ['/events', event()._id]"
               [queryParams]="{buy: 'true'}"
               class="flex-1"
-              [attr.aria-label]="'Get tickets for ' + event().title"
+              [attr.aria-label]="buyButtonAriaLabel()"
               [zDisabled]="isBuyDisabled()"
             >
               Tickets
-              <span
-                class="ml-1 font-mono opacity-80"
-                [attr.aria-label]="pricingSummary().ariaLabel"
-              >
+              <span class="ml-1 font-mono opacity-80" aria-hidden="true">
                 {{ pricingSummary().primaryText }}
               </span>
             </a>
@@ -209,6 +206,10 @@ export class EventCardComponent implements OnDestroy {
       ...this.event(),
       canSeePrice: this.canSeePrice(),
     }),
+  );
+  readonly buyButtonAriaLabel = computed(
+    () =>
+      `Get tickets for ${this.event().title} - ${this.pricingSummary().ariaLabel}`,
   );
 
   // Track the rendered width of the host element to derive the card variant.

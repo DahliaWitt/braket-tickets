@@ -281,7 +281,9 @@ describe('TicketsComponent', () => {
       expect(disclosure).toContain('4.2%');
       expect(disclosure).toContain('$1.05');
       expect(disclosure).toContain('$23.95');
-      expect(disclosure).toContain('$1.03');
+      expect(disclosure).not.toContain('$1.03');
+      const disclosureNote = await card.getResaleSellerDisclosureNoteText();
+      expect(disclosureNote).toContain('$1.03');
     });
 
     it('should block resale confirmation when payout math is unavailable', async () => {

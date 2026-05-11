@@ -143,7 +143,13 @@ function buildTicketLineItem(args: {
   eventName: string;
   ticketDescription: string;
 }): NonNullable<CheckoutSessionCreateParams['line_items']>[number] {
-  const quantity = Math.max(1, Math.trunc(args.quantity));
+  if (!Number.isInteger(args.quantity) || args.quantity <= 0) {
+    throw new Error(
+      `Checkout line item quantity must be a positive integer; received ${args.quantity}`,
+    );
+  }
+
+  const quantity = args.quantity;
   const hasExactUnitAmount = args.amountCents % quantity === 0;
   const unitAmount = hasExactUnitAmount
     ? args.amountCents / quantity

@@ -64,6 +64,39 @@ describe('Stripe Checkout session branding', () => {
     );
   });
 
+  it('falls back to order-total itemization when amount does not divide by quantity', async () => {
+    await createPlatformCheckoutSession({
+      orderId: baseMetadata.orderId,
+      amountCents: 2501,
+      quantity: 2,
+      checkoutTheme: 'light',
+      eventName: 'Concrete & Wax',
+      ticketDescription: 'regular ticket',
+      expiresAtMs: 1893456000000,
+      metadata: baseMetadata,
+    });
+
+    const [params] = checkoutSessionsCreateMock.mock.calls[0] ?? [];
+    expect(params?.line_items?.[0]?.quantity).toBe(1);
+    expect(params?.line_items?.[0]?.price_data?.unit_amount).toBe(2501);
+  });
+
+  it('rejects non-integer checkout line item quantities', async () => {
+    await expect(
+      createPlatformCheckoutSession({
+        orderId: baseMetadata.orderId,
+        amountCents: 2500,
+        quantity: 1.5,
+        checkoutTheme: 'light',
+        eventName: 'Concrete & Wax',
+        ticketDescription: 'regular ticket',
+        expiresAtMs: 1893456000000,
+        metadata: baseMetadata,
+      }),
+    ).rejects.toThrow('Checkout line item quantity must be a positive integer');
+    expect(checkoutSessionsCreateMock).not.toHaveBeenCalled();
+  });
+
   it('applies dark embedded Checkout branding to direct-charge sessions', async () => {
     await createDirectChargeCheckoutSession({
       connectedAccountId: 'acct_direct_branding',

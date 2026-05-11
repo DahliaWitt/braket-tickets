@@ -63,6 +63,13 @@ class TicketCardHarness extends ComponentHarness {
     return panel ? (await panel.text()).trim() : null;
   }
 
+  async getResaleSellerDisclosureNoteText(): Promise<string | null> {
+    const note = await this.locatorForOptional(
+      '[data-testid="resale-seller-disclosure-note"]',
+    )();
+    return note ? (await note.text()).trim() : null;
+  }
+
   async isConfirmResaleListingDisabled(): Promise<boolean> {
     const button = await this.locatorFor(
       '[data-testid="ticket-confirm-resale"]',
