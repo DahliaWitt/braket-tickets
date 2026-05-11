@@ -79,7 +79,7 @@ After a mutation (via `convexHelper` or UI action), Convex pushes updates via We
 
 ```typescript
 // Seed data, then assert the reactive DOM update
-await convexHelper.mutation(api.testing_functions.seedEvent, { title, ... });
+await convexHelper.mutation(api.testing.events.seedEvent, { title, ... });
 await page.goto('/events');
 await expect(
   page.getByTestId('event-card').filter({ hasText: title })
@@ -143,7 +143,7 @@ This applies to: event titles, user emails, community names, ticket tier names, 
 When possible, seed all test data before `page.goto()`. The Convex subscription will include the data on first load:
 
 ```typescript
-const eventId = await convexHelper.mutation(api.testing_functions.seedEvent, { title, ... });
+const eventId = await convexHelper.mutation(api.testing.events.seedEvent, { title, ... });
 await page.goto(`/community-admin/events/${eventId}/manage`);
 ```
 
