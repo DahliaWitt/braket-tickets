@@ -1,4 +1,5 @@
-import {ComponentHarness, type TestElement} from '@angular/cdk/testing';
+import {ComponentHarness} from '@angular/cdk/testing';
+import {waitForHarnessCondition} from '@/testing/harness-wait';
 import {ZardButtonComponentHarness} from '@ui/components/primitives/button/button.component.harness';
 
 export class VettingComponentHarness extends ComponentHarness {
@@ -14,21 +15,6 @@ export class VettingComponentHarness extends ComponentHarness {
     '[data-testid="conduct-checkbox"]',
   );
 
-  /**
-   * Polls for an optional element until it appears or timeout elapses.
-   * Needed because @ngx-playwright/test's locatorFor() does a single snapshot
-   * DOM query with no retry, and forceStabilize() is a no-op in zoneless Angular.
-   */
-  private async awaitRendered(
-    locator: () => Promise<TestElement | null>,
-    timeoutMs = 5000,
-  ): Promise<void> {
-    const start = Date.now();
-    while (Date.now() - start < timeoutMs) {
-      if (await locator()) return;
-      await new Promise((r) => setTimeout(r, 50));
-    }
-  }
   async getSubmitButton(): Promise<ZardButtonComponentHarness> {
     // Find button by ID attribute on z-button element
     const buttons = await this.locatorForAll(ZardButtonComponentHarness)();
@@ -120,8 +106,12 @@ export class VettingComponentHarness extends ComponentHarness {
 
   async toggleConduct() {
     // Wait for the conduct checkbox to render (Convex data + zoneless CD)
-    await this.awaitRendered(
-      this.locatorForOptional('[data-testid="conduct-checkbox"]'),
+    await waitForHarnessCondition(
+      async () =>
+        (await this.locatorForOptional(
+          '[data-testid="conduct-checkbox"]',
+        )()) !== null,
+      {description: 'conduct checkbox'},
     );
     const checkbox = await this.getConductCheckbox();
     await checkbox.click();
