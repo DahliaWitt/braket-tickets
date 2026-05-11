@@ -20,6 +20,7 @@ import {api} from '@convex/_generated/api';
 import {type Id} from '@convex/_generated/dataModel';
 import {logger} from '@/utils/logger';
 import {compareEventDatesDescending} from '@/features/admin/utils/event-date.utils';
+import {BraStatusBadgeComponent} from '@ui/components/primitives/status-badge/status-badge.component';
 
 type RouteQueryParams = Readonly<
   Record<string, string | number | boolean | null | undefined>
@@ -34,6 +35,7 @@ type RouteQueryParams = Readonly<
     ZardCardComponent,
     EmptyStateComponent,
     ZardSkeletonComponent,
+    BraStatusBadgeComponent,
   ],
   template: `
     <div class="mb-4">
@@ -125,15 +127,19 @@ type RouteQueryParams = Readonly<
                   }
                 </td>
                 <td class="p-5 align-top">
-                  <span
-                    [class]="
-                      'inline-flex items-center rounded border px-2 py-1 font-mono text-xs tracking-widest uppercase ' +
-                      getStatusClasses(event.status)
+                  <bra-status-badge
+                    [status]="
+                      event.status === 'published'
+                        ? 'success'
+                        : event.status === 'cancelled'
+                          ? 'destructive'
+                          : 'warning'
                     "
+                    size="md"
                     data-testid="event-status"
                   >
-                    {{ event.status || 'DRAFT' }}
-                  </span>
+                    {{ event.status || 'draft' }}
+                  </bra-status-badge>
                 </td>
                 <td class="p-5 align-top">
                   <div class="font-mono text-sm text-foreground/80">
@@ -229,14 +235,18 @@ type RouteQueryParams = Readonly<
                     class="flex min-w-0 items-center gap-2 font-display text-lg font-bold tracking-wide text-foreground"
                   >
                     <span class="truncate">{{ event.title }}</span>
-                    <span
-                      [class]="
-                        'inline-flex shrink-0 items-center rounded border px-1.5 py-0.5 font-mono text-2xs tracking-widest uppercase ' +
-                        getStatusClasses(event.status)
+                    <bra-status-badge
+                      [status]="
+                        event.status === 'published'
+                          ? 'success'
+                          : event.status === 'cancelled'
+                            ? 'destructive'
+                            : 'warning'
                       "
+                      class="shrink-0"
                     >
-                      {{ event.status || 'DRAFT' }}
-                    </span>
+                      {{ event.status || 'draft' }}
+                    </bra-status-badge>
                   </div>
                   <div class="mt-1 font-mono text-xs text-muted-foreground">
                     @if (event.date) {
@@ -326,16 +336,6 @@ export class AdminEventsTableComponent {
   private eventsService = inject(EventsService);
   private alertDialog = inject(BraAlertDialogService);
   private router = inject(Router);
-
-  /** Helper method for status badge styling */
-  protected getStatusClasses(status: string | undefined): string {
-    const statusMap: Record<string, string> = {
-      published: 'bg-success/10 text-success border-success/20',
-      draft: 'bg-warning/10 text-warning border-warning/20',
-      cancelled: 'bg-destructive/10 text-destructive border-destructive/20',
-    };
-    return statusMap[status ?? 'draft'] ?? statusMap['draft'];
-  }
 
   private readonly eventsQuery = injectQuery(
     api.events.management.adminList,

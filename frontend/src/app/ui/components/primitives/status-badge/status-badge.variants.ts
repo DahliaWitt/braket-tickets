@@ -1,28 +1,29 @@
-import { cva, type VariantProps } from 'class-variance-authority';
+import {cva, type VariantProps} from 'class-variance-authority';
 
 export const statusBadgeVariants = cva(
   'mono-label inline-flex items-center border px-2 py-0.5',
   {
     variants: {
       status: {
-        success: 'bg-success/10 text-success border-success/20',
-        warning: 'bg-warning/10 text-warning border-warning/20',
-        destructive: 'bg-destructive/10 text-destructive border-destructive/20',
-        info: 'bg-info/10 text-info border-info/20',
-        muted: 'bg-muted text-muted-foreground border-border',
-        primary: 'bg-primary/10 text-primary border-primary/20',
-        secondary: 'bg-secondary/10 text-secondary border-secondary/20',
+        success: 'border-success/20 bg-success/10 text-success',
+        warning: 'border-warning/20 bg-warning/10 text-warning',
+        destructive: 'border-destructive/20 bg-destructive/10 text-destructive',
+        info: 'border-info/20 bg-info/10 text-info',
+        muted: 'border-border bg-muted text-muted-foreground',
+        primary: 'border-primary/20 bg-primary/10 text-primary',
+        secondary: 'border-secondary/20 bg-secondary/10 text-secondary',
+        accent: 'border-accent/20 bg-accent/10 text-accent',
       },
       size: {
-        sm: 'text-2xs py-0.5 px-2',
-        md: 'text-xs py-1 px-2.5',
+        sm: 'px-2 py-0.5 text-2xs',
+        md: 'px-2.5 py-1 text-xs',
       },
       shape: {
         rounded: 'rounded',
         pill: 'rounded-full',
       },
     },
-    defaultVariants: { status: 'muted', size: 'sm', shape: 'rounded' },
+    defaultVariants: {status: 'muted', size: 'sm', shape: 'rounded'},
   },
 );
 

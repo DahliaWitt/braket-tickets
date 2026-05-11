@@ -33,12 +33,12 @@
           >
             Community not found
           </h1>
-          <span
-            class="inline-flex shrink-0 items-center rounded bg-destructive/10 px-2 py-0.5 font-mono text-2xs tracking-widest text-destructive uppercase"
+          <bra-status-badge
+            status="destructive"
+            class="shrink-0"
             data-testid="community-status-badge"
+            >invalid</bra-status-badge
           >
-            invalid
-          </span>
         </div>
       } @else if (communityName(); as name) {
         @if (communityLogo(); as logo) {
@@ -62,16 +62,15 @@
             {{ name }}
           </h1>
           @if (communityDoc()) {
-            <span
-              class="shrink-0 inline-flex items-center rounded px-2 py-0.5 font-mono text-2xs uppercase tracking-widest {{
-                communityStatus() === 'published'
-                  ? 'bg-success/10 text-success'
-                  : 'bg-warning/10 text-warning'
-              }}"
+            <bra-status-badge
+              [status]="
+                communityStatus() === 'published' ? 'success' : 'warning'
+              "
+              class="shrink-0 border-0"
               data-testid="community-status-badge"
             >
               {{ communityStatus() }}
-            </span>
+            </bra-status-badge>
           }
         </div>
       } @else if (communityCtx.selectedCommunityId()) {
@@ -450,21 +449,18 @@
                       <td class="p-5 align-middle">
                         @switch (link.status) {
                           @case ('active') {
-                            <span
-                              class="inline-flex items-center rounded bg-success/10 px-2 py-0.5 font-mono text-2xs tracking-widest text-success uppercase"
-                              >active</span
+                            <bra-status-badge status="success"
+                              >active</bra-status-badge
                             >
                           }
                           @case ('paused') {
-                            <span
-                              class="inline-flex items-center rounded bg-warning/10 px-2 py-0.5 font-mono text-2xs tracking-widest text-warning uppercase"
-                              >paused</span
+                            <bra-status-badge status="warning"
+                              >paused</bra-status-badge
                             >
                           }
                           @case ('disabled') {
-                            <span
-                              class="inline-flex items-center rounded bg-destructive/10 px-2 py-0.5 font-mono text-2xs tracking-widest text-destructive uppercase"
-                              >disabled</span
+                            <bra-status-badge status="destructive"
+                              >disabled</bra-status-badge
                             >
                           }
                         }
@@ -601,21 +597,18 @@
                     </div>
                     @switch (link.status) {
                       @case ('active') {
-                        <span
-                          class="inline-flex shrink-0 items-center rounded bg-success/10 px-2 py-0.5 font-mono text-2xs tracking-widest text-success uppercase"
-                          >active</span
+                        <bra-status-badge status="success" class="shrink-0"
+                          >active</bra-status-badge
                         >
                       }
                       @case ('paused') {
-                        <span
-                          class="inline-flex shrink-0 items-center rounded bg-warning/10 px-2 py-0.5 font-mono text-2xs tracking-widest text-warning uppercase"
-                          >paused</span
+                        <bra-status-badge status="warning" class="shrink-0"
+                          >paused</bra-status-badge
                         >
                       }
                       @case ('disabled') {
-                        <span
-                          class="inline-flex shrink-0 items-center rounded bg-destructive/10 px-2 py-0.5 font-mono text-2xs tracking-widest text-destructive uppercase"
-                          >disabled</span
+                        <bra-status-badge status="destructive" class="shrink-0"
+                          >disabled</bra-status-badge
                         >
                       }
                     }
@@ -873,9 +866,8 @@
                         {{ link.tokenPrefix || 'hidden' }}
                       </p>
                     </div>
-                    <span
-                      class="inline-flex shrink-0 items-center rounded bg-muted/50 px-2 py-0.5 font-mono text-2xs tracking-widest text-muted-foreground uppercase"
-                      >deleted</span
+                    <bra-status-badge status="muted" class="shrink-0"
+                      >deleted</bra-status-badge
                     >
                   </div>
                   <div

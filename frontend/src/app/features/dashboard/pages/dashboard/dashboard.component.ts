@@ -12,6 +12,7 @@ import {DashboardPageDataService} from '@/features/dashboard/services/dashboard-
 import {RouterLink} from '@angular/router';
 import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton.component';
 import {BraCommunityAvatarComponent} from '@ui/components/primitives/community-avatar/community-avatar.component';
+import {BraStatusBadgeComponent} from '@ui/components/primitives/status-badge/status-badge.component';
 import {ContentLayoutComponent} from '@/layout/content-layout/content-layout.component';
 import {EVENT_VISIBILITY} from '@shared/domain/event-visibility';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
@@ -30,6 +31,7 @@ import {
     ContentLayoutComponent,
     ZardSkeletonComponent,
     BraCommunityAvatarComponent,
+    BraStatusBadgeComponent,
   ],
   templateUrl: './dashboard.component.html',
   providers: [DashboardPageDataService],

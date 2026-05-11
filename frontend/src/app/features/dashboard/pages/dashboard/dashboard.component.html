@@ -225,11 +225,9 @@
                     {{ event.date | date: 'mediumDate' }},
                     {{ event.date | date: 'shortTime' }}
                   </p>
-                  <p
-                    class="w-fit rounded-sm border border-accent/20 bg-accent/10 px-2 py-0.5 font-mono text-2xs tracking-widest text-accent uppercase"
+                  <bra-status-badge status="accent"
+                    >Vetting Required</bra-status-badge
                   >
-                    Vetting Required
-                  </p>
                 </div>
               </a>
             }
@@ -289,11 +287,9 @@
                   </p>
                 }
                 <div class="mt-auto flex min-w-0 items-center gap-2">
-                  <span
-                    class="flex-shrink-0 rounded-sm border border-success/20 bg-success/10 px-1.5 py-0.5 font-mono text-2xs tracking-widest text-success uppercase"
+                  <bra-status-badge status="success" class="flex-shrink-0"
+                    >Access</bra-status-badge
                   >
-                    Access
-                  </span>
                   @if (entry.source === 'shared' && entry.viaOrganizerName) {
                     <p
                       class="truncate font-mono text-2xs text-muted-foreground/50"
@@ -321,12 +317,12 @@
                     {{ entry.organizerName }}
                   </span>
                 </div>
-                <span
+                <bra-status-badge
+                  status="warning"
+                  class="mt-auto w-fit"
                   data-testid="application-status"
-                  class="mt-auto w-fit rounded-sm border border-warning/20 bg-warning/10 px-1.5 py-0.5 font-mono text-2xs tracking-widest text-warning uppercase"
+                  >Pending</bra-status-badge
                 >
-                  Pending
-                </span>
               </div>
             } @else {
               <!-- Rejected -->
@@ -352,11 +348,11 @@
                     {{ entry.reason }}
                   </p>
                 }
-                <span
-                  class="mt-auto w-fit rounded-sm border border-destructive/20 bg-destructive/10 px-1.5 py-0.5 font-mono text-2xs tracking-widest text-destructive/80 uppercase"
+                <bra-status-badge
+                  status="destructive"
+                  class="mt-auto w-fit text-destructive/80"
+                  >Rejected</bra-status-badge
                 >
-                  Rejected
-                </span>
               </div>
             }
           }

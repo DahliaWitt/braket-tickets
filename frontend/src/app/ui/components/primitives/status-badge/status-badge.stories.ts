@@ -26,6 +26,7 @@ const meta: Meta<BraStatusBadgeComponent> = {
         'muted',
         'primary',
         'secondary',
+        'accent',
       ],
     },
     size: {
@@ -128,6 +129,14 @@ export const PillShape: Story = {
   ),
 };
 
+export const Accent: Story = {
+  args: {status: 'accent'},
+  render: (args) => ({
+    props: args,
+    template: `<bra-status-badge ${argsToTemplate(args)}>Accent</bra-status-badge>`,
+  }),
+};
+
 export const AllStatuses: Story = {
   render: () => ({
     template: `
@@ -139,6 +148,7 @@ export const AllStatuses: Story = {
         <bra-status-badge status="muted">Draft</bra-status-badge>
         <bra-status-badge status="primary">Featured</bra-status-badge>
         <bra-status-badge status="secondary">VIP</bra-status-badge>
+        <bra-status-badge status="accent">Accent</bra-status-badge>
       </div>
     `,
     moduleMetadata: {imports: [BraStatusBadgeComponent]},
