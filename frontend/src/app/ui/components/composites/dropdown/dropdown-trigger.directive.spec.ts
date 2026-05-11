@@ -1,21 +1,21 @@
-import { ComponentHarness, type HarnessLoader } from '@angular/cdk/testing';
-import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
+import {ComponentHarness, type HarnessLoader} from '@angular/cdk/testing';
+import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
 import {
   ChangeDetectionStrategy,
   Component,
   provideZonelessChangeDetection,
   signal,
 } from '@angular/core';
-import { type ComponentFixture, TestBed } from '@angular/core/testing';
-import { By } from '@angular/platform-browser';
-import { vi } from 'vitest';
-import { BraDropdownMenuContentComponent } from './dropdown-menu-content.component';
-import { BraDropdownDirective } from './dropdown-trigger.directive';
-import { BraDropdownService } from './dropdown.service';
+import {type ComponentFixture, TestBed} from '@angular/core/testing';
+import {By} from '@angular/platform-browser';
+import {vi} from 'vitest';
+import {BraDropdownMenuContentComponent} from './dropdown-menu-content.component';
+import {BraDropdownDirective} from './dropdown-trigger.directive';
+import {BraDropdownService} from './dropdown.service';
 
 class BraDropdownServiceStub {
-  readonly openState = signal(false);
-  readonly isOpen = vi.fn(() => this.openState());
+  readonly activeTrigger = signal<HTMLElement | null>(null);
+  readonly isOpen = vi.fn(() => this.activeTrigger() !== null);
   readonly toggle = vi.fn();
 }
 
@@ -46,7 +46,12 @@ class TestHostComponent {
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <button type="button" braDropdown [braDropdownMenu]="menuContent" aria-label="Custom label">
+    <button
+      type="button"
+      braDropdown
+      [braDropdownMenu]="menuContent"
+      aria-label="Custom label"
+    >
       Open Menu
     </button>
 
@@ -58,6 +63,26 @@ class TestHostComponent {
 })
 class AriaLabelHostComponent {}
 
+@Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <button
+      type="button"
+      id="custom-trigger-id"
+      braDropdown
+      [braDropdownMenu]="menuContent"
+    >
+      Open Menu
+    </button>
+
+    <bra-dropdown-menu-content #menuContent>
+      <div role="menuitem">Item</div>
+    </bra-dropdown-menu-content>
+  `,
+  imports: [BraDropdownDirective, BraDropdownMenuContentComponent],
+})
+class ExistingIdHostComponent {}
+
 class DropdownTriggerHarness extends ComponentHarness {
   static hostSelector = 'button[braDropdown]';
 
@@ -67,6 +92,10 @@ class DropdownTriggerHarness extends ComponentHarness {
 
   async getAriaExpanded(): Promise<string | null> {
     return (await this.host()).getAttribute('aria-expanded');
+  }
+
+  async getAriaControls(): Promise<string | null> {
+    return (await this.host()).getAttribute('aria-controls');
   }
 }
 
@@ -88,7 +117,7 @@ describe('BraDropdownDirective', () => {
       imports: [TestHostComponent],
       providers: [
         provideZonelessChangeDetection(),
-        { provide: BraDropdownService, useValue: dropdownService },
+        {provide: BraDropdownService, useValue: dropdownService},
       ],
     }).compileComponents();
 
@@ -105,6 +134,22 @@ describe('BraDropdownDirective', () => {
 
     expect(await trigger.getAriaLabel()).toBe('Open Menu');
     expect(await trigger.getAriaExpanded()).toBe('false');
+    expect(await trigger.getAriaControls()).toBeNull();
+  });
+
+  it('should set aria-expanded and aria-controls when this trigger is active', async () => {
+    const triggerNativeElement = fixture.debugElement.query(
+      By.directive(BraDropdownDirective),
+    ).nativeElement as HTMLElement;
+    const directive = getDirective();
+
+    dropdownService.activeTrigger.set(triggerNativeElement);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const harness = await loader.getHarness(DropdownTriggerHarness);
+    expect(await harness.getAriaExpanded()).toBe('true');
+    expect(await harness.getAriaControls()).toBe(directive.menuId);
   });
 
   it('should not override existing aria-label', async () => {
@@ -115,7 +160,7 @@ describe('BraDropdownDirective', () => {
       imports: [AriaLabelHostComponent],
       providers: [
         provideZonelessChangeDetection(),
-        { provide: BraDropdownService, useValue: explicitLabelService },
+        {provide: BraDropdownService, useValue: explicitLabelService},
       ],
     }).compileComponents();
 
@@ -130,7 +175,7 @@ describe('BraDropdownDirective', () => {
   });
 
   it('should toggle on click only when click trigger is active', async () => {
-    const directive = getDirective() as unknown as { onClick(): void };
+    const directive = getDirective() as unknown as {onClick(): void};
 
     directive.onClick();
     expect(dropdownService.toggle).toHaveBeenCalledTimes(1);
@@ -145,7 +190,7 @@ describe('BraDropdownDirective', () => {
   it('should toggle on hover only when hover trigger is active', () => {
     component.trigger.set('hover');
     fixture.detectChanges();
-    const directive = getDirective() as unknown as { onHoverToggle(): void };
+    const directive = getDirective() as unknown as {onHoverToggle(): void};
 
     directive.onHoverToggle();
     directive.onHoverToggle();
@@ -167,13 +212,16 @@ describe('BraDropdownDirective', () => {
     expect(dropdownService.toggle).not.toHaveBeenCalled();
   });
 
-  it('should open via openDropdown only when dropdown is closed', () => {
-    const directive = getDirective() as unknown as { openDropdown(): void };
+  it('should open via openDropdown only when this trigger is not expanded', () => {
+    const directive = getDirective() as unknown as {openDropdown(): void};
+    const triggerNativeElement = fixture.debugElement.query(
+      By.directive(BraDropdownDirective),
+    ).nativeElement as HTMLElement;
 
     directive.openDropdown();
     expect(dropdownService.toggle).toHaveBeenCalledTimes(1);
 
-    dropdownService.openState.set(true);
+    dropdownService.activeTrigger.set(triggerNativeElement);
     fixture.detectChanges();
 
     directive.openDropdown();
@@ -181,11 +229,48 @@ describe('BraDropdownDirective', () => {
   });
 
   it('should call toggleDropdown when enabled', () => {
-    const directive = getDirective() as unknown as { toggleDropdown(): void };
+    const directive = getDirective() as unknown as {toggleDropdown(): void};
 
     directive.toggleDropdown();
     directive.toggleDropdown();
 
     expect(dropdownService.toggle).toHaveBeenCalledTimes(2);
+  });
+
+  it('should preserve a consumer-supplied id and use it as triggerId', async () => {
+    TestBed.resetTestingModule();
+    const existingIdService = new BraDropdownServiceStub();
+
+    await TestBed.configureTestingModule({
+      imports: [ExistingIdHostComponent],
+      providers: [
+        provideZonelessChangeDetection(),
+        {provide: BraDropdownService, useValue: existingIdService},
+      ],
+    }).compileComponents();
+
+    const existingIdFixture = TestBed.createComponent(ExistingIdHostComponent);
+    existingIdFixture.detectChanges();
+    await existingIdFixture.whenStable();
+
+    const triggerEl = existingIdFixture.debugElement.query(
+      By.directive(BraDropdownDirective),
+    ).nativeElement as HTMLElement;
+    const directive = existingIdFixture.debugElement
+      .query(By.directive(BraDropdownDirective))
+      .injector.get(BraDropdownDirective);
+
+    expect(triggerEl.id).toBe('custom-trigger-id');
+    expect(directive.triggerId).toBe('custom-trigger-id');
+  });
+
+  it('should generate a trigger id when none is supplied', () => {
+    const triggerEl = fixture.debugElement.query(
+      By.directive(BraDropdownDirective),
+    ).nativeElement as HTMLElement;
+    const directive = getDirective();
+
+    expect(triggerEl.id).toMatch(/^bra-dropdown-trigger-\d+$/);
+    expect(directive.triggerId).toBe(triggerEl.id);
   });
 });
