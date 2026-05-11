@@ -6,29 +6,33 @@
       Privacy Policy
     </h1>
     <p class="mb-8 text-sm text-muted-foreground">
-      Effective Date: April 9, 2026
+      Effective Date: May 11, 2026
     </p>
 
     <section class="mb-8 rounded-lg border border-border bg-card p-6">
       <h2 class="mb-3 font-display text-lg text-foreground">TL;DR</h2>
       <ul class="list-disc space-y-1.5 pl-6 text-sm text-muted-foreground">
         <li>
-          We collect your <strong>name, email, purchase history,</strong> and
-          <strong>how you use the site</strong> (to improve it).
+          We collect your <strong>name, email, purchase history,</strong>
+          community/vetting information you choose to provide, and
+          <strong>how you use the site</strong> (to improve it and keep it
+          reliable).
         </li>
         <li>
-          We <strong>never store your credit card info</strong> — Stripe handles
-          all payments and card data is tokenized by Stripe before it reaches
-          us.
+          We <strong>do not collect or store full card numbers or CVV</strong>;
+          Stripe collects payment details directly and tokenizes card data
+          before it reaches us.
         </li>
         <li>
           If you're a vetted member of a community, we may send you event
           announcement emails for that community unless you opt out.
         </li>
         <li>
-          We <strong>don't sell your data</strong>. We share it only with
-          payment providers, email delivery providers, PostHog (analytics),
-          Sentry (error monitoring), and event organizers when needed to run the
+          We <strong>don't sell your data</strong> and don't share it for
+          cross-context behavioral advertising. We disclose it only to service
+          providers, payment providers, email delivery providers, PostHog
+          (analytics), Sentry (error monitoring), authentication providers,
+          infrastructure providers, and event organizers when needed to run the
           service.
         </li>
         <li>
@@ -36,13 +40,14 @@
           <strong>not for ads or cross-site tracking</strong>.
         </li>
         <li>
-          We
-          <strong>honor Do Not Track and Global Privacy Control</strong>
-          signals.
+          When we detect Do Not Track or Global Privacy Control signals, we
+          disable passive frontend PostHog analytics, replay, and persistence.
+          Explicit feedback you submit, essential site functions, backend
+          operational events, and error reporting may still operate.
         </li>
         <li>You must be <strong>18+</strong> to use Braket Tickets.</li>
         <li>
-          Want your data deleted? Email
+          Want to access, correct, or delete your data? Email
           <a href="mailto:contact@braket.gay" class="text-primary underline"
             >contact&#64;braket.gay</a
           >.
@@ -57,12 +62,12 @@
     <section class="mb-8">
       <h2 class="mb-4 font-display text-xl text-foreground">1. Introduction</h2>
       <p class="mb-4 text-muted-foreground">
-        Braket LLC ("we," "us," or "our") respects your privacy and is committed
-        to protecting your personal data. This privacy policy describes how we
-        collect, use, and share information when you use our website and
-        services. This Privacy Policy is designed to comply with the California
-        Online Privacy Protection Act (CalOPPA) and explains our practices
-        regarding personal information.
+        This Privacy Policy explains what information Braket LLC ("we," "us," or
+        "our") collects, how we use it, and when we share it when you use our
+        website and services. This Privacy Policy is designed to explain our
+        practices under the California Online Privacy Protection Act (CalOPPA)
+        and, where applicable, the California Consumer Privacy Act as amended by
+        the California Privacy Rights Act (CCPA/CPRA).
       </p>
     </section>
 
@@ -72,25 +77,273 @@
       </h2>
       <div class="space-y-2 text-muted-foreground">
         <p>
-          We collect information that falls into the following key categories:
+          We collect information that falls into the following key categories,
+          depending on how you use the Service:
         </p>
         <ul class="list-disc space-y-2 pl-6">
-          <li><strong>Identifiers:</strong> Real name, email address.</li>
+          <li>
+            <strong>Identifiers and Account Information:</strong> Real name,
+            email address, account identifiers, profile image if provided,
+            authentication status, email verification status, and account
+            preference records.
+          </li>
           <li>
             <strong>Commercial Information:</strong> Records of tickets
-            purchased and event attendance history.
+            purchased, order amounts, ticket quantities, ticket tiers, refund
+            and dispute records, Stripe payment identifiers, and event
+            attendance or check-in history.
           </li>
           <li>
-            <strong>Internet Activity:</strong> Browsing history on the Braket
-            Tickets platform, interaction data, and input patterns (analyzed to
-            improve usability).
+            <strong>Community, Vetting, and Event Information:</strong>
+            Community memberships, organizer roles, event applications, vetting
+            answers, trust or approval status, guest-list details, attendee
+            names, QR/ticket status, and communications you send to us or to an
+            organizer through the Service.
           </li>
           <li>
-            <strong>User-Generated Content:</strong> Information provided in
-            event applications, vetting process responses, and communications
-            you send to us.
+            <strong>Organizer and Administrative Information:</strong>
+            Organizer names, contact details, public organizer profiles,
+            configured event details, Stripe connected-account identifiers,
+            onboarding and payout-readiness status, audit records, and
+            administrative actions.
+          </li>
+          <li>
+            <strong>Internet, Device, and Usage Activity:</strong> Page views,
+            route templates, selected clicks and form submissions marked for
+            analytics, browser and device information, performance data, error
+            diagnostics, and feature interactions. We mask analytics text and
+            form input by default and sanitize event properties before sending
+            them to analytics systems.
+          </li>
+          <li>
+            <strong>Communications and Email Preferences:</strong> Support
+            requests, feedback you submit, transactional email records,
+            community announcement opt-in or opt-out state, unsubscribe records,
+            and limited marketing email engagement such as opens and clicks.
+          </li>
+          <li>
+            <strong>Sensitive Personal Information:</strong> Braket Tickets is a
+            community ticketing service, and some community, vetting, event, or
+            attendance information may reveal sensitive personal information
+            depending on what you choose to provide and which events or
+            communities you interact with. We use this information to provide
+            the Service, operate ticketing and vetting, support safety and
+            access controls, prevent abuse, and comply with law. We do not use
+            it for cross-context behavioral advertising.
           </li>
         </ul>
+
+        <div class="mt-6 overflow-x-auto">
+          <p class="mb-3 text-sm font-semibold text-foreground">
+            CCPA/CPRA-Style Notice at Collection
+          </p>
+          <p class="mb-4 text-sm">
+            Where California privacy laws apply, the table below summarizes the
+            categories of personal information we collect, the sources, business
+            purposes, categories of recipients, sale/share status, and retention
+            criteria. We do not sell personal information and do not share it
+            for cross-context behavioral advertising.
+          </p>
+          <table
+            class="min-w-[960px] border-collapse text-left text-sm text-muted-foreground"
+          >
+            <thead>
+              <tr class="border-b border-border text-foreground">
+                <th class="py-2 pr-4 font-semibold">Category</th>
+                <th class="py-2 pr-4 font-semibold">Sources</th>
+                <th class="py-2 pr-4 font-semibold">Business Purposes</th>
+                <th class="py-2 pr-4 font-semibold">Disclosed To</th>
+                <th class="py-2 pr-4 font-semibold">Sale/Share Status</th>
+                <th class="py-2 pr-4 font-semibold">Retention Criteria</th>
+              </tr>
+            </thead>
+            <tbody class="align-top">
+              <tr class="border-b border-border">
+                <td class="py-3 pr-4 font-medium text-foreground">
+                  Identifiers and account information
+                </td>
+                <td class="py-3 pr-4">
+                  You, authentication providers, account settings, and platform
+                  administrators.
+                </td>
+                <td class="py-3 pr-4">
+                  Account creation, authentication, email verification, support,
+                  security, notices, and account preferences.
+                </td>
+                <td class="py-3 pr-4">
+                  Infrastructure providers, authentication and email providers,
+                  payment providers when needed for transactions, and relevant
+                  Event Organizers for event operations.
+                </td>
+                <td class="py-3 pr-4">
+                  Not sold; not shared for cross-context behavioral advertising.
+                </td>
+                <td class="py-3 pr-4">
+                  Account life plus time needed for security, support, legal,
+                  dispute, and audit purposes.
+                </td>
+              </tr>
+              <tr class="border-b border-border">
+                <td class="py-3 pr-4 font-medium text-foreground">
+                  Commercial, ticketing, and order information
+                </td>
+                <td class="py-3 pr-4">
+                  You, Stripe, checkout flows, refund and dispute flows,
+                  check-in activity, and Event Organizers.
+                </td>
+                <td class="py-3 pr-4">
+                  Ticket sales, ticket delivery, resale, refunds, chargebacks,
+                  event admission, financial reconciliation, fraud prevention,
+                  and legal or tax compliance.
+                </td>
+                <td class="py-3 pr-4">
+                  Stripe, email providers, infrastructure providers, relevant
+                  Event Organizers, and support or administrative personnel.
+                </td>
+                <td class="py-3 pr-4">
+                  Not sold; not shared for cross-context behavioral advertising.
+                </td>
+                <td class="py-3 pr-4">
+                  As needed for transaction records, refunds, disputes,
+                  chargebacks, accounting, tax, audit, and legal obligations.
+                </td>
+              </tr>
+              <tr class="border-b border-border">
+                <td class="py-3 pr-4 font-medium text-foreground">
+                  Community, vetting, and event information
+                </td>
+                <td class="py-3 pr-4">
+                  You, Event Organizers, community administrators, application
+                  and vetting workflows, guest lists, and event interactions.
+                </td>
+                <td class="py-3 pr-4">
+                  Community access, vetting, safety, event eligibility, guest
+                  list management, check-in, support, and abuse prevention.
+                </td>
+                <td class="py-3 pr-4">
+                  Relevant Event Organizers, community administrators,
+                  infrastructure providers, email providers, and support or
+                  administrative personnel.
+                </td>
+                <td class="py-3 pr-4">
+                  Not sold; not shared for cross-context behavioral advertising.
+                </td>
+                <td class="py-3 pr-4">
+                  While needed for membership, event operations, safety,
+                  dispute, audit, support, and legal purposes.
+                </td>
+              </tr>
+              <tr class="border-b border-border">
+                <td class="py-3 pr-4 font-medium text-foreground">
+                  Organizer and administrative information
+                </td>
+                <td class="py-3 pr-4">
+                  Organizers, administrators, Stripe Connect, event setup
+                  workflows, and platform audit logs.
+                </td>
+                <td class="py-3 pr-4">
+                  Organizer profiles, event administration, Stripe Connect
+                  onboarding status, payout readiness, account controls,
+                  support, fraud prevention, and audit logs.
+                </td>
+                <td class="py-3 pr-4">
+                  Stripe, infrastructure providers, email providers, platform
+                  administrators, and users where organizer profiles or event
+                  details are displayed.
+                </td>
+                <td class="py-3 pr-4">
+                  Not sold; not shared for cross-context behavioral advertising.
+                </td>
+                <td class="py-3 pr-4">
+                  Organizer relationship plus time needed for payment, payout,
+                  dispute, audit, legal, tax, and accounting purposes.
+                </td>
+              </tr>
+              <tr class="border-b border-border">
+                <td class="py-3 pr-4 font-medium text-foreground">
+                  Internet, device, usage, analytics, and diagnostics
+                </td>
+                <td class="py-3 pr-4">
+                  Your browser or device, Cloudflare, PostHog, Sentry, and
+                  backend operational event logs.
+                </td>
+                <td class="py-3 pr-4">
+                  Site functionality, reliability, error investigation,
+                  security, fraud prevention, product improvement, performance
+                  monitoring, and abuse prevention.
+                </td>
+                <td class="py-3 pr-4">
+                  Cloudflare, PostHog, Sentry, infrastructure providers, and
+                  support or administrative personnel.
+                </td>
+                <td class="py-3 pr-4">
+                  Not sold; not shared for cross-context behavioral advertising.
+                </td>
+                <td class="py-3 pr-4">
+                  According to operational, analytics, security, and error
+                  monitoring needs and provider retention settings; minimized
+                  when no longer needed.
+                </td>
+              </tr>
+              <tr class="border-b border-border">
+                <td class="py-3 pr-4 font-medium text-foreground">
+                  Communications and email preferences
+                </td>
+                <td class="py-3 pr-4">
+                  You, support channels, feedback forms, email providers, and
+                  unsubscribe or preference workflows.
+                </td>
+                <td class="py-3 pr-4">
+                  Support, transactional messages, community announcements,
+                  feedback review, opt-out management, and email deliverability.
+                </td>
+                <td class="py-3 pr-4">
+                  Email providers, PostHog for feedback you submit,
+                  infrastructure providers, and relevant Event Organizers when
+                  needed to resolve event-specific issues.
+                </td>
+                <td class="py-3 pr-4">
+                  Not sold; not shared for cross-context behavioral advertising.
+                </td>
+                <td class="py-3 pr-4">
+                  As needed for support history, transactional records,
+                  unsubscribe compliance, preferences, dispute handling, and
+                  legal obligations.
+                </td>
+              </tr>
+              <tr>
+                <td class="py-3 pr-4 font-medium text-foreground">
+                  Sensitive personal information
+                </td>
+                <td class="py-3 pr-4">
+                  You, communities or events you interact with, Event
+                  Organizers, vetting workflows, and safety or access-control
+                  workflows.
+                </td>
+                <td class="py-3 pr-4">
+                  Service delivery, community access, vetting, safety, fraud and
+                  abuse prevention, ticketing, support, security, and legal
+                  compliance.
+                </td>
+                <td class="py-3 pr-4">
+                  Relevant Event Organizers, community administrators,
+                  infrastructure providers, email providers, support or
+                  administrative personnel, and legal or safety recipients when
+                  required.
+                </td>
+                <td class="py-3 pr-4">
+                  Not sold; not shared for cross-context behavioral advertising;
+                  not used to infer characteristics outside the Service.
+                </td>
+                <td class="py-3 pr-4">
+                  Only as reasonably necessary for the Service, safety, access,
+                  support, audit, dispute, and legal purposes described here.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
         <p class="mt-4">
           We route frontend telemetry through Cloudflare Pages. For analytics,
           we attach coarse location signals such as metro area, country, and
@@ -103,12 +356,13 @@
           <strong>Stripe, Inc.</strong> ("Stripe") for payment processing,
           including Stripe Connect for Third-Party Events. We do
           <strong>not</strong>
-          store your credit card number, CVV, or bank account details on our
-          servers — this information is collected and tokenized directly by
-          Stripe through an embedded Payment Element. Braket Tickets retains
-          only a Stripe payment identifier, the purchase amount, and transaction
-          status so we can reconcile orders and process refunds. Stripe
-          processes your payment information in accordance with its
+          collect or store full credit card numbers, CVV codes, or bank account
+          details on Braket Tickets servers; Stripe collects and tokenizes that
+          information directly through embedded payment and onboarding flows.
+          Braket Tickets retains only a Stripe payment identifier, the purchase
+          amount, and transaction status so we can reconcile orders and process
+          refunds. Stripe processes your payment information in accordance with
+          its
           <a
             href="https://stripe.com/privacy"
             target="_blank"
@@ -116,6 +370,29 @@
             class="text-primary underline"
             >Privacy Policy<span class="sr-only"> (opens in new tab)</span></a
           >.
+        </p>
+        <p class="mt-4">
+          If you are an organizer or administrator, Stripe Connect onboarding
+          may require you to provide business profile, representative identity,
+          tax, bank or payout, verification, compliance, and account information
+          directly to Stripe. Stripe may share connected-account identifiers,
+          onboarding and compliance status, payment and payout status, refund
+          and dispute status, and related transaction metadata with Braket LLC
+          as the Connect platform. Connected accounts may also see limited
+          transaction metadata for charges processed on that connected account.
+          Braket Tickets stores connected-account identifiers and readiness
+          status, but we do not receive or store full bank account numbers.
+          Organizers using Stripe Connect are subject to Stripe's
+          <a
+            href="https://stripe.com/legal/connect-account"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="text-primary underline"
+            >Connected Account Agreement<span class="sr-only">
+              (opens in new tab)</span
+            ></a
+          >
+          and Stripe's other applicable terms and policies.
         </p>
       </div>
     </section>
@@ -126,20 +403,19 @@
       </h2>
       <div class="space-y-4 text-muted-foreground">
         <p class="mb-4">
-          We use analytics tools (PostHog) to analyze user interactions,
-          including clickstream data and input patterns, to improve the
-          platform. PostHog automatically captures some interactions
-          ("autocapture") to help us understand usability. We also use Sentry to
-          collect error reports and related technical diagnostics so we can
-          investigate failures.
+          We use analytics tools (PostHog) to analyze usage and improve the
+          platform. Our PostHog configuration captures page views, page leaves,
+          and a limited allowlist of clicks or form submissions on elements we
+          mark for analytics.
         </p>
         <p>
           Analytics identity is limited to internal account identifiers and role
           metadata; we do not send your name or email address as PostHog
-          identity properties. If you submit feedback, the message text is sent
-          to PostHog so we can review and act on it. We may use masked session
-          replay for quality and support, with text and form inputs hidden by
-          default.
+          identity properties. If you submit feedback through the footer
+          feedback form, the message text is sent to PostHog so we can review
+          and act on it; this is an explicit submission, not passive analytics
+          capture. We may use masked session replay for quality and support,
+          with text and form inputs hidden by default.
         </p>
         <p>
           Sensitive checkout, authentication, vetting, QR code, ticket PDF,
@@ -147,6 +423,19 @@
           be blocked from analytics capture. Replay network capture does not
           record request headers, response headers, request bodies, or response
           bodies.
+        </p>
+        <p>
+          We also use Sentry for error monitoring and performance diagnostics.
+          Depending on the failure and browser context, Sentry may collect error
+          messages, stack traces, URLs or route templates, release and
+          environment information, browser, device, and operating-system
+          metadata, performance traces, console breadcrumbs, and limited network
+          breadcrumbs. We may also forward sanitized backend and operational
+          error logs to Sentry when needed to investigate production failures.
+          We configure Sentry not to send default personal information, and any
+          replay collection is masked by default: text and form inputs are
+          hidden and media is blocked. DNT and GPC signals do not disable
+          essential error, security, and reliability monitoring.
         </p>
         <p>
           We use cookies, local storage, and similar tracking technologies to
@@ -164,7 +453,14 @@
             </li>
             <li>
               <strong>Local Storage:</strong> We use your browser's local
-              storage to save your session and preferences.
+              storage to save your session, guest checkout state, feature flags,
+              and preferences.
+            </li>
+            <li>
+              <strong>Error Monitoring and Reliability:</strong> We use
+              <strong>Sentry</strong> to investigate failures, trace performance
+              problems, and keep the Service secure and reliable. Error
+              monitoring is not used for advertising.
             </li>
           </ul>
         </div>
@@ -180,10 +476,11 @@
             <li>
               <strong>Analytics (Performance):</strong> We use
               <strong>PostHog</strong> to collect data on how you interact with
-              our website (e.g., pages visited, buttons clicked, performance
-              errors). This data is used solely for improving user experience
-              and is <strong>not</strong> used for cross-context behavioral
-              advertising.
+              our website (e.g., pages visited, selected buttons clicked,
+              feature interactions, and client-side performance signals). This
+              data is used solely for improving user experience and service
+              reliability and is <strong>not</strong> used for cross-context
+              behavioral advertising.
             </li>
           </ul>
           <p class="mt-4 font-semibold text-foreground">
@@ -222,6 +519,24 @@
       </p>
       <ul class="list-disc space-y-2 pl-6 text-muted-foreground">
         <li>To provide and maintain our Service.</li>
+        <li>
+          To create accounts, verify email addresses, authenticate sessions, and
+          enforce account preferences.
+        </li>
+        <li>
+          To process ticket purchases, issue tickets, manage guest lists,
+          support QR-code check-in, reconcile payments, process refunds, and
+          handle payment disputes.
+        </li>
+        <li>
+          To process community applications, organizer vetting, membership
+          status, access controls, and safety-related decisions.
+        </li>
+        <li>
+          To support organizers and administrators, including event management,
+          Stripe Connect onboarding status, payout readiness, audit logs, and
+          fraud or abuse prevention.
+        </li>
         <li>To notify you about changes to our Service.</li>
         <li>
           To allow you to participate in interactive features when you choose to
@@ -256,19 +571,38 @@
       </h2>
       <div class="space-y-2 text-muted-foreground">
         <p>
-          <strong>We do not sell your personal information.</strong> We share
-          your information only with the following categories of third parties
-          to provide our services:
+          <strong>
+            We do not sell your personal information and do not share it for
+            cross-context behavioral advertising.
+          </strong>
+          We disclose personal information to service providers, processors, and
+          independent event organizers only as needed to provide, protect, and
+          improve the Service:
         </p>
         <ul class="list-disc space-y-1 pl-6">
           <li>
             <strong>Analytics and Error Monitoring Providers:</strong> We share
-            usage data with PostHog to analyze site traffic and usage patterns,
-            and we share error reports plus related technical diagnostics with
-            Sentry so we can detect and troubleshoot failures. Our proxy code
-            strips visitor IP headers that we control, but Cloudflare and these
-            providers may still process technical network metadata as part of
-            request delivery.
+            usage data with PostHog to analyze site traffic, product usage, and
+            service reliability. Browser DNT/GPC signals disable passive
+            frontend PostHog SDK capture, replay, and persistence, but explicit
+            feedback submissions and server-side operational analytics may still
+            send sanitized transaction, security, reliability, and business
+            events to PostHog. We share error reports, stack traces, route or
+            URL context, browser and device metadata, performance traces,
+            breadcrumbs, and masked replay context with Sentry so we can detect
+            and troubleshoot failures. Our proxy code strips visitor IP headers
+            that we control, but Cloudflare and these providers may still
+            process technical network metadata as part of request delivery.
+          </li>
+          <li>
+            <strong>Infrastructure and Authentication Providers:</strong> We use
+            providers such as Convex for application backend, database, file
+            storage, and authentication infrastructure; Cloudflare for hosting,
+            DNS, routing, telemetry proxying, and request delivery; and Google
+            or Discord if you choose to sign in with or link those social login
+            providers. These providers process information needed to provide
+            their services, such as account identifiers, authentication status,
+            request metadata, storage records, and technical logs.
           </li>
           <li>
             <strong>Payment Processors:</strong> We share transaction data with
@@ -277,7 +611,7 @@
             so it can send you a payment receipt), and order metadata such as
             the event name and ticket quantity. Stripe separately collects your
             payment card information directly from you through an embedded
-            Payment Element — that information is governed by
+            Stripe Checkout flow — that information is governed by
             <a
               href="https://stripe.com/privacy"
               target="_blank"
@@ -291,25 +625,37 @@
             Events, Stripe Connect transfers net proceeds to the Event
             Organizer's connected Stripe account; in that flow Stripe also makes
             limited transaction metadata visible to the Event Organizer's
-            connected Stripe account.
+            connected Stripe account. For organizers, Stripe may collect
+            business, identity, tax, bank, verification, compliance, and payout
+            information directly and may share connected-account status,
+            payment, payout, refund, dispute, and transaction metadata with
+            Braket LLC as the Connect platform.
           </li>
           <li>
             <strong>Email Delivery Providers:</strong> We share the information
-            needed to deliver Braket Tickets emails, including marketing
-            announcements and transactional messages. For marketing emails, this
-            can include limited engagement data such as whether an email was
-            opened or a link was clicked, along with unsubscribe status.
+            needed to deliver Braket Tickets emails through providers such as
+            Resend and, where configured for preview or critical fallback
+            delivery, SMTP providers. This includes transactional messages,
+            community announcements, authentication emails, ticket emails, and
+            support-related messages. For marketing emails, Braket Tickets also
+            uses first-party open pixels and tracked redirect links to record
+            limited engagement data such as whether an email was opened or a
+            link was clicked, along with unsubscribe status.
           </li>
           <li>
-            <strong>Event Organizers:</strong> We share your name and email with
-            the organizer of the specific event you purchase tickets for, so
-            they can manage the guest list.
+            <strong>Event Organizers:</strong> We share your name, email, ticket
+            status, order details needed for admission, application or vetting
+            information relevant to that organizer, and check-in or guest-list
+            details with the organizer of the specific event or community you
+            interact with, so they can manage access, guest lists, event
+            operations, and safety.
             <br />
             <span class="mt-1 block text-sm italic">
               Please note that Event Organizers are independent third parties.
-              Once your data is shared with them for the purpose of event entry,
-              it is governed by their own privacy policies. We are not
-              responsible for the privacy practices of Event Organizers.
+              Once your data is shared with them for event, community, vetting,
+              or organizer operations, it is governed by their own privacy
+              policies. We are not responsible for the privacy practices of
+              Event Organizers.
             </span>
           </li>
         </ul>
@@ -322,7 +668,10 @@
       </h2>
       <p class="text-muted-foreground">
         We implement reasonable security measures to protect your information,
-        but no method of transmission over the Internet is 100% secure.
+        including limiting operational access to people and providers who need
+        it, using Stripe-hosted payment collection for card and bank details,
+        and relying on service providers for secure hosting and transmission. No
+        method of transmission over the Internet is 100% secure.
       </p>
     </section>
 
@@ -330,10 +679,42 @@
       <h2 class="mb-4 font-display text-xl text-foreground">
         7. Data Retention
       </h2>
-      <p class="text-muted-foreground">
-        We retain your personal data only for as long as is necessary for the
-        purposes set out in this Privacy Policy.
-      </p>
+      <div class="space-y-4 text-muted-foreground">
+        <p>
+          We retain personal information only for as long as reasonably
+          necessary for the purposes described in this Privacy Policy, including
+          providing the Service, maintaining account and ticket records,
+          honoring opt-outs, resolving disputes, preventing fraud or abuse,
+          complying with legal, tax, accounting, and payment obligations, and
+          enforcing our agreements.
+        </p>
+        <p>
+          Some records may need to be retained after an account deletion request
+          if they are required for payment reconciliation, refunds, chargebacks,
+          financial records, organizer audit logs, safety investigations, legal
+          compliance, or preserving unsubscribe and marketing opt-out status. We
+          delete, deidentify, or minimize personal information when retention is
+          no longer reasonably necessary for those purposes.
+        </p>
+        <p>
+          Some current examples: unconverted guest checkout sessions are
+          designed to expire after 24 hours and are cleaned up regularly; email
+          delivery metadata and delivery-failure records are generally cleaned
+          after about 30 days; internal email-provider component records are
+          generally cleaned after 7 to 30 days depending on status; and
+          administrative audit logs are generally retained for about 365 days.
+          Marketing preference and unsubscribe records may be retained longer so
+          we can honor opt-outs.
+        </p>
+        <p>
+          Deletion or minimization may not immediately remove data from backups,
+          provider systems, financial processors, error monitoring systems,
+          analytics systems, or records that we must keep for legal, tax,
+          accounting, fraud-prevention, dispute, safety, or security reasons.
+          Provider-side records follow those providers' own retention and
+          deletion processes.
+        </p>
+      </div>
     </section>
 
     <section class="mb-8">
@@ -358,21 +739,30 @@
           mechanisms.
         </p>
         <p>
-          <strong class="text-foreground">We honor both signals.</strong> When
-          your browser sends a Do Not Track signal or a Global Privacy Control
-          signal, we disable passive analytics and replay collection (PostHog).
-          No passive usage events are captured, and no analytics cookies or
-          local storage entries are created.
+          When your browser sends a Do Not Track signal or a Global Privacy
+          Control signal, we use that signal to disable passive frontend PostHog
+          analytics, session replay, and persistence. No passive frontend usage
+          events are captured through the PostHog browser SDK, and we configure
+          that SDK not to persist PostHog analytics cookies or local storage
+          entries. Because we do not sell personal information or share it for
+          cross-context behavioral advertising, GPC does not need to disable any
+          advertising sale or sharing flow.
         </p>
         <p>
-          If you explicitly submit the footer feedback form, we send that
-          feedback message and limited diagnostic context to PostHog so we can
-          receive and act on your request.
+          The footer feedback form is an explicit way to send us feedback. If
+          you submit that form, we send the message text and feedback category
+          to PostHog even if your browser sends DNT or GPC. If you prefer not to
+          send feedback through PostHog, you can contact us directly by email at
+          <a href="mailto:contact@braket.gay" class="text-primary underline"
+            >contact@braket.gay</a
+          >.
         </p>
         <p>
           Essential cookies and local storage required for authentication,
-          session management, and core site functionality are not affected by
-          these signals, as they are necessary for the Service to operate.
+          session management, payment checkout, and core site functionality are
+          not affected by these signals, as they are necessary for the Service
+          to operate. Backend operational events and error monitoring may still
+          receive diagnostics needed to keep the Service secure and reliable.
         </p>
         <p>
           You can enable DNT or GPC in your browser settings. Most modern
@@ -393,18 +783,46 @@
 
     <section class="mb-8">
       <h2 class="mb-4 font-display text-xl text-foreground">
-        10. Reviewing, Updating, or Deleting Your Information
+        10. Your Privacy Choices and California Rights
       </h2>
-      <p class="text-muted-foreground">
-        You may review and update your account information by logging into your
-        profile settings. To request the deletion of your account and personal
-        data, please email us at
-        <a href="mailto:contact@braket.gay" class="text-primary underline"
-          >contact@braket.gay</a
-        >. <strong>We will verify your identity</strong> (e.g., by requiring you
-        to email from the address on file) before processing any request. We aim
-        to respond to all verified requests within 60 days.
-      </p>
+      <div class="space-y-4 text-muted-foreground">
+        <p>
+          You may review and update your account information by logging into
+          your profile settings. You may also ask us to access, correct, or
+          delete personal information associated with your account by emailing
+          us at
+          <a href="mailto:contact@braket.gay" class="text-primary underline"
+            >contact@braket.gay</a
+          >.
+        </p>
+        <p>
+          California residents may have the right to know what personal
+          information we collect, use, disclose, or retain; to access a portable
+          copy of personal information; to correct inaccurate personal
+          information; to delete personal information, subject to legal and
+          operational exceptions; to opt out of sale or sharing for
+          cross-context behavioral advertising; to limit certain uses of
+          sensitive personal information where applicable; and to exercise those
+          rights without unlawful discrimination.
+        </p>
+        <p>
+          We do not sell personal information and do not share personal
+          information for cross-context behavioral advertising. We use sensitive
+          personal information only for Service-related purposes such as
+          community access, vetting, event operations, safety, fraud prevention,
+          payment support, security, and legal compliance.
+        </p>
+        <p>
+          <strong>We will verify your identity</strong> before processing a
+          privacy request, for example by requiring you to email from the
+          address on file or by asking for information needed to match your
+          account. Authorized agents may submit requests on your behalf if they
+          provide proof of authorization and we can verify the request. We aim
+          to respond to verified California privacy requests within 45 days, or
+          within any extension period allowed by applicable law after notice to
+          you.
+        </p>
+      </div>
     </section>
 
     <section class="mb-8">
@@ -413,13 +831,8 @@
       </h2>
       <p class="text-muted-foreground">
         The Service is hosted in the United States and is intended for visitors
-        located within the United States. If you choose to use the Service from
-        the European Union or other regions of the world with laws governing
-        data collection and use that may differ from U.S. law, then please note
-        that you are transferring your personal information outside of those
-        regions to the United States for storage and processing. By providing
-        any information, including personal information, on or to the Service,
-        you consent to such transfer, storage, and processing.
+        located within the United States. We do not intentionally target or
+        market the Service to users outside the United States.
       </p>
     </section>
 
@@ -428,11 +841,11 @@
         12. Changes to This Privacy Policy
       </h2>
       <p class="text-muted-foreground">
-        We may update our Privacy Policy from time to time. We will notify you
-        of any changes by posting the new Privacy Policy on this page. If we
-        make material changes, we will notify you either through the email
-        address you have provided us, or by placing a prominent notice on our
-        website, prior to the change becoming effective.
+        We may update our Privacy Policy from time to time. We will post the
+        updated Privacy Policy on this page and update the effective date above.
+        If we make material changes, we may provide additional notice, such as
+        by email or a prominent notice on the Service, when practical or
+        required by law.
       </p>
     </section>
 

@@ -497,10 +497,6 @@ export class AnalyticsService {
     if (!this.isPostHogEnabled()) {
       return false;
     }
-    if (shouldOptOutAnalyticsByDefault()) {
-      return false;
-    }
-
     const client = await this.ensureClient();
     if (!client) {
       return false;

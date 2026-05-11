@@ -28,6 +28,8 @@ This index is for engineers and admins who respond to Braket Tickets incidents o
 | [Payment Incidents](./payments.md)                    | Stuck payments, failed refunds, Stripe webhook failures, revenue reconciliation                    | SEV-1               |
 | [Stripe Connect Ops](./stripe-connect-ops.md)         | Organizer onboarding, Express dashboard access, payout readiness, scheduled payout troubleshooting | SEV-2               |
 | [Stripe Sandbox Testing](./stripe-sandbox-testing.md) | Shared sandbox fixture reseeding, contract lane checks, scheduled verification                     | Planned maintenance |
+| [Event Change Refunds](./event-change-refunds.md)     | Cancellation, postponement, reschedule, moved-event, and refund-request operations                 | Planned operations  |
+| [Privacy Requests](./privacy-requests.md)             | Access, correction, deletion, minimization, and provider-side privacy request handling             | Planned operations  |
 | [Convex Backend](./convex-backend.md)                 | Deployment failures, function errors, database issues, cron job failures                           | SEV-1 / SEV-2       |
 | [Frontend & CDN](./frontend-cdn.md)                   | Cloudflare Pages outages, build failures, CSP violations, blank pages                              | SEV-1 / SEV-2       |
 | [Auth Incidents](./auth-incidents.md)                 | Missing social providers, blocked sign-in, password reset, email-change, and auth sync issues      | SEV-2               |
@@ -77,8 +79,10 @@ The `.convex.cloud` host serves the API and storage URLs (e.g., poster `posterUr
 - [Deployment Guide](../deployment.md) — how deployments work
 - [Environment Variables](../environment.md) — all env vars and their purpose
 - [Payment Edge Cases](../payment-edge-cases.md) — known payment bugs and mitigations
+- [Event Change Refunds](./event-change-refunds.md) — cancellation, reschedule, moved-event, and refund-request operations
 - [Stripe Connect Ops](./stripe-connect-ops.md) — organizer onboarding, dashboard access, and payout operations
 - [Stripe Sandbox Testing](./stripe-sandbox-testing.md) — fixture and contract-test operations
+- [Privacy Requests](./privacy-requests.md) — access, correction, deletion, minimization, and provider-side privacy handling
 - [Security](../security.md) — RLS rules and access control
 
 ## Post-Incident Checklist

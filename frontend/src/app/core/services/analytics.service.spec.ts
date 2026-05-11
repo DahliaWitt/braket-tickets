@@ -178,7 +178,7 @@ describe('AnalyticsService', () => {
       });
     });
 
-    it('does not start replay or send direct feedback capture when DNT is enabled', async () => {
+    it('does not start replay but still sends explicit feedback when DNT is enabled', async () => {
       const fetchMock = vi.fn().mockResolvedValue(new Response('{}'));
       vi.stubGlobal('navigator', {doNotTrack: '1'});
       vi.stubGlobal('fetch', fetchMock);
@@ -190,16 +190,16 @@ describe('AnalyticsService', () => {
       await expect(
         service.captureFeedback({
           category: 'bug',
-          message: 'Respect my browser privacy signal',
+          message: 'I explicitly want to send this feedback',
           route: '/help',
         }),
-      ).resolves.toBe(false);
+      ).resolves.toBe(true);
 
       expect(posthog.startSessionRecording).not.toHaveBeenCalled();
-      expect(fetchMock).not.toHaveBeenCalled();
+      expect(fetchMock).toHaveBeenCalledOnce();
     });
 
-    it('does not start replay or send direct feedback capture when GPC is enabled', async () => {
+    it('does not start replay but still sends explicit feedback when GPC is enabled', async () => {
       const fetchMock = vi.fn().mockResolvedValue(new Response('{}'));
       vi.stubGlobal('navigator', {globalPrivacyControl: true});
       vi.stubGlobal('fetch', fetchMock);
@@ -211,13 +211,13 @@ describe('AnalyticsService', () => {
       await expect(
         service.captureFeedback({
           category: 'feature_request',
-          message: 'Respect global privacy control too',
+          message: 'I explicitly want to send this feedback too',
           route: '/help',
         }),
-      ).resolves.toBe(false);
+      ).resolves.toBe(true);
 
       expect(posthog.startSessionRecording).not.toHaveBeenCalled();
-      expect(fetchMock).not.toHaveBeenCalled();
+      expect(fetchMock).toHaveBeenCalledOnce();
     });
 
     it('configures masked session replay without headers or bodies', async () => {
