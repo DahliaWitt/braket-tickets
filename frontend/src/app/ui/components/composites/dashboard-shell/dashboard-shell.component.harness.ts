@@ -1,4 +1,5 @@
 import {ComponentHarness} from '@angular/cdk/testing';
+import {waitForHarnessCondition} from '@/testing/harness-wait';
 
 export class DashboardShellHarness extends ComponentHarness {
   static hostSelector = 'app-dashboard-shell';
@@ -75,11 +76,10 @@ export class DashboardShellHarness extends ComponentHarness {
       if ((await tab.text()).trim() === label) {
         await tab.click();
         // Wait for Angular router + zoneless CD to complete navigation
-        const start = Date.now();
-        while (Date.now() - start < 5000) {
-          if ((await tab.getAttribute('aria-current')) === 'page') return;
-          await new Promise((r) => setTimeout(r, 50));
-        }
+        await waitForHarnessCondition(
+          async () => (await tab.getAttribute('aria-current')) === 'page',
+          {description: `tab "${label}" to become current`},
+        );
         return;
       }
     }

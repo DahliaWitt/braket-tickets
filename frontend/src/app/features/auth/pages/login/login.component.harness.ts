@@ -1,4 +1,5 @@
-import {ComponentHarness, type TestElement} from '@angular/cdk/testing';
+import {ComponentHarness} from '@angular/cdk/testing';
+import {waitForHarnessCondition} from '@/testing/harness-wait';
 
 export class LoginComponentHarness extends ComponentHarness {
   static hostSelector = 'app-login';
@@ -33,21 +34,6 @@ export class LoginComponentHarness extends ComponentHarness {
 
   private getRegisterSubmit = this.locatorFor('button#register-submit');
 
-  /**
-   * Polls for an optional element until it appears or timeout elapses.
-   * Needed because @ngx-playwright/test's locatorFor() does a single snapshot
-   * DOM query with no retry, and forceStabilize() is a no-op in zoneless Angular.
-   */
-  private async awaitRendered(
-    locator: () => Promise<TestElement | null>,
-    timeoutMs = 5000,
-  ): Promise<void> {
-    const start = Date.now();
-    while (Date.now() - start < timeoutMs) {
-      if (await locator()) return;
-      await new Promise((r) => setTimeout(r, 50));
-    }
-  }
   private getRegisterNameError = this.locatorForOptional(
     '#register-name-error',
   );
@@ -68,7 +54,11 @@ export class LoginComponentHarness extends ComponentHarness {
     const tab = await this.getRegisterTab();
     await tab.click();
     // Wait for zoneless CD to render the register panel
-    await this.awaitRendered(this.locatorForOptional('input#register-name'));
+    await waitForHarnessCondition(
+      async () =>
+        (await this.locatorForOptional('input#register-name')()) !== null,
+      {description: 'register panel'},
+    );
   }
 
   async setLoginEmail(value: string) {
@@ -185,7 +175,11 @@ export class LoginComponentHarness extends ComponentHarness {
     const tab = await this.getLoginTab();
     await tab.click();
     // Wait for zoneless CD to render the login panel
-    await this.awaitRendered(this.locatorForOptional('input#login-email'));
+    await waitForHarnessCondition(
+      async () =>
+        (await this.locatorForOptional('input#login-email')()) !== null,
+      {description: 'login panel'},
+    );
   }
 
   async setRegisterName(value: string): Promise<void> {
@@ -229,7 +223,11 @@ export class LoginComponentHarness extends ComponentHarness {
       );
     await btn.click();
     // Wait for zoneless CD to render the reset form
-    await this.awaitRendered(this.locatorForOptional('input#reset-email'));
+    await waitForHarnessCondition(
+      async () =>
+        (await this.locatorForOptional('input#reset-email')()) !== null,
+      {description: 'reset form'},
+    );
   }
 
   async setResetEmail(value: string): Promise<void> {
