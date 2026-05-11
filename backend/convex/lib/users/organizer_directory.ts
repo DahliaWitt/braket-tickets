@@ -488,11 +488,15 @@ export async function searchUserApplicationsInDirectory(
     }
   }
 
-  return {
-    page: entries.flatMap((entry) => {
+  const page = entries
+    .flatMap((entry) => {
       const user = usersById.get(entry.userId);
       return user ? [toUserApplicationRow(entry, user)] : [];
-    }),
+    })
+    .slice(0, SCOPED_RESULT_LIMIT);
+
+  return {
+    page,
     isDone: true,
     continueCursor: '',
   };
