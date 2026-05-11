@@ -23,9 +23,9 @@ import {
 import {
   getUserCommunities,
   addMember,
-  removeMember,
   isCommunityMember,
 } from '../../lib/authz';
+import {removeMemberWithAdminCascade} from '../../lib/users/membership';
 import {rateLimiter} from '../../lib/rate_limits';
 import {enqueueEmailDelivery} from '../../lib/email_delivery_wrapper';
 import {
@@ -423,7 +423,12 @@ export async function revokeApplication(
   );
 
   if (app.organizerId) {
-    await removeMember(ctx, app.userId, app.organizerId, {actorId});
+    await removeMemberWithAdminCascade(ctx, {
+      userId: app.userId,
+      organizerId: app.organizerId,
+      actorId,
+      auditSource: 'application-revoke-cascade',
+    });
     await refreshOrganizerDirectoryForMembershipChange(ctx, {
       organizerId: app.organizerId,
       userId: app.userId,

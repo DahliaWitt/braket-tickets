@@ -19,11 +19,9 @@ import {
 } from '../../lib/access';
 import {rateLimiter} from '../../lib/rate_limits';
 import {insertAdminAuditLog} from '../../lib/admin_audit_log';
+import {cancelPendingInvitesCreatedBy} from '../../lib/admin_invites';
 import {ensureApprovedMarketingPreference} from '../../lib/marketing_emails/preferences';
-import {
-  collectAllQueryUnsafe,
-  collectMatchingInQuery,
-} from '../../lib/query_scan';
+import {collectAllQueryUnsafe} from '../../lib/query_scan';
 import {
   recomputeOrganizerDirectoryRow,
   refreshOrganizerDirectoryForMembershipChange,
@@ -31,30 +29,6 @@ import {
 import {throwAppError} from '../../lib/errors';
 import {buildCommunityUserRows} from '../../lib/users/helpers';
 import {deactivateActiveMagicLinksForCreator} from '../../lib/magic_links/deactivation';
-
-async function cancelPendingInvitesCreatedBy(
-  ctx: MutationCtx,
-  args: {
-    organizerId: Id<'organizers'>;
-    invitedBy: Id<'users'>;
-  },
-): Promise<number> {
-  const pendingInvites = await collectMatchingInQuery(
-    ctx.db
-      .query('admin_invites')
-      .withIndex('by_organizer', (q) => q.eq('organizerId', args.organizerId)),
-    (invite) =>
-      invite.invitedBy === args.invitedBy && invite.status === 'pending',
-  );
-
-  await Promise.all(
-    pendingInvites.map((invite) =>
-      ctx.db.patch('admin_invites', invite._id, {status: 'cancelled'}),
-    ),
-  );
-
-  return pendingInvites.length;
-}
 
 async function requireCommunityAdminOrganizerTarget(
   ctx: MutationCtx,

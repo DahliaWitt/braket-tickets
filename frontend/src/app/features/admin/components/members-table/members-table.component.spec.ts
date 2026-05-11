@@ -1,4 +1,5 @@
 import {type ComponentFixture, TestBed} from '@angular/core/testing';
+import {ConvexError} from 'convex/values';
 import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
 import {AdminMembersTableComponent} from './members-table.component';
 import {AdminMembersTableHarness} from './members-table.component.harness';
@@ -469,6 +470,28 @@ describe('AdminMembersTableComponent', () => {
     expect(config.zTitle).toBe('Revoke Membership');
   });
 
+  it('shows admin warning in revoke dialog for community admin members', async () => {
+    const adminMember: MemberWithApplication = {
+      ...mockApprovedMember,
+      isCommunityAdmin: true,
+    };
+
+    await component.revokeMembership(adminMember);
+    expect(mockDialogService.create).toHaveBeenCalled();
+    const config = (mockDialogService.create as unknown as Mock).mock
+      .calls[0][0] as BraDialogOptions<unknown, unknown>;
+    expect(config.zDescription).toContain('community admin role');
+  });
+
+  it('shows standard description in revoke dialog for non-admin members', async () => {
+    await component.revokeMembership(mockApprovedMember);
+    expect(mockDialogService.create).toHaveBeenCalled();
+    const config = (mockDialogService.create as unknown as Mock).mock
+      .calls[0][0] as BraDialogOptions<unknown, unknown>;
+    expect(config.zDescription).not.toContain('community admin role');
+    expect(config.zDescription).toContain('ticket access');
+  });
+
   it('should call revoke service when dialog confirmed', async () => {
     const mockReasonInstance = {reason: () => ''};
     (mockDialogService.create as unknown as Mock).mockImplementation(
@@ -538,6 +561,42 @@ describe('AdminMembersTableComponent', () => {
       'org1',
     );
     expect(mockAppsService.revoke).not.toHaveBeenCalled();
+  });
+
+  it('shows LAST_ADMIN error toast when revoking the last community admin', async () => {
+    (mockAppsService.revoke as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new ConvexError({code: 'LAST_ADMIN', message: 'last admin'}),
+    );
+
+    (mockDialogService.create as unknown as Mock).mockImplementation(
+      (config: {zOnOk: (instance: unknown) => void}) => {
+        config.zOnOk({reason: () => undefined});
+      },
+    );
+
+    await component.revokeMembership(mockApprovedMember);
+    await fixture.whenStable();
+
+    expect(toastErrorSpy).toHaveBeenCalledWith(
+      'cannot revoke the last community admin. assign another admin first.',
+    );
+  });
+
+  it('shows generic error toast when revoke fails for non-LAST_ADMIN reason', async () => {
+    (mockAppsService.revoke as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error('network failure'),
+    );
+
+    (mockDialogService.create as unknown as Mock).mockImplementation(
+      (config: {zOnOk: (instance: unknown) => void}) => {
+        config.zOnOk({reason: () => undefined});
+      },
+    );
+
+    await component.revokeMembership(mockApprovedMember);
+    await fixture.whenStable();
+
+    expect(toastErrorSpy).toHaveBeenCalledWith('failed to revoke membership');
   });
 
   it('should approve application', async () => {

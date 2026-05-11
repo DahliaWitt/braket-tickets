@@ -3,6 +3,7 @@ import type {MutationCtx} from '../_generated/server';
 import {adminInviteTemplate} from '../email/templates';
 import {insertAdminAuditLog} from './admin_audit_log';
 import {enqueueEmailDelivery} from './email_delivery_wrapper';
+import {collectMatchingInQuery} from './query_scan';
 import {resolveSiteUrl} from './site_url';
 import {
   digestBearerToken,
@@ -12,6 +13,30 @@ import {
 import {validateEmail} from './validation';
 
 export const ADMIN_INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+export async function cancelPendingInvitesCreatedBy(
+  ctx: MutationCtx,
+  args: {
+    organizerId: Id<'organizers'>;
+    invitedBy: Id<'users'>;
+  },
+): Promise<number> {
+  const pendingInvites = await collectMatchingInQuery(
+    ctx.db
+      .query('admin_invites')
+      .withIndex('by_organizer', (q) => q.eq('organizerId', args.organizerId)),
+    (invite) =>
+      invite.invitedBy === args.invitedBy && invite.status === 'pending',
+  );
+
+  await Promise.all(
+    pendingInvites.map((invite) =>
+      ctx.db.patch('admin_invites', invite._id, {status: 'cancelled'}),
+    ),
+  );
+
+  return pendingInvites.length;
+}
 
 export function normalizeInviteEmail(email: string): string {
   const normalizedEmail = email.trim().toLowerCase();
