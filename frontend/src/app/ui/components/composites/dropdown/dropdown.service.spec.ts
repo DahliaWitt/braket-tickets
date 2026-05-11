@@ -93,7 +93,7 @@ describe('BraDropdownService', () => {
 
   afterEach(() => {
     service.close();
-    document.body.innerHTML = '';
+    document.querySelector('.cdk-overlay-container')?.replaceChildren();
   });
 
   it('should be created', () => {
