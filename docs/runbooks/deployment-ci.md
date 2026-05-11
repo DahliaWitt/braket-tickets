@@ -49,7 +49,7 @@ When troubleshooting automatic deploys, start from the parent `CI` run on the br
 
 ## Fix Release Please automation
 
-The `Release` workflow uses the repository secret `RELEASE_PLEASE_TOKEN`, not the default `GITHUB_TOKEN`, so Release Please pull requests can trigger follow-up workflows. The token needs repository-scoped `Contents: Read and write`, `Pull requests: Read and write`, and `Issues: Read and write` permissions.
+The `Release` workflow runs on pushes to `main` and sets `target-branch: main` so Release Please does not fall back to the repository default branch. It splits Release Please into two steps: the default `GITHUB_TOKEN` creates GitHub releases, and `RELEASE_PLEASE_TOKEN` opens or updates Release Please PRs so those PRs can trigger follow-up workflows. The token needs repository-scoped `Contents: Read and write`, `Pull requests: Read and write`, and `Issues: Read and write` permissions. If release creation fails with `Resource not accessible by personal access token`, confirm the workflow is still using the split-token shape instead of sending `RELEASE_PLEASE_TOKEN` to the create-release path; GitHub documents `Contents: Read and write` as required for the create-release endpoint.
 
 The repository Actions workflow permission must allow GitHub Actions to create and approve pull requests. Verify it with:
 

@@ -15,7 +15,10 @@ jobs:
       ${{
         !github.event.pull_request.draft &&
         startsWith(github.event.pull_request.head.ref, 'release-please--branches--main') &&
-        startsWith(github.event.pull_request.title, 'chore: release')
+        (
+          startsWith(github.event.pull_request.title, 'chore: release') ||
+          startsWith(github.event.pull_request.title, 'chore(main): release')
+        )
       }}
     runs-on: ubuntu-latest
     steps:
@@ -40,7 +43,7 @@ jobs:
             exit 1
           fi
 
-          if [[ "$PR_TITLE" != chore:\ release* ]]; then
+          if [[ "$PR_TITLE" != chore:\ release* && "$PR_TITLE" != chore\(main\):\ release* ]]; then
             echo "Unexpected PR title: $PR_TITLE" >&2
             exit 1
           fi
