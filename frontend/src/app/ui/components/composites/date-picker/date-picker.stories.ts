@@ -51,9 +51,9 @@ const datePickerStoryState: DatePickerStoryState = {
             placeholder="Pick a date"
             zFormat="yyyy-MM-dd"
             zSize="sm"
-            class="!rounded-sm !border !border-b-0 !border-border !bg-background !py-2 !font-sans !text-sm"
-            [class.!border-destructive/50]="isFieldInvalid(eventForm.date)"
-            [class.!text-destructive]="isFieldInvalid(eventForm.date)"
+            class="rounded-sm! border! border-b-0! border-border! bg-background! py-2! font-sans! text-sm!"
+            [class.border-destructive/50!]="isFieldInvalid(eventForm.date)"
+            [class.text-destructive!]="isFieldInvalid(eventForm.date)"
           />
           @if (isFieldInvalid(eventForm.date)) {
             <p class="text-xs text-destructive uppercase">Date is required</p>
@@ -72,7 +72,7 @@ const datePickerStoryState: DatePickerStoryState = {
               placeholder="Ticket sale deadline"
               zFormat="yyyy-MM-dd"
               zSize="sm"
-              class="!rounded-sm !border !border-b-0 !border-border !bg-background !py-2 !font-sans !text-sm"
+              class="rounded-sm! border! border-b-0! border-border! bg-background! py-2! font-sans! text-sm!"
             />
             <p class="text-xs text-muted-foreground">
               Optional cutoff used when scheduling ticket sales.

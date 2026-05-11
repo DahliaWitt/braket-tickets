@@ -44,40 +44,16 @@ const COMMUNITY_TABS: DashboardTab[] = [
 })
 class DashboardShellStoryRouteStubComponent {}
 
+function createStoryRoute(tab: DashboardTab): Routes[number] {
+  return {
+    path: tab.path.replace(/^\//, ''),
+    component: DashboardShellStoryRouteStubComponent,
+  };
+}
+
 const STORY_ROUTES: Routes = [
-  {path: 'admin/communities', component: DashboardShellStoryRouteStubComponent},
-  {
-    path: 'community-admin/pending',
-    component: DashboardShellStoryRouteStubComponent,
-  },
-  {
-    path: 'community-admin/history',
-    component: DashboardShellStoryRouteStubComponent,
-  },
-  {
-    path: 'community-admin/members',
-    component: DashboardShellStoryRouteStubComponent,
-  },
-  {
-    path: 'community-admin/events',
-    component: DashboardShellStoryRouteStubComponent,
-  },
-  {
-    path: 'community-admin/magic-links',
-    component: DashboardShellStoryRouteStubComponent,
-  },
-  {
-    path: 'community-admin/audit-log',
-    component: DashboardShellStoryRouteStubComponent,
-  },
-  {
-    path: 'community-admin/shared-vetting',
-    component: DashboardShellStoryRouteStubComponent,
-  },
-  {
-    path: 'community-admin/settings',
-    component: DashboardShellStoryRouteStubComponent,
-  },
+  ...ADMIN_TABS.map(createStoryRoute),
+  ...COMMUNITY_TABS.map(createStoryRoute),
   {path: '**', component: DashboardShellStoryRouteStubComponent},
 ];
 
