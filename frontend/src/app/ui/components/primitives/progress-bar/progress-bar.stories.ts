@@ -1,7 +1,7 @@
-import type { Meta, StoryObj } from '@storybook/angular';
-import { argsToTemplate } from '@storybook/angular';
+import type {Meta, StoryObj} from '@storybook/angular';
+import {argsToTemplate} from '@storybook/angular';
 
-import { ZardProgressBarComponent } from './progress-bar.component';
+import {ZardProgressBarComponent} from './progress-bar.component';
 
 const meta: Meta<ZardProgressBarComponent> = {
   title: 'Braket/Primitives/ProgressBar',
@@ -28,9 +28,14 @@ const meta: Meta<ZardProgressBarComponent> = {
       control: 'select',
       options: ['default', 'square'],
     },
-    zIndeterminate: { control: 'boolean' },
-    progress: { control: { type: 'range', min: 0, max: 100, step: 1 } },
-    zAriaLabel: { control: 'text' },
+    zIndeterminate: {control: 'boolean'},
+    progress: {control: {type: 'range', min: 0, max: 100, step: 1}},
+    zAriaLabel: {control: 'text'},
+    barClass: {
+      control: 'text',
+      description:
+        'Additional classes applied to the inner progress indicator.',
+    },
   },
   render: (args) => ({
     props: args,
@@ -75,7 +80,7 @@ export const CapacityOverview: Story = {
         </div>
       </div>
     `,
-    moduleMetadata: { imports: [ZardProgressBarComponent] },
+    moduleMetadata: {imports: [ZardProgressBarComponent]},
   }),
   parameters: {
     docs: {
@@ -105,7 +110,7 @@ export const ExportProgress: Story = {
         <z-progress-bar [zIndeterminate]="true" zAriaLabel="Export in progress" />
       </div>
     `,
-    moduleMetadata: { imports: [ZardProgressBarComponent] },
+    moduleMetadata: {imports: [ZardProgressBarComponent]},
   }),
   parameters: {
     docs: {
@@ -155,12 +160,13 @@ export const CapacityStates: Story = {
         </div>
       </div>
     `,
-    moduleMetadata: { imports: [ZardProgressBarComponent] },
+    moduleMetadata: {imports: [ZardProgressBarComponent]},
   }),
   parameters: {
     docs: {
       description: {
-        story: 'Reference overview of healthy, warning, and critical progress color treatments.',
+        story:
+          'Reference overview of healthy, warning, and critical progress color treatments.',
       },
     },
   },

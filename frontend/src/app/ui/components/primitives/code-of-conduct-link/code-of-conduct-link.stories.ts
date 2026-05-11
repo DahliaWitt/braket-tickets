@@ -7,6 +7,14 @@ const meta: Meta<BraCodeOfConductLinkComponent> = {
   title: 'Braket/Primitives/CodeOfConductLink',
   component: BraCodeOfConductLinkComponent,
   tags: ['autodocs'],
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'App-proven primitive for showing community code-of-conduct copy from event and community surfaces.',
+      },
+    },
+  },
   argTypes: {
     codeOfConduct: {control: 'text'},
   },
@@ -24,6 +32,14 @@ export const Default: Story = {
     props: args,
     template: `<bra-code-of-conduct-link ${argsToTemplate(args)} />`,
   }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'App-proven long-form conduct copy that opens from community context.',
+      },
+    },
+  },
 };
 
 export const ShortContent: Story = {
@@ -34,6 +50,14 @@ export const ShortContent: Story = {
     props: args,
     template: `<bra-code-of-conduct-link ${argsToTemplate(args)} />`,
   }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Library reference for the same trigger when the conduct copy is very short.',
+      },
+    },
+  },
 };
 
 export const OnDarkBackground: Story = {
@@ -49,4 +73,12 @@ export const OnDarkBackground: Story = {
       </div>
     `,
   }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'App-proven contrast check for the link when it appears on card-like dark surfaces.',
+      },
+    },
+  },
 };

@@ -251,6 +251,14 @@ export const AddGuestWorkflow: Story = {
     template: `<bt-story-dialog-guest-workflow />`,
     moduleMetadata: {imports: [DialogGuestWorkflowStoryComponent]},
   }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'App-proven dialog workflow for adding a guest from event management.',
+      },
+    },
+  },
 };
 
 export const ExportAttendeeList: Story = {
@@ -258,4 +266,12 @@ export const ExportAttendeeList: Story = {
     template: `<bt-story-dialog-export-workflow />`,
     moduleMetadata: {imports: [DialogExportWorkflowStoryComponent]},
   }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'App-proven dialog workflow for exporting attendees from the buyers panel.',
+      },
+    },
+  },
 };

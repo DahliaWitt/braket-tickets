@@ -1,12 +1,49 @@
+import {ChangeDetectionStrategy, Component, signal} from '@angular/core';
+import {provideRouter} from '@angular/router';
 import type {Preview} from '@storybook/angular';
+import {applicationConfig} from '@storybook/angular';
 import {withThemeByClassName} from '@storybook/addon-themes';
 import {setCompodocJson} from '@storybook/addon-docs/angular';
+import {CONVEX} from 'convex-angular';
+import {AuthService} from '@/core/services/auth.service';
+import {createStoryConvexClient} from '../src/storybook/mocks/convex';
 import docJson from './documentation.json';
 
 setCompodocJson(docJson);
 
+@Component({
+  selector: 'bt-story-route-stub',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: '',
+})
+class StoryRouteStubComponent {}
+
+class StoryAuthService {
+  readonly isAuthenticated = signal(false);
+  readonly user = signal(null);
+  readonly currentUser = signal(null);
+  readonly email = signal(null);
+  readonly isLoading = signal(false);
+  readonly authInitialized = signal(true);
+
+  userRole(): 'user' {
+    return 'user';
+  }
+
+  handleOAuthCallback(_ott: string): Promise<void> {
+    return Promise.resolve();
+  }
+}
+
 const preview: Preview = {
   decorators: [
+    applicationConfig({
+      providers: [
+        provideRouter([{path: '**', component: StoryRouteStubComponent}]),
+        {provide: CONVEX, useValue: createStoryConvexClient()},
+        {provide: AuthService, useClass: StoryAuthService},
+      ],
+    }),
     withThemeByClassName({
       themes: {
         dark: 'dark',
