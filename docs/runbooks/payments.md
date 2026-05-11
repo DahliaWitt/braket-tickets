@@ -8,7 +8,7 @@ access: public
 
 # Payment Incidents
 
-This runbook is for engineers or admins who investigate checkout, webhook, refund, or settlement issues in the ticketing flow. It assumes access to Convex Dashboard and Stripe Dashboard. Use it when orders stick, tickets do not issue, or payment state and ticket state drift apart. Use [Stripe Connect Ops](./stripe-connect-ops.md) for organizer onboarding or payouts.
+This runbook is for engineers or admins who investigate checkout, webhook, refund, or settlement issues in the ticketing flow. It assumes access to Convex Dashboard and Stripe Dashboard. Use it when orders stick, tickets do not issue, or payment state and ticket state drift apart. Use [Event Change Refunds](./event-change-refunds.md) for cancellation, postponement, reschedule, moved-event, or buyer refund-request operations. Use [Stripe Connect Ops](./stripe-connect-ops.md) for organizer onboarding or payouts.
 
 This runbook uses the current Stripe-only ticketing architecture:
 

@@ -793,7 +793,7 @@ Publishing an event requires the parent community to be published. Publishing th
 2. The event is removed from public lists. New purchases are blocked.
 3. Open ticket orders (people mid-checkout) are released. They will not be charged. The released-order state surfaces to the buyer at the next page check, but no automated cancellation email is sent today.
 4. Any scheduled marketing announcement for this event is auto-cancelled.
-5. Existing ticket holders keep their tickets. They are not automatically emailed about the cancellation; the admin uses the broadcast feature (6.6) to notify them, then handles refunds (see 6.9) per buyer, in batches, or with alternative compensation.
+5. Existing ticket holders keep their tickets until refunds are processed. They are not automatically emailed about the cancellation; the admin uses the broadcast feature (6.6) to notify them, then follows the [Event Change Refunds](runbooks/event-change-refunds.md) runbook to process cancellation refunds.
 6. If a payment completes after cancellation (delayed Stripe webhook), the buyer is refunded automatically through the late-payment path.
 
 **Failure modes**
@@ -810,7 +810,7 @@ Publishing an event requires the parent community to be published. Publishing th
 **Who**: community admins.
 **Criticality**: revenue, safety. Refund correctness affects financial records and trust.
 **Entry points**: event management page, user management surface.
-**Successful outcome**: the customer's money is returned (minus non-refundable processing fees), affected tickets are cancelled, and inventory is freed.
+**Successful outcome**: the customer's money is returned according to the applicable refund policy, affected tickets are cancelled, and inventory is freed.
 
 **Path**
 
