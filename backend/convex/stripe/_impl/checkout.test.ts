@@ -97,6 +97,22 @@ describe('Stripe Checkout session branding', () => {
     expect(checkoutSessionsCreateMock).not.toHaveBeenCalled();
   });
 
+  it('rejects non-positive checkout line item quantities', async () => {
+    await expect(
+      createPlatformCheckoutSession({
+        orderId: baseMetadata.orderId,
+        amountCents: 2500,
+        quantity: 0,
+        checkoutTheme: 'light',
+        eventName: 'Concrete & Wax',
+        ticketDescription: 'regular ticket',
+        expiresAtMs: 1893456000000,
+        metadata: baseMetadata,
+      }),
+    ).rejects.toThrow('Checkout line item quantity must be a positive integer');
+    expect(checkoutSessionsCreateMock).not.toHaveBeenCalled();
+  });
+
   it('applies dark embedded Checkout branding to direct-charge sessions', async () => {
     await createDirectChargeCheckoutSession({
       connectedAccountId: 'acct_direct_branding',
