@@ -458,6 +458,9 @@ describe('startTicketOrderCheckoutSession — checkout line item pricing', () =>
     const [params] = checkoutSessionsCreateMock.mock.calls[0] ?? [];
     expect(params?.line_items?.[0]?.quantity).toBe(2);
     expect(params?.line_items?.[0]?.price_data?.unit_amount).toBe(2500);
+    expect(params?.line_items?.[0]?.price_data?.product_data?.description).toBe(
+      'regular ticket',
+    );
   });
 
   it('rejects stale direct-charge orders after an organizer becomes platform-backed', async () => {

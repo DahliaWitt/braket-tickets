@@ -284,6 +284,26 @@ describe('TicketsComponent', () => {
       expect(disclosure).toContain('$1.03');
     });
 
+    it('should block resale confirmation when payout math is unavailable', async () => {
+      ticketsValue.set([makeTicket({resaleSellerSettlement: undefined})]);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      const card = await harness.getTicketCard(0);
+      await card.clickListForResale();
+      fixture.detectChanges();
+
+      expect(await card.getResaleSellerDisclosureText()).toBeNull();
+      const unavailableText =
+        await card.getResaleSellerDisclosureUnavailableText();
+      expect(unavailableText).toContain("We can't calculate the resale payout");
+      expect(await card.isConfirmResaleListingDisabled()).toBe(true);
+      await card.clickConfirmResaleListing();
+      await fixture.whenStable();
+      expect(resaleServiceMock.listTicketForResale).not.toHaveBeenCalled();
+    });
+
     it('should close the confirmation flow without listing', async () => {
       const card = await harness.getTicketCard(0);
       await card.clickListForResale();

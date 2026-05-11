@@ -156,10 +156,7 @@ function buildTicketLineItem(args: {
       unit_amount: unitAmount,
       product_data: {
         name: args.eventName,
-        description:
-          hasExactUnitAmount && quantity > 1
-            ? `${args.ticketDescription} (${quantity} tickets)`
-            : args.ticketDescription,
+        description: args.ticketDescription,
       },
     },
   };

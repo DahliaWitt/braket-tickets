@@ -457,6 +457,14 @@ interface TicketResaleInfo {
                                     {{ disclosure.lostProcessingFee }}.
                                   </p>
                                 </dl>
+                              } @else {
+                                <div
+                                  class="mt-3 rounded border border-warning/30 bg-warning/10 p-3 font-mono text-2xs leading-relaxed text-warning"
+                                  data-testid="resale-seller-disclosure-unavailable"
+                                >
+                                  We can't calculate the resale payout for this
+                                  ticket yet. Contact support before listing it.
+                                </div>
                               }
                             </div>
                           </div>
@@ -470,7 +478,10 @@ interface TicketResaleInfo {
                               data-testid="ticket-confirm-resale"
                               aria-label="Confirm resale listing"
                               (click)="confirmListForResale(ticket._id)"
-                              [zDisabled]="isListingForResale() === ticket._id"
+                              [zDisabled]="
+                                isListingForResale() === ticket._id ||
+                                !canConfirmResaleListing(ticket)
+                              "
                               [attr.aria-busy]="
                                 isListingForResale() === ticket._id
                               "
@@ -709,6 +720,10 @@ export class TicketsComponent {
     };
   }
 
+  canConfirmResaleListing(ticket: Ticket): boolean {
+    return ticket.resaleSellerSettlement !== undefined;
+  }
+
   openResaleListingFlow(ticketId: string) {
     if (this.isListingForResale() !== null || this.getResaleInfo(ticketId))
       return;
@@ -726,6 +741,15 @@ export class TicketsComponent {
   async confirmListForResale(ticketId: string) {
     if (this.isListingForResale() !== null || this.getResaleInfo(ticketId))
       return;
+    const ticket = this.tickets().find(
+      (candidate) => candidate._id === ticketId,
+    );
+    if (!ticket || !this.canConfirmResaleListing(ticket)) {
+      toast.error(
+        "We can't calculate the resale payout for this ticket yet. Contact support before listing it.",
+      );
+      return;
+    }
     this.isListingForResale.set(ticketId);
     try {
       const listingId = await this.resaleService.listTicketForResale(ticketId);

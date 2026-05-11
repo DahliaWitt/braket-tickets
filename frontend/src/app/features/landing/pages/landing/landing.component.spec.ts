@@ -166,9 +166,10 @@ describe('LandingComponent', () => {
         }),
       ];
 
-      const {fixture} = await setup([], events);
-      const host = fixture.nativeElement as HTMLElement;
-      expect(host.textContent).toContain('Sign in for pricing');
+      const {landingHarness} = await setup([], events);
+      const featuredText = await landingHarness.getFeaturedEventText();
+      expect(featuredText).toContain('Sign in for pricing');
+      expect(featuredText).not.toContain('$20');
     });
 
     it('featuredEvent() returns null when no events', async () => {
