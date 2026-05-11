@@ -178,7 +178,7 @@ describe('AnalyticsService', () => {
       });
     });
 
-    it('does not start replay or send direct feedback capture when DNT is enabled', async () => {
+    it('does not start replay but still sends explicit feedback when DNT is enabled', async () => {
       const fetchMock = vi.fn().mockResolvedValue(new Response('{}'));
       vi.stubGlobal('navigator', {doNotTrack: '1'});
       vi.stubGlobal('fetch', fetchMock);
@@ -193,13 +193,31 @@ describe('AnalyticsService', () => {
           message: 'Respect my browser privacy signal',
           route: '/help',
         }),
-      ).resolves.toBe(false);
+      ).resolves.toBe(true);
 
       expect(posthog.startSessionRecording).not.toHaveBeenCalled();
-      expect(fetchMock).not.toHaveBeenCalled();
+      expect(posthog.get_distinct_id).not.toHaveBeenCalled();
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://test.posthog.com/i/v0/e/',
+        expect.objectContaining({
+          method: 'POST',
+        }),
+      );
+      expect(
+        JSON.parse(fetchMock.mock.calls[0][1].body as string),
+      ).toMatchObject({
+        api_key: 'test-api-key',
+        event: 'feedback_submitted',
+        distinct_id: expect.stringMatching(/^feedback:/),
+        properties: {
+          feedback_category: 'bug',
+          feedback_message: 'Respect my browser privacy signal',
+          has_replay_url: false,
+        },
+      });
     });
 
-    it('does not start replay or send direct feedback capture when GPC is enabled', async () => {
+    it('does not start replay but still sends explicit feedback when GPC is enabled', async () => {
       const fetchMock = vi.fn().mockResolvedValue(new Response('{}'));
       vi.stubGlobal('navigator', {globalPrivacyControl: true});
       vi.stubGlobal('fetch', fetchMock);
@@ -214,10 +232,28 @@ describe('AnalyticsService', () => {
           message: 'Respect global privacy control too',
           route: '/help',
         }),
-      ).resolves.toBe(false);
+      ).resolves.toBe(true);
 
       expect(posthog.startSessionRecording).not.toHaveBeenCalled();
-      expect(fetchMock).not.toHaveBeenCalled();
+      expect(posthog.get_distinct_id).not.toHaveBeenCalled();
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://test.posthog.com/i/v0/e/',
+        expect.objectContaining({
+          method: 'POST',
+        }),
+      );
+      expect(
+        JSON.parse(fetchMock.mock.calls[0][1].body as string),
+      ).toMatchObject({
+        api_key: 'test-api-key',
+        event: 'feedback_submitted',
+        distinct_id: expect.stringMatching(/^feedback:/),
+        properties: {
+          feedback_category: 'feature_request',
+          feedback_message: 'Respect global privacy control too',
+          has_replay_url: false,
+        },
+      });
     });
 
     it('configures masked session replay without headers or bodies', async () => {
