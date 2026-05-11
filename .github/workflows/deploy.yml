@@ -5,33 +5,88 @@ name: Deploy to Production
 # See ops/docker-compose.yml for local development or self-hosting reference.
 
 on:
-  workflow_call:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
     inputs:
       ref:
-        description: Git SHA to deploy.
-        required: true
+        description: Optional Git SHA override for manual production deploys.
+        required: false
+        default: ''
         type: string
       branch:
-        description: Source branch for concurrency scoping.
-        required: true
+        description: Optional branch label override for manual production deploys.
+        required: false
+        default: ''
         type: string
       force_all:
         description: Force all deploy slices to run.
         required: false
-        default: false
+        default: true
         type: boolean
 
 concurrency:
-  group: deploy-production-${{ inputs.branch }}
+  group: deploy-production
   cancel-in-progress: true
 
 permissions:
   contents: read
-  actions: write
 
 jobs:
+  deploy-context:
+    name: Resolve Production Deploy Context
+    runs-on: self-hosted
+    if: >-
+      ${{
+        github.event_name == 'workflow_dispatch' ||
+        (
+          github.event_name == 'workflow_run' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.head_branch == 'main'
+        )
+      }}
+    outputs:
+      ref: ${{ steps.resolve.outputs.ref }}
+      branch: ${{ steps.resolve.outputs.branch }}
+      force_all: ${{ steps.resolve.outputs.force_all }}
+    steps:
+      - name: Resolve deploy ref
+        id: resolve
+        env:
+          DEFAULT_BRANCH: ${{ github.ref_name }}
+          DEFAULT_SHA: ${{ github.sha }}
+          INPUT_BRANCH: ${{ inputs.branch }}
+          INPUT_FORCE_ALL: ${{ inputs.force_all }}
+          INPUT_REF: ${{ inputs.ref }}
+          WORKFLOW_EVENT: ${{ github.event_name }}
+          WORKFLOW_RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+
+          ref="${INPUT_REF:-${WORKFLOW_RUN_SHA:-${DEFAULT_SHA}}}"
+          branch="${INPUT_BRANCH:-${WORKFLOW_RUN_BRANCH:-${DEFAULT_BRANCH}}}"
+          force_all="${INPUT_FORCE_ALL:-true}"
+
+          if [ "${WORKFLOW_EVENT}" = "workflow_run" ]; then
+            force_all=true
+          fi
+
+          if [ "${branch}" != "main" ]; then
+            echo "Production deploys must come from main; got ${branch}."
+            exit 1
+          fi
+
+          echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
+          echo "branch=${branch}" >> "${GITHUB_OUTPUT}"
+          echo "force_all=${force_all}" >> "${GITHUB_OUTPUT}"
+
   changes:
     runs-on: self-hosted
+    needs: deploy-context
     outputs:
       backend: ${{ steps.detect.outputs.backend }}
       frontend: ${{ steps.detect.outputs.frontend }}
@@ -39,14 +94,14 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ needs.deploy-context.outputs.ref }}
           fetch-depth: 0
       - name: Detect changed deployment slices
         id: detect
         env:
-          DEPLOY_REF: ${{ inputs.ref }}
+          DEPLOY_REF: ${{ needs.deploy-context.outputs.ref }}
           EVENT_BEFORE: ${{ github.event.before }}
-          FORCE_ALL: ${{ inputs.force_all && 'true' || 'false' }}
+          FORCE_ALL: ${{ needs.deploy-context.outputs.force_all }}
         run: |
           set -euo pipefail
 
@@ -104,7 +159,7 @@ jobs:
     environment:
       name: production
       deployment: false
-    needs: changes
+    needs: [deploy-context, changes]
     if: ${{ needs.changes.outputs.backend == 'true' }}
     env:
       AUTH_BASE_URL: ${{ secrets.AUTH_BASE_URL }}
@@ -139,7 +194,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ needs.deploy-context.outputs.ref }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@c336a2788d9774dccfdeb4823a5058ccc9f07453 # v4.3.0
@@ -176,14 +231,14 @@ jobs:
     environment:
       name: production
       deployment: false
-    needs: [changes, deploy-convex]
+    needs: [deploy-context, changes, deploy-convex]
     if: ${{ needs.changes.outputs.frontend == 'true' && (needs.deploy-convex.result == 'success' || needs.deploy-convex.result == 'skipped') }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ needs.deploy-context.outputs.ref }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@c336a2788d9774dccfdeb4823a5058ccc9f07453 # v4.3.0
@@ -219,7 +274,7 @@ jobs:
     environment:
       name: production
       deployment: false
-    needs: changes
+    needs: [deploy-context, changes]
     outputs:
       deployed: ${{ steps.status.outputs.needs_deploy }}
     concurrency:
@@ -230,7 +285,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ needs.deploy-context.outputs.ref }}
 
       - name: Ensure backup directory exists
         run: |
@@ -320,21 +375,47 @@ jobs:
   record-deployment:
     name: Record Production Deployment
     runs-on: self-hosted
-    needs: [changes, deploy-convex, deploy-frontend, deploy-observability]
+    needs:
+      [
+        deploy-context,
+        changes,
+        deploy-convex,
+        deploy-frontend,
+        deploy-observability,
+      ]
     if: >-
       ${{
         always() &&
-        needs.changes.result == 'success' &&
-        (needs.deploy-convex.result == 'success' || needs.deploy-convex.result == 'skipped') &&
-        (needs.deploy-frontend.result == 'success' || needs.deploy-frontend.result == 'skipped') &&
-        (needs.deploy-observability.result == 'success' || needs.deploy-observability.result == 'skipped') &&
+        needs.deploy-context.result == 'success' &&
         (
+          needs.changes.result != 'success' ||
           needs.changes.outputs.backend == 'true' ||
           needs.changes.outputs.frontend == 'true' ||
+          needs.changes.outputs.observability == 'true' ||
           needs.deploy-observability.outputs.deployed == 'true'
         )
       }}
     environment: production
     steps:
       - name: Record deployment
-        run: echo "Production deployment completed for ${{ inputs.ref }}"
+        run: |
+          set -euo pipefail
+
+          failed=false
+          for result in \
+            "${{ needs.changes.result }}" \
+            "${{ needs.deploy-convex.result }}" \
+            "${{ needs.deploy-frontend.result }}" \
+            "${{ needs.deploy-observability.result }}"
+          do
+            if [ "${result}" != "success" ] && [ "${result}" != "skipped" ]; then
+              failed=true
+            fi
+          done
+
+          if [ "${failed}" = "true" ]; then
+            echo "Production deployment failed for ${{ needs.deploy-context.outputs.ref }}"
+            exit 1
+          fi
+
+          echo "Production deployment completed for ${{ needs.deploy-context.outputs.ref }}"
