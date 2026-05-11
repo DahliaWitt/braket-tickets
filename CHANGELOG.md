@@ -1,5 +1,45 @@
 # Changelog
 
+## [0.1.9](https://github.com/DahliaWitt/braket-tickets/compare/v0.1.8...v0.1.9) (2026-05-11)
+
+
+### Features
+
+* **admin:** add search filtering to applications and members tables ([baba663](https://github.com/DahliaWitt/braket-tickets/commit/baba6638cbc2f1a1a680b2c47bf8422a302ad319)), closes [#27](https://github.com/DahliaWitt/braket-tickets/issues/27)
+* **audit:** add targetUserId to audit log for role grant/revoke ([#32](https://github.com/DahliaWitt/braket-tickets/issues/32)) ([e26f56d](https://github.com/DahliaWitt/braket-tickets/commit/e26f56dac64912b978ff10aad858b3d9779e08fe))
+* **tickets:** surface code of conduct across event pages and emails ([#31](https://github.com/DahliaWitt/braket-tickets/issues/31)) ([b423788](https://github.com/DahliaWitt/braket-tickets/commit/b4237881f5d7838806e1b1441eaec38fa1af0076))
+* **vetting:** add reinstate button for revoked memberships ([#35](https://github.com/DahliaWitt/braket-tickets/issues/35)) ([47b393f](https://github.com/DahliaWitt/braket-tickets/commit/47b393ffb7214ea43402037b989eac7bdabd5b34))
+
+
+### Bug Fixes
+
+* **admin:** cascade admin role revocation when revoking membership ([#36](https://github.com/DahliaWitt/braket-tickets/issues/36)) ([4b32127](https://github.com/DahliaWitt/braket-tickets/commit/4b32127b45f9dbad2e71b72efdc483ad95003948)), closes [#25](https://github.com/DahliaWitt/braket-tickets/issues/25)
+* **admin:** move members search to server-side Convex query ([db369e7](https://github.com/DahliaWitt/braket-tickets/commit/db369e722a990d81db70c8d22f1297ec50d8abff))
+* **admin:** resolve team roles by existing users ([#34](https://github.com/DahliaWitt/braket-tickets/issues/34)) ([9a9a496](https://github.com/DahliaWitt/braket-tickets/commit/9a9a4960c6ef9ca31a73ae515cd356da3de4f08c))
+* **admin:** stream member search through directory to eliminate pre-scope cap ([ba9f4bf](https://github.com/DahliaWitt/braket-tickets/commit/ba9f4bf7b55a1edc998f99ae3e15bba3644cd50f))
+* **admin:** use CDK harness throughout applications-table specs ([ac01dc8](https://github.com/DahliaWitt/braket-tickets/commit/ac01dc8a26431d320d804183e1501a3673844e8f))
+* **analytics:** harden posthog cookie scope ([a3ae05f](https://github.com/DahliaWitt/braket-tickets/commit/a3ae05fd511723facbe877bad0a553b024378f25))
+* **analytics:** send feedback through PostHog ([b653053](https://github.com/DahliaWitt/braket-tickets/commit/b653053d017bb4c8305f6d9fd718c788436a1214))
+* **ci:** call deploy workflows directly ([3861c1d](https://github.com/DahliaWitt/braket-tickets/commit/3861c1d9ce4f435c82ec63628d6a67c41eaf1e75))
+* **ci:** call deploy workflows directly ([fb43ffc](https://github.com/DahliaWitt/braket-tickets/commit/fb43ffc736cd4e2201909815397f00e955f1d962))
+* **ci:** split release please token usage ([a426132](https://github.com/DahliaWitt/braket-tickets/commit/a426132285e2eb06d11813a0433f828376c6cac5))
+* **convex:** address static-analysis findings across backend ([#11](https://github.com/DahliaWitt/braket-tickets/issues/11)) ([8603af8](https://github.com/DahliaWitt/braket-tickets/commit/8603af88274051c6ae29f3f2ed81d27db4ef7d90))
+* **email:** pass isGuest=true in guest ticket email ([#37](https://github.com/DahliaWitt/braket-tickets/issues/37)) ([73fc196](https://github.com/DahliaWitt/braket-tickets/commit/73fc196169e8eb9b5bde2b0f4c823ab28ba46ba7))
+* **event-card:** add buy=true query param to ticket buttons ([#33](https://github.com/DahliaWitt/braket-tickets/issues/33)) ([619168a](https://github.com/DahliaWitt/braket-tickets/commit/619168a9278f0be748fff1b1338c57c2da545414))
+* **frontend:** restore scroll position on route changes ([#26](https://github.com/DahliaWitt/braket-tickets/issues/26)) ([efcfa7c](https://github.com/DahliaWitt/braket-tickets/commit/efcfa7c9642196a4f504e245a042f94433a0e483))
+* **scripts:** reinject doppler for nested config switches ([6800ab2](https://github.com/DahliaWitt/braket-tickets/commit/6800ab29049f4f099ae95983625e83102ed707bd))
+* **tooling:** configure Convex generated check env ([6b08c36](https://github.com/DahliaWitt/braket-tickets/commit/6b08c366ea84a9ea1ffa3db74cd434a1ead929f4))
+
+
+### Performance
+
+* **admin:** parallelize directory lookups in member search ([3ea4504](https://github.com/DahliaWitt/braket-tickets/commit/3ea45040bef7311d9f4b26cabd0f89b6aa7adace))
+
+
+### Documentation
+
+* **skills:** skip worktree creation when already inside a worktree ([b9225f5](https://github.com/DahliaWitt/braket-tickets/commit/b9225f5cf08505dfb86cf8e3ef780089bced4cb4))
+
 ## [0.1.8](https://github.com/DahliaWitt/braket-tickets/compare/v0.1.7...v0.1.8) (2026-05-09)
 
 ### Features
