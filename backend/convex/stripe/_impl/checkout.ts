@@ -42,6 +42,7 @@ export interface CreateDirectChargeCheckoutSessionArgs {
   connectedAccountId: string;
   orderId: string;
   amountCents: number;
+  quantity: number;
   checkoutTheme: CheckoutThemeMode;
   eventName: string;
   ticketDescription: string;
@@ -54,6 +55,7 @@ export interface CreateDirectChargeCheckoutSessionArgs {
 export interface CreatePlatformCheckoutSessionArgs {
   orderId: string;
   amountCents: number;
+  quantity: number;
   checkoutTheme: CheckoutThemeMode;
   eventName: string;
   ticketDescription: string;
@@ -135,6 +137,37 @@ function toStripeSessionResult(
   };
 }
 
+function buildTicketLineItem(args: {
+  amountCents: number;
+  quantity: number;
+  eventName: string;
+  ticketDescription: string;
+}): NonNullable<CheckoutSessionCreateParams['line_items']>[number] {
+  if (!Number.isInteger(args.quantity) || args.quantity <= 0) {
+    throw new Error(
+      `Checkout line item quantity must be a positive integer; received ${args.quantity}`,
+    );
+  }
+
+  const quantity = args.quantity;
+  const hasExactUnitAmount = args.amountCents % quantity === 0;
+  const unitAmount = hasExactUnitAmount
+    ? args.amountCents / quantity
+    : args.amountCents;
+
+  return {
+    quantity: hasExactUnitAmount ? quantity : 1,
+    price_data: {
+      currency: 'usd',
+      unit_amount: unitAmount,
+      product_data: {
+        name: args.eventName,
+        description: args.ticketDescription,
+      },
+    },
+  };
+}
+
 /**
  * Promoter-as-MoR direct charge. Uses the `Stripe-Account` header via the
  * SDK's per-request `{stripeAccount}` option so the Checkout Session, the
@@ -175,17 +208,12 @@ export async function createDirectChargeCheckoutSession(
       ...(args.buyerEmail ? {customer_email: args.buyerEmail} : {}),
       expires_at: Math.floor(args.expiresAtMs / 1000),
       line_items: [
-        {
-          quantity: 1,
-          price_data: {
-            currency: 'usd',
-            unit_amount: args.amountCents,
-            product_data: {
-              name: args.eventName,
-              description: args.ticketDescription,
-            },
-          },
-        },
+        buildTicketLineItem({
+          amountCents: args.amountCents,
+          quantity: args.quantity,
+          eventName: args.eventName,
+          ticketDescription: args.ticketDescription,
+        }),
       ],
       payment_intent_data: {
         application_fee_amount: applicationFee,
@@ -233,17 +261,12 @@ export async function createPlatformCheckoutSession(
       ...(args.buyerEmail ? {customer_email: args.buyerEmail} : {}),
       expires_at: Math.floor(args.expiresAtMs / 1000),
       line_items: [
-        {
-          quantity: 1,
-          price_data: {
-            currency: 'usd',
-            unit_amount: args.amountCents,
-            product_data: {
-              name: args.eventName,
-              description: args.ticketDescription,
-            },
-          },
-        },
+        buildTicketLineItem({
+          amountCents: args.amountCents,
+          quantity: args.quantity,
+          eventName: args.eventName,
+          ticketDescription: args.ticketDescription,
+        }),
       ],
       payment_intent_data: {
         ...(descriptorSuffix

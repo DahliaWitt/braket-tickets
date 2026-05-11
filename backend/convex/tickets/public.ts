@@ -12,6 +12,7 @@ import {
   tierValidator,
 } from '../lib/validators/ticketing';
 import {canViewEventRoster, requireEventForRoster} from '../lib/access';
+import {calculateResaleSellerSettlement} from '../lib/resale/helpers';
 
 // Raw ticket document shape — matches the DB schema, no enriched fields.
 // Used as the return validator for internal queries that return raw docs.
@@ -44,6 +45,13 @@ const ticketFields = {
   guestEmail: v.optional(v.string()),
 };
 
+const resaleSellerSettlementValidator = v.object({
+  sellerPaidAmount: v.number(),
+  resaleFeeCents: v.number(),
+  sellerRefundAmount: v.number(),
+  lostProcessingFeeCents: v.number(),
+});
+
 function toTicketUserShape(user: Doc<'users'>) {
   return {
     _id: user._id,
@@ -65,6 +73,7 @@ export const getMyTickets = query({
     v.object({
       ...ticketFields,
       event: v.union(canonicalEventDocValidator, v.null()),
+      resaleSellerSettlement: v.optional(resaleSellerSettlementValidator),
     }),
   ),
   handler: async (ctx) => {
@@ -81,13 +90,31 @@ export const getMyTickets = query({
     );
 
     const eventIds = tickets.map((ticket) => ticket.eventId);
-    const eventMap = await batchGetDocuments(ctx, 'events', eventIds);
+    const orderIds = tickets
+      .map((ticket) => ticket.orderId)
+      .filter((orderId): orderId is NonNullable<typeof orderId> =>
+        Boolean(orderId),
+      );
+    const [eventMap, orderMap] = await Promise.all([
+      batchGetDocuments(ctx, 'events', eventIds),
+      batchGetDocuments(ctx, 'ticket_orders', orderIds),
+    ]);
 
     return tickets.map((ticket) => {
       const event = eventMap.get(ticket.eventId);
+      const order = ticket.orderId ? orderMap.get(ticket.orderId) : undefined;
       return {
         ...ticket,
         event: event ? toEventDocShape(event) : null,
+        ...(event && order
+          ? {
+              resaleSellerSettlement: calculateResaleSellerSettlement(
+                order,
+                undefined,
+                event.resaleFeePct,
+              ),
+            }
+          : {}),
       };
     });
   },

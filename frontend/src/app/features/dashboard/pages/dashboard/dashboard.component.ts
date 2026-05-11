@@ -5,7 +5,7 @@ import {
   signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
-import {DatePipe, CurrencyPipe, NgOptimizedImage} from '@angular/common';
+import {DatePipe, NgOptimizedImage} from '@angular/common';
 import {AuthService} from '@/core/services/auth.service';
 import {DashboardDataService} from '@/features/dashboard/services/dashboard-data.service';
 import {DashboardPageDataService} from '@/features/dashboard/services/dashboard-page-data.service';
@@ -15,13 +15,16 @@ import {BraCommunityAvatarComponent} from '@ui/components/primitives/community-a
 import {ContentLayoutComponent} from '@/layout/content-layout/content-layout.component';
 import {EVENT_VISIBILITY} from '@shared/domain/event-visibility';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
+import {
+  getBuyerPricingSummary,
+  type BuyerPricingInput,
+} from '@shared/pricing/pricing-summary';
 
 @Component({
   selector: 'app-dashboard',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     DatePipe,
-    CurrencyPipe,
     RouterLink,
     NgOptimizedImage,
     ContentLayoutComponent,
@@ -271,5 +274,9 @@ export class DashboardComponent {
 
   logout() {
     void this.auth.logout();
+  }
+
+  priceSummary(event: BuyerPricingInput) {
+    return getBuyerPricingSummary(event);
   }
 }

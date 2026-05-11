@@ -18,6 +18,7 @@ import {BraCommunityAvatarComponent} from '@ui/components/primitives/community-a
 import {BraCodeOfConductLinkComponent} from '@ui/components/primitives/code-of-conduct-link/code-of-conduct-link.component';
 import {api} from '@convex/_generated/api';
 import {queryLoadState} from '@/utils/resource';
+import {AuthService} from '@/core/services/auth.service';
 
 @Component({
   selector: 'app-community-events',
@@ -259,6 +260,7 @@ import {queryLoadState} from '@/utils/resource';
                 <app-event-card
                   data-testid="community-event-card"
                   [event]="event"
+                  [canSeePrice]="canSeeEventPrice(event)"
                   [priority]="i < 2"
                   class="animate-in fade-in slide-in-from-bottom-8"
                   [style.animation-delay]="i * 75 + 75 + 'ms'"
@@ -279,6 +281,7 @@ import {queryLoadState} from '@/utils/resource';
 })
 export class CommunityEventsComponent {
   private readonly route = inject(ActivatedRoute);
+  readonly auth = inject(AuthService);
 
   /** Slug from the route path param (e.g. /c/:slug or /communities/:slug). */
   private readonly routeSlug = toSignal(
@@ -333,6 +336,12 @@ export class CommunityEventsComponent {
     () => this.queryData()?.organizerCodeOfConduct,
   );
   readonly events = computed(() => this.queryData()?.events ?? []);
+
+  canSeeEventPrice(event: {visibility?: string}): boolean {
+    return (
+      event.visibility !== 'public_viewable' || this.auth.isAuthenticated()
+    );
+  }
 
   /**
    * Derive the page state from query signals for clean @switch in the template.

@@ -89,6 +89,13 @@ describe('TicketsComponent', () => {
         title: 'Test Event',
         date: '2026-06-01',
         resaleEnabled: true,
+        resaleFeePct: 4.2,
+      },
+      resaleSellerSettlement: {
+        sellerPaidAmount: 2500,
+        resaleFeeCents: 105,
+        sellerRefundAmount: 2395,
+        lostProcessingFeeCents: 103,
       },
       ...overrides,
     };
@@ -260,6 +267,42 @@ describe('TicketsComponent', () => {
       expect(await card.hasResaleConfirmationPanel()).toBe(true);
       await card.waitForConfirmResaleListingFocus();
       expect(await card.isConfirmResaleListingFocused()).toBe(true);
+      expect(resaleServiceMock.listTicketForResale).not.toHaveBeenCalled();
+    });
+
+    it('should disclose seller payout math before listing', async () => {
+      const card = await harness.getTicketCard(0);
+      await card.clickListForResale();
+      fixture.detectChanges();
+
+      const disclosure = await card.getResaleSellerDisclosureText();
+      expect(disclosure).toContain('Original ticket price');
+      expect(disclosure).toContain('$25');
+      expect(disclosure).toContain('4.2%');
+      expect(disclosure).toContain('$1.05');
+      expect(disclosure).toContain('$23.95');
+      expect(disclosure).not.toContain('$1.03');
+      const disclosureNote = await card.getResaleSellerDisclosureNoteText();
+      expect(disclosureNote).toContain('$1.03');
+    });
+
+    it('should block resale confirmation when payout math is unavailable', async () => {
+      ticketsValue.set([makeTicket({resaleSellerSettlement: undefined})]);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      const card = await harness.getTicketCard(0);
+      await card.clickListForResale();
+      fixture.detectChanges();
+
+      expect(await card.getResaleSellerDisclosureText()).toBeNull();
+      const unavailableText =
+        await card.getResaleSellerDisclosureUnavailableText();
+      expect(unavailableText).toContain("We can't calculate the resale payout");
+      expect(await card.isConfirmResaleListingDisabled()).toBe(true);
+      await card.clickConfirmResaleListing();
+      await fixture.whenStable();
       expect(resaleServiceMock.listTicketForResale).not.toHaveBeenCalled();
     });
 

@@ -2238,6 +2238,10 @@ describe('listPublicUpcomingInternal', () => {
       title: 'Public Party',
       date: '2030-06-15T00:00:00.000Z',
       price: 2000,
+      slidingScaleEnabled: true,
+      slidingScaleMin: 0,
+      slidingScaleMax: 2000,
+      supporterDefaultPrice: 3500,
       totalTickets: 5,
       status: 'published',
       visibility: 'public',
@@ -2315,6 +2319,13 @@ describe('listPublicUpcomingInternal', () => {
     const publicParty = results.find((r) => r.title === 'Public Party')!;
     expect(publicParty.soldCount).toBe(4);
     expect(publicParty).toMatchObject({isSoldOut: true});
+    expect(publicParty).toMatchObject({
+      price: 2000,
+      slidingScaleEnabled: true,
+      slidingScaleMin: 0,
+      slidingScaleMax: 2000,
+      supporterDefaultPrice: 3500,
+    });
     // Verify posterUrl is null (not undefined) for events without posters
     expect(publicParty.posterUrl).toBe(null);
   });
