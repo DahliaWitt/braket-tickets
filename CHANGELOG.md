@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.10](https://github.com/DahliaWitt/braket-tickets/compare/v0.1.9...v0.1.10) (2026-05-11)
+
+
+### Documentation
+
+* **ci:** document release merge policy ([#43](https://github.com/DahliaWitt/braket-tickets/issues/43)) ([6b8681f](https://github.com/DahliaWitt/braket-tickets/commit/6b8681fcfd1a9fc1691676c661c1e24501ccb778))
+
 ## [0.1.9](https://github.com/DahliaWitt/braket-tickets/compare/v0.1.8...v0.1.9) (2026-05-11)
 
 ### Features
