@@ -41,6 +41,23 @@ const resolvePostHogUiHost = (apiHost: string | undefined): string =>
     ? 'https://eu.posthog.com'
     : 'https://us.posthog.com';
 
+const getLastFetchJsonPayload = (fetchMock: Mock): Record<string, unknown> => {
+  const fetchInit = fetchMock.mock.calls.at(-1)?.[1] as RequestInit | undefined;
+  const body = fetchInit?.body;
+  if (typeof body !== 'string') {
+    throw new Error('Expected fetch request body to be a string');
+  }
+  const payload: unknown = JSON.parse(body);
+  if (
+    typeof payload !== 'object' ||
+    payload === null ||
+    Array.isArray(payload)
+  ) {
+    throw new Error('Expected fetch request body to be a JSON object');
+  }
+  return payload as Record<string, unknown>;
+};
+
 const TEST_FEATURE_FLAG = 'beta-feature';
 
 describe('AnalyticsService', () => {
@@ -203,12 +220,13 @@ describe('AnalyticsService', () => {
           method: 'POST',
         }),
       );
-      expect(
-        JSON.parse(fetchMock.mock.calls[0][1].body as string),
-      ).toMatchObject({
+      const payload = getLastFetchJsonPayload(fetchMock);
+      expect(payload['distinct_id']).toEqual(
+        expect.stringMatching(/^feedback:/),
+      );
+      expect(payload).toMatchObject({
         api_key: 'test-api-key',
         event: 'feedback_submitted',
-        distinct_id: expect.stringMatching(/^feedback:/),
         properties: {
           feedback_category: 'bug',
           feedback_message: 'Respect my browser privacy signal',
@@ -242,12 +260,13 @@ describe('AnalyticsService', () => {
           method: 'POST',
         }),
       );
-      expect(
-        JSON.parse(fetchMock.mock.calls[0][1].body as string),
-      ).toMatchObject({
+      const payload = getLastFetchJsonPayload(fetchMock);
+      expect(payload['distinct_id']).toEqual(
+        expect.stringMatching(/^feedback:/),
+      );
+      expect(payload).toMatchObject({
         api_key: 'test-api-key',
         event: 'feedback_submitted',
-        distinct_id: expect.stringMatching(/^feedback:/),
         properties: {
           feedback_category: 'feature_request',
           feedback_message: 'Respect global privacy control too',
@@ -279,10 +298,11 @@ describe('AnalyticsService', () => {
       ).resolves.toBe(true);
 
       expect(posthog.get_distinct_id).not.toHaveBeenCalled();
-      expect(
-        JSON.parse(fetchMock.mock.calls[0][1].body as string),
-      ).toMatchObject({
-        distinct_id: expect.stringMatching(/^feedback:/),
+      const payload = getLastFetchJsonPayload(fetchMock);
+      expect(payload['distinct_id']).toEqual(
+        expect.stringMatching(/^feedback:/),
+      );
+      expect(payload).toMatchObject({
         properties: {
           signed_in: true,
           $process_person_profile: false,
@@ -617,16 +637,8 @@ describe('AnalyticsService', () => {
       vi.stubGlobal('fetch', fetchMock);
     });
 
-    const getLastFeedbackPayload = (): Record<string, unknown> => {
-      const fetchInit = fetchMock.mock.calls.at(-1)?.[1] as
-        | RequestInit
-        | undefined;
-      const body = fetchInit?.body;
-      if (typeof body !== 'string') {
-        throw new Error('Expected feedback request body to be a string');
-      }
-      return JSON.parse(body) as Record<string, unknown>;
-    };
+    const getLastFeedbackPayload = (): Record<string, unknown> =>
+      getLastFetchJsonPayload(fetchMock);
 
     it('should not capture feedback when message is blank', async () => {
       await expect(
