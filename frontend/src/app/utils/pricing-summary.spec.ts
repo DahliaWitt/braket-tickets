@@ -2,12 +2,12 @@ import {describe, expect, it} from 'vitest';
 import {getBuyerPricingSummary} from '@shared/pricing/pricing-summary';
 
 describe('getBuyerPricingSummary', () => {
-  it('labels regular buyer-visible prices as all-in', () => {
+  it('labels regular buyer-visible prices plainly', () => {
     expect(
       getBuyerPricingSummary({price: 2500, supporterDefaultPrice: 4000}),
     ).toMatchObject({
       kind: 'regular',
-      primaryText: '$25 all-in',
+      primaryText: '$25',
       secondaryText: 'Supporter from $40',
       unitAmountCents: 2500,
       totalAmountCents: 2500,
@@ -25,7 +25,7 @@ describe('getBuyerPricingSummary', () => {
       }),
     ).toMatchObject({
       kind: 'sliding_scale',
-      primaryText: '$0-$25 all-in sliding scale',
+      primaryText: '$0-$25 sliding scale',
       secondaryText: 'Regular $25 / supporter from $40',
     });
   });

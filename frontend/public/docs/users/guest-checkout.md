@@ -33,4 +33,4 @@ Your ticket lives in your email — there's no Tickets page or dashboard to mana
 
 ## When to make an account instead
 
-If you're planning to attend more than one event, or the events you're eyeing are private, [creating an account](./getting-started.md) is worth the minute it takes. Dashboard, resale, vetting — all in one place.
+If you're planning to attend more than one event, or the events you're eyeing are private, [creating an account](./getting-started.md) is worth the minute it takes. Dashboard, resale, and vetting stay together.
