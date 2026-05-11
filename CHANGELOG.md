@@ -5,40 +5,82 @@
 
 ### Features
 
-* **admin:** add search filtering to applications and members tables ([baba663](https://github.com/DahliaWitt/braket-tickets/commit/baba6638cbc2f1a1a680b2c47bf8422a302ad319)), closes [#27](https://github.com/DahliaWitt/braket-tickets/issues/27)
-* **audit:** add targetUserId to audit log for role grant/revoke ([#32](https://github.com/DahliaWitt/braket-tickets/issues/32)) ([e26f56d](https://github.com/DahliaWitt/braket-tickets/commit/e26f56dac64912b978ff10aad858b3d9779e08fe))
-* **tickets:** surface code of conduct across event pages and emails ([#31](https://github.com/DahliaWitt/braket-tickets/issues/31)) ([b423788](https://github.com/DahliaWitt/braket-tickets/commit/b4237881f5d7838806e1b1441eaec38fa1af0076))
-* **vetting:** add reinstate button for revoked memberships ([#35](https://github.com/DahliaWitt/braket-tickets/issues/35)) ([47b393f](https://github.com/DahliaWitt/braket-tickets/commit/47b393ffb7214ea43402037b989eac7bdabd5b34))
+* **admin:** add search filtering to applications and members tables ([48bdcfd](https://github.com/DahliaWitt/braket-tickets/commit/48bdcfd278992331ea34f51f5be299705186134c)), closes [#27](https://github.com/DahliaWitt/braket-tickets/issues/27)
+* **audit:** add targetUserId to audit log for role grant/revoke ([#32](https://github.com/DahliaWitt/braket-tickets/issues/32)) ([2fb3110](https://github.com/DahliaWitt/braket-tickets/commit/2fb31109b778a8ecac470a571fcbb0f640e0b636))
+* **frontend:** wire NgOptimizedImage with Cloudflare image transformations ([59fccb9](https://github.com/DahliaWitt/braket-tickets/commit/59fccb9523d9784d388809ffc9fa4cf3532635ab))
+* **ops:** forward Convex logs to both sinks ([7048eb8](https://github.com/DahliaWitt/braket-tickets/commit/7048eb8f1e66a4b6171f72050297aef2f16e3b23))
+* **ops:** forward Convex logs to both sinks ([f68337a](https://github.com/DahliaWitt/braket-tickets/commit/f68337ad2779e91ea850a9746ef3594240bec853))
+* **tickets:** surface code of conduct across event pages and emails ([#31](https://github.com/DahliaWitt/braket-tickets/issues/31)) ([d51dcb5](https://github.com/DahliaWitt/braket-tickets/commit/d51dcb5f7c20578dbe4cc698e62ea7c192191262))
+* **ui:** add bra-community-avatar shared component ([efdc03f](https://github.com/DahliaWitt/braket-tickets/commit/efdc03fdc9872f81a5ac3d936aafcba837fefb03))
+* **ui:** add bra-community-avatar shared component ([d0b54a1](https://github.com/DahliaWitt/braket-tickets/commit/d0b54a1b7984abf9bce3c2efc15a50c7490bb95e))
+* **vetting:** add reinstate button for revoked memberships ([#35](https://github.com/DahliaWitt/braket-tickets/issues/35)) ([7425941](https://github.com/DahliaWitt/braket-tickets/commit/74259414d92f762a94b71e362d0eb1a655b19262))
 
 
 ### Bug Fixes
 
-* **admin:** cascade admin role revocation when revoking membership ([#36](https://github.com/DahliaWitt/braket-tickets/issues/36)) ([4b32127](https://github.com/DahliaWitt/braket-tickets/commit/4b32127b45f9dbad2e71b72efdc483ad95003948)), closes [#25](https://github.com/DahliaWitt/braket-tickets/issues/25)
-* **admin:** move members search to server-side Convex query ([db369e7](https://github.com/DahliaWitt/braket-tickets/commit/db369e722a990d81db70c8d22f1297ec50d8abff))
-* **admin:** resolve team roles by existing users ([#34](https://github.com/DahliaWitt/braket-tickets/issues/34)) ([9a9a496](https://github.com/DahliaWitt/braket-tickets/commit/9a9a4960c6ef9ca31a73ae515cd356da3de4f08c))
-* **admin:** stream member search through directory to eliminate pre-scope cap ([ba9f4bf](https://github.com/DahliaWitt/braket-tickets/commit/ba9f4bf7b55a1edc998f99ae3e15bba3644cd50f))
-* **admin:** use CDK harness throughout applications-table specs ([ac01dc8](https://github.com/DahliaWitt/braket-tickets/commit/ac01dc8a26431d320d804183e1501a3673844e8f))
-* **analytics:** harden posthog cookie scope ([a3ae05f](https://github.com/DahliaWitt/braket-tickets/commit/a3ae05fd511723facbe877bad0a553b024378f25))
-* **analytics:** send feedback through PostHog ([b653053](https://github.com/DahliaWitt/braket-tickets/commit/b653053d017bb4c8305f6d9fd718c788436a1214))
-* **ci:** call deploy workflows directly ([3861c1d](https://github.com/DahliaWitt/braket-tickets/commit/3861c1d9ce4f435c82ec63628d6a67c41eaf1e75))
-* **ci:** call deploy workflows directly ([fb43ffc](https://github.com/DahliaWitt/braket-tickets/commit/fb43ffc736cd4e2201909815397f00e955f1d962))
-* **ci:** split release please token usage ([a426132](https://github.com/DahliaWitt/braket-tickets/commit/a426132285e2eb06d11813a0433f828376c6cac5))
-* **convex:** address static-analysis findings across backend ([#11](https://github.com/DahliaWitt/braket-tickets/issues/11)) ([8603af8](https://github.com/DahliaWitt/braket-tickets/commit/8603af88274051c6ae29f3f2ed81d27db4ef7d90))
-* **email:** pass isGuest=true in guest ticket email ([#37](https://github.com/DahliaWitt/braket-tickets/issues/37)) ([73fc196](https://github.com/DahliaWitt/braket-tickets/commit/73fc196169e8eb9b5bde2b0f4c823ab28ba46ba7))
-* **event-card:** add buy=true query param to ticket buttons ([#33](https://github.com/DahliaWitt/braket-tickets/issues/33)) ([619168a](https://github.com/DahliaWitt/braket-tickets/commit/619168a9278f0be748fff1b1338c57c2da545414))
-* **frontend:** restore scroll position on route changes ([#26](https://github.com/DahliaWitt/braket-tickets/issues/26)) ([efcfa7c](https://github.com/DahliaWitt/braket-tickets/commit/efcfa7c9642196a4f504e245a042f94433a0e483))
-* **scripts:** reinject doppler for nested config switches ([6800ab2](https://github.com/DahliaWitt/braket-tickets/commit/6800ab29049f4f099ae95983625e83102ed707bd))
-* **tooling:** configure Convex generated check env ([6b08c36](https://github.com/DahliaWitt/braket-tickets/commit/6b08c366ea84a9ea1ffa3db74cd434a1ead929f4))
+* **admin:** cascade admin role revocation when revoking membership ([#36](https://github.com/DahliaWitt/braket-tickets/issues/36)) ([e09104e](https://github.com/DahliaWitt/braket-tickets/commit/e09104e635e0443ef225320562e76a8814d816f2)), closes [#25](https://github.com/DahliaWitt/braket-tickets/issues/25)
+* **admin:** move members search to server-side Convex query ([1c24326](https://github.com/DahliaWitt/braket-tickets/commit/1c2432648d45eb9c22a30e00e50bcc7cd2621412))
+* **admin:** resolve team roles by existing users ([#34](https://github.com/DahliaWitt/braket-tickets/issues/34)) ([5de7e91](https://github.com/DahliaWitt/braket-tickets/commit/5de7e91980ad19b961ae327e79d0b00ae6d34815))
+* **admin:** stream member search through directory to eliminate pre-scope cap ([ad5451d](https://github.com/DahliaWitt/braket-tickets/commit/ad5451dea0ce4754a45084bf76baabd2658b25b8))
+* **admin:** use CDK harness throughout applications-table specs ([bf2bb55](https://github.com/DahliaWitt/braket-tickets/commit/bf2bb5514b00166b3fca8a0e0606e2a62e8bd203))
+* **analytics:** harden posthog cookie scope ([199be16](https://github.com/DahliaWitt/braket-tickets/commit/199be167c44c0064f068aec01f8fb03fafa2ad0c))
+* **analytics:** send feedback through PostHog ([209e3bd](https://github.com/DahliaWitt/braket-tickets/commit/209e3bd1dc532944005ac5245f3a28d5ef520daf))
+* **ci:** call deploy workflows directly ([44362e6](https://github.com/DahliaWitt/braket-tickets/commit/44362e6e750df05bcb70e2496ee9d9e4061c3477))
+* **ci:** split release please token usage ([#42](https://github.com/DahliaWitt/braket-tickets/issues/42)) ([070bdb9](https://github.com/DahliaWitt/braket-tickets/commit/070bdb907db3f9ab89d36462f2f252f0fa73e7a1))
+* **convex:** address static-analysis findings across backend ([#11](https://github.com/DahliaWitt/braket-tickets/issues/11)) ([c932afd](https://github.com/DahliaWitt/braket-tickets/commit/c932afd36fc786d0b8e8b7efe947cc31ca2474eb))
+* **dashboard:** add a11y attrs to truncated nav labels and lock down responsive assertions ([3901bdb](https://github.com/DahliaWitt/braket-tickets/commit/3901bdbd53fa12d2fd7aa0cd100ffa685216c040))
+* **dashboard:** replace horizontal tab scroll with vertical nav rail ([cf54479](https://github.com/DahliaWitt/braket-tickets/commit/cf54479e790c028882287c8018b6c46ae5d8ab01))
+* **dashboard:** replace horizontal tab scroll with vertical nav rail ([2c334c7](https://github.com/DahliaWitt/braket-tickets/commit/2c334c760a276bd2f6d2de82529b873210b8291f))
+* **dashboard:** resolve duplicate class binding ([6ce2eba](https://github.com/DahliaWitt/braket-tickets/commit/6ce2eba2bb253e64a0325867e6976f2677f5a369))
+* **dashboard:** resolve duplicate class binding ([357f96c](https://github.com/DahliaWitt/braket-tickets/commit/357f96cf45a7ced30985ead0ac8470f9b38ce8de))
+* **dashboard:** show community logos instead of fallback initials ([d7b49cf](https://github.com/DahliaWitt/braket-tickets/commit/d7b49cf8e8fc012b536ffef3ba51ef02aa79fdc1))
+* **dashboard:** show community logos instead of fallback initials ([4c247cc](https://github.com/DahliaWitt/braket-tickets/commit/4c247cc6364bdb2aa0e4bf2594bf03bdfa9575b8))
+* **docs:** correct accuracy issues from PR review ([122a439](https://github.com/DahliaWitt/braket-tickets/commit/122a4398ac7aff0a9b4924921872815b2eeb6056))
+* **email:** pass isGuest=true in guest ticket email ([#37](https://github.com/DahliaWitt/braket-tickets/issues/37)) ([39f2968](https://github.com/DahliaWitt/braket-tickets/commit/39f29683b686895721a0f494a5ffeb65f250f4eb))
+* **event-card:** add buy=true query param to ticket buttons ([#33](https://github.com/DahliaWitt/braket-tickets/issues/33)) ([217e875](https://github.com/DahliaWitt/braket-tickets/commit/217e8757fbd936c9f337bafcd56d79d26ef0c47d))
+* **frontend:** add missing aria-label to member approve button ([64b1baa](https://github.com/DahliaWitt/braket-tickets/commit/64b1baa705c33b4d4eddddf8c05ad21632bdae6a))
+* **frontend:** address monitoring review findings ([bf9e72e](https://github.com/DahliaWitt/braket-tickets/commit/bf9e72e1936107836774a700e0475e1906e70a9e))
+* **frontend:** display event times alongside dates ([5a067bf](https://github.com/DahliaWitt/braket-tickets/commit/5a067bf52982631594f8ec25bbdc2320c1b2401c))
+* **frontend:** display event times alongside dates across all surfaces ([76c5922](https://github.com/DahliaWitt/braket-tickets/commit/76c59220ff82cf029b08a7e3f3b304fd362ca867))
+* **frontend:** finish event time display PR ([919d1d4](https://github.com/DahliaWitt/braket-tickets/commit/919d1d4ad755ca93609920e75cac9dcc04c0464b))
+* **frontend:** resolve docstring PR feedback ([435d14b](https://github.com/DahliaWitt/braket-tickets/commit/435d14b915e904e05c1fb90045c97aaeb5c3142f))
+* **frontend:** restore scroll position on route changes ([#26](https://github.com/DahliaWitt/braket-tickets/issues/26)) ([aaeda0b](https://github.com/DahliaWitt/braket-tickets/commit/aaeda0ba47896c13e1e51dc16f90dc5684cedb38))
+* **frontend:** show landing page instead of dashboard after logout ([d63f680](https://github.com/DahliaWitt/braket-tickets/commit/d63f6805a1caa1fb8a336027ff0df96095dd6890))
+* **scripts:** reinject doppler for nested config switches ([6d0311c](https://github.com/DahliaWitt/braket-tickets/commit/6d0311cf0bcbedcb400a39689c96e8744f9a1a64))
+* **static-analysis:** address audit findings ([3cb10a4](https://github.com/DahliaWitt/braket-tickets/commit/3cb10a431d5de775494cc4df20ebb14af4689e70))
+* **storybook:** dedupe react/react-dom to unblock docs rendering ([d4bdf45](https://github.com/DahliaWitt/braket-tickets/commit/d4bdf45e00084756a695f787a335884bbfa6b0b7))
+* **storybook:** enable GFM in addon-docs for MDX pipe-tables ([0b29723](https://github.com/DahliaWitt/braket-tickets/commit/0b297236b5090d2224c4500d36874786da250ed9))
+* **tickets:** stop auto-opening checkout sidebar on event navigation ([6d01552](https://github.com/DahliaWitt/braket-tickets/commit/6d015522021f90aa0cb47ed3606934e15d16365f))
+* **tooling:** configure Convex generated check env ([a148a08](https://github.com/DahliaWitt/braket-tickets/commit/a148a085cbe840e74bfe5ee7626e5ae843a3e913))
+* **ui:** resolve avatar PR feedback ([3868965](https://github.com/DahliaWitt/braket-tickets/commit/3868965b565be1b0c5a6fe954d2fd87e43160176))
 
 
 ### Performance
 
-* **admin:** parallelize directory lookups in member search ([3ea4504](https://github.com/DahliaWitt/braket-tickets/commit/3ea45040bef7311d9f4b26cabd0f89b6aa7adace))
+* **admin:** parallelize directory lookups in member search ([43802cb](https://github.com/DahliaWitt/braket-tickets/commit/43802cbae7715445481612a099082e4c21c4221a))
+* **frontend:** trim initial app bundle ([ce9e84f](https://github.com/DahliaWitt/braket-tickets/commit/ce9e84f9ca1c0c4936800fef52629664b0b402a5))
+* **frontend:** trim initial app bundle ([7169f84](https://github.com/DahliaWitt/braket-tickets/commit/7169f84d815674f17784b0676330b2e4f7eac492))
+
+
+### Code Refactoring
+
+* **dashboard:** extract community avatar into ng-template ([4b879e9](https://github.com/DahliaWitt/braket-tickets/commit/4b879e9a40bda2b269c3a6199a12c6ebeea1da11))
 
 
 ### Documentation
 
-* **skills:** skip worktree creation when already inside a worktree ([b9225f5](https://github.com/DahliaWitt/braket-tickets/commit/b9225f5cf08505dfb86cf8e3ef780089bced4cb4))
+* add dark mode screenshots to README ([aa22085](https://github.com/DahliaWitt/braket-tickets/commit/aa22085735520ed443fa55d47f3271e9335925c5))
+* add dark mode screenshots to README ([2f841e9](https://github.com/DahliaWitt/braket-tickets/commit/2f841e909cf163ef67077c50cb9d22c85074b613))
+* **ci:** document release merge policy ([3c41a19](https://github.com/DahliaWitt/braket-tickets/commit/3c41a19019b9e1a1a9917d7a0a952cfd8580fb3f))
+* **cujs:** rewrite as goal-centric inventory grounded in code ([57b993e](https://github.com/DahliaWitt/braket-tickets/commit/57b993e5494cdf824746c5eaa816d94dbd71e849))
+* overhaul help documentation for users and admins ([bc95066](https://github.com/DahliaWitt/braket-tickets/commit/bc950668b49d05640a41051672d2cb59c6d2f78c))
+* **skills:** skip worktree creation when already inside a worktree ([60a1ad8](https://github.com/DahliaWitt/braket-tickets/commit/60a1ad891f493974e48c1387b2b1ab5f8c270211))
+
+
+### CI/CD
+
+* **release:** automate release please PR merging ([807a925](https://github.com/DahliaWitt/braket-tickets/commit/807a9252db0e321f762a9c1c805ac7e68a1f4323))
+* route fork PRs to GitHub-hosted runners ([1b0a6c2](https://github.com/DahliaWitt/braket-tickets/commit/1b0a6c2e538296cb86e288a9b5eb9289863f0c84))
 
 ## [0.1.8](https://github.com/DahliaWitt/braket-tickets/compare/v0.1.7...v0.1.8) (2026-05-09)
 
