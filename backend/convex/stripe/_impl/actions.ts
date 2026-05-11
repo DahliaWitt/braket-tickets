@@ -488,6 +488,7 @@ export async function startTicketOrderCheckoutSessionImpl(
         return createPlatformCheckoutSession({
           orderId: order._id,
           amountCents: order.amountCents,
+          quantity: order.quantity,
           checkoutTheme,
           eventName: event.title,
           ticketDescription,
@@ -523,6 +524,7 @@ export async function startTicketOrderCheckoutSessionImpl(
         connectedAccountId: organizer.stripeConnectedAccountId,
         orderId: order._id,
         amountCents: order.amountCents,
+        quantity: order.quantity,
         checkoutTheme,
         eventName: event.title,
         ticketDescription,

@@ -29,6 +29,7 @@ interface MockEvent {
   posterUrl: string | null;
   location?: string;
   description?: string;
+  visibility?: 'public' | 'public_viewable' | 'private';
 }
 
 interface MockCommunity {
@@ -154,6 +155,20 @@ describe('LandingComponent', () => {
 
       const {component} = await setup([], events);
       expect(component.featuredEvent()).toEqual(events[0]);
+    });
+
+    it('shows sign-in pricing copy for public-viewable events before auth', async () => {
+      const events = [
+        makeEvent({
+          _id: 'evt-viewable',
+          title: 'Viewable Event',
+          visibility: 'public_viewable',
+        }),
+      ];
+
+      const {fixture} = await setup([], events);
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.textContent).toContain('Sign in for pricing');
     });
 
     it('featuredEvent() returns null when no events', async () => {

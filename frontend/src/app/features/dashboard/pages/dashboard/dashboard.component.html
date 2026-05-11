@@ -165,9 +165,7 @@
                     {{ event.date | date: 'mediumDate' }},
                     {{ event.date | date: 'shortTime' }}
                     &middot;
-                    {{
-                      event.price / 100 | currency: 'USD' : 'symbol' : '1.0-2'
-                    }}
+                    {{ priceSummary(event).primaryText }}
                   </p>
                 </div>
               </a>
@@ -492,9 +490,7 @@
                   <span> &middot; {{ featured.location }}</span>
                 }
                 &middot;
-                {{
-                  featured.price / 100 | currency: 'USD' : 'symbol' : '1.0-2'
-                }}
+                {{ priceSummary(featured).primaryText }}
               </p>
               <div class="relative z-10 pt-1">
                 @if (featuredCanPurchase()) {
@@ -561,9 +557,7 @@
                       {{ event.date | date: 'mediumDate' }},
                       {{ event.date | date: 'shortTime' }}
                       &middot;
-                      {{
-                        event.price / 100 | currency: 'USD' : 'symbol' : '1.0-2'
-                      }}
+                      {{ priceSummary(event).primaryText }}
                       @if (
                         organizerNameById().get(event.organizerId);
                         as orgName

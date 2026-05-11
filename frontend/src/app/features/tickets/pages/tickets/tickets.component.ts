@@ -38,6 +38,7 @@ import {
 } from '@/features/admin/services/events.service';
 import type {ResaleListingStatus} from '@shared/domain/resale-listing-status';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
+import {formatUsdCents} from '@shared/pricing/pricing-summary';
 
 /** Resale listing data mapped to a ticket */
 interface TicketResaleInfo {
@@ -416,6 +417,47 @@ interface TicketResaleInfo {
                                 pick it up once the event sells out; you can
                                 cancel before then.
                               </p>
+                              @if (resaleDisclosure(ticket); as disclosure) {
+                                <dl
+                                  class="mt-3 grid gap-1 rounded border border-border/60 bg-background/50 p-3 font-mono text-2xs"
+                                  data-testid="resale-seller-disclosure"
+                                >
+                                  <div class="flex justify-between gap-3">
+                                    <dt class="text-muted-foreground">
+                                      Original ticket price
+                                    </dt>
+                                    <dd class="text-foreground">
+                                      {{ disclosure.originalPrice }}
+                                    </dd>
+                                  </div>
+                                  <div class="flex justify-between gap-3">
+                                    <dt class="text-muted-foreground">
+                                      Resale fee
+                                    </dt>
+                                    <dd class="text-foreground">
+                                      {{ disclosure.feePercent }}% ({{
+                                        disclosure.feeAmount
+                                      }})
+                                    </dd>
+                                  </div>
+                                  <div class="flex justify-between gap-3">
+                                    <dt class="text-muted-foreground">
+                                      Expected refund
+                                    </dt>
+                                    <dd class="text-foreground">
+                                      {{ disclosure.expectedRefund }}
+                                    </dd>
+                                  </div>
+                                  <p
+                                    class="pt-2 leading-relaxed text-muted-foreground"
+                                  >
+                                    Stripe processing fees from the original
+                                    purchase are not returned; estimated lost
+                                    processing fee:
+                                    {{ disclosure.lostProcessingFee }}.
+                                  </p>
+                                </dl>
+                              }
                             </div>
                           </div>
                           <div class="mt-4 grid gap-2 sm:grid-cols-2">
@@ -645,6 +687,26 @@ export class TicketsComponent {
       }
     }
     return 0;
+  }
+
+  resaleDisclosure(ticket: Ticket): {
+    originalPrice: string;
+    feePercent: string;
+    feeAmount: string;
+    expectedRefund: string;
+    lostProcessingFee: string;
+  } | null {
+    const settlement = ticket.resaleSellerSettlement;
+    const resaleFeePct = ticket.resolvedEvent?.resaleFeePct ?? 0;
+    if (!settlement) return null;
+
+    return {
+      originalPrice: formatUsdCents(settlement.sellerPaidAmount),
+      feePercent: resaleFeePct.toFixed(1).replace(/\.0$/, ''),
+      feeAmount: formatUsdCents(settlement.resaleFeeCents),
+      expectedRefund: formatUsdCents(settlement.sellerRefundAmount),
+      lostProcessingFee: formatUsdCents(settlement.lostProcessingFeeCents),
+    };
   }
 
   openResaleListingFlow(ticketId: string) {

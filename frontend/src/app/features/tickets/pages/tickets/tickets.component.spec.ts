@@ -89,6 +89,13 @@ describe('TicketsComponent', () => {
         title: 'Test Event',
         date: '2026-06-01',
         resaleEnabled: true,
+        resaleFeePct: 4.2,
+      },
+      resaleSellerSettlement: {
+        sellerPaidAmount: 2500,
+        resaleFeeCents: 105,
+        sellerRefundAmount: 2395,
+        lostProcessingFeeCents: 103,
       },
       ...overrides,
     };
@@ -261,6 +268,20 @@ describe('TicketsComponent', () => {
       await card.waitForConfirmResaleListingFocus();
       expect(await card.isConfirmResaleListingFocused()).toBe(true);
       expect(resaleServiceMock.listTicketForResale).not.toHaveBeenCalled();
+    });
+
+    it('should disclose seller payout math before listing', async () => {
+      const card = await harness.getTicketCard(0);
+      await card.clickListForResale();
+      fixture.detectChanges();
+
+      const disclosure = await card.getResaleSellerDisclosureText();
+      expect(disclosure).toContain('Original ticket price');
+      expect(disclosure).toContain('$25');
+      expect(disclosure).toContain('4.2%');
+      expect(disclosure).toContain('$1.05');
+      expect(disclosure).toContain('$23.95');
+      expect(disclosure).toContain('$1.03');
     });
 
     it('should close the confirmation flow without listing', async () => {

@@ -3141,6 +3141,12 @@ export declare const api: {
           guestSessionId?: Id<"guest_sessions">;
           orderId?: Id<"ticket_orders">;
           qrCode?: string;
+          resaleSellerSettlement?: {
+            lostProcessingFeeCents: number;
+            resaleFeeCents: number;
+            sellerPaidAmount: number;
+            sellerRefundAmount: number;
+          };
           rosterAttendeeName?: string;
           rosterAttendeeNameLower?: string;
           rosterCheckedInByName?: string | null;
@@ -4256,7 +4262,11 @@ export declare const internal: {
           organizerId?: Id<"organizers"> | null;
           posterUrl: string | null;
           price: number;
+          slidingScaleEnabled?: boolean;
+          slidingScaleMax?: number;
+          slidingScaleMin?: number;
           soldCount: number;
+          supporterDefaultPrice?: number;
           ticketSalesStatus?: "active" | "paused" | "ended";
           title: string;
           totalTickets: number;

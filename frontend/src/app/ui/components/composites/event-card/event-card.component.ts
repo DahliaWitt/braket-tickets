@@ -9,11 +9,12 @@ import {
   afterNextRender,
   type OnDestroy,
 } from '@angular/core';
-import {DatePipe, CurrencyPipe, NgOptimizedImage} from '@angular/common';
+import {DatePipe, NgOptimizedImage} from '@angular/common';
 import {RouterLink} from '@angular/router';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 import {ZardCardComponent} from '@ui/components/primitives/card/card.component';
 import type {EventVisibility} from '@shared/domain/event-visibility';
+import {getBuyerPricingSummary} from '@shared/pricing/pricing-summary';
 
 export interface EventCardData {
   _id: string; // intentionally string, not Id<'events'> — UI components don't import Convex types
@@ -22,6 +23,10 @@ export interface EventCardData {
   date: string;
   location?: string;
   price: number;
+  slidingScaleEnabled?: boolean;
+  slidingScaleMin?: number;
+  slidingScaleMax?: number;
+  supporterDefaultPrice?: number;
   totalTickets: number;
   soldCount?: number;
   isSoldOut?: boolean;
@@ -35,7 +40,6 @@ export interface EventCardData {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     DatePipe,
-    CurrencyPipe,
     RouterLink,
     NgOptimizedImage,
     ZardButtonComponent,
@@ -169,8 +173,11 @@ export interface EventCardData {
               [zDisabled]="isBuyDisabled()"
             >
               Tickets
-              <span class="ml-1 font-mono opacity-80">
-                {{ event().price / 100 | currency: 'USD' }}
+              <span
+                class="ml-1 font-mono opacity-80"
+                [attr.aria-label]="pricingSummary().ariaLabel"
+              >
+                {{ pricingSummary().primaryText }}
               </span>
             </a>
           }
@@ -183,6 +190,7 @@ export class EventCardComponent implements OnDestroy {
   readonly event = input.required<EventCardData>();
   readonly priority = input(false);
   readonly showBuyButton = input(true);
+  readonly canSeePrice = input(true);
 
   readonly isSoldOut = computed(() => {
     const e = this.event();
@@ -196,6 +204,12 @@ export class EventCardComponent implements OnDestroy {
 
   /** True when buy button should be disabled (sold out or sales paused). */
   readonly isBuyDisabled = computed(() => this.isSoldOut() || this.isPaused());
+  readonly pricingSummary = computed(() =>
+    getBuyerPricingSummary({
+      ...this.event(),
+      canSeePrice: this.canSeePrice(),
+    }),
+  );
 
   // Track the rendered width of the host element to derive the card variant.
   private readonly containerWidth = signal(0);

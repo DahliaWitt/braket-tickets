@@ -49,6 +49,7 @@ describe('Stripe Checkout session branding', () => {
     await createPlatformCheckoutSession({
       orderId: baseMetadata.orderId,
       amountCents: 2500,
+      quantity: 1,
       checkoutTheme: 'light',
       eventName: 'Concrete & Wax',
       ticketDescription: 'regular ticket',
@@ -68,6 +69,7 @@ describe('Stripe Checkout session branding', () => {
       connectedAccountId: 'acct_direct_branding',
       orderId: baseMetadata.orderId,
       amountCents: 2500,
+      quantity: 1,
       checkoutTheme: 'dark',
       eventName: 'Concrete & Wax',
       ticketDescription: 'regular ticket',

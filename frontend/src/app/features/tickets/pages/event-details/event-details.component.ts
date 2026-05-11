@@ -13,7 +13,7 @@ import {
   type AfterRenderRef,
 } from '@angular/core';
 import {toSignal} from '@angular/core/rxjs-interop';
-import {DatePipe, CurrencyPipe, NgOptimizedImage} from '@angular/common';
+import {DatePipe, NgOptimizedImage} from '@angular/common';
 import {ActivatedRoute, Router, RouterLink} from '@angular/router';
 import {AuthService} from '@/core/services/auth.service';
 import {AnalyticsService} from '@/core/services/analytics.service';
@@ -50,6 +50,7 @@ import {EventTicketStatusComponent} from './event-ticket-status.component';
 import {awaitCheckoutSettlement} from './checkout-settlement';
 import {CheckoutStore} from './checkout-store';
 import {getContactDialogDescription} from './event-details-copy';
+import {getBuyerPricingSummary} from '@shared/pricing/pricing-summary';
 
 type EventOrganizer = NonNullable<EventDetail['organizer']>;
 
@@ -58,7 +59,6 @@ type EventOrganizer = NonNullable<EventDetail['organizer']>;
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     DatePipe,
-    CurrencyPipe,
     RouterLink,
     NgOptimizedImage,
     ZardButtonComponent,
@@ -283,6 +283,20 @@ export class EventDetailsComponent {
     return !(this.availability()?.purchaseAccess.allowed ?? false);
   });
   readonly isResalePurchase = this.checkoutStore.isResalePurchase;
+  readonly buyerPricingSummary = computed(() => {
+    const evt = this.event();
+    if (!evt) {
+      return getBuyerPricingSummary({price: 0, canSeePrice: false});
+    }
+
+    return getBuyerPricingSummary({
+      ...evt,
+      isResale: this.isResalePurchase(),
+      canSeePrice:
+        evt.visibility !== EVENT_VISIBILITY.PUBLIC_VIEWABLE ||
+        this.auth.user() !== null,
+    });
+  });
 
   readonly isPaymentSidebarOpen = signal(false);
   readonly initialized = signal(false);
