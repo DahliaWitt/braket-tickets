@@ -41,6 +41,23 @@ const resolvePostHogUiHost = (apiHost: string | undefined): string =>
     ? 'https://eu.posthog.com'
     : 'https://us.posthog.com';
 
+const getLastFetchJsonPayload = (fetchMock: Mock): Record<string, unknown> => {
+  const fetchInit = fetchMock.mock.calls.at(-1)?.[1] as RequestInit | undefined;
+  const body = fetchInit?.body;
+  if (typeof body !== 'string') {
+    throw new Error('Expected fetch request body to be a string');
+  }
+  const payload: unknown = JSON.parse(body);
+  if (
+    typeof payload !== 'object' ||
+    payload === null ||
+    Array.isArray(payload)
+  ) {
+    throw new Error('Expected fetch request body to be a JSON object');
+  }
+  return payload as Record<string, unknown>;
+};
+
 const TEST_FEATURE_FLAG = 'beta-feature';
 
 describe('AnalyticsService', () => {
@@ -190,13 +207,32 @@ describe('AnalyticsService', () => {
       await expect(
         service.captureFeedback({
           category: 'bug',
-          message: 'I explicitly want to send this feedback',
+          message: 'Respect my browser privacy signal',
           route: '/help',
         }),
       ).resolves.toBe(true);
 
       expect(posthog.startSessionRecording).not.toHaveBeenCalled();
-      expect(fetchMock).toHaveBeenCalledOnce();
+      expect(posthog.get_distinct_id).not.toHaveBeenCalled();
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://test.posthog.com/i/v0/e/',
+        expect.objectContaining({
+          method: 'POST',
+        }),
+      );
+      const payload = getLastFetchJsonPayload(fetchMock);
+      expect(payload['distinct_id']).toEqual(
+        expect.stringMatching(/^feedback:/),
+      );
+      expect(payload).toMatchObject({
+        api_key: 'test-api-key',
+        event: 'feedback_submitted',
+        properties: {
+          feedback_category: 'bug',
+          feedback_message: 'Respect my browser privacy signal',
+          has_replay_url: false,
+        },
+      });
     });
 
     it('does not start replay but still sends explicit feedback when GPC is enabled', async () => {
@@ -211,13 +247,67 @@ describe('AnalyticsService', () => {
       await expect(
         service.captureFeedback({
           category: 'feature_request',
-          message: 'I explicitly want to send this feedback too',
+          message: 'Respect global privacy control too',
           route: '/help',
         }),
       ).resolves.toBe(true);
 
       expect(posthog.startSessionRecording).not.toHaveBeenCalled();
-      expect(fetchMock).toHaveBeenCalledOnce();
+      expect(posthog.get_distinct_id).not.toHaveBeenCalled();
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://test.posthog.com/i/v0/e/',
+        expect.objectContaining({
+          method: 'POST',
+        }),
+      );
+      const payload = getLastFetchJsonPayload(fetchMock);
+      expect(payload['distinct_id']).toEqual(
+        expect.stringMatching(/^feedback:/),
+      );
+      expect(payload).toMatchObject({
+        api_key: 'test-api-key',
+        event: 'feedback_submitted',
+        properties: {
+          feedback_category: 'feature_request',
+          feedback_message: 'Respect global privacy control too',
+          has_replay_url: false,
+        },
+      });
+    });
+
+    it('suppresses person profile creation for signed-in feedback when privacy signals bypass the SDK', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(new Response('{}'));
+      vi.stubGlobal('navigator', {doNotTrack: '1'});
+      vi.stubGlobal('fetch', fetchMock);
+      authServiceMock.currentUser.set({
+        _id: 'user-123' as Id<'users'>,
+        _creationTime: Date.now(),
+        email: 'user@example.com',
+        name: 'User Example',
+      });
+
+      await service.warmup();
+      await waitForInit();
+
+      await expect(
+        service.captureFeedback({
+          category: 'bug',
+          message: 'Signed in but still privacy-first',
+          route: '/help',
+        }),
+      ).resolves.toBe(true);
+
+      expect(posthog.get_distinct_id).not.toHaveBeenCalled();
+      const payload = getLastFetchJsonPayload(fetchMock);
+      expect(payload['distinct_id']).toEqual(
+        expect.stringMatching(/^feedback:/),
+      );
+      expect(payload).toMatchObject({
+        properties: {
+          signed_in: true,
+          $process_person_profile: false,
+        },
+      });
     });
 
     it('configures masked session replay without headers or bodies', async () => {
@@ -547,16 +637,8 @@ describe('AnalyticsService', () => {
       vi.stubGlobal('fetch', fetchMock);
     });
 
-    const getLastFeedbackPayload = (): Record<string, unknown> => {
-      const fetchInit = fetchMock.mock.calls.at(-1)?.[1] as
-        | RequestInit
-        | undefined;
-      const body = fetchInit?.body;
-      if (typeof body !== 'string') {
-        throw new Error('Expected feedback request body to be a string');
-      }
-      return JSON.parse(body) as Record<string, unknown>;
-    };
+    const getLastFeedbackPayload = (): Record<string, unknown> =>
+      getLastFetchJsonPayload(fetchMock);
 
     it('should not capture feedback when message is blank', async () => {
       await expect(

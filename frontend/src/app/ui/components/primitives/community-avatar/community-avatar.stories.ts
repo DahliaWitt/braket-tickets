@@ -7,7 +7,25 @@ const meta: Meta<BraCommunityAvatarComponent> = {
   title: 'Braket/Primitives/CommunityAvatar',
   component: BraCommunityAvatarComponent,
   tags: ['autodocs'],
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'App-proven avatar primitive for community and organizer identity across directories, headers, and cards.',
+      },
+    },
+  },
   argTypes: {
+    name: {
+      control: 'text',
+      description:
+        'Community name used for image alt text and fallback initials.',
+    },
+    logoUrl: {
+      control: 'text',
+      description:
+        'Optional community logo URL; falls back to initials when absent or failed.',
+    },
     size: {
       control: 'select',
       options: ['xs', 'sm', 'md', 'lg', 'xl', '2xl'],
@@ -23,6 +41,10 @@ const meta: Meta<BraCommunityAvatarComponent> = {
 export default meta;
 type Story = StoryObj<BraCommunityAvatarComponent>;
 
+function storyDescription(story: string): Story['parameters'] {
+  return {docs: {description: {story}}};
+}
+
 export const WithImage: Story = {
   args: {
     name: 'Braket',
@@ -34,6 +56,9 @@ export const WithImage: Story = {
     props: args,
     template: `<bra-community-avatar ${argsToTemplate(args)} />`,
   }),
+  parameters: storyDescription(
+    'App-proven organizer avatar when a community logo URL is available.',
+  ),
 };
 
 export const Fallback: Story = {
@@ -42,6 +67,9 @@ export const Fallback: Story = {
     props: args,
     template: `<bra-community-avatar ${argsToTemplate(args)} />`,
   }),
+  parameters: storyDescription(
+    'App-proven fallback initials when a community has no uploaded logo.',
+  ),
 };
 
 export const FallbackMuted: Story = {
@@ -50,6 +78,9 @@ export const FallbackMuted: Story = {
     props: args,
     template: `<bra-community-avatar ${argsToTemplate(args)} />`,
   }),
+  parameters: storyDescription(
+    'App-proven muted fallback for secondary or low-emphasis community listings.',
+  ),
 };
 
 export const Circle: Story = {
@@ -63,6 +94,9 @@ export const Circle: Story = {
     props: args,
     template: `<bra-community-avatar ${argsToTemplate(args)} />`,
   }),
+  parameters: storyDescription(
+    'Library reference for circular avatar shape support.',
+  ),
 };
 
 export const RoundedLg: Story = {
@@ -76,6 +110,9 @@ export const RoundedLg: Story = {
     props: args,
     template: `<bra-community-avatar ${argsToTemplate(args)} />`,
   }),
+  parameters: storyDescription(
+    'Library reference for the largest rounded avatar presentation.',
+  ),
 };
 
 export const AllSizes: Story = {
@@ -92,6 +129,9 @@ export const AllSizes: Story = {
     `,
     moduleMetadata: {imports: [BraCommunityAvatarComponent]},
   }),
+  parameters: storyDescription(
+    'Library reference comparing every fallback avatar size.',
+  ),
 };
 
 export const AllSizesWithImage: Story = {
@@ -108,6 +148,9 @@ export const AllSizesWithImage: Story = {
     `,
     moduleMetadata: {imports: [BraCommunityAvatarComponent]},
   }),
+  parameters: storyDescription(
+    'Library reference comparing every image avatar size.',
+  ),
 };
 
 export const AllShapes: Story = {
@@ -121,6 +164,9 @@ export const AllShapes: Story = {
     `,
     moduleMetadata: {imports: [BraCommunityAvatarComponent]},
   }),
+  parameters: storyDescription(
+    'Library reference comparing supported image avatar shapes.',
+  ),
 };
 
 export const AllShapesFallback: Story = {
@@ -134,6 +180,9 @@ export const AllShapesFallback: Story = {
     `,
     moduleMetadata: {imports: [BraCommunityAvatarComponent]},
   }),
+  parameters: storyDescription(
+    'Library reference comparing supported fallback avatar shapes.',
+  ),
 };
 
 export const MutedAcrossSizes: Story = {
@@ -150,4 +199,7 @@ export const MutedAcrossSizes: Story = {
     `,
     moduleMetadata: {imports: [BraCommunityAvatarComponent]},
   }),
+  parameters: storyDescription(
+    'Library reference for muted fallback avatars across supported sizes.',
+  ),
 };

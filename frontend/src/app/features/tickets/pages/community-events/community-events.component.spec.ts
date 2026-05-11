@@ -1,6 +1,6 @@
 import {type ComponentFixture, TestBed} from '@angular/core/testing';
 import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
-import {provideZonelessChangeDetection} from '@angular/core';
+import {provideZonelessChangeDetection, signal} from '@angular/core';
 import {ActivatedRoute} from '@angular/router';
 import {provideRouter} from '@angular/router';
 import {BehaviorSubject, of} from 'rxjs';
@@ -8,6 +8,9 @@ import {vi, describe, it, expect} from 'vitest';
 import {CommunityEventsComponent} from './community-events.component';
 import {CommunityEventsComponentHarness} from './community-events.component.harness';
 import {CONVEX} from 'convex-angular';
+import {AuthService} from '@/core/services/auth.service';
+import type {api} from '@convex/_generated/api';
+import type {FunctionReturnType} from 'convex/server';
 import {
   createMockConvexClient,
   type MockConvexClient,
@@ -22,38 +25,31 @@ interface MockPublicCommunity {
   logoUrl: string | null;
 }
 
-// Shape of a single event as returned by api.events.public.listByOrganizer
-interface MockOrganizerEvent {
-  _id: string;
-  _creationTime: number;
-  title: string;
-  date: string;
-  price: number;
-  posterUrl: string | null;
-  location?: string;
-  description?: string;
-  status: 'published';
-}
-
-interface MockListByOrganizerResult {
-  organizerName: string;
-  organizerDescription?: string;
-  organizerLogoUrl?: string;
-  events: MockOrganizerEvent[];
-}
+type MockListByOrganizerResult = NonNullable<
+  FunctionReturnType<typeof api.events.public.listByOrganizer>
+>;
+type MockOrganizerEvent = MockListByOrganizerResult['events'][number];
 
 function makeMockEvent(
-  overrides: Partial<MockOrganizerEvent> = {},
+  overrides: Partial<Omit<MockOrganizerEvent, '_id' | 'organizerId'>> & {
+    _id?: string;
+    organizerId?: string;
+  } = {},
 ): MockOrganizerEvent {
+  const {_id = 'evt1', organizerId = 'org1', ...eventOverrides} = overrides;
   return {
-    _id: 'evt1',
+    _id: _id as MockOrganizerEvent['_id'],
     _creationTime: Date.now(),
     title: 'Test Event',
     date: '2026-06-01',
     price: 2000,
+    totalTickets: 100,
+    organizerId: organizerId as MockOrganizerEvent['organizerId'],
+    ticketSalesStatus: 'active',
     posterUrl: null,
     status: 'published',
-    ...overrides,
+    visibility: 'public',
+    ...eventOverrides,
   };
 }
 
@@ -118,11 +114,15 @@ describe('CommunityEventsComponent', () => {
     queryParams: Record<string, string | null>,
     convexResult: MockListByOrganizerResult | null,
     directoryResult: MockPublicCommunity[] = [],
+    isAuthenticated = false,
   ) {
     const convexClientMock = makeConvexClientMock({
       organizerResult: convexResult,
       directoryResult,
     });
+    const authServiceMock = {
+      isAuthenticated: signal(isAuthenticated),
+    };
 
     await TestBed.configureTestingModule({
       imports: [CommunityEventsComponent],
@@ -130,6 +130,7 @@ describe('CommunityEventsComponent', () => {
         provideZonelessChangeDetection(),
         provideRouter([]),
         {provide: CONVEX, useValue: convexClientMock},
+        {provide: AuthService, useValue: authServiceMock},
         {provide: ActivatedRoute, useValue: makeActivatedRoute(queryParams)},
       ],
     }).compileComponents();
@@ -162,6 +163,7 @@ describe('CommunityEventsComponent', () => {
           provideZonelessChangeDetection(),
           provideRouter([]),
           {provide: CONVEX, useValue: hangingConvexMock},
+          {provide: AuthService, useValue: {isAuthenticated: signal(false)}},
           {
             provide: ActivatedRoute,
             useValue: makeActivatedRoute({community: 'org1'}),
@@ -365,6 +367,50 @@ describe('CommunityEventsComponent', () => {
       expect(avatar).not.toBeNull();
       expect(await avatar!.hasImage()).toBe(true);
     });
+
+    it('hides public-viewable event prices from unauthenticated buyers', async () => {
+      await createComponent(
+        {community: 'org1'},
+        {
+          organizerName: 'Active Community',
+          events: [
+            makeMockEvent({
+              title: 'Public Preview Event',
+              price: 1800,
+              visibility: 'public_viewable',
+            }),
+          ],
+        },
+      );
+
+      const [card] = await harness.getEventCards();
+      const buyText = await card.getBuyText();
+      expect(buyText).toContain('Sign in for pricing');
+      expect(buyText).not.toContain('$18');
+    });
+
+    it('shows public-viewable event prices to authenticated buyers', async () => {
+      await createComponent(
+        {community: 'org1'},
+        {
+          organizerName: 'Active Community',
+          events: [
+            makeMockEvent({
+              title: 'Public Preview Event',
+              price: 1800,
+              visibility: 'public_viewable',
+            }),
+          ],
+        },
+        [],
+        true,
+      );
+
+      const [card] = await harness.getEventCards();
+      const buyText = await card.getBuyText();
+      expect(buyText).toContain('$18 all-in');
+      expect(buyText).not.toContain('Sign in for pricing');
+    });
   });
 
   describe('BRA-390: null data shows error state, URL unchanged', () => {
@@ -386,6 +432,7 @@ describe('CommunityEventsComponent', () => {
           provideZonelessChangeDetection(),
           provideRouter([]),
           {provide: CONVEX, useValue: nullReturnMock},
+          {provide: AuthService, useValue: {isAuthenticated: signal(false)}},
           {
             provide: ActivatedRoute,
             useValue: makeActivatedRoute({community: 'nonexistent'}),
@@ -435,6 +482,7 @@ describe('CommunityEventsComponent', () => {
           provideZonelessChangeDetection(),
           provideRouter([]),
           {provide: CONVEX, useValue: convexMock},
+          {provide: AuthService, useValue: {isAuthenticated: signal(false)}},
           {
             provide: ActivatedRoute,
             useValue: {

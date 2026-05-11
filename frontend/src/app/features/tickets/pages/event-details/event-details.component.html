@@ -367,15 +367,7 @@
                     } @else {
                       Get Tickets
                     }
-                    @if (
-                      event()?.visibility !== 'public_viewable' || auth.user()
-                    ) {
-                      @if (evt.price) {
-                        - {{ evt.price / 100 | currency: 'USD' }}
-                      }
-                    } @else {
-                      — Sign in for pricing
-                    }
+                    - {{ buyerPricingSummary().primaryText }}
                   </z-button>
                 } @else if (limitReached()) {
                   <div

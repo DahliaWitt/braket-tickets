@@ -23,6 +23,7 @@ import {BraDialogService} from '@ui/components/composites/dialog/dialog.service'
 import {ReasonDialogComponent} from '../reason-dialog/reason-dialog.component';
 import {ZardInputDirective} from '@ui/components/primitives/input/input.directive';
 import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton.component';
+import {BraStatusBadgeComponent} from '@ui/components/primitives/status-badge/status-badge.component';
 import {toast} from 'ngx-sonner';
 import {logger} from '@/utils/logger';
 import {api} from '@convex/_generated/api';
@@ -40,6 +41,7 @@ type MemberFilter = 'all' | 'ours' | 'shared';
     ZardCardComponent,
     ZardInputDirective,
     ZardSkeletonComponent,
+    BraStatusBadgeComponent,
   ],
   templateUrl: './members-table.component.html',
 })

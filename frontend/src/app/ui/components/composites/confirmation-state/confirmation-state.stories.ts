@@ -1,8 +1,8 @@
-import type { Meta, StoryObj } from '@storybook/angular';
+import type {Meta, StoryObj} from '@storybook/angular';
 
-import { ZardButtonComponent } from '@ui/components/primitives/button/button.component';
+import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 
-import { ConfirmationStateComponent } from './confirmation-state.component';
+import {ConfirmationStateComponent} from './confirmation-state.component';
 
 const meta: Meta<ConfirmationStateComponent> = {
   title: 'Braket/Composites/ConfirmationState',
@@ -22,12 +22,12 @@ const meta: Meta<ConfirmationStateComponent> = {
       control: 'select',
       options: ['loading', 'success', 'error', 'warning', 'info'],
     },
-    icon: { control: 'text' },
-    title: { control: 'text' },
-    description: { control: 'text' },
-    loading: { control: 'boolean' },
-    iconId: { control: 'text' },
-    descriptionId: { control: 'text' },
+    icon: {control: 'text'},
+    title: {control: 'text'},
+    description: {control: 'text'},
+    loading: {control: 'boolean'},
+    iconId: {control: 'text'},
+    descriptionId: {control: 'text'},
   },
 };
 
@@ -41,6 +41,14 @@ export const VerificationLoading: Story = {
     title: 'Verifying your email...',
     description: 'Just a moment while we confirm your email address.',
     loading: true,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'App-proven loading state from the email verification callback flow.',
+      },
+    },
   },
 };
 
@@ -67,6 +75,14 @@ export const VerificationSuccess: Story = {
       imports: [ConfirmationStateComponent, ZardButtonComponent],
     },
   }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'App-proven success state shown after an email verification link resolves.',
+      },
+    },
+  },
 };
 
 export const EmailChangePending: Story = {
@@ -92,6 +108,14 @@ export const EmailChangePending: Story = {
       imports: [ConfirmationStateComponent, ZardButtonComponent],
     },
   }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'App-proven warning state for the second step of an email-change request.',
+      },
+    },
+  },
 };
 
 export const SocialSigninError: Story = {
@@ -116,6 +140,14 @@ export const SocialSigninError: Story = {
       imports: [ConfirmationStateComponent, ZardButtonComponent],
     },
   }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'App-proven error state for blocked or failed social sign-in callbacks.',
+      },
+    },
+  },
 };
 
 export const SocialSigninSuccess: Story = {
@@ -140,4 +172,12 @@ export const SocialSigninSuccess: Story = {
       imports: [ConfirmationStateComponent, ZardButtonComponent],
     },
   }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'App-proven success state for completed social sign-in callbacks.',
+      },
+    },
+  },
 };

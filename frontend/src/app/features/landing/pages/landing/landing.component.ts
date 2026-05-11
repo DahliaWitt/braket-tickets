@@ -9,7 +9,7 @@ import {
   signal,
   untracked,
 } from '@angular/core';
-import {DatePipe, CurrencyPipe, NgOptimizedImage} from '@angular/common';
+import {DatePipe, NgOptimizedImage} from '@angular/common';
 import {AuthService} from '@/core/services/auth.service';
 import {PublicCommunitiesService} from '@/core/services/public-communities.service';
 import {PublicEventsService} from '@/core/services/public-events.service';
@@ -18,6 +18,8 @@ import {ContentLayoutComponent} from '@/layout/content-layout/content-layout.com
 import {BraCommunityAvatarComponent} from '@ui/components/primitives/community-avatar/community-avatar.component';
 import {logger} from '@/utils/logger';
 import {safeResourceValue} from '@/utils/resource';
+import type {PublicEventCard} from '@shared/contracts/public-event';
+import {getBuyerPricingSummary} from '@shared/pricing/pricing-summary';
 
 @Component({
   selector: 'app-landing',
@@ -26,7 +28,6 @@ import {safeResourceValue} from '@/utils/resource';
     RouterLink,
     ContentLayoutComponent,
     DatePipe,
-    CurrencyPipe,
     NgOptimizedImage,
     BraCommunityAvatarComponent,
   ],
@@ -116,7 +117,7 @@ import {safeResourceValue} from '@/utils/resource';
                     <span> · {{ event.location }}</span>
                   }
                   ·
-                  {{ event.price / 100 | currency: 'USD' : 'symbol' : '1.0-2' }}
+                  {{ priceSummary(event).primaryText }}
                   ·
                   <span class="text-primary">View Event →</span>
                 </p>
@@ -184,9 +185,7 @@ import {safeResourceValue} from '@/utils/resource';
                       {{ event.date | date: 'mediumDate' }},
                       {{ event.date | date: 'shortTime' }}
                       ·
-                      {{
-                        event.price / 100 | currency: 'USD' : 'symbol' : '1.0-2'
-                      }}
+                      {{ priceSummary(event).primaryText }}
                     </p>
                   </div>
                 </a>
@@ -302,5 +301,13 @@ export class LandingComponent {
 
   login() {
     void this.router.navigate(['/login']);
+  }
+
+  priceSummary(event: PublicEventCard) {
+    return getBuyerPricingSummary({
+      ...event,
+      canSeePrice:
+        event.visibility !== 'public_viewable' || this.auth.isAuthenticated(),
+    });
   }
 }

@@ -5,10 +5,10 @@ import {
   QueryList,
   ViewChildren,
 } from '@angular/core';
-import type { Meta, StoryObj } from '@storybook/angular';
-import { argsToTemplate } from '@storybook/angular';
+import type {Meta, StoryObj} from '@storybook/angular';
+import {argsToTemplate} from '@storybook/angular';
 
-import { ZardCheckboxComponent } from './checkbox.component';
+import {ZardCheckboxComponent} from './checkbox.component';
 
 @Component({
   selector: 'bt-story-checkbox-export-fields',
@@ -17,10 +17,14 @@ import { ZardCheckboxComponent } from './checkbox.component';
   template: `
     <div class="space-y-4 rounded-xl border border-border bg-card p-6">
       <div class="space-y-1">
-        <p class="font-mono text-2xs uppercase tracking-widest text-muted-foreground">
+        <p
+          class="font-mono text-2xs tracking-widest text-muted-foreground uppercase"
+        >
           Event export
         </p>
-        <h3 class="text-lg font-semibold">Select fields for the attendee export</h3>
+        <h3 class="text-lg font-semibold">
+          Select fields for the attendee export
+        </h3>
         <p class="text-sm text-muted-foreground">
           Matches the export dialog Braket uses in event management.
         </p>
@@ -38,7 +42,9 @@ import { ZardCheckboxComponent } from './checkbox.component';
       <z-checkbox class="mt-2">
         <span class="flex items-center gap-2">
           Include refunded tickets
-          <span class="text-xs text-muted-foreground">(adds status columns)</span>
+          <span class="text-xs text-muted-foreground"
+            >(adds status columns)</span
+          >
         </span>
       </z-checkbox>
     </div>
@@ -50,7 +56,9 @@ class CheckboxExportFieldsStoryComponent implements AfterViewInit {
 
   ngAfterViewInit(): void {
     const selectedIndexes = new Set([0, 1, 2, 4, 6]);
-    this.checkboxRefs.forEach((checkbox, index) => checkbox.writeValue(selectedIndexes.has(index)));
+    this.checkboxRefs.forEach((checkbox, index) =>
+      checkbox.writeValue(selectedIndexes.has(index)),
+    );
   }
 }
 
@@ -61,22 +69,30 @@ class CheckboxExportFieldsStoryComponent implements AfterViewInit {
   template: `
     <div class="space-y-4 rounded-xl border border-border bg-card p-6">
       <div class="space-y-1">
-        <p class="font-mono text-2xs uppercase tracking-widest text-muted-foreground">
+        <p
+          class="font-mono text-2xs tracking-widest text-muted-foreground uppercase"
+        >
           Consent and cancellation
         </p>
-        <h3 class="text-lg font-semibold">Use checkbox styles for high-stakes confirmation</h3>
+        <h3 class="text-lg font-semibold">
+          Use checkbox styles for high-stakes confirmation
+        </h3>
         <p class="text-sm text-muted-foreground">
-          We use regular checkboxes for form consent and destructive confirmations when the user is
-          acknowledging a one-way action.
+          We use regular checkboxes for form consent and destructive
+          confirmations when the user is acknowledging a one-way action.
         </p>
       </div>
 
       <div class="grid gap-4 sm:grid-cols-2">
         <z-checkbox>I agree to the community vetting rules</z-checkbox>
-        <z-checkbox zType="destructive">I confirm I want to cancel my reservation</z-checkbox>
+        <z-checkbox zType="destructive"
+          >I confirm I want to cancel my reservation</z-checkbox
+        >
       </div>
 
-      <z-checkbox [disabled]="true">Feature unavailable while sales are paused</z-checkbox>
+      <z-checkbox [disabled]="true"
+        >Feature unavailable while sales are paused</z-checkbox
+      >
     </div>
   `,
 })
@@ -99,7 +115,11 @@ const meta: Meta<ZardCheckboxComponent> = {
       control: 'select',
       options: ['default', 'circle', 'square'],
     },
-    disabled: { control: 'boolean' },
+    disabled: {control: 'boolean'},
+    zAriaDescribedBy: {
+      control: 'text',
+      description: 'ID reference for additional checkbox description text.',
+    },
   },
   render: (args) => ({
     props: args,
@@ -113,7 +133,7 @@ type Story = StoryObj<ZardCheckboxComponent>;
 export const ExportFields: Story = {
   render: () => ({
     template: `<bt-story-checkbox-export-fields />`,
-    moduleMetadata: { imports: [CheckboxExportFieldsStoryComponent] },
+    moduleMetadata: {imports: [CheckboxExportFieldsStoryComponent]},
   }),
   parameters: {
     docs: {
@@ -128,7 +148,7 @@ export const ExportFields: Story = {
 export const ConsentAndCancellation: Story = {
   render: () => ({
     template: `<bt-story-checkbox-consent />`,
-    moduleMetadata: { imports: [CheckboxConsentStoryComponent] },
+    moduleMetadata: {imports: [CheckboxConsentStoryComponent]},
   }),
   parameters: {
     docs: {
@@ -148,4 +168,12 @@ export const Disabled: Story = {
     props: args,
     template: `<z-checkbox [disabled]="disabled">Feature unavailable while sales are paused</z-checkbox>`,
   }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Library reference for disabled checkbox styling when an option is temporarily unavailable.',
+      },
+    },
+  },
 };

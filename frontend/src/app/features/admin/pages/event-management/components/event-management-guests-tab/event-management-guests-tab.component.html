@@ -91,11 +91,9 @@
                 </div>
               </td>
               <td class="px-6 py-4">
-                <span
-                  class="mono-label rounded border border-border bg-muted px-2 py-0.5 text-2xs text-muted-foreground"
-                >
-                  {{ guest.type }}
-                </span>
+                <bra-status-badge status="muted">{{
+                  guest.type
+                }}</bra-status-badge>
               </td>
               <td
                 class="max-w-xs truncate px-6 py-4 text-sm text-muted-foreground"

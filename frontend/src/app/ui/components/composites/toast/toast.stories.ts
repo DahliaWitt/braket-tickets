@@ -1,9 +1,9 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
-import type { Meta, StoryObj } from '@storybook/angular';
+import {ChangeDetectionStrategy, Component, inject} from '@angular/core';
+import type {Meta, StoryObj} from '@storybook/angular';
 
-import { BraToastComponent } from './toast.component';
-import { BraToastService } from './toast.service';
-import { ZardButtonComponent } from '@ui/components/primitives/button/button.component';
+import {BraToastComponent} from './toast.component';
+import {BraToastService} from './toast.service';
+import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 
 @Component({
   selector: 'bt-story-toast-app-flows',
@@ -13,20 +13,31 @@ import { ZardButtonComponent } from '@ui/components/primitives/button/button.com
     <bra-toaster />
     <section class="space-y-4 rounded-2xl border border-border bg-card p-6">
       <div class="space-y-1">
-        <p class="font-mono text-2xs uppercase tracking-widest text-muted-foreground">
+        <p
+          class="font-mono text-2xs tracking-widest text-muted-foreground uppercase"
+        >
           App-proven patterns
         </p>
-        <h3 class="font-display text-xl text-foreground">Operational feedback states</h3>
+        <h3 class="font-display text-xl text-foreground">
+          Operational feedback states
+        </h3>
         <p class="max-w-2xl text-sm text-muted-foreground">
-          These messages mirror the short-lived feedback users and admins actually see across
-          account settings, guest-ticket delivery, and resale actions.
+          These messages mirror the short-lived feedback users and admins
+          actually see across account settings, guest-ticket delivery, and
+          resale actions.
         </p>
       </div>
 
       <div class="flex flex-wrap gap-3">
-        <button z-button zType="default" (click)="showSettingsSaved()">Settings saved</button>
-        <button z-button zType="secondary" (click)="showTicketSent()">Guest ticket sent</button>
-        <button z-button zType="outline" (click)="showResaleSubscribed()">Resale subscribed</button>
+        <button z-button zType="default" (click)="showSettingsSaved()">
+          Settings saved
+        </button>
+        <button z-button zType="secondary" (click)="showTicketSent()">
+          Guest ticket sent
+        </button>
+        <button z-button zType="outline" (click)="showResaleSubscribed()">
+          Resale subscribed
+        </button>
         <button z-button zType="destructive" (click)="showBroadcastFailed()">
           Broadcast failed
         </button>
@@ -65,17 +76,23 @@ class ToastAppFlowsComponent {
     <bra-toaster />
     <section class="space-y-4 rounded-2xl border border-border bg-card p-6">
       <div class="space-y-1">
-        <p class="font-mono text-2xs uppercase tracking-widest text-muted-foreground">
+        <p
+          class="font-mono text-2xs tracking-widest text-muted-foreground uppercase"
+        >
           App-proven detail
         </p>
-        <h3 class="font-display text-xl text-foreground">Purchase confirmation context</h3>
+        <h3 class="font-display text-xl text-foreground">
+          Purchase confirmation context
+        </h3>
         <p class="max-w-2xl text-sm text-muted-foreground">
-          Mirrors the richer confirmation messaging used when the app needs to preserve event-level
-          context alongside the toast title.
+          Mirrors the richer confirmation messaging used when the app needs to
+          preserve event-level context alongside the toast title.
         </p>
       </div>
 
-      <button z-button zType="secondary" (click)="show()">Show purchase confirmation</button>
+      <button z-button zType="secondary" (click)="show()">
+        Show purchase confirmation
+      </button>
     </section>
   `,
 })
@@ -97,17 +114,21 @@ class ToastDescriptionComponent {
     <bra-toaster />
     <section class="space-y-4 rounded-2xl border border-border bg-card p-6">
       <div class="space-y-1">
-        <p class="font-mono text-2xs uppercase tracking-widest text-muted-foreground">
+        <p
+          class="font-mono text-2xs tracking-widest text-muted-foreground uppercase"
+        >
           Library reference
         </p>
         <h3 class="font-display text-xl text-foreground">Undo action toast</h3>
         <p class="max-w-2xl text-sm text-muted-foreground">
-          The toast system supports inline actions, but this exact undo pattern is reference
-          behavior rather than a current app-proven flow.
+          The toast system supports inline actions, but this exact undo pattern
+          is reference behavior rather than a current app-proven flow.
         </p>
       </div>
 
-      <button z-button zType="outline" (click)="show()">Show undo action</button>
+      <button z-button zType="outline" (click)="show()">
+        Show undo action
+      </button>
     </section>
   `,
 })
@@ -136,17 +157,23 @@ class ToastReferenceActionComponent {
     <bra-toaster position="top-center" />
     <section class="space-y-4 rounded-2xl border border-border bg-card p-6">
       <div class="space-y-1">
-        <p class="font-mono text-2xs uppercase tracking-widest text-muted-foreground">
+        <p
+          class="font-mono text-2xs tracking-widest text-muted-foreground uppercase"
+        >
           Library reference
         </p>
-        <h3 class="font-display text-xl text-foreground">Alternate placement</h3>
+        <h3 class="font-display text-xl text-foreground">
+          Alternate placement
+        </h3>
         <p class="max-w-2xl text-sm text-muted-foreground">
-          Top-center placement is supported for focused workflows, though the app normally uses the
-          default viewport position.
+          Top-center placement is supported for focused workflows, though the
+          app normally uses the default viewport position.
         </p>
       </div>
 
-      <button z-button zType="outline" (click)="show()">Show top-center toast</button>
+      <button z-button zType="outline" (click)="show()">
+        Show top-center toast
+      </button>
     </section>
   `,
 })
@@ -154,7 +181,7 @@ class ToastTopCenterComponent {
   private readonly toastService = inject(BraToastService);
 
   show(): void {
-    this.toastService.show({ message: 'Appearing at top center.' });
+    this.toastService.show({message: 'Appearing at top center.'});
   }
 }
 
@@ -178,27 +205,59 @@ type Story = StoryObj;
 export const Default: Story = {
   render: () => ({
     template: `<bt-story-toast-app-flows />`,
-    moduleMetadata: { imports: [ToastAppFlowsComponent] },
+    moduleMetadata: {imports: [ToastAppFlowsComponent]},
   }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'App-proven short feedback messages for settings, guest tickets, resale, and broadcast failures.',
+      },
+    },
+  },
 };
 
 export const WithDescription: Story = {
   render: () => ({
     template: `<bt-story-toast-description />`,
-    moduleMetadata: { imports: [ToastDescriptionComponent] },
+    moduleMetadata: {imports: [ToastDescriptionComponent]},
   }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'App-proven richer toast with event context for purchase confirmation.',
+      },
+    },
+  },
 };
 
 export const ReferenceAction: Story = {
   render: () => ({
     template: `<bt-story-toast-reference-action />`,
-    moduleMetadata: { imports: [ToastReferenceActionComponent] },
+    moduleMetadata: {imports: [ToastReferenceActionComponent]},
   }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Library reference for inline toast actions; the app does not currently use this undo pattern.',
+      },
+    },
+  },
 };
 
 export const ReferenceTopCenter: Story = {
   render: () => ({
     template: `<bt-story-toast-top-center />`,
-    moduleMetadata: { imports: [ToastTopCenterComponent] },
+    moduleMetadata: {imports: [ToastTopCenterComponent]},
   }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Library reference for alternate toast placement beyond the app default.',
+      },
+    },
+  },
 };

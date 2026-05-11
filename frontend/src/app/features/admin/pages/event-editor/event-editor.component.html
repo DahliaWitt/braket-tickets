@@ -1,7 +1,7 @@
-<main id="main-content" class="max-w-4xl mx-auto mt-8 px-4 md:px-6 pb-8">
+<main id="main-content" class="mx-auto mt-8 max-w-4xl px-4 pb-8 md:px-6">
   <div class="mb-6 flex items-center justify-between">
     <h1
-      class="text-2xl sm:text-3xl lg:text-4xl font-bold font-display uppercase tracking-tight text-foreground"
+      class="font-display text-2xl font-bold tracking-tight text-foreground uppercase sm:text-3xl lg:text-4xl"
     >
       {{ isCreateMode() ? 'Create Event' : 'Edit Event' }}
     </h1>
@@ -9,20 +9,20 @@
       [routerLink]="eventsListRoute"
       [queryParams]="eventsListQueryParams() ?? undefined"
       zType="ghost"
-      class="font-mono text-xs uppercase tracking-widest text-muted-foreground hover:text-foreground"
+      class="font-mono text-xs tracking-widest text-muted-foreground uppercase hover:text-foreground"
     >
       [ back ]
     </z-button>
   </div>
 
   @if (isLoading()) {
-    <div class="space-y-10 fade-in animate-pulse">
+    <div class="fade-in animate-pulse space-y-10">
       <!-- Flyer Skeleton -->
       <div class="space-y-3">
         <z-skeleton class="h-3 w-16 rounded-sm" />
-        <div class="flex flex-col sm:flex-row gap-6 items-start">
-          <z-skeleton class="w-48 aspect-4/5 rounded-sm flex-none" />
-          <div class="space-y-3 grow">
+        <div class="flex flex-col items-start gap-6 sm:flex-row">
+          <z-skeleton class="aspect-4/5 w-48 flex-none rounded-sm" />
+          <div class="grow space-y-3">
             <z-skeleton class="h-3 w-24 rounded-sm" />
             <z-skeleton class="h-9 w-full max-w-xs rounded-sm" />
             <z-skeleton class="h-3 w-40 rounded-sm" />
@@ -31,7 +31,7 @@
       </div>
 
       <!-- Core Details Skeleton -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+      <div class="grid grid-cols-1 gap-x-6 gap-y-5 md:grid-cols-2">
         <div class="space-y-2 md:col-span-2">
           <z-skeleton class="h-3 w-12 rounded-sm" />
           <z-skeleton class="h-9 w-full rounded-sm" />
@@ -45,7 +45,7 @@
       </div>
 
       <!-- Settings Skeleton -->
-      <div class="border-t border-border pt-8 space-y-6">
+      <div class="space-y-6 border-t border-border pt-8">
         <z-skeleton class="h-9 w-full max-w-md rounded-sm" />
         <z-skeleton class="h-9 w-full max-w-xs rounded-sm" />
         <z-skeleton class="h-9 w-full max-w-xs rounded-sm" />
@@ -54,7 +54,7 @@
   } @else if (error()) {
     <z-card class="border-destructive/30 bg-destructive/5">
       <div class="py-12 text-center">
-        <p class="text-destructive mono-label">{{ error() }}</p>
+        <p class="mono-label text-destructive">{{ error() }}</p>
         <z-button
           [routerLink]="eventsListRoute"
           [queryParams]="eventsListQueryParams() ?? undefined"
@@ -81,7 +81,7 @@
           <!-- ═══ Flyer ═══ -->
           <div class="space-y-3">
             <span
-              class="block text-xs font-mono text-muted-foreground uppercase tracking-widest"
+              class="block font-mono text-xs tracking-widest text-muted-foreground uppercase"
               >flyer</span
             >
             <app-event-poster-uploader
@@ -92,12 +92,12 @@
           </div>
 
           <!-- ═══ Core Details ═══ -->
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+          <div class="grid grid-cols-1 gap-x-6 gap-y-5 md:grid-cols-2">
             <!-- Title — spans full width -->
             <div class="space-y-2 md:col-span-2">
               <label
                 for="title"
-                class="block text-xs font-mono text-muted-foreground uppercase tracking-wider"
+                class="block font-mono text-xs tracking-wider text-muted-foreground uppercase"
                 >Title *</label
               >
               <input
@@ -110,30 +110,30 @@
                   (isFieldInvalid(eventForm.title) ? ' ' + errorClasses : '')
                 "
               />
-              <div class="flex justify-between items-center">
+              <div class="flex items-center justify-between">
                 @if (hasError(eventForm.title, 'maxLength')) {
                   <p
                     data-testid="title-too-long-error"
-                    class="text-destructive text-xs uppercase"
+                    class="text-xs text-destructive uppercase"
                   >
                     Title cannot exceed {{ maxEventTitleLength }} characters
                   </p>
                 } @else if (hasError(eventForm.title, 'required')) {
                   <p
                     data-testid="title-blank-error"
-                    class="text-destructive text-xs uppercase"
+                    class="text-xs text-destructive uppercase"
                   >
                     Title is required
                   </p>
                 } @else if (isFieldInvalid(eventForm.title)) {
-                  <p class="text-destructive text-xs uppercase">
+                  <p class="text-xs text-destructive uppercase">
                     Title is required
                   </p>
                 } @else {
                   <span></span>
                 }
                 <span
-                  class="text-xs font-mono"
+                  class="font-mono text-xs"
                   [class.text-muted-foreground]="
                     eventModel().title.length < eventTitleWarningLength
                   "
@@ -154,7 +154,7 @@
             <!-- Date -->
             <div class="space-y-2">
               <span
-                class="block text-xs font-mono text-muted-foreground uppercase tracking-wider"
+                class="block font-mono text-xs tracking-wider text-muted-foreground uppercase"
                 >Date *</span
               >
               <bra-date-picker
@@ -163,7 +163,7 @@
                 placeholder="Pick a date"
                 zFormat="yyyy-MM-dd"
                 zSize="sm"
-                class="!border-b-0 !border !border-border !bg-background !rounded-sm !py-2 !text-sm !font-sans"
+                class="!rounded-sm !border !border-b-0 !border-border !bg-background !py-2 !font-sans !text-sm"
                 [class.!border-destructive/50]="
                   isFieldInvalid(eventForm.date) ||
                   hasError(eventForm.date, 'pastDate')
@@ -182,14 +182,14 @@
               @if (hasError(eventForm.date, 'pastDate')) {
                 <p
                   data-testid="date-error"
-                  class="text-destructive text-xs uppercase"
+                  class="text-xs text-destructive uppercase"
                 >
                   Date cannot be in the past
                 </p>
               } @else if (isFieldInvalid(eventForm.date)) {
                 <p
                   data-testid="date-error"
-                  class="text-destructive text-xs uppercase"
+                  class="text-xs text-destructive uppercase"
                 >
                   Date is required
                 </p>
@@ -200,7 +200,7 @@
             <div class="space-y-2">
               <label
                 for="location"
-                class="block text-xs font-mono text-muted-foreground uppercase tracking-wider"
+                class="block font-mono text-xs tracking-wider text-muted-foreground uppercase"
                 >Location</label
               >
               <input
@@ -216,12 +216,17 @@
             <div class="space-y-2">
               <label
                 for="price"
-                class="block text-xs font-mono text-muted-foreground uppercase tracking-wider"
-                >Base Price (USD) *</label
+                class="block font-mono text-xs tracking-wider text-muted-foreground uppercase"
+                >Buyer Ticket Price (USD) *</label
               >
-              <div class="relative group">
+              <p class="font-mono text-2xs text-muted-foreground">
+                This is the regular all-in price buyers see. Stripe processing
+                and Braket platform fees are deducted from organizer proceeds
+                after payment.
+              </p>
+              <div class="group relative">
                 <span
-                  class="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-mono text-sm group-focus-within:text-foreground transition-colors"
+                  class="absolute top-1/2 left-4 -translate-y-1/2 font-mono text-sm text-muted-foreground transition-colors group-focus-within:text-foreground"
                   aria-hidden="true"
                   >$</span
                 >
@@ -253,21 +258,21 @@
               @if (hasError(eventForm.price, 'invalidDecimal')) {
                 <p
                   data-testid="price-error"
-                  class="text-destructive text-xs uppercase"
+                  class="text-xs text-destructive uppercase"
                 >
                   Use a dollar amount like 20 or 20.00
                 </p>
               } @else if (hasError(eventForm.price, 'negativePrice')) {
                 <p
                   data-testid="price-error"
-                  class="text-destructive text-xs uppercase"
+                  class="text-xs text-destructive uppercase"
                 >
                   Price cannot be negative
                 </p>
               } @else if (isFieldInvalid(eventForm.price)) {
                 <p
                   data-testid="price-error"
-                  class="text-destructive text-xs uppercase"
+                  class="text-xs text-destructive uppercase"
                 >
                   Price is required
                 </p>
@@ -278,7 +283,7 @@
             <div class="space-y-2">
               <label
                 for="totalTickets"
-                class="block text-xs font-mono text-muted-foreground uppercase tracking-wider"
+                class="block font-mono text-xs tracking-wider text-muted-foreground uppercase"
                 >Total Tickets</label
               >
               <input
@@ -311,7 +316,7 @@
               ) {
                 <p
                   data-testid="totalTickets-error"
-                  class="text-destructive text-xs uppercase"
+                  class="text-xs text-destructive uppercase"
                 >
                   @if (hasError(eventForm.totalTickets, 'wholeNumber')) {
                     Must be a whole number
@@ -326,37 +331,37 @@
           <!-- ═══ Settings ═══ -->
           <div class="space-y-4 border-t border-border pt-6">
             <div
-              class="flex items-center gap-4 bg-muted/40 p-3 rounded-sm border border-border/50 hover:border-border transition-colors"
+              class="flex items-center gap-4 rounded-sm border border-border/50 bg-muted/40 p-3 transition-colors hover:border-border"
             >
               <input
                 type="checkbox"
                 id="slidingScaleEnabled"
                 [checked]="eventModel().slidingScaleEnabled"
                 (change)="toggleSlidingScale($event)"
-                class="w-6 h-6 rounded-sm border-border bg-muted accent-primary cursor-pointer"
+                class="h-6 w-6 cursor-pointer rounded-sm border-border bg-muted accent-primary"
               />
               <label
                 for="slidingScaleEnabled"
-                class="text-xs font-mono text-foreground/80 uppercase tracking-widest cursor-pointer select-none"
+                class="cursor-pointer font-mono text-xs tracking-widest text-foreground/80 uppercase select-none"
               >
                 Enable Community Tier
-                <span class="text-muted-foreground font-sans italic ml-2"
+                <span class="ml-2 font-sans text-muted-foreground italic"
                   >(NOTAFLOF / Sliding Scale)</span
                 >
               </label>
             </div>
 
             @if (eventModel().slidingScaleEnabled) {
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+              <div class="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
                 <div class="space-y-2">
                   <label
                     for="slidingScaleMin"
-                    class="block text-xs font-mono text-muted-foreground uppercase tracking-wider"
+                    class="block font-mono text-xs tracking-wider text-muted-foreground uppercase"
                     >Minimum Amount (USD)</label
                   >
-                  <div class="relative group">
+                  <div class="group relative">
                     <span
-                      class="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-mono text-sm group-focus-within:text-foreground transition-colors"
+                      class="absolute top-1/2 left-4 -translate-y-1/2 font-mono text-sm text-muted-foreground transition-colors group-focus-within:text-foreground"
                       aria-hidden="true"
                       >$</span
                     >
@@ -384,7 +389,7 @@
                   @if (hasError(eventForm.slidingScaleMin, 'invalidDecimal')) {
                     <p
                       data-testid="slidingScaleMin-error"
-                      class="text-destructive text-xs uppercase"
+                      class="text-xs text-destructive uppercase"
                     >
                       Use a dollar amount like 20 or 20.00
                     </p>
@@ -393,12 +398,12 @@
                 <div class="space-y-2">
                   <label
                     for="slidingScaleMax"
-                    class="block text-xs font-mono text-muted-foreground uppercase tracking-wider"
+                    class="block font-mono text-xs tracking-wider text-muted-foreground uppercase"
                     >Maximum Amount (USD, optional)</label
                   >
-                  <div class="relative group">
+                  <div class="group relative">
                     <span
-                      class="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-mono text-sm group-focus-within:text-foreground transition-colors"
+                      class="absolute top-1/2 left-4 -translate-y-1/2 font-mono text-sm text-muted-foreground transition-colors group-focus-within:text-foreground"
                       aria-hidden="true"
                       >$</span
                     >
@@ -426,7 +431,7 @@
                   @if (hasError(eventForm.slidingScaleMax, 'invalidDecimal')) {
                     <p
                       data-testid="slidingScaleMax-error"
-                      class="text-destructive text-xs uppercase"
+                      class="text-xs text-destructive uppercase"
                     >
                       Use a dollar amount like 20 or 20.00
                     </p>
@@ -440,21 +445,21 @@
           <div class="space-y-3 border-t border-border/50 pt-6">
             <label
               for="supporterDefaultPrice"
-              class="text-xs font-mono text-muted-foreground uppercase tracking-wider flex items-center gap-2"
+              class="flex items-center gap-2 font-mono text-xs tracking-wider text-muted-foreground uppercase"
             >
               <span
-                class="inline-block w-2 h-2 rounded-full bg-primary"
+                class="inline-block h-2 w-2 rounded-full bg-primary"
                 aria-hidden="true"
               ></span>
               Supporter Tier Default Price (USD)
             </label>
-            <p class="text-2xs text-muted-foreground font-mono -mt-2">
+            <p class="-mt-2 font-mono text-2xs text-muted-foreground">
               Minimum price for "Supporter" tickets. Must be greater than base
-              price.
+              buyer ticket price.
             </p>
-            <div class="relative group max-w-xs">
+            <div class="group relative max-w-xs">
               <span
-                class="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-mono text-sm group-focus-within:text-foreground transition-colors"
+                class="absolute top-1/2 left-4 -translate-y-1/2 font-mono text-sm text-muted-foreground transition-colors group-focus-within:text-foreground"
                 aria-hidden="true"
                 >$</span
               >
@@ -484,14 +489,14 @@
               />
             </div>
             @if (hasError(eventForm.supporterDefaultPrice, 'invalidDecimal')) {
-              <p class="text-destructive text-xs uppercase">
+              <p class="text-xs text-destructive uppercase">
                 Use a dollar amount like 20 or 20.00
               </p>
             } @else if (
               hasError(eventForm.supporterDefaultPrice, 'supporterPrice')
             ) {
-              <p class="text-destructive text-xs uppercase">
-                Must be greater than base price
+              <p class="text-xs text-destructive uppercase">
+                Must be greater than buyer ticket price
               </p>
             }
           </div>
@@ -500,19 +505,19 @@
           <div class="space-y-3 border-t border-border/50 pt-6">
             <label
               for="maxTicketsPerUser"
-              class="text-xs font-mono text-muted-foreground uppercase tracking-wider flex items-center gap-2"
+              class="flex items-center gap-2 font-mono text-xs tracking-wider text-muted-foreground uppercase"
             >
               <span
-                class="inline-block w-2 h-2 rounded-full bg-secondary"
+                class="inline-block h-2 w-2 rounded-full bg-secondary"
                 aria-hidden="true"
               ></span>
               Max Tickets Per User
             </label>
-            <p class="text-2xs text-muted-foreground font-mono -mt-2">
+            <p class="-mt-2 font-mono text-2xs text-muted-foreground">
               Maximum number of tickets a single user can purchase. Default is
               4.
             </p>
-            <div class="relative group max-w-xs">
+            <div class="group relative max-w-xs">
               <input
                 type="number"
                 id="maxTicketsPerUser"
@@ -534,7 +539,7 @@
               ) {
                 <p
                   data-testid="maxTicketsPerUser-error"
-                  class="text-destructive text-xs uppercase"
+                  class="text-xs text-destructive uppercase"
                 >
                   @if (hasError(eventForm.maxTicketsPerUser, 'wholeNumber')) {
                     Must be a whole number
@@ -550,10 +555,10 @@
           @if (communityName()) {
             <div class="space-y-3 border-t border-border/50 pt-6">
               <div
-                class="text-xs font-mono text-muted-foreground uppercase tracking-wider flex items-center gap-2"
+                class="flex items-center gap-2 font-mono text-xs tracking-wider text-muted-foreground uppercase"
               >
                 <span
-                  class="inline-block w-2 h-2 rounded-full bg-accent"
+                  class="inline-block h-2 w-2 rounded-full bg-accent"
                   aria-hidden="true"
                 ></span>
                 Community
@@ -570,12 +575,12 @@
           <div class="space-y-3 border-t border-border/50 pt-6">
             <fieldset data-testid="visibility-selector" class="space-y-3">
               <legend
-                class="text-xs font-mono text-muted-foreground uppercase tracking-wider"
+                class="font-mono text-xs tracking-wider text-muted-foreground uppercase"
               >
                 Event Visibility
               </legend>
 
-              <label class="flex items-start gap-3 cursor-pointer">
+              <label class="flex cursor-pointer items-start gap-3">
                 <input
                   type="radio"
                   name="visibility"
@@ -585,7 +590,7 @@
                   "
                   (change)="setVisibility(EVENT_VISIBILITY.PRIVATE)"
                   aria-describedby="visibility-private-helper"
-                  class="mt-1 w-5 h-5 accent-primary"
+                  class="mt-1 h-5 w-5 accent-primary"
                 />
                 <div class="space-y-2">
                   <span class="text-sm font-medium text-foreground"
@@ -597,7 +602,7 @@
                     class="space-y-1 text-xs text-muted-foreground"
                   >
                     <p>Hidden from public listings and detail pages.</p>
-                    <p class="font-mono text-2xs uppercase tracking-wider">
+                    <p class="font-mono text-2xs tracking-wider uppercase">
                       <span class="text-foreground/70">View</span>: signed-in
                       vetted users
                       <span class="mx-2 text-border" aria-hidden="true">/</span>
@@ -608,7 +613,7 @@
                 </div>
               </label>
 
-              <label class="flex items-start gap-3 cursor-pointer">
+              <label class="flex cursor-pointer items-start gap-3">
                 <input
                   type="radio"
                   name="visibility"
@@ -618,7 +623,7 @@
                   "
                   (change)="setVisibility(EVENT_VISIBILITY.PUBLIC_VIEWABLE)"
                   aria-describedby="visibility-public-viewable-helper"
-                  class="mt-1 w-5 h-5 accent-primary"
+                  class="mt-1 h-5 w-5 accent-primary"
                 />
                 <div class="space-y-2">
                   <span class="text-sm font-medium text-foreground"
@@ -632,7 +637,7 @@
                     <p>
                       Shown publicly, including to people who are not logged in.
                     </p>
-                    <p class="font-mono text-2xs uppercase tracking-wider">
+                    <p class="font-mono text-2xs tracking-wider uppercase">
                       <span class="text-foreground/70">View</span>: anyone
                       <span class="mx-2 text-border" aria-hidden="true">/</span>
                       <span class="text-foreground/70">Buy</span>: signed-in
@@ -642,7 +647,7 @@
                 </div>
               </label>
 
-              <label class="flex items-start gap-3 cursor-pointer">
+              <label class="flex cursor-pointer items-start gap-3">
                 <input
                   type="radio"
                   name="visibility"
@@ -652,7 +657,7 @@
                   "
                   (change)="setVisibility(EVENT_VISIBILITY.PUBLIC)"
                   aria-describedby="visibility-public-helper"
-                  class="mt-1 w-5 h-5 accent-primary"
+                  class="mt-1 h-5 w-5 accent-primary"
                 />
                 <div class="space-y-2">
                   <span class="text-sm font-medium text-foreground"
@@ -664,7 +669,7 @@
                     class="space-y-1 text-xs text-muted-foreground"
                   >
                     <p>Open listing and checkout for the widest reach.</p>
-                    <p class="font-mono text-2xs uppercase tracking-wider">
+                    <p class="font-mono text-2xs tracking-wider uppercase">
                       <span class="text-foreground/70">View</span>: anyone
                       <span class="mx-2 text-border" aria-hidden="true">/</span>
                       <span class="text-foreground/70">Buy</span>: anyone
@@ -700,7 +705,7 @@
           <div class="space-y-2 border-t border-border/50 pt-6">
             <label
               for="description"
-              class="block text-xs font-mono text-muted-foreground uppercase tracking-wider"
+              class="block font-mono text-xs tracking-wider text-muted-foreground uppercase"
               >Description</label
             >
             <textarea
@@ -708,19 +713,19 @@
               [formField]="eventForm.description"
               rows="4"
               placeholder="Event description..."
-              [class]="inputClasses + ' min-h-[150px] field-sizing-content'"
+              [class]="inputClasses + ' field-sizing-content min-h-[150px]'"
             ></textarea>
           </div>
         </div>
 
         <div
-          class="gap-2 sm:gap-4 justify-end pt-6 mt-8 border-t border-border flex flex-col sm:flex-row w-full"
+          class="mt-8 flex w-full flex-col justify-end gap-2 border-t border-border pt-6 sm:flex-row sm:gap-4"
         >
           @if (submitError()) {
             <p
               data-testid="event-save-error"
               role="alert"
-              class="order-0 sm:mr-auto text-destructive text-xs uppercase"
+              class="order-0 text-xs text-destructive uppercase sm:mr-auto"
             >
               {{ submitError() }}
             </p>
@@ -746,7 +751,7 @@
             (click)="save('draft')"
             [zLoading]="isSubmitting()"
             [zDisabled]="!isFormValid() || isSubmitting()"
-            class="w-full sm:w-auto sm:min-w-[140px] order-2"
+            class="order-2 w-full sm:w-auto sm:min-w-[140px]"
             data-testid="save-draft-btn"
           >
             {{
@@ -764,7 +769,7 @@
             (click)="save('published')"
             [zLoading]="isSubmitting()"
             [zDisabled]="!isFormValid() || isSubmitting()"
-            class="w-full sm:w-auto sm:min-w-[140px] disabled:opacity-50 transition-opacity order-1 sm:order-3"
+            class="order-1 w-full transition-opacity disabled:opacity-50 sm:order-3 sm:w-auto sm:min-w-[140px]"
             data-testid="publish-save-btn"
           >
             {{

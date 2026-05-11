@@ -1,7 +1,12 @@
-import { Overlay, OverlayPositionBuilder, type OverlayRef } from '@angular/cdk/overlay';
-import { TemplatePortal } from '@angular/cdk/portal';
-import { isPlatformBrowser } from '@angular/common';
 import {
+  Overlay,
+  OverlayPositionBuilder,
+  type OverlayRef,
+} from '@angular/cdk/overlay';
+import {TemplatePortal} from '@angular/cdk/portal';
+import {isPlatformBrowser} from '@angular/common';
+import {
+  computed,
   type ElementRef,
   inject,
   Injectable,
@@ -13,9 +18,9 @@ import {
   type ViewContainerRef,
 } from '@angular/core';
 
-import { filter, type Subscription } from 'rxjs';
+import {filter, type Subscription} from 'rxjs';
 
-import { noopFn } from '@ui/utils/noop';
+import {noopFn} from '@ui/utils/noop';
 import {
   navigateItems,
   focusItemAtIndex,
@@ -43,7 +48,8 @@ export class BraDropdownService {
   private outsideClickSubscription!: Subscription;
   private unlisten: () => void = noopFn;
 
-  readonly isOpen = signal(false);
+  readonly activeTrigger = signal<HTMLElement | null>(null);
+  readonly isOpen = computed(() => this.activeTrigger() !== null);
 
   constructor() {
     this.renderer = this.rendererFactory.createRenderer(null, null);
@@ -53,11 +59,13 @@ export class BraDropdownService {
     triggerElement: ElementRef<HTMLElement>,
     template: TemplateRef<unknown>,
     viewContainerRef: ViewContainerRef,
+    menuId: string,
+    triggerId: string,
   ) {
-    if (this.isOpen()) {
+    if (this.activeTrigger() === triggerElement.nativeElement) {
       this.close();
     } else {
-      this.open(triggerElement, template, viewContainerRef);
+      this.open(triggerElement, template, viewContainerRef, menuId, triggerId);
     }
   }
 
@@ -65,6 +73,8 @@ export class BraDropdownService {
     triggerElement: ElementRef<HTMLElement>,
     template: TemplateRef<unknown>,
     viewContainerRef: ViewContainerRef,
+    menuId: string,
+    triggerId: string,
   ) {
     if (this.isOpen()) {
       this.close();
@@ -80,13 +90,12 @@ export class BraDropdownService {
     this.portal = new TemplatePortal(template, viewContainerRef);
     this.overlayRef.attach(this.portal);
 
-    // Setup keyboard navigation
     setTimeout(() => {
       this.setupKeyboardNavigation();
       this.focusInitialItem();
+      this.applyMenuAria(menuId, triggerId);
     }, 0);
 
-    // Close on outside click
     this.outsideClickSubscription = this.overlayRef
       .outsidePointerEvents()
       .pipe(
@@ -99,7 +108,7 @@ export class BraDropdownService {
       .subscribe(() => {
         this.close();
       });
-    this.isOpen.set(true);
+    this.activeTrigger.set(triggerElement.nativeElement);
   }
 
   close() {
@@ -109,7 +118,7 @@ export class BraDropdownService {
     this.focusedIndex.set(-1);
     this.unlisten();
     this.destroyOverlay();
-    this.isOpen.set(false);
+    this.activeTrigger.set(null);
   }
 
   private createOverlay(triggerElement: ElementRef<HTMLElement>) {
@@ -171,7 +180,10 @@ export class BraDropdownService {
   }
 
   private setupKeyboardNavigation() {
-    if (!this.overlayRef?.hasAttached() || !isPlatformBrowser(this.platformId)) {
+    if (
+      !this.overlayRef?.hasAttached() ||
+      !isPlatformBrowser(this.platformId)
+    ) {
       return;
     }
 
@@ -182,46 +194,46 @@ export class BraDropdownService {
       return;
     }
 
-    this.unlisten = this.renderer.listen(dropdownElement, 'keydown', (event: KeyboardEvent) => {
-      const key = event.key as KeyboardNavKey;
-      if (NAVIGATION_KEYS.includes(key)) {
-        event.preventDefault();
-        const items = this.getDropdownItems();
+    this.unlisten = this.renderer.listen(
+      dropdownElement,
+      'keydown',
+      (event: KeyboardEvent) => {
+        const key = event.key as KeyboardNavKey;
+        if (NAVIGATION_KEYS.includes(key)) {
+          event.preventDefault();
+          const items = this.getDropdownItems();
 
-        switch (key) {
-          case 'ArrowDown':
-            navigateItems(
-              1,
-              items,
-              this.focusedIndex(),
-              (idx) => this.updateFocusedItem(items, idx),
-            );
-            break;
-          case 'ArrowUp':
-            navigateItems(
-              -1,
-              items,
-              this.focusedIndex(),
-              (idx) => this.updateFocusedItem(items, idx),
-            );
-            break;
-          case 'Enter':
-          case ' ':
-            this.selectFocusedItem(items);
-            break;
-          case 'Escape':
-            this.close();
-            this.triggerElement?.nativeElement.focus();
-            break;
-          case 'Home':
-            focusItemAtIndex(items, 0, (idx) => this.focusedIndex.set(idx));
-            break;
-          case 'End':
-            focusItemAtIndex(items, items.length - 1, (idx) => this.focusedIndex.set(idx));
-            break;
+          switch (key) {
+            case 'ArrowDown':
+              navigateItems(1, items, this.focusedIndex(), (idx) =>
+                this.updateFocusedItem(items, idx),
+              );
+              break;
+            case 'ArrowUp':
+              navigateItems(-1, items, this.focusedIndex(), (idx) =>
+                this.updateFocusedItem(items, idx),
+              );
+              break;
+            case 'Enter':
+            case ' ':
+              this.selectFocusedItem(items);
+              break;
+            case 'Escape':
+              this.close();
+              this.triggerElement?.nativeElement.focus();
+              break;
+            case 'Home':
+              focusItemAtIndex(items, 0, (idx) => this.focusedIndex.set(idx));
+              break;
+            case 'End':
+              focusItemAtIndex(items, items.length - 1, (idx) =>
+                this.focusedIndex.set(idx),
+              );
+              break;
+          }
         }
-      }
-    });
+      },
+    );
 
     // Focus dropdown container
     dropdownElement.focus();
@@ -233,7 +245,9 @@ export class BraDropdownService {
     }
     const dropdownElement = this.overlayRef.overlayElement;
     return Array.from(
-      dropdownElement.querySelectorAll<HTMLElement>('bra-dropdown-menu-item, [bra-dropdown-menu-item]'),
+      dropdownElement.querySelectorAll<HTMLElement>(
+        'bra-dropdown-menu-item, [bra-dropdown-menu-item]',
+      ),
     ).filter((item) => item.dataset['disabled'] === undefined);
   }
 
@@ -250,5 +264,13 @@ export class BraDropdownService {
   private updateFocusedItem(items: HTMLElement[], index: number): void {
     this.focusedIndex.set(index);
     updateItemFocus(items, index);
+  }
+
+  private applyMenuAria(menuId: string, triggerId: string): void {
+    const menuElement =
+      this.overlayRef?.overlayElement.querySelector('[role="menu"]');
+    if (!menuElement) return;
+    menuElement.id = menuId;
+    menuElement.setAttribute('aria-labelledby', triggerId);
   }
 }

@@ -1,11 +1,11 @@
-import type { Meta, StoryObj } from '@storybook/angular';
-import { argsToTemplate } from '@storybook/angular';
+import type {Meta, StoryObj} from '@storybook/angular';
+import {argsToTemplate} from '@storybook/angular';
 
-import { ZardBadgeComponent } from '@ui/components/primitives/badge/badge.component';
-import { ZardButtonComponent } from '@ui/components/primitives/button/button.component';
-import { ZardCardComponent } from './card.component';
-import { ZardIconComponent } from '@ui/components/primitives/icon/icon.component';
-import { ZardProgressBarComponent } from '@ui/components/primitives/progress-bar/progress-bar.component';
+import {ZardBadgeComponent} from '@ui/components/primitives/badge/badge.component';
+import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
+import {ZardCardComponent} from './card.component';
+import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
+import {ZardProgressBarComponent} from '@ui/components/primitives/progress-bar/progress-bar.component';
 
 const meta: Meta<ZardCardComponent> = {
   title: 'Braket/Primitives/Card',
@@ -20,12 +20,18 @@ const meta: Meta<ZardCardComponent> = {
     },
   },
   argTypes: {
-    zTitle: { control: 'text' },
-    zDescription: { control: 'text' },
-    zAction: { control: 'text' },
-    zActionAriaLabel: { control: 'text' },
-    zHeaderBorder: { control: 'boolean' },
-    zFooterBorder: { control: 'boolean' },
+    zTitle: {control: 'text'},
+    zDescription: {control: 'text'},
+    zAction: {control: 'text'},
+    zActionAriaLabel: {control: 'text'},
+    zHeaderBorder: {control: 'boolean'},
+    zFooterBorder: {control: 'boolean'},
+    zVariant: {
+      control: 'select',
+      options: ['default', 'horizontal'],
+      description:
+        'Layout variant for default stacked cards or horizontal media cards.',
+    },
   },
   render: (args) => ({
     props: args,
@@ -44,7 +50,8 @@ export const Default: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Reference baseline for the primitive card API with title and description props.',
+        story:
+          'Reference baseline for the primitive card API with title and description props.',
       },
     },
   },
@@ -101,7 +108,8 @@ export const AdminSection: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'App-proven admin summary composition with metrics, progress, and footer metadata.',
+        story:
+          'App-proven admin summary composition with metrics, progress, and footer metadata.',
       },
     },
   },
@@ -144,7 +152,12 @@ export const ProductCallout: Story = {
       </z-card>
     `,
     moduleMetadata: {
-      imports: [ZardBadgeComponent, ZardButtonComponent, ZardCardComponent, ZardIconComponent],
+      imports: [
+        ZardBadgeComponent,
+        ZardButtonComponent,
+        ZardCardComponent,
+        ZardIconComponent,
+      ],
     },
   }),
   parameters: {

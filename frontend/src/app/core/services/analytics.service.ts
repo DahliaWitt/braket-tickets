@@ -69,6 +69,15 @@ function getPostHogSingleEventUrl(apiHost: string | undefined): string {
   return `${getPostHogApiHost(apiHost).replace(/\/+$/, '')}${POSTHOG_SINGLE_EVENT_PATH}`;
 }
 
+function getEphemeralFeedbackDistinctId(): string {
+  const randomUUID = globalThis.crypto?.randomUUID?.();
+  if (randomUUID) {
+    return `feedback:${randomUUID}`;
+  }
+
+  return `feedback:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+}
+
 function isAnalyticsEnvironment(value: string): value is AnalyticsEnvironment {
   return (
     value === 'production' ||
@@ -203,6 +212,7 @@ function buildFeedbackProperties(
   routeTemplate: string,
   signedIn: boolean,
   replayUrl: string | undefined,
+  suppressPersonProfile: boolean,
   config: AnalyticsRuntimeConfig,
 ): Record<string, unknown> {
   return sanitizeAnalyticsProperties(
@@ -219,7 +229,9 @@ function buildFeedbackProperties(
       build_commit_hash: config.build.commitHash,
       build_branch: config.build.branch,
       build_timestamp: config.build.timestamp,
-      ...(signedIn ? {} : {$process_person_profile: false}),
+      ...(signedIn && !suppressPersonProfile
+        ? {}
+        : {$process_person_profile: false}),
     },
     {allowFeedbackMessage: true},
   );
@@ -497,13 +509,13 @@ export class AnalyticsService {
     if (!this.isPostHogEnabled()) {
       return false;
     }
-    const client = await this.ensureClient();
-    if (!client) {
-      return false;
-    }
-
-    const replayUrl = this.getCurrentSessionReplayUrl(client);
-    const distinctId = client.get_distinct_id();
+    const shouldBypassSdk = shouldOptOutAnalyticsByDefault();
+    const client = shouldBypassSdk ? null : await this.ensureClient();
+    const replayUrl = client
+      ? this.getCurrentSessionReplayUrl(client)
+      : undefined;
+    const distinctId =
+      client?.get_distinct_id() || getEphemeralFeedbackDistinctId();
     if (!distinctId) {
       return false;
     }
@@ -518,6 +530,7 @@ export class AnalyticsService {
         routeTemplate,
         signedIn,
         replayUrl,
+        shouldBypassSdk,
         this.runtimeConfig,
       ),
     };
