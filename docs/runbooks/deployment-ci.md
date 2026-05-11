@@ -36,7 +36,7 @@ Jump to:
 | Workflow                   | Trigger                                                                                              | Jobs                                                                                                               |
 | -------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `CI`                       | Pushes to `main` or `develop`; pull requests targeting `main` or `develop`                           | `lint`, `test`, `stripe-contracts`, `build`, `storybook`, `e2e-check`, conditional `e2e`, branch-gated deploy call |
-| `Release`                  | Pushes to `main`                                                                                     | Creates or updates the Release Please PR using `RELEASE_PLEASE_TOKEN`                                              |
+| `Release`                  | Pushes to `main`                                                                                     | Creates GitHub releases with `GITHUB_TOKEN` and opens or updates Release Please PRs with `RELEASE_PLEASE_TOKEN`    |
 | `Release Automerge`        | Release Please pull requests targeting `main`                                                        | Validates the release PR branch, title, author, and changed files, then enables squash auto-merge                  |
 | `Deploy to Production`     | Reusable workflow called from a successful `CI` push run on `main`                                   | `changes`, `deploy-convex`, `deploy-frontend`, `deploy-observability`, `record-deployment`                         |
 | `Deploy Preview (develop)` | Reusable workflow called from a successful `CI` push run on `develop`, or manual `workflow_dispatch` | `changes`, `deploy-convex-dev`, `deploy-frontend-preview`, `deploy-observability-dev`, `record-deployment`         |
@@ -72,20 +72,33 @@ The repository auto-merge setting must also be enabled because `Release Automerg
 gh api repos/DahliaWitt/braket-tickets --jq '{allow_auto_merge,default_branch}'
 ```
 
-Release Please reads conventional commits from `main` history when it builds the release pull request body and `CHANGELOG.md`. Keep GitHub merge commits disabled for this repository so a conventional PR title does not become an extra changelog entry in addition to the original branch commit. Verify the merge policy with:
+Release Please reads conventional commits from `main` history when it builds the release pull request body and `CHANGELOG.md`. This repository uses a Git Flow-style branch model, so promotion PRs from `develop` to `main` must preserve branch ancestry with merge commits. Feature PRs into `develop` should use squash merge with a curated conventional PR title. Promotion PRs into `main` should use a merge commit, not squash or rebase, and their titles should be non-releasable, for example `chore(release): promote develop to main`.
+
+The repository merge settings are part of the Release Please contract:
+
+- Merge commits are enabled so `develop` can be promoted to `main` without rewriting commit SHAs.
+- Rebase merges are disabled because they rewrite `develop` commits on `main` and make later `develop` -> `main` PRs look much larger than they are.
+- Squash merges stay enabled for feature PRs into `develop`.
+- Merge and squash commit bodies are blank so Release Please does not parse duplicate conventional commit messages from PR bodies or branch commit lists.
+
+Verify the merge policy with:
 
 ```bash
 gh api repos/DahliaWitt/braket-tickets \
-  --jq '{allow_merge_commit,allow_squash_merge,allow_rebase_merge}'
+  --jq '{allow_merge_commit,allow_squash_merge,allow_rebase_merge,merge_commit_title,merge_commit_message,squash_merge_commit_title,squash_merge_commit_message}'
 ```
 
 Expected values:
 
 ```json
 {
-  "allow_merge_commit": false,
+  "allow_merge_commit": true,
   "allow_squash_merge": true,
-  "allow_rebase_merge": true
+  "allow_rebase_merge": false,
+  "merge_commit_title": "PR_TITLE",
+  "merge_commit_message": "BLANK",
+  "squash_merge_commit_title": "PR_TITLE",
+  "squash_merge_commit_message": "BLANK"
 }
 ```
 
