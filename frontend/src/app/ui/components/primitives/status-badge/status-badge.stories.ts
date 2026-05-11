@@ -48,12 +48,19 @@ const meta: Meta<BraStatusBadgeComponent> = {
 export default meta;
 type Story = StoryObj<BraStatusBadgeComponent>;
 
+function storyDescription(story: string): Story['parameters'] {
+  return {docs: {description: {story}}};
+}
+
 export const Success: Story = {
   args: {status: 'success'},
   render: (args) => ({
     props: args,
     template: `<bra-status-badge ${argsToTemplate(args)}>Active</bra-status-badge>`,
   }),
+  parameters: storyDescription(
+    'Library reference for positive state labels such as active or approved.',
+  ),
 };
 
 export const Warning: Story = {
@@ -62,6 +69,9 @@ export const Warning: Story = {
     props: args,
     template: `<bra-status-badge ${argsToTemplate(args)}>Pending</bra-status-badge>`,
   }),
+  parameters: storyDescription(
+    'Library reference for pending or needs-attention status labels.',
+  ),
 };
 
 export const Destructive: Story = {
@@ -70,6 +80,9 @@ export const Destructive: Story = {
     props: args,
     template: `<bra-status-badge ${argsToTemplate(args)}>Rejected</bra-status-badge>`,
   }),
+  parameters: storyDescription(
+    'Library reference for rejected, failed, or destructive status labels.',
+  ),
 };
 
 export const Info: Story = {
@@ -78,6 +91,9 @@ export const Info: Story = {
     props: args,
     template: `<bra-status-badge ${argsToTemplate(args)}>Info</bra-status-badge>`,
   }),
+  parameters: storyDescription(
+    'Library reference for neutral informational labels.',
+  ),
 };
 
 export const Muted: Story = {
@@ -86,6 +102,9 @@ export const Muted: Story = {
     props: args,
     template: `<bra-status-badge ${argsToTemplate(args)}>Draft</bra-status-badge>`,
   }),
+  parameters: storyDescription(
+    'Library reference for passive labels such as draft or inactive.',
+  ),
 };
 
 export const MediumSize: Story = {
@@ -94,6 +113,9 @@ export const MediumSize: Story = {
     props: args,
     template: `<bra-status-badge ${argsToTemplate(args)}>Active</bra-status-badge>`,
   }),
+  parameters: storyDescription(
+    'Library reference for the larger badge size in denser metadata rows.',
+  ),
 };
 
 export const PillShape: Story = {
@@ -102,6 +124,9 @@ export const PillShape: Story = {
     props: args,
     template: `<bra-status-badge ${argsToTemplate(args)}>Featured</bra-status-badge>`,
   }),
+  parameters: storyDescription(
+    'Library reference for rounded pill badges used when a label needs more emphasis.',
+  ),
 };
 
 export const Accent: Story = {
@@ -128,4 +153,7 @@ export const AllStatuses: Story = {
     `,
     moduleMetadata: {imports: [BraStatusBadgeComponent]},
   }),
+  parameters: storyDescription(
+    'Library reference that compares every supported status token side by side.',
+  ),
 };

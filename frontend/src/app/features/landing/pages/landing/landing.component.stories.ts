@@ -1,25 +1,25 @@
-import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
-import { ActivatedRoute, Params, provideRouter, type Routes } from '@angular/router';
-import type { Meta, StoryObj } from '@storybook/angular';
-import { applicationConfig } from '@storybook/angular';
-import { CONVEX } from 'convex-angular';
+import {ChangeDetectionStrategy, Component, signal} from '@angular/core';
+import {
+  ActivatedRoute,
+  Params,
+  provideRouter,
+  type Routes,
+} from '@angular/router';
+import type {Meta, StoryObj} from '@storybook/angular';
+import {applicationConfig} from '@storybook/angular';
+import {CONVEX} from 'convex-angular';
+import type {FunctionReturnType} from 'convex/server';
 
-import { AuthService } from '@/core/services/auth.service';
-import { PublicCommunitiesService } from '@/core/services/public-communities.service';
+import {AuthService} from '@/core/services/auth.service';
+import {PublicCommunitiesService} from '@/core/services/public-communities.service';
+import {type api} from '@convex/_generated/api';
+import {createStoryConvexClient} from '../../../../../storybook/mocks/convex';
 
-import { LandingComponent } from './landing.component';
+import {LandingComponent} from './landing.component';
 
-interface LandingStoryEvent {
-  _id: string;
-  title: string;
-  date: string;
-  price: number;
-  totalTickets: number;
-  soldCount: number;
-  posterUrl: string | null;
-  location?: string;
-  description?: string;
-}
+type LandingStoryEvent = FunctionReturnType<
+  typeof api.events.public.list
+>[number];
 
 interface LandingStoryCommunity {
   _id: string;
@@ -38,11 +38,16 @@ const landingStoryState = {
 
 const STORY_EVENTS: LandingStoryEvent[] = [
   {
-    _id: 'evt_void_sessions',
+    _id: 'evt_void_sessions' as LandingStoryEvent['_id'],
+    _creationTime: Date.now(),
     title: 'Void Sessions Vol. 12',
     date: '2026-06-20T22:00:00.000Z',
     price: 3500,
+    organizerId: 'org_void' as LandingStoryEvent['organizerId'],
     totalTickets: 160,
+    ticketSalesStatus: 'active',
+    status: 'published',
+    visibility: 'public',
     soldCount: 118,
     posterUrl: '/waterfallTexture.webp',
     location: 'East Warehouse',
@@ -50,41 +55,61 @@ const STORY_EVENTS: LandingStoryEvent[] = [
       'A late-night warehouse session with dense low-end, projection work, and a strict no-phone floor policy.',
   },
   {
-    _id: 'evt_signal_loss',
+    _id: 'evt_signal_loss' as LandingStoryEvent['_id'],
+    _creationTime: Date.now(),
     title: 'Signal Loss',
     date: '2026-07-05T20:30:00.000Z',
     price: 2200,
+    organizerId: 'org_signal' as LandingStoryEvent['organizerId'],
     totalTickets: 110,
+    ticketSalesStatus: 'active',
+    status: 'published',
+    visibility: 'public',
     soldCount: 43,
     posterUrl: null,
     location: 'Lower Level',
   },
   {
-    _id: 'evt_body_language',
+    _id: 'evt_body_language' as LandingStoryEvent['_id'],
+    _creationTime: Date.now(),
     title: 'Body Language',
     date: '2026-07-18T21:00:00.000Z',
     price: 2800,
+    organizerId: 'org_dancefloor' as LandingStoryEvent['organizerId'],
     totalTickets: 120,
+    ticketSalesStatus: 'active',
+    status: 'published',
+    visibility: 'public',
     soldCount: 67,
     posterUrl: '/braket.svg',
     location: 'Studio Room',
   },
   {
-    _id: 'evt_subterranean_archive',
+    _id: 'evt_subterranean_archive' as LandingStoryEvent['_id'],
+    _creationTime: Date.now(),
     title: 'Subterranean Archive',
     date: '2026-08-02T23:00:00.000Z',
     price: 4000,
+    organizerId: 'org_void' as LandingStoryEvent['organizerId'],
     totalTickets: 90,
+    ticketSalesStatus: 'active',
+    status: 'published',
+    visibility: 'public',
     soldCount: 72,
     posterUrl: '/waterfallTexture.webp',
     location: 'Archive Hall',
   },
   {
-    _id: 'evt_afterhours_assembly',
+    _id: 'evt_afterhours_assembly' as LandingStoryEvent['_id'],
+    _creationTime: Date.now(),
     title: 'Afterhours Assembly',
     date: '2026-08-16T22:30:00.000Z',
     price: 2600,
+    organizerId: 'org_signal' as LandingStoryEvent['organizerId'],
     totalTickets: 140,
+    ticketSalesStatus: 'active',
+    status: 'published',
+    visibility: 'public',
     soldCount: 51,
     posterUrl: null,
     location: 'North Gallery',
@@ -126,13 +151,13 @@ const STORY_COMMUNITIES: LandingStoryCommunity[] = [
 class LandingStoryRouteStubComponent {}
 
 const STORY_ROUTES: Routes = [
-  { path: '', component: LandingStoryRouteStubComponent },
-  { path: 'login', component: LandingStoryRouteStubComponent },
-  { path: 'events', component: LandingStoryRouteStubComponent },
-  { path: 'events/:id', component: LandingStoryRouteStubComponent },
-  { path: 'communities', component: LandingStoryRouteStubComponent },
-  { path: 'communities/:slug', component: LandingStoryRouteStubComponent },
-  { path: '**', component: LandingStoryRouteStubComponent },
+  {path: '', component: LandingStoryRouteStubComponent},
+  {path: 'login', component: LandingStoryRouteStubComponent},
+  {path: 'events', component: LandingStoryRouteStubComponent},
+  {path: 'events/:id', component: LandingStoryRouteStubComponent},
+  {path: 'communities', component: LandingStoryRouteStubComponent},
+  {path: 'communities/:slug', component: LandingStoryRouteStubComponent},
+  {path: '**', component: LandingStoryRouteStubComponent},
 ];
 
 class StoryPublicCommunitiesService {
@@ -142,7 +167,9 @@ class StoryPublicCommunitiesService {
 
   getBySlug(slug: string): Promise<LandingStoryCommunity | null> {
     return Promise.resolve(
-      landingStoryState.communities.find((community) => community.slug === slug) ?? null,
+      landingStoryState.communities.find(
+        (community) => community.slug === slug,
+      ) ?? null,
     );
   }
 }
@@ -155,53 +182,9 @@ class StoryAuthService {
   }
 }
 
-function createStoryConvexClient() {
-  const onUpdate = (
-    _query: unknown,
-    _args: unknown,
-    onData: (data: unknown) => void,
-  ): (() => void) => {
-    onData(landingStoryState.events);
-    return () => undefined;
-  };
-
-  const connectionState = () => ({
-    hasInflightRequests: false,
-    isWebSocketConnected: false,
-    timeOfOldestInflightRequest: null,
-    hasEverConnected: true,
-    connectionCount: 1,
-    connectionRetries: 0,
-    inflightMutations: 0,
-    inflightActions: 0,
-  });
-
-  return {
-    query: async () => null,
-    mutation: async () => null,
-    action: async () => null,
-    onUpdate,
-    onPaginatedUpdate_experimental: () => () => undefined,
-    localQueryResult: () => undefined,
-    connectionState,
-    subscribeToConnectionState: () => () => undefined,
-    hasAuth: () => false,
-    handleAuthError: () => undefined,
-    client: {
-      query: async () => null,
-      mutation: async () => null,
-      action: async () => null,
-      onUpdate,
-      onPaginatedUpdate_experimental: () => () => undefined,
-      localQueryResult: () => undefined,
-      connectionState,
-      subscribeToConnectionState: () => () => undefined,
-      hasAuth: () => false,
-    },
-  };
-}
-
-const storyConvexClient = createStoryConvexClient();
+const storyConvexClient = createStoryConvexClient({
+  onUpdate: () => landingStoryState.events,
+});
 
 function createActivatedRoute(): Pick<ActivatedRoute, 'snapshot'> {
   return {
@@ -238,10 +221,13 @@ const meta: Meta<LandingComponent> = {
     applicationConfig({
       providers: [
         provideRouter(STORY_ROUTES),
-        { provide: CONVEX, useValue: storyConvexClient },
-        { provide: AuthService, useClass: StoryAuthService },
-        { provide: PublicCommunitiesService, useClass: StoryPublicCommunitiesService },
-        { provide: ActivatedRoute, useFactory: createActivatedRoute },
+        {provide: CONVEX, useValue: storyConvexClient},
+        {provide: AuthService, useClass: StoryAuthService},
+        {
+          provide: PublicCommunitiesService,
+          useClass: StoryPublicCommunitiesService,
+        },
+        {provide: ActivatedRoute, useFactory: createActivatedRoute},
       ],
     }),
   ],

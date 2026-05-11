@@ -5,10 +5,10 @@ import {
   input,
   viewChild,
 } from '@angular/core';
-import type { Meta, StoryObj } from '@storybook/angular';
+import type {Meta, StoryObj} from '@storybook/angular';
 
-import { ZardSelectComponent } from './select.component';
-import { ZardSelectItemComponent } from './select-item.component';
+import {ZardSelectComponent} from './select.component';
+import {ZardSelectItemComponent} from './select-item.component';
 
 interface SelectItemOption {
   value: string;
@@ -17,20 +17,26 @@ interface SelectItemOption {
 }
 
 const DEFAULT_ITEMS: readonly SelectItemOption[] = [
-  { value: 'general', label: 'General Admission' },
-  { value: 'vip', label: 'VIP Access' },
-  { value: 'backstage', label: 'Backstage Pass' },
+  {value: 'general', label: 'General Admission'},
+  {value: 'vip', label: 'VIP Access'},
+  {value: 'backstage', label: 'Backstage Pass'},
 ];
 
 const DISABLED_ITEMS: readonly SelectItemOption[] = [
-  { value: 'guest', label: 'Guest' },
-  { value: 'artist guest', label: 'Artist Guest' },
-  { value: 'staff', label: 'Staff', disabled: true },
+  {value: 'guest', label: 'Guest'},
+  {value: 'artist guest', label: 'Artist Guest'},
+  {value: 'staff', label: 'Staff', disabled: true},
 ];
 
 const LONG_LABEL_ITEMS: readonly SelectItemOption[] = [
-  { value: 'general', label: 'General Admission with Flexible Pricing and No Special Access' },
-  { value: 'vip', label: 'VIP Access with Reserved Seating, Priority Entry, and Merch Bundle' },
+  {
+    value: 'general',
+    label: 'General Admission with Flexible Pricing and No Special Access',
+  },
+  {
+    value: 'vip',
+    label: 'VIP Access with Reserved Seating, Priority Entry, and Merch Bundle',
+  },
   {
     value: 'artist guest',
     label: 'Artist Guest Pass for Backstage Access and Check-In Coordination',
@@ -38,9 +44,9 @@ const LONG_LABEL_ITEMS: readonly SelectItemOption[] = [
 ];
 
 const COMPACT_ITEMS: readonly SelectItemOption[] = [
-  { value: 'early', label: 'Early Entry' },
-  { value: 'general', label: 'General Admission' },
-  { value: 'vip', label: 'VIP Access' },
+  {value: 'early', label: 'Early Entry'},
+  {value: 'general', label: 'General Admission'},
+  {value: 'vip', label: 'VIP Access'},
 ];
 
 @Component({
@@ -50,15 +56,27 @@ const COMPACT_ITEMS: readonly SelectItemOption[] = [
   template: `
     <div class="space-y-3" [class]="widthClass()">
       <div class="space-y-1">
-        <p class="font-mono text-2xs uppercase tracking-widest text-muted-foreground">
+        <p
+          class="font-mono text-2xs tracking-widest text-muted-foreground uppercase"
+        >
           {{ title() }}
         </p>
-        <p class="text-xs text-muted-foreground font-sans">{{ description() }}</p>
+        <p class="font-sans text-xs text-muted-foreground">
+          {{ description() }}
+        </p>
       </div>
 
-      <z-select #select class="w-full" [zValue]="selectedValue()" [zPlaceholder]="placeholder()">
+      <z-select
+        #select
+        class="w-full"
+        [zValue]="selectedValue()"
+        [zPlaceholder]="placeholder()"
+      >
         @for (item of items(); track item.value) {
-          <z-select-item [zValue]="item.value" [zDisabled]="item.disabled ?? false">
+          <z-select-item
+            [zValue]="item.value"
+            [zDisabled]="item.disabled ?? false"
+          >
             {{ item.label }}
           </z-select-item>
         }
@@ -94,6 +112,20 @@ const meta: Meta<ZardSelectItemComponent> = {
           'Select item is app-proven as the row primitive inside admin and ticketing selects. These stories keep the menu open so the option treatment is documented directly instead of only through the closed trigger.',
       },
     },
+  },
+  argTypes: {
+    zValue: {
+      control: 'text',
+      description: 'Stable option value emitted when this item is selected.',
+    },
+    zDisabled: {
+      control: 'boolean',
+      description: 'Disables this option while keeping it visible in the menu.',
+    },
+  },
+  args: {
+    zValue: 'vip',
+    zDisabled: false,
   },
   decorators: [
     (story) => ({
@@ -204,7 +236,8 @@ export const LongLabels: Story = {
 export const CompactMode: Story = {
   render: renderSelectItemStory({
     title: 'Compact mode',
-    description: 'Narrow triggers force the compact item treatment used in small sidebars.',
+    description:
+      'Narrow triggers force the compact item treatment used in small sidebars.',
     widthClass: 'w-24',
     placeholder: 'Choose an option...',
     selectedValue: 'early',
@@ -213,7 +246,8 @@ export const CompactMode: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Reference compact treatment for especially narrow triggers or side panels.',
+        story:
+          'Reference compact treatment for especially narrow triggers or side panels.',
       },
     },
   },

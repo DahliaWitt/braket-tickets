@@ -1,16 +1,20 @@
-import { ComponentHarness } from '@angular/cdk/testing';
+import {ComponentHarness} from '@angular/cdk/testing';
+import {waitForHarnessCondition} from '@/testing/harness-wait';
 
 export class BraToastHarness extends ComponentHarness {
   static hostSelector = 'bra-toast, bra-toaster';
 
-  protected getToasts =
-    this.documentRootLocatorFactory().locatorForOptional('li[data-sonner-toast]');
-  protected getToastTitle = this.documentRootLocatorFactory().locatorForOptional(
-    '[data-sonner-toast] [data-title]',
+  protected getToasts = this.documentRootLocatorFactory().locatorForOptional(
+    'li[data-sonner-toast]',
   );
-  protected getToastDescription = this.documentRootLocatorFactory().locatorForOptional(
-    '[data-sonner-toast] [data-description]',
-  );
+  protected getToastTitle =
+    this.documentRootLocatorFactory().locatorForOptional(
+      '[data-sonner-toast] [data-title]',
+    );
+  protected getToastDescription =
+    this.documentRootLocatorFactory().locatorForOptional(
+      '[data-sonner-toast] [data-description]',
+    );
 
   async hasToast(): Promise<boolean> {
     const toast = await this.getToasts();
@@ -43,11 +47,12 @@ export class BraToastHarness extends ComponentHarness {
   }
 
   async waitForToastHidden(timeout = 5000): Promise<void> {
-    const start = Date.now();
-    while (Date.now() - start < timeout) {
-      const toastElement = await this.getToasts();
-      if (!toastElement) return;
-      await new Promise((r) => setTimeout(r, 50));
-    }
+    await waitForHarnessCondition(
+      async () => (await this.getToasts()) === null,
+      {
+        description: 'toast to be hidden',
+        timeoutMs: timeout,
+      },
+    );
   }
 }
