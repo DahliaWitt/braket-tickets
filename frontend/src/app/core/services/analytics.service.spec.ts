@@ -256,6 +256,40 @@ describe('AnalyticsService', () => {
       });
     });
 
+    it('suppresses person profile creation for signed-in feedback when privacy signals bypass the SDK', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(new Response('{}'));
+      vi.stubGlobal('navigator', {doNotTrack: '1'});
+      vi.stubGlobal('fetch', fetchMock);
+      authServiceMock.currentUser.set({
+        _id: 'user-123' as Id<'users'>,
+        _creationTime: Date.now(),
+        email: 'user@example.com',
+        name: 'User Example',
+      });
+
+      await service.warmup();
+      await waitForInit();
+
+      await expect(
+        service.captureFeedback({
+          category: 'bug',
+          message: 'Signed in but still privacy-first',
+          route: '/help',
+        }),
+      ).resolves.toBe(true);
+
+      expect(posthog.get_distinct_id).not.toHaveBeenCalled();
+      expect(
+        JSON.parse(fetchMock.mock.calls[0][1].body as string),
+      ).toMatchObject({
+        distinct_id: expect.stringMatching(/^feedback:/),
+        properties: {
+          signed_in: true,
+          $process_person_profile: false,
+        },
+      });
+    });
+
     it('configures masked session replay without headers or bodies', async () => {
       await service.warmup();
       await waitForInit();

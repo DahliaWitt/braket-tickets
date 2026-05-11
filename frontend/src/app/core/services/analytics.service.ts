@@ -212,6 +212,7 @@ function buildFeedbackProperties(
   routeTemplate: string,
   signedIn: boolean,
   replayUrl: string | undefined,
+  suppressPersonProfile: boolean,
   config: AnalyticsRuntimeConfig,
 ): Record<string, unknown> {
   return sanitizeAnalyticsProperties(
@@ -228,7 +229,9 @@ function buildFeedbackProperties(
       build_commit_hash: config.build.commitHash,
       build_branch: config.build.branch,
       build_timestamp: config.build.timestamp,
-      ...(signedIn ? {} : {$process_person_profile: false}),
+      ...(signedIn && !suppressPersonProfile
+        ? {}
+        : {$process_person_profile: false}),
     },
     {allowFeedbackMessage: true},
   );
@@ -527,6 +530,7 @@ export class AnalyticsService {
         routeTemplate,
         signedIn,
         replayUrl,
+        shouldBypassSdk,
         this.runtimeConfig,
       ),
     };
