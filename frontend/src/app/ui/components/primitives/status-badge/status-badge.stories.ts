@@ -1,7 +1,7 @@
-import type { Meta, StoryObj } from '@storybook/angular';
-import { argsToTemplate } from '@storybook/angular';
+import type {Meta, StoryObj} from '@storybook/angular';
+import {argsToTemplate} from '@storybook/angular';
 
-import { BraStatusBadgeComponent } from './status-badge.component';
+import {BraStatusBadgeComponent} from './status-badge.component';
 
 const meta: Meta<BraStatusBadgeComponent> = {
   title: 'Braket/Primitives/StatusBadge',
@@ -18,7 +18,16 @@ const meta: Meta<BraStatusBadgeComponent> = {
   argTypes: {
     status: {
       control: 'select',
-      options: ['success', 'warning', 'destructive', 'info', 'muted', 'primary', 'secondary'],
+      options: [
+        'success',
+        'warning',
+        'destructive',
+        'info',
+        'muted',
+        'primary',
+        'secondary',
+        'accent',
+      ],
     },
     size: {
       control: 'select',
@@ -28,7 +37,7 @@ const meta: Meta<BraStatusBadgeComponent> = {
       control: 'select',
       options: ['rounded', 'pill'],
     },
-    live: { control: 'boolean' },
+    live: {control: 'boolean'},
   },
   render: (args) => ({
     props: args,
@@ -40,7 +49,7 @@ export default meta;
 type Story = StoryObj<BraStatusBadgeComponent>;
 
 export const Success: Story = {
-  args: { status: 'success' },
+  args: {status: 'success'},
   render: (args) => ({
     props: args,
     template: `<bra-status-badge ${argsToTemplate(args)}>Active</bra-status-badge>`,
@@ -48,7 +57,7 @@ export const Success: Story = {
 };
 
 export const Warning: Story = {
-  args: { status: 'warning' },
+  args: {status: 'warning'},
   render: (args) => ({
     props: args,
     template: `<bra-status-badge ${argsToTemplate(args)}>Pending</bra-status-badge>`,
@@ -56,7 +65,7 @@ export const Warning: Story = {
 };
 
 export const Destructive: Story = {
-  args: { status: 'destructive' },
+  args: {status: 'destructive'},
   render: (args) => ({
     props: args,
     template: `<bra-status-badge ${argsToTemplate(args)}>Rejected</bra-status-badge>`,
@@ -64,7 +73,7 @@ export const Destructive: Story = {
 };
 
 export const Info: Story = {
-  args: { status: 'info' },
+  args: {status: 'info'},
   render: (args) => ({
     props: args,
     template: `<bra-status-badge ${argsToTemplate(args)}>Info</bra-status-badge>`,
@@ -72,7 +81,7 @@ export const Info: Story = {
 };
 
 export const Muted: Story = {
-  args: { status: 'muted' },
+  args: {status: 'muted'},
   render: (args) => ({
     props: args,
     template: `<bra-status-badge ${argsToTemplate(args)}>Draft</bra-status-badge>`,
@@ -80,7 +89,7 @@ export const Muted: Story = {
 };
 
 export const MediumSize: Story = {
-  args: { status: 'success', size: 'md' },
+  args: {status: 'success', size: 'md'},
   render: (args) => ({
     props: args,
     template: `<bra-status-badge ${argsToTemplate(args)}>Active</bra-status-badge>`,
@@ -88,10 +97,18 @@ export const MediumSize: Story = {
 };
 
 export const PillShape: Story = {
-  args: { status: 'primary', shape: 'pill' },
+  args: {status: 'primary', shape: 'pill'},
   render: (args) => ({
     props: args,
     template: `<bra-status-badge ${argsToTemplate(args)}>Featured</bra-status-badge>`,
+  }),
+};
+
+export const Accent: Story = {
+  args: {status: 'accent'},
+  render: (args) => ({
+    props: args,
+    template: `<bra-status-badge ${argsToTemplate(args)}>Accent</bra-status-badge>`,
   }),
 };
 
@@ -106,8 +123,9 @@ export const AllStatuses: Story = {
         <bra-status-badge status="muted">Draft</bra-status-badge>
         <bra-status-badge status="primary">Featured</bra-status-badge>
         <bra-status-badge status="secondary">VIP</bra-status-badge>
+        <bra-status-badge status="accent">Accent</bra-status-badge>
       </div>
     `,
-    moduleMetadata: { imports: [BraStatusBadgeComponent] },
+    moduleMetadata: {imports: [BraStatusBadgeComponent]},
   }),
 };

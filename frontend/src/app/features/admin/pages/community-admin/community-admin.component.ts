@@ -42,6 +42,7 @@ import {AuditLogTableComponent} from '@/features/admin/components/audit-log-tabl
 import {SharedVettingTableComponent} from '../../components/shared-vetting-table/shared-vetting-table.component';
 import {ZardAlertComponent} from '@ui/components/primitives/alert/alert.component';
 import {ZardTooltipDirective} from '@ui/components/primitives/tooltip/tooltip';
+import {BraStatusBadgeComponent} from '@ui/components/primitives/status-badge/status-badge.component';
 import {logger} from '@/utils/logger';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
 
@@ -104,6 +105,7 @@ const COMMUNITY_ADMIN_TABS: DashboardTab[] = [
     SharedVettingTableComponent,
     ZardAlertComponent,
     ZardTooltipDirective,
+    BraStatusBadgeComponent,
   ],
   templateUrl: './community-admin.component.html',
 })

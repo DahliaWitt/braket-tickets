@@ -16,6 +16,7 @@ import {
   AddGuestDialogComponent,
   type AddGuestDialogResult,
 } from '../add-guest-dialog/add-guest-dialog.component';
+import {BraStatusBadgeComponent} from '@ui/components/primitives/status-badge/status-badge.component';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 import {ZardCardComponent} from '@ui/components/primitives/card/card.component';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
@@ -44,6 +45,7 @@ function isAddGuestDialogResult(value: unknown): value is AddGuestDialogResult {
   selector: 'app-event-management-guests-tab',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    BraStatusBadgeComponent,
     ZardButtonComponent,
     ZardCardComponent,
     ZardIconComponent,
