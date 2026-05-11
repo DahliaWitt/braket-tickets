@@ -165,19 +165,19 @@ The TypeScript harness (`scripts/lib/ConvexBackend.ts` + `scripts/e2e.ts`) handl
 4. Deploys schema with `npx convex deploy` (with retry)
 5. Sets env vars on backend (`IS_TEST=true`, auth keys, SMTP, Stripe)
 6. Generates `frontend/public/runtime-env.js` with ephemeral Convex URLs (runtime injection)
-7. Clears test data via `testing_functions:clearAll`
+7. Clears test data via `testing/utilities:clearAll`
 8. Spawns Playwright with correct env vars injected
 9. Cleans up backend via `tree-kill` on exit (PID-scoped, never pkill)
 
 ## Common Mistakes
 
-| Mistake                                          | Fix                                                               |
-| ------------------------------------------------ | ----------------------------------------------------------------- |
-| `npx playwright test` directly                   | Use `pnpm test:e2e` (needs backend harness)                       |
-| `ng test`                                        | That's unit tests. E2E = `pnpm test:e2e`                          |
-| Manually setting ports for parallel runs         | Both ports use OS ephemeral allocation — just run `pnpm test:e2e` |
-| Running against remote Convex                    | Harness blocks this. Always uses local backend                    |
-| `./scripts/validate.sh all` for one failing test | Use `pnpm test:e2e -- e2e/specific.e2e-spec.ts`                   |
+| Mistake                                          | Fix                                                                                   |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| `npx playwright test` directly                   | Use `pnpm test:e2e` (needs backend harness)                                           |
+| `ng test`                                        | That's unit tests. E2E = `pnpm test:e2e`                                              |
+| Manually setting ports for parallel runs         | Both ports use OS ephemeral allocation — just run `pnpm test:e2e`                     |
+| Running against remote Convex                    | Harness blocks this. Always uses local backend                                        |
+| `./scripts/validate.sh all` for one failing test | Start `pnpm test:e2e:serve`, then use `pnpm test:e2e:run -- e2e/specific.e2e-spec.ts` |
 
 ## Environment Variables
 

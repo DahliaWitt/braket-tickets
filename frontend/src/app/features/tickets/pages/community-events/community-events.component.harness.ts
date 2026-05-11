@@ -48,6 +48,10 @@ export class CommunityEventsComponentHarness extends ComponentHarness {
     return cards.length;
   }
 
+  async getEventCards(): Promise<EventCardHarness[]> {
+    return this.locatorForAll(EventCardHarness)();
+  }
+
   async getCommunityNameHeaderText(): Promise<string | null> {
     const el = await this.locatorForOptional(
       '[data-testid="community-events-header"]',

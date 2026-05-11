@@ -1,8 +1,8 @@
-import type { Meta, StoryObj } from '@storybook/angular';
+import type {Meta, StoryObj} from '@storybook/angular';
 
-import { ZardButtonComponent } from '@ui/components/primitives/button/button.component';
-import { ZardSelectComponent } from './select.component';
-import { ZardSelectItemComponent } from './select-item.component';
+import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
+import {ZardSelectComponent} from './select.component';
+import {ZardSelectItemComponent} from './select-item.component';
 
 const meta: Meta<ZardSelectComponent> = {
   title: 'Braket/Primitives/Select',
@@ -21,14 +21,41 @@ const meta: Meta<ZardSelectComponent> = {
       control: 'select',
       options: ['sm', 'default', 'lg'],
     },
-    zDisabled: { control: 'boolean' },
-    zMultiple: { control: 'boolean' },
-    zPlaceholder: { control: 'text' },
+    zDisabled: {control: 'boolean'},
+    zMultiple: {control: 'boolean'},
+    zPlaceholder: {control: 'text'},
+    zAriaLabel: {
+      control: 'text',
+      description: 'Accessible label applied to the select trigger.',
+    },
+    zAriaLabelledBy: {
+      control: 'text',
+      description: 'ID reference for an external label element.',
+    },
+    zLabel: {
+      control: 'text',
+      description:
+        'Fallback selected-value label for compact single-select display.',
+    },
+    zMaxLabelCount: {
+      control: {type: 'number', min: 1, step: 1},
+      description:
+        'Maximum selected labels shown before multi-select overflow copy is used.',
+    },
   },
   render: (args) => ({
     props: args,
     template: `
-      <z-select [zSize]="zSize" [zDisabled]="zDisabled" [zPlaceholder]="zPlaceholder">
+      <z-select
+        [zSize]="zSize"
+        [zDisabled]="zDisabled"
+        [zPlaceholder]="zPlaceholder"
+        [zMultiple]="zMultiple"
+        [zAriaLabel]="zAriaLabel"
+        [zAriaLabelledBy]="zAriaLabelledBy"
+        [zLabel]="zLabel"
+        [zMaxLabelCount]="zMaxLabelCount"
+      >
         <z-select-item zValue="general">General Admission</z-select-item>
         <z-select-item zValue="vip">VIP Access</z-select-item>
         <z-select-item zValue="backstage">Backstage Pass</z-select-item>
@@ -65,7 +92,8 @@ export const Small: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Reference small-size trigger for compact toolbars and dense forms.',
+        story:
+          'Reference small-size trigger for compact toolbars and dense forms.',
       },
     },
   },
@@ -79,7 +107,8 @@ export const Large: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Reference large-size trigger for more spacious form treatments.',
+        story:
+          'Reference large-size trigger for more spacious form treatments.',
       },
     },
   },
@@ -134,7 +163,8 @@ export const AllSizes: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Reference overview of the primitive across its supported trigger sizes.',
+        story:
+          'Reference overview of the primitive across its supported trigger sizes.',
       },
     },
   },

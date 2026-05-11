@@ -1,30 +1,28 @@
-import { Meta } from '@storybook/addon-docs/blocks';
+import {Meta} from '@storybook/addon-docs/blocks';
 
 <Meta title="Design System/Colors/Guide" />
 
 # Color Palette — Pulp
 
 Colors are defined as HSL custom properties in `styles.css` `@theme` blocks.
-The live palette is in the **Colors > Palette** story — it reads actual computed values from the DOM.
+The live palette is in the **Colors > Palette** story. Treat that story as the canonical token reference because it reads actual computed values from the DOM instead of duplicating a static list here.
 
 ## Token Relationships
 
-| Token | Derives From | Usage |
-|---|---|---|
-| `--primary` | — | Deep Plum/Wine. CTAs, active states, brand accent |
-| `--primary-foreground` | `--primary` | Text on primary backgrounds |
-| `--secondary` | — | Violet. Secondary actions, hover accents |
-| `--accent` | — | Burnt Amber. Warm highlights, emphasis |
-| `--ring` | `--primary` | Focus ring color (2px solid + 2px offset) |
-| `--border` | `--muted` | Same hue as muted, used for card/input borders |
-| `--destructive` | — | Delete actions, error states |
+The color system has three layers:
+
+1. Base semantic tokens such as background, foreground, primary, secondary, accent, muted, border, input, ring, card, popover, and destructive.
+2. Tailwind-facing aliases such as success, warning, info, and their foreground pairs.
+3. Component usage rules that map those tokens onto product states: primary actions, secondary actions, warnings, errors, passive surfaces, and focus affordances.
+
+Keep this page focused on relationships and rationale. When adding or renaming tokens, update the live **Colors > Palette** story so the docs remain grounded in computed CSS rather than a hand-maintained table.
 
 ## Border Radius
 
-| Token | Value |
-|---|---|
-| `--radius` | 0.25rem (4px) |
+| Token         | Value                           |
+| ------------- | ------------------------------- |
+| `--radius`    | 0.25rem (4px)                   |
 | `--radius-md` | calc(var(--radius) - 2px) = 2px |
-| `--radius-sm` | 0 (sharp) |
+| `--radius-sm` | 0 (sharp)                       |
 
 Note: mixed radius is intentional — some elements sharp (0), some slightly softened (4px). Uniform rounding is an anti-pattern for this brand.

@@ -59,8 +59,8 @@ test.describe('Event Status Lifecycle', () => {
 
       // Verify draft badge is shown
       await expect(
-        eventItem.locator('span').filter({hasText: 'draft'}),
-      ).toBeVisible();
+        eventItem.locator('[data-testid="event-status"]'),
+      ).toContainText('draft');
 
       // Verify event details page is accessible to admin
       await adminPage.goto(
@@ -135,8 +135,8 @@ test.describe('Event Status Lifecycle', () => {
         .filter({hasText: eventTitle});
       await expect(eventItem).toBeVisible({timeout: 15000});
       await expect(
-        eventItem.locator('span').filter({hasText: 'published'}),
-      ).toBeVisible();
+        eventItem.locator('[data-testid="event-status"]'),
+      ).toContainText('published');
     });
 
     test('admin can unpublish a published event', async ({
@@ -200,8 +200,8 @@ test.describe('Event Status Lifecycle', () => {
         .filter({hasText: eventTitle});
       await expect(eventItem).toBeVisible({timeout: 15000});
       await expect(
-        eventItem.locator('span').filter({hasText: 'draft'}),
-      ).toBeVisible();
+        eventItem.locator('[data-testid="event-status"]'),
+      ).toContainText('draft');
     });
 
     test('admin can view cancelled events', async ({
@@ -239,8 +239,8 @@ test.describe('Event Status Lifecycle', () => {
         .filter({hasText: eventTitle});
       await expect(eventItem).toBeVisible({timeout: 15000});
       await expect(
-        eventItem.locator('span').filter({hasText: 'cancelled'}),
-      ).toBeVisible();
+        eventItem.locator('[data-testid="event-status"]'),
+      ).toContainText('cancelled');
     });
   });
 });

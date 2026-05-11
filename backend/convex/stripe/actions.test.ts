@@ -433,7 +433,7 @@ describe('startTicketOrderCheckoutSession — checkout line item pricing', () =>
     }
   });
 
-  it('creates checkout line item for the canonical order total', async () => {
+  it('itemizes checkout line item quantity while preserving the canonical order total', async () => {
     const t = convexTest();
     const userId = await createUser(
       t,
@@ -456,8 +456,11 @@ describe('startTicketOrderCheckoutSession — checkout line item pricing', () =>
 
     expect(checkoutSessionsCreateMock).toHaveBeenCalledTimes(1);
     const [params] = checkoutSessionsCreateMock.mock.calls[0] ?? [];
-    expect(params?.line_items?.[0]?.quantity).toBe(1);
-    expect(params?.line_items?.[0]?.price_data?.unit_amount).toBe(5000);
+    expect(params?.line_items?.[0]?.quantity).toBe(2);
+    expect(params?.line_items?.[0]?.price_data?.unit_amount).toBe(2500);
+    expect(params?.line_items?.[0]?.price_data?.product_data?.description).toBe(
+      'regular ticket',
+    );
   });
 
   it('rejects stale direct-charge orders after an organizer becomes platform-backed', async () => {

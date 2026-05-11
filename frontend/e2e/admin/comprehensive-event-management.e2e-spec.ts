@@ -314,10 +314,9 @@ test.describe('Comprehensive Admin Event Management', () => {
         .filter({hasText: eventTitle})
         .first();
       await expect(eventRow).toBeVisible({timeout: 10000});
-      // .first() retained: desktop + mobile layouts both render status badges simultaneously.
       await expect(
-        eventRow.locator('span').filter({hasText: 'draft'}).first(),
-      ).toBeVisible();
+        eventRow.locator('[data-testid="event-status"]').first(),
+      ).toContainText('draft');
 
       // Publish the event
       // Click Edit to go back to event editor
@@ -347,10 +346,9 @@ test.describe('Comprehensive Admin Event Management', () => {
         .filter({hasText: eventTitle})
         .first();
       await expect(publishedRow).toBeVisible({timeout: 10000});
-      // .first() retained: desktop + mobile layouts both render status badges simultaneously.
       await expect(
-        publishedRow.locator('span').filter({hasText: 'published'}).first(),
-      ).toBeVisible();
+        publishedRow.locator('[data-testid="event-status"]').first(),
+      ).toContainText('published');
     });
 
     test('check-in attendees and guests from management page', async ({
@@ -843,10 +841,9 @@ test.describe('Comprehensive Admin Event Management', () => {
         .filter({hasText: eventTitle})
         .first();
       await expect(eventRow).toBeVisible({timeout: 10000});
-      // .first() retained: desktop + mobile layouts both render status badges simultaneously.
       await expect(
-        eventRow.locator('span').filter({hasText: 'draft'}).first(),
-      ).toBeVisible();
+        eventRow.locator('[data-testid="event-status"]').first(),
+      ).toContainText('draft');
 
       // Publish the event
       await eventRow.getByRole('link', {name: 'EDIT'}).click();

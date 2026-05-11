@@ -290,10 +290,13 @@ await emailHarness.expectQRCode();
 # Run all E2E tests (includes email flows)
 pnpm test:e2e
 
-# Run specific email tests
-pnpm test:e2e -- --grep "verification"
-pnpm test:e2e -- --grep "password reset"
-pnpm test:e2e -- --grep "email change"
+# Terminal 1: start the reusable E2E harness
+pnpm test:e2e:serve
+
+# Terminal 2: run specific email tests against the active harness
+pnpm test:e2e:run --grep "verification"
+pnpm test:e2e:run --grep "password reset"
+pnpm test:e2e:run --grep "email change"
 ```
 
 ### Test Database Table

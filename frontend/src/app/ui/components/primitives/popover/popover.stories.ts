@@ -1,9 +1,9 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
-import type { Meta, StoryObj } from '@storybook/angular';
+import {ChangeDetectionStrategy, Component} from '@angular/core';
+import type {Meta, StoryObj} from '@storybook/angular';
 
-import { ZardButtonComponent } from '@ui/components/primitives/button/button.component';
+import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 
-import { ZardPopoverComponent, ZardPopoverDirective } from './popover.component';
+import {ZardPopoverComponent, ZardPopoverDirective} from './popover.component';
 
 @Component({
   selector: 'bt-story-popover-audit-log',
@@ -12,7 +12,9 @@ import { ZardPopoverComponent, ZardPopoverDirective } from './popover.component'
   template: `
     <div class="space-y-4 rounded-xl border border-border bg-card p-6">
       <div class="space-y-1">
-        <p class="font-mono text-2xs uppercase tracking-widest text-muted-foreground">
+        <p
+          class="font-mono text-2xs tracking-widest text-muted-foreground uppercase"
+        >
           Audit log detail
         </p>
         <h3 class="text-lg font-semibold">
@@ -23,7 +25,11 @@ import { ZardPopoverComponent, ZardPopoverDirective } from './popover.component'
       <div class="rounded-lg border border-border/60 bg-muted/20 p-4">
         <div class="flex items-center justify-between gap-4">
           <div class="space-y-1">
-            <p class="font-mono text-2xs uppercase tracking-widest text-muted-foreground">Action</p>
+            <p
+              class="font-mono text-2xs tracking-widest text-muted-foreground uppercase"
+            >
+              Action
+            </p>
             <span
               zPopover
               [zContent]="detail"
@@ -36,26 +42,26 @@ import { ZardPopoverComponent, ZardPopoverDirective } from './popover.component'
             </span>
           </div>
           <z-button zType="outline" zShape="circle" aria-label="More details">
-            <span class="text-xs uppercase tracking-widest">i</span>
+            <span class="text-xs tracking-widest uppercase">i</span>
           </z-button>
         </div>
       </div>
 
       <ng-template #detail>
         <z-popover>
-          <div class="space-y-2 min-w-64">
-            <p class="font-semibold text-sm">Audit log detail</p>
+          <div class="min-w-64 space-y-2">
+            <p class="text-sm font-semibold">Audit log detail</p>
             <dl class="grid gap-1 text-xs text-muted-foreground">
               <div class="flex justify-between gap-4">
-                <dt class="uppercase tracking-widest">Admin</dt>
+                <dt class="tracking-widest uppercase">Admin</dt>
                 <dd>Casey</dd>
               </div>
               <div class="flex justify-between gap-4">
-                <dt class="uppercase tracking-widest">Timestamp</dt>
+                <dt class="tracking-widest uppercase">Timestamp</dt>
                 <dd>12m ago</dd>
               </div>
               <div class="flex justify-between gap-4">
-                <dt class="uppercase tracking-widest">Source</dt>
+                <dt class="tracking-widest uppercase">Source</dt>
                 <dd>community-admin</dd>
               </div>
             </dl>
@@ -74,7 +80,9 @@ class PopoverAuditLogStoryComponent {}
   template: `
     <div class="space-y-4 rounded-xl border border-border bg-card p-6">
       <div class="space-y-1">
-        <p class="font-mono text-2xs uppercase tracking-widest text-muted-foreground">
+        <p
+          class="font-mono text-2xs tracking-widest text-muted-foreground uppercase"
+        >
           Event details
         </p>
         <h3 class="text-lg font-semibold">
@@ -84,9 +92,9 @@ class PopoverAuditLogStoryComponent {}
 
       <ng-template #content>
         <z-popover>
-          <div class="space-y-3 min-w-56">
+          <div class="min-w-56 space-y-3">
             <div>
-              <p class="font-semibold text-sm">Void Sessions Vol. 12</p>
+              <p class="text-sm font-semibold">Void Sessions Vol. 12</p>
               <p class="text-xs text-muted-foreground">The Bunker, Brooklyn</p>
             </div>
             <div class="grid gap-1 text-xs text-muted-foreground">
@@ -120,16 +128,23 @@ class PopoverEventInfoStoryComponent {}
   template: `
     <div class="space-y-4 rounded-xl border border-border bg-card p-6">
       <div class="space-y-1">
-        <p class="font-mono text-2xs uppercase tracking-widest text-muted-foreground">Open state</p>
-        <h3 class="text-lg font-semibold">Use zVisible to document the rendered panel itself</h3>
+        <p
+          class="font-mono text-2xs tracking-widest text-muted-foreground uppercase"
+        >
+          Open state
+        </p>
+        <h3 class="text-lg font-semibold">
+          Use zVisible to document the rendered panel itself
+        </h3>
       </div>
 
       <ng-template #content>
         <z-popover>
-          <div class="space-y-2 min-w-56">
-            <p class="font-semibold text-sm">Theme settings</p>
+          <div class="min-w-56 space-y-2">
+            <p class="text-sm font-semibold">Theme settings</p>
             <p class="text-xs text-muted-foreground">
-              This matches the dropdown-style content used in the theme switcher.
+              This matches the dropdown-style content used in the theme
+              switcher.
             </p>
           </div>
         </z-popover>
@@ -154,6 +169,14 @@ class PopoverOpenStateStoryComponent {}
 const meta: Meta = {
   title: 'Braket/Primitives/Popover',
   tags: ['autodocs'],
+  parameters: {
+    docs: {
+      description: {
+        component:
+          'Popover primitive stories separate app-proven compact metadata usage from open-state reference coverage.',
+      },
+    },
+  },
 };
 
 export default meta;
@@ -162,21 +185,37 @@ type Story = StoryObj;
 export const AuditLogDetail: Story = {
   render: () => ({
     template: `<bt-story-popover-audit-log />`,
-    moduleMetadata: { imports: [PopoverAuditLogStoryComponent] },
+    moduleMetadata: {imports: [PopoverAuditLogStoryComponent]},
   }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'App-proven compact detail pattern for audit-log style admin table rows.',
+      },
+    },
+  },
 };
 
 export const EventInfo: Story = {
   render: () => ({
     template: `<bt-story-popover-event-info />`,
-    moduleMetadata: { imports: [PopoverEventInfoStoryComponent] },
+    moduleMetadata: {imports: [PopoverEventInfoStoryComponent]},
   }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Library reference for click-triggered event metadata in a compact panel.',
+      },
+    },
+  },
 };
 
 export const OpenState: Story = {
   render: () => ({
     template: `<bt-story-popover-open-state />`,
-    moduleMetadata: { imports: [PopoverOpenStateStoryComponent] },
+    moduleMetadata: {imports: [PopoverOpenStateStoryComponent]},
   }),
   parameters: {
     docs: {

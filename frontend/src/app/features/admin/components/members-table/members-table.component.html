@@ -139,11 +139,9 @@
                     ID: {{ member.user._id }}
                   </div>
                   @if (member.isCommunityAdmin) {
-                    <span
-                      class="mt-1 inline-flex items-center rounded bg-primary/10 px-2 py-0.5 font-mono text-2xs tracking-widest text-primary uppercase"
+                    <bra-status-badge status="primary" class="mt-1"
+                      >community admin</bra-status-badge
                     >
-                      community admin
-                    </span>
                   }
                 </div>
               </div>
@@ -329,11 +327,9 @@
                   {{ member.user['email'] || 'No email' }}
                 </div>
                 @if (member.isCommunityAdmin) {
-                  <span
-                    class="mt-1 inline-flex items-center rounded bg-primary/10 px-2 py-0.5 font-mono text-2xs tracking-widest text-primary uppercase"
+                  <bra-status-badge status="primary" class="mt-1"
+                    >community admin</bra-status-badge
                   >
-                    community admin
-                  </span>
                 }
               </div>
             </div>

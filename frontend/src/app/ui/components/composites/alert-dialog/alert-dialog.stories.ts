@@ -1,8 +1,13 @@
-import { ChangeDetectionStrategy, Component, afterNextRender, inject } from '@angular/core';
-import type { Meta, StoryObj } from '@storybook/angular';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  afterNextRender,
+  inject,
+} from '@angular/core';
+import type {Meta, StoryObj} from '@storybook/angular';
 
-import { ZardButtonComponent } from '@ui/components/primitives/button/button.component';
-import { BraAlertDialogService } from './alert-dialog.service';
+import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
+import {BraAlertDialogService} from './alert-dialog.service';
 
 @Component({
   selector: 'bt-story-alert-dialog-unsaved-changes',
@@ -10,19 +15,28 @@ import { BraAlertDialogService } from './alert-dialog.service';
   imports: [ZardButtonComponent],
   template: `
     <section class="min-h-screen bg-muted/30 p-6">
-      <div class="mx-auto max-w-3xl space-y-4 rounded-2xl border border-border bg-card p-6">
+      <div
+        class="mx-auto max-w-3xl space-y-4 rounded-2xl border border-border bg-card p-6"
+      >
         <div class="space-y-1">
-          <p class="font-mono text-2xs uppercase tracking-widest text-muted-foreground">
+          <p
+            class="font-mono text-2xs tracking-widest text-muted-foreground uppercase"
+          >
             App-proven confirm flow
           </p>
-          <h3 class="font-display text-2xl text-foreground">Unsaved changes guard</h3>
+          <h3 class="font-display text-2xl text-foreground">
+            Unsaved changes guard
+          </h3>
           <p class="text-sm text-muted-foreground">
-            Mirrors the event-editor navigation guard. The alert dialog auto-opens so the actual
-            destructive confirm state is visible in Storybook.
+            Mirrors the event-editor navigation guard. The alert dialog
+            auto-opens so the actual destructive confirm state is visible in
+            Storybook.
           </p>
         </div>
 
-        <button z-button zType="outline" (click)="open()">Try leaving editor</button>
+        <button z-button zType="outline" (click)="open()">
+          Try leaving editor
+        </button>
       </div>
     </section>
   `,
@@ -39,7 +53,8 @@ class AlertDialogUnsavedChangesComponent {
   open(): void {
     this.alertDialogService.confirm({
       zTitle: 'Unsaved Changes',
-      zDescription: 'You have unsaved changes that will be lost. Are you sure you want to leave?',
+      zDescription:
+        'You have unsaved changes that will be lost. Are you sure you want to leave?',
       zOkText: 'Discard Changes',
       zCancelText: 'Keep Editing',
       zOkDestructive: true,
@@ -54,19 +69,27 @@ class AlertDialogUnsavedChangesComponent {
   imports: [ZardButtonComponent],
   template: `
     <section class="min-h-screen bg-muted/30 p-6">
-      <div class="mx-auto max-w-3xl space-y-4 rounded-2xl border border-border bg-card p-6">
+      <div
+        class="mx-auto max-w-3xl space-y-4 rounded-2xl border border-border bg-card p-6"
+      >
         <div class="space-y-1">
-          <p class="font-mono text-2xs uppercase tracking-widest text-muted-foreground">
+          <p
+            class="font-mono text-2xs tracking-widest text-muted-foreground uppercase"
+          >
             App-proven confirm flow
           </p>
-          <h3 class="font-display text-2xl text-foreground">Buyer refund confirmation</h3>
+          <h3 class="font-display text-2xl text-foreground">
+            Buyer refund confirmation
+          </h3>
           <p class="text-sm text-muted-foreground">
-            Mirrors the refund action from event management when an admin refunds only the unused
-            tickets in a purchase.
+            Mirrors the refund action from event management when an admin
+            refunds only the unused tickets in a purchase.
           </p>
         </div>
 
-        <button z-button zType="destructive" (click)="open()">Refund payment</button>
+        <button z-button zType="destructive" (click)="open()">
+          Refund payment
+        </button>
       </div>
     </section>
   `,
@@ -99,19 +122,27 @@ class AlertDialogRefundPaymentComponent {
   imports: [ZardButtonComponent],
   template: `
     <section class="min-h-screen bg-muted/30 p-6">
-      <div class="mx-auto max-w-3xl space-y-4 rounded-2xl border border-border bg-card p-6">
+      <div
+        class="mx-auto max-w-3xl space-y-4 rounded-2xl border border-border bg-card p-6"
+      >
         <div class="space-y-1">
-          <p class="font-mono text-2xs uppercase tracking-widest text-muted-foreground">
+          <p
+            class="font-mono text-2xs tracking-widest text-muted-foreground uppercase"
+          >
             App-proven info flow
           </p>
-          <h3 class="font-display text-2xl text-foreground">Organizer contact details</h3>
+          <h3 class="font-display text-2xl text-foreground">
+            Organizer contact details
+          </h3>
           <p class="text-sm text-muted-foreground">
-            Mirrors the event-details fallback when the organizer has contact info but no public
-            email address.
+            Mirrors the event-details fallback when the organizer has contact
+            info but no public email address.
           </p>
         </div>
 
-        <button z-button zType="outline" (click)="open()">Contact organizer</button>
+        <button z-button zType="outline" (click)="open()">
+          Contact organizer
+        </button>
       </div>
     </section>
   `,
@@ -140,15 +171,21 @@ class AlertDialogContactOrganizerComponent {
   imports: [ZardButtonComponent],
   template: `
     <section class="min-h-screen bg-muted/30 p-6">
-      <div class="mx-auto max-w-3xl space-y-4 rounded-2xl border border-border bg-card p-6">
+      <div
+        class="mx-auto max-w-3xl space-y-4 rounded-2xl border border-border bg-card p-6"
+      >
         <div class="space-y-1">
-          <p class="font-mono text-2xs uppercase tracking-widest text-muted-foreground">
+          <p
+            class="font-mono text-2xs tracking-widest text-muted-foreground uppercase"
+          >
             Library reference
           </p>
-          <h3 class="font-display text-2xl text-foreground">Inventory warning</h3>
+          <h3 class="font-display text-2xl text-foreground">
+            Inventory warning
+          </h3>
           <p class="text-sm text-muted-foreground">
-            Warning dialogs are supported by the service, but this exact warning treatment is not a
-            current app-proven workflow.
+            Warning dialogs are supported by the service, but this exact warning
+            treatment is not a current app-proven workflow.
           </p>
         </div>
 
@@ -196,27 +233,59 @@ type Story = StoryObj;
 export const UnsavedChangesGuard: Story = {
   render: () => ({
     template: `<bt-story-alert-dialog-unsaved-changes />`,
-    moduleMetadata: { imports: [AlertDialogUnsavedChangesComponent] },
+    moduleMetadata: {imports: [AlertDialogUnsavedChangesComponent]},
   }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'App-proven confirmation flow for discarding unsaved event-editor changes.',
+      },
+    },
+  },
 };
 
 export const RefundPayment: Story = {
   render: () => ({
     template: `<bt-story-alert-dialog-refund-payment />`,
-    moduleMetadata: { imports: [AlertDialogRefundPaymentComponent] },
+    moduleMetadata: {imports: [AlertDialogRefundPaymentComponent]},
   }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'App-proven destructive confirmation for refunding unused tickets from event management.',
+      },
+    },
+  },
 };
 
 export const ContactOrganizerInfo: Story = {
   render: () => ({
     template: `<bt-story-alert-dialog-contact-organizer />`,
-    moduleMetadata: { imports: [AlertDialogContactOrganizerComponent] },
+    moduleMetadata: {imports: [AlertDialogContactOrganizerComponent]},
   }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'App-proven informational dialog for organizer contact details on event pages.',
+      },
+    },
+  },
 };
 
 export const WarningReference: Story = {
   render: () => ({
     template: `<bt-story-alert-dialog-warning-reference />`,
-    moduleMetadata: { imports: [AlertDialogWarningReferenceComponent] },
+    moduleMetadata: {imports: [AlertDialogWarningReferenceComponent]},
   }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Library reference for warning dialogs; this exact inventory warning is not a current product flow.',
+      },
+    },
+  },
 };

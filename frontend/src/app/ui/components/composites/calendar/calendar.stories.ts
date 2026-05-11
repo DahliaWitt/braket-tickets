@@ -1,6 +1,31 @@
-import type { Meta, StoryObj } from '@storybook/angular';
+import type {Meta, StoryObj} from '@storybook/angular';
 
-import { BraCalendarComponent } from './calendar.component';
+import {BraCalendarComponent} from './calendar.component';
+
+type CalendarStoryValue = Date | Date[] | null;
+
+function coerceStoryDate(value: unknown): Date | null {
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
+  if (typeof value === 'number' || typeof value === 'string') {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  return null;
+}
+
+function coerceStoryValue(value: unknown): CalendarStoryValue {
+  if (Array.isArray(value)) {
+    return value
+      .map(coerceStoryDate)
+      .filter((date): date is Date => date !== null);
+  }
+
+  return coerceStoryDate(value);
+}
 
 const meta: Meta<BraCalendarComponent> = {
   title: 'Braket/Composites/Calendar',
@@ -19,13 +44,33 @@ const meta: Meta<BraCalendarComponent> = {
     zMode: {
       control: 'select',
       options: ['single', 'multiple', 'range'],
+      description: 'Selection mode used by the calendar grid.',
     },
-    disabled: { control: 'boolean' },
-    minDate: { control: 'date' },
-    maxDate: { control: 'date' },
+    value: {
+      control: 'object',
+      description:
+        'Selected date value. Use a Date for single mode or a Date array for range and multiple modes.',
+    },
+    disabled: {
+      control: 'boolean',
+      description: 'Disables date navigation and selection.',
+    },
+    minDate: {
+      control: 'date',
+      description: 'Earliest selectable date.',
+    },
+    maxDate: {
+      control: 'date',
+      description: 'Latest selectable date.',
+    },
   },
   render: (args) => ({
-    props: args,
+    props: {
+      ...args,
+      value: coerceStoryValue(args.value),
+      minDate: coerceStoryDate(args.minDate),
+      maxDate: coerceStoryDate(args.maxDate),
+    },
     template: `
       <div class="rounded-2xl border border-border bg-card p-4">
         <bra-calendar
@@ -73,7 +118,8 @@ export const EmptySelection: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Reference story for the unselected state before a date is chosen.',
+        story:
+          'Reference story for the unselected state before a date is chosen.',
       },
     },
   },
@@ -100,7 +146,11 @@ export const EventSchedulingRangeReference: Story = {
 export const MultipleSelectionReference: Story = {
   args: {
     zMode: 'multiple',
-    value: [new Date(2026, 5, 10), new Date(2026, 5, 15), new Date(2026, 5, 22)],
+    value: [
+      new Date(2026, 5, 10),
+      new Date(2026, 5, 15),
+      new Date(2026, 5, 22),
+    ],
     minDate: null,
     maxDate: null,
     disabled: false,
@@ -125,7 +175,8 @@ export const DisabledWindowReference: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Reference state for disabled calendars and constrained date windows.',
+        story:
+          'Reference state for disabled calendars and constrained date windows.',
       },
     },
   },

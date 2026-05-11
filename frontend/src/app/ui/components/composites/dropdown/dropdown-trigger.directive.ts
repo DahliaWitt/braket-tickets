@@ -1,15 +1,27 @@
-import { afterNextRender, Directive, ElementRef, inject, input, ViewContainerRef } from '@angular/core';
+import {
+  afterNextRender,
+  computed,
+  Directive,
+  ElementRef,
+  inject,
+  input,
+  ViewContainerRef,
+} from '@angular/core';
 
-import type { BraDropdownMenuContentComponent } from './dropdown-menu-content.component';
-import { BraDropdownService } from './dropdown.service';
+import type {BraDropdownMenuContentComponent} from './dropdown-menu-content.component';
+import {BraDropdownService} from './dropdown.service';
+
+let nextDropdownId = 0;
 
 @Directive({
   selector: '[bra-dropdown], [braDropdown]',
   host: {
+    '[attr.id]': 'triggerId',
     '[attr.tabindex]': '0',
     '[attr.role]': '"button"',
     '[attr.aria-haspopup]': '"menu"',
-    '[attr.aria-expanded]': 'dropdownService.isOpen()',
+    '[attr.aria-expanded]': 'isExpanded()',
+    '[attr.aria-controls]': 'isExpanded() ? menuId : null',
     '[attr.aria-disabled]': 'zDisabled()',
     '(click.prevent-with-stop)': 'onClick()',
     '(mouseenter)': 'onHoverToggle()',
@@ -24,15 +36,28 @@ export class BraDropdownDirective {
   private readonly viewContainerRef = inject(ViewContainerRef);
   protected readonly dropdownService = inject(BraDropdownService);
 
+  private readonly dropdownId = nextDropdownId++;
+  readonly triggerId =
+    this.elementRef.nativeElement.id ||
+    `bra-dropdown-trigger-${this.dropdownId}`;
+  readonly menuId = `bra-dropdown-menu-${this.dropdownId}`;
+
   readonly braDropdownMenu = input<BraDropdownMenuContentComponent>();
   readonly zTrigger = input<'click' | 'hover'>('click');
   readonly zDisabled = input<boolean>(false);
 
+  protected readonly isExpanded = computed(
+    () =>
+      this.dropdownService.activeTrigger() === this.elementRef.nativeElement,
+  );
+
   constructor() {
     afterNextRender(() => {
-      // Ensure button has proper accessibility attributes
       const element = this.elementRef.nativeElement;
-      if (!element.hasAttribute('aria-label') && !element.hasAttribute('aria-labelledby')) {
+      if (
+        !element.hasAttribute('aria-label') &&
+        !element.hasAttribute('aria-labelledby')
+      ) {
         const label = element.textContent?.trim();
         element.setAttribute('aria-label', label?.length ? label : 'Open menu');
       }
@@ -66,6 +91,8 @@ export class BraDropdownDirective {
         this.elementRef,
         menuContent.contentTemplate(),
         this.viewContainerRef,
+        this.menuId,
+        this.triggerId,
       );
     }
   }
@@ -76,11 +103,13 @@ export class BraDropdownDirective {
     }
 
     const menuContent = this.braDropdownMenu();
-    if (menuContent && !this.dropdownService.isOpen()) {
+    if (menuContent && !this.isExpanded()) {
       this.dropdownService.toggle(
         this.elementRef,
         menuContent.contentTemplate(),
         this.viewContainerRef,
+        this.menuId,
+        this.triggerId,
       );
     }
   }

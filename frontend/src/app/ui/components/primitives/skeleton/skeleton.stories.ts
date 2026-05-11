@@ -1,6 +1,6 @@
-import type { Meta, StoryObj } from '@storybook/angular';
+import type {Meta, StoryObj} from '@storybook/angular';
 
-import { ZardSkeletonComponent } from './skeleton.component';
+import {ZardSkeletonComponent} from './skeleton.component';
 
 const meta: Meta<ZardSkeletonComponent> = {
   title: 'Braket/Primitives/Skeleton',
@@ -14,15 +14,36 @@ const meta: Meta<ZardSkeletonComponent> = {
       },
     },
   },
+  argTypes: {
+    width: {
+      control: 'text',
+      description: 'Inline width applied to the skeleton placeholder.',
+    },
+    height: {
+      control: 'text',
+      description: 'Inline height applied to the skeleton placeholder.',
+    },
+    zAnimation: {
+      control: 'select',
+      options: ['pulse', 'shimmer'],
+      description: 'Loading animation style for the placeholder.',
+    },
+  },
+  args: {
+    width: '12rem',
+    height: '1rem',
+    zAnimation: 'pulse',
+  },
+  render: (args) => ({
+    props: args,
+    template: `<z-skeleton [width]="width" [height]="height" [zAnimation]="zAnimation" />`,
+  }),
 };
 
 export default meta;
 type Story = StoryObj<ZardSkeletonComponent>;
 
 export const SingleLine: Story = {
-  render: () => ({
-    template: `<z-skeleton class="h-4 w-48" />`,
-  }),
   parameters: {
     docs: {
       description: {
@@ -39,7 +60,8 @@ export const ShimmerSingleLine: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Shimmer animation variant — left-to-right gradient sweep for enhanced perceived performance.',
+        story:
+          'Shimmer animation variant — left-to-right gradient sweep for enhanced perceived performance.',
       },
     },
   },
@@ -67,7 +89,8 @@ export const ShimmerCardGrid: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Shimmer card grid matching the community directory loading pattern.',
+        story:
+          'Shimmer card grid matching the community directory loading pattern.',
       },
     },
   },
@@ -114,7 +137,8 @@ export const CommunityEventsLoading: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'App-proven event-card loading grid for discovery and community event surfaces.',
+        story:
+          'App-proven event-card loading grid for discovery and community event surfaces.',
       },
     },
   },
@@ -153,7 +177,8 @@ export const DashboardLoading: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'App-proven dashboard placeholder pattern for metric summaries and content cards.',
+        story:
+          'App-proven dashboard placeholder pattern for metric summaries and content cards.',
       },
     },
   },
@@ -187,7 +212,8 @@ export const AuditLogLoading: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'App-proven loading treatment for audit-log and tabular admin surfaces.',
+        story:
+          'App-proven loading treatment for audit-log and tabular admin surfaces.',
       },
     },
   },
