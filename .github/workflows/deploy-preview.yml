@@ -4,21 +4,10 @@ name: Deploy Preview (develop)
 # Dev site: https://dev.community.braket.gay
 
 on:
-  workflow_call:
-    inputs:
-      ref:
-        description: Git SHA to deploy.
-        required: true
-        type: string
-      branch:
-        description: Source branch for concurrency scoping.
-        required: true
-        type: string
-      force_all:
-        description: Force all preview deploy slices to run.
-        required: false
-        default: false
-        type: boolean
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [develop]
   workflow_dispatch:
     inputs:
       ref:
@@ -38,16 +27,65 @@ on:
         type: boolean
 
 concurrency:
-  group: deploy-development-${{ inputs.branch || github.ref_name }}
+  group: deploy-development
   cancel-in-progress: true
 
 permissions:
   contents: read
-  actions: write
 
 jobs:
+  deploy-context:
+    name: Resolve Development Deploy Context
+    runs-on: self-hosted
+    if: >-
+      ${{
+        github.event_name == 'workflow_dispatch' ||
+        (
+          github.event_name == 'workflow_run' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.head_branch == 'develop'
+        )
+      }}
+    outputs:
+      ref: ${{ steps.resolve.outputs.ref }}
+      branch: ${{ steps.resolve.outputs.branch }}
+      force_all: ${{ steps.resolve.outputs.force_all }}
+    steps:
+      - name: Resolve deploy ref
+        id: resolve
+        env:
+          DEFAULT_BRANCH: ${{ github.ref_name }}
+          DEFAULT_SHA: ${{ github.sha }}
+          INPUT_BRANCH: ${{ inputs.branch }}
+          INPUT_FORCE_ALL: ${{ inputs.force_all }}
+          INPUT_REF: ${{ inputs.ref }}
+          WORKFLOW_EVENT: ${{ github.event_name }}
+          WORKFLOW_RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+
+          ref="${INPUT_REF:-${WORKFLOW_RUN_SHA:-${DEFAULT_SHA}}}"
+          branch="${INPUT_BRANCH:-${WORKFLOW_RUN_BRANCH:-${DEFAULT_BRANCH}}}"
+          force_all="${INPUT_FORCE_ALL:-true}"
+
+          if [ "${WORKFLOW_EVENT}" = "workflow_run" ]; then
+            force_all=true
+          fi
+
+          if [ "${branch}" != "develop" ]; then
+            echo "Development deploys must come from develop; got ${branch}."
+            exit 1
+          fi
+
+          echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
+          echo "branch=${branch}" >> "${GITHUB_OUTPUT}"
+          echo "force_all=${force_all}" >> "${GITHUB_OUTPUT}"
+
   changes:
     runs-on: self-hosted
+    needs: deploy-context
     outputs:
       backend: ${{ steps.detect.outputs.backend }}
       frontend: ${{ steps.detect.outputs.frontend }}
@@ -55,14 +93,14 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          ref: ${{ inputs.ref || github.sha }}
+          ref: ${{ needs.deploy-context.outputs.ref }}
           fetch-depth: 0
       - name: Detect changed deployment slices
         id: detect
         env:
-          DEPLOY_REF: ${{ inputs.ref || github.sha }}
+          DEPLOY_REF: ${{ needs.deploy-context.outputs.ref }}
           EVENT_BEFORE: ${{ github.event.before }}
-          FORCE_ALL: ${{ inputs.force_all && 'true' || 'false' }}
+          FORCE_ALL: ${{ needs.deploy-context.outputs.force_all }}
         run: |
           set -euo pipefail
 
@@ -120,7 +158,7 @@ jobs:
     environment:
       name: development
       deployment: false
-    needs: changes
+    needs: [deploy-context, changes]
     if: ${{ needs.changes.outputs.backend == 'true' }}
     env:
       ALLOW_LOCALHOST_CORS: ${{ secrets.ALLOW_LOCALHOST_CORS }}
@@ -156,7 +194,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          ref: ${{ inputs.ref || github.sha }}
+          ref: ${{ needs.deploy-context.outputs.ref }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@c336a2788d9774dccfdeb4823a5058ccc9f07453 # v4.3.0
@@ -193,14 +231,14 @@ jobs:
     environment:
       name: development
       deployment: false
-    needs: [changes, deploy-convex-dev]
+    needs: [deploy-context, changes, deploy-convex-dev]
     if: ${{ needs.changes.outputs.frontend == 'true' && (needs.deploy-convex-dev.result == 'success' || needs.deploy-convex-dev.result == 'skipped') }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          ref: ${{ inputs.ref || github.sha }}
+          ref: ${{ needs.deploy-context.outputs.ref }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@c336a2788d9774dccfdeb4823a5058ccc9f07453 # v4.3.0
@@ -236,7 +274,7 @@ jobs:
     environment:
       name: development
       deployment: false
-    needs: changes
+    needs: [deploy-context, changes]
     outputs:
       deployed: ${{ steps.status.outputs.needs_deploy }}
     concurrency:
@@ -247,7 +285,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          ref: ${{ inputs.ref || github.sha }}
+          ref: ${{ needs.deploy-context.outputs.ref }}
 
       - name: Check forwarder status
         id: status
@@ -326,6 +364,7 @@ jobs:
     needs:
       [
         changes,
+        deploy-context,
         deploy-convex-dev,
         deploy-frontend-preview,
         deploy-observability-dev,
@@ -333,17 +372,36 @@ jobs:
     if: >-
       ${{
         always() &&
-        needs.changes.result == 'success' &&
-        (needs.deploy-convex-dev.result == 'success' || needs.deploy-convex-dev.result == 'skipped') &&
-        (needs.deploy-frontend-preview.result == 'success' || needs.deploy-frontend-preview.result == 'skipped') &&
-        (needs.deploy-observability-dev.result == 'success' || needs.deploy-observability-dev.result == 'skipped') &&
+        needs.deploy-context.result == 'success' &&
         (
+          needs.changes.result != 'success' ||
           needs.changes.outputs.backend == 'true' ||
           needs.changes.outputs.frontend == 'true' ||
+          needs.changes.outputs.observability == 'true' ||
           needs.deploy-observability-dev.outputs.deployed == 'true'
         )
       }}
     environment: development
     steps:
       - name: Record deployment
-        run: echo "Development deployment completed for ${{ inputs.ref || github.sha }}"
+        run: |
+          set -euo pipefail
+
+          failed=false
+          for result in \
+            "${{ needs.changes.result }}" \
+            "${{ needs.deploy-convex-dev.result }}" \
+            "${{ needs.deploy-frontend-preview.result }}" \
+            "${{ needs.deploy-observability-dev.result }}"
+          do
+            if [ "${result}" != "success" ] && [ "${result}" != "skipped" ]; then
+              failed=true
+            fi
+          done
+
+          if [ "${failed}" = "true" ]; then
+            echo "Development deployment failed for ${{ needs.deploy-context.outputs.ref }}"
+            exit 1
+          fi
+
+          echo "Development deployment completed for ${{ needs.deploy-context.outputs.ref }}"

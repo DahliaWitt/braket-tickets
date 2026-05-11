@@ -41,11 +41,11 @@ Jump to:
 | `Deploy to Production`     | Reusable workflow called from a successful `CI` push run on `main`                                   | `changes`, `deploy-convex`, `deploy-frontend`, `deploy-observability`, `record-deployment`                         |
 | `Deploy Preview (develop)` | Reusable workflow called from a successful `CI` push run on `develop`, or manual `workflow_dispatch` | `changes`, `deploy-convex-dev`, `deploy-frontend-preview`, `deploy-observability-dev`, `record-deployment`         |
 
-PRs do not deploy. Automatic deploys are invoked directly from the top-level `CI` workflow after its required jobs succeed, instead of chaining through `workflow_run`.
+PRs do not deploy. Automatic deploys use `workflow_run` and the deploy workflows require the completed CI run to be a successful `push` event on `main` or `develop`. Pull request CI completions can never pass the deploy-context branch/event guard.
 
-GitHub Actions jobs that need environment-scoped secrets use the selected GitHub environment. CI and component deploy jobs set `deployment: false` so they can read those secrets without adding entries to the repository Deployments sidebar. Only the final `record-deployment` job in each deploy workflow creates the GitHub Deployment record, after the actual backend, frontend, or observability work has completed successfully.
+GitHub Actions jobs that need environment-scoped secrets use the selected GitHub environment. CI and component deploy jobs set `deployment: false` so they can read those secrets without adding entries to the repository Deployments sidebar. Only the final `record-deployment` job in each deploy workflow creates the GitHub Deployment record. That job runs after backend, frontend, and observability work and exits with the deploy result, so the Deployment record is successful only when the deploy workflow succeeds.
 
-When troubleshooting automatic deploys, start from the parent `CI` run on the branch push, then expand the reusable `Deploy Preview (develop)` or `Deploy to Production` job to inspect the nested deploy jobs.
+When troubleshooting automatic deploys, start from the parent `CI` run on the branch push, confirm it completed successfully, then open the separate `Deploy Preview (develop)` or `Deploy to Production` workflow run for deploy logs.
 
 ## Fix Release Please automation
 
@@ -194,9 +194,10 @@ If an automatic deploy never started or the expected job is marked `skipped`, ch
 1. The parent `CI` run must have succeeded.
 2. The triggering event must be a branch push, not a pull request.
 3. The branch must be `main` for production or `develop` for preview.
-4. The `changes` job must have marked the affected slice as changed.
+4. The deploy workflow's `deploy-context` job must have resolved the expected branch (`main` for production, `develop` for preview).
+5. The automatic deploy path forces all deploy slices after CI success. Manual deploys can still use `force_all=false` for targeted recovery.
 
-Current slice detection:
+Automatic deploys force every deploy slice after CI succeeds. The slice detector is only relevant for manual recovery runs with `force_all=false`:
 
 | Slice           | Files that trigger it                                                                                                                                  |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -204,12 +205,12 @@ Current slice detection:
 | `frontend`      | `frontend/**`, `shared/**`, `package.json`, `pnpm-lock.yaml`                                                                                           |
 | `observability` | `ops/**`, `shared/log-sanitizer.mjs`                                                                                                                   |
 
-The deploy workflows also force all slices when their own orchestration changes:
+Manual targeted deploys also force all slices when their own orchestration changes:
 
 - production: `.github/workflows/ci.yml` or `.github/workflows/deploy.yml`
 - preview: `.github/workflows/ci.yml` or `.github/workflows/deploy-preview.yml`
 
-If the wrong slice was skipped, fix the slice-detection logic in the workflow instead of force-running an unrelated deploy step.
+If the wrong slice was skipped during a manual targeted run, fix the slice-detection logic in the workflow instead of force-running an unrelated deploy step.
 
 ## Restore a failed Convex deploy
 
