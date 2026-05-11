@@ -1,4 +1,9 @@
-import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  signal,
+} from '@angular/core';
 import {
   ActivatedRoute,
   convertToParamMap,
@@ -6,16 +11,25 @@ import {
   type Params,
   type Routes,
 } from '@angular/router';
-import type { Meta, StoryObj } from '@storybook/angular';
-import { applicationConfig } from '@storybook/angular';
-import { CONVEX } from 'convex-angular';
-import { of } from 'rxjs';
+import type {Meta, StoryObj} from '@storybook/angular';
+import {applicationConfig} from '@storybook/angular';
+import {CONVEX} from 'convex-angular';
+import {of} from 'rxjs';
 
-import { AuthService } from '@/core/services/auth.service';
+import {AuthService} from '@/core/services/auth.service';
+import {
+  createStoryConvexClient,
+  skipStoryConvexQueryUpdate,
+} from '../../../../../storybook/mocks/convex';
 
-import { InviteComponent } from './invite.component';
+import {InviteComponent} from './invite.component';
 
-type InviteValidationError = 'invalid' | 'paused' | 'disabled' | 'expired' | 'maxed';
+type InviteValidationError =
+  | 'invalid'
+  | 'paused'
+  | 'disabled'
+  | 'expired'
+  | 'maxed';
 
 interface InviteValidationResult {
   valid: boolean;
@@ -58,20 +72,24 @@ const inviteStoryState: {
 class InviteStoryRouteStubComponent {}
 
 const STORY_ROUTES: Routes = [
-  { path: '', component: InviteStoryRouteStubComponent },
-  { path: 'login', component: InviteStoryRouteStubComponent },
-  { path: 'invite/:token', component: InviteStoryRouteStubComponent },
-  { path: '**', component: InviteStoryRouteStubComponent },
+  {path: '', component: InviteStoryRouteStubComponent},
+  {path: 'login', component: InviteStoryRouteStubComponent},
+  {path: 'invite/:token', component: InviteStoryRouteStubComponent},
+  {path: '**', component: InviteStoryRouteStubComponent},
 ];
 
 class StoryAuthService {
-  private readonly session = signal<{ _id: string } | undefined>(undefined);
+  private readonly session = signal<{_id: string} | undefined>(undefined);
 
   readonly isAuthenticated = computed(() => this.session() !== undefined);
   readonly user = computed(() => this.session());
 
   constructor() {
-    this.session.set(inviteStoryState.authenticated ? { _id: inviteStoryState.userId } : undefined);
+    this.session.set(
+      inviteStoryState.authenticated
+        ? {_id: inviteStoryState.userId}
+        : undefined,
+    );
   }
 
   handleOAuthCallback(_ott: string): Promise<void> {
@@ -79,19 +97,15 @@ class StoryAuthService {
   }
 }
 
-function createStoryConvexClient() {
-  const onUpdate = (
-    _query: unknown,
-    _args: unknown,
-    onData: (data: unknown) => void,
-  ): (() => void) => {
+const storyConvexClient = createStoryConvexClient({
+  onUpdate: () => {
     if (inviteStoryState.validationState === 'resolved') {
-      onData(inviteStoryState.validationResult);
+      return inviteStoryState.validationResult;
     }
-    return () => undefined;
-  };
 
-  const mutation = async () => {
+    return skipStoryConvexQueryUpdate();
+  },
+  mutation: async () => {
     if (inviteStoryState.redeemBehavior === 'pending') {
       return await new Promise(() => undefined);
     }
@@ -102,48 +116,12 @@ function createStoryConvexClient() {
       alreadyMember: false,
       message: 'unused',
     };
-  };
-
-  const connectionState = () => ({
-    hasInflightRequests: false,
-    isWebSocketConnected: false,
-    timeOfOldestInflightRequest: null,
-    hasEverConnected: true,
-    connectionCount: 1,
-    connectionRetries: 0,
-    inflightMutations: 0,
-    inflightActions: 0,
-  });
-
-  return {
-    query: async () => null,
-    mutation,
-    action: async () => null,
-    onUpdate,
-    onPaginatedUpdate_experimental: () => () => undefined,
-    localQueryResult: () => undefined,
-    connectionState,
-    subscribeToConnectionState: () => () => undefined,
-    hasAuth: () => inviteStoryState.authenticated,
-    handleAuthError: () => undefined,
-    client: {
-      query: async () => null,
-      mutation,
-      action: async () => null,
-      onUpdate,
-      onPaginatedUpdate_experimental: () => () => undefined,
-      localQueryResult: () => undefined,
-      connectionState,
-      subscribeToConnectionState: () => () => undefined,
-      hasAuth: () => inviteStoryState.authenticated,
-    },
-  };
-}
-
-const storyConvexClient = createStoryConvexClient();
+  },
+  hasAuth: () => inviteStoryState.authenticated,
+});
 
 function createActivatedRoute(): Pick<ActivatedRoute, 'paramMap' | 'snapshot'> {
-  const params: Params = { token: inviteStoryState.token };
+  const params: Params = {token: inviteStoryState.token};
 
   return {
     paramMap: of(convertToParamMap(params)),
@@ -169,9 +147,9 @@ const meta: Meta<InviteComponent> = {
     applicationConfig({
       providers: [
         provideRouter(STORY_ROUTES),
-        { provide: CONVEX, useValue: storyConvexClient },
-        { provide: AuthService, useClass: StoryAuthService },
-        { provide: ActivatedRoute, useFactory: createActivatedRoute },
+        {provide: CONVEX, useValue: storyConvexClient},
+        {provide: AuthService, useClass: StoryAuthService},
+        {provide: ActivatedRoute, useFactory: createActivatedRoute},
       ],
     }),
   ],
@@ -199,7 +177,7 @@ export const LoadingValidation: Story = {
     renderInvite({
       token: 'loading-token',
       validationState: 'loading',
-      validationResult: { valid: true, communityName: 'Signal House' },
+      validationResult: {valid: true, communityName: 'Signal House'},
       authenticated: false,
       redeemBehavior: 'unused',
     }),

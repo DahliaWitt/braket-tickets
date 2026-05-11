@@ -1,8 +1,8 @@
-import type { Meta, StoryObj } from '@storybook/angular';
-import { argsToTemplate } from '@storybook/angular';
+import type {Meta, StoryObj} from '@storybook/angular';
+import {argsToTemplate} from '@storybook/angular';
 
-import { ZardButtonComponent } from './button.component';
-import { ZardIconComponent } from '@ui/components/primitives/icon/icon.component';
+import {ZardButtonComponent} from './button.component';
+import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
 
 const meta: Meta<ZardButtonComponent> = {
   title: 'Braket/Primitives/Button',
@@ -19,7 +19,14 @@ const meta: Meta<ZardButtonComponent> = {
   argTypes: {
     zType: {
       control: 'select',
-      options: ['default', 'outline', 'ghost', 'link', 'destructive', 'secondary'],
+      options: [
+        'default',
+        'outline',
+        'ghost',
+        'link',
+        'destructive',
+        'secondary',
+      ],
     },
     zSize: {
       control: 'select',
@@ -29,9 +36,14 @@ const meta: Meta<ZardButtonComponent> = {
       control: 'select',
       options: ['default', 'circle', 'square'],
     },
-    zLoading: { control: 'boolean' },
-    zDisabled: { control: 'boolean' },
-    zFull: { control: 'boolean' },
+    zLoading: {control: 'boolean'},
+    zDisabled: {control: 'boolean'},
+    zFull: {control: 'boolean'},
+    zGlow: {
+      control: 'boolean',
+      description:
+        'Applies the glow data attribute used by emphasized button treatments.',
+    },
   },
   render: (args) => ({
     props: args,
@@ -43,11 +55,12 @@ export default meta;
 type Story = StoryObj<ZardButtonComponent>;
 
 export const Default: Story = {
-  args: { zType: 'default', zSize: 'default' },
+  args: {zType: 'default', zSize: 'default'},
   parameters: {
     docs: {
       description: {
-        story: 'Reference playground for the base button API and visual variants.',
+        story:
+          'Reference playground for the base button API and visual variants.',
       },
     },
   },
@@ -174,7 +187,8 @@ export const IconAction: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'App-proven compact action pattern for copy, refresh, and similar utility actions.',
+        story:
+          'App-proven compact action pattern for copy, refresh, and similar utility actions.',
       },
     },
   },

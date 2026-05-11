@@ -1,8 +1,18 @@
-import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
-import { FormField, form, required, type MaybeFieldTree } from '@angular/forms/signals';
-import type { Meta, StoryObj } from '@storybook/angular';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  signal,
+} from '@angular/core';
+import {
+  FormField,
+  form,
+  required,
+  type MaybeFieldTree,
+} from '@angular/forms/signals';
+import type {Meta, StoryObj} from '@storybook/angular';
 
-import { BraDatePickerComponent } from './date-picker.component';
+import {BraDatePickerComponent} from './date-picker.component';
 
 interface DatePickerStoryState {
   date: Date | null;
@@ -24,14 +34,16 @@ const datePickerStoryState: DatePickerStoryState = {
   imports: [BraDatePickerComponent, FormField],
   template: `
     <div class="max-w-sm rounded-md border border-border bg-card p-6">
-      <h2 class="font-display text-lg font-bold mb-1">Event Editor</h2>
-      <p class="text-sm text-muted-foreground mb-6">
+      <h2 class="mb-1 font-display text-lg font-bold">Event Editor</h2>
+      <p class="mb-6 text-sm text-muted-foreground">
         Mirrors the compact scheduling field used in the admin event editor.
       </p>
 
       <div class="flex flex-col gap-6">
         <div class="space-y-2">
-          <span class="block text-xs font-mono text-muted-foreground uppercase tracking-wider">
+          <span
+            class="block font-mono text-xs tracking-wider text-muted-foreground uppercase"
+          >
             Date *
           </span>
           <bra-date-picker
@@ -39,18 +51,20 @@ const datePickerStoryState: DatePickerStoryState = {
             placeholder="Pick a date"
             zFormat="yyyy-MM-dd"
             zSize="sm"
-            class="!border-b-0 !border !border-border !bg-background !rounded-sm !py-2 !text-sm !font-sans"
+            class="!rounded-sm !border !border-b-0 !border-border !bg-background !py-2 !font-sans !text-sm"
             [class.!border-destructive/50]="isFieldInvalid(eventForm.date)"
             [class.!text-destructive]="isFieldInvalid(eventForm.date)"
           />
           @if (isFieldInvalid(eventForm.date)) {
-            <p class="text-destructive text-xs uppercase">Date is required</p>
+            <p class="text-xs text-destructive uppercase">Date is required</p>
           }
         </div>
 
         @if (showSaleDeadline()) {
           <div class="space-y-2">
-            <span class="block text-xs font-mono text-muted-foreground uppercase tracking-wider">
+            <span
+              class="block font-mono text-xs tracking-wider text-muted-foreground uppercase"
+            >
               Sale End Date
             </span>
             <bra-date-picker
@@ -58,7 +72,7 @@ const datePickerStoryState: DatePickerStoryState = {
               placeholder="Ticket sale deadline"
               zFormat="yyyy-MM-dd"
               zSize="sm"
-              class="!border-b-0 !border !border-border !bg-background !rounded-sm !py-2 !text-sm !font-sans"
+              class="!rounded-sm !border !border-b-0 !border-border !bg-background !py-2 !font-sans !text-sm"
             />
             <p class="text-xs text-muted-foreground">
               Optional cutoff used when scheduling ticket sales.
@@ -97,6 +111,19 @@ function setDatePickerStoryState(state: Partial<DatePickerStoryState>): void {
   datePickerStoryState.showSaleDeadline = state.showSaleDeadline ?? false;
 }
 
+function coerceStoryDate(value: unknown): Date | null {
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
+  if (typeof value === 'number' || typeof value === 'string') {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  return null;
+}
+
 const meta: Meta<BraDatePickerComponent> = {
   title: 'Braket/Composites/DatePicker',
   component: BraDatePickerComponent,
@@ -110,6 +137,68 @@ const meta: Meta<BraDatePickerComponent> = {
       },
     },
   },
+  argTypes: {
+    zType: {
+      control: 'select',
+      options: ['default', 'outline', 'ghost'],
+      description: 'Button treatment used for the date-picker trigger.',
+    },
+    zSize: {
+      control: 'select',
+      options: ['sm', 'default', 'lg'],
+      description: 'Trigger sizing used by the surrounding form layout.',
+    },
+    placeholder: {
+      control: 'text',
+      description: 'Text shown before a date has been selected.',
+    },
+    zFormat: {
+      control: 'text',
+      description: 'Angular DatePipe format used for the selected date label.',
+    },
+    value: {
+      control: 'date',
+      description: 'Selected date shown in the trigger label.',
+    },
+    minDate: {
+      control: 'date',
+      description: 'Earliest selectable date in the calendar popover.',
+    },
+    maxDate: {
+      control: 'date',
+      description: 'Latest selectable date in the calendar popover.',
+    },
+  },
+  args: {
+    zType: 'outline',
+    zSize: 'default',
+    placeholder: 'Pick a date',
+    zFormat: 'MMMM d, yyyy',
+    value: null,
+    minDate: null,
+    maxDate: null,
+  },
+  render: (args) => ({
+    props: {
+      ...args,
+      value: coerceStoryDate(args.value),
+      minDate: coerceStoryDate(args.minDate),
+      maxDate: coerceStoryDate(args.maxDate),
+    },
+    template: `
+      <div class="w-80">
+        <bra-date-picker
+          [zType]="zType"
+          [zSize]="zSize"
+          [placeholder]="placeholder"
+          [zFormat]="zFormat"
+          [value]="value"
+          [minDate]="minDate"
+          [maxDate]="maxDate"
+        />
+      </div>
+    `,
+  }),
 };
 
 export default meta;
@@ -131,6 +220,14 @@ export const EventEditorField: Story = {
       date: null,
       submitted: false,
     }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'App-proven empty event-editor date field before validation has run.',
+      },
+    },
+  },
 };
 
 export const PrepopulatedEventDate: Story = {
@@ -139,6 +236,14 @@ export const PrepopulatedEventDate: Story = {
       date: new Date('2026-06-20T00:00:00.000Z'),
       submitted: false,
     }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'App-proven event-editor date field after an existing event date is loaded.',
+      },
+    },
+  },
 };
 
 export const RequiredValidationState: Story = {
@@ -147,6 +252,14 @@ export const RequiredValidationState: Story = {
       date: null,
       submitted: true,
     }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'App-proven required-field validation state for event scheduling.',
+      },
+    },
+  },
 };
 
 export const EventSchedulingWindow: Story = {
@@ -157,4 +270,12 @@ export const EventSchedulingWindow: Story = {
       submitted: false,
       showSaleDeadline: true,
     }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'App-proven editor state for configuring both the event date and ticket-sale cutoff.',
+      },
+    },
+  },
 };

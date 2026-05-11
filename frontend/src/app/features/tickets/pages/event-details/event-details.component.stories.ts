@@ -23,6 +23,10 @@ import {type api} from '@convex/_generated/api';
 
 import {ApplicationsService} from '@/features/vetting/services/applications.service';
 import {BraDarkMode, EDarkModes} from '@ui/services/dark-mode';
+import {
+  createStoryConvexClient,
+  skipStoryConvexQueryUpdate,
+} from '../../../../../storybook/mocks/convex';
 import {PaymentService} from '../../services/payment.service';
 import {ResaleService} from '../../services/resale.service';
 import {EventDetailsComponent} from './event-details.component';
@@ -57,7 +61,7 @@ interface EventDetailsStoryState {
 
 function buildEvent(overrides: Partial<EventDetail> = {}): EventDetail {
   return {
-    _id: 'evt_story_public',
+    _id: 'evt_story_public' as EventDetail['_id'],
     _creationTime: Date.now(),
     title: 'Void Sessions Vol. 12',
     date: '2026-06-20T22:00:00.000Z',
@@ -68,7 +72,9 @@ function buildEvent(overrides: Partial<EventDetail> = {}): EventDetail {
     slidingScaleMax: 3000,
     maxTicketsPerUser: 4,
     totalTickets: 160,
+    ticketSalesStatus: 'active',
     organizerPaymentReady: true,
+    isPlatformOrganizer: false,
     visibility: 'public',
     status: 'published',
     organizerId: 'org_void' as EventDetail['organizerId'],
@@ -84,8 +90,9 @@ function buildEvent(overrides: Partial<EventDetail> = {}): EventDetail {
       email: 'hello@voidcollective.test',
       contactInfo: 'Signal-only contact hours: Tuesdays and Thursdays.',
     },
+    guestCount: 0,
     ...overrides,
-  } as EventDetail;
+  } satisfies EventDetail;
 }
 
 function buildAvailability(
@@ -152,6 +159,7 @@ const eventDetailsStoryState: EventDetailsStoryState = {
 
 class StoryAuthService {
   readonly user = computed(() => eventDetailsStoryState.user);
+  readonly currentUser = computed(() => eventDetailsStoryState.user);
   readonly isAuthenticated = computed(
     () => eventDetailsStoryState.authenticated,
   );
@@ -254,74 +262,30 @@ class StoryDarkModeService {
   }
 }
 
-function createStoryConvexClient() {
-  const onUpdate = (
-    _query: unknown,
-    args: unknown,
-    onData: (data: unknown) => void,
-  ): (() => void) => {
+const storyConvexClient = createStoryConvexClient({
+  onUpdate: ({args}) => {
     if (eventDetailsStoryState.queryState === 'loading') {
-      return () => undefined;
+      return skipStoryConvexQueryUpdate();
     }
 
     const typedArgs = args as Record<string, unknown>;
 
     if ('id' in typedArgs) {
-      onData(eventDetailsStoryState.event);
-      return () => undefined;
+      return eventDetailsStoryState.event;
     }
 
     if ('eventId' in typedArgs) {
-      onData(eventDetailsStoryState.availability);
-      return () => undefined;
+      return eventDetailsStoryState.availability;
     }
 
     if ('organizerId' in typedArgs) {
-      onData(eventDetailsStoryState.trustResult);
-      return () => undefined;
+      return eventDetailsStoryState.trustResult;
     }
 
-    onData(null);
-    return () => undefined;
-  };
-
-  const connectionState = () => ({
-    hasInflightRequests: false,
-    isWebSocketConnected: false,
-    timeOfOldestInflightRequest: null,
-    hasEverConnected: true,
-    connectionCount: 1,
-    connectionRetries: 0,
-    inflightMutations: 0,
-    inflightActions: 0,
-  });
-
-  return {
-    query: async () => null,
-    mutation: async () => null,
-    action: async () => null,
-    onUpdate,
-    onPaginatedUpdate_experimental: () => () => undefined,
-    localQueryResult: () => undefined,
-    connectionState,
-    subscribeToConnectionState: () => () => undefined,
-    hasAuth: () => eventDetailsStoryState.authenticated,
-    handleAuthError: () => undefined,
-    client: {
-      query: async () => null,
-      mutation: async () => null,
-      action: async () => null,
-      onUpdate,
-      onPaginatedUpdate_experimental: () => () => undefined,
-      localQueryResult: () => undefined,
-      connectionState,
-      subscribeToConnectionState: () => () => undefined,
-      hasAuth: () => eventDetailsStoryState.authenticated,
-    },
-  };
-}
-
-const storyConvexClient = createStoryConvexClient();
+    return null;
+  },
+  hasAuth: () => eventDetailsStoryState.authenticated,
+});
 
 function createActivatedRoute(): Pick<
   ActivatedRoute,
@@ -388,6 +352,18 @@ const meta: Meta<EventDetailsComponent> = {
         component:
           'Real event details page imported into Storybook. These stories document stable page states and gating logic around access, resale, and purchase affordances without simulating the full embedded checkout flow.',
       },
+    },
+  },
+  argTypes: {
+    id: {
+      control: 'text',
+      description:
+        'Event id passed to the routed page component; stories set this from the mocked event state.',
+    },
+    buy: {
+      control: 'text',
+      description:
+        'Optional direct-buy mode input used by route-driven purchase flows.',
     },
   },
 };

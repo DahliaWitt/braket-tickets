@@ -1,5 +1,5 @@
-import { Meta, StoryObj } from '@storybook/angular';
-import { BraInventoryMeterComponent } from './inventory-meter.component';
+import {Meta, StoryObj} from '@storybook/angular';
+import {BraInventoryMeterComponent} from './inventory-meter.component';
 
 const meta: Meta<BraInventoryMeterComponent> = {
   title: 'Braket/Composites/InventoryMeter',
@@ -14,16 +14,21 @@ const meta: Meta<BraInventoryMeterComponent> = {
     },
   },
   argTypes: {
-    soldCount: { control: { type: 'number', min: 0 } },
-    heldCount: { control: { type: 'number', min: 0 } },
-    totalTickets: { control: { type: 'number', min: 1 } },
-    label: { control: 'text' },
+    soldCount: {control: {type: 'number', min: 0}},
+    heldCount: {control: {type: 'number', min: 0}},
+    totalTickets: {control: {type: 'number', min: 1}},
+    label: {control: 'text'},
+    testid: {
+      control: 'text',
+      description: 'Prefix used for the meter data-testid attributes.',
+    },
   },
   args: {
     soldCount: 40,
     heldCount: 0,
     totalTickets: 100,
     label: 'Tickets Sold',
+    testid: 'inventory-meter',
   },
   render: (args) => ({
     props: args,
@@ -34,6 +39,7 @@ const meta: Meta<BraInventoryMeterComponent> = {
           [heldCount]="heldCount"
           [totalTickets]="totalTickets"
           [label]="label"
+          [testid]="testid"
         />
       </div>
     `,
@@ -44,11 +50,19 @@ export default meta;
 type Story = StoryObj<BraInventoryMeterComponent>;
 
 export const EarlySales: Story = {
-  args: { soldCount: 12, heldCount: 0, totalTickets: 160 },
+  args: {soldCount: 12, heldCount: 0, totalTickets: 160},
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'App-proven early-sales state for event management before any checkout holds are present.',
+      },
+    },
+  },
 };
 
 export const ActiveCheckouts: Story = {
-  args: { soldCount: 84, heldCount: 6, totalTickets: 100 },
+  args: {soldCount: 84, heldCount: 6, totalTickets: 100},
   parameters: {
     docs: {
       description: {
@@ -60,7 +74,7 @@ export const ActiveCheckouts: Story = {
 };
 
 export const SoldOutByHolds: Story = {
-  args: { soldCount: 93, heldCount: 7, totalTickets: 100 },
+  args: {soldCount: 93, heldCount: 7, totalTickets: 100},
   parameters: {
     docs: {
       description: {
@@ -72,7 +86,7 @@ export const SoldOutByHolds: Story = {
 };
 
 export const FullySold: Story = {
-  args: { soldCount: 100, heldCount: 0, totalTickets: 100 },
+  args: {soldCount: 100, heldCount: 0, totalTickets: 100},
   parameters: {
     docs: {
       description: {
@@ -84,7 +98,7 @@ export const FullySold: Story = {
 };
 
 export const MostlyHeld: Story = {
-  args: { soldCount: 10, heldCount: 40, totalTickets: 100 },
+  args: {soldCount: 10, heldCount: 40, totalTickets: 100},
   parameters: {
     docs: {
       description: {

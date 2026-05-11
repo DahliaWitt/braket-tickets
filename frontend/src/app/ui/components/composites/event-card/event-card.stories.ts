@@ -1,5 +1,4 @@
-import {Meta, StoryObj, applicationConfig} from '@storybook/angular';
-import {provideRouter} from '@angular/router';
+import {Meta, StoryObj} from '@storybook/angular';
 
 import {EventCardComponent, type EventCardData} from './event-card.component';
 
@@ -30,11 +29,6 @@ const meta: Meta<EventCardComponent> = {
       },
     },
   },
-  decorators: [
-    applicationConfig({
-      providers: [provideRouter([])],
-    }),
-  ],
   argTypes: {
     event: {control: 'object'},
     priority: {control: 'boolean'},
@@ -193,7 +187,8 @@ export const WideContainer: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Reference stress case for spacious layouts and featured placements.',
+        story:
+          'Reference stress case for spacious layouts and featured placements.',
       },
     },
   },
