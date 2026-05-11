@@ -431,14 +431,22 @@ export async function enqueueMembershipPropagation(
  * resolved against the organizer directory to include application data and
  * access-source metadata.
  *
- * Returns a single non-paginated page (`isDone: true`) capped at 50 results.
+ * The search fetches up to 256 global candidates to compensate for the
+ * post-filter to organizer members, then caps the final page at 50 results.
+ * Returns a single non-paginated page (`isDone: true`).
  */
 export async function searchUserApplicationsInDirectory(
   ctx: DirectoryCtx,
   organizerId: Id<'organizers'>,
   searchTerm: string,
 ): Promise<UserApplicationPage> {
-  const matchingUsers = await searchUsersByNameOrEmail(ctx.db, searchTerm, 256);
+  const SEARCH_CANDIDATES = 256;
+  const PAGE_LIMIT = 50;
+  const matchingUsers = await searchUsersByNameOrEmail(
+    ctx.db,
+    searchTerm,
+    SEARCH_CANDIDATES,
+  );
 
   // Parallel index lookups — each is an independent read on
   // by_organizer_and_user, so no need to serialize.
@@ -470,11 +478,15 @@ export async function searchUserApplicationsInDirectory(
     }
   }
 
-  return {
-    page: entries.flatMap((entry) => {
+  const page = entries
+    .flatMap((entry) => {
       const user = usersById.get(entry.userId);
       return user ? [toUserApplicationRow(entry, user)] : [];
-    }),
+    })
+    .slice(0, PAGE_LIMIT);
+
+  return {
+    page,
     isDone: true,
     continueCursor: '',
   };
