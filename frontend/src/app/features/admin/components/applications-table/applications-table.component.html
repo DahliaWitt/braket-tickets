@@ -245,6 +245,25 @@
                     >
                       By: {{ app.processor?.name || 'SYSTEM' }}
                     </div>
+                    @if (
+                      app.status === 'revoked' && tableType() === 'history'
+                    ) {
+                      <button
+                        type="button"
+                        z-button
+                        zType="default"
+                        [zFull]="true"
+                        [attr.aria-label]="
+                          'Reinstate membership for ' +
+                          (app.user?.name || 'applicant')
+                        "
+                        class="mt-2"
+                        data-testid="reinstate-application"
+                        (click)="reinstateApplication(app)"
+                      >
+                        REINSTATE
+                      </button>
+                    }
                   </div>
                 }
               </td>
@@ -256,7 +275,9 @@
                 class="p-16 text-center font-mono tracking-widest text-muted-foreground uppercase"
               >
                 @if (searchQuery()) {
-                  NO RESULTS FOR &ldquo;{{ searchQuery() }}&rdquo;
+                  <span data-testid="no-results-empty-state"
+                    >NO RESULTS FOR &ldquo;{{ searchQuery() }}&rdquo;</span
+                  >
                 } @else {
                   NO {{ tableType() }} APPLICATIONS FOUND
                 }
@@ -402,6 +423,23 @@
             </button>
           </div>
         }
+        @if (app.status === 'revoked' && tableType() === 'history') {
+          <div class="border-t border-border/50">
+            <button
+              type="button"
+              z-button
+              zType="default"
+              class="w-full rounded-none border-0"
+              [attr.aria-label]="
+                'Reinstate membership for ' + (app.user?.name || 'applicant')
+              "
+              data-testid="reinstate-application"
+              (click)="reinstateApplication(app)"
+            >
+              REINSTATE
+            </button>
+          </div>
+        }
       </div>
     } @empty {
       <div
@@ -409,7 +447,9 @@
         class="mono-label rounded-lg border border-dashed border-border py-12 text-center text-sm text-muted-foreground"
       >
         @if (searchQuery()) {
-          NO RESULTS FOR &ldquo;{{ searchQuery() }}&rdquo;
+          <span data-testid="no-results-empty-state"
+            >NO RESULTS FOR &ldquo;{{ searchQuery() }}&rdquo;</span
+          >
         } @else {
           NO {{ tableType() }} APPLICATIONS FOUND
         }

@@ -37,6 +37,7 @@ const makeEntry = (overrides: MakeEntryOverrides = {}): AuditLogEntry => ({
   reason: overrides.reason,
   source: overrides.source,
   applicationUserName: overrides.applicationUserName,
+  targetUserName: overrides.targetUserName,
   magicLinkLabel: overrides.magicLinkLabel,
   trustLinkLabel: overrides.trustLinkLabel,
   applicationId: overrides.applicationId,
@@ -505,6 +506,42 @@ describe('AuditLogTableComponent', () => {
     );
     expect(expanded).not.toBeNull();
     expect(expanded!.querySelector('a')).toBeNull();
+  });
+
+  it('shows target user name in expanded details when set', async () => {
+    const entry = makeEntry({
+      _id: 'tgt1',
+      action: 'community_admin.grant',
+      adminName: 'Root Admin',
+      targetUserName: 'Jane Doe',
+    });
+    await setupComponent(makeMockConvex([entry]));
+    const harness = await getHarness(fixture);
+
+    await harness.clickDesktopDetailTrigger(0);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const targetText = await harness.getTargetUserText();
+    expect(targetText).toBe('Jane Doe');
+  });
+
+  it('does not show target user section when targetUserName is absent', async () => {
+    const entry = makeEntry({
+      _id: 'notgt1',
+      action: 'event.create',
+      adminName: 'Alice',
+      eventName: 'Some Event',
+    });
+    await setupComponent(makeMockConvex([entry]));
+    const harness = await getHarness(fixture);
+
+    await harness.clickDesktopDetailTrigger(0);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const targetText = await harness.getTargetUserText();
+    expect(targetText).toBeNull();
   });
 
   // BRA-98: Unknown actions are humanized rather than showing 'ACTION'

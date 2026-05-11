@@ -189,7 +189,8 @@ export function convexRun(
 /**
  * Replaces scripts/run-with-local-env.sh.
  *
- * If CI or DOPPLER_INJECTED is set, returns immediately.
+ * If CI or DOPPLER_INJECTED is set for the requested config, returns
+ * immediately.
  * Otherwise, re-executes the current process through `doppler run`.
  *
  * CRITICAL: Sets DOPPLER_INJECTED=1 BEFORE exec'ing into doppler run to
@@ -200,7 +201,16 @@ export function convexRun(
  * safe defaults) — no user-supplied strings are interpolated without sanitization.
  */
 export function ensureDopplerEnv(): void {
-  if (process.env['CI'] || process.env['DOPPLER_INJECTED']) {
+  const dopplerProject = process.env['DOPPLER_PROJECT'] ?? 'braket-tickets';
+  const dopplerConfig = process.env['DOPPLER_CONFIG'] ?? 'local';
+  const activeDopplerConfig = process.env['DOPPLER_ACTIVE_CONFIG'];
+
+  if (
+    process.env['CI'] ||
+    (process.env['DOPPLER_INJECTED'] &&
+      (activeDopplerConfig === undefined ||
+        activeDopplerConfig === dopplerConfig))
+  ) {
     return;
   }
 
@@ -221,13 +231,11 @@ export function ensureDopplerEnv(): void {
     process.exit(1);
   }
 
-  const dopplerProject = process.env['DOPPLER_PROJECT'] ?? 'braket-tickets';
-  const dopplerConfig = process.env['DOPPLER_CONFIG'] ?? 'local';
-
   // CRITICAL: Set the re-entry guard BEFORE exec'ing into doppler run.
   // Without this, validate.sh → doppler run → validate.sh creates ~19-level
   // recursion, each level adding a doppler API call (rate limit: 120 req/min).
   process.env['DOPPLER_INJECTED'] = '1';
+  process.env['DOPPLER_ACTIVE_CONFIG'] = dopplerConfig;
 
   // Shell is required to pass process.argv correctly through doppler run.
   // All interpolated values are controlled: process.execPath (Node.js binary
@@ -855,14 +863,27 @@ export async function setAllEnvVars(
     .join('\n');
 
   // Write to OS temp dir (not repo tree) to avoid leaking secrets on crash
-  const tmpFile = path.join(os.tmpdir(), `.convex-env-bulk-${process.pid}-${Date.now()}`);
+  const tmpFile = path.join(
+    os.tmpdir(),
+    `.convex-env-bulk-${process.pid}-${Date.now()}`,
+  );
   fs.writeFileSync(tmpFile, envContent, {mode: 0o600});
 
   try {
     await new Promise<void>((resolve, reject) => {
       execFile(
         CONVEX_CLI,
-        ['env', 'set', '--from-file', tmpFile, '--force', '--admin-key', ADMIN_KEY, '--url', url],
+        [
+          'env',
+          'set',
+          '--from-file',
+          tmpFile,
+          '--force',
+          '--admin-key',
+          ADMIN_KEY,
+          '--url',
+          url,
+        ],
         {cwd: PROJECT_ROOT},
         (error: Error | null) => (error ? reject(error) : resolve()),
       );

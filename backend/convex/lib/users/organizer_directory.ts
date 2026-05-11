@@ -2,7 +2,6 @@ import type {Doc, Id} from '../../_generated/dataModel';
 import {internal} from '../../_generated/api';
 import type {MutationCtx, QueryCtx} from '../../_generated/server';
 import {getLatestApplicationForOrganizer} from '../applications/read_models';
-import {searchUsersByNameOrEmail} from './directory';
 import {stripSensitiveUserFields} from './helpers';
 import {
   isCommunityAdmin,
@@ -427,54 +426,65 @@ export async function enqueueMembershipPropagation(
 
 /**
  * Searches the organizer directory by user name or email using the
- * `search_name_email` search index on the users table. Matched users are then
- * resolved against the organizer directory to include application data and
- * access-source metadata.
+ * `search_name_email` search index on the users table. Streams through global
+ * matches and filters against the organizer directory so that the result cap
+ * applies to *scoped* members, not pre-scope global users.
  *
- * The search fetches up to 256 global candidates to compensate for the
- * post-filter to organizer members, then caps the final page at 50 results.
- * Returns a single non-paginated page (`isDone: true`).
+ * Returns a single non-paginated page (`isDone: true`) capped at 50 scoped results.
  */
 export async function searchUserApplicationsInDirectory(
   ctx: DirectoryCtx,
   organizerId: Id<'organizers'>,
   searchTerm: string,
 ): Promise<UserApplicationPage> {
-  const SEARCH_CANDIDATES = 256;
-  const PAGE_LIMIT = 50;
-  const matchingUsers = await searchUsersByNameOrEmail(
-    ctx.db,
-    searchTerm,
-    SEARCH_CANDIDATES,
-  );
-
-  // Parallel index lookups — each is an independent read on
-  // by_organizer_and_user, so no need to serialize.
-  const directoryEntries = await Promise.all(
-    matchingUsers.map((user) =>
-      ctx.db
-        .query('organizer_user_directory')
-        .withIndex('by_organizer_and_user', (q) =>
-          q.eq('organizerId', organizerId).eq('userId', user._id),
-        )
-        .unique(),
-    ),
-  );
-
-  // Parallel resolution — mirrors loadUserApplicationPageForOrganizerFromDirectory.
-  const resolvedEntries = await Promise.all(
-    directoryEntries.map((entry) =>
-      entry ? resolveActiveDirectoryEntry(ctx, entry) : null,
-    ),
-  );
-
+  const lowerTerm = searchTerm.toLowerCase();
+  const SCOPED_RESULT_LIMIT = 50;
   const entries: DirectoryEntryFields[] = [];
   const usersById = new Map<Id<'users'>, Doc<'users'>>();
-  for (let i = 0; i < matchingUsers.length; i++) {
-    const resolved = resolvedEntries[i];
-    if (resolved) {
-      entries.push(resolved);
-      usersById.set(matchingUsers[i]._id, matchingUsers[i]);
+  const seen = new Set<Id<'users'>>();
+
+  /** Check one user against the organizer directory; returns true if added. */
+  async function tryAddUser(user: Doc<'users'>): Promise<boolean> {
+    if (seen.has(user._id)) return false;
+    seen.add(user._id);
+
+    const entry = await ctx.db
+      .query('organizer_user_directory')
+      .withIndex('by_organizer_and_user', (q) =>
+        q.eq('organizerId', organizerId).eq('userId', user._id),
+      )
+      .unique();
+    if (!entry) return false;
+
+    const resolved = await resolveActiveDirectoryEntry(ctx, entry);
+    if (!resolved) return false;
+
+    entries.push(resolved);
+    usersById.set(user._id, user);
+    return true;
+  }
+
+  // Stream name matches from search index (up to Convex 1024 scan limit).
+  // Scope-filter as we go so out-of-community users don't consume the cap.
+  for await (const user of ctx.db
+    .query('users')
+    .withSearchIndex('search_name_email', (q) =>
+      q.search('name', searchTerm),
+    )) {
+    if (entries.length >= SCOPED_RESULT_LIMIT) break;
+    await tryAddUser(user);
+  }
+
+  // Stream email prefix matches from regular index.
+  if (entries.length < SCOPED_RESULT_LIMIT) {
+    for await (const user of ctx.db
+      .query('users')
+      .withIndex('email', (q) =>
+        q.gte('email', lowerTerm).lt('email', lowerTerm + '\uffff'),
+      )) {
+      if (entries.length >= SCOPED_RESULT_LIMIT) break;
+      if (!user.email?.toLowerCase().includes(lowerTerm)) continue;
+      await tryAddUser(user);
     }
   }
 
@@ -483,7 +493,7 @@ export async function searchUserApplicationsInDirectory(
       const user = usersById.get(entry.userId);
       return user ? [toUserApplicationRow(entry, user)] : [];
     })
-    .slice(0, PAGE_LIMIT);
+    .slice(0, SCOPED_RESULT_LIMIT);
 
   return {
     page,

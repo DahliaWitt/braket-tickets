@@ -8,6 +8,8 @@ import {
   getUserCommunities,
   isCommunityAdmin,
   isCommunityMember,
+  isCommunityScanner,
+  revokeCommunityScannerRole,
 } from '../../lib/authz';
 import {
   canManageCommunity,
@@ -17,11 +19,9 @@ import {
 } from '../../lib/access';
 import {rateLimiter} from '../../lib/rate_limits';
 import {insertAdminAuditLog} from '../../lib/admin_audit_log';
+import {cancelPendingInvitesCreatedBy} from '../../lib/admin_invites';
 import {ensureApprovedMarketingPreference} from '../../lib/marketing_emails/preferences';
-import {
-  collectAllQueryUnsafe,
-  collectMatchingInQuery,
-} from '../../lib/query_scan';
+import {collectAllQueryUnsafe} from '../../lib/query_scan';
 import {
   recomputeOrganizerDirectoryRow,
   refreshOrganizerDirectoryForMembershipChange,
@@ -29,30 +29,6 @@ import {
 import {throwAppError} from '../../lib/errors';
 import {buildCommunityUserRows} from '../../lib/users/helpers';
 import {deactivateActiveMagicLinksForCreator} from '../../lib/magic_links/deactivation';
-
-async function cancelPendingInvitesCreatedBy(
-  ctx: MutationCtx,
-  args: {
-    organizerId: Id<'organizers'>;
-    invitedBy: Id<'users'>;
-  },
-): Promise<number> {
-  const pendingInvites = await collectMatchingInQuery(
-    ctx.db
-      .query('admin_invites')
-      .withIndex('by_organizer', (q) => q.eq('organizerId', args.organizerId)),
-    (invite) =>
-      invite.invitedBy === args.invitedBy && invite.status === 'pending',
-  );
-
-  await Promise.all(
-    pendingInvites.map((invite) =>
-      ctx.db.patch('admin_invites', invite._id, {status: 'cancelled'}),
-    ),
-  );
-
-  return pendingInvites.length;
-}
 
 async function requireCommunityAdminOrganizerTarget(
   ctx: MutationCtx,
@@ -90,10 +66,15 @@ export async function grantCommunityAdmin(
     isCommunityAdmin(ctx, args.userId, organizerId),
     isCommunityMember(ctx, args.userId, organizerId),
   ]);
+  const hasScannerRole = await isCommunityScanner(
+    ctx,
+    args.userId,
+    organizerId,
+  );
   const roleAdded = !hasRole;
   const memberAdded = !hasMember;
 
-  if (!roleAdded && !memberAdded) {
+  if (!roleAdded && !memberAdded && !hasScannerRole) {
     return null;
   }
 
@@ -105,6 +86,12 @@ export async function grantCommunityAdmin(
   await grantCommunityAdminMembership(ctx, args.userId, organizerId, {
     actorId: callerId,
   });
+
+  if (hasScannerRole) {
+    await revokeCommunityScannerRole(ctx, args.userId, organizerId, {
+      actorId: callerId,
+    });
+  }
 
   if (memberAdded) {
     await ensureApprovedMarketingPreference(ctx.db, {
@@ -124,7 +111,7 @@ export async function grantCommunityAdmin(
         adminId: callerId,
         action: 'community_admin.grant',
         organizerId,
-        source: `target:${args.userId}`,
+        targetUserId: args.userId,
       },
     );
   } else if (memberAdded) {
@@ -134,7 +121,7 @@ export async function grantCommunityAdmin(
         adminId: callerId,
         action: 'community_admin.member_repair',
         organizerId,
-        source: `target:${args.userId}`,
+        targetUserId: args.userId,
       },
     );
   }
@@ -211,7 +198,7 @@ export async function revokeCommunityAdmin(
       adminId: callerId,
       action: 'community_admin.revoke',
       organizerId,
-      source: `target:${args.userId}`,
+      targetUserId: args.userId,
     },
   );
 

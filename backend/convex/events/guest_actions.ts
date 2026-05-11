@@ -107,6 +107,10 @@ export const sendTicket = action({
       guest.name,
       'cid:qrcode',
       true,
+      {
+        slug: organizer?.slug,
+        hasCodeOfConduct: !!organizer?.codeOfConduct,
+      },
     );
 
     await sendEmailDeliveryNow(

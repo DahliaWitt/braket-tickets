@@ -471,6 +471,31 @@ describe('community_scanners', () => {
       expect(logsAfter).toHaveLength(logsBefore.length);
     });
 
+    it('rejects explicit scanner grants for community admins', async () => {
+      const {t, rootAdminId, orgId} = await setupTestData();
+      const communityAdminId = await t.run(async (ctx) =>
+        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- intentionally minimal user for authz/query testing
+        ctx.db.insert('users', {
+          name: 'Community Admin',
+          email: 'scanner-admin@test.com',
+        }),
+      );
+      const asRoot = t.withIdentity({subject: rootAdminId});
+      await asRoot.mutation(api.communities.admins.grant, {
+        userId: communityAdminId,
+        organizerId: orgId,
+      });
+
+      await expect(
+        asRoot.mutation(api.communities.scanners.grant, {
+          userId: communityAdminId,
+          organizerId: orgId,
+        }),
+      ).rejects.toThrow(
+        'This user is already an admin. Admins can already check in guests.',
+      );
+    });
+
     it('authz-failing grant spam leaves rate-limit counter untouched (rollback contract)', async () => {
       // See communities/admins.test.ts for the full rationale. Short version:
       // rateLimiter.limit(ctx, ...) is transactional with the outer mutation,

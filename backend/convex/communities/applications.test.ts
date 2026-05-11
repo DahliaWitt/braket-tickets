@@ -2,7 +2,7 @@ import {createAutoDrainConvexTest} from '../setup.testing';
 import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest';
 import {api} from '../_generated/api';
 import type {Id} from '../_generated/dataModel';
-import {addMember, authz, authzUserId} from '../lib/authz';
+import {addMember, authz, authzUserId, isCommunityMember} from '../lib/authz';
 
 // Reviews can enqueue notification emails through workpool; drain those
 // callbacks between tests so edge-runtime teardown has no pending console RPC.
@@ -1161,6 +1161,348 @@ describe('applications.revoke', () => {
         applicationId: pendingApplicationId,
       }),
     ).rejects.toThrow('Only approved applications can be revoked');
+  });
+});
+
+describe('applications.reinstate', () => {
+  it('reinstates a revoked application', async () => {
+    const t = convexTest();
+
+    const applicantId = (await t.mutation(
+      api.testing.users.createUserDirectly,
+      {
+        name: 'Applicant',
+        email: `applicant-reinstate-${Date.now()}@test.com`,
+      },
+    )) as Id<'users'>;
+
+    const adminId = await createRootAdmin(t);
+
+    const organizerId = (await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {name: 'Test Org'},
+    )) as Id<'organizers'>;
+
+    const applicationId = (await t.mutation(
+      api.testing.applications.seedApplication,
+      {
+        userId: applicantId,
+        organizerId,
+        status: 'revoked',
+        answers: {q: 'Answer'},
+      },
+    )) as Id<'applications'>;
+
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    const result = await asAdmin.mutation(
+      api.communities.applications.reinstate,
+      {applicationId},
+    );
+
+    expect(result).toBeNull();
+
+    const app = await t.run(async (ctx) => ctx.db.get(applicationId));
+    expect(app?.status).toBe('approved');
+    expect(app?.processedBy).toBe(adminId);
+    expect(app?.denyReason).toBeUndefined();
+    expect(app?.reason).toBeUndefined();
+
+    const auditLogs = await t.run(async (ctx) =>
+      ctx.db.query('adminAuditLogs').collect(),
+    );
+    expect(auditLogs.length).toBe(1);
+    expect(auditLogs[0].action).toBe('application.reinstate');
+    expect(auditLogs[0].applicationId).toBe(applicationId);
+
+    const isMember = await t.run(async (ctx) =>
+      isCommunityMember(ctx, applicantId, organizerId),
+    );
+    expect(isMember).toBe(true);
+  });
+
+  it('rejects non-admin users', async () => {
+    const t = convexTest();
+
+    const userId = (await t.mutation(api.testing.users.createUserDirectly, {
+      name: 'Regular User',
+      email: `regular-user-reinstate-${Date.now()}@test.com`,
+    })) as Id<'users'>;
+
+    const applicationId = (await t.mutation(
+      api.testing.applications.seedApplication,
+      {
+        userId,
+        status: 'revoked',
+        answers: {},
+      },
+    )) as Id<'applications'>;
+
+    const asUser = t.withIdentity({subject: userId});
+
+    await expect(
+      asUser.mutation(api.communities.applications.reinstate, {applicationId}),
+    ).rejects.toThrow('Unauthorized');
+  });
+
+  it('rejects when application not found', async () => {
+    const t = convexTest();
+
+    const adminId = await createRootAdmin(t);
+
+    const tempAppId = (await t.mutation(
+      api.testing.applications.seedApplication,
+      {
+        userId: adminId,
+        status: 'revoked',
+        answers: {},
+      },
+    )) as Id<'applications'>;
+    /* eslint-disable no-raw-db-mutations/no-raw-db-mutation -- deleting record to simulate non-existent ID; no production delete mutation exists */
+    await t.run(async (ctx) => ctx.db.delete(tempAppId));
+    /* eslint-enable no-raw-db-mutations/no-raw-db-mutation */
+
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    await expect(
+      asAdmin.mutation(api.communities.applications.reinstate, {
+        applicationId: tempAppId,
+      }),
+    ).rejects.toThrow('Application not found');
+  });
+
+  it('rejects reinstating a non-revoked application', async () => {
+    const t = convexTest();
+
+    const adminId = await createRootAdmin(t);
+    const applicantId = (await t.mutation(
+      api.testing.users.createUserDirectly,
+      {
+        name: 'Applicant',
+        email: `applicant-pending-reinstate-${Date.now()}@test.com`,
+      },
+    )) as Id<'users'>;
+
+    const pendingApplicationId = (await t.mutation(
+      api.testing.applications.seedApplication,
+      {
+        userId: applicantId,
+        status: 'pending',
+        answers: {},
+      },
+    )) as Id<'applications'>;
+
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    await expect(
+      asAdmin.mutation(api.communities.applications.reinstate, {
+        applicationId: pendingApplicationId,
+      }),
+    ).rejects.toThrow('Only revoked applications can be reinstated');
+  });
+
+  it('returns conflict when newer pending application exists', async () => {
+    const t = convexTest();
+
+    const adminId = await createRootAdmin(t);
+    const applicantId = (await t.mutation(
+      api.testing.users.createUserDirectly,
+      {
+        name: 'Applicant',
+        email: `applicant-conflict-${Date.now()}@test.com`,
+      },
+    )) as Id<'users'>;
+
+    const organizerId = (await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {name: 'Test Org'},
+    )) as Id<'organizers'>;
+
+    const revokedApplicationId = (await t.mutation(
+      api.testing.applications.seedApplication,
+      {
+        userId: applicantId,
+        organizerId,
+        status: 'revoked',
+        answers: {q: 'Old'},
+      },
+    )) as Id<'applications'>;
+
+    await t.mutation(api.testing.applications.seedApplication, {
+      userId: applicantId,
+      organizerId,
+      status: 'pending',
+      answers: {q: 'New'},
+    });
+
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    const result = await asAdmin.mutation(
+      api.communities.applications.reinstate,
+      {applicationId: revokedApplicationId},
+    );
+
+    expect(result).toEqual({
+      conflict: 'newer_application',
+      newerStatus: 'pending',
+    });
+
+    const app = await t.run(async (ctx) => ctx.db.get(revokedApplicationId));
+    expect(app?.status).toBe('revoked');
+  });
+
+  it('returns conflict when newer rejected application exists', async () => {
+    const t = convexTest();
+
+    const adminId = await createRootAdmin(t);
+    const applicantId = (await t.mutation(
+      api.testing.users.createUserDirectly,
+      {
+        name: 'Applicant',
+        email: `applicant-rejected-conflict-${Date.now()}@test.com`,
+      },
+    )) as Id<'users'>;
+
+    const organizerId = (await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {name: 'Test Org'},
+    )) as Id<'organizers'>;
+
+    const revokedApplicationId = (await t.mutation(
+      api.testing.applications.seedApplication,
+      {
+        userId: applicantId,
+        organizerId,
+        status: 'revoked',
+        answers: {q: 'Old'},
+      },
+    )) as Id<'applications'>;
+
+    await t.mutation(api.testing.applications.seedApplication, {
+      userId: applicantId,
+      organizerId,
+      status: 'rejected',
+      answers: {q: 'New'},
+    });
+
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    const result = await asAdmin.mutation(
+      api.communities.applications.reinstate,
+      {applicationId: revokedApplicationId},
+    );
+
+    expect(result).toEqual({
+      conflict: 'newer_application',
+      newerStatus: 'rejected',
+    });
+
+    const app = await t.run(async (ctx) => ctx.db.get(revokedApplicationId));
+    expect(app?.status).toBe('revoked');
+  });
+
+  it('force reinstates even with newer pending application', async () => {
+    const t = convexTest();
+
+    const adminId = await createRootAdmin(t);
+    const applicantId = (await t.mutation(
+      api.testing.users.createUserDirectly,
+      {
+        name: 'Applicant',
+        email: `applicant-force-${Date.now()}@test.com`,
+      },
+    )) as Id<'users'>;
+
+    const organizerId = (await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {name: 'Test Org'},
+    )) as Id<'organizers'>;
+
+    const revokedApplicationId = (await t.mutation(
+      api.testing.applications.seedApplication,
+      {
+        userId: applicantId,
+        organizerId,
+        status: 'revoked',
+        answers: {q: 'Old'},
+      },
+    )) as Id<'applications'>;
+
+    await t.mutation(api.testing.applications.seedApplication, {
+      userId: applicantId,
+      organizerId,
+      status: 'pending',
+      answers: {q: 'New'},
+    });
+
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    const result = await asAdmin.mutation(
+      api.communities.applications.reinstate,
+      {applicationId: revokedApplicationId, force: true},
+    );
+
+    expect(result).toBeNull();
+
+    const app = await t.run(async (ctx) => ctx.db.get(revokedApplicationId));
+    expect(app?.status).toBe('approved');
+  });
+
+  it('allows community admin to reinstate in their community', async () => {
+    const t = convexTest();
+
+    const organizerId = (await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {
+        name: 'Test Community',
+        email: 'org@example.com',
+      },
+    )) as Id<'organizers'>;
+
+    const communityAdminId = (await t.mutation(
+      api.testing.users.createUserDirectly,
+      {
+        name: 'Community Admin',
+        email: `cadmin-reinstate-${Date.now()}@example.com`,
+      },
+    )) as Id<'users'>;
+    await assignCommunityAdmin(t, communityAdminId, organizerId);
+
+    const applicantId = (await t.mutation(
+      api.testing.users.createUserDirectly,
+      {
+        name: 'Applicant',
+        email: `applicant-cadmin-reinstate-${Date.now()}@test.com`,
+      },
+    )) as Id<'users'>;
+
+    const applicationId = (await t.mutation(
+      api.testing.applications.seedApplication,
+      {
+        userId: applicantId,
+        organizerId,
+        status: 'revoked',
+        answers: {q: 'Answer'},
+      },
+    )) as Id<'applications'>;
+
+    const asCommunityAdmin = t.withIdentity({subject: communityAdminId});
+
+    await asCommunityAdmin.mutation(api.communities.applications.reinstate, {
+      applicationId,
+    });
+
+    const app = await t.run(async (ctx) => ctx.db.get(applicationId));
+    expect(app?.status).toBe('approved');
+    expect(app?.organizerId).toBe(organizerId);
+    expect(app?.processedBy).toBe(communityAdminId);
+
+    const auditLogs = await t.run(async (ctx) =>
+      ctx.db.query('adminAuditLogs').collect(),
+    );
+    expect(auditLogs.length).toBe(1);
+    expect(auditLogs[0].action).toBe('application.reinstate');
+    expect(auditLogs[0].applicationId).toBe(applicationId);
   });
 });
 

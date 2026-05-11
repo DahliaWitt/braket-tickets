@@ -83,6 +83,7 @@ export type DataModel = {
         | "admin_invite.cancel"
         | "admin_invite.create"
         | "admin_invite.redeem"
+        | "application.reinstate"
         | "application.review"
         | "application.revoke"
         | "auth.social_signin.blocked"
@@ -154,6 +155,7 @@ export type DataModel = {
       organizerId?: Id<"organizers">;
       reason?: string;
       source?: string;
+      targetUserId?: Id<"users">;
       trustedOrganizerId?: Id<"organizers">;
       trustingOrganizerId?: Id<"organizers">;
       _id: Id<"adminAuditLogs">;
@@ -172,6 +174,7 @@ export type DataModel = {
       | "organizerId"
       | "reason"
       | "source"
+      | "targetUserId"
       | "trustedOrganizerId"
       | "trustingOrganizerId";
     indexes: {

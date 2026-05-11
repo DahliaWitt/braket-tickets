@@ -223,6 +223,15 @@ export declare const api: {
           userId: Id<"users">;
         }>
       >;
+      reinstate: FunctionReference<
+        "mutation",
+        "public",
+        { applicationId: Id<"applications">; force?: boolean },
+        null | {
+          conflict: "newer_application";
+          newerStatus: "pending" | "approved" | "rejected" | "revoked";
+        }
+      >;
       review: FunctionReference<
         "mutation",
         "public",
@@ -418,6 +427,7 @@ export declare const api: {
                 | "admin_invite.cancel"
                 | "admin_invite.create"
                 | "admin_invite.redeem"
+                | "application.reinstate"
                 | "application.review"
                 | "application.revoke"
                 | "auth.social_signin.blocked"
@@ -480,6 +490,7 @@ export declare const api: {
               magicLinkLabel?: string;
               reason?: string;
               source?: string;
+              targetUserName?: string;
               trustLinkLabel?: string;
             }>;
             pageStatus?: "SplitRecommended" | "SplitRequired" | null;
@@ -1388,6 +1399,7 @@ export declare const api: {
           maxTicketsPerUser?: number;
           organizer: {
             _id: Id<"organizers">;
+            codeOfConduct?: string;
             contactInfo?: string;
             email?: string;
             logoUrl?: string;
@@ -1580,6 +1592,7 @@ export declare const api: {
             totalTickets: number;
             visibility: "private" | "public_viewable" | "public";
           }>;
+          organizerCodeOfConduct?: string;
           organizerDescription?: string;
           organizerLogoUrl?: string;
           organizerName: string;
@@ -2241,6 +2254,7 @@ export declare const api: {
             | "admin_invite.cancel"
             | "admin_invite.create"
             | "admin_invite.redeem"
+            | "application.reinstate"
             | "application.review"
             | "application.revoke"
             | "auth.social_signin.blocked"
@@ -2312,6 +2326,7 @@ export declare const api: {
           organizerId?: Id<"organizers">;
           reason?: string;
           source?: string;
+          targetUserId?: Id<"users">;
           trustedOrganizerId?: Id<"organizers">;
           trustingOrganizerId?: Id<"organizers">;
         } | null
@@ -3198,6 +3213,12 @@ export declare const api: {
           termsAcceptedAt?: number;
         } | null
       >;
+      findByExactEmailForAdmin: FunctionReference<
+        "query",
+        "public",
+        { email: string; organizerId: Id<"organizers"> },
+        { _id: Id<"users">; email?: string } | null
+      >;
       get: FunctionReference<
         "query",
         "public",
@@ -3263,6 +3284,7 @@ export declare const api: {
             maximumRowsRead?: number;
             numItems: number;
           };
+          search?: string;
         },
         {
           continueCursor: string;
@@ -3477,6 +3499,7 @@ export declare const internal: {
               | "admin_invite.cancel"
               | "admin_invite.create"
               | "admin_invite.redeem"
+              | "application.reinstate"
               | "application.review"
               | "application.revoke"
               | "auth.social_signin.blocked"
@@ -3535,6 +3558,7 @@ export declare const internal: {
             eventId?: Id<"events">;
             organizerId?: Id<"organizers">;
             source?: string;
+            targetUserId?: Id<"users">;
           },
           null
         >;

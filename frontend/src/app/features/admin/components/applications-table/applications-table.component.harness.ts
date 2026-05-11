@@ -10,6 +10,9 @@ export class AdminApplicationsTableHarness extends ComponentHarness {
   private getRejectButtons = this.locatorForAll(
     'tr[data-testid="application-row"] [data-testid="reject-application"]',
   );
+  private getReinstateButtons = this.locatorForAll(
+    'tr[data-testid="application-row"] [data-testid="reinstate-application"]',
+  );
   private getStatusBadges = this.locatorForAll(
     'tr[data-testid="application-row"] [data-testid="application-status"]',
   );
@@ -24,10 +27,8 @@ export class AdminApplicationsTableHarness extends ComponentHarness {
   async setSearchValue(value: string): Promise<void> {
     const input = await this.getSearchInput();
     if (!input) throw new Error('Search input not found');
-    await input.clear();
-    if (value) {
-      await input.sendKeys(value);
-    }
+    await input.setInputValue(value);
+    await input.dispatchEvent('input');
   }
 
   async getSearchValue(): Promise<string> {
@@ -96,7 +97,29 @@ export class AdminApplicationsTableHarness extends ComponentHarness {
     return (await this.getApproveButtons()).length;
   }
 
+  async getReinstateButtonCount(): Promise<number> {
+    return (await this.getReinstateButtons()).length;
+  }
+
+  async clickReinstateAtIndex(index: number): Promise<void> {
+    const buttons = await this.getReinstateButtons();
+    await buttons[index]?.click();
+  }
+
   async getNoAnswersCount(): Promise<number> {
     return (await this.getNoAnswersIndicators()).length;
+  }
+
+  private getNoResultsEl = this.locatorForOptional(
+    '[data-testid="no-results-empty-state"]',
+  );
+
+  async hasNoResultsState(): Promise<boolean> {
+    return (await this.getNoResultsEl()) !== null;
+  }
+
+  async getNoResultsText(): Promise<string> {
+    const el = await this.getNoResultsEl();
+    return el ? (await el.text()).trim() : '';
   }
 }

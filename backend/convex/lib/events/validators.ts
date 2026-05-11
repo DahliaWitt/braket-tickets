@@ -75,6 +75,7 @@ export const eventGetDetailValidator = v.object({
       logoUrl: v.optional(v.string()),
       email: v.optional(v.string()),
       contactInfo: v.optional(v.string()),
+      codeOfConduct: v.optional(v.string()),
     }),
     v.null(),
   ),

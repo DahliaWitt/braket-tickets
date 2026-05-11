@@ -30,6 +30,7 @@ describe('AdminApplicationsTableComponent', () => {
     mapHistoryApplications: ReturnType<typeof vi.fn>;
     approve: ReturnType<typeof vi.fn>;
     reject: ReturnType<typeof vi.fn>;
+    reinstate: ReturnType<typeof vi.fn>;
   }
 
   interface AuthServiceMock {
@@ -102,6 +103,7 @@ describe('AdminApplicationsTableComponent', () => {
       }),
       approve: vi.fn().mockResolvedValue({}),
       reject: vi.fn().mockResolvedValue({}),
+      reinstate: vi.fn().mockResolvedValue(null),
     };
 
     const onUpdate = vi
@@ -457,10 +459,198 @@ describe('AdminApplicationsTableComponent', () => {
       await fixture.whenStable();
 
       expect(await harness.getRowCount()).toBe(0);
-      expect(await harness.hasEmptyState()).toBe(true);
-      const emptyText = await harness.getEmptyStateText();
+      expect(await harness.hasNoResultsState()).toBe(true);
+      const emptyText = await harness.getNoResultsText();
       expect(emptyText).toContain('NO RESULTS FOR');
       expect(emptyText).toContain('nonexistent');
+    });
+  });
+
+  describe('reinstate button', () => {
+    const revokedApp: Application = {
+      _id: 'app-revoked' as Id<'applications'>,
+      _creationTime: 999,
+      userId,
+      status: 'revoked',
+      answers: {},
+      user: {
+        _id: userId,
+        name: 'RevokedUser',
+        email: 'revoked@test.com',
+      } as Application['user'],
+      organizer: null,
+    };
+
+    const approvedApp: Application = {
+      _id: 'app-approved' as Id<'applications'>,
+      _creationTime: 888,
+      userId,
+      status: 'approved',
+      answers: {},
+      user: {
+        _id: userId,
+        name: 'ApprovedUser',
+        email: 'approved@test.com',
+      } as Application['user'],
+      organizer: null,
+    };
+
+    async function setupWithApp(
+      app: Application,
+      tableType: 'pending' | 'history',
+    ): Promise<AdminApplicationsTableHarness> {
+      convexClientMock.client.onUpdate.mockImplementation(
+        (
+          _query: unknown,
+          _args: unknown,
+          onData: (apps: Application[]) => void,
+        ) => {
+          onData([app]);
+          return () => void 0;
+        },
+      );
+
+      fixture.componentRef.setInput('tableType', tableType);
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      return TestbedHarnessEnvironment.harnessForFixture(
+        fixture,
+        AdminApplicationsTableHarness,
+      );
+    }
+
+    it('should show reinstate button for revoked apps in history view', async () => {
+      const harness = await setupWithApp(revokedApp, 'history');
+      expect(await harness.getReinstateButtonCount()).toBeGreaterThan(0);
+    });
+
+    it('should NOT show reinstate button for revoked apps in pending view', async () => {
+      // Pending view filters out non-pending apps via mapHistoryApplications,
+      // but even if a revoked app slipped through, tableType() === 'history' guard hides the button
+      const harness = await setupWithApp(revokedApp, 'pending');
+      expect(await harness.getReinstateButtonCount()).toBe(0);
+    });
+
+    it('should NOT show reinstate button for non-revoked apps in history view', async () => {
+      const harness = await setupWithApp(approvedApp, 'history');
+      expect(await harness.getReinstateButtonCount()).toBe(0);
+    });
+
+    it('should open confirmation dialog when reinstate is clicked', async () => {
+      // Override dialog mock to NOT auto-confirm so we can inspect the call
+      braDialogMock.create.mockImplementationOnce(
+        (_options: BraDialogOptions<unknown, unknown>) => ({
+          afterClosed$: of(false),
+        }),
+      );
+
+      const harness = await setupWithApp(revokedApp, 'history');
+      await harness.clickReinstateAtIndex(0);
+
+      expect(braDialogMock.create).toHaveBeenCalled();
+      const callArg = braDialogMock.create.mock.calls[0][0] as BraDialogOptions<
+        unknown,
+        unknown
+      >;
+      expect(callArg.zTitle).toBe('Reinstate Membership');
+    });
+
+    it('should call reinstate service on confirmation', async () => {
+      const harness = await setupWithApp(revokedApp, 'history');
+      await harness.clickReinstateAtIndex(0);
+      await fixture.whenStable();
+
+      expect(appsServiceMock.reinstate).toHaveBeenCalledWith(
+        revokedApp._id,
+        undefined,
+      );
+    });
+
+    it('should show conflict dialog when reinstate returns newer_application conflict', async () => {
+      appsServiceMock.reinstate.mockResolvedValueOnce({
+        conflict: 'newer_application',
+        newerStatus: 'pending',
+      });
+
+      // First dialog: auto-confirm. Second dialog: capture without auto-confirm.
+      let callCount = 0;
+      braDialogMock.create.mockImplementation(
+        (options: BraDialogOptions<unknown, unknown>) => {
+          callCount++;
+          if (callCount === 1 && options.zOnOk) {
+            // Auto-confirm the first (reinstate) dialog
+            (options.zOnOk as (result: unknown) => void)(null);
+          }
+          // Do not auto-confirm the second (conflict) dialog
+          return {afterClosed$: of(false)};
+        },
+      );
+
+      const harness = await setupWithApp(revokedApp, 'history');
+      await harness.clickReinstateAtIndex(0);
+      await fixture.whenStable();
+
+      expect(braDialogMock.create).toHaveBeenCalledTimes(2);
+      const secondCallArg = braDialogMock.create.mock
+        .calls[1][0] as BraDialogOptions<unknown, unknown>;
+      expect(secondCallArg.zTitle).toBe('Newer Application Exists');
+    });
+
+    it('should show status-specific conflict message for rejected newer app', async () => {
+      appsServiceMock.reinstate.mockResolvedValueOnce({
+        conflict: 'newer_application',
+        newerStatus: 'rejected',
+      });
+
+      let callCount = 0;
+      braDialogMock.create.mockImplementation(
+        (options: BraDialogOptions<unknown, unknown>) => {
+          callCount++;
+          if (callCount === 1 && options.zOnOk) {
+            (options.zOnOk as (result: unknown) => void)(null);
+          }
+          return {afterClosed$: of(false)};
+        },
+      );
+
+      const harness = await setupWithApp(revokedApp, 'history');
+      await harness.clickReinstateAtIndex(0);
+      await fixture.whenStable();
+
+      expect(braDialogMock.create).toHaveBeenCalledTimes(2);
+      const secondCallArg = braDialogMock.create.mock
+        .calls[1][0] as BraDialogOptions<unknown, unknown>;
+      expect(secondCallArg.zDescription).toContain('rejected');
+      expect(secondCallArg.zDescription).toContain('more recent decision');
+    });
+
+    it('should force reinstate when conflict dialog is confirmed', async () => {
+      appsServiceMock.reinstate
+        .mockResolvedValueOnce({
+          conflict: 'newer_application',
+          newerStatus: 'pending',
+        })
+        .mockResolvedValueOnce(null);
+
+      braDialogMock.create.mockImplementation(
+        (options: BraDialogOptions<unknown, unknown>) => {
+          if (options.zOnOk) {
+            (options.zOnOk as (result: unknown) => void)(null);
+          }
+          return {afterClosed$: of(true)};
+        },
+      );
+
+      const harness = await setupWithApp(revokedApp, 'history');
+      await harness.clickReinstateAtIndex(0);
+      await fixture.whenStable();
+
+      expect(appsServiceMock.reinstate).toHaveBeenCalledTimes(2);
+      expect(appsServiceMock.reinstate).toHaveBeenLastCalledWith(
+        revokedApp._id,
+        true,
+      );
     });
   });
 });

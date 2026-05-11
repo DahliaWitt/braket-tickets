@@ -48,6 +48,7 @@ export const ACTION_DISPLAY: Record<
   'admin_invite.cancel': {icon: 'shield', label: 'ADMIN INVITE CANCELLED'},
   'admin_invite.create': {icon: 'shield', label: 'ADMIN INVITE SENT'},
   'admin_invite.redeem': {icon: 'shield', label: 'ADMIN INVITE REDEEMED'},
+  'application.reinstate': {icon: 'user-check', label: 'REINSTATED ACCESS'},
   'application.review': {icon: 'user-check', label: 'REVIEWED APPLICATION'},
   'application.revoke': {icon: 'user-check', label: 'REVOKED ACCESS'},
   'auth.social_signin.blocked': {
@@ -177,6 +178,7 @@ function detailSummary(entry: AuditLogEntry): string {
   if (entry.eventName) return entry.eventName;
   if (entry.deletedEventName) return `${entry.deletedEventName} (deleted)`;
   if (entry.applicationUserName) return entry.applicationUserName;
+  if (entry.targetUserName) return entry.targetUserName;
   if (entry.magicLinkLabel) return entry.magicLinkLabel;
   if (entry.trustLinkLabel) return entry.trustLinkLabel;
   if (entry.reason) return entry.reason;

@@ -21,23 +21,19 @@ export async function listUsersForCommunityAdmin(
   return members.map(stripSensitiveUserFields).map(stripCommunityAdminFields);
 }
 
-export async function searchUsersByNameOrEmail(
-  db: UsersDirectoryDb,
-  query: string,
-  limit = 50,
-) {
+async function searchUsersByNameOrEmail(db: UsersDirectoryDb, query: string) {
   const lowerQuery = query.toLowerCase();
   const nameResults = await db
     .query('users')
     .withSearchIndex('search_name_email', (q) => q.search('name', query))
-    .take(limit);
+    .take(50);
 
   const emailResults = await db
     .query('users')
     .withIndex('email', (q) =>
       q.gte('email', lowerQuery).lt('email', lowerQuery + '\uffff'),
     )
-    .take(limit);
+    .take(50);
 
   const seen = new Set(nameResults.map((user) => user._id));
   const emailMatches = emailResults.filter(
@@ -45,7 +41,7 @@ export async function searchUsersByNameOrEmail(
       !seen.has(user._id) && user.email?.toLowerCase().includes(lowerQuery),
   );
 
-  return [...nameResults, ...emailMatches].slice(0, limit);
+  return [...nameResults, ...emailMatches].slice(0, 50);
 }
 
 async function filterUsersByApprovedOrganizerMembership(

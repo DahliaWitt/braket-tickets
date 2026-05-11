@@ -15,6 +15,7 @@ import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton
 import {EmptyStateComponent} from '@ui/components/primitives/empty-state/empty-state.component';
 import {EventCardComponent} from '@ui/components/composites/event-card/event-card.component';
 import {BraCommunityAvatarComponent} from '@ui/components/primitives/community-avatar/community-avatar.component';
+import {BraCodeOfConductLinkComponent} from '@ui/components/primitives/code-of-conduct-link/code-of-conduct-link.component';
 import {api} from '@convex/_generated/api';
 import {queryLoadState} from '@/utils/resource';
 
@@ -29,6 +30,7 @@ import {queryLoadState} from '@/utils/resource';
     EmptyStateComponent,
     EventCardComponent,
     BraCommunityAvatarComponent,
+    BraCodeOfConductLinkComponent,
   ],
   template: `
     <main
@@ -171,8 +173,10 @@ import {queryLoadState} from '@/utils/resource';
             <h1
               data-testid="community-events-header"
               class="animate-in fade-in slide-in-from-left-4 flex items-center gap-4 font-display text-2xl font-bold tracking-tight text-foreground uppercase duration-500 sm:text-3xl lg:text-4xl"
-              [class.mb-2]="organizerDescription()"
-              [class.mb-6]="!organizerDescription()"
+              [class.mb-2]="organizerDescription() || organizerCodeOfConduct()"
+              [class.mb-6]="
+                !organizerDescription() && !organizerCodeOfConduct()
+              "
             >
               @if (organizerLogoUrl()) {
                 <bra-community-avatar
@@ -188,10 +192,20 @@ import {queryLoadState} from '@/utils/resource';
             @if (organizerDescription()) {
               <p
                 data-testid="community-events-description"
-                class="animate-in fade-in slide-in-from-left-4 mb-8 max-w-2xl font-sans text-muted-foreground duration-500"
+                class="animate-in fade-in slide-in-from-left-4 max-w-2xl font-sans text-muted-foreground duration-500"
+                [class.mb-3]="organizerCodeOfConduct()"
+                [class.mb-8]="!organizerCodeOfConduct()"
               >
                 {{ organizerDescription() }}
               </p>
+            }
+            @if (organizerCodeOfConduct(); as coc) {
+              <div
+                class="animate-in fade-in slide-in-from-left-4 mb-8 duration-500"
+                data-testid="community-coc-link"
+              >
+                <bra-code-of-conduct-link [codeOfConduct]="coc" />
+              </div>
             }
             <div data-testid="community-events-empty">
               <app-empty-state title="No upcoming events found" />
@@ -202,8 +216,10 @@ import {queryLoadState} from '@/utils/resource';
             <h1
               data-testid="community-events-header"
               class="animate-in fade-in slide-in-from-left-4 flex items-center gap-4 font-display text-2xl font-bold tracking-tight text-foreground uppercase duration-500 sm:text-3xl lg:text-4xl"
-              [class.mb-2]="organizerDescription()"
-              [class.mb-6]="!organizerDescription()"
+              [class.mb-2]="organizerDescription() || organizerCodeOfConduct()"
+              [class.mb-6]="
+                !organizerDescription() && !organizerCodeOfConduct()
+              "
             >
               @if (organizerLogoUrl()) {
                 <bra-community-avatar
@@ -219,10 +235,20 @@ import {queryLoadState} from '@/utils/resource';
             @if (organizerDescription()) {
               <p
                 data-testid="community-events-description"
-                class="animate-in fade-in slide-in-from-left-4 mb-8 max-w-2xl font-sans text-muted-foreground duration-500"
+                class="animate-in fade-in slide-in-from-left-4 max-w-2xl font-sans text-muted-foreground duration-500"
+                [class.mb-3]="organizerCodeOfConduct()"
+                [class.mb-8]="!organizerCodeOfConduct()"
               >
                 {{ organizerDescription() }}
               </p>
+            }
+            @if (organizerCodeOfConduct(); as coc) {
+              <div
+                class="animate-in fade-in slide-in-from-left-4 mb-8 duration-500"
+                data-testid="community-coc-link"
+              >
+                <bra-code-of-conduct-link [codeOfConduct]="coc" />
+              </div>
             }
 
             <div
@@ -302,6 +328,9 @@ export class CommunityEventsComponent {
   );
   readonly organizerLogoUrl = computed(
     () => this.queryData()?.organizerLogoUrl,
+  );
+  readonly organizerCodeOfConduct = computed(
+    () => this.queryData()?.organizerCodeOfConduct,
   );
   readonly events = computed(() => this.queryData()?.events ?? []);
 

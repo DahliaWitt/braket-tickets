@@ -224,4 +224,50 @@ export class AdminApplicationsTableComponent {
       toast.error(`Failed to ${status} application`);
     }
   }
+
+  reinstateApplication(app: Application): void {
+    this.dialog.create({
+      zTitle: 'Reinstate Membership',
+      zDescription: `Are you sure you want to reinstate ${app.user?.name || 'this user'}? This will restore their community access.`,
+      zOkText: 'Yes, Reinstate',
+      zOkDestructive: false,
+      zCancelText: 'Cancel',
+      zOnOk: () => {
+        void this.performReinstate(app, false);
+      },
+    });
+  }
+
+  private async performReinstate(app: Application, force: boolean) {
+    try {
+      const result = await this.appsService.reinstate(
+        app._id,
+        force || undefined,
+      );
+
+      if (result?.conflict === 'newer_application') {
+        const status = result.newerStatus;
+        const description =
+          status === 'pending'
+            ? `${app.user?.name || 'This user'} has a new application that is currently pending. Reinstating will restore access from their previous application. Proceed anyway?`
+            : `${app.user?.name || 'This user'} has a newer application that was ${status}. Reinstating this older application will restore access despite the more recent decision. Proceed anyway?`;
+        this.dialog.create({
+          zTitle: 'Newer Application Exists',
+          zDescription: description,
+          zOkText: 'Yes, Reinstate Anyway',
+          zOkDestructive: false,
+          zCancelText: 'Cancel',
+          zOnOk: () => {
+            void this.performReinstate(app, true);
+          },
+        });
+        return;
+      }
+
+      toast.success('Membership reinstated');
+    } catch (e) {
+      logger.error('Operation failed', e);
+      toast.error('Failed to reinstate membership');
+    }
+  }
 }

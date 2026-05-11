@@ -110,6 +110,7 @@ export async function listEventsByOrganizer(
     organizerName: organizer.name,
     organizerDescription: organizer.description,
     organizerLogoUrl,
+    organizerCodeOfConduct: organizer.codeOfConduct,
     events: eventsWithAvailability,
   };
 }

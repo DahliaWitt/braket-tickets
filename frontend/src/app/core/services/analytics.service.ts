@@ -471,6 +471,9 @@ export class AnalyticsService {
     if (!this.isPostHogEnabled()) {
       return;
     }
+    if (shouldOptOutAnalyticsByDefault()) {
+      return;
+    }
 
     void this.ensureClient().then((client) => {
       client?.startSessionRecording({
@@ -492,6 +495,9 @@ export class AnalyticsService {
     const routeTemplate = toRouteTemplate(input.route);
 
     if (!this.isPostHogEnabled()) {
+      return false;
+    }
+    if (shouldOptOutAnalyticsByDefault()) {
       return false;
     }
 
@@ -520,6 +526,9 @@ export class AnalyticsService {
       ),
     };
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
     try {
       const response = await fetch(
         getPostHogSingleEventUrl(this.runtimeConfig.posthog.host),
@@ -529,6 +538,7 @@ export class AnalyticsService {
             'content-type': 'application/json',
           },
           body: JSON.stringify(payload),
+          signal: controller.signal,
         },
       );
 
@@ -543,6 +553,8 @@ export class AnalyticsService {
     } catch (error: unknown) {
       logger.warn('PostHog feedback capture failed', error);
       return false;
+    } finally {
+      clearTimeout(timeout);
     }
   }
 

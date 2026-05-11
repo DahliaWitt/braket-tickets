@@ -13,6 +13,7 @@ export const ADMIN_AUDIT_ACTIONS = {
   ADMIN_INVITE_CANCEL: 'admin_invite.cancel',
   ADMIN_INVITE_CREATE: 'admin_invite.create',
   ADMIN_INVITE_REDEEM: 'admin_invite.redeem',
+  APPLICATION_REINSTATE: 'application.reinstate',
   APPLICATION_REVIEW: 'application.review',
   APPLICATION_REVOKE: 'application.revoke',
   AUTH_SOCIAL_SIGNIN_BLOCKED: 'auth.social_signin.blocked',
@@ -128,6 +129,7 @@ export const ADMIN_AUDIT_ACTIONS_BY_CATEGORY = {
     ADMIN_AUDIT_ACTIONS.GUEST_ADD,
   ],
   application: [
+    ADMIN_AUDIT_ACTIONS.APPLICATION_REINSTATE,
     ADMIN_AUDIT_ACTIONS.APPLICATION_REVIEW,
     ADMIN_AUDIT_ACTIONS.APPLICATION_REVOKE,
   ],

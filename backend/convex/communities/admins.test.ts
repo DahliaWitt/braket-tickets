@@ -241,7 +241,7 @@ describe('community_admins', () => {
       expect(logs[0].action).toBe('community_admin.grant');
       expect(logs[0].adminId).toBe(rootAdminId);
       expect(logs[0].organizerId).toBe(orgId);
-      expect(logs[0].source).toContain(regularUserId);
+      expect(logs[0].targetUserId).toBe(regularUserId);
     });
 
     it('keeps the granted admin listed for the community', async () => {
@@ -260,6 +260,38 @@ describe('community_admins', () => {
         },
       );
       expect(admins.map((admin) => admin.userId)).toContain(regularUserId);
+    });
+
+    it('removes explicit scanner role when promoting scanner to admin', async () => {
+      const {t, rootAdminId, orgId, regularUserId} = await setupTestData();
+      const asAdmin = t.withIdentity({subject: rootAdminId});
+
+      await asAdmin.mutation(api.communities.scanners.grant, {
+        userId: regularUserId,
+        organizerId: orgId,
+      });
+      await asAdmin.mutation(api.communities.admins.grant, {
+        userId: regularUserId,
+        organizerId: orgId,
+      });
+
+      const admins = await asAdmin.query(
+        api.communities.admins.listByCommunity,
+        {
+          organizerId: orgId,
+        },
+      );
+      const scanners = await asAdmin.query(
+        api.communities.scanners.listByCommunity,
+        {
+          organizerId: orgId,
+        },
+      );
+
+      expect(admins.map((admin) => admin.userId)).toContain(regularUserId);
+      expect(scanners.map((scanner) => scanner.userId)).not.toContain(
+        regularUserId,
+      );
     });
 
     it('leaves the community admin list stable on idempotent grant', async () => {

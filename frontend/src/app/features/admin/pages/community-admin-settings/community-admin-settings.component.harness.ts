@@ -328,6 +328,9 @@ export class CommunityAdminSettingsHarness extends ComponentHarness {
   private _scannerEmpty = this.locatorForOptional(
     '[data-testid="scanner-empty"]',
   );
+  private _doorStaffHelp = this.locatorForOptional(
+    '[data-testid="door-staff-help"]',
+  );
 
   async setAdminEmail(email: string): Promise<void> {
     const el = await this._adminEmailInput();
@@ -369,6 +372,11 @@ export class CommunityAdminSettingsHarness extends ComponentHarness {
   async isScannerListEmpty(): Promise<boolean> {
     const el = await this._scannerEmpty();
     return el !== null;
+  }
+
+  async getDoorStaffHelpText(): Promise<string | null> {
+    const el = await this._doorStaffHelp();
+    return el ? (await el.text()).trim() : null;
   }
 
   // ─── Notifications ─────────────────────────────────

@@ -25,6 +25,7 @@ import {ZardButtonComponent} from '@ui/components/primitives/button/button.compo
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
 import {ZardInputDirective} from '@ui/components/primitives/input/input.directive';
 import {ZardSliderComponent} from '@ui/components/primitives/slider/slider.component';
+import {BraCodeOfConductLinkComponent} from '@ui/components/primitives/code-of-conduct-link/code-of-conduct-link.component';
 import {readInputValue} from '@ui/utils/dom-event';
 import {StripePaymentComponent} from '../stripe-payment/stripe-payment.component';
 import type {TicketTier} from '@shared/domain/ticket-tier';
@@ -44,6 +45,7 @@ import {type EventDetail} from '@/core/models/event.types';
     ZardIconComponent,
     ZardInputDirective,
     ZardSliderComponent,
+    BraCodeOfConductLinkComponent,
     StripePaymentComponent,
   ],
   templateUrl: './checkout-sidebar.component.html',
