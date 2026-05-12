@@ -338,6 +338,21 @@ describe('vettingSubmissionTemplate', () => {
     );
     expect(html).not.toContain('/admin/applications');
   });
+
+  it('formats submitted time in the platform Los Angeles timezone', () => {
+    const {html} = vettingSubmissionTemplate(
+      'Admin',
+      'Applicant',
+      Date.UTC(2026, 4, 12, 0, 30, 0),
+      'Deep End Collective',
+      'deep-end',
+    );
+
+    expect(html).toContain(
+      'Applicant</strong> submitted a vetting app at May 11, 5:30 PM.',
+    );
+    expect(html).not.toContain('May 12, 12:30 AM');
+  });
 });
 
 describe('vettingDigestTemplate', () => {
@@ -355,6 +370,18 @@ describe('vettingDigestTemplate', () => {
       'https://community.braket.gay/community-admin/pending?community=deep%20end',
     );
     expect(html).not.toContain('/admin/applications');
+  });
+
+  it('formats submitted times in the platform Los Angeles timezone', () => {
+    const {html} = vettingDigestTemplate(
+      'Admin',
+      'Deep End Collective',
+      [{name: 'Applicant', submittedAt: Date.UTC(2026, 4, 12, 0, 30, 0)}],
+      'deep-end',
+    );
+
+    expect(html).toContain('May 11, 5:30 PM');
+    expect(html).not.toContain('May 12, 12:30 AM');
   });
 });
 
