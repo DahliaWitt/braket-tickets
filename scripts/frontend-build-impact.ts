@@ -16,6 +16,7 @@ const EXPLICIT_BUILD_TRIGGERS = new Set([
   'frontend/tsconfig.app.json',
   'frontend/src/index.html',
   'frontend/public/_headers',
+  'frontend/public/_routes.json',
   'scripts/build-docs-manifest.ts',
   'scripts/with-env.ts',
 ]);
@@ -31,7 +32,11 @@ const GENERATED_OR_IGNORED_FILES = new Set([
   'frontend/public/docs/manifest.json',
 ]);
 
-const FRONTEND_BUILD_SCRIPT_PREFIXES = ['frontend/scripts/', 'shared/'];
+const FRONTEND_BUILD_SCRIPT_PREFIXES = [
+  'frontend/functions/',
+  'frontend/scripts/',
+  'shared/',
+];
 
 const FRONTEND_BUILD_CONTENT_PREFIXES = ['frontend/src/', 'frontend/public/'];
 

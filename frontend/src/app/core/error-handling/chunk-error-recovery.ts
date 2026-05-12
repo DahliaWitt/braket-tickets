@@ -14,7 +14,8 @@ export function isChunkLoadError(error: unknown): boolean {
   return (
     message.includes('Importing a module script failed') ||
     message.includes('Failed to fetch dynamically imported module') ||
-    message.includes('Loading chunk')
+    message.includes('Loading chunk') ||
+    message.includes('is not a valid JavaScript MIME type')
   );
 }
 

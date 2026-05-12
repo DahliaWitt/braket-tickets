@@ -13,6 +13,9 @@ This runbook is for engineers or admins who troubleshoot the deployed Angular fr
 Source of truth:
 
 - `frontend/public/_headers`
+- `frontend/public/_redirects`
+- `frontend/public/_routes.json`
+- `frontend/functions/asset-miss.ts`
 - `.github/workflows/deploy.yml`
 - `.github/workflows/deploy-preview.yml`
 - `frontend/package.json`
@@ -42,14 +45,17 @@ Check these items in order:
 
 The table below lists the common runtime causes:
 
-| Symptom                      | Likely cause                               | Fix                                                                                          |
-| ---------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------- |
-| Blank white page             | The JavaScript bundle did not load         | Check the latest Pages deployment and redeploy if needed                                     |
-| Page loads but no data       | The frontend cannot reach Convex           | Check the deployed `CONVEX_URL` and the Convex deployment health                             |
-| CSP violation in the console | A CSP directive blocks a required resource | Check `frontend/public/_headers` and continue with [Fix CSP violations](#fix-csp-violations) |
-| `Application error`          | Angular failed during bootstrap            | Check Sentry for the stack trace                                                             |
+| Symptom                      | Likely cause                               | Fix                                                                                                                   |
+| ---------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| Blank white page             | The JavaScript bundle did not load         | Check the latest Pages deployment and redeploy if needed                                                              |
+| Page loads but no data       | The frontend cannot reach Convex           | Check the deployed `CONVEX_URL` and the Convex deployment health                                                      |
+| CSP violation in the console | A CSP directive blocks a required resource | Check `frontend/public/_headers` and continue with [Fix CSP violations](#fix-csp-violations)                          |
+| JavaScript MIME type error   | A stale hashed bundle URL returned HTML    | Check `frontend/functions/asset-miss.ts`; missing `*.js` and `*.css` assets must 404 instead of serving the SPA shell |
+| `Application error`          | Angular failed during bootstrap            | Check Sentry for the stack trace                                                                                      |
 
 If you need to redeploy unchanged frontend assets, use [Deployment & CI: Manually deploy Angular production](./deployment-ci.md#manually-deploy-angular-production). Rerunning the parent `CI` workflow on `main` only re-runs `deploy-frontend` when that run's `changes` job selected the frontend slice.
+
+Cloudflare Pages keeps the Angular app fallback in `frontend/public/_redirects` so direct links to app routes, including unknown extensionless routes handled by Angular's not-found route, load the SPA shell. Stale hashed bundle requests such as `/chunk-OLD.js` would otherwise return `200 text/html`, which Safari reports as a JavaScript MIME type error. `frontend/public/_routes.json` routes root `*.js` and `*.css` requests through `frontend/functions/asset-miss.ts`; that function passes through real assets and returns 404 when the Pages asset binding falls back to HTML.
 
 ## Fix a frontend build or deploy failure
 

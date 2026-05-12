@@ -1,5 +1,12 @@
 {
   "version": 1,
-  "include": ["/ingest", "/ingest/*", "/monitor", "/monitor/*"],
+  "include": [
+    "/ingest",
+    "/ingest/*",
+    "/monitor",
+    "/monitor/*",
+    "/*.js",
+    "/*.css"
+  ],
   "exclude": []
 }
