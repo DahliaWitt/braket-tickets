@@ -24,7 +24,6 @@ import type {
   AnalyticsEnvironment,
   AnalyticsEventMap,
   AnalyticsEventName,
-  FeedbackCategory,
 } from '../analytics/events';
 import {
   sanitizeAnalyticsProperties,
@@ -32,23 +31,7 @@ import {
 } from '../analytics/sanitize';
 import {toRouteTemplate} from '../analytics/route-template';
 
-export type {FeedbackCategory} from '../analytics/events';
-
-export interface FeedbackCaptureInput {
-  category: FeedbackCategory | null;
-  message: string;
-  route: string;
-}
-
-interface PostHogCapturePayload {
-  api_key: string;
-  event: AnalyticsEventName;
-  distinct_id: string;
-  properties: Record<string, unknown>;
-}
-
 const DEFAULT_POSTHOG_API_HOST = 'https://us.i.posthog.com';
-const POSTHOG_SINGLE_EVENT_PATH = '/i/v0/e/';
 
 function getPostHogUiHost(apiHost: string | undefined): string {
   if (
@@ -63,19 +46,6 @@ function getPostHogUiHost(apiHost: string | undefined): string {
 
 function getPostHogApiHost(apiHost: string | undefined): string {
   return apiHost || DEFAULT_POSTHOG_API_HOST;
-}
-
-function getPostHogSingleEventUrl(apiHost: string | undefined): string {
-  return `${getPostHogApiHost(apiHost).replace(/\/+$/, '')}${POSTHOG_SINGLE_EVENT_PATH}`;
-}
-
-function getEphemeralFeedbackDistinctId(): string {
-  const randomUUID = globalThis.crypto?.randomUUID?.();
-  if (randomUUID) {
-    return `feedback:${randomUUID}`;
-  }
-
-  return `feedback:${Date.now()}:${Math.random().toString(36).slice(2)}`;
 }
 
 function isAnalyticsEnvironment(value: string): value is AnalyticsEnvironment {
@@ -178,23 +148,18 @@ function tagEventWithEnvironment(
   }
 
   const originalProperties = toProperties(event.properties);
-  const sanitizedProperties = sanitizeAnalyticsProperties(
-    {
-      ...originalProperties,
-      schema_version: 1,
-      environment: getAnalyticsEnvironment(config),
-      build_commit_hash: config.build.commitHash,
-      build_branch: config.build.branch,
-      build_timestamp: config.build.timestamp,
-      route_template:
-        typeof globalThis.location?.pathname === 'string'
-          ? toRouteTemplate(globalThis.location.pathname)
-          : undefined,
-    },
-    {
-      allowFeedbackMessage: event.event === 'feedback_submitted',
-    },
-  );
+  const sanitizedProperties = sanitizeAnalyticsProperties({
+    ...originalProperties,
+    schema_version: 1,
+    environment: getAnalyticsEnvironment(config),
+    build_commit_hash: config.build.commitHash,
+    build_branch: config.build.branch,
+    build_timestamp: config.build.timestamp,
+    route_template:
+      typeof globalThis.location?.pathname === 'string'
+        ? toRouteTemplate(globalThis.location.pathname)
+        : undefined,
+  });
 
   if (originalProperties['token'] === config.posthog.apiKey) {
     sanitizedProperties['token'] = config.posthog.apiKey;
@@ -204,37 +169,6 @@ function tagEventWithEnvironment(
     ...event,
     properties: sanitizedProperties,
   };
-}
-
-function buildFeedbackProperties(
-  input: FeedbackCaptureInput,
-  trimmedMessage: string,
-  routeTemplate: string,
-  signedIn: boolean,
-  replayUrl: string | undefined,
-  suppressPersonProfile: boolean,
-  config: AnalyticsRuntimeConfig,
-): Record<string, unknown> {
-  return sanitizeAnalyticsProperties(
-    {
-      feedback_category: input.category ?? 'general_feedback',
-      feedback_message: trimmedMessage,
-      ...(replayUrl ? {feedback_replay_url: replayUrl} : {}),
-      message_length: trimmedMessage.length,
-      route_template: routeTemplate,
-      signed_in: signedIn,
-      has_replay_url: Boolean(replayUrl),
-      schema_version: 1,
-      environment: getAnalyticsEnvironment(config),
-      build_commit_hash: config.build.commitHash,
-      build_branch: config.build.branch,
-      build_timestamp: config.build.timestamp,
-      ...(signedIn && !suppressPersonProfile
-        ? {}
-        : {$process_person_profile: false}),
-    },
-    {allowFeedbackMessage: true},
-  );
 }
 
 /**
@@ -477,109 +411,6 @@ export class AnalyticsService {
         client?.capture(eventName, sanitizeAnalyticsProperties(properties)),
       );
     }
-  }
-
-  startFeedbackReplayCapture(): void {
-    if (!this.isPostHogEnabled()) {
-      return;
-    }
-    if (shouldOptOutAnalyticsByDefault()) {
-      return;
-    }
-
-    void this.ensureClient().then((client) => {
-      client?.startSessionRecording({
-        sampling: true,
-        linked_flag: true,
-        url_trigger: true,
-        event_trigger: true,
-      });
-    });
-  }
-
-  async captureFeedback(input: FeedbackCaptureInput): Promise<boolean> {
-    const trimmedMessage = input.message.trim();
-    if (!trimmedMessage) {
-      return false;
-    }
-
-    const signedIn = Boolean(this.auth.currentUser());
-    const routeTemplate = toRouteTemplate(input.route);
-
-    if (!this.isPostHogEnabled()) {
-      return false;
-    }
-    const shouldBypassSdk = shouldOptOutAnalyticsByDefault();
-    const client = shouldBypassSdk ? null : await this.ensureClient();
-    const replayUrl = client
-      ? this.getCurrentSessionReplayUrl(client)
-      : undefined;
-    const distinctId =
-      client?.get_distinct_id() || getEphemeralFeedbackDistinctId();
-    if (!distinctId) {
-      return false;
-    }
-
-    const payload: PostHogCapturePayload = {
-      api_key: this.runtimeConfig.posthog.apiKey,
-      event: 'feedback_submitted',
-      distinct_id: distinctId,
-      properties: buildFeedbackProperties(
-        input,
-        trimmedMessage,
-        routeTemplate,
-        signedIn,
-        replayUrl,
-        shouldBypassSdk,
-        this.runtimeConfig,
-      ),
-    };
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-
-    try {
-      const response = await fetch(
-        getPostHogSingleEventUrl(this.runtimeConfig.posthog.host),
-        {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-          signal: controller.signal,
-        },
-      );
-
-      if (!response.ok) {
-        logger.warn('PostHog feedback capture failed', {
-          status: response.status,
-        });
-        return false;
-      }
-
-      return true;
-    } catch (error: unknown) {
-      logger.warn('PostHog feedback capture failed', error);
-      return false;
-    } finally {
-      clearTimeout(timeout);
-    }
-  }
-
-  private getCurrentSessionReplayUrl(
-    client: PostHogInterface,
-  ): string | undefined {
-    if (!client.sessionRecordingStarted()) {
-      return undefined;
-    }
-
-    const replayUrl = client.get_session_replay_url({
-      withTimestamp: true,
-      timestampLookBack: 30,
-    });
-
-    return replayUrl || undefined;
   }
 
   /**

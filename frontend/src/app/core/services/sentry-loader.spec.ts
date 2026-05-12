@@ -6,9 +6,11 @@ const addIntegrationMock = vi.fn();
 const browserTracingIntegrationMock = vi.fn(() => ({name: 'browserTracing'}));
 const captureExceptionMock = vi.fn();
 const createErrorHandlerMock = vi.fn();
+const createFeedbackFormMock = vi.fn();
 const handleErrorMock = vi.fn();
 const initMock = vi.fn();
 const lazyLoadIntegrationMock = vi.fn();
+const getFeedbackMock = vi.fn();
 const traceServiceConstructorMock = vi.fn();
 class TraceServiceMock {
   constructor(router: Router) {
@@ -29,6 +31,7 @@ vi.mock('@sentry/angular', () => ({
   browserTracingIntegration: browserTracingIntegrationMock,
   captureException: captureExceptionMock,
   createErrorHandler: createErrorHandlerMock,
+  getFeedback: getFeedbackMock,
   init: initMock,
   lazyLoadIntegration: lazyLoadIntegrationMock,
   TraceService: TraceServiceMock,
@@ -39,6 +42,7 @@ describe('sentry-loader', () => {
     addIntegrationMock.mockReset();
     browserTracingIntegrationMock.mockClear();
     captureExceptionMock.mockReset();
+    createFeedbackFormMock.mockReset();
     createErrorHandlerMock.mockReset();
     createErrorHandlerMock.mockReturnValue({
       handleError: handleErrorMock,
@@ -46,6 +50,7 @@ describe('sentry-loader', () => {
     handleErrorMock.mockReset();
     initMock.mockReset();
     lazyLoadIntegrationMock.mockReset();
+    getFeedbackMock.mockReset();
     traceServiceConstructorMock.mockReset();
     runtimeConfig = {
       enableSentry: true,
@@ -122,6 +127,65 @@ describe('sentry-loader', () => {
       blockAllMedia: true,
     });
     expect(addIntegrationMock).toHaveBeenCalledOnce();
+  });
+
+  it('lazy-loads Sentry feedback and opens the provided form', async () => {
+    const removeFromDom = vi.fn();
+    const appendToDom = vi.fn();
+    const open = vi.fn();
+    const feedback = {
+      createForm: createFeedbackFormMock.mockResolvedValue({
+        appendToDom,
+        open,
+        removeFromDom,
+      }),
+    };
+    const feedbackIntegrationFactory = vi.fn(() => ({name: 'feedback'}));
+    lazyLoadIntegrationMock.mockResolvedValue(feedbackIntegrationFactory);
+    getFeedbackMock
+      .mockReturnValueOnce(undefined)
+      .mockReturnValueOnce(feedback);
+
+    const {openSentryFeedback} = await import('./sentry-loader');
+
+    await expect(openSentryFeedback(runtimeConfig)).resolves.toBe(true);
+
+    expect(lazyLoadIntegrationMock).toHaveBeenCalledWith('feedbackIntegration');
+    expect(feedbackIntegrationFactory).toHaveBeenCalledWith(
+      expect.objectContaining({
+        autoInject: false,
+        showBranding: false,
+        showName: false,
+        showEmail: true,
+        enableScreenshot: true,
+        formTitle: 'Feedback',
+      }),
+    );
+    expect(addIntegrationMock).toHaveBeenCalledWith({name: 'feedback'});
+    expect(createFeedbackFormMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tags: {
+          source: 'footer_feedback',
+        },
+      }),
+    );
+    expect(appendToDom).toHaveBeenCalledOnce();
+    expect(open).toHaveBeenCalledOnce();
+  });
+
+  it('does not load Sentry feedback when Sentry is disabled', async () => {
+    runtimeConfig = {
+      ...runtimeConfig,
+      enableSentry: false,
+      sentryDsn: '',
+    };
+
+    const {openSentryFeedback} = await import('./sentry-loader');
+
+    await expect(openSentryFeedback(runtimeConfig)).resolves.toBe(false);
+    expect(initMock).not.toHaveBeenCalled();
+    expect(lazyLoadIntegrationMock).not.toHaveBeenCalled();
+    expect(createFeedbackFormMock).not.toHaveBeenCalled();
   });
 
   it('captures exceptions through Sentry Angular error handling', async () => {
