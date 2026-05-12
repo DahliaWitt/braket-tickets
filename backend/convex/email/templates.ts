@@ -45,6 +45,18 @@ function formatEventDateTime(value: string): string {
   }).format(date);
 }
 
+const vettingSubmissionTimeFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: EVENT_DATE_TIME_ZONE,
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+});
+
+function formatVettingSubmissionTime(submittedAt: number): string {
+  return vettingSubmissionTimeFormatter.format(new Date(submittedAt));
+}
+
 /**
  * Generates the complete HTML email template wrapper
  */
@@ -688,12 +700,7 @@ export function vettingSubmissionTemplate(
   const safeCommunity = escapeHtml(communityName);
   const siteUrl = resolveSiteUrl();
   const reviewUrl = communityAdminPendingUrl(siteUrl, communityParam);
-  const timeStr = new Date(submittedAt).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  const timeStr = formatVettingSubmissionTime(submittedAt);
 
   const content = `
     <h2 style="margin: 0 0 16px 0; font-family: 'Syne', 'Chakra Petch', system-ui, sans-serif; font-size: 24px; line-height: 1.15; font-weight: 700; color: ${baseStyles.textLight};">
@@ -729,12 +736,7 @@ export function vettingDigestTemplate(
   const appRows = applications
     .map((app) => {
       const safeName = escapeHtml(app.name);
-      const timeStr = new Date(app.submittedAt).toLocaleString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-      });
+      const timeStr = formatVettingSubmissionTime(app.submittedAt);
       return `
         <tr>
           <td style="padding: 10px 0; color: ${baseStyles.textLight}; border-bottom: 1px solid ${baseStyles.border};">
