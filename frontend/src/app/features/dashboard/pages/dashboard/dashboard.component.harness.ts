@@ -24,36 +24,25 @@ export class DashboardComponentHarness extends ComponentHarness {
     return (await cells[index].text()).trim();
   }
 
-  /** Check whether the featured event section is rendered. */
-  async hasFeaturedEvent(): Promise<boolean> {
+  /** Check whether the events section is rendered. */
+  async hasEventsSection(): Promise<boolean> {
     const el = await this.locatorForOptional(
-      '[data-testid="featured-event"]',
+      '[data-testid="dashboard-events"]',
     )();
     return !!el;
   }
 
-  /** Get the text content of the featured event section. */
-  async getFeaturedEventText(): Promise<string | null> {
-    const el = await this.locatorForOptional(
-      '[data-testid="featured-event"]',
-    )();
-    return el ? (await el.text()).trim() : null;
-  }
-
-  /** Get the href of the featured event's primary (details) link. */
-  async getFeaturedEventHref(): Promise<string | null> {
-    const el = await this.locatorForOptional(
-      '[data-testid="featured-event"] a',
-    )();
-    return el ? el.getAttribute('href') : null;
-  }
-
-  /** Get the href of the "Get Tickets" CTA on the featured event. */
-  async getGetTicketsHref(): Promise<string | null> {
-    const el = await this.locatorForOptional(
+  /** Get all "Get Tickets" CTA hrefs. */
+  async getGetTicketsHrefs(): Promise<string[]> {
+    const els = await this.locatorForAll(
       '[data-testid="dashboard-get-tickets"]',
     )();
-    return el ? el.getAttribute('href') : null;
+    const hrefs: string[] = [];
+    for (const el of els) {
+      const href = await el.getAttribute('href');
+      if (href) hrefs.push(href);
+    }
+    return hrefs;
   }
 
   async getVisibleEventTitles(): Promise<string[]> {

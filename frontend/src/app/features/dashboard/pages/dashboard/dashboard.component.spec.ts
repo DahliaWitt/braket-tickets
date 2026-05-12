@@ -469,10 +469,10 @@ describe('DashboardComponent', () => {
   });
 
   // -----------------------------------------------------------------------
-  // Featured event
+  // Events section
   // -----------------------------------------------------------------------
-  describe('featured event', () => {
-    it('should render featured event when accessible events exist', async () => {
+  describe('events section', () => {
+    it('should render events section when accessible events exist', async () => {
       setup({
         approvals: mockApprovals,
         events: [mockEvent],
@@ -480,11 +480,11 @@ describe('DashboardComponent', () => {
       });
       await createComponent();
 
-      const hasFeatured = await harness.hasFeaturedEvent();
-      expect(hasFeatured).toBe(true);
+      const hasEvents = await harness.hasEventsSection();
+      expect(hasEvents).toBe(true);
     });
 
-    it('should display the event title in the featured section', async () => {
+    it('should display event titles in the events section', async () => {
       setup({
         approvals: mockApprovals,
         events: [mockEvent],
@@ -492,11 +492,11 @@ describe('DashboardComponent', () => {
       });
       await createComponent();
 
-      const text = await harness.getFeaturedEventText();
-      expect(text).toContain('Test Event');
+      const titles = await harness.getVisibleEventTitles();
+      expect(titles).toContain('Test Event');
     });
 
-    it('should select the earliest accessible event as featured', async () => {
+    it('should show earliest accessible event first', async () => {
       const laterEvent: UpcomingEvent = {
         ...mockEvent,
         _id: '10' as Id<'events'>,
@@ -516,20 +516,20 @@ describe('DashboardComponent', () => {
       });
       await createComponent();
 
-      expect(fixture.componentInstance.featuredEvent()?.title).toBe(
+      expect(fixture.componentInstance.visibleEvents()[0]?.title).toBe(
         'Earlier Event',
       );
     });
 
-    it('should show no featured event when backend returns no viewable events', async () => {
+    it('should show no events section when backend returns no viewable events', async () => {
       setup({approvals: mockApprovals, events: []});
       await createComponent();
 
-      const hasFeatured = await harness.hasFeaturedEvent();
-      expect(hasFeatured).toBe(false);
+      const hasEvents = await harness.hasEventsSection();
+      expect(hasEvents).toBe(false);
     });
 
-    it('should show "Get Tickets" CTA when user can purchase featured event', async () => {
+    it('should show "Get Tickets" CTA when user can purchase event', async () => {
       setup({
         approvals: mockApprovals,
         events: [mockEvent],
@@ -561,26 +561,6 @@ describe('DashboardComponent', () => {
       expect(hasCta).toBe(false);
     });
 
-    it('should link featured event card to details without buy param', async () => {
-      setup({
-        approvals: mockApprovals,
-        events: [mockEvent],
-        applicationStatus: 'approved',
-        eventAvailability: {
-          '1': {
-            isSoldOut: false,
-            userTicketCount: 0,
-            ticketSalesStatus: 'active',
-            purchaseAccess: {allowed: true, source: 'direct'},
-          },
-        },
-      });
-      await createComponent();
-
-      const href = await harness.getFeaturedEventHref();
-      expect(href).toBe('/events/1');
-    });
-
     it('should link Get Tickets CTA with buy=true when user can purchase', async () => {
       setup({
         approvals: mockApprovals,
@@ -597,8 +577,8 @@ describe('DashboardComponent', () => {
       });
       await createComponent();
 
-      const href = await harness.getGetTicketsHref();
-      expect(href).toBe('/events/1?buy=true');
+      const hrefs = await harness.getGetTicketsHrefs();
+      expect(hrefs).toContain('/events/1?buy=true');
     });
 
     it('should not render Get Tickets CTA when event is sold out', async () => {
@@ -617,7 +597,7 @@ describe('DashboardComponent', () => {
       await createComponent();
 
       expect(await harness.hasGetTicketsCta()).toBe(false);
-      expect(await harness.getGetTicketsHref()).toBeNull();
+      expect(await harness.getGetTicketsHrefs()).toEqual([]);
     });
 
     it('should hide events when availability is unavailable', async () => {
@@ -629,8 +609,7 @@ describe('DashboardComponent', () => {
       await createComponent();
 
       expect(fixture.componentInstance.accessibleEvents()).toEqual([]);
-      expect(fixture.componentInstance.featuredCanPurchase()).toBe(false);
-      expect(await harness.hasFeaturedEvent()).toBe(false);
+      expect(await harness.hasEventsSection()).toBe(false);
       expect(await harness.hasGetTicketsCta()).toBe(false);
     });
 
@@ -662,10 +641,10 @@ describe('DashboardComponent', () => {
       expect(fixture.componentInstance.accessibleEvents()).toEqual([
         mockPublicEvent,
       ]);
-      expect(fixture.componentInstance.featuredEvent()).toEqual(
+      expect(fixture.componentInstance.visibleEvents()[0]).toEqual(
         mockPublicEvent,
       );
-      expect(await harness.hasFeaturedEvent()).toBe(true);
+      expect(await harness.hasEventsSection()).toBe(true);
       expect(await harness.hasGetTicketsCta()).toBe(true);
     });
   });
@@ -720,41 +699,73 @@ describe('DashboardComponent', () => {
       ]);
     });
 
-    it('overflowEvents should be events after the first accessible event', async () => {
-      const events: UpcomingEvent[] = [
-        {
-          ...mockEvent,
-          _id: 'e1' as Id<'events'>,
-          title: 'First',
-          date: '2024-01-01',
-        } as never,
-        {
-          ...mockEvent,
-          _id: 'e2' as Id<'events'>,
-          title: 'Second',
-          date: '2024-02-01',
-        } as never,
-        {
-          ...mockEvent,
-          _id: 'e3' as Id<'events'>,
-          title: 'Third',
-          date: '2024-03-01',
-        } as never,
-      ];
+    it('accessibleEvents should sort approved-community events before open-access events', async () => {
+      const approvedEvent: UpcomingEvent = {
+        ...mockEvent,
+        _id: 'e-approved' as Id<'events'>,
+        title: 'Approved Later',
+        date: '2024-06-01',
+        organizerId: ORG_ID_A,
+      } as never;
+      const openAccessEvent: UpcomingEvent = {
+        ...mockEvent,
+        _id: 'e-open' as Id<'events'>,
+        title: 'Open Earlier',
+        date: '2024-01-01',
+        organizerId: ORG_ID_B,
+        visibility: 'public',
+      } as never;
       setup({
         approvals: mockApprovals,
-        events,
-        eventAvailability: purchaseAccessFor(events),
+        events: [openAccessEvent, approvedEvent],
+        eventAvailability: {
+          [approvedEvent._id]: {
+            isSoldOut: false,
+            userTicketCount: 0,
+            ticketSalesStatus: 'active',
+            purchaseAccess: {allowed: true, source: 'direct'},
+          },
+          [openAccessEvent._id]: {
+            isSoldOut: false,
+            userTicketCount: 0,
+            ticketSalesStatus: 'active',
+            purchaseAccess: {allowed: true, source: 'open_access'},
+          },
+        },
       });
       await createComponent();
 
-      const overflow = fixture.componentInstance.overflowEvents();
-      expect(overflow.length).toBe(2);
-      expect(overflow[0].title).toBe('Second');
-      expect(overflow[1].title).toBe('Third');
+      const accessible = fixture.componentInstance.accessibleEvents();
+      expect(accessible[0].title).toBe('Approved Later');
+      expect(accessible[1].title).toBe('Open Earlier');
     });
 
-    it('overflowEvents should cap at 3 items (indices 1-3)', async () => {
+    it('accessibleEvents should sort by date within the same access group', async () => {
+      const earlier: UpcomingEvent = {
+        ...mockEvent,
+        _id: 'e-early' as Id<'events'>,
+        title: 'Earlier',
+        date: '2024-01-01',
+      } as never;
+      const later: UpcomingEvent = {
+        ...mockEvent,
+        _id: 'e-late' as Id<'events'>,
+        title: 'Later',
+        date: '2024-06-01',
+      } as never;
+      setup({
+        approvals: mockApprovals,
+        events: [later, earlier],
+        eventAvailability: purchaseAccessFor([later, earlier]),
+      });
+      await createComponent();
+
+      const accessible = fixture.componentInstance.accessibleEvents();
+      expect(accessible[0].title).toBe('Earlier');
+      expect(accessible[1].title).toBe('Later');
+    });
+
+    it('visibleEvents should return up to 4 accessible events', async () => {
       const events: UpcomingEvent[] = Array.from(
         {length: 6},
         (_, i) =>
@@ -772,7 +783,10 @@ describe('DashboardComponent', () => {
       });
       await createComponent();
 
-      expect(fixture.componentInstance.overflowEvents().length).toBe(3);
+      const visible = fixture.componentInstance.visibleEvents();
+      expect(visible.length).toBe(4);
+      expect(visible[0].title).toBe('Event 0');
+      expect(visible[3].title).toBe('Event 3');
     });
 
     it('publicEvents should include only public-visibility events', async () => {
@@ -1108,7 +1122,7 @@ describe('DashboardComponent', () => {
       await createComponent();
 
       const el = fixture.nativeElement as HTMLElement;
-      expect(await harness.hasFeaturedEvent()).toBe(true);
+      expect(await harness.hasEventsSection()).toBe(true);
       expect(el.textContent).not.toContain('nothing on the calendar yet');
     });
 
