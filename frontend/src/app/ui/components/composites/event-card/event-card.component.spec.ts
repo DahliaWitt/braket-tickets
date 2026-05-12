@@ -115,7 +115,7 @@ describe('EventCardComponent', () => {
     expect(await harness.getBuyHref()).toBe('/events/test-id-123?buy=true');
   });
 
-  it('renders ticket price from the buyer pricing summary model', async () => {
+  it('renders action-only ticket button text', async () => {
     host.event.set({
       ...host.event(),
       slidingScaleEnabled: true,
@@ -125,14 +125,12 @@ describe('EventCardComponent', () => {
     });
 
     const harness = await loader.getHarness(EventCardHarness);
-    expect(await harness.getBuyText()).toContain('$0-$25 all-in sliding scale');
+    expect((await harness.getBuyText()).trim()).toBe('Tickets');
   });
 
-  it('includes pricing context in the buy button accessible name', async () => {
+  it('uses an action-only buy button accessible name', async () => {
     const harness = await loader.getHarness(EventCardHarness);
-    expect(await harness.getBuyAriaLabel()).toBe(
-      'Get tickets for Test Event - $25 all-in regular ticket price',
-    );
+    expect(await harness.getBuyAriaLabel()).toBe('Get tickets for Test Event');
   });
 
   it('does not emit href when buy button is disabled (sold out)', async () => {

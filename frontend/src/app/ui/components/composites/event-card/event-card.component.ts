@@ -14,7 +14,6 @@ import {RouterLink} from '@angular/router';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 import {ZardCardComponent} from '@ui/components/primitives/card/card.component';
 import type {EventVisibility} from '@shared/domain/event-visibility';
-import {getBuyerPricingSummary} from '@shared/pricing/pricing-summary';
 
 export interface EventCardData {
   _id: string; // intentionally string, not Id<'events'> — UI components don't import Convex types
@@ -173,9 +172,6 @@ export interface EventCardData {
               [zDisabled]="isBuyDisabled()"
             >
               Tickets
-              <span class="ml-1 font-mono opacity-80" aria-hidden="true">
-                {{ pricingSummary().primaryText }}
-              </span>
             </a>
           }
         </div>
@@ -187,7 +183,6 @@ export class EventCardComponent implements OnDestroy {
   readonly event = input.required<EventCardData>();
   readonly priority = input(false);
   readonly showBuyButton = input(true);
-  readonly canSeePrice = input(true);
 
   readonly isSoldOut = computed(() => {
     const e = this.event();
@@ -201,15 +196,8 @@ export class EventCardComponent implements OnDestroy {
 
   /** True when buy button should be disabled (sold out or sales paused). */
   readonly isBuyDisabled = computed(() => this.isSoldOut() || this.isPaused());
-  readonly pricingSummary = computed(() =>
-    getBuyerPricingSummary({
-      ...this.event(),
-      canSeePrice: this.canSeePrice(),
-    }),
-  );
   readonly buyButtonAriaLabel = computed(
-    () =>
-      `Get tickets for ${this.event().title} - ${this.pricingSummary().ariaLabel}`,
+    () => `Get tickets for ${this.event().title}`,
   );
 
   // Track the rendered width of the host element to derive the card variant.

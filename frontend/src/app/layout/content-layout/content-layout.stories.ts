@@ -1,11 +1,11 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
-import type { Meta, StoryObj } from '@storybook/angular';
+import {ChangeDetectionStrategy, Component} from '@angular/core';
+import type {Meta, StoryObj} from '@storybook/angular';
 
-import { ZardButtonComponent } from '@ui/components/primitives/button/button.component';
-import { ZardCardComponent } from '@ui/components/primitives/card/card.component';
-import { ZardIconComponent } from '@ui/components/primitives/icon/icon.component';
+import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
+import {ZardCardComponent} from '@ui/components/primitives/card/card.component';
+import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
 
-import { ContentLayoutComponent } from './content-layout.component';
+import {ContentLayoutComponent} from './content-layout.component';
 
 @Component({
   selector: 'bt-story-content-layout-guest-tickets',
@@ -15,11 +15,13 @@ import { ContentLayoutComponent } from './content-layout.component';
     <app-content-layout>
       <div class="flex grow flex-col py-8">
         <div class="mb-8">
-          <p class="font-mono text-2xs uppercase tracking-widest text-muted-foreground">
+          <p
+            class="font-mono text-2xs tracking-widest text-muted-foreground uppercase"
+          >
             Guest Access
           </p>
           <h1
-            class="mt-2 font-display text-2xl font-bold uppercase tracking-tight text-foreground sm:text-3xl"
+            class="mt-2 font-display text-2xl font-bold tracking-tight text-foreground uppercase sm:text-3xl"
           >
             Your tickets
           </h1>
@@ -30,18 +32,24 @@ import { ContentLayoutComponent } from './content-layout.component';
             <div class="space-y-6 p-6">
               <div class="flex items-start justify-between gap-4">
                 <div>
-                  <p class="font-display uppercase tracking-wide text-secondary">
+                  <p
+                    class="font-display tracking-wide text-secondary uppercase"
+                  >
                     Void Sessions Vol. 12
                   </p>
-                  <p class="mt-1 font-mono text-2xs uppercase text-muted-foreground">
+                  <p
+                    class="mt-1 font-mono text-2xs text-muted-foreground uppercase"
+                  >
                     June 20, 2026
                   </p>
-                  <p class="mt-1 font-mono text-2xs uppercase text-muted-foreground">
+                  <p
+                    class="mt-1 font-mono text-2xs text-muted-foreground uppercase"
+                  >
                     VIP admission
                   </p>
                 </div>
                 <span
-                  class="rounded border border-secondary/30 px-2 py-0.5 font-mono text-2xs uppercase text-secondary"
+                  class="rounded border border-secondary/30 px-2 py-0.5 font-mono text-2xs text-secondary uppercase"
                 >
                   Valid
                 </span>
@@ -50,13 +58,15 @@ import { ContentLayoutComponent } from './content-layout.component';
               <div
                 class="flex aspect-square items-center justify-center rounded-lg border border-border bg-background/60"
               >
-                <span class="font-mono text-xs uppercase tracking-[0.3em] text-muted-foreground">
+                <span
+                  class="font-mono text-xs tracking-[0.3em] text-muted-foreground uppercase"
+                >
                   QR
                 </span>
               </div>
 
               <p
-                class="break-all text-center font-mono text-2xs uppercase tracking-tight text-muted-foreground"
+                class="text-center font-mono text-2xs tracking-tight break-all text-muted-foreground uppercase"
               >
                 evt_void_sessions_vip_0001
               </p>
@@ -67,16 +77,24 @@ import { ContentLayoutComponent } from './content-layout.component';
             <div class="space-y-6 p-6">
               <div class="flex items-start justify-between gap-4">
                 <div>
-                  <p class="font-display uppercase tracking-wide text-secondary">Signal Loss</p>
-                  <p class="mt-1 font-mono text-2xs uppercase text-muted-foreground">
+                  <p
+                    class="font-display tracking-wide text-secondary uppercase"
+                  >
+                    Signal Loss
+                  </p>
+                  <p
+                    class="mt-1 font-mono text-2xs text-muted-foreground uppercase"
+                  >
                     July 5, 2026
                   </p>
-                  <p class="mt-1 font-mono text-2xs uppercase text-muted-foreground">
+                  <p
+                    class="mt-1 font-mono text-2xs text-muted-foreground uppercase"
+                  >
                     General admission
                   </p>
                 </div>
                 <span
-                  class="rounded border border-secondary/30 px-2 py-0.5 font-mono text-2xs uppercase text-secondary"
+                  class="rounded border border-secondary/30 px-2 py-0.5 font-mono text-2xs text-secondary uppercase"
                 >
                   Valid
                 </span>
@@ -85,13 +103,15 @@ import { ContentLayoutComponent } from './content-layout.component';
               <div
                 class="flex aspect-square items-center justify-center rounded-lg border border-border bg-background/60"
               >
-                <span class="font-mono text-xs uppercase tracking-[0.3em] text-muted-foreground">
+                <span
+                  class="font-mono text-xs tracking-[0.3em] text-muted-foreground uppercase"
+                >
                   QR
                 </span>
               </div>
 
               <p
-                class="break-all text-center font-mono text-2xs uppercase tracking-tight text-muted-foreground"
+                class="text-center font-mono text-2xs tracking-tight break-all text-muted-foreground uppercase"
               >
                 evt_signal_loss_ga_0004
               </p>
@@ -116,18 +136,23 @@ class ContentLayoutGuestTicketsStoryComponent {}
         >
           Terms of Service
         </h1>
-        <p class="mb-8 text-sm text-muted-foreground">Last Updated: April 6, 2026</p>
+        <p class="mb-8 text-sm text-muted-foreground">
+          Last Updated: April 6, 2026
+        </p>
 
         <section class="mb-8">
-          <h2 class="mb-4 font-display text-xl text-foreground">1. Agreement to Terms</h2>
+          <h2 class="mb-4 font-display text-xl text-foreground">
+            1. Agreement to Terms
+          </h2>
           <div class="space-y-4 text-muted-foreground">
             <p>
-              By accessing or using the Braket Tickets platform, you agree to be bound by these
-              terms and the related privacy policy.
+              By accessing or using the Braket Tickets platform, you agree to be
+              bound by these terms and the related privacy policy.
             </p>
             <p>
-              This layout is used for long-form legal and policy documents where readability and
-              restrained width matter more than call-to-action density.
+              This layout is used for long-form legal and policy documents where
+              readability and restrained width matter more than call-to-action
+              density.
             </p>
           </div>
         </section>
@@ -138,22 +163,28 @@ class ContentLayoutGuestTicketsStoryComponent {}
           </h2>
           <div class="space-y-4 text-muted-foreground">
             <p>
-              Braket Tickets may act as the event organizer or as the ticketing platform for
-              third-party organizers depending on the event listing.
+              Braket Tickets may act as the event organizer or as the ticketing
+              platform for third-party organizers depending on the event
+              listing.
             </p>
             <ul class="list-disc space-y-1 pl-6">
-              <li>All-in pricing stays visible through checkout.</li>
+              <li>Pricing stays visible through checkout.</li>
               <li>Refund policy details remain in-flow with the legal text.</li>
-              <li>Dense prose still reads well inside the fixed central column.</li>
+              <li>
+                Dense prose still reads well inside the fixed central column.
+              </li>
             </ul>
           </div>
         </section>
 
         <section class="border-l-4 border-primary py-2 pl-4">
-          <h2 class="mb-4 font-display text-xl text-foreground">3. Refund Policy</h2>
+          <h2 class="mb-4 font-display text-xl text-foreground">
+            3. Refund Policy
+          </h2>
           <p class="text-muted-foreground">
-            All sales are final except as required by law. Cancellations and reschedules are handled
-            in the same readable document surface without introducing a second layout treatment.
+            All sales are final except as required by law. Cancellations and
+            reschedules are handled in the same readable document surface
+            without introducing a second layout treatment.
           </p>
         </section>
       </div>
@@ -172,39 +203,53 @@ class ContentLayoutLegalStoryComponent {}
         class="container mx-auto flex grow flex-col justify-center px-4 py-8 text-center sm:py-12 md:max-w-2xl md:py-24"
       >
         <h1
-          class="mb-6 font-display text-2xl font-bold uppercase tracking-tight text-foreground sm:text-3xl lg:text-4xl"
+          class="mb-6 font-display text-2xl font-bold tracking-tight text-foreground uppercase sm:text-3xl lg:text-4xl"
         >
           Need help?
         </h1>
         <p class="mx-auto mb-12 max-w-lg text-xl text-muted-foreground">
-          We are here to help with ticket issues, account problems, and platform questions.
+          We are here to help with ticket issues, account problems, and platform
+          questions.
         </p>
 
         <div class="grid w-full max-w-lg gap-6 sm:gap-8">
-          <div class="rounded-none border border-border bg-card/30 p-8 text-left md:p-10">
-            <h2 class="mb-4 flex items-center gap-2 font-display text-xl font-bold text-foreground">
+          <div
+            class="rounded-none border border-border bg-card/30 p-8 text-left md:p-10"
+          >
+            <h2
+              class="mb-4 flex items-center gap-2 font-display text-xl font-bold text-foreground"
+            >
               <z-icon zType="calendar" class="size-5" />
               Event questions?
             </h2>
             <p class="text-muted-foreground">
-              For timing, venue, or organizer-specific questions, Braket points people to the event
-              organizer first.
+              For timing, venue, or organizer-specific questions, Braket points
+              people to the event organizer first.
             </p>
           </div>
 
           <div class="rounded-none border border-border bg-card/30 p-8 md:p-10">
-            <h2 class="mb-4 font-display text-xl font-bold text-foreground">Platform support</h2>
+            <h2 class="mb-4 font-display text-xl font-bold text-foreground">
+              Platform support
+            </h2>
             <p class="mb-8 text-muted-foreground">
-              Use the primary call to action when the page is mostly guidance plus one next step.
+              Use the primary call to action when the page is mostly guidance
+              plus one next step.
             </p>
 
-            <z-button zType="default" zSize="lg" class="w-full">Email support</z-button>
+            <z-button zType="default" zSize="lg" class="w-full"
+              >Email support</z-button
+            >
 
             <div class="mt-8 border-t border-border/50 pt-8">
-              <p class="mb-3 font-mono text-xs uppercase tracking-widest text-muted-foreground">
+              <p
+                class="mb-3 font-mono text-xs tracking-widest text-muted-foreground uppercase"
+              >
                 Manual contact address
               </p>
-              <div class="inline-block border border-border bg-background/50 p-3">
+              <div
+                class="inline-block border border-border bg-background/50 p-3"
+              >
                 <span class="font-mono text-sm">
                   contact<span class="mx-1 text-primary">[at]</span>braket.gay
                 </span>

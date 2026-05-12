@@ -45,7 +45,7 @@ export function formatUsdCents(cents: number): string {
  * 1. `canSeePrice === false` hides prices and returns sign-in-required copy.
  * 2. `isResale === true` returns resale unit/total copy.
  * 3. `slidingScaleEnabled === true` returns sliding-scale range copy.
- * 4. Otherwise, regular all-in pricing is returned.
+ * 4. Otherwise, regular pricing is returned.
  *
  * @param input Event or ticket pricing fields plus display-context flags.
  * @returns A {@link BuyerPricingSummary} with display text, accessible label,
@@ -97,8 +97,8 @@ export function getBuyerPricingSummary(
     const max = Math.max(min, input.slidingScaleMax ?? regularPrice);
     const primaryText =
       min === max
-        ? `${formatUsdCents(min)} all-in`
-        : `${formatUsdCents(min)}-${formatUsdCents(max)} all-in sliding scale`;
+        ? formatUsdCents(min)
+        : `${formatUsdCents(min)}-${formatUsdCents(max)} sliding scale`;
     const secondaryParts = [
       `Regular ${formatUsdCents(regularPrice)}`,
       supporterPrice
@@ -113,8 +113,8 @@ export function getBuyerPricingSummary(
         secondaryParts.length > 0 ? secondaryParts.join(' / ') : undefined,
       ariaLabel:
         min === max
-          ? `${formatUsdCents(min)} all-in ticket price`
-          : `${formatUsdCents(min)} to ${formatUsdCents(max)} all-in sliding scale ticket price`,
+          ? `${formatUsdCents(min)} ticket price`
+          : `${formatUsdCents(min)} to ${formatUsdCents(max)} sliding scale ticket price`,
       unitAmountCents: regularPrice,
       totalAmountCents: regularPrice * quantity,
     };
@@ -123,11 +123,11 @@ export function getBuyerPricingSummary(
   const totalAmountCents = regularPrice * quantity;
   return {
     kind: 'regular',
-    primaryText: `${formatUsdCents(regularPrice)} all-in`,
+    primaryText: formatUsdCents(regularPrice),
     secondaryText: supporterPrice
       ? `Supporter from ${formatUsdCents(supporterPrice)}`
       : undefined,
-    ariaLabel: `${formatUsdCents(regularPrice)} all-in regular ticket price`,
+    ariaLabel: `${formatUsdCents(regularPrice)} regular ticket price`,
     unitAmountCents: regularPrice,
     totalAmountCents,
   };

@@ -385,7 +385,7 @@ describe('CommunityEventsComponent', () => {
 
       const [card] = await harness.getEventCards();
       const buyText = await card.getBuyText();
-      expect(buyText).toContain('Sign in for pricing');
+      expect(buyText.trim()).toBe('Tickets');
       expect(buyText).not.toContain('$18');
     });
 
@@ -408,7 +408,7 @@ describe('CommunityEventsComponent', () => {
 
       const [card] = await harness.getEventCards();
       const buyText = await card.getBuyText();
-      expect(buyText).toContain('$18 all-in');
+      expect(buyText.trim()).toBe('Tickets');
       expect(buyText).not.toContain('Sign in for pricing');
     });
   });
