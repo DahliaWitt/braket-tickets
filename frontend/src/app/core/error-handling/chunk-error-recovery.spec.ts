@@ -22,6 +22,13 @@ describe('chunk-error-recovery', () => {
         );
         expect(isChunkLoadError(error)).toBe(true);
       });
+
+      it('detects Safari MIME errors when stale chunk URLs return the SPA shell', () => {
+        const error = new TypeError(
+          "'text/html' is not a valid JavaScript MIME type.",
+        );
+        expect(isChunkLoadError(error)).toBe(true);
+      });
     });
 
     describe('handles non-Error object shapes', () => {
