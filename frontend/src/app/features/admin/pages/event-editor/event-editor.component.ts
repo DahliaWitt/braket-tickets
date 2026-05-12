@@ -59,6 +59,7 @@ import {
 interface EventFormModel {
   title: string;
   date: Date | null;
+  time: string;
   location: string;
   description: string;
   price: string; // String for input compatibility
@@ -90,8 +91,10 @@ interface ResolvedCreateCommunityScope {
 }
 
 const DEFAULT_NOTAFLOF_MAX_AMOUNT = '10';
+const EVENT_DATE_TIME_ZONE = 'America/Los_Angeles';
 const STRICT_USD_AMOUNT_PATTERN = /^(?:\d+|\d+\.\d{1,2}|\.\d{1,2})$/;
 const INVALID_USD_AMOUNT_MESSAGE = 'Use a dollar amount like 20 or 20.00';
+const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 type StrictUsdParseResult =
   | {valid: true; cents: number}
@@ -106,6 +109,7 @@ function createEmptyEventFormModel(organizerId = ''): EventFormModel {
   return {
     title: '',
     date: null,
+    time: '20:00',
     location: '',
     description: '',
     price: '0',
@@ -118,6 +122,96 @@ function createEmptyEventFormModel(organizerId = ''): EventFormModel {
     organizerId,
     visibility: 'private',
   };
+}
+
+const eventDateTimePartsFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: EVENT_DATE_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23',
+});
+
+function getDateTimePart(
+  parts: Intl.DateTimeFormatPart[],
+  type: Intl.DateTimeFormatPartTypes,
+): string {
+  const value = parts.find((part) => part.type === type)?.value;
+  if (value === undefined) throw new Error(`Missing date part: ${type}`);
+  return value;
+}
+
+function parseEventDateTimeParts(
+  value: string,
+): Intl.DateTimeFormatPart[] | null {
+  if (DATE_ONLY_REGEX.test(value)) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return eventDateTimePartsFormatter.formatToParts(parsed);
+}
+
+function formatEventTimeInput(value: string | null | undefined): string {
+  if (!value) return '20:00';
+  const parts = parseEventDateTimeParts(value);
+  if (!parts) return '20:00';
+  return `${getDateTimePart(parts, 'hour')}:${getDateTimePart(parts, 'minute')}`;
+}
+
+function parseEventDateInEventTimeZone(
+  value: string | null | undefined,
+): Date | null {
+  if (!value) return null;
+
+  const dateOnlyDate = parseEventDate(value);
+  if (dateOnlyDate && DATE_ONLY_REGEX.test(value)) return dateOnlyDate;
+
+  const parts = parseEventDateTimeParts(value);
+  if (!parts) return null;
+
+  return new Date(
+    Number(getDateTimePart(parts, 'year')),
+    Number(getDateTimePart(parts, 'month')) - 1,
+    Number(getDateTimePart(parts, 'day')),
+  );
+}
+
+function combineLocalEventDateTime(date: Date, time: string): Date {
+  const [hours = 0, minutes = 0] = time.split(':').map(Number);
+  const desiredUtc = Date.UTC(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    hours,
+    minutes,
+    0,
+    0,
+  );
+  let candidateUtc = desiredUtc;
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const parts = eventDateTimePartsFormatter.formatToParts(
+      new Date(candidateUtc),
+    );
+    const renderedUtc = Date.UTC(
+      Number(getDateTimePart(parts, 'year')),
+      Number(getDateTimePart(parts, 'month')) - 1,
+      Number(getDateTimePart(parts, 'day')),
+      Number(getDateTimePart(parts, 'hour')),
+      Number(getDateTimePart(parts, 'minute')),
+      Number(getDateTimePart(parts, 'second')),
+      0,
+    );
+    const diff = desiredUtc - renderedUtc;
+    if (diff === 0) return new Date(candidateUtc);
+    candidateUtc += diff;
+  }
+
+  throw new Error(
+    `Could not resolve event time in ${EVENT_DATE_TIME_ZONE}: ${date.toISOString()} ${time}`,
+  );
 }
 
 function parseStrictUsdCents(value: string): StrictUsdParseResult {
@@ -192,18 +286,7 @@ function parseOptionalWholeNumber(value: string): number | undefined {
 }
 
 function buildEventFormModel(evt: EditableEvent): EventFormModel {
-  // Parse the date
-  let parsedDate = parseEventDate(evt.date);
-  if (!parsedDate && evt.date) {
-    const fallbackDate = new Date(evt.date);
-    if (!Number.isNaN(fallbackDate.getTime())) {
-      parsedDate = new Date(
-        fallbackDate.getFullYear(),
-        fallbackDate.getMonth(),
-        fallbackDate.getDate(),
-      );
-    }
-  }
+  const parsedDate = parseEventDateInEventTimeZone(evt.date);
 
   if (!parsedDate) {
     logger.warn(
@@ -215,6 +298,7 @@ function buildEventFormModel(evt: EditableEvent): EventFormModel {
   return {
     title: evt.title,
     date: parsedDate,
+    time: formatEventTimeInput(evt.date),
     location: evt.location || '',
     description: evt.description || '',
     price: String((evt.price || 0) / 100),
@@ -441,6 +525,7 @@ export class EventEditorComponent implements HasUnsavedChanges {
     });
 
     required(f.date);
+    required(f.time);
     validate(f.date, ({value}) => {
       const date = value();
       if (!date) return null;
@@ -579,6 +664,7 @@ export class EventEditorComponent implements HasUnsavedChanges {
       current.title !== pristine.title ||
       current.location !== pristine.location ||
       current.description !== pristine.description ||
+      current.time !== pristine.time ||
       current.price !== pristine.price ||
       current.totalTickets !== pristine.totalTickets ||
       current.slidingScaleEnabled !== pristine.slidingScaleEnabled ||
@@ -789,7 +875,7 @@ export class EventEditorComponent implements HasUnsavedChanges {
 
       const baseArgs = {
         title: formValue.title,
-        date: formatDateYmd(date),
+        date: formatDateYmd(combineLocalEventDateTime(date, formValue.time)),
         location: formValue.location.trim() || undefined,
         description: formValue.description.trim() || undefined,
         price: priceCents,

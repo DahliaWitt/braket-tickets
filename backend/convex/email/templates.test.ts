@@ -162,6 +162,8 @@ describe('eventAnnouncementTemplate', () => {
     });
 
     expect(html).toContain('https://braket.gay/account#email-preferences');
+    expect(html).toContain('Fri, May 1, 2026, 1:00 PM PDT');
+    expect(html).not.toContain('2026-05-01T20:00:00.000Z');
     expect(headers['List-Unsubscribe']).toContain(
       'https://braket.gay/api/unsubscribe/one-click?token=unsubscribe-token',
     );
@@ -399,6 +401,10 @@ describe('eventBroadcastTemplate', () => {
       'https://braket.gay/api/unsubscribe?token=broadcast-unsub-token',
     );
     expect(html).toContain('https://braket.gay/account#email-preferences');
+    expect(html).toContain('Sat, Jun 20, 2026, 2:00 PM PDT');
+    expect(text).toContain('Sat, Jun 20, 2026, 2:00 PM PDT · Sublevel');
+    expect(html).not.toContain('2026-06-20T21:00:00.000Z');
+    expect(text).not.toContain('2026-06-20T21:00:00.000Z');
     expect(text).toContain(
       'Unsubscribe from future emails from Night Signal: https://braket.gay/api/unsubscribe?token=broadcast-unsub-token',
     );
