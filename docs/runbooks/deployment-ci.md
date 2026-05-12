@@ -23,6 +23,7 @@ Jump to:
 
 - [Fix a failing CI job](#fix-a-failing-ci-job)
 - [Fix Release Please automation](#fix-release-please-automation)
+- [Check self-hosted runner capacity](#check-self-hosted-runner-capacity)
 - [Explain why a deploy was skipped](#explain-why-a-deploy-was-skipped)
 - [Restore a failed Convex deploy](#restore-a-failed-convex-deploy)
 - [Restore a failed frontend deploy](#restore-a-failed-frontend-deploy)
@@ -46,6 +47,35 @@ PRs do not deploy. Automatic deploys use `workflow_run` and the deploy workflows
 GitHub Actions jobs that need environment-scoped secrets use the selected GitHub environment. CI and component deploy jobs set `deployment: false` so they can read those secrets without adding entries to the repository Deployments sidebar. Only the final `record-deployment` job in each deploy workflow creates the GitHub Deployment record. That job runs after backend, frontend, and observability work and exits with the deploy result, so the Deployment record is successful only when the deploy workflow succeeds.
 
 When troubleshooting automatic deploys, start from the parent `CI` run on the branch push, confirm it completed successfully, then open the separate `Deploy Preview (develop)` or `Deploy to Production` workflow run for deploy logs.
+
+## Check self-hosted runner capacity
+
+The repository uses five self-hosted GitHub Actions runners on the Whiterose host:
+
+- `whiterose_1`
+- `whiterose_2`
+- `whiterose_3`
+- `whiterose_4`
+- `whiterose_5`
+
+On Whiterose, the runner fleet is managed by the host-local Unraid compose project at `/boot/config/plugins/compose.manager/projects/github-runner/docker-compose.yml`. The containers are named `github-runner-1` through `github-runner-5`, use the `braket-runner:latest` image, and share the Docker socket plus cached `pnpm` and Playwright browser volumes.
+
+Check GitHub registration state from a local shell with repository access:
+
+```bash
+gh api repos/DahliaWitt/braket-tickets/actions/runners --paginate \
+  --jq '.runners[] | [.name,.status,.busy,([.labels[].name]|join(","))] | @tsv'
+```
+
+Check host state over SSH:
+
+```bash
+ssh whiterose 'cd /boot/config/plugins/compose.manager/projects/github-runner && docker compose ps'
+ssh whiterose 'docker stats --no-stream github-runner-1 github-runner-2 github-runner-3 github-runner-4 github-runner-5'
+ssh whiterose 'uptime && free -h && df -h /var/lib/docker /mnt/user /'
+```
+
+If a new runner container starts but GitHub rejects it with `The runner registration has been deleted from the server, please re-configure`, remove only the affected new runner container, clear that runner's persistent volume, and recreate it from the compose project. Do not clear volumes for active runners that may be running jobs.
 
 ## Fix Release Please automation
 
