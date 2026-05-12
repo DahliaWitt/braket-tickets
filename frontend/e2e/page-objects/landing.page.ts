@@ -97,18 +97,12 @@ export class LandingPage {
    * Get all visible event titles.
    */
   async getVisibleEventTitles(): Promise<string[]> {
-    const titles: string[] = [];
     const section = this.getEventsSection();
-    if ((await section.count()) === 0) return titles;
+    if ((await section.count()) === 0) return [];
 
-    const eventTitles = section.locator('h2');
-    const count = await eventTitles.count();
-    for (let i = 0; i < count; i++) {
-      const text = await eventTitles.nth(i).textContent();
-      if (text) titles.push(text.trim());
-    }
-
-    return titles;
+    return (await section.locator('h2').allTextContents())
+      .map((t) => t.trim())
+      .filter(Boolean);
   }
 
   /**
