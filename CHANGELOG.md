@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.1.12](https://github.com/DahliaWitt/braket-tickets/compare/v0.1.11...v0.1.12) (2026-05-12)
+
+
+### Bug Fixes
+
+* **tickets:** simplify buyer pricing copy ([8823482](https://github.com/DahliaWitt/braket-tickets/commit/88234826ee765099630599b2f5bd0c3fc4d972b9))
+
+## [0.1.11](https://github.com/DahliaWitt/braket-tickets/compare/v0.1.10...v0.1.11) (2026-05-11)
+
+
+### Features
+
+* **pricing:** align buyer-facing ticket pricing ([#51](https://github.com/DahliaWitt/braket-tickets/issues/51)) ([3ae0dd6](https://github.com/DahliaWitt/braket-tickets/commit/3ae0dd654eb85a694f8193dcd1fd8256908886f6))
+
+
+### Bug Fixes
+
+* **analytics:** allow feedback with privacy signals ([#50](https://github.com/DahliaWitt/braket-tickets/issues/50)) ([351b54f](https://github.com/DahliaWitt/braket-tickets/commit/351b54ff2a7ea3d050d12f8877996995582a5122))
+* **dropdown:** per-trigger aria-expanded state ([#53](https://github.com/DahliaWitt/braket-tickets/issues/53)) ([af4151a](https://github.com/DahliaWitt/braket-tickets/commit/af4151a187c734d6085489a582911eb1e8b550df))
+* **help:** defer admin help guard until auth settles ([#55](https://github.com/DahliaWitt/braket-tickets/issues/55)) ([4b707b1](https://github.com/DahliaWitt/braket-tickets/commit/4b707b11c1316d726d954a6803ce0f96c07098b2))
+
+
+### Code Refactoring
+
+* **frontend:** centralize harness polling waits ([3ec3442](https://github.com/DahliaWitt/braket-tickets/commit/3ec3442362b229ec02c41990ffec86e96a72a7f2))
+* **frontend:** centralize harness polling waits ([#49](https://github.com/DahliaWitt/braket-tickets/issues/49)) ([9b75aab](https://github.com/DahliaWitt/braket-tickets/commit/9b75aab61fccde3f3817a54d97680ae771936f84))
+* **ui:** migrate hand-written status badges to bra-status-badge ([#52](https://github.com/DahliaWitt/braket-tickets/issues/52)) ([4679b3d](https://github.com/DahliaWitt/braket-tickets/commit/4679b3d573cdacb7ff569ddf975a05eb4757b45f))
+
+
+### Documentation
+
+* **e2e:** refresh authoring test APIs ([#48](https://github.com/DahliaWitt/braket-tickets/issues/48)) ([fc9757d](https://github.com/DahliaWitt/braket-tickets/commit/fc9757d5def382eec91ef302ea3ca3bdd2acbc2d))
+* **legal:** update privacy and terms policies ([f874ad8](https://github.com/DahliaWitt/braket-tickets/commit/f874ad8239f9803706ced9a900ab346b94f65216))
+
 ## [0.1.10](https://github.com/DahliaWitt/braket-tickets/compare/v0.1.9...v0.1.10) (2026-05-11)
 
 

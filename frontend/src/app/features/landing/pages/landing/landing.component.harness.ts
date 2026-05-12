@@ -26,32 +26,22 @@ export class LandingComponentHarness extends ComponentHarness {
     return el !== null;
   }
 
-  // ─── Featured Event ────────────────────────────────
-  private _featuredEvent = this.locatorForOptional(
-    '[data-testid="landing-featured-event"]',
-  );
-
-  async hasFeaturedEventSection(): Promise<boolean> {
-    const el = await this._featuredEvent();
-    return el !== null;
-  }
-
-  async getFeaturedEventText(): Promise<string | null> {
-    const el = await this._featuredEvent();
-    return el ? (await el.text()).trim() : null;
-  }
-
-  // ─── Overflow Events ───────────────────────────────
-  private _overflowEvents = this.locatorForOptional(
-    '[data-testid="landing-overflow-events"]',
+  // ─── Events ────────────────────────────────────────
+  private _eventsSection = this.locatorForOptional(
+    '[data-testid="landing-events"]',
   );
   private _browseAll = this.locatorForOptional(
     '[data-testid="browse-all-events"]',
   );
 
-  async hasOverflowEventsSection(): Promise<boolean> {
-    const el = await this._overflowEvents();
+  async hasEventsSection(): Promise<boolean> {
+    const el = await this._eventsSection();
     return el !== null;
+  }
+
+  async getEventsText(): Promise<string | null> {
+    const el = await this._eventsSection();
+    return el ? (await el.text()).trim() : null;
   }
 
   async hasBrowseAllLink(): Promise<boolean> {
