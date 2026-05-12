@@ -29,65 +29,14 @@ describe('sanitizeAnalyticsProperties', () => {
     });
   });
 
-  it('preserves explicit footer feedback messages when the caller opts in', () => {
-    const result = sanitizeAnalyticsProperties(
-      {
-        feedback_message: 'The footer feedback button should send this.',
-        feedback_replay_url:
-          'https://us.posthog.com/project/test-api-key/replay/session-id?t=30',
-        raw_feedback: 'legacy raw key stays blocked',
-      },
-      {allowFeedbackMessage: true},
-    );
-
-    expect(result).toEqual({
-      feedback_message: 'The footer feedback button should send this.',
-      feedback_replay_url:
-        'https://us.posthog.com/project/test-api-key/replay/session-id?t=30',
-      raw_feedback: '[redacted]',
-    });
-  });
-
-  it('redacts feedback messages unless the caller opts in', () => {
+  it('redacts feedback messages', () => {
     const result = sanitizeAnalyticsProperties({
-      feedback_message: 'This should only be allowed on feedback_submitted',
+      feedback_message: 'Feedback is sent through Sentry, not PostHog',
     });
 
     expect(result).toEqual({
       feedback_message: '[redacted]',
     });
-  });
-
-  it('redacts feedback replay URLs that are not PostHog replay links', () => {
-    const result = sanitizeAnalyticsProperties({
-      feedback_replay_url:
-        'https://example.com/checkout/abcdefghijklmnopqrstuvwxyz?token=secret',
-    });
-
-    expect(result).toEqual({
-      feedback_replay_url: '[redacted]',
-    });
-  });
-
-  it('redacts feedback replay URLs with unexpected query or path data', () => {
-    expect(
-      sanitizeAnalyticsProperties({
-        feedback_replay_url:
-          'https://us.posthog.com/project/test-api-key/replay/session-id/extra?t=30',
-      }),
-    ).toEqual({feedback_replay_url: '[redacted]'});
-    expect(
-      sanitizeAnalyticsProperties({
-        feedback_replay_url:
-          'https://us.posthog.com/project/test-api-key/replay/session-id?t=30&token=secret',
-      }),
-    ).toEqual({feedback_replay_url: '[redacted]'});
-    expect(
-      sanitizeAnalyticsProperties({
-        feedback_replay_url:
-          'https://user:password@us.posthog.com/project/test-api-key/replay/session-id?t=30',
-      }),
-    ).toEqual({feedback_replay_url: '[redacted]'});
   });
 
   it('preserves route_template while normalizing its value', () => {
@@ -108,7 +57,6 @@ describe('sanitizeAnalyticsProperties', () => {
       $pathname: '/confirm/verification/short-token',
       $referrer: 'https://braket.local/invite/abcDEF123_-abcDEF123_-',
       attr__href: '/checkout/abcdefghijklmnopqrstuvwxyz?client_secret=secret',
-      has_replay_url: true,
     });
 
     expect(result).toEqual({
@@ -116,14 +64,11 @@ describe('sanitizeAnalyticsProperties', () => {
       $pathname: '/confirm/verification/:token',
       $referrer: '/invite/:token',
       attr__href: '/checkout/:token',
-      has_replay_url: true,
     });
   });
 
   it('preserves required safe metadata keys that overlap denylist words', () => {
     const result = sanitizeAnalyticsProperties({
-      message_length: 42,
-      has_replay_url: false,
       application_id_hash: 'deadbeef',
       ticket_id_hash: 'feedface',
       hostname: 'app.braket.local',
@@ -132,8 +77,6 @@ describe('sanitizeAnalyticsProperties', () => {
     });
 
     expect(result).toEqual({
-      message_length: 42,
-      has_replay_url: false,
       application_id_hash: 'deadbeef',
       ticket_id_hash: 'feedface',
       hostname: 'app.braket.local',
