@@ -196,8 +196,34 @@
               }
             </div>
 
-            <!-- Location -->
+            <!-- Time -->
             <div class="space-y-2">
+              <label
+                for="time"
+                class="block font-mono text-xs tracking-wider text-muted-foreground uppercase"
+                >Time *</label
+              >
+              <input
+                type="time"
+                id="time"
+                [formField]="eventForm.time"
+                [class]="
+                  inputClasses +
+                  (isFieldInvalid(eventForm.time) ? ' ' + errorClasses : '')
+                "
+              />
+              @if (isFieldInvalid(eventForm.time)) {
+                <p
+                  data-testid="time-error"
+                  class="text-xs text-destructive uppercase"
+                >
+                  Time is required
+                </p>
+              }
+            </div>
+
+            <!-- Location -->
+            <div class="space-y-2 md:col-span-2">
               <label
                 for="location"
                 class="block font-mono text-xs tracking-wider text-muted-foreground uppercase"

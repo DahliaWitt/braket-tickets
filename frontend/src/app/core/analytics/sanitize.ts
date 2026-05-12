@@ -29,15 +29,6 @@ const DENYLIST_KEY_PARTS = [
 ] as const;
 
 const MAX_STRING_LENGTH = 200;
-const ALLOWED_DENYLIST_OVERLAP_KEYS = new Set([
-  'message_length',
-  'has_replay_url',
-]);
-const POSTHOG_REPLAY_HOSTS = new Set(['us.posthog.com', 'eu.posthog.com']);
-
-interface SanitizeAnalyticsOptions {
-  allowFeedbackMessage?: boolean;
-}
 
 function keySegments(key: string): string[] {
   return key
@@ -88,36 +79,6 @@ function isRouteLikeKey(key: string): boolean {
   );
 }
 
-function isPostHogReplayUrl(value: unknown): value is string {
-  if (typeof value !== 'string') {
-    return false;
-  }
-
-  try {
-    const url = new URL(value);
-    const pathSegments = url.pathname.split('/').filter(Boolean);
-    const searchKeys = [...url.searchParams.keys()];
-    return (
-      url.protocol === 'https:' &&
-      POSTHOG_REPLAY_HOSTS.has(url.hostname) &&
-      url.username === '' &&
-      url.password === '' &&
-      url.hash === '' &&
-      pathSegments.length === 4 &&
-      pathSegments[0] === 'project' &&
-      pathSegments[1].length > 0 &&
-      pathSegments[2] === 'replay' &&
-      pathSegments[3].length > 0 &&
-      (url.search === '' ||
-        (searchKeys.length === 1 &&
-          searchKeys[0] === 't' &&
-          /^\d+$/.test(url.searchParams.get('t') ?? '')))
-    );
-  } catch {
-    return false;
-  }
-}
-
 function sanitizeArrayValue(value: unknown[]): unknown[] | '[redacted]' {
   const safePrimitives = value.every(
     (item) =>
@@ -140,29 +101,10 @@ function sanitizeArrayValue(value: unknown[]): unknown[] | '[redacted]' {
 
 export function sanitizeAnalyticsProperties(
   properties: AnalyticsProperties = {},
-  options: SanitizeAnalyticsOptions = {},
 ): AnalyticsProperties {
   const sanitized: AnalyticsProperties = {};
 
   for (const [key, value] of Object.entries(properties)) {
-    if (key === 'feedback_message') {
-      sanitized[key] =
-        options.allowFeedbackMessage && typeof value === 'string'
-          ? value
-          : '[redacted]';
-      continue;
-    }
-
-    if (key === 'feedback_replay_url') {
-      sanitized[key] = isPostHogReplayUrl(value) ? value : '[redacted]';
-      continue;
-    }
-
-    if (ALLOWED_DENYLIST_OVERLAP_KEYS.has(key)) {
-      sanitized[key] = value;
-      continue;
-    }
-
     if (isRouteLikeKey(key)) {
       sanitized[key] =
         typeof value === 'string' ? toRouteTemplate(value) : '[redacted]';

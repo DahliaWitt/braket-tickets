@@ -26,6 +26,9 @@ let sentryInitPromise: Promise<SentryModule> | null = null;
 let sentryErrorHandlerPromise: Promise<ErrorHandler | null> | null = null;
 let replayLoadPromise: Promise<void> | null = null;
 let replayScheduled = false;
+let feedbackLoadPromise: Promise<ReturnType<
+  SentryModule['getFeedback']
+> | null> | null = null;
 
 /**
  * Determines whether Sentry reporting is enabled for the given runtime config.
@@ -209,6 +212,85 @@ export async function ensureSentryReplay(
   await replayLoadPromise;
 }
 
+async function ensureSentryFeedback(
+  config: SentryRuntimeConfig,
+): Promise<ReturnType<SentryModule['getFeedback']> | null> {
+  if (!isSentryEnabled(config)) {
+    return null;
+  }
+
+  feedbackLoadPromise ??= (async () => {
+    const Sentry = await initializeSentry(config);
+    if (!Sentry) {
+      return null;
+    }
+
+    const existingFeedback = Sentry.getFeedback();
+    if (existingFeedback) {
+      return existingFeedback;
+    }
+
+    const feedbackIntegration = await Sentry.lazyLoadIntegration(
+      'feedbackIntegration',
+    );
+    Sentry.addIntegration(
+      feedbackIntegration({
+        autoInject: false,
+        showBranding: false,
+        showName: false,
+        showEmail: true,
+        isEmailRequired: false,
+        enableScreenshot: config.enableSentryReplay,
+        formTitle: 'Feedback',
+        messageLabel: 'What should we know?',
+        messagePlaceholder:
+          'Tell us what happened or what you want to see next.',
+        submitButtonLabel: 'Submit',
+        cancelButtonLabel: 'Cancel',
+        successMessageText: 'Thanks for the feedback.',
+      }),
+    );
+
+    return Sentry.getFeedback() ?? null;
+  })().catch((error: unknown) => {
+    feedbackLoadPromise = null;
+    logger.error('Failed to lazy-load Sentry feedback integration', error);
+    throw error;
+  });
+
+  return feedbackLoadPromise;
+}
+
+export async function openSentryFeedback(
+  config: SentryRuntimeConfig,
+): Promise<boolean> {
+  let removeFormFromDom: (() => void) | null = null;
+
+  try {
+    const feedback = await ensureSentryFeedback(config);
+    if (!feedback) {
+      return false;
+    }
+
+    const form = await feedback.createForm({
+      tags: {
+        source: 'footer_feedback',
+      },
+      onFormClose: () => removeFormFromDom?.(),
+      onFormSubmitted: () => removeFormFromDom?.(),
+    });
+    removeFormFromDom = form.removeFromDom;
+    form.appendToDom();
+    form.open();
+
+    return true;
+  } catch (error: unknown) {
+    logger.error('Failed to open Sentry feedback', error);
+    removeFormFromDom?.();
+    return false;
+  }
+}
+
 export function scheduleSentryReplayLoad(config: SentryRuntimeConfig): void {
   if (
     replayScheduled ||
@@ -222,7 +304,10 @@ export function scheduleSentryReplayLoad(config: SentryRuntimeConfig): void {
   replayScheduled = true;
 
   const startReplay = () => {
-    void ensureSentryReplay(config);
+    void ensureSentryReplay(config).catch(() => {
+      // ensureSentryReplay already logs and resets the retry state. Keep this
+      // optional integration failure out of the global unhandled-error path.
+    });
   };
 
   if ('requestIdleCallback' in window) {

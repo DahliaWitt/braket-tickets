@@ -135,7 +135,7 @@ Include applicable records:
   refund/dispute status, resale listing state, and relevant event details.
 - Guest checkout: guest sessions, guest-owned tickets, guest orders, and magic
   link redemption records tied to the verified email.
-- Communications: support request thread, feedback text if retained in PostHog,
+- Communications: support request thread, Sentry Feedback text if retained,
   email preference records, announcement delivery records, and unsubscribe
   state.
 - Organizer data: organizer profile, Stripe connected-account status stored by
@@ -247,8 +247,7 @@ events and recordings were queued, and the deletion status check result.
 
 Do not promise that DNT or GPC removed backend operational events. The Privacy
 Policy says those signals disable browser-side passive PostHog SDK capture,
-replay, persistence, and feedback submission, while backend operational events
-may still be sent.
+replay, and persistence, while backend operational events may still be sent.
 
 ### Sentry
 
@@ -262,7 +261,7 @@ Search Sentry by:
 - route or URL
 - release/environment
 - error message reported by the requester
-- replay URL if PostHog feedback linked to a replay
+- submitted Sentry Feedback items in the same request window
 
 If an issue or replay contains personal information, delete the issue or replay
 where Sentry allows it. Sentry replay deletion can leave inaccessible metadata

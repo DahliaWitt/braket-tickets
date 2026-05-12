@@ -73,71 +73,11 @@ import {getBuyerPricingSummary} from '@shared/pricing/pricing-summary';
           </div>
         </section>
 
-        <!-- Featured Event -->
-        @if (featuredEvent(); as event) {
+        <!-- Events -->
+        @if (visibleEvents().length > 0) {
           <section
-            data-testid="landing-featured-event"
+            data-testid="landing-events"
             class="fade-in fade-in-delay-1 border-t border-border"
-          >
-            <a
-              [routerLink]="['/events', event._id]"
-              class="focus-ring grid grid-cols-1 transition-colors hover:bg-foreground/[0.02] md:grid-cols-[auto_1fr]"
-              [attr.aria-label]="'View details for ' + event.title"
-            >
-              @if (event.posterUrl) {
-                <div
-                  class="relative h-64 w-full overflow-hidden bg-card md:h-80 md:w-56 lg:w-64"
-                >
-                  <img
-                    [ngSrc]="event.posterUrl"
-                    [alt]="event.title + ' event poster'"
-                    fill
-                    priority
-                    ngSrcset="320w, 640w, 1024w"
-                    sizes="(min-width: 1024px) 256px, (min-width: 768px) 224px, 100vw"
-                    class="object-contain"
-                  />
-                </div>
-              }
-              <div
-                class="space-y-3 border-l-2 border-l-primary/30 px-5 py-6 md:px-6 md:py-8"
-                [class.md:border-l-0]="!!event.posterUrl"
-                [class.md:border-l-2]="!event.posterUrl"
-              >
-                <p class="mono-label text-2xs text-muted-foreground">Next Up</p>
-                <h2
-                  class="line-clamp-2 font-display text-2xl font-bold tracking-tight text-foreground uppercase md:text-3xl"
-                >
-                  {{ event.title }}
-                </h2>
-                <p class="mono-label text-2xs text-muted-foreground">
-                  {{ event.date | date: 'mediumDate' }},
-                  {{ event.date | date: 'shortTime' }}
-                  @if (event.location) {
-                    <span> · {{ event.location }}</span>
-                  }
-                  ·
-                  {{ priceSummary(event).primaryText }}
-                  ·
-                  <span class="text-primary">View Event →</span>
-                </p>
-                @if (event.description) {
-                  <p
-                    class="line-clamp-3 max-w-prose text-sm leading-relaxed text-muted-foreground"
-                  >
-                    {{ event.description }}
-                  </p>
-                }
-              </div>
-            </a>
-          </section>
-        }
-
-        <!-- Overflow Events -->
-        @if (overflowEvents().length > 0) {
-          <section
-            data-testid="landing-overflow-events"
-            class="fade-in fade-in-delay-2 border-t border-border"
           >
             <div class="flex items-center justify-between px-1 py-3">
               <p class="mono-label text-2xs text-muted-foreground">
@@ -153,40 +93,60 @@ import {getBuyerPricingSummary} from '@shared/pricing/pricing-summary';
                 </a>
               }
             </div>
-            <div class="grid grid-cols-1 border-t border-border md:grid-cols-3">
-              @for (event of overflowEvents(); track event._id) {
+            <div class="border-t border-border">
+              @for (
+                event of visibleEvents();
+                track event._id;
+                let first = $first
+              ) {
                 <a
                   [routerLink]="['/events', event._id]"
-                  class="focus-ring flex min-w-0 flex-col border-b border-border transition-colors last:border-b-0 hover:border-foreground/30 hover:bg-foreground/[0.02] md:border-r md:border-b-0 md:last:border-r-0"
+                  class="focus-ring grid grid-cols-1 border-b border-border transition-colors last:border-b-0 hover:bg-foreground/[0.02] md:grid-cols-[auto_1fr]"
                   [attr.aria-label]="'View details for ' + event.title"
                 >
-                  <div
-                    class="relative aspect-video flex-shrink-0 overflow-hidden bg-card"
-                  >
-                    @if (event.posterUrl) {
+                  @if (event.posterUrl) {
+                    <div
+                      class="relative h-64 w-full overflow-hidden bg-card md:h-56 md:w-48 lg:w-56"
+                    >
                       <img
                         [ngSrc]="event.posterUrl"
-                        [alt]="event.title + ' poster'"
+                        [alt]="event.title + ' event poster'"
                         fill
-                        sizes="(min-width: 768px) 33vw, 100vw"
-                        class="object-cover"
+                        [priority]="first"
+                        ngSrcset="320w, 640w, 1024w"
+                        sizes="(min-width: 1024px) 224px, (min-width: 768px) 192px, 100vw"
+                        class="object-contain"
                       />
-                    }
-                  </div>
-                  <div class="min-w-0 space-y-1 p-3 md:p-4">
-                    <h3
-                      class="line-clamp-2 min-h-[2.5rem] font-display text-base font-bold tracking-tight text-foreground uppercase"
+                    </div>
+                  }
+                  <div
+                    class="space-y-2 px-5 py-5 md:px-6 md:py-6"
+                    [class.border-l-2]="!event.posterUrl"
+                    [class.border-l-primary/30]="!event.posterUrl"
+                  >
+                    <h2
+                      class="line-clamp-2 font-display text-xl font-bold tracking-tight text-foreground uppercase md:text-2xl"
                     >
                       {{ event.title }}
-                    </h3>
-                    <p
-                      class="mono-label truncate text-2xs text-muted-foreground"
-                    >
+                    </h2>
+                    <p class="mono-label text-2xs text-muted-foreground">
                       {{ event.date | date: 'mediumDate' }},
                       {{ event.date | date: 'shortTime' }}
+                      @if (event.location) {
+                        <span> · {{ event.location }}</span>
+                      }
                       ·
                       {{ priceSummary(event).primaryText }}
+                      ·
+                      <span class="text-primary">View Event →</span>
                     </p>
+                    @if (event.description) {
+                      <p
+                        class="line-clamp-2 max-w-prose text-sm leading-relaxed text-muted-foreground"
+                      >
+                        {{ event.description }}
+                      </p>
+                    }
                   </div>
                 </a>
               }
@@ -264,8 +224,7 @@ export class LandingComponent {
     () => safeResourceValue(this.publicEventsResource) ?? [],
   );
 
-  readonly featuredEvent = computed(() => this.publicEvents()[0] ?? null);
-  readonly overflowEvents = computed(() => this.publicEvents().slice(1, 4));
+  readonly visibleEvents = computed(() => this.publicEvents().slice(0, 4));
   readonly showBrowseAll = computed(() => this.publicEvents().length > 4);
   readonly shouldCenter = computed(() => this.publicEvents().length === 0);
 
