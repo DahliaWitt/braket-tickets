@@ -29,6 +29,22 @@ const baseStyles = {
   border: '#332A33',
 };
 
+function formatEventDateTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: EVENT_DATE_TIME_ZONE,
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  }).format(date);
+}
+
 const vettingSubmissionTimeFormatter = new Intl.DateTimeFormat('en-US', {
   timeZone: EVENT_DATE_TIME_ZONE,
   month: 'short',
@@ -605,6 +621,7 @@ export function eventBroadcastTemplate(args: {
   const safeOrganizerName = escapeHtml(organizer.name);
   const safeLocation = event.location ? escapeHtml(event.location) : null;
   const safeMessage = escapeAndFormatMultiline(message);
+  const eventDate = formatEventDateTime(event.date);
   const eventUrl = `${siteUrl}/events/${event._id}`;
   const unsubUrl = `${apiSiteUrl}/api/unsubscribe?token=${encodeURIComponent(unsubToken)}`;
   const oneClickUnsubUrl = `${apiSiteUrl}/api/unsubscribe/one-click?token=${encodeURIComponent(unsubToken)}`;
@@ -615,7 +632,7 @@ export function eventBroadcastTemplate(args: {
       ${safeTitle}
     </h1>
     <p style="color: ${baseStyles.textMuted}; font-size: 14px; margin-top: 0; margin-bottom: 20px; font-family: 'Space Mono', 'Courier New', monospace;">
-      ${escapeHtml(event.date)}${safeLocation ? ` · ${safeLocation}` : ''}
+      ${escapeHtml(eventDate)}${safeLocation ? ` · ${safeLocation}` : ''}
     </p>
     <div style="color: ${baseStyles.textLight}; font-size: 16px; line-height: 1.6; margin-bottom: 24px;">
       ${safeMessage}
@@ -647,7 +664,7 @@ export function eventBroadcastTemplate(args: {
 
   const textLines = [
     `${event.title}`,
-    `${event.date}${event.location ? ` · ${event.location}` : ''}`,
+    `${eventDate}${event.location ? ` · ${event.location}` : ''}`,
     '',
     message,
     '',
@@ -844,6 +861,7 @@ export function eventAnnouncementTemplate(args: {
   const safeTitle = escapeHtml(event.title);
   const safeOrgName = escapeHtml(organizer.name);
   const safeLocation = event.location ? escapeHtml(event.location) : null;
+  const eventDate = formatEventDateTime(event.date);
   const safeDesc = event.description
     ? escapeHtml(event.description.slice(0, 300)) +
       (event.description.length > 300 ? '…' : '')
@@ -886,7 +904,7 @@ export function eventAnnouncementTemplate(args: {
 
     <p style="color: ${baseStyles.textMuted}; font-size: 14px; margin: 0 0 ${safeDesc ? '20px' : '24px'};
                font-family: 'Space Mono', monospace;">
-      ${escapeHtml(event.date)}${safeLocation ? ` · ${safeLocation}` : ''}
+      ${escapeHtml(eventDate)}${safeLocation ? ` · ${safeLocation}` : ''}
     </p>
 
     ${
@@ -942,7 +960,7 @@ export function eventAnnouncementTemplate(args: {
   const textLines = [
     `NEW EVENT FROM ${organizer.name.toUpperCase()}`,
     event.title,
-    `${event.date}${event.location ? ` · ${event.location}` : ''}`,
+    `${eventDate}${event.location ? ` · ${event.location}` : ''}`,
     event.description
       ? `${event.description.slice(0, 300)}${event.description.length > 300 ? '…' : ''}`
       : null,
