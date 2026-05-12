@@ -1,4 +1,4 @@
-# Braket Tickets
+# Braket Tickets.
 
 [![License: ACSL v1.4](https://img.shields.io/badge/license-ACSL%20v1.4-a855f7)](LICENSE)
 [![CI](https://github.com/DahliaWitt/braket-tickets/actions/workflows/ci.yml/badge.svg)](https://github.com/DahliaWitt/braket-tickets/actions/workflows/ci.yml)
