@@ -543,25 +543,32 @@ describe('EventEditorComponent', () => {
     fixture.detectChanges();
     await fixture.whenStable();
 
-    expect(eventsServiceMock.updateWithPoster).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: 'evt123',
-        organizerId: expect.anything() as unknown,
-        date: expect.stringMatching(/T/),
-      }),
+    const [args, posterFile, onProgress, signal] = eventsServiceMock
+      .updateWithPoster.mock.calls[0] as unknown as [
+      {
+        id: string;
+        organizerId: unknown;
+        date: string;
+      },
       undefined,
-      expect.any(Function),
-      expect.any(AbortSignal),
-    );
-    const args = eventsServiceMock.updateWithPoster.mock.calls[0][0] as {
+      (pct: number) => void,
+      AbortSignal,
+    ];
+    expect(args.id).toBe('evt123');
+    expect(args.organizerId).toBeDefined();
+    expect(posterFile).toBeUndefined();
+    expect(onProgress).toEqual(expect.any(Function));
+    expect(signal).toBeInstanceOf(AbortSignal);
+    const updateArgs = args as {
       date: string;
     };
+    expect(updateArgs.date).toMatch(/T/);
     const savedTimeParts = new Intl.DateTimeFormat('en-US', {
       timeZone: 'America/Los_Angeles',
       hour: '2-digit',
       minute: '2-digit',
       hourCycle: 'h23',
-    }).formatToParts(new Date(args.date));
+    }).formatToParts(new Date(updateArgs.date));
     expect(savedTimeParts.find((part) => part.type === 'hour')?.value).toBe(
       '23',
     );
