@@ -71,4 +71,18 @@ describe('FooterComponent', () => {
       ),
     );
   });
+
+  it('shows a toast when Sentry feedback throws', async () => {
+    feedbackServiceMock.open.mockRejectedValueOnce(
+      new Error('feedback failed'),
+    );
+
+    await harness.clickFeedback();
+
+    await vi.waitFor(() =>
+      expect(toastMock.error).toHaveBeenCalledWith(
+        'Feedback is unavailable right now.',
+      ),
+    );
+  });
 });

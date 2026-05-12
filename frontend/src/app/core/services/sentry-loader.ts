@@ -264,24 +264,31 @@ async function ensureSentryFeedback(
 export async function openSentryFeedback(
   config: SentryRuntimeConfig,
 ): Promise<boolean> {
-  const feedback = await ensureSentryFeedback(config);
-  if (!feedback) {
+  let removeFormFromDom: (() => void) | null = null;
+
+  try {
+    const feedback = await ensureSentryFeedback(config);
+    if (!feedback) {
+      return false;
+    }
+
+    const form = await feedback.createForm({
+      tags: {
+        source: 'footer_feedback',
+      },
+      onFormClose: () => removeFormFromDom?.(),
+      onFormSubmitted: () => removeFormFromDom?.(),
+    });
+    removeFormFromDom = form.removeFromDom;
+    form.appendToDom();
+    form.open();
+
+    return true;
+  } catch (error: unknown) {
+    logger.error('Failed to open Sentry feedback', error);
+    removeFormFromDom?.();
     return false;
   }
-
-  let removeFormFromDom: (() => void) | null = null;
-  const form = await feedback.createForm({
-    tags: {
-      source: 'footer_feedback',
-    },
-    onFormClose: () => removeFormFromDom?.(),
-    onFormSubmitted: () => removeFormFromDom?.(),
-  });
-  removeFormFromDom = form.removeFromDom;
-  form.appendToDom();
-  form.open();
-
-  return true;
 }
 
 export function scheduleSentryReplayLoad(config: SentryRuntimeConfig): void {

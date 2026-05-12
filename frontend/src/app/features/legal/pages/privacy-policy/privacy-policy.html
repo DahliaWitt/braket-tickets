@@ -583,15 +583,16 @@
             <strong>Analytics and Error Monitoring Providers:</strong> We share
             usage data with PostHog to analyze site traffic, product usage, and
             service reliability. Browser DNT/GPC signals disable passive
-            frontend PostHog SDK capture, replay, and persistence, but explicit
-            feedback submissions and server-side operational analytics may still
-            send sanitized transaction, security, reliability, and business
-            events to PostHog. We share error reports, stack traces, route or
-            URL context, browser and device metadata, performance traces,
-            breadcrumbs, and masked replay context with Sentry so we can detect
-            and troubleshoot failures. Our proxy code strips visitor IP headers
-            that we control, but Cloudflare and these providers may still
-            process technical network metadata as part of request delivery.
+            frontend PostHog SDK capture, replay, and persistence, but
+            server-side operational analytics may still send sanitized
+            transaction, security, reliability, and business events to PostHog.
+            Explicit feedback submissions are sent through Sentry Feedback. We
+            also share error reports, stack traces, route or URL context,
+            browser and device metadata, performance traces, breadcrumbs, and
+            masked replay context with Sentry so we can detect and troubleshoot
+            failures. Our proxy code strips visitor IP headers that we control,
+            but Cloudflare and these providers may still process technical
+            network metadata as part of request delivery.
           </li>
           <li>
             <strong>Infrastructure and Authentication Providers:</strong> We use
