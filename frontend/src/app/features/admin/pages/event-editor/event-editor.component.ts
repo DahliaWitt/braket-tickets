@@ -156,6 +156,9 @@ function parseEventDateTimeParts(
 function formatEventTimeInput(value: string | null | undefined): string {
   if (!value) return '20:00';
   const parts = parseEventDateTimeParts(value);
+  // Date-only legacy rows make parseEventDateTimeParts return null; keep them
+  // on the default 20:00 path. Change this with getDateTimePart if legacy
+  // rows get a different backfill/default policy.
   if (!parts) return '20:00';
   return `${getDateTimePart(parts, 'hour')}:${getDateTimePart(parts, 'minute')}`;
 }
