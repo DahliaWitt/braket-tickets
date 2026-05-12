@@ -212,4 +212,35 @@ describe('sentry-loader', () => {
       expect(lazyLoadIntegrationMock).toHaveBeenCalledWith('replayIntegration'),
     );
   });
+
+  it('does not surface scheduled replay loading failures as unhandled rejections', async () => {
+    const requestIdleCallback = vi.fn((callback: IdleRequestCallback) => {
+      callback({
+        didTimeout: false,
+        timeRemaining: () => 42,
+      } as IdleDeadline);
+      return 1;
+    });
+    const unhandledRejectionSpy = vi.fn();
+
+    Object.defineProperty(window, 'requestIdleCallback', {
+      configurable: true,
+      writable: true,
+      value: requestIdleCallback,
+    });
+    window.addEventListener('unhandledrejection', unhandledRejectionSpy);
+    lazyLoadIntegrationMock.mockRejectedValue(new Error('blocked replay'));
+
+    const {scheduleSentryReplayLoad} = await import('./sentry-loader');
+
+    scheduleSentryReplayLoad(runtimeConfig);
+
+    await vi.waitFor(() =>
+      expect(lazyLoadIntegrationMock).toHaveBeenCalledWith('replayIntegration'),
+    );
+    await Promise.resolve();
+
+    expect(unhandledRejectionSpy).not.toHaveBeenCalled();
+    window.removeEventListener('unhandledrejection', unhandledRejectionSpy);
+  });
 });
