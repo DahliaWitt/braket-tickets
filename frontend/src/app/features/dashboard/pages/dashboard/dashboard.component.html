@@ -419,9 +419,10 @@
         </section>
       }
 
-      <!-- Section: Your Events (featured + overflow) -->
-      @if (featuredEvent(); as featured) {
+      <!-- Section: Your Events -->
+      @if (visibleEvents().length > 0) {
         <section
+          data-testid="dashboard-events"
           class="fade-in fade-in-delay-1 mt-10 border-t border-border pt-6"
         >
           <div class="flex items-center justify-between px-1 pb-4">
@@ -437,138 +438,95 @@
               </a>
             }
           </div>
-
-          <!-- Featured event: card with two interactive targets.
-               Title link covers the card via ::after; Get Tickets sits above it. -->
-          <div
-            class="relative grid grid-cols-1 border-t border-border transition-colors hover:bg-foreground/[0.02] md:grid-cols-[auto_1fr]"
-            data-testid="featured-event"
-          >
-            @if (featured.posterUrl) {
+          <div class="border-t border-border">
+            @for (
+              event of visibleEvents();
+              track event._id;
+              let first = $first
+            ) {
               <div
-                class="relative h-64 w-full overflow-hidden bg-card md:h-80 md:w-56 lg:w-64"
+                class="relative grid grid-cols-1 border-b border-border transition-colors last:border-b-0 hover:bg-foreground/[0.02] md:grid-cols-[auto_1fr]"
               >
-                <img
-                  [ngSrc]="featured.posterUrl"
-                  [alt]="featured.title + ' event poster'"
-                  fill
-                  priority
-                  ngSrcset="320w, 640w, 1024w"
-                  sizes="(min-width: 1024px) 256px, (min-width: 768px) 224px, 100vw"
-                  class="object-contain"
-                />
-              </div>
-            }
-            <div
-              class="space-y-3 border-l-2 border-l-primary/30 px-5 py-6 md:px-6 md:py-8"
-              [class.md:border-l-0]="!!featured.posterUrl"
-              [class.md:border-l-2]="!featured.posterUrl"
-            >
-              <p class="mono-label text-2xs text-muted-foreground/60">
-                Next Up
-              </p>
-              <h3
-                data-testid="dashboard-event-title"
-                class="line-clamp-2 font-display text-2xl font-bold tracking-tight text-foreground uppercase md:text-3xl"
-              >
-                <a
-                  [routerLink]="['/events', featured._id]"
-                  class="text-foreground after:absolute after:inset-0"
-                  [attr.aria-label]="'View details for ' + featured.title"
-                >
-                  {{ featured.title }}
-                </a>
-              </h3>
-              <p class="mono-label text-2xs text-muted-foreground">
-                {{ featured.date | date: 'mediumDate' }},
-                {{ featured.date | date: 'shortTime' }}
-                @if (featured.location) {
-                  <span> &middot; {{ featured.location }}</span>
-                }
-                &middot;
-                {{ priceSummary(featured).primaryText }}
-              </p>
-              <div class="relative z-10 pt-1">
-                @if (featuredCanPurchase()) {
-                  <a
-                    [routerLink]="['/events', featured._id]"
-                    [queryParams]="{buy: 'true'}"
-                    data-testid="dashboard-get-tickets"
-                    class="inline-block border-2 border-primary px-6 py-2 font-mono text-2xs tracking-widest text-foreground uppercase transition-colors hover:bg-primary hover:text-white"
-                    [attr.aria-label]="'Get tickets for ' + featured.title"
+                @if (event.posterUrl) {
+                  <div
+                    class="relative h-64 w-full overflow-hidden bg-card md:h-56 md:w-48 lg:w-56"
                   >
-                    Get Tickets &rarr;
-                  </a>
-                } @else {
-                  <span
-                    class="font-mono text-2xs tracking-widest text-primary uppercase"
-                  >
-                    View Event &rarr;
-                  </span>
-                }
-              </div>
-              @if (featured.description) {
-                <p
-                  class="line-clamp-3 max-w-prose text-sm leading-relaxed text-muted-foreground/60"
-                >
-                  {{ featured.description }}
-                </p>
-              }
-            </div>
-          </div>
-        </section>
-
-        <!-- Overflow events -->
-        @if (overflowEvents().length > 0) {
-          <section class="fade-in fade-in-delay-2">
-            <div
-              class="no-scrollbar flex overflow-x-auto border-t border-border md:overflow-visible"
-            >
-              @for (event of overflowEvents(); track event._id) {
-                <a
-                  [routerLink]="['/events', event._id]"
-                  class="flex w-56 flex-1 flex-shrink-0 flex-col border-r border-border transition-colors last:border-r-0 hover:border-foreground/30 hover:bg-foreground/[0.02] md:w-auto"
-                  [attr.aria-label]="'View details for ' + event.title"
-                >
-                  <div class="relative aspect-video overflow-hidden bg-card">
-                    @if (event.posterUrl) {
-                      <img
-                        [ngSrc]="event.posterUrl"
-                        [alt]="event.title + ' poster'"
-                        fill
-                        ngSrcset="320w, 640w"
-                        sizes="(min-width: 768px) 25vw, 224px"
-                        class="object-cover"
-                      />
-                    }
+                    <img
+                      [ngSrc]="event.posterUrl"
+                      [alt]="event.title + ' event poster'"
+                      fill
+                      [priority]="first"
+                      ngSrcset="320w, 640w, 1024w"
+                      sizes="(min-width: 1024px) 224px, (min-width: 768px) 192px, 100vw"
+                      class="object-contain"
+                    />
                   </div>
-                  <div class="min-w-0 space-y-1 overflow-hidden p-3 md:p-4">
-                    <h3
-                      data-testid="dashboard-event-title"
-                      class="truncate font-display text-base font-bold tracking-tight text-foreground uppercase"
+                }
+                <div
+                  class="space-y-2 px-5 py-5 md:px-6 md:py-6"
+                  [class.border-l-2]="!event.posterUrl"
+                  [class.border-l-primary/30]="!event.posterUrl"
+                >
+                  <h3
+                    data-testid="dashboard-event-title"
+                    class="line-clamp-2 font-display text-xl font-bold tracking-tight text-foreground uppercase md:text-2xl"
+                  >
+                    <a
+                      [routerLink]="['/events', event._id]"
+                      class="text-foreground after:absolute after:inset-0"
+                      [attr.aria-label]="'View details for ' + event.title"
                     >
                       {{ event.title }}
-                    </h3>
-                    <p class="mono-label text-2xs text-muted-foreground/60">
-                      {{ event.date | date: 'mediumDate' }},
-                      {{ event.date | date: 'shortTime' }}
-                      &middot;
-                      {{ priceSummary(event).primaryText }}
-                      @if (
-                        organizerNameById().get(event.organizerId);
-                        as orgName
-                      ) {
-                        <span> &middot; {{ orgName }}</span>
-                      }
-                    </p>
+                    </a>
+                  </h3>
+                  <p class="mono-label text-2xs text-muted-foreground">
+                    {{ event.date | date: 'mediumDate' }},
+                    {{ event.date | date: 'shortTime' }}
+                    @if (event.location) {
+                      <span> &middot; {{ event.location }}</span>
+                    }
+                    &middot;
+                    {{ priceSummary(event).primaryText }}
+                    @if (
+                      organizerNameById().get(event.organizerId);
+                      as orgName
+                    ) {
+                      <span> &middot; {{ orgName }}</span>
+                    }
+                  </p>
+                  <div class="relative z-10 pt-1">
+                    @if (canPurchaseEvent(event._id)) {
+                      <a
+                        [routerLink]="['/events', event._id]"
+                        [queryParams]="{buy: 'true'}"
+                        data-testid="dashboard-get-tickets"
+                        class="inline-block border-2 border-primary px-6 py-2 font-mono text-2xs tracking-widest text-foreground uppercase transition-colors hover:bg-primary hover:text-white"
+                        [attr.aria-label]="'Get tickets for ' + event.title"
+                      >
+                        Get Tickets &rarr;
+                      </a>
+                    } @else {
+                      <span
+                        class="font-mono text-2xs tracking-widest text-primary uppercase"
+                      >
+                        View Event &rarr;
+                      </span>
+                    }
                   </div>
-                </a>
-              }
-            </div>
-          </section>
-        }
+                  @if (event.description) {
+                    <p
+                      class="line-clamp-2 max-w-prose text-sm leading-relaxed text-muted-foreground/60"
+                    >
+                      {{ event.description }}
+                    </p>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        </section>
       } @else {
-        <!-- Vetted no events empty state -->
+        <!-- No events empty state -->
         <div class="fade-in fade-in-delay-2 py-12 text-center">
           <p class="font-mono text-sm text-muted-foreground/50">
             nothing on the calendar yet — keep an eye out

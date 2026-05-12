@@ -160,12 +160,22 @@ export class DashboardComponent {
 
   // events.upcoming applies backend view-access policy; availability carries
   // the canonical purchase-access decision from backend/convex/lib/access.ts.
+  // Sorted: approved-community events first (direct/shared), then open-access, by date within each group.
   readonly accessibleEvents = computed(() => {
     const availabilityMap = this.eventAvailability();
-    return this.sortedRawEvents().filter((event) => {
-      const availability = availabilityMap[event._id];
-      return availability?.purchaseAccess.allowed === true;
-    });
+    return this.sortedRawEvents()
+      .filter((event) => {
+        const availability = availabilityMap[event._id];
+        return availability?.purchaseAccess.allowed === true;
+      })
+      .toSorted((a, b) => {
+        const aSource = availabilityMap[a._id]?.purchaseAccess.source;
+        const bSource = availabilityMap[b._id]?.purchaseAccess.source;
+        const aApproved = aSource === 'direct' || aSource === 'shared' ? 0 : 1;
+        const bApproved = bSource === 'direct' || bSource === 'shared' ? 0 : 1;
+        if (aApproved !== bApproved) return aApproved - bApproved;
+        return a.date.localeCompare(b.date);
+      });
   });
 
   readonly publicEvents = computed(() => {
@@ -183,8 +193,7 @@ export class DashboardComponent {
     );
   });
 
-  readonly featuredEvent = computed(() => this.accessibleEvents()[0] ?? null);
-  readonly overflowEvents = computed(() => this.accessibleEvents().slice(1, 4));
+  readonly visibleEvents = computed(() => this.accessibleEvents().slice(0, 4));
   readonly showBrowseAll = computed(() => this.accessibleEvents().length > 4);
 
   // Organizer name lookup from approvals + communities list
@@ -212,14 +221,10 @@ export class DashboardComponent {
     return map;
   });
 
-  // Whether the featured event can be purchased (used in CTA)
-  readonly featuredCanPurchase = computed(() => {
-    const featured = this.featuredEvent();
-    if (!featured) return false;
-    const dashEvents = this.dashboardEvents();
-    const match = dashEvents.find((e) => e._id === featured._id);
+  canPurchaseEvent(eventId: string): boolean {
+    const match = this.dashboardEvents().find((e) => e._id === eventId);
     return match?.canPurchase ?? false;
-  });
+  }
 
   /**
    * View Model for Dashboard Events.

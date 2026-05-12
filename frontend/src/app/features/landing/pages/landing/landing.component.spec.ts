@@ -147,14 +147,24 @@ describe('LandingComponent', () => {
   // -----------------------------------------------------------------------
 
   describe('computed signals', () => {
-    it('featuredEvent() returns the first public event', async () => {
+    it('visibleEvents() returns up to 4 events', async () => {
       const events = [
-        makeEvent({_id: 'evt-1', title: 'First Event'}),
-        makeEvent({_id: 'evt-2', title: 'Second Event'}),
+        makeEvent({_id: 'evt-1', title: 'First'}),
+        makeEvent({_id: 'evt-2', title: 'Second'}),
+        makeEvent({_id: 'evt-3', title: 'Third'}),
+        makeEvent({_id: 'evt-4', title: 'Fourth'}),
+        makeEvent({_id: 'evt-5', title: 'Fifth'}),
       ];
 
       const {component} = await setup([], events);
-      expect(component.featuredEvent()).toEqual(events[0]);
+      expect(component.visibleEvents().length).toBe(4);
+      expect(component.visibleEvents()[0]).toEqual(events[0]);
+      expect(component.visibleEvents()[3]).toEqual(events[3]);
+    });
+
+    it('visibleEvents() returns empty array when no events', async () => {
+      const {component} = await setup([], []);
+      expect(component.visibleEvents().length).toBe(0);
     });
 
     it('shows sign-in pricing copy for public-viewable events before auth', async () => {
@@ -167,37 +177,9 @@ describe('LandingComponent', () => {
       ];
 
       const {landingHarness} = await setup([], events);
-      const featuredText = await landingHarness.getFeaturedEventText();
-      expect(featuredText).toContain('Sign in for pricing');
-      expect(featuredText).not.toContain('$20');
-    });
-
-    it('featuredEvent() returns null when no events', async () => {
-      const {component} = await setup([], []);
-      expect(component.featuredEvent()).toBeNull();
-    });
-
-    it('overflowEvents() returns events after the first (up to 3)', async () => {
-      const events = [
-        makeEvent({_id: 'evt-1', title: 'First'}),
-        makeEvent({_id: 'evt-2', title: 'Second'}),
-        makeEvent({_id: 'evt-3', title: 'Third'}),
-        makeEvent({_id: 'evt-4', title: 'Fourth'}),
-        makeEvent({_id: 'evt-5', title: 'Fifth'}),
-      ];
-
-      const {component} = await setup([], events);
-      const overflow = component.overflowEvents();
-      expect(overflow.length).toBe(3);
-      expect(overflow[0]).toEqual(events[1]);
-      expect(overflow[2]).toEqual(events[3]);
-    });
-
-    it('overflowEvents() returns empty array when only one event', async () => {
-      const events = [makeEvent({_id: 'evt-1', title: 'Only Event'})];
-
-      const {component} = await setup([], events);
-      expect(component.overflowEvents().length).toBe(0);
+      const eventsText = await landingHarness.getEventsText();
+      expect(eventsText).toContain('Sign in for pricing');
+      expect(eventsText).not.toContain('$20');
     });
 
     it('shouldCenter() returns true when no events', async () => {
@@ -214,13 +196,13 @@ describe('LandingComponent', () => {
   });
 
   // -----------------------------------------------------------------------
-  // Featured event section
+  // Events section
   // -----------------------------------------------------------------------
 
-  describe('featured event section', () => {
+  describe('events section', () => {
     it('is NOT visible when no public events', async () => {
       const {landingHarness} = await setup([], []);
-      expect(await landingHarness.hasFeaturedEventSection()).toBe(false);
+      expect(await landingHarness.hasEventsSection()).toBe(false);
     });
 
     it('IS visible when public events exist', async () => {
@@ -233,30 +215,17 @@ describe('LandingComponent', () => {
       ];
 
       const {landingHarness} = await setup([], events);
-      expect(await landingHarness.hasFeaturedEventSection()).toBe(true);
-    });
-  });
-
-  // -----------------------------------------------------------------------
-  // Overflow events section
-  // -----------------------------------------------------------------------
-
-  describe('overflow events section', () => {
-    it('is NOT visible when only one event', async () => {
-      const events = [makeEvent({_id: 'evt-1', title: 'Solo Event'})];
-
-      const {landingHarness} = await setup([], events);
-      expect(await landingHarness.hasOverflowEventsSection()).toBe(false);
+      expect(await landingHarness.hasEventsSection()).toBe(true);
     });
 
-    it('IS visible when more than one event', async () => {
+    it('IS visible with multiple events', async () => {
       const events = [
         makeEvent({_id: 'evt-1', title: 'Event A'}),
         makeEvent({_id: 'evt-2', title: 'Event B'}),
       ];
 
       const {landingHarness} = await setup([], events);
-      expect(await landingHarness.hasOverflowEventsSection()).toBe(true);
+      expect(await landingHarness.hasEventsSection()).toBe(true);
     });
   });
 
