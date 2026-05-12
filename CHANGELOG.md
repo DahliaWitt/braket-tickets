@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.12](https://github.com/DahliaWitt/braket-tickets/compare/v0.1.11...v0.1.12) (2026-05-12)
+
+
+### Bug Fixes
+
+* **tickets:** simplify buyer pricing copy ([8823482](https://github.com/DahliaWitt/braket-tickets/commit/88234826ee765099630599b2f5bd0c3fc4d972b9))
+
 ## [0.1.11](https://github.com/DahliaWitt/braket-tickets/compare/v0.1.10...v0.1.11) (2026-05-11)
 
 
