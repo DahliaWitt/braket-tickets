@@ -222,7 +222,10 @@ export function scheduleSentryReplayLoad(config: SentryRuntimeConfig): void {
   replayScheduled = true;
 
   const startReplay = () => {
-    void ensureSentryReplay(config);
+    void ensureSentryReplay(config).catch(() => {
+      // ensureSentryReplay already logs and resets the retry state. Keep this
+      // optional integration failure out of the global unhandled-error path.
+    });
   };
 
   if ('requestIdleCallback' in window) {
