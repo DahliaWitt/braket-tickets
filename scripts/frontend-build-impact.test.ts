@@ -51,15 +51,23 @@ describe('determineFrontendBuildRequirement', () => {
     const result = determineFrontendBuildRequirement([
       'frontend/public/ball.png',
       'frontend/angular.json',
+      'frontend/public/_routes.json',
     ]);
 
     expect(result.needsBuild).toBe(true);
   });
 
-  it('returns conservative build-required when impact is unknown', () => {
+  it('requires the frontend build for Cloudflare Pages functions', () => {
     const result = determineFrontendBuildRequirement([
-      'scripts/with-env.ts',
+      'frontend/functions/asset-miss.ts',
     ]);
+
+    expect(result.needsBuild).toBe(true);
+    expect(result.reasons).toContain('frontend/functions/asset-miss.ts');
+  });
+
+  it('returns conservative build-required when impact is unknown', () => {
+    const result = determineFrontendBuildRequirement(['scripts/with-env.ts']);
 
     expect(result.needsBuild).toBe(true);
   });

@@ -1,8 +1,8 @@
 import {Component, ChangeDetectionStrategy, inject} from '@angular/core';
 import {RouterLink} from '@angular/router';
 
-import {BraDialogService} from '@ui/components/composites/dialog/dialog.service';
-import {FooterFeedbackDialogComponent} from './footer-feedback-dialog.component';
+import {BraToastService} from '@ui/components/composites/toast/toast.service';
+import {FeedbackService} from '@/core/services/feedback.service';
 import {logger} from '@/utils/logger';
 
 @Component({
@@ -11,7 +11,7 @@ import {logger} from '@/utils/logger';
   imports: [RouterLink],
   template: `
     <footer
-      class="px-6 py-8 md:px-12 md:py-6 border-t border-border bg-background text-muted-foreground text-xs flex flex-col items-center gap-3 uppercase tracking-widest font-mono"
+      class="flex flex-col items-center gap-3 border-t border-border bg-background px-6 py-8 font-mono text-xs tracking-widest text-muted-foreground uppercase md:px-12 md:py-6"
     >
       <nav
         aria-label="Footer"
@@ -19,58 +19,58 @@ import {logger} from '@/utils/logger';
       >
         <a
           routerLink="/terms"
-          class="hover:text-foreground transition-colors py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm"
+          class="rounded-sm py-1 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
           >Terms</a
         >
         <a
           routerLink="/privacy"
-          class="hover:text-foreground transition-colors py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm"
+          class="rounded-sm py-1 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
           >Privacy</a
         >
         <a
           routerLink="/support"
-          class="hover:text-foreground transition-colors py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm"
+          class="rounded-sm py-1 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
           >Support</a
         >
         <a
           routerLink="/about"
-          class="hover:text-foreground transition-colors py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm"
+          class="rounded-sm py-1 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
           >About</a
         >
         <a
           routerLink="/help"
-          class="hover:text-foreground transition-colors py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm"
+          class="rounded-sm py-1 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
           >Help</a
         >
         <button
           type="button"
           (click)="openFeedback()"
-          class="hover:text-foreground transition-colors cursor-pointer uppercase py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm"
+          class="cursor-pointer rounded-sm py-1 uppercase transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
         >
           Feedback
         </button>
       </nav>
-      <div class="hidden md:block text-muted-foreground">
+      <div class="hidden text-muted-foreground md:block">
         DIY Transexual Technology
       </div>
     </footer>
   `,
 })
 export class FooterComponent {
-  private readonly dialogService = inject(BraDialogService);
+  private readonly feedback = inject(FeedbackService);
+  private readonly toast = inject(BraToastService);
 
   openFeedback(): void {
-    try {
-      this.dialogService.create({
-        zTitle: 'Feedback',
-        zDescription: 'Tell us what happened or what you want to see next.',
-        zContent: FooterFeedbackDialogComponent,
-        zHideFooter: true,
-        zMaskClosable: false,
-        zWidth: 'min(32rem, calc(100vw - 2rem))',
+    void this.feedback
+      .open()
+      .then((opened) => {
+        if (!opened) {
+          this.toast.error('Feedback is unavailable right now.');
+        }
+      })
+      .catch((error: unknown) => {
+        logger.error('Failed to open Sentry feedback', error);
+        this.toast.error('Feedback is unavailable right now.');
       });
-    } catch (error) {
-      logger.error('Failed to open feedback dialog', error);
-    }
   }
 }

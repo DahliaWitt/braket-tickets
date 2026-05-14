@@ -298,7 +298,7 @@
                   feedback review, opt-out management, and email deliverability.
                 </td>
                 <td class="py-3 pr-4">
-                  Email providers, PostHog for feedback you submit,
+                  Email providers, Sentry for feedback you submit,
                   infrastructure providers, and relevant Event Organizers when
                   needed to resolve event-specific issues.
                 </td>
@@ -411,11 +411,10 @@
         <p>
           Analytics identity is limited to internal account identifiers and role
           metadata; we do not send your name or email address as PostHog
-          identity properties. If you submit feedback through the footer
-          feedback form, the message text is sent to PostHog so we can review
-          and act on it; this is an explicit submission, not passive analytics
-          capture. We may use masked session replay for quality and support,
-          with text and form inputs hidden by default.
+          identity properties. Footer feedback is sent through Sentry Feedback
+          so we can review and act on it; this is an explicit submission, not
+          passive analytics capture. We may use masked session replay for
+          quality and support, with text and form inputs hidden by default.
         </p>
         <p>
           Sensitive checkout, authentication, vetting, QR code, ticket PDF,
@@ -584,15 +583,16 @@
             <strong>Analytics and Error Monitoring Providers:</strong> We share
             usage data with PostHog to analyze site traffic, product usage, and
             service reliability. Browser DNT/GPC signals disable passive
-            frontend PostHog SDK capture, replay, and persistence, but explicit
-            feedback submissions and server-side operational analytics may still
-            send sanitized transaction, security, reliability, and business
-            events to PostHog. We share error reports, stack traces, route or
-            URL context, browser and device metadata, performance traces,
-            breadcrumbs, and masked replay context with Sentry so we can detect
-            and troubleshoot failures. Our proxy code strips visitor IP headers
-            that we control, but Cloudflare and these providers may still
-            process technical network metadata as part of request delivery.
+            frontend PostHog SDK capture, replay, and persistence, but
+            server-side operational analytics may still send sanitized
+            transaction, security, reliability, and business events to PostHog.
+            Explicit feedback submissions are sent through Sentry Feedback. We
+            also share error reports, stack traces, route or URL context,
+            browser and device metadata, performance traces, breadcrumbs, and
+            masked replay context with Sentry so we can detect and troubleshoot
+            failures. Our proxy code strips visitor IP headers that we control,
+            but Cloudflare and these providers may still process technical
+            network metadata as part of request delivery.
           </li>
           <li>
             <strong>Infrastructure and Authentication Providers:</strong> We use
@@ -749,10 +749,11 @@
           advertising sale or sharing flow.
         </p>
         <p>
-          The footer feedback form is an explicit way to send us feedback. If
-          you submit that form, we send the message text and feedback category
-          to PostHog even if your browser sends DNT or GPC. If you prefer not to
-          send feedback through PostHog, you can contact us directly by email at
+          The footer feedback form is an explicit way to send us feedback
+          through Sentry Feedback. If you submit that form, we send the message
+          text and any email address you provide to Sentry even if your browser
+          sends DNT or GPC. If you prefer not to send feedback through Sentry,
+          you can contact us directly by email at
           <a href="mailto:contact@braket.gay" class="text-primary underline"
             >contact@braket.gay</a
           >.

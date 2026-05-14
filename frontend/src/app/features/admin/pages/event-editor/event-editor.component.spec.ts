@@ -115,7 +115,7 @@ describe('EventEditorComponent', () => {
     _id: 'evt123',
     _creationTime: Date.now(),
     title: 'Test Event',
-    date: getFutureDateYmd(),
+    date: '2026-06-05T06:30:00.000Z',
     location: 'Test Location',
     description: 'Test Description',
     price: 2000,
@@ -229,6 +229,10 @@ describe('EventEditorComponent', () => {
   it('should load event data into form', async () => {
     // Verify Form Model (Signal Forms)
     expect(component.eventModel().title).toBe('Test Event');
+    expect(component.eventModel().date?.getFullYear()).toBe(2026);
+    expect(component.eventModel().date?.getMonth()).toBe(5);
+    expect(component.eventModel().date?.getDate()).toBe(4);
+    expect(component.eventModel().time).toBe('23:30');
 
     expect(await harness.isSaveButtonDisabled()).toBe(false); // Valid form = Enabled
     expect(eventsServiceMock.getOneForEdit).toHaveBeenCalledWith('evt123');
@@ -528,6 +532,7 @@ describe('EventEditorComponent', () => {
       organizerId: 'org1',
       title: 'Updated Title',
       date: getFutureDate(31),
+      time: '23:15',
     }));
     fixture.detectChanges();
     await fixture.whenStable();
@@ -538,14 +543,37 @@ describe('EventEditorComponent', () => {
     fixture.detectChanges();
     await fixture.whenStable();
 
-    expect(eventsServiceMock.updateWithPoster).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: 'evt123',
-        organizerId: expect.anything() as unknown,
-      }),
+    const [args, posterFile, onProgress, signal] = eventsServiceMock
+      .updateWithPoster.mock.calls[0] as unknown as [
+      {
+        id: string;
+        organizerId: unknown;
+        date: string;
+      },
       undefined,
-      expect.any(Function),
-      expect.any(AbortSignal),
+      (pct: number) => void,
+      AbortSignal,
+    ];
+    expect(args.id).toBe('evt123');
+    expect(args.organizerId).toBeDefined();
+    expect(posterFile).toBeUndefined();
+    expect(onProgress).toEqual(expect.any(Function));
+    expect(signal).toBeInstanceOf(AbortSignal);
+    const updateArgs = args as {
+      date: string;
+    };
+    expect(updateArgs.date).toMatch(/T/);
+    const savedTimeParts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Los_Angeles',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(new Date(updateArgs.date));
+    expect(savedTimeParts.find((part) => part.type === 'hour')?.value).toBe(
+      '23',
+    );
+    expect(savedTimeParts.find((part) => part.type === 'minute')?.value).toBe(
+      '15',
     );
   });
 

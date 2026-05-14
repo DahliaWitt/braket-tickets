@@ -5,7 +5,7 @@
  * Mirrors the structure of component harnesses for consistency.
  */
 
-import { Locator, Page, expect } from '@playwright/test';
+import {Locator, Page, expect} from '@playwright/test';
 
 export class LandingPage {
   constructor(private page: Page) {}
@@ -15,12 +15,8 @@ export class LandingPage {
     return this.page.getByTestId('landing-hero');
   }
 
-  private getFeaturedEventSection(): Locator {
-    return this.page.getByTestId('landing-featured-event');
-  }
-
-  private getOverflowEventsSection(): Locator {
-    return this.page.getByTestId('landing-overflow-events');
+  private getEventsSection(): Locator {
+    return this.page.getByTestId('landing-events');
   }
 
   private getCommunitiesSection(): Locator {
@@ -38,7 +34,7 @@ export class LandingPage {
    * Wait for the landing page to be fully loaded.
    */
   async waitForReady(timeout = 15000): Promise<void> {
-    await expect(this.getHeroSection()).toBeVisible({ timeout });
+    await expect(this.getHeroSection()).toBeVisible({timeout});
   }
 
   /**
@@ -50,18 +46,10 @@ export class LandingPage {
   }
 
   /**
-   * Check if featured event section is visible.
+   * Check if events section is visible.
    */
-  async isFeaturedEventVisible(): Promise<boolean> {
-    const el = this.getFeaturedEventSection();
-    return (await el.count()) > 0 && (await el.isVisible());
-  }
-
-  /**
-   * Check if overflow events section is visible.
-   */
-  async isOverflowEventsVisible(): Promise<boolean> {
-    const el = this.getOverflowEventsSection();
+  async isEventsVisible(): Promise<boolean> {
+    const el = this.getEventsSection();
     return (await el.count()) > 0 && (await el.isVisible());
   }
 
@@ -77,7 +65,7 @@ export class LandingPage {
    * Get the main heading text.
    */
   async getHeadingText(): Promise<string | null> {
-    const h1 = this.page.getByRole('heading', { level: 1 });
+    const h1 = this.page.getByRole('heading', {level: 1});
     if ((await h1.count()) === 0) return null;
     return h1.textContent();
   }
@@ -86,11 +74,7 @@ export class LandingPage {
    * Find an event card by its title text.
    */
   findEventByTitle(title: string | RegExp): Locator {
-    // Events can be in featured or overflow sections
-    return this.page
-      .getByTestId('landing-featured-event')
-      .or(this.page.getByTestId('landing-overflow-events'))
-      .getByText(title);
+    return this.getEventsSection().getByText(title);
   }
 
   /**
@@ -113,30 +97,12 @@ export class LandingPage {
    * Get all visible event titles.
    */
   async getVisibleEventTitles(): Promise<string[]> {
-    const titles: string[] = [];
+    const section = this.getEventsSection();
+    if ((await section.count()) === 0) return [];
 
-    // Check featured event
-    const featured = this.getFeaturedEventSection();
-    if ((await featured.count()) > 0) {
-      const title = featured.locator('h2');
-      if ((await title.count()) > 0) {
-        const text = await title.textContent();
-        if (text) titles.push(text.trim());
-      }
-    }
-
-    // Check overflow events
-    const overflow = this.getOverflowEventsSection();
-    if ((await overflow.count()) > 0) {
-      const eventTitles = overflow.locator('h3');
-      const count = await eventTitles.count();
-      for (let i = 0; i < count; i++) {
-        const text = await eventTitles.nth(i).textContent();
-        if (text) titles.push(text.trim());
-      }
-    }
-
-    return titles;
+    return (await section.locator('h2').allTextContents())
+      .map((t) => t.trim())
+      .filter(Boolean);
   }
 
   /**
@@ -158,7 +124,7 @@ export class LandingPage {
    * Get the login/signup button.
    */
   getAuthButton(): Locator {
-    return this.page.locator('button', { hasText: /Log In|Sign Up/i });
+    return this.page.locator('button', {hasText: /Log In|Sign Up/i});
   }
 
   /**
@@ -172,7 +138,7 @@ export class LandingPage {
    * Assert that the page shows the expected event.
    */
   async expectEventVisible(title: string | RegExp): Promise<void> {
-    await expect(this.findEventByTitle(title)).toBeVisible({ timeout: 30000 });
+    await expect(this.findEventByTitle(title)).toBeVisible({timeout: 30000});
   }
 
   /**

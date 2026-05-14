@@ -1,20 +1,14 @@
-import {type HarnessLoader} from '@angular/cdk/testing';
 import {describe, it, expect, beforeEach, vi} from 'vitest';
+import {type HarnessLoader} from '@angular/cdk/testing';
 import {ChangeDetectionStrategy, Component} from '@angular/core';
 import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
 import {type ComponentFixture, TestBed} from '@angular/core/testing';
-import {OverlayModule} from '@angular/cdk/overlay';
-import {PortalModule} from '@angular/cdk/portal';
 import {provideRouter} from '@angular/router';
 import {provideZonelessChangeDetection} from '@angular/core';
 import {FooterComponent} from './footer';
 import {FooterHarness} from './footer.harness';
-import {BraDialogService} from '@ui/components/composites/dialog/dialog.service';
-import {FooterFeedbackDialogComponent} from './footer-feedback-dialog.component';
-import {FooterFeedbackDialogHarness} from './footer-feedback-dialog.component.harness';
-import {type BraDialogOptions} from '@ui/components/composites/dialog/dialog.component';
-import {BraDialogHarness} from '@ui/components/composites/dialog/dialog.component.harness';
-import {AnalyticsService} from '@/core/services/analytics.service';
+import {BraToastService} from '@ui/components/composites/toast/toast.service';
+import {FeedbackService} from '@/core/services/feedback.service';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -27,19 +21,25 @@ describe('FooterComponent', () => {
   let fixture: ComponentFixture<FooterHostComponent>;
   let harness: FooterHarness;
   let loader: HarnessLoader;
-  const dialogServiceMock = {
-    create: vi.fn<(config: BraDialogOptions<unknown, unknown>) => void>(),
+  const feedbackServiceMock = {
+    open: vi.fn(),
+  };
+  const toastMock = {
+    error: vi.fn(),
   };
 
   beforeEach(async () => {
-    dialogServiceMock.create.mockReset();
+    feedbackServiceMock.open.mockReset();
+    feedbackServiceMock.open.mockResolvedValue(true);
+    toastMock.error.mockReset();
 
     await TestBed.configureTestingModule({
       imports: [FooterHostComponent],
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([]),
-        {provide: BraDialogService, useValue: dialogServiceMock},
+        {provide: FeedbackService, useValue: feedbackServiceMock},
+        {provide: BraToastService, useValue: toastMock},
       ],
     }).compileComponents();
 
@@ -53,60 +53,36 @@ describe('FooterComponent', () => {
     expect(await harness.hasFooterLandmark()).toBe(true);
   });
 
-  it('opens the feedback dialog with the correct config', async () => {
+  it('opens the Sentry feedback form', async () => {
     await harness.clickFeedback();
 
-    expect(dialogServiceMock.create).toHaveBeenCalledOnce();
-    const [config] = dialogServiceMock.create.mock.calls[0] ?? [];
-    expect(config).toMatchObject({
-      zTitle: 'Feedback',
-      zDescription: 'Tell us what happened or what you want to see next.',
-      zContent: FooterFeedbackDialogComponent,
-      zHideFooter: true,
-      zMaskClosable: false,
-      zWidth: 'min(32rem, calc(100vw - 2rem))',
-    });
-  });
-});
-
-describe('FooterComponent feedback overlay', () => {
-  let fixture: ComponentFixture<FooterHostComponent>;
-  let harness: FooterHarness;
-  let loader: HarnessLoader;
-
-  beforeEach(async () => {
-    await TestBed.configureTestingModule({
-      imports: [FooterHostComponent, OverlayModule, PortalModule],
-      providers: [
-        provideZonelessChangeDetection(),
-        provideRouter([]),
-        {
-          provide: AnalyticsService,
-          useValue: {
-            captureFeedback: vi.fn(),
-            startFeedbackReplayCapture: vi.fn(),
-          },
-        },
-      ],
-    }).compileComponents();
-
-    fixture = TestBed.createComponent(FooterHostComponent);
-    fixture.detectChanges();
-    loader = TestbedHarnessEnvironment.loader(fixture);
-    harness = await loader.getHarness(FooterHarness);
+    expect(feedbackServiceMock.open).toHaveBeenCalledOnce();
+    expect(toastMock.error).not.toHaveBeenCalled();
   });
 
-  it('renders the feedback dialog through the real overlay service', async () => {
+  it('shows a toast when Sentry feedback is unavailable', async () => {
+    feedbackServiceMock.open.mockResolvedValueOnce(false);
+
     await harness.clickFeedback();
 
-    const documentLoader =
-      TestbedHarnessEnvironment.documentRootLoader(fixture);
-    const dialog = await documentLoader.getHarness(BraDialogHarness);
-    const feedbackDialog = await documentLoader.getHarness(
-      FooterFeedbackDialogHarness,
+    await vi.waitFor(() =>
+      expect(toastMock.error).toHaveBeenCalledWith(
+        'Feedback is unavailable right now.',
+      ),
+    );
+  });
+
+  it('shows a toast when Sentry feedback throws', async () => {
+    feedbackServiceMock.open.mockRejectedValueOnce(
+      new Error('feedback failed'),
     );
 
-    expect(await dialog.getTitleText()).toBe('Feedback');
-    expect(await feedbackDialog.submitDisabled()).toBe(true);
+    await harness.clickFeedback();
+
+    await vi.waitFor(() =>
+      expect(toastMock.error).toHaveBeenCalledWith(
+        'Feedback is unavailable right now.',
+      ),
+    );
   });
 });

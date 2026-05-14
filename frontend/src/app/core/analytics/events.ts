@@ -13,15 +13,6 @@ export type PurchaseAccessSource =
   | 'denied';
 export type CheckoutKind = 'primary' | 'guest' | 'free' | 'resale';
 
-export type FeedbackCategory =
-  | 'general_feedback'
-  | 'bug'
-  | 'feature_request'
-  | 'payment'
-  | 'event_info'
-  | 'organizer'
-  | 'other';
-
 export interface AnalyticsEventMap {
   event_viewed: {
     event_id: string;
@@ -43,15 +34,6 @@ export interface AnalyticsEventMap {
   stripe_connect_onboarding_started: {
     organizer_id: string;
     connected_account_present: boolean;
-  };
-  feedback_submitted: {
-    feedback_category: FeedbackCategory;
-    feedback_message: string;
-    feedback_replay_url?: string;
-    message_length: number;
-    route_template: string;
-    signed_in: boolean;
-    has_replay_url: boolean;
   };
   trust_link_created: {
     organizer_id?: string;
