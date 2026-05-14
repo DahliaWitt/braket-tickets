@@ -219,6 +219,9 @@ export class CommunityAdminHarness extends ComponentHarness {
   private getMagicLinkTokenPrefixesAll = this.locatorForAll(
     '[data-testid="magic-link-token-prefix"]',
   );
+  private getMagicLinkCopyUnavailableNotesAll = this.locatorForAll(
+    '[data-testid="magic-link-copy-unavailable-note"]',
+  );
   private getMagicLinkCopyStatusEl = this.locatorForOptional(
     '[data-testid="magic-link-copy-status"]',
   );
@@ -249,6 +252,12 @@ export class CommunityAdminHarness extends ComponentHarness {
     return Promise.all(
       prefixes.map(async (prefix) => (await prefix.text()).trim()),
     );
+  }
+
+  /** Returns visible mobile notes explaining why a stored magic link cannot be copied. */
+  async getMagicLinkCopyUnavailableNotes(): Promise<string[]> {
+    const notes = await this.getMagicLinkCopyUnavailableNotesAll();
+    return Promise.all(notes.map(async (note) => (await note.text()).trim()));
   }
 
   /** Returns the visible magic-link copy status text, or null if absent. */

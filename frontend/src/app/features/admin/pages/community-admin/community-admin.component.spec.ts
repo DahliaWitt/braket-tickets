@@ -897,6 +897,12 @@ describe('CommunityAdminComponent', () => {
 
       expect(writeTextSpy).not.toHaveBeenCalled();
       expect(prefixes).toContain('copy-tok');
+      expect(await harness.getMagicLinkActionAriaLabels()).not.toContain(
+        'Copy link VIP Access',
+      );
+      expect(await harness.getMagicLinkCopyUnavailableNotes()).toContain(
+        'Full link only available right after creation.',
+      );
     });
 
     it('wraps the create dialog content in a CDK focus trap', async () => {
@@ -1163,6 +1169,8 @@ describe('CommunityAdminComponent', () => {
       const successSpy = vi
         .spyOn(toast, 'success')
         .mockImplementation(() => 'toast-id');
+      const writeTextSpy = vi.fn().mockResolvedValue(undefined);
+      Object.assign(navigator, {clipboard: {writeText: writeTextSpy}});
 
       convexMock.mutation.mockImplementation(
         (mutationRef: unknown, args: unknown) => {
@@ -1246,6 +1254,17 @@ describe('CommunityAdminComponent', () => {
         .poll(async () => (await harness.getActiveMagicLinkRowTexts())[0] ?? '')
         .toContain('QA Negative Redemption');
       expect(successSpy).toHaveBeenCalledWith('Magic link created');
+      expect(writeTextSpy).toHaveBeenCalledWith(
+        `${window.location.origin}/invite/created-token`,
+      );
+      expect(await harness.getMagicLinkActionAriaLabels()).toContain(
+        'Copy link QA Negative Redemption',
+      );
+      await harness.clickMagicLinkAction('Copy link QA Negative Redemption');
+      expect(writeTextSpy).toHaveBeenCalledTimes(2);
+      expect(await harness.getMagicLinkCopyStatus()).toBe(
+        'Copied link for QA Negative Redemption',
+      );
 
       await harness.clickMagicLinkAction('Pause link QA Negative Redemption');
       await expect
