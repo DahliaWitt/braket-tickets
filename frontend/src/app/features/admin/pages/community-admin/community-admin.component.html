@@ -227,9 +227,7 @@
               link keeps count of how many people have used it.
             </p>
           </z-alert>
-          @if (
-            !isLoading() && links().length > 0 && linksFilter() === 'active'
-          ) {
+          @if (!isLoading() && (links().length > 0 || pastLinksCount() > 0)) {
             <button
               type="button"
               data-testid="create-link-button"
