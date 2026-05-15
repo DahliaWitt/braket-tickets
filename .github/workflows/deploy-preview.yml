@@ -331,7 +331,7 @@ jobs:
           CONVEX_DEV_LOG_FORWARD_ALL: ${{ secrets.CONVEX_DEV_LOG_FORWARD_ALL }}
           CONVEX_DEV_LOG_INCLUDE_SUCCESS: ${{ secrets.CONVEX_DEV_LOG_INCLUDE_SUCCESS }}
           CONVEX_DEV_LOG_RECONNECT_MS: ${{ secrets.CONVEX_DEV_LOG_RECONNECT_MS }}
-          CONVEX_DEV_LOG_SINK: ${{ secrets.CONVEX_DEV_LOG_SINK == 'none' && 'none' || 'sentry' }}
+          CONVEX_DEV_LOG_SINK: ${{ secrets.CONVEX_DEV_LOG_SINK == 'sentry' && secrets.SENTRY_DSN != '' && 'sentry' || 'none' }}
           CONVEX_DEV_LOG_TARGET: ${{ secrets.CONVEX_DEV_LOG_TARGET }}
           SENTRY_DSN_DEVELOPMENT: ${{ secrets.SENTRY_DSN }}
 
@@ -344,7 +344,7 @@ jobs:
           CONVEX_DEV_LOG_FORWARD_ALL: ${{ secrets.CONVEX_DEV_LOG_FORWARD_ALL }}
           CONVEX_DEV_LOG_INCLUDE_SUCCESS: ${{ secrets.CONVEX_DEV_LOG_INCLUDE_SUCCESS }}
           CONVEX_DEV_LOG_RECONNECT_MS: ${{ secrets.CONVEX_DEV_LOG_RECONNECT_MS }}
-          CONVEX_DEV_LOG_SINK: ${{ secrets.CONVEX_DEV_LOG_SINK == 'none' && 'none' || 'sentry' }}
+          CONVEX_DEV_LOG_SINK: ${{ secrets.CONVEX_DEV_LOG_SINK == 'sentry' && secrets.SENTRY_DSN != '' && 'sentry' || 'none' }}
           CONVEX_DEV_LOG_TARGET: ${{ secrets.CONVEX_DEV_LOG_TARGET }}
           SENTRY_DSN_DEVELOPMENT: ${{ secrets.SENTRY_DSN }}
 

@@ -7,12 +7,13 @@ import {
 } from './convex-log-forwarder.mjs';
 
 describe('convex-log-forwarder runtime config', () => {
-  it('defaults to sentry and throws when SENTRY_DSN is missing', () => {
-    expect(() =>
-      buildRuntimeConfig({
-        CONVEX_LOG_TARGET: 'prod',
-      }),
-    ).toThrowError(/SENTRY_DSN is required when sink is sentry/i);
+  it('defaults to no-op forwarding when CONVEX_LOG_SINK is unset', () => {
+    const config = buildRuntimeConfig({
+      CONVEX_LOG_TARGET: 'prod',
+    });
+
+    expect(config.sink).toBe('none');
+    expect((config as Record<string, unknown>)['sentryDsn']).toBeUndefined();
   });
 
   it('accepts sink=none without provider credentials', () => {

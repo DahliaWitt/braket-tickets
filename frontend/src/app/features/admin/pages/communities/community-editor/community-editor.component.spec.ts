@@ -20,6 +20,7 @@ import {AdminCommunityEditorComponentHarness} from './community-editor.component
 import {CommunitiesService} from '@/core/services/communities.service';
 import {CONVEX} from 'convex-angular';
 import {AuthService} from '@/core/services/auth.service';
+import {api} from '@convex/_generated/api';
 import {type Id} from '@convex/_generated/dataModel';
 import {toast} from 'ngx-sonner';
 
@@ -170,11 +171,27 @@ describe('AdminCommunityEditorComponent', () => {
       AdminCommunityEditorComponentHarness,
     );
 
+    convexClientMock.action
+      .mockResolvedValueOnce({stripeConnectedAccountId: 'acct_new'})
+      .mockResolvedValueOnce({
+        chargesEnabled: false,
+        payoutsEnabled: false,
+        onboardingStatus: 'in_progress',
+        chargeReady: false,
+      });
+    const actionCallsBefore = convexClientMock.action.mock.calls.length;
+
     await harness.clickConnectWithStripe();
     fixture.detectChanges();
     await fixture.whenStable();
 
-    expect(convexClientMock.action).toHaveBeenCalled();
+    expect(convexClientMock.action.mock.calls.length).toBeGreaterThan(
+      actionCallsBefore,
+    );
+    expect(convexClientMock.action.mock.calls[actionCallsBefore]).toEqual([
+      api.stripe.actions.createConnectedAccount,
+      {organizerId: 'org_123'},
+    ]);
   });
 
   it('slug form field auto-populates when name is entered in create mode', async () => {

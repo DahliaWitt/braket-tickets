@@ -131,16 +131,16 @@ The sync script only pushes an explicit allowlist of backend variables, not ever
 Forwarding for Convex logs is controlled by the Docker observability services in `ops/docker-compose.yml`.
 The deploy workflows pass these values from the Doppler-synced GitHub environment into `docker compose`.
 
-- **`CONVEX_LOG_SINK`**: sink for production logs. Supported values are `sentry` and `none`; compose defaults to `sentry`.
-- **`CONVEX_DEV_LOG_SINK`**: sink for development logs. Supported values are `sentry` and `none`; compose defaults to `sentry`.
+- **`CONVEX_LOG_SINK`**: sink for production logs. Supported values are `sentry` and `none`; compose defaults to `none`.
+- **`CONVEX_DEV_LOG_SINK`**: sink for development logs. Supported values are `sentry` and `none`; compose defaults to `none`.
 
 The selected Doppler deployment configs use `SENTRY_DSN` for Sentry. `ops/docker-compose.yml` passes that value into the production forwarder directly; the preview/dev workflow maps the development environment's `SENTRY_DSN` secret into the dev forwarder. `SENTRY_DSN_DEVELOPMENT` remains only as a local compose override for the dev observability profile.
 
 - **`SENTRY_DSN`**: Sentry DSN for the active Doppler config. Required when the selected sink is `sentry`.
 - **`SENTRY_DSN_DEVELOPMENT`**: optional local override for `convex-log-forwarder-dev`; compose falls back to `SENTRY_DSN` when this is unset.
 
-Set `CONVEX_LOG_SINK=none` only for a deliberate temporary pause in log forwarding.
-Restore `sentry` and rerun the matching deploy workflow when forwarding should resume.
+Set `CONVEX_LOG_SINK=sentry` or `CONVEX_DEV_LOG_SINK=sentry` only when the matching Sentry DSN is configured.
+Use `none` to leave the forwarder connected to Convex without sending events to Sentry.
 
 ## Adding a New Variable
 

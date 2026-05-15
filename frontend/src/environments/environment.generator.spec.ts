@@ -20,7 +20,6 @@ describe('runtime-config', () => {
 
     expect(serializedEnvironment).not.toContain('super-secret-password');
     expect(serializedEnvironment).not.toContain('DEV_PASSWORD');
-    expect(serializedEnvironment).not.toContain('DEV_PASSWORD');
   });
 
   it('creates an e2e config from the harness-provided Convex URLs', () => {

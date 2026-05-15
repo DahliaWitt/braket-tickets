@@ -330,6 +330,20 @@ jobs:
           echo "needs_deploy=${needs_deploy}" >> "${GITHUB_OUTPUT}"
           echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
 
+      - name: Validate CONVEX_LOG_SINK
+        if: ${{ steps.status.outputs.needs_deploy == 'true' }}
+        env:
+          CONVEX_LOG_SINK: ${{ secrets.CONVEX_LOG_SINK }}
+        run: |
+          case "${CONVEX_LOG_SINK}" in
+            sentry|none)
+              ;;
+            *)
+              echo "::error::CONVEX_LOG_SINK must be exactly 'sentry' or 'none'; got '${CONVEX_LOG_SINK:-<unset>}'"
+              exit 1
+              ;;
+          esac
+
       - name: Deploy observability services (changed)
         if: ${{ steps.status.outputs.needs_deploy == 'true' && needs.changes.outputs.observability == 'true' }}
         run: docker compose -f ops/docker-compose.yml up -d --build
@@ -342,7 +356,7 @@ jobs:
           CONVEX_LOG_FORWARD_ALL: ${{ secrets.CONVEX_LOG_FORWARD_ALL }}
           CONVEX_LOG_INCLUDE_SUCCESS: ${{ secrets.CONVEX_LOG_INCLUDE_SUCCESS }}
           CONVEX_LOG_RECONNECT_MS: ${{ secrets.CONVEX_LOG_RECONNECT_MS }}
-          CONVEX_LOG_SINK: ${{ secrets.CONVEX_LOG_SINK == 'none' && 'none' || 'sentry' }}
+          CONVEX_LOG_SINK: ${{ secrets.CONVEX_LOG_SINK }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           BRAKET_APPDATA_ROOT: /mnt/user/appdata/braket-tickets
 
@@ -358,7 +372,7 @@ jobs:
           CONVEX_LOG_FORWARD_ALL: ${{ secrets.CONVEX_LOG_FORWARD_ALL }}
           CONVEX_LOG_INCLUDE_SUCCESS: ${{ secrets.CONVEX_LOG_INCLUDE_SUCCESS }}
           CONVEX_LOG_RECONNECT_MS: ${{ secrets.CONVEX_LOG_RECONNECT_MS }}
-          CONVEX_LOG_SINK: ${{ secrets.CONVEX_LOG_SINK == 'none' && 'none' || 'sentry' }}
+          CONVEX_LOG_SINK: ${{ secrets.CONVEX_LOG_SINK }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           BRAKET_APPDATA_ROOT: /mnt/user/appdata/braket-tickets
 

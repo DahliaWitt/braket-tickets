@@ -12,6 +12,7 @@ import {describe, it, expect, vi} from 'vitest';
 import {of} from 'rxjs';
 import {CommunityAdminSettingsComponent} from './community-admin-settings.component';
 import {CONVEX} from 'convex-angular';
+import {api} from '@convex/_generated/api';
 import {BraDialogService} from '@ui/components/composites/dialog/dialog.service';
 import {CommunityContextService} from '@/features/admin/services/community-context.service';
 import type {Id} from '@convex/_generated/dataModel';
@@ -530,7 +531,16 @@ describe('CommunityAdminSettingsComponent', () => {
 
       await harness.clickContinueStripeOnboarding();
 
-      expect(convexMock.action).toHaveBeenCalled();
+      expect(convexMock.action).toHaveBeenCalledWith(
+        api.stripe.actions.createAccountOnboardingLink,
+        {
+          organizerId: FAKE_ORG_ID,
+          returnOrigin: 'https://dev.community.braket.gay',
+        },
+      );
+      expect(assignSpy).toHaveBeenCalledWith(
+        'https://connect.stripe.test/onboarding-link',
+      );
 
       originSpy.mockRestore();
       assignSpy.mockRestore();
@@ -563,11 +573,13 @@ describe('CommunityAdminSettingsComponent', () => {
 
       await fixture.componentInstance.openStripeOnboarding();
 
-      expect(originSpy).toHaveBeenCalled();
-      expect(convexMock.action).toHaveBeenCalledWith(expect.anything(), {
-        organizerId: FAKE_ORG_ID,
-        returnOrigin: 'https://dev.community.braket.gay',
-      });
+      expect(convexMock.action).toHaveBeenCalledWith(
+        api.stripe.actions.createAccountOnboardingLink,
+        {
+          organizerId: FAKE_ORG_ID,
+          returnOrigin: 'https://dev.community.braket.gay',
+        },
+      );
       expect(assignSpy).toHaveBeenCalledWith(
         'https://connect.stripe.test/onboarding-link',
       );

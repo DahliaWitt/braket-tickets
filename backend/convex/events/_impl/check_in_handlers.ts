@@ -4,7 +4,7 @@ import type {MutationCtx} from '../../_generated/server';
 import {requireUser} from '../../lib/auth_identity';
 import {findMatchingInQuery} from '../../lib/query_scan';
 import {buildTicketRosterProjection} from '../../lib/ticket_roster_projection';
-import {canEditEvent, canScanEvent, isPlatformAdmin} from '../../lib/access';
+import {canEditEvent, canScanEvent} from '../../lib/access';
 import {ADMIN_AUDIT_ACTIONS} from '../../lib/admin_audit_actions';
 import {logger} from '../../lib/logger';
 import {
@@ -66,27 +66,9 @@ type CheckInResult =
     };
 
 type CheckInScanSource = 'admin-ui' | 'door-scanner';
-type CheckInActorRole = 'community_admin' | 'root_admin' | 'scanner';
 
 function getScanSource(isEditor: boolean): CheckInScanSource {
   return isEditor ? 'admin-ui' : 'door-scanner';
-}
-
-async function resolveCheckInActorRole(
-  ctx: MutationCtx,
-  userId: Id<'users'>,
-  event: Doc<'events'> | null,
-  isEditor: boolean,
-): Promise<CheckInActorRole> {
-  if (await isPlatformAdmin(ctx, userId)) {
-    return 'root_admin';
-  }
-
-  if (event && isEditor) {
-    return 'community_admin';
-  }
-
-  return 'scanner';
 }
 
 function failCheckIn(args: {
@@ -116,7 +98,6 @@ async function loadCheckInAuthorization(
       success: true;
       event: Doc<'events'>;
       isEditor: boolean;
-      actorRole: CheckInActorRole;
       auditSource: CheckInScanSource;
     }
   | {success: false; response: CheckInResult}
@@ -153,13 +134,7 @@ async function loadCheckInAuthorization(
     };
   }
 
-  const actorRole = await resolveCheckInActorRole(
-    ctx,
-    args.userId,
-    event,
-    isEditor,
-  );
-  return {success: true, event, isEditor, actorRole, auditSource};
+  return {success: true, event, isEditor, auditSource};
 }
 
 export async function checkIn(

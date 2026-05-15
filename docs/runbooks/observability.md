@@ -28,11 +28,11 @@ Jump to:
 
 **Symptom:** Sentry stops receiving forwarded Convex logs even though users report backend failures.
 
-The `convex-log-forwarder` Docker service streams Convex logs to the provider selected by `CONVEX_LOG_SINK`. Supported values are `sentry` and `none`. The profile service reads `CONVEX_DEV_LOG_SINK` for preview/dev and maps it to runtime sink config in the same container.
+The `convex-log-forwarder` Docker service streams Convex logs to the provider selected by `CONVEX_LOG_SINK`. Supported values are `sentry` and `none`; compose defaults to `none` when no sink is set. The profile service reads `CONVEX_DEV_LOG_SINK` for preview/dev and maps it to runtime sink config in the same container.
 
 Before delivery, the forwarder sanitizes the log message, raw Convex line, and structured Convex payload with `shared/log-sanitizer.mjs`. This is defense-in-depth for runtime or third-party log lines that bypass the backend `logger` wrapper.
 
-Set `CONVEX_LOG_SINK=none` only for a deliberate temporary pause in forwarding. Restore `sentry` and rerun the matching deploy workflow when forwarding should resume.
+Set `CONVEX_LOG_SINK=sentry` or `CONVEX_DEV_LOG_SINK=sentry` only when the matching Sentry DSN is configured. Use `none` to keep the forwarder connected without sending events to Sentry.
 
 ### Check the forwarder
 

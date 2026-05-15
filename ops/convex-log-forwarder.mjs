@@ -10,7 +10,7 @@ import {sanitize} from '../shared/log-sanitizer.mjs';
 
 const ERROR_WORD_RE =
   /(^|[^a-z0-9])(error|exception|fatal|panic|failed|failure|uncaught)([^a-z0-9]|$)/i;
-const DEFAULT_SINK = 'sentry';
+const DEFAULT_SINK = 'none';
 
 const recentlyForwarded = new Map();
 
