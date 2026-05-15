@@ -31,6 +31,11 @@ export const CONVEX_CLI = path.join(
 );
 
 export const LOCAL_DIR = path.join(PROJECT_ROOT, '.convex-local');
+export const DEFAULT_CONVEX_LOCAL_BACKEND_RELEASE =
+  'precompiled-2026-05-12-cadb2c2';
+export const CONVEX_LOCAL_BACKEND_RELEASE =
+  process.env['CONVEX_LOCAL_BACKEND_RELEASE'] ??
+  DEFAULT_CONVEX_LOCAL_BACKEND_RELEASE;
 
 // ── sleep ──────────────────────────────────────────────────────────────────────
 
@@ -503,7 +508,7 @@ function detectBackendPackage(): string | null {
 
 /**
  * Downloads the convex-local-backend binary into targetDir.
- * Skips download if the binary already exists and is executable.
+ * Skips download if the pinned binary already exists and is executable.
  */
 async function downloadBackendBinary(targetDir: string): Promise<string> {
   const pkg = detectBackendPackage();
@@ -516,19 +521,28 @@ async function downloadBackendBinary(targetDir: string): Promise<string> {
   fs.mkdirSync(targetDir, {recursive: true});
 
   const binaryPath = path.join(targetDir, 'convex-local-backend');
+  const releaseMarkerPath = path.join(
+    targetDir,
+    'convex-local-backend.release',
+  );
 
   if (
     fs.existsSync(binaryPath) &&
-    (fs.statSync(binaryPath).mode & 0o111) !== 0
+    (fs.statSync(binaryPath).mode & 0o111) !== 0 &&
+    fs.existsSync(releaseMarkerPath) &&
+    fs.readFileSync(releaseMarkerPath, 'utf-8').trim() ===
+      CONVEX_LOCAL_BACKEND_RELEASE
   ) {
     // Already downloaded and executable
     return binaryPath;
   }
 
   const zipPath = path.join(targetDir, pkg);
-  const downloadUrl = `https://github.com/get-convex/convex-backend/releases/latest/download/${pkg}`;
+  const downloadUrl = `https://github.com/get-convex/convex-backend/releases/download/${CONVEX_LOCAL_BACKEND_RELEASE}/${pkg}`;
 
-  console.log(`Downloading convex-local-backend (${pkg})...`);
+  console.log(
+    `Downloading convex-local-backend ${CONVEX_LOCAL_BACKEND_RELEASE} (${pkg})...`,
+  );
   execFileSync(
     'curl',
     [
@@ -550,6 +564,7 @@ async function downloadBackendBinary(targetDir: string): Promise<string> {
 
   execFileSync('unzip', ['-o', zipPath, '-d', targetDir], {stdio: 'inherit'});
   fs.chmodSync(binaryPath, 0o755);
+  fs.writeFileSync(releaseMarkerPath, `${CONVEX_LOCAL_BACKEND_RELEASE}\n`);
 
   return binaryPath;
 }

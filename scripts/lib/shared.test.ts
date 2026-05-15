@@ -4,7 +4,15 @@ import {createPrivateKey, createSign, createVerify} from 'crypto';
 
 import {describe, expect, it} from 'vitest';
 
-import {buildEnv} from './shared';
+import {buildEnv, DEFAULT_CONVEX_LOCAL_BACKEND_RELEASE} from './shared';
+
+describe('local Convex backend release', () => {
+  it('pins the E2E backend binary instead of following latest', () => {
+    expect(DEFAULT_CONVEX_LOCAL_BACKEND_RELEASE).toBe(
+      'precompiled-2026-05-12-cadb2c2',
+    );
+  });
+});
 
 describe('buildEnv', () => {
   it('generates stable paired E2E JWT key material for the current process', () => {
