@@ -74,6 +74,8 @@ export class DashboardComponent {
       source?: 'direct' | 'shared';
       viaOrganizerName?: string;
       reason?: string;
+      routeParam?: string;
+      canResubmit?: boolean;
     }[] = [];
 
     // Add all approvals as "access" entries
@@ -106,11 +108,17 @@ export class DashboardComponent {
         organizerLogoUrl: app.organizerLogoUrl,
         status: app.status === 'pending' ? 'pending' : 'rejected',
         reason: app.denyReason ?? app.reason,
+        routeParam: app.organizerSlug ?? app.organizerId,
+        canResubmit: app.organizerStatus === 'published',
       });
     }
 
     return entries;
   });
+
+  readonly rejectedResubmitEntries = computed(() =>
+    this.communityGridEntries().filter((entry) => entry.status === 'rejected'),
+  );
 
   // Is this a new user with no community relationships?
   readonly isNewUser = computed(

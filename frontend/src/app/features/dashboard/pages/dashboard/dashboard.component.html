@@ -237,6 +237,58 @@
     } @else {
       <!-- Vetted user: has community relationships -->
 
+      @if (rejectedResubmitEntries().length > 0) {
+        @let resubmit = rejectedResubmitEntries()[0];
+        <section
+          data-testid="dashboard-resubmit-strip"
+          class="fade-in mb-6 border-y border-destructive/30 bg-destructive/[0.07] px-4 py-5 md:px-6"
+        >
+          <div
+            class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
+          >
+            <div class="min-w-0">
+              <p class="mono-label mb-2 text-2xs text-destructive/80">
+                Vetting update
+              </p>
+              <h2
+                class="font-display text-xl leading-tight font-bold tracking-tight text-foreground uppercase md:text-2xl"
+              >
+                {{ resubmit.organizerName }} needs another pass
+              </h2>
+              <p
+                class="mt-2 max-w-2xl font-sans text-sm leading-relaxed text-muted-foreground"
+              >
+                You can revise your answers and send the application back
+                through.
+              </p>
+              @if (resubmit.reason) {
+                <p
+                  class="mt-3 max-w-2xl font-sans text-xs leading-relaxed break-words text-muted-foreground/70"
+                >
+                  Reason: {{ resubmit.reason }}
+                </p>
+              }
+            </div>
+            @if (resubmit.canResubmit) {
+              <a
+                [routerLink]="['/vetting', resubmit.routeParam]"
+                data-testid="dashboard-resubmit-cta"
+                class="inline-flex w-fit items-center border border-primary px-4 py-2 font-mono text-2xs tracking-widest text-foreground uppercase transition-colors hover:bg-primary hover:text-primary-foreground"
+              >
+                Revise answers
+                <span aria-hidden="true" class="ml-2">&rarr;</span>
+              </a>
+            } @else {
+              <span
+                class="font-mono text-2xs tracking-widest text-muted-foreground uppercase"
+              >
+                Applications paused
+              </span>
+            }
+          </div>
+        </section>
+      }
+
       <!-- Section: Your Communities -->
       <section class="fade-in">
         <div class="flex items-center justify-between px-1 py-3">
@@ -326,9 +378,9 @@
               </div>
             } @else {
               <!-- Rejected -->
-              <div
+              <article
                 data-testid="dashboard-community-cell"
-                class="flex flex-col gap-2 border-l-[3px] border-l-destructive/50 bg-card/30 p-4"
+                class="flex flex-col gap-3 border-l-[3px] border-l-destructive/50 bg-card/30 p-4"
               >
                 <div class="flex min-w-0 items-center gap-2.5">
                   <bra-community-avatar
@@ -348,12 +400,23 @@
                     {{ entry.reason }}
                   </p>
                 }
-                <bra-status-badge
-                  status="destructive"
-                  class="mt-auto w-fit text-destructive/80"
-                  >Rejected</bra-status-badge
-                >
-              </div>
+                <div class="mt-auto flex items-center justify-between gap-3">
+                  <bra-status-badge
+                    status="destructive"
+                    class="w-fit text-destructive/80"
+                    >Rejected</bra-status-badge
+                  >
+                  @if (entry.canResubmit) {
+                    <a
+                      [routerLink]="['/vetting', entry.routeParam]"
+                      data-testid="dashboard-community-resubmit"
+                      class="font-mono text-2xs tracking-widest text-primary uppercase transition-colors hover:text-primary/80"
+                    >
+                      Revise &rarr;
+                    </a>
+                  }
+                </div>
+              </article>
             }
           }
         </div>
