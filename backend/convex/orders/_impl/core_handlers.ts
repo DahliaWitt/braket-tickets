@@ -28,6 +28,10 @@ import {
   openPrimaryOrderState,
   openResaleOrderState,
 } from '../../lib/orders/open';
+import {
+  getPrimaryHeldInventoryReconciliation,
+  repairPrimaryHeldInventoryCount,
+} from '../../lib/orders/inventory_reconciliation';
 import {releaseOrderState} from '../../lib/orders/release';
 import {getOrderForCaller, throwOrderError} from '../../lib/orders/access';
 import {resolveStripeConnectInfo} from '../../lib/payments/refund_processing';
@@ -144,6 +148,11 @@ type ApplyExternalRefundArgs = {
 
 type ClearCheckoutSessionArgs = {orderId: Id<'ticket_orders'>};
 type CancelOpenOrdersForEventArgs = {eventId: Id<'events'>};
+type GetHeldInventoryReconciliationArgs = {eventId: Id<'events'>};
+type RepairHeldInventoryCountArgs = {
+  eventId: Id<'events'>;
+  expectedStoredHeldCount?: number;
+};
 
 type CheckoutSessionResult = {
   orderId: Id<'ticket_orders'>;
@@ -508,6 +517,20 @@ export async function listMyOrdersHandler(ctx: QueryCtx) {
 
 export async function getInternalHandler(ctx: QueryCtx, args: GetInternalArgs) {
   return await ctx.db.get('ticket_orders', args.orderId);
+}
+
+export async function getHeldInventoryReconciliationHandler(
+  ctx: QueryCtx,
+  args: GetHeldInventoryReconciliationArgs,
+) {
+  return await getPrimaryHeldInventoryReconciliation(ctx, args.eventId);
+}
+
+export async function repairHeldInventoryCountHandler(
+  ctx: MutationCtx,
+  args: RepairHeldInventoryCountArgs,
+) {
+  return await repairPrimaryHeldInventoryCount(ctx, args);
 }
 
 export async function normalizeTicketOrderIdHandler(

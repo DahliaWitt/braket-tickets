@@ -197,7 +197,7 @@ localStorage.setItem('debug', 'verbose');
 | Cleanup old email delivery failures    | Daily            | `emailDeliveryFailures` rows older than 30 days                            |
 | Cleanup Resend component email records | Daily            | Resend component delivery metadata after provider status retention windows |
 
-Expired ticket orders are released by the order expiry path, not by a cron. If that path is broken, investigate `orders:expire` and the Stripe checkout expiry handler.
+Expired ticket orders are released by the order expiry path, not by a cron. If that path is broken, investigate `orders/core:expire` and the Stripe checkout expiry handler. If inventory appears held with no open primary orders, use the held-count reconciliation steps in `docs/runbooks/payments.md`.
 
 ### Resume the cron path
 
