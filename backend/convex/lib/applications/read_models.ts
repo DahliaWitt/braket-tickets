@@ -9,6 +9,7 @@ import {
   batchGetStorageUrls,
   type StorageUrlContext,
 } from '../../lib/storage_urls';
+import {derivePublicationStatus} from '../../lib/community_status';
 import {stripSensitiveUserFields} from '../users/helpers';
 
 type ApplicationDoc = Doc<'applications'>;
@@ -30,7 +31,10 @@ export function pickLatestApplicationByCreationTime(
   applications: ReadonlyArray<ApplicationDoc>,
 ): ApplicationDoc | null {
   if (applications.length === 0) return null;
-  return [...applications].sort((a, b) => b._creationTime - a._creationTime)[0] ?? null;
+  return (
+    [...applications].sort((a, b) => b._creationTime - a._creationTime)[0] ??
+    null
+  );
 }
 
 export async function getLatestApplicationForOrganizer(
@@ -56,7 +60,10 @@ export async function mapApplicationsWithOrganizers(
   const organizerIds = new Set(
     applications
       .map((application) => application.organizerId)
-      .filter((organizerId): organizerId is Id<'organizers'> => organizerId !== undefined),
+      .filter(
+        (organizerId): organizerId is Id<'organizers'> =>
+          organizerId !== undefined,
+      ),
   );
   const organizerMap = await batchGetDocuments(ctx, 'organizers', organizerIds);
   const organizers = [...organizerMap.values()];
@@ -78,6 +85,10 @@ export async function mapApplicationsWithOrganizers(
       _creationTime: application._creationTime,
       organizerId: application.organizerId,
       organizerName: organizer?.name ?? 'Unknown Community',
+      organizerSlug: organizer?.slug,
+      organizerStatus: organizer
+        ? derivePublicationStatus(organizer)
+        : undefined,
       organizerLogoUrl: logoUrl ?? undefined,
       status: application.status,
       denyReason: application.denyReason,

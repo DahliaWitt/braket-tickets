@@ -2423,6 +2423,7 @@ describe('applications.getMyApplications', () => {
     expect(result[0].organizerName).toBe('Recoherence');
     expect(result[0].status).toBe('pending');
     expect(result[0].organizerId).toBe(organizerId);
+    expect(result[0].organizerStatus).toBe('published');
   });
 
   it('returns multiple applications across communities', async () => {
@@ -2558,6 +2559,7 @@ describe('applications.getMyApplications', () => {
     expect(result).toHaveLength(1);
     expect(result[0].organizerId).toBeUndefined();
     expect(result[0].organizerName).toBe('Unknown Community');
+    expect(result[0].organizerStatus).toBeUndefined();
   });
 
   it('BRA-398: newer pending application appears before older rejected (creationTime desc)', async () => {

@@ -158,6 +158,8 @@ export declare const api: {
           organizerId?: Id<"organizers">;
           organizerLogoUrl?: string;
           organizerName: string;
+          organizerSlug?: string;
+          organizerStatus?: "draft" | "published";
           reason?: string;
           status: "pending" | "approved" | "rejected" | "revoked";
         }>
