@@ -95,17 +95,18 @@ questions, open an issue.
    for database URLs, auth secrets, and CORS. Fill in additional credentials
    only for the features you're working on:
 
-   | Credential | What it unlocks |
-   | --- | --- |
-   | Google/Discord OAuth | Social login (email/password still works without) |
-   | Stripe test keys | Payment and checkout flows |
-   | Ethereal SMTP | Email previews (get free credentials at [ethereal.email](https://ethereal.email/)) |
-   | PostHog/Sentry | Analytics and error tracking (fully optional) |
+   | Credential           | What it unlocks                                                                    |
+   | -------------------- | ---------------------------------------------------------------------------------- |
+   | Google/Discord OAuth | Social login (email/password still works without)                                  |
+   | Stripe test keys     | Payment and checkout flows                                                         |
+   | Ethereal SMTP        | Email previews (get free credentials at [ethereal.email](https://ethereal.email/)) |
+   | Sentry               | Error tracking (fully optional)                                                    |
 
    See [docs/environment.md](docs/environment.md) for details on each
    variable.
 
 5. Seed demo data (in a second terminal, with env vars sourced):
+
    ```bash
    set -a; source .env.local; set +a   # skip if using Doppler
    pnpm seed:fresh

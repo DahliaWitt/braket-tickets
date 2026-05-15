@@ -18,7 +18,6 @@ import {vi, describe, it, expect, beforeEach} from 'vitest';
 import {AdminCommunityEditorComponent} from './community-editor.component';
 import {AdminCommunityEditorComponentHarness} from './community-editor.component.harness';
 import {CommunitiesService} from '@/core/services/communities.service';
-import {AnalyticsService} from '@/core/services/analytics.service';
 import {CONVEX} from 'convex-angular';
 import {AuthService} from '@/core/services/auth.service';
 import {type Id} from '@convex/_generated/dataModel';
@@ -49,7 +48,6 @@ describe('AdminCommunityEditorComponent', () => {
     mutation: ReturnType<typeof vi.fn>;
     action: ReturnType<typeof vi.fn>;
   };
-  let analyticsServiceMock: {capture: ReturnType<typeof vi.fn>};
   let routeParamMap$: BehaviorSubject<ParamMap>;
   let routeQueryParamMap$: BehaviorSubject<ParamMap>;
 
@@ -84,10 +82,6 @@ describe('AdminCommunityEditorComponent', () => {
       // callback resolves cleanly during tests that render the embed.
       action: vi.fn().mockResolvedValue({clientSecret: 'seccs_test'}),
     };
-    analyticsServiceMock = {
-      capture: vi.fn(),
-    };
-
     await TestBed.configureTestingModule({
       imports: [AdminCommunityEditorComponent],
       providers: [
@@ -97,7 +91,6 @@ describe('AdminCommunityEditorComponent', () => {
         ]),
         {provide: AuthService, useValue: authServiceMock},
         {provide: CommunitiesService, useValue: communitiesServiceMock},
-        {provide: AnalyticsService, useValue: analyticsServiceMock},
         {provide: CONVEX, useValue: convexClientMock},
         {provide: ActivatedRoute, useValue: activatedRouteMock},
       ],
@@ -108,7 +101,6 @@ describe('AdminCommunityEditorComponent', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
-    analyticsServiceMock.capture.mockClear();
   });
 
   it('communityModel() defaults include description as empty string and isPublicDirectory as false', () => {
@@ -167,7 +159,7 @@ describe('AdminCommunityEditorComponent', () => {
     expect(component.displaySlug()).toBe('my-custom');
   });
 
-  it('captures stripe_connect_onboarding_started when Connect with Stripe is clicked', async () => {
+  it('starts Stripe account creation when Connect with Stripe is clicked', async () => {
     component.communityId.set('org_123' as Id<'organizers'>);
     component.stripeConnectedAccountId.set(null);
     component.organizerPaymentReady.set(false);
@@ -182,14 +174,7 @@ describe('AdminCommunityEditorComponent', () => {
     fixture.detectChanges();
     await fixture.whenStable();
 
-    expect(analyticsServiceMock.capture).toHaveBeenCalledTimes(1);
-    expect(analyticsServiceMock.capture).toHaveBeenCalledWith(
-      'stripe_connect_onboarding_started',
-      expect.objectContaining({
-        organizer_id: 'org_123',
-        connected_account_present: false,
-      }),
-    );
+    expect(convexClientMock.action).toHaveBeenCalled();
   });
 
   it('slug form field auto-populates when name is entered in create mode', async () => {

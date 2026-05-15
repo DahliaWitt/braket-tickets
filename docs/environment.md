@@ -91,7 +91,6 @@ With just `DOPPLER_INJECTED=1`, `pnpm dev` starts successfully and you can brows
 | Email sending (magic links, invites) | `SMTP_*` (free from [Ethereal](https://ethereal.email/))  | Emails silently dropped                               |
 | Payments & checkout                  | `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`             | Payment flows error                                   |
 | Stripe webhooks                      | `STRIPE_WEBHOOK_SECRET*`                                  | Webhook processing fails                              |
-| Analytics                            | `POSTHOG_KEY`                                             | Disabled silently                                     |
 | Error tracking                       | `SENTRY_DSN`                                              | Disabled silently                                     |
 
 #### Third-party credential setup
@@ -127,46 +126,21 @@ DOPPLER_CONFIG=prd pnpm sync:env:prod
 
 The sync script only pushes an explicit allowlist of backend variables, not every shell variable. GitHub Actions can run `pnpm sync:env:dev` or `pnpm sync:env:prod` directly because the selected environment secrets are already injected by GitHub.
 
-### Backend PostHog Product Analytics Variables
-
-| Variable          | Runtime        | Description                                                                                                                                                                        |
-| ----------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POSTHOG_API_KEY` | Convex backend | PostHog project API key used by `@posthog/convex` for backend product events.                                                                                                      |
-| `POSTHOG_HOST`    | Convex backend | PostHog API host for backend capture. If the deploy environment uses `/ingest` for the frontend proxy, `backend/scripts/sync-env.ts` syncs Convex with `https://us.i.posthog.com`. |
-
 ### Self-Hosted Observability Variables
 
 Forwarding for Convex logs is controlled by the Docker observability services in `ops/docker-compose.yml`.
 The deploy workflows pass these values from the Doppler-synced GitHub environment into `docker compose`.
-For PostHog forwarding, the workflows prefer the dedicated `POSTHOG_LOGS_PROJECT_TOKEN` / `POSTHOG_DEV_LOGS_PROJECT_TOKEN` values when present and fall back to the existing project `POSTHOG_KEY`.
 
-- **`CONVEX_LOG_SINK`**: sink for production logs. Supported values are `posthog`, `sentry`, `both`, and `none`; compose defaults to `posthog`.
-- **`POSTHOG_LOGS_PROJECT_TOKEN`**: PostHog project token used by the production forwarder.
-- **`POSTHOG_LOGS_HOST`**: PostHog ingest host for production, default `https://us.i.posthog.com`.
-- **`POSTHOG_LOGS_SERVICE_NAME`**: optional identifier for production service correlation.
-- **`CONVEX_DEV_LOG_SINK`**: sink for development logs. Supported values are `posthog`, `sentry`, `both`, and `none`; compose defaults to `posthog`.
-- **`POSTHOG_DEV_LOGS_PROJECT_TOKEN`**: PostHog project token for development.
-- **`POSTHOG_DEV_LOGS_HOST`**: PostHog ingest host for development, default `https://us.i.posthog.com`.
-- **`POSTHOG_DEV_LOGS_SERVICE_NAME`**: optional identifier for development service correlation.
+- **`CONVEX_LOG_SINK`**: sink for production logs. Supported values are `sentry` and `none`; compose defaults to `sentry`.
+- **`CONVEX_DEV_LOG_SINK`**: sink for development logs. Supported values are `sentry` and `none`; compose defaults to `sentry`.
 
 The selected Doppler deployment configs use `SENTRY_DSN` for Sentry. `ops/docker-compose.yml` passes that value into the production forwarder directly; the preview/dev workflow maps the development environment's `SENTRY_DSN` secret into the dev forwarder. `SENTRY_DSN_DEVELOPMENT` remains only as a local compose override for the dev observability profile.
 
-- **`SENTRY_DSN`**: Sentry DSN for the active Doppler config. Required when the selected sink is `sentry` or `both`.
+- **`SENTRY_DSN`**: Sentry DSN for the active Doppler config. Required when the selected sink is `sentry`.
 - **`SENTRY_DSN_DEVELOPMENT`**: optional local override for `convex-log-forwarder-dev`; compose falls back to `SENTRY_DSN` when this is unset.
 
-Dual forwarding path:
-
-1. Set `CONVEX_LOG_SINK=both` (or `CONVEX_DEV_LOG_SINK=both`) in Doppler for the target environment.
-2. Confirm the matching PostHog token and Sentry DSN are present. The forwarder fails fast if either credential is missing.
-3. Rerun the matching deploy workflow, or restart the forwarder container from a shell that exports the same env locally.
-
-Rollback path when PostHog ingestion is failing:
-
-1. Set `CONVEX_LOG_SINK=sentry` (or `CONVEX_DEV_LOG_SINK=sentry`) in Doppler for the affected environment.
-2. Rerun the matching deploy workflow, or restart the forwarder container from a shell that exports the same env locally:
-   - Prod: `docker compose -f ops/docker-compose.yml restart convex-log-forwarder`
-   - Preview/dev profile: `docker compose -f ops/docker-compose.yml --profile dev-observability restart convex-log-forwarder-dev`
-3. Keep Sentry DSN values unchanged so the rollback target is ready when needed.
+Set `CONVEX_LOG_SINK=none` only for a deliberate temporary pause in log forwarding.
+Restore `sentry` and rerun the matching deploy workflow when forwarding should resume.
 
 ## Adding a New Variable
 
@@ -186,11 +160,7 @@ Common frontend-exposed variables:
 
 - `CONVEX_URL`
 - `STRIPE_PUBLISHABLE_KEY`
-- `POSTHOG_KEY`
-- `POSTHOG_HOST`
 - `SENTRY_DSN`
-
-To preserve the Cloudflare proxy routes used in deployed frontend builds, set `POSTHOG_HOST=/ingest` in `stg` and `prd`. Convex backend capture cannot use that relative host; the backend sync script maps `/ingest` to `https://us.i.posthog.com`.
 
 ## Authentication Provider Variables (Convex Backend)
 

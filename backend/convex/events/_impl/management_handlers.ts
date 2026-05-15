@@ -14,7 +14,6 @@ import {pruneNoopEventPatch, resolveEditableEventForCaller} from './editor';
 import {loadCanonicalListAvailability} from './listing';
 import {
   autoCancelScheduledMarketingEmail,
-  maybeEmitEventPublishedOnPublish,
   maybeScheduleMarketingAnnouncementOnPublish,
   throwIfEventHasTickets,
 } from './lifecycle';
@@ -343,15 +342,6 @@ export async function create(
     previousStatus: 'draft',
   });
 
-  await maybeEmitEventPublishedOnPublish({
-    ctx,
-    actorId: userId,
-    eventId,
-    organizerId: args.organizerId,
-    nextStatus: args.status,
-    previousStatus: 'draft',
-  });
-
   await insertAdminAuditLog(
     {db: ctx.db},
     {
@@ -460,15 +450,6 @@ export async function update(
     eventId: id,
     organizerId: nextOrganizerId,
     announcement,
-    nextStatus,
-    previousStatus: event.status,
-  });
-
-  await maybeEmitEventPublishedOnPublish({
-    ctx,
-    actorId: userId,
-    eventId: id,
-    organizerId: nextOrganizerId,
     nextStatus,
     previousStatus: event.status,
   });

@@ -7,24 +7,6 @@ import {addMember, authz, authzUserId, isCommunityMember} from '../lib/authz';
 // Reviews can enqueue notification emails through workpool; drain those
 // callbacks between tests so edge-runtime teardown has no pending console RPC.
 const convexTest = createAutoDrainConvexTest();
-const {captureMock} = vi.hoisted(() => ({
-  captureMock: vi.fn(),
-}));
-
-vi.mock('../lib/analytics', async () => {
-  const actual =
-    await vi.importActual<typeof import('../lib/analytics')>(
-      '../lib/analytics',
-    );
-  return {
-    ...actual,
-    captureBackendEvent: captureMock,
-  };
-});
-
-beforeEach(() => {
-  captureMock.mockReset();
-});
 
 async function createRootAdmin(
   t: ReturnType<typeof convexTest>,
@@ -126,18 +108,6 @@ describe('applications.submit', () => {
 
     const app = await t.run(async (ctx) => ctx.db.get(applicationId));
     expect(app?.organizerId).toBe(organizerId);
-    expect(captureMock).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        event: 'vetting_application_submitted',
-        distinctId: userId,
-        properties: expect.objectContaining({
-          community_id: organizerId,
-          application_id_hash: expect.stringMatching(/^[0-9a-f]{32}$/),
-          actor_role: 'user',
-        }),
-      }),
-    );
   });
 
   it('rejects organizer applications from users who are already members', async () => {
@@ -715,18 +685,6 @@ describe('applications.review', () => {
     const app = await t.run(async (ctx) => ctx.db.get(applicationId));
     expect(app?.status).toBe('approved');
     expect(app?.processedBy).toBe(adminId);
-    expect(captureMock).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        event: 'vetting_application_approved',
-        distinctId: adminId,
-        properties: expect.objectContaining({
-          community_id: organizerId,
-          reviewer_role: 'root_admin',
-          application_id_hash: expect.stringMatching(/^[0-9a-f]{32}$/),
-        }),
-      }),
-    );
 
     const user = await t.run(async (ctx) => ctx.db.get(applicantId));
     expect(user?.authEmailVerified).toBe(false);
@@ -778,18 +736,6 @@ describe('applications.review', () => {
 
     const app = await t.run(async (ctx) => ctx.db.get(applicationId));
     expect(app?.status).toBe('rejected');
-    expect(captureMock).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        event: 'vetting_application_rejected',
-        distinctId: adminId,
-        properties: expect.objectContaining({
-          community_id: organizerId,
-          reviewer_role: 'root_admin',
-          application_id_hash: expect.stringMatching(/^[0-9a-f]{32}$/),
-        }),
-      }),
-    );
 
     const user = await t.run(async (ctx) => ctx.db.get(applicantId));
     expect(user?.authEmailVerified).toBe(true);

@@ -173,8 +173,6 @@ jobs:
       EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
       EMAIL_REPLY_TO: ${{ secrets.EMAIL_REPLY_TO }}
       IS_TEST: ${{ secrets.IS_TEST }}
-      POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY || secrets.POSTHOG_KEY }}
-      POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
       RESEND_WEBHOOK_SECRET: ${{ secrets.RESEND_WEBHOOK_SECRET }}
       SITE_URL: ${{ secrets.SITE_URL }}
@@ -256,8 +254,6 @@ jobs:
         run: pnpm build:preview
         env:
           CONVEX_URL: ${{ secrets.CONVEX_URL }}
-          POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
-          POSTHOG_KEY: ${{ secrets.POSTHOG_KEY }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
 
@@ -335,11 +331,8 @@ jobs:
           CONVEX_DEV_LOG_FORWARD_ALL: ${{ secrets.CONVEX_DEV_LOG_FORWARD_ALL }}
           CONVEX_DEV_LOG_INCLUDE_SUCCESS: ${{ secrets.CONVEX_DEV_LOG_INCLUDE_SUCCESS }}
           CONVEX_DEV_LOG_RECONNECT_MS: ${{ secrets.CONVEX_DEV_LOG_RECONNECT_MS }}
-          CONVEX_DEV_LOG_SINK: ${{ secrets.CONVEX_DEV_LOG_SINK }}
+          CONVEX_DEV_LOG_SINK: ${{ secrets.CONVEX_DEV_LOG_SINK == 'none' && 'none' || 'sentry' }}
           CONVEX_DEV_LOG_TARGET: ${{ secrets.CONVEX_DEV_LOG_TARGET }}
-          POSTHOG_DEV_LOGS_HOST: ${{ secrets.POSTHOG_DEV_LOGS_HOST }}
-          POSTHOG_DEV_LOGS_PROJECT_TOKEN: ${{ secrets.POSTHOG_DEV_LOGS_PROJECT_TOKEN || secrets.POSTHOG_KEY }}
-          POSTHOG_DEV_LOGS_SERVICE_NAME: ${{ secrets.POSTHOG_DEV_LOGS_SERVICE_NAME }}
           SENTRY_DSN_DEVELOPMENT: ${{ secrets.SENTRY_DSN }}
 
       - name: Restore dev forwarder (offline or missing)
@@ -351,11 +344,8 @@ jobs:
           CONVEX_DEV_LOG_FORWARD_ALL: ${{ secrets.CONVEX_DEV_LOG_FORWARD_ALL }}
           CONVEX_DEV_LOG_INCLUDE_SUCCESS: ${{ secrets.CONVEX_DEV_LOG_INCLUDE_SUCCESS }}
           CONVEX_DEV_LOG_RECONNECT_MS: ${{ secrets.CONVEX_DEV_LOG_RECONNECT_MS }}
-          CONVEX_DEV_LOG_SINK: ${{ secrets.CONVEX_DEV_LOG_SINK }}
+          CONVEX_DEV_LOG_SINK: ${{ secrets.CONVEX_DEV_LOG_SINK == 'none' && 'none' || 'sentry' }}
           CONVEX_DEV_LOG_TARGET: ${{ secrets.CONVEX_DEV_LOG_TARGET }}
-          POSTHOG_DEV_LOGS_HOST: ${{ secrets.POSTHOG_DEV_LOGS_HOST }}
-          POSTHOG_DEV_LOGS_PROJECT_TOKEN: ${{ secrets.POSTHOG_DEV_LOGS_PROJECT_TOKEN || secrets.POSTHOG_KEY }}
-          POSTHOG_DEV_LOGS_SERVICE_NAME: ${{ secrets.POSTHOG_DEV_LOGS_SERVICE_NAME }}
           SENTRY_DSN_DEVELOPMENT: ${{ secrets.SENTRY_DSN }}
 
   record-deployment:

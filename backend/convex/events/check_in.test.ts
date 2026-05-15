@@ -1,27 +1,8 @@
 import {convexTest, finishAllScheduledFunctions} from '../setup.testing';
-import {beforeEach, describe, it, expect, vi} from 'vitest';
+import {describe, it, expect, vi} from 'vitest';
 import type {Id} from '../_generated/dataModel';
 import {api} from '../_generated/api';
 import {authz} from '../lib/authz';
-
-const {captureMock} = vi.hoisted(() => ({
-  captureMock: vi.fn(),
-}));
-
-vi.mock('../lib/analytics', async () => {
-  const actual =
-    await vi.importActual<typeof import('../lib/analytics')>(
-      '../lib/analytics',
-    );
-  return {
-    ...actual,
-    captureBackendEvent: captureMock,
-  };
-});
-
-beforeEach(() => {
-  captureMock.mockReset();
-});
 
 async function createRootAdmin(
   t: ReturnType<typeof convexTest>,
@@ -67,18 +48,6 @@ describe('ticketCheckIn.checkIn', () => {
 
       expect(ticketRes.success).toBe(false);
       expect(ticketRes.message).toContain('Invalid Ticket QR Code');
-      expect(captureMock).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({
-          event: 'ticket_checkin_failed',
-          distinctId: adminId,
-          properties: expect.objectContaining({
-            error_code: 'invalid_ticket_qr_code',
-            scan_source: 'admin-ui',
-            actor_role: 'root_admin',
-          }),
-        }),
-      );
     });
 
     it('handles invalid guest QR codes gracefully', async () => {
@@ -96,18 +65,6 @@ describe('ticketCheckIn.checkIn', () => {
 
       expect(guestRes.success).toBe(false);
       expect(guestRes.message).toContain('Invalid Guest QR Code');
-      expect(captureMock).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({
-          event: 'ticket_checkin_failed',
-          distinctId: adminId,
-          properties: expect.objectContaining({
-            error_code: 'invalid_guest_qr_code',
-            scan_source: 'admin-ui',
-            actor_role: 'root_admin',
-          }),
-        }),
-      );
     });
   });
 
@@ -226,19 +183,6 @@ describe('ticketCheckIn.checkIn', () => {
       expect(result.ticket?.checkedInAt).toBeGreaterThanOrEqual(beforeCheckIn);
       expect(result.ticket?.event?.title).toBe('Test Event');
       expect(result.ticket?.user?.name).toBe('Attendee');
-      expect(captureMock).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({
-          event: 'ticket_checked_in',
-          distinctId: adminId,
-          properties: expect.objectContaining({
-            event_id: eventId,
-            scan_source: 'admin-ui',
-            actor_role: 'root_admin',
-            ticket_id_hash: expect.stringMatching(/^[0-9a-f]{32}$/),
-          }),
-        }),
-      );
 
       await finishAllScheduledFunctions(t);
 
@@ -446,19 +390,6 @@ describe('ticketCheckIn.checkIn', () => {
       expect(result.guest?.checkedInBy).toBe(adminId);
       expect(result.guest?.checkedInAt).toBeGreaterThanOrEqual(beforeCheckIn);
       expect(result.guest?.event?.title).toBe('VIP Event');
-      expect(captureMock).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({
-          event: 'ticket_checked_in',
-          distinctId: adminId,
-          properties: expect.objectContaining({
-            event_id: eventId,
-            scan_source: 'admin-ui',
-            actor_role: 'root_admin',
-            guest_id_hash: expect.stringMatching(/^[0-9a-f]{32}$/),
-          }),
-        }),
-      );
 
       await finishAllScheduledFunctions(t);
 

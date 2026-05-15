@@ -2,11 +2,6 @@ import {internal} from '../../_generated/api';
 import type {Doc, Id} from '../../_generated/dataModel';
 import type {MutationCtx} from '../../_generated/server';
 import {canPurchaseEvent} from '../../lib/access/purchase';
-import {
-  captureBackendEvent,
-  guestDistinctId,
-  userDistinctId,
-} from '../../lib/analytics';
 import type {CallerIdentity} from '../../lib/caller_identity';
 import {
   DEFAULT_CURRENCY,
@@ -90,24 +85,6 @@ function getOwnerKey(identity: CallerIdentity): OrderOwnerKey {
   return identity.type === 'user'
     ? {type: 'user', userId: identity.userId}
     : {type: 'guest', guestSessionId: identity.guestSessionId};
-}
-
-function getCheckoutKind(args: {
-  identity: CallerIdentity;
-  amountCents: number;
-  kind: 'primary' | 'resale';
-}): 'primary' | 'guest' | 'free' | 'resale' {
-  if (args.kind === 'resale') return 'resale';
-  if (args.amountCents === 0) return 'free';
-  return args.identity.type === 'guest' ? 'guest' : 'primary';
-}
-
-async function distinctIdForIdentity(
-  identity: CallerIdentity,
-): Promise<string> {
-  return identity.type === 'user'
-    ? userDistinctId(identity.userId)
-    : await guestDistinctId(identity.guestOwnerKey);
 }
 
 function isEquivalentOpenOrder(
@@ -351,27 +328,6 @@ export async function openPrimaryOrderState(
       'Order could not be loaded after creation',
     );
   }
-  await captureBackendEvent(ctx, {
-    distinctId: await distinctIdForIdentity(args.identity),
-    event: 'ticket_order_opened',
-    uuid: `ticket_order_opened:${orderId}`,
-    properties: {
-      actor_role: args.identity.type === 'user' ? 'user' : 'guest',
-      auth_state: args.identity.type === 'user' ? 'signed_in' : 'guest',
-      order_id: orderId,
-      event_id: event._id,
-      checkout_kind: getCheckoutKind({
-        identity: args.identity,
-        amountCents: args.amountCents,
-        kind: 'primary',
-      }),
-      ticket_count: args.quantity,
-      amount_cents: args.amountCents,
-      currency: DEFAULT_CURRENCY.toLowerCase(),
-      purchase_access_source: trust.trustSource,
-      connected_account_present: Boolean(connectedAccountId),
-    },
-  });
   return order;
 }
 
@@ -515,22 +471,5 @@ export async function openResaleOrderState(
       'Order could not be loaded after creation',
     );
   }
-  await captureBackendEvent(ctx, {
-    distinctId: await distinctIdForIdentity(args.identity),
-    event: 'ticket_order_opened',
-    uuid: `ticket_order_opened:${orderId}`,
-    properties: {
-      actor_role: 'user',
-      auth_state: 'signed_in',
-      order_id: orderId,
-      event_id: event._id,
-      checkout_kind: 'resale',
-      ticket_count: 1,
-      amount_cents: args.amountCents,
-      currency: DEFAULT_CURRENCY.toLowerCase(),
-      purchase_access_source: trust.trustSource,
-      connected_account_present: Boolean(connectedAccountId),
-    },
-  });
   return order;
 }

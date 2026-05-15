@@ -14,7 +14,6 @@ import {CommunityAdminSettingsComponent} from './community-admin-settings.compon
 import {CONVEX} from 'convex-angular';
 import {BraDialogService} from '@ui/components/composites/dialog/dialog.service';
 import {CommunityContextService} from '@/features/admin/services/community-context.service';
-import {AnalyticsService} from '@/core/services/analytics.service';
 import type {Id} from '@convex/_generated/dataModel';
 import {createMockConvexClient} from '../../../../../testing/mock-types';
 import {toast} from 'ngx-sonner';
@@ -118,9 +117,6 @@ async function setup(options?: {
   const dialogMock = {
     create: vi.fn(),
   };
-  const analyticsMock = {
-    capture: vi.fn(),
-  };
   const routerMock = {
     navigate: vi.fn().mockResolvedValue(true),
   };
@@ -141,7 +137,6 @@ async function setup(options?: {
       provideRouter([]),
       {provide: CONVEX, useValue: convexMock},
       {provide: BraDialogService, useValue: dialogMock},
-      {provide: AnalyticsService, useValue: analyticsMock},
       {provide: CommunityContextService, useValue: ctxMock},
       {provide: ActivatedRoute, useValue: routeMock},
       {provide: Router, useValue: routerMock},
@@ -158,7 +153,6 @@ async function setup(options?: {
     fixture,
     CommunityAdminSettingsHarness,
   );
-  analyticsMock.capture.mockClear();
 
   return {
     fixture,
@@ -166,7 +160,6 @@ async function setup(options?: {
     ctxMock,
     convexMock,
     dialogMock,
-    analyticsMock,
     routerNavigateSpy: routerMock.navigate,
     routeMock,
     refreshOrganizerQuery,
@@ -347,7 +340,7 @@ describe('CommunityAdminSettingsComponent', () => {
 
   describe('Stripe Connect', () => {
     it('connectWithStripe calls createConnectedAccount then refreshes status via checkAccountStatus', async () => {
-      const {harness, convexMock, analyticsMock} = await setup({
+      const {harness, convexMock} = await setup({
         queryParams: {
           community: 'test-community',
         },
@@ -405,14 +398,6 @@ describe('CommunityAdminSettingsComponent', () => {
       // V2 flow continues in embedded components (account link is optional and
       // only used for hosted KYC when required).
       expect(Reflect.has(createArgs, 'returnKind')).toBe(false);
-      expect(analyticsMock.capture).toHaveBeenCalledTimes(1);
-      expect(analyticsMock.capture).toHaveBeenCalledWith(
-        'stripe_connect_onboarding_started',
-        expect.objectContaining({
-          organizer_id: FAKE_ORG_ID,
-          connected_account_present: false,
-        }),
-      );
     });
 
     it('renders the embedded Connect component once the organizer has a Stripe account', async () => {
@@ -517,14 +502,14 @@ describe('CommunityAdminSettingsComponent', () => {
       expect(cta).not.toBeNull();
     });
 
-    it('captures stripe_connect_onboarding_started when continuing hosted onboarding', async () => {
+    it('continues hosted Stripe onboarding', async () => {
       const originSpy = vi
         .spyOn(BrowserPlatformService.prototype, 'origin')
         .mockReturnValue('https://dev.community.braket.gay');
       const assignSpy = vi
         .spyOn(BrowserPlatformService.prototype, 'assign')
         .mockImplementation(() => undefined);
-      const {harness, analyticsMock, convexMock} = await setup({
+      const {harness, convexMock} = await setup({
         organizerData: {
           _id: FAKE_ORG_ID,
           name: 'Test Community',
@@ -545,14 +530,7 @@ describe('CommunityAdminSettingsComponent', () => {
 
       await harness.clickContinueStripeOnboarding();
 
-      expect(analyticsMock.capture).toHaveBeenCalledTimes(1);
-      expect(analyticsMock.capture).toHaveBeenCalledWith(
-        'stripe_connect_onboarding_started',
-        expect.objectContaining({
-          organizer_id: FAKE_ORG_ID,
-          connected_account_present: true,
-        }),
-      );
+      expect(convexMock.action).toHaveBeenCalled();
 
       originSpy.mockRestore();
       assignSpy.mockRestore();

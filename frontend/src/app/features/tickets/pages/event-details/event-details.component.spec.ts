@@ -11,7 +11,6 @@ import {
   type UrlTree,
 } from '@angular/router';
 import {CommunitiesService} from '@/core/services/communities.service';
-import {AnalyticsService} from '@/core/services/analytics.service';
 import {BraDialogService} from '@ui/components/composites/dialog/dialog.service';
 import {STRIPE_CONFIG} from '@/app.tokens';
 import {of, BehaviorSubject, type Observable} from 'rxjs';
@@ -169,12 +168,6 @@ interface ContactDialogConfigForEventDetails {
   zTitle: string;
 }
 
-interface MockAnalyticsServiceForEventDetails {
-  capture: Mock;
-  isFeatureEnabled: Mock;
-  trackEvent: Mock;
-}
-
 describe('EventDetailsComponent', () => {
   let component: EventDetailsComponent;
   let fixture: ComponentFixture<EventDetailsComponent>;
@@ -190,7 +183,6 @@ describe('EventDetailsComponent', () => {
   let mockCommunitiesService: MockCommunitiesServiceForEventDetails;
   let mockResaleService: MockResaleServiceForEventDetails;
   let mockDarkMode: Pick<BraDarkMode, 'themeMode'>;
-  let mockAnalyticsService: MockAnalyticsServiceForEventDetails;
   let queryParamMapSubject: BehaviorSubject<ParamMap>;
   let eventDocsById: Map<string, EventDetail>;
   let availabilityByEventId: Map<string, AvailabilityForEventDetails>;
@@ -360,12 +352,6 @@ describe('EventDetailsComponent', () => {
     mockDarkMode = {
       themeMode: signal(EDarkModes.LIGHT),
     };
-    mockAnalyticsService = {
-      capture: vi.fn(),
-      isFeatureEnabled: vi.fn().mockReturnValue(signal(true)),
-      trackEvent: vi.fn(),
-    };
-
     await TestBed.configureTestingModule({
       imports: [EventDetailsComponent],
       providers: [
@@ -383,10 +369,6 @@ describe('EventDetailsComponent', () => {
         {provide: ResaleService, useValue: mockResaleService},
         {provide: BraDialogService, useValue: mockDialogService},
         {provide: BraDarkMode, useValue: mockDarkMode},
-        {
-          provide: AnalyticsService,
-          useValue: mockAnalyticsService,
-        },
         provideHttpClient(),
         provideHttpClientTesting(),
       ],
@@ -429,44 +411,6 @@ describe('EventDetailsComponent', () => {
     expect(eventCall?.[1]).toEqual({id: '1'});
     expect(component.event()).toEqual(mockEvent);
     expect(component.loading()).toBe(false);
-  });
-
-  it('captures event_viewed once per event id and does not refire on refresh', async () => {
-    mockAnalyticsService.capture.mockClear();
-    eventDocsById.set('2', {
-      ...mockEvent,
-      _id: '2' as Id<'events'>,
-      visibility: 'public',
-    } as EventDetail);
-    availabilityByEventId.set('2', {
-      ...defaultAvailability,
-      purchaseAccess: {allowed: true, source: 'open_access'},
-    });
-
-    fixture.componentRef.setInput('id', '2');
-    fixture.detectChanges();
-    await fixture.whenStable();
-
-    expect(mockAnalyticsService.capture).toHaveBeenCalledTimes(1);
-    expect(mockAnalyticsService.capture).toHaveBeenCalledWith(
-      'event_viewed',
-      expect.objectContaining({
-        event_id: '2',
-        event_visibility: 'public',
-        purchase_access_source: 'open_access',
-      }),
-    );
-
-    eventDocsById.set('2', {
-      ...mockEvent,
-      _id: '2' as Id<'events'>,
-      visibility: 'public',
-      description: 'refreshed description',
-    } as EventDetail);
-    fixture.detectChanges();
-    await fixture.whenStable();
-
-    expect(mockAnalyticsService.capture).toHaveBeenCalledTimes(1);
   });
 
   it('should reload event data when id input changes', async () => {
@@ -610,19 +554,9 @@ describe('EventDetailsComponent', () => {
   });
 
   it('should toggle payment sidebar open', () => {
-    mockAnalyticsService.capture.mockClear();
     component.openPaymentSidebar(true);
     expect(component.isPaymentSidebarOpen()).toBe(true);
     expect(mockRouter.navigate).toHaveBeenCalled();
-    expect(mockAnalyticsService.capture).toHaveBeenCalledWith(
-      'checkout_panel_opened',
-      expect.objectContaining({
-        event_id: '1',
-        checkout_kind: 'primary',
-        ticket_count: 1,
-        tier: 'regular',
-      }),
-    );
   });
 
   it('should toggle payment sidebar close', () => {
@@ -670,21 +604,10 @@ describe('EventDetailsComponent', () => {
     trigger!.focus();
     expect(document.activeElement).toBe(trigger);
 
-    mockAnalyticsService.capture.mockClear();
     await eventDetailsHarness.clickGetTickets();
     fixture.detectChanges();
     await checkoutHarness.waitForCloseButtonFocus();
 
-    expect(mockAnalyticsService.capture).toHaveBeenCalledWith(
-      'checkout_panel_opened',
-      expect.objectContaining({
-        event_id: '1',
-        checkout_kind: 'primary',
-        ticket_count: 1,
-        tier: 'regular',
-      }),
-    );
-    expect(mockAnalyticsService.capture).toHaveBeenCalledTimes(1);
     expect(await checkoutHarness.isCloseButtonFocused()).toBe(true);
     expect(document.activeElement).not.toBe(trigger);
   });
@@ -1162,11 +1085,6 @@ describe('EventDetailsComponent', () => {
       await fixture.whenStable();
 
       expect(component.isPaymentSidebarOpen()).toBe(false);
-      expect(
-        mockAnalyticsService.capture.mock.calls.some(
-          ([name]) => name === 'checkout_panel_opened',
-        ),
-      ).toBe(false);
       expect(emitTrustUpdate).not.toBeNull();
       expect(emitAvailabilityUpdate).not.toBeNull();
 
@@ -1180,15 +1098,6 @@ describe('EventDetailsComponent', () => {
 
       expect(component.canBuyTickets()).toBe(true);
       expect(component.isPaymentSidebarOpen()).toBe(true);
-      expect(mockAnalyticsService.capture).toHaveBeenCalledWith(
-        'checkout_panel_opened',
-        expect.objectContaining({
-          event_id: privateEventId,
-          checkout_kind: 'primary',
-          ticket_count: 1,
-          tier: 'regular',
-        }),
-      );
     });
   });
 

@@ -1,11 +1,6 @@
 import {internal} from '../../_generated/api';
 import type {Doc, Id} from '../../_generated/dataModel';
 import type {MutationCtx} from '../../_generated/server';
-import {
-  captureBackendEvent,
-  hashForAnalytics,
-  userDistinctId,
-} from '../../lib/analytics';
 import {requireUser} from '../../lib/auth_identity';
 import {findMatchingInQuery} from '../../lib/query_scan';
 import {buildTicketRosterProjection} from '../../lib/ticket_roster_projection';
@@ -72,25 +67,9 @@ type CheckInResult =
 
 type CheckInScanSource = 'admin-ui' | 'door-scanner';
 type CheckInActorRole = 'community_admin' | 'root_admin' | 'scanner';
-type CheckInErrorCode =
-  | 'invalid_ticket_qr_code'
-  | 'invalid_guest_qr_code'
-  | 'missing_scan_target'
-  | 'ticket_not_found'
-  | 'guest_not_found'
-  | 'scan_access_denied'
-  | 'ticket_invalid_status'
-  | 'ticket_locked_for_resale'
-  | 'ticket_status_changed'
-  | 'guest_already_checked_in'
-  | 'event_not_found';
 
 function getScanSource(isEditor: boolean): CheckInScanSource {
   return isEditor ? 'admin-ui' : 'door-scanner';
-}
-
-function getFallbackScanSource(actorRole: CheckInActorRole): CheckInScanSource {
-  return actorRole === 'root_admin' ? 'admin-ui' : 'door-scanner';
 }
 
 async function resolveCheckInActorRole(
@@ -110,78 +89,11 @@ async function resolveCheckInActorRole(
   return 'scanner';
 }
 
-async function emitCheckInSuccessEvent(args: {
-  ctx: MutationCtx;
-  userId: Id<'users'>;
-  eventId: Id<'events'>;
-  scanSource: CheckInScanSource;
-  actorRole: CheckInActorRole;
-  ticketId?: Id<'tickets'>;
-  guestId?: Id<'guests'>;
-}): Promise<void> {
-  const ticketIdHash = args.ticketId
-    ? await hashForAnalytics(String(args.ticketId))
-    : undefined;
-  const guestIdHash = args.guestId
-    ? await hashForAnalytics(String(args.guestId))
-    : undefined;
-
-  await captureBackendEvent(args.ctx, {
-    distinctId: userDistinctId(String(args.userId)),
-    event: 'ticket_checked_in',
-    properties: {
-      actor_role: args.actorRole,
-      auth_state: 'signed_in',
-      event_id: args.eventId,
-      scan_source: args.scanSource,
-      ...(ticketIdHash ? {ticket_id_hash: ticketIdHash} : {}),
-      ...(guestIdHash ? {guest_id_hash: guestIdHash} : {}),
-    },
-  });
-}
-
-async function emitCheckInFailureEvent(args: {
-  ctx: MutationCtx;
-  userId: Id<'users'>;
-  errorCode: CheckInErrorCode;
-  scanSource: CheckInScanSource;
-  actorRole: CheckInActorRole;
-  eventId?: Id<'events'>;
-}): Promise<void> {
-  await captureBackendEvent(args.ctx, {
-    distinctId: userDistinctId(String(args.userId)),
-    event: 'ticket_checkin_failed',
-    properties: {
-      actor_role: args.actorRole,
-      auth_state: 'signed_in',
-      ...(args.eventId ? {event_id: args.eventId} : {}),
-      error_code: args.errorCode,
-      scan_source: args.scanSource,
-    },
-  });
-}
-
-async function failCheckIn(
-  ctx: MutationCtx,
-  args: {
-    userId: Id<'users'>;
-    errorCode: CheckInErrorCode;
-    scanSource: CheckInScanSource;
-    actorRole: CheckInActorRole;
-    message: string;
-    eventId?: Id<'events'>;
-    ticket?: TicketResult;
-    guest?: GuestResult;
-  },
-): Promise<CheckInResult> {
-  await emitCheckInFailureEvent({
-    ctx,
-    userId: args.userId,
-    errorCode: args.errorCode,
-    scanSource: args.scanSource,
-    actorRole: args.actorRole,
-    ...(args.eventId ? {eventId: args.eventId} : {}),
-  });
+function failCheckIn(args: {
+  message: string;
+  ticket?: TicketResult;
+  guest?: GuestResult;
+}): CheckInResult {
   return {
     success: false,
     message: args.message,
@@ -198,7 +110,6 @@ async function loadCheckInAuthorization(
     missingEventLogMessage: string;
     operation: 'check-in' | 'revert';
     notFoundMessage: string;
-    notFoundErrorCode: CheckInErrorCode;
   },
 ): Promise<
   | {
@@ -216,21 +127,9 @@ async function loadCheckInAuthorization(
       userId: args.userId,
       operation: args.operation,
     });
-    const actorRole = await resolveCheckInActorRole(
-      ctx,
-      args.userId,
-      null,
-      false,
-    );
     const response =
       args.operation === 'check-in'
-        ? await failCheckIn(ctx, {
-            userId: args.userId,
-            errorCode: args.notFoundErrorCode,
-            scanSource: getFallbackScanSource(actorRole),
-            actorRole,
-            message: args.notFoundMessage,
-          })
+        ? failCheckIn({message: args.notFoundMessage})
         : {success: false as const, message: args.notFoundMessage};
     return {
       success: false,
@@ -242,24 +141,11 @@ async function loadCheckInAuthorization(
     canScanEvent(ctx, args.userId, event),
     canEditEvent(ctx, args.userId, event),
   ]);
-  const actorRole = await resolveCheckInActorRole(
-    ctx,
-    args.userId,
-    event,
-    isEditor,
-  );
   const auditSource = getScanSource(isEditor);
   if (!canScan) {
     const response =
       args.operation === 'check-in'
-        ? await failCheckIn(ctx, {
-            userId: args.userId,
-            errorCode: 'scan_access_denied',
-            scanSource: auditSource,
-            actorRole,
-            eventId: event._id,
-            message: args.notFoundMessage,
-          })
+        ? failCheckIn({message: args.notFoundMessage})
         : {success: false as const, message: args.notFoundMessage};
     return {
       success: false,
@@ -267,6 +153,12 @@ async function loadCheckInAuthorization(
     };
   }
 
+  const actorRole = await resolveCheckInActorRole(
+    ctx,
+    args.userId,
+    event,
+    isEditor,
+  );
   return {success: true, event, isEditor, actorRole, auditSource};
 }
 
@@ -288,23 +180,13 @@ export async function checkIn(
     : null;
 
   if (args.ticketId && !ticketId) {
-    const actorRole = await resolveCheckInActorRole(ctx, userId, null, false);
-    return await failCheckIn(ctx, {
-      userId,
-      errorCode: 'invalid_ticket_qr_code',
-      scanSource: getFallbackScanSource(actorRole),
-      actorRole,
+    return failCheckIn({
       message: 'Invalid Ticket QR Code',
     });
   }
 
   if (args.guestId && !guestId) {
-    const actorRole = await resolveCheckInActorRole(ctx, userId, null, false);
-    return await failCheckIn(ctx, {
-      userId,
-      errorCode: 'invalid_guest_qr_code',
-      scanSource: getFallbackScanSource(actorRole),
-      actorRole,
+    return failCheckIn({
       message: 'Invalid Guest QR Code',
     });
   }
@@ -312,12 +194,7 @@ export async function checkIn(
   if (ticketId) {
     const ticket = await ctx.db.get('tickets', ticketId);
     if (!ticket) {
-      const actorRole = await resolveCheckInActorRole(ctx, userId, null, false);
-      return await failCheckIn(ctx, {
-        userId,
-        errorCode: 'ticket_not_found',
-        scanSource: getFallbackScanSource(actorRole),
-        actorRole,
+      return failCheckIn({
         message: 'Ticket not found',
       });
     }
@@ -328,19 +205,13 @@ export async function checkIn(
       missingEventLogMessage: 'orphaned ticket references missing event',
       operation: 'check-in',
       notFoundMessage: 'Ticket not found',
-      notFoundErrorCode: 'event_not_found',
     });
     if (!authorization.success) return authorization.response;
 
-    const {event, actorRole, auditSource} = authorization;
+    const {event, auditSource} = authorization;
 
     if (!isValidTicketStatus(ticket.status)) {
-      return await failCheckIn(ctx, {
-        userId,
-        errorCode: 'ticket_invalid_status',
-        scanSource: auditSource,
-        actorRole,
-        eventId: event._id,
+      return failCheckIn({
         message: `Ticket is ${ticket.status}. Cannot check in.`,
         ticket: {
           _id: ticket._id,
@@ -369,12 +240,7 @@ export async function checkIn(
 
     if (activeResaleListing) {
       if (isPendingResaleListingStatus(activeResaleListing.status)) {
-        return await failCheckIn(ctx, {
-          userId,
-          errorCode: 'ticket_locked_for_resale',
-          scanSource: auditSource,
-          actorRole,
-          eventId: event._id,
+        return failCheckIn({
           message:
             'RESALE IN PROGRESS — This ticket is currently being purchased by another user. ' +
             'The ticket holder has listed this ticket for resale. Do NOT allow entry.',
@@ -395,24 +261,14 @@ export async function checkIn(
       ctx.db.get('events', ticket.eventId),
     ]);
     if (!freshTicket || !isValidTicketStatus(freshTicket.status)) {
-      return await failCheckIn(ctx, {
-        userId,
-        errorCode: freshTicket ? 'ticket_status_changed' : 'ticket_not_found',
-        scanSource: auditSource,
-        actorRole,
-        eventId: event._id,
+      return failCheckIn({
         message: freshTicket
           ? `Ticket status changed to ${freshTicket.status}`
           : 'Ticket not found',
       });
     }
     if (!freshEvent) {
-      return await failCheckIn(ctx, {
-        userId,
-        errorCode: 'event_not_found',
-        scanSource: auditSource,
-        actorRole,
-        eventId: event._id,
+      return failCheckIn({
         message: 'Event not found',
       });
     }
@@ -451,15 +307,6 @@ export async function checkIn(
       },
     );
 
-    await emitCheckInSuccessEvent({
-      ctx,
-      userId,
-      eventId: freshTicket.eventId,
-      scanSource: auditSource,
-      actorRole,
-      ticketId,
-    });
-
     return {
       success: true,
       message: `Successfully checked in: ${event.title}`,
@@ -490,12 +337,7 @@ export async function checkIn(
   if (guestId) {
     const guest = await ctx.db.get('guests', guestId);
     if (!guest) {
-      const actorRole = await resolveCheckInActorRole(ctx, userId, null, false);
-      return await failCheckIn(ctx, {
-        userId,
-        errorCode: 'guest_not_found',
-        scanSource: getFallbackScanSource(actorRole),
-        actorRole,
+      return failCheckIn({
         message: 'Guest ticket not found',
       });
     }
@@ -506,19 +348,13 @@ export async function checkIn(
       missingEventLogMessage: 'orphaned guest references missing event',
       operation: 'check-in',
       notFoundMessage: 'Guest ticket not found',
-      notFoundErrorCode: 'event_not_found',
     });
     if (!authorization.success) return authorization.response;
 
-    const {event, actorRole, auditSource} = authorization;
+    const {event, auditSource} = authorization;
 
     if (guest.checkedInAt) {
-      return await failCheckIn(ctx, {
-        userId,
-        errorCode: 'guest_already_checked_in',
-        scanSource: auditSource,
-        actorRole,
-        eventId: event._id,
+      return failCheckIn({
         message: `Guest already checked in at ${new Date(guest.checkedInAt).toLocaleTimeString()}`,
         guest: {
           _id: guest._id,
@@ -558,15 +394,6 @@ export async function checkIn(
       },
     );
 
-    await emitCheckInSuccessEvent({
-      ctx,
-      userId,
-      eventId: guest.eventId,
-      scanSource: auditSource,
-      actorRole,
-      guestId,
-    });
-
     return {
       success: true,
       message: `Guest Checked In: ${guest.name}`,
@@ -589,12 +416,7 @@ export async function checkIn(
     };
   }
 
-  const actorRole = await resolveCheckInActorRole(ctx, userId, null, false);
-  return await failCheckIn(ctx, {
-    userId,
-    errorCode: 'missing_scan_target',
-    scanSource: getFallbackScanSource(actorRole),
-    actorRole,
+  return failCheckIn({
     message: 'No ticket or guest ID provided',
   });
 }
@@ -618,7 +440,6 @@ export async function revertCheckIn(
     missingEventLogMessage: 'orphaned ticket references missing event',
     operation: 'revert',
     notFoundMessage: 'Ticket not found',
-    notFoundErrorCode: 'event_not_found',
   });
   if (!authorization.success) return authorization.response;
 

@@ -1,41 +1,9 @@
-import {beforeEach, describe, expect, it, vi} from 'vitest';
+import {describe, expect, it, vi} from 'vitest';
 import {api, internal} from '../_generated/api';
 import type {Id} from '../_generated/dataModel';
 import type {EventVisibility} from '@shared/domain/event-visibility';
 import {convexTest, finishAllScheduledFunctions} from '../setup.testing';
 import {ORDER_RELEASE_GRACE_MS} from '../lib/constants';
-import {guestDistinctId} from '../lib/analytics';
-
-const {captureMock} = vi.hoisted(() => ({
-  captureMock: vi.fn(),
-}));
-
-vi.mock('../lib/analytics', async () => {
-  const actual =
-    await vi.importActual<typeof import('../lib/analytics')>(
-      '../lib/analytics',
-    );
-  return {
-    ...actual,
-    captureBackendEvent: captureMock,
-  };
-});
-
-type AnalyticsCaptureInputForTest = {
-  distinctId: string;
-  event: string;
-  properties?: Record<string, unknown>;
-};
-
-function capturedAnalyticsEvents(): AnalyticsCaptureInputForTest[] {
-  return captureMock.mock.calls.map(
-    ([, input]) => input as AnalyticsCaptureInputForTest,
-  );
-}
-
-beforeEach(() => {
-  captureMock.mockReset();
-});
 
 async function createUser(
   t: ReturnType<typeof convexTest>,
@@ -339,64 +307,6 @@ describe('orders', () => {
     expect(inventory?.heldCount).toBe(1);
   });
 
-  it('uses one guest analytics distinct ID from open through expiry', async () => {
-    const t = convexTest();
-    const {eventId} = await createEventWithInventory(t);
-    const {sessionId, sessionToken} = await createGuestSession(t);
-    const expectedDistinctId = await guestDistinctId(`session:${sessionId}`);
-
-    const result = await t.mutation(api.orders.core.openForGuest, {
-      sessionToken,
-      eventId,
-      quantity: 1,
-      tier: 'regular',
-      totalAmount: 2500,
-    });
-
-    await t.mutation(internal.orders.core.expire, {
-      orderId: result.orderId,
-      force: true,
-    });
-
-    const events = capturedAnalyticsEvents();
-    expect(
-      events.find((event) => event.event === 'ticket_order_opened')?.distinctId,
-    ).toBe(expectedDistinctId);
-    expect(
-      events.find((event) => event.event === 'checkout_abandoned')?.distinctId,
-    ).toBe(expectedDistinctId);
-  });
-
-  it('uses one guest analytics distinct ID for free checkout completion', async () => {
-    const t = convexTest();
-    const {eventId} = await createEventWithInventory(t, {price: 0});
-    const {sessionId, sessionToken} = await createGuestSession(t);
-    const expectedDistinctId = await guestDistinctId(`session:${sessionId}`);
-
-    await t.mutation(api.orders.core.claimFreeTicketAsGuest, {
-      sessionToken,
-      eventId,
-      quantity: 1,
-      tier: 'regular',
-    });
-
-    const events = capturedAnalyticsEvents();
-    const checkoutCompleted = events.find(
-      (event) => event.event === 'checkout_completed',
-    );
-    expect(
-      events.find((event) => event.event === 'ticket_order_opened')?.distinctId,
-    ).toBe(expectedDistinctId);
-    expect(checkoutCompleted?.distinctId).toBe(expectedDistinctId);
-    expect(
-      events.find((event) => event.event === 'tickets_issued')?.distinctId,
-    ).toBe(expectedDistinctId);
-    expect(checkoutCompleted?.properties).toMatchObject({
-      checkout_kind: 'free',
-      payment_provider: 'none',
-    });
-  });
-
   it('completes a normal authenticated free claim', async () => {
     const t = convexTest();
     const userId = await createUser(t, 'Free Buyer', 'free-buyer@example.com');
@@ -663,7 +573,7 @@ describe('orders', () => {
     expect(third.state).toBe('open');
   });
 
-  it('uses caller-provided analytics metadata for checkout failures', async () => {
+  it('releases an order for caller-reported payment failures', async () => {
     const t = convexTest();
     const buyerId = await createUser(
       t,
@@ -685,16 +595,11 @@ describe('orders', () => {
       failureStage: 'checkout_session',
     });
 
-    const checkoutFailed = capturedAnalyticsEvents().find(
-      (event) => event.event === 'checkout_failed',
+    const releasedOrder = await t.run(async (ctx) =>
+      ctx.db.get('ticket_orders', result.orderId),
     );
-    expect(checkoutFailed?.properties).toMatchObject({
-      order_id: result.orderId,
-      event_id: eventId,
-      checkout_kind: 'primary',
-      error_code: 'connected_account_mismatch',
-      failure_stage: 'checkout_session',
-    });
+    expect(releasedOrder?.state).toBe('released');
+    expect(releasedOrder?.releaseReason).toBe('payment_failed');
   });
 
   it('allows different guest emails to open independent holds', async () => {
@@ -954,26 +859,6 @@ describe('orders', () => {
     expect(activeBuyerTickets).toHaveLength(1);
     expect(activeBuyerTickets[0]?.tier).toBe('supporter');
     expect(activeBuyerTickets[0]?.orderId).toBe(order.orderId);
-
-    const analyticsEvents = capturedAnalyticsEvents();
-    expect(
-      analyticsEvents.find(
-        (event) =>
-          event.event === 'checkout_completed' &&
-          event.properties?.['order_id'] === order.orderId,
-      )?.properties,
-    ).toMatchObject({
-      checkout_kind: 'resale',
-      payment_provider: 'stripe',
-      amount_cents: 5000,
-    });
-    expect(
-      analyticsEvents.filter(
-        (event) =>
-          event.event === 'tickets_issued' &&
-          event.properties?.['order_id'] === order.orderId,
-      ),
-    ).toHaveLength(0);
   });
 
   it('rejects resale settlement when the listing is no longer pending', async () => {

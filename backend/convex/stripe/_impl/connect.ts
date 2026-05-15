@@ -1,6 +1,5 @@
 import type {Doc, Id} from '../../_generated/dataModel';
 import type {MutationCtx, QueryCtx} from '../../_generated/server';
-import {captureBackendEvent, systemDistinctId} from '../../lib/analytics';
 import {logger} from '../../lib/logger';
 import {PAYOUT_BATCH_SIZE} from '../../lib/constants';
 import {
@@ -198,33 +197,12 @@ export async function updateOrganizerFromStripeAccountImpl(
     return null;
   }
 
-  const wasFullyEnabled =
-    organizer.stripeChargesEnabled === true &&
-    organizer.stripePayoutsEnabled === true;
-
   await ctx.db.patch('organizers', organizer._id, {
     stripeOnboardingStatus: args.onboardingStatus,
     stripeChargesEnabled: args.chargesEnabled,
     stripePayoutsEnabled: args.payoutsEnabled,
     stripeCurrentlyDue: args.currentlyDue,
   });
-
-  if (!wasFullyEnabled && args.chargesEnabled && args.payoutsEnabled) {
-    await captureBackendEvent(ctx, {
-      distinctId: systemDistinctId('stripe'),
-      event: 'stripe_connect_onboarding_completed',
-      properties: {
-        actor_role: 'system',
-        auth_state: 'system',
-        connected_account_present:
-          organizer.stripeConnectedAccountId !== undefined,
-        organizer_id: organizer._id,
-        stripe_charges_enabled: args.chargesEnabled,
-        stripe_onboarding_status: args.onboardingStatus,
-        stripe_payouts_enabled: args.payoutsEnabled,
-      },
-    });
-  }
   return null;
 }
 
