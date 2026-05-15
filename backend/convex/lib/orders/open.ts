@@ -31,7 +31,6 @@ import {
   throwOrderError,
 } from './access';
 import {
-  assertInventoryCanCoverQuantity,
   getRemainingPrimaryInventory,
   reservePrimaryInventoryHold,
   requireEventWithInventory,
