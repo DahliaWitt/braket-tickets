@@ -509,6 +509,38 @@
                           class="flex items-center justify-end gap-1"
                           data-testid="magic-link-actions"
                         >
+                          @if (createdTokenFor(link._id); as token) {
+                            <button
+                              type="button"
+                              z-button
+                              zType="ghost"
+                              zSize="sm"
+                              (click)="copyLink(token, link)"
+                              [attr.aria-label]="
+                                'Copy link ' + getLinkIdentifier(link)
+                              "
+                              [zTooltip]="'Copy magic link'"
+                              class="text-muted-foreground hover:text-primary"
+                            >
+                              <z-icon zType="copy" class="h-4 w-4" />
+                            </button>
+                          } @else {
+                            <button
+                              type="button"
+                              z-button
+                              zType="ghost"
+                              zSize="sm"
+                              disabled
+                              [attr.aria-label]="
+                                'Copy unavailable for ' +
+                                getLinkIdentifier(link)
+                              "
+                              [zTooltip]="'Full link is only available when it is created'"
+                              class="text-muted-foreground/50"
+                            >
+                              <z-icon zType="copy" class="h-4 w-4" />
+                            </button>
+                          }
                           @if (link.status === 'active') {
                             <button
                               type="button"
@@ -594,6 +626,14 @@
                         class="mt-1 block font-mono text-xs text-muted-foreground"
                         >{{ link.tokenPrefix || 'hidden' }}</span
                       >
+                      @if (!createdTokenFor(link._id)) {
+                        <p
+                          class="mt-2 max-w-64 text-xs leading-snug text-muted-foreground"
+                          data-testid="magic-link-copy-unavailable-note"
+                        >
+                          Full link only available right after creation.
+                        </p>
+                      }
                     </div>
                     @switch (link.status) {
                       @case ('active') {
@@ -680,14 +720,38 @@
                   </div>
 
                   <!-- Card Actions -->
-                  <div class="flex gap-2" data-testid="magic-link-actions">
+                  <div
+                    [class]="
+                      createdTokenFor(link._id)
+                        ? 'grid grid-cols-3 gap-2'
+                        : 'grid grid-cols-2 gap-2'
+                    "
+                    data-testid="magic-link-actions"
+                  >
+                    @if (createdTokenFor(link._id); as token) {
+                      <button
+                        type="button"
+                        z-button
+                        zType="outline"
+                        zSize="sm"
+                        class="min-w-0 justify-center border-primary/30 px-2 text-primary hover:bg-primary/10"
+                        (click)="copyLink(token, link)"
+                        [attr.aria-label]="
+                          'Copy link ' + getLinkIdentifier(link)
+                        "
+                        [zTooltip]="'Copy magic link'"
+                      >
+                        <z-icon zType="copy" class="mr-1.5 h-3.5 w-3.5" />
+                        COPY
+                      </button>
+                    }
                     @if (link.status === 'active') {
                       <button
                         type="button"
                         z-button
                         zType="outline"
                         zSize="sm"
-                        class="flex-1 border-warning/30 text-warning hover:bg-warning/10"
+                        class="min-w-0 justify-center border-warning/30 px-2 text-warning hover:bg-warning/10"
                         (click)="confirmPause(link._id, link.label)"
                         [attr.aria-label]="
                           'Pause link ' + getLinkIdentifier(link)
@@ -704,7 +768,7 @@
                         z-button
                         zType="outline"
                         zSize="sm"
-                        class="flex-1 border-success/30 text-success hover:bg-success/10"
+                        class="min-w-0 justify-center border-success/30 px-2 text-success hover:bg-success/10"
                         (click)="updateLinkStatus(link._id, 'resume')"
                         [attr.aria-label]="
                           'Resume link ' + getLinkIdentifier(link)
@@ -720,7 +784,7 @@
                       z-button
                       zType="outline"
                       zSize="sm"
-                      class="flex-1 border-destructive/30 text-destructive hover:bg-destructive/10"
+                      class="min-w-0 justify-center border-destructive/30 px-2 text-destructive hover:bg-destructive/10"
                       (click)="confirmDelete(link._id, link.label)"
                       [attr.aria-label]="
                         'Delete link ' + getLinkIdentifier(link)
