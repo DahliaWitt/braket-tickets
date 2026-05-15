@@ -33,6 +33,7 @@ import {
 import {
   assertInventoryCanCoverQuantity,
   getRemainingPrimaryInventory,
+  reservePrimaryInventoryHold,
   requireEventWithInventory,
 } from './inventory';
 import {
@@ -266,12 +267,8 @@ export async function openPrimaryOrderState(
     now,
   );
 
-  const {event, inventory} = await requireEventWithInventory(
-    {db: ctx.db},
-    args.eventId,
-  );
+  const {event} = await requireEventWithInventory({db: ctx.db}, args.eventId);
   assertPurchasableEvent(event);
-  assertInventoryCanCoverQuantity({event, inventory, quantity: args.quantity});
 
   const trust = await requirePrimaryPurchaseAccessForOrder(
     ctx,
@@ -291,10 +288,6 @@ export async function openPrimaryOrderState(
     ) {
       return order;
     }
-  }
-
-  for (const order of existingOrders) {
-    await releaseOpenOrder(ctx.db, order, 'superseded', now);
   }
 
   validateTierPricing(event, {
@@ -319,6 +312,15 @@ export async function openPrimaryOrderState(
     event,
   );
 
+  for (const order of existingOrders) {
+    await releaseOpenOrder(ctx.db, order, 'superseded', now);
+  }
+
+  await reservePrimaryInventoryHold(
+    {db: ctx.db},
+    {event, quantity: args.quantity},
+  );
+
   const orderId = await ctx.db.insert('ticket_orders', {
     ...getOwnerFieldsForInsert(args.identity),
     eventId: args.eventId,
@@ -332,10 +334,6 @@ export async function openPrimaryOrderState(
     trustSource: trust.trustSource,
     trustViaOrganizerId: trust.trustViaOrganizerId,
     ...(connectedAccountId !== undefined ? {connectedAccountId} : {}),
-  });
-
-  await ctx.db.patch('event_inventory', inventory._id, {
-    heldCount: inventory.heldCount + args.quantity,
   });
 
   await ctx.scheduler.runAfter(

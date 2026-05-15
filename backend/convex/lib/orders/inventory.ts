@@ -15,7 +15,10 @@ export function getRemainingPrimaryInventory(
   event: Pick<Doc<'events'>, 'totalTickets'>,
   inventory: Pick<Doc<'event_inventory'>, 'soldCount' | 'heldCount'>,
 ): number {
-  return Math.max(0, event.totalTickets - inventory.soldCount - inventory.heldCount);
+  return Math.max(
+    0,
+    event.totalTickets - inventory.soldCount - inventory.heldCount,
+  );
 }
 
 export async function requireEventWithInventory(
@@ -36,17 +39,11 @@ export async function requireEventWithInventory(
 
   const inventory = await ctx.db.get('event_inventory', event.inventoryId);
   if (!inventory) {
-    throwOrderError(
-      'INVALID_STATE',
-      'Event inventory row could not be loaded',
-    );
+    throwOrderError('INVALID_STATE', 'Event inventory row could not be loaded');
   }
 
   if (inventory.eventId !== event._id) {
-    throwOrderError(
-      'INVALID_STATE',
-      'Event inventory linkage is invalid',
-    );
+    throwOrderError('INVALID_STATE', 'Event inventory linkage is invalid');
   }
 
   return {event, inventory};
@@ -61,6 +58,40 @@ export function assertInventoryCanCoverQuantity(args: {
   if (remaining < args.quantity) {
     throwOrderError('SOLD_OUT', 'This event is sold out');
   }
+}
+
+export async function reservePrimaryInventoryHold(
+  ctx: {db: MutationCtx['db']},
+  args: {
+    event: Pick<Doc<'events'>, '_id' | 'inventoryId' | 'totalTickets'>;
+    quantity: number;
+  },
+): Promise<void> {
+  if (!args.event.inventoryId) {
+    throwOrderError(
+      'INVALID_STATE',
+      'Event inventory is not configured for this event',
+    );
+  }
+
+  const inventory = await ctx.db.get('event_inventory', args.event.inventoryId);
+  if (!inventory) {
+    throwOrderError('INVALID_STATE', 'Event inventory row could not be loaded');
+  }
+
+  if (inventory.eventId !== args.event._id) {
+    throwOrderError('INVALID_STATE', 'Event inventory linkage is invalid');
+  }
+
+  assertInventoryCanCoverQuantity({
+    event: args.event,
+    inventory,
+    quantity: args.quantity,
+  });
+
+  await ctx.db.patch('event_inventory', inventory._id, {
+    heldCount: inventory.heldCount + args.quantity,
+  });
 }
 
 export function assertCanSetEventTotalTickets(args: {

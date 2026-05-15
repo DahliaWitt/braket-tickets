@@ -313,6 +313,176 @@ describe('orders', () => {
     expect(inventory?.heldCount).toBe(1);
   });
 
+  it('same-owner replacement with a different amount supersedes without leaking held inventory', async () => {
+    const t = convexTest();
+    const userId = await createUser(
+      t,
+      'Supporter Buyer',
+      'supporter-replace@example.com',
+    );
+    const {eventId, inventoryId} = await createEventWithInventory(t, {
+      supporterDefaultPrice: 3000,
+    });
+
+    const asUser = t.withIdentity({subject: userId});
+    const first = await asUser.mutation(api.orders.core.open, {
+      eventId,
+      quantity: 1,
+      tier: 'supporter',
+      totalAmount: 4000,
+    });
+    const second = await asUser.mutation(api.orders.core.open, {
+      eventId,
+      quantity: 1,
+      tier: 'supporter',
+      totalAmount: 3000,
+    });
+
+    expect(second.orderId).not.toBe(first.orderId);
+
+    const firstOrder = await t.run(async (ctx) =>
+      ctx.db.get('ticket_orders', first.orderId),
+    );
+    const secondOrder = await t.run(async (ctx) =>
+      ctx.db.get('ticket_orders', second.orderId),
+    );
+    let inventory = await t.run(async (ctx) =>
+      ctx.db.get('event_inventory', inventoryId),
+    );
+
+    expect(firstOrder?.state).toBe('released');
+    expect(firstOrder?.releaseReason).toBe('superseded');
+    expect(secondOrder?.state).toBe('open');
+    expect(inventory?.heldCount).toBe(1);
+
+    await t.action(internal.orders.core.settlePaidOrderFromStripe, {
+      orderId: second.orderId,
+      stripePaymentIntentId: 'pi_superseded_replacement',
+      stripeChargeId: 'ch_superseded_replacement',
+      note: 'superseded_replacement',
+    });
+
+    inventory = await t.run(async (ctx) =>
+      ctx.db.get('event_inventory', inventoryId),
+    );
+    expect(inventory?.heldCount).toBe(0);
+    expect(inventory?.soldCount).toBe(1);
+  });
+
+  it('same-owner replacement can reuse held capacity at the sold-out boundary', async () => {
+    const t = convexTest();
+    const userId = await createUser(
+      t,
+      'Boundary Buyer',
+      'boundary-replace@example.com',
+    );
+    const {eventId, inventoryId} = await createEventWithInventory(t, {
+      totalTickets: 2,
+      soldCount: 1,
+      supporterDefaultPrice: 3000,
+    });
+
+    const asUser = t.withIdentity({subject: userId});
+    const first = await asUser.mutation(api.orders.core.open, {
+      eventId,
+      quantity: 1,
+      tier: 'supporter',
+      totalAmount: 4000,
+    });
+    const second = await asUser.mutation(api.orders.core.open, {
+      eventId,
+      quantity: 1,
+      tier: 'supporter',
+      totalAmount: 3000,
+    });
+
+    expect(second.orderId).not.toBe(first.orderId);
+
+    const firstOrder = await t.run(async (ctx) =>
+      ctx.db.get('ticket_orders', first.orderId),
+    );
+    const inventory = await t.run(async (ctx) =>
+      ctx.db.get('event_inventory', inventoryId),
+    );
+
+    expect(firstOrder?.state).toBe('released');
+    expect(firstOrder?.releaseReason).toBe('superseded');
+    expect(inventory?.soldCount).toBe(1);
+    expect(inventory?.heldCount).toBe(1);
+  });
+
+  it('invalid same-owner replacement leaves the existing hold open', async () => {
+    const t = convexTest();
+    const userId = await createUser(
+      t,
+      'Invalid Replacement Buyer',
+      'invalid-replacement@example.com',
+    );
+    const {eventId, inventoryId} = await createEventWithInventory(t, {
+      supporterDefaultPrice: 3000,
+    });
+
+    const asUser = t.withIdentity({subject: userId});
+    const first = await asUser.mutation(api.orders.core.open, {
+      eventId,
+      quantity: 1,
+      tier: 'supporter',
+      totalAmount: 4000,
+    });
+
+    await expect(
+      asUser.mutation(api.orders.core.open, {
+        eventId,
+        quantity: 1,
+        tier: 'supporter',
+        totalAmount: 2600,
+      }),
+    ).rejects.toThrow('Amount below supporter minimum');
+
+    const firstOrder = await t.run(async (ctx) =>
+      ctx.db.get('ticket_orders', first.orderId),
+    );
+    const inventory = await t.run(async (ctx) =>
+      ctx.db.get('event_inventory', inventoryId),
+    );
+
+    expect(firstOrder?.state).toBe('open');
+    expect(inventory?.heldCount).toBe(1);
+  });
+
+  it('internal held inventory reconciliation reports and repairs primary hold drift', async () => {
+    const t = convexTest();
+    const {eventId, inventoryId} = await createEventWithInventory(t);
+
+    await t.run(async (ctx) => {
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- simulates production counter drift for the internal repair mutation.
+      await ctx.db.patch('event_inventory', inventoryId, {heldCount: 5});
+    });
+
+    const before = await t.query(
+      internal.orders.core.getHeldInventoryReconciliation,
+      {eventId},
+    );
+
+    expect(before.storedHeldCount).toBe(5);
+    expect(before.openPrimaryHeldCount).toBe(0);
+    expect(before.drift).toBe(5);
+
+    const repaired = await t.mutation(
+      internal.orders.core.repairHeldInventoryCount,
+      {eventId, expectedStoredHeldCount: 5},
+    );
+    const inventory = await t.run(async (ctx) =>
+      ctx.db.get('event_inventory', inventoryId),
+    );
+
+    expect(repaired.repaired).toBe(true);
+    expect(repaired.storedHeldCount).toBe(0);
+    expect(repaired.openPrimaryHeldCount).toBe(0);
+    expect(repaired.drift).toBe(0);
+    expect(inventory?.heldCount).toBe(0);
+  });
+
   it('openForGuest creates an open order owned by the guest session', async () => {
     const t = convexTest();
     const {eventId, inventoryId} = await createEventWithInventory(t);
