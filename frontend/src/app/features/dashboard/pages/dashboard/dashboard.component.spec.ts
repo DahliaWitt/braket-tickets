@@ -10,6 +10,7 @@ import {
 import {
   DashboardPageDataService,
   type DashboardApproval,
+  type DashboardApplication,
 } from '@/features/dashboard/services/dashboard-page-data.service';
 import {provideRouter} from '@angular/router';
 import {provideZonelessChangeDetection, signal} from '@angular/core';
@@ -17,7 +18,6 @@ import {type UpcomingEvent} from '@/core/models/event.types';
 import {type Community} from '@/core/services/communities.service';
 import {vi, beforeAll, describe, it, expect, beforeEach} from 'vitest';
 import type {Id} from '@convex/_generated/dataModel';
-import type {ApplicationStatus} from '@shared/domain/application-status';
 import type {CommunityPublicationStatus} from '@shared/domain/community-publication-status';
 
 // ---------------------------------------------------------------------------
@@ -26,6 +26,7 @@ import type {CommunityPublicationStatus} from '@shared/domain/community-publicat
 
 const ORG_ID_A = 'org-a' as Id<'organizers'>;
 const ORG_ID_B = 'org-b' as Id<'organizers'>;
+const applicationId = (id: string) => id as Id<'applications'>;
 
 const mockEvent: UpcomingEvent = {
   _id: '1' as Id<'events'>,
@@ -168,16 +169,7 @@ const authServiceMock = {
 };
 
 let approvalsData: DashboardApproval[] = [];
-let myApplicationsData: {
-  _id: string;
-  _creationTime: number;
-  organizerId?: string;
-  organizerName: string;
-  organizerLogoUrl?: string;
-  status: ApplicationStatus;
-  denyReason?: string;
-  reason?: string;
-}[] = [];
+let myApplicationsData: DashboardApplication[] = [];
 let publicCommunitiesData: PublicCommunity[] = [];
 
 // ---------------------------------------------------------------------------
@@ -352,7 +344,7 @@ describe('DashboardComponent', () => {
         approvals: [],
         myApplications: [
           {
-            _id: 'app-1',
+            _id: applicationId('app-1'),
             _creationTime: 100,
             organizerId: ORG_ID_A,
             organizerName: 'Underground Collective',
@@ -444,14 +436,14 @@ describe('DashboardComponent', () => {
         approvals: [],
         myApplications: [
           {
-            _id: 'app-pending',
+            _id: applicationId('app-pending'),
             _creationTime: 200,
             organizerId: ORG_ID_A,
             organizerName: 'Underground Collective',
             status: 'pending',
           },
           {
-            _id: 'app-rejected',
+            _id: applicationId('app-rejected'),
             _creationTime: 100,
             organizerId: ORG_ID_A,
             organizerName: 'Underground Collective',
@@ -465,6 +457,76 @@ describe('DashboardComponent', () => {
       const entries = fixture.componentInstance.communityGridEntries();
       expect(entries.length).toBe(1);
       expect(entries[0].status).toBe('pending');
+    });
+
+    it('shows rejected applications as a home-page resubmit action', async () => {
+      setup({
+        approvals: [],
+        publicCommunities: [
+          {
+            _id: ORG_ID_A,
+            name: 'Underground Collective',
+            status: 'published',
+            slug: 'underground-collective',
+          },
+        ],
+        myApplications: [
+          {
+            _id: applicationId('app-rejected'),
+            _creationTime: 100,
+            organizerId: ORG_ID_A,
+            organizerName: 'Underground Collective',
+            organizerSlug: 'underground-collective',
+            organizerStatus: 'published',
+            status: 'rejected',
+            denyReason: 'Tell us a little more about who invited you.',
+          },
+        ],
+      });
+      await createComponent();
+
+      expect(await harness.getResubmitStripText()).toContain(
+        'Underground Collective needs another pass',
+      );
+      expect(await harness.getResubmitStripText()).toContain(
+        'Tell us a little more',
+      );
+      expect(await harness.getResubmitCtaHref()).toBe(
+        '/vetting/underground-collective',
+      );
+      expect(await harness.getCommunityResubmitHrefs()).toEqual([
+        '/vetting/underground-collective',
+      ]);
+    });
+
+    it('does not offer resubmission when the community is not published', async () => {
+      setup({
+        approvals: [],
+        publicCommunities: [
+          {
+            _id: ORG_ID_A,
+            name: 'Underground Collective',
+            status: 'draft',
+          },
+        ],
+        myApplications: [
+          {
+            _id: applicationId('app-rejected'),
+            _creationTime: 100,
+            organizerId: ORG_ID_A,
+            organizerName: 'Underground Collective',
+            organizerStatus: 'draft',
+            status: 'rejected',
+          },
+        ],
+      });
+      await createComponent();
+
+      expect(await harness.getResubmitStripText()).toContain(
+        'Applications paused',
+      );
+      expect(await harness.getResubmitCtaHref()).toBeNull();
+      expect(await harness.getCommunityResubmitHrefs()).toEqual([]);
     });
   });
 
@@ -618,7 +680,7 @@ describe('DashboardComponent', () => {
         approvals: [],
         myApplications: [
           {
-            _id: 'app-rejected',
+            _id: applicationId('app-rejected'),
             _creationTime: 1,
             organizerId: ORG_ID_B,
             organizerName: 'Open Events',
@@ -1084,7 +1146,7 @@ describe('DashboardComponent', () => {
         approvals: mockApprovals, // approved for ORG_ID_A
         myApplications: [
           {
-            _id: 'app-1',
+            _id: applicationId('app-1'),
             _creationTime: 100,
             organizerId: ORG_ID_B,
             organizerName: 'Open Events',

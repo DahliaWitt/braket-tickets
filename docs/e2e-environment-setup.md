@@ -51,20 +51,21 @@ E2E now uses the same typed runtime-config builder as every other frontend comma
 
 There is no longer any mutable shared frontend config file:
 
-| Mode | Mechanism | How URLs Stay Fresh |
-|------|-----------|-------------------|
-| `ng serve` (dev server) | **Build-time define** | The harness starts one Angular process with one stable pair of Convex URLs. |
-| `--build` (CI / prod) | **Build-time define** | The build process receives its own env vars and bakes them into that build only. |
+| Mode                    | Mechanism             | How URLs Stay Fresh                                                              |
+| ----------------------- | --------------------- | -------------------------------------------------------------------------------- |
+| `ng serve` (dev server) | **Build-time define** | The harness starts one Angular process with one stable pair of Convex URLs.      |
+| `--build` (CI / prod)   | **Build-time define** | The build process receives its own env vars and bakes them into that build only. |
 
 ## Key Files
 
-| File | Role |
-|------|------|
-| `frontend/scripts/runtime-config.ts` | Builds the public frontend config object for each mode. |
-| `frontend/scripts/run-ng-with-runtime.ts` | Injects the config into Angular with `--define`. |
-| `frontend/src/environments/environment.ts` | Reads `__BRAKET_RUNTIME__`, with a stable fallback for raw TypeScript/lint contexts. |
-| `scripts/lib/AngularFrontend.ts` | Starts Angular with harness-specific `CONVEX_URL` / `CONVEX_SITE_URL` values. |
-| `scripts/e2e-run.ts` | Reuses the running server; it no longer rewrites frontend assets. |
+| File                                       | Role                                                                                                          |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `frontend/scripts/runtime-config.ts`       | Builds the public frontend config object for each mode.                                                       |
+| `frontend/scripts/run-ng-with-runtime.ts`  | Injects the config into Angular with `--define`.                                                              |
+| `frontend/src/environments/environment.ts` | Reads `__BRAKET_RUNTIME__`, with a stable fallback for raw TypeScript/lint contexts.                          |
+| `scripts/lib/AngularFrontend.ts`           | Starts Angular with harness-specific `CONVEX_URL` / `CONVEX_SITE_URL` values.                                 |
+| `scripts/lib/shared.ts`                    | Downloads and starts the pinned local Convex backend binary with the matching local dev instance credentials. |
+| `scripts/e2e-run.ts`                       | Reuses the running server; it no longer rewrites frontend assets.                                             |
 
 ## Running Dev and E2E Simultaneously
 
@@ -99,6 +100,14 @@ npx convex deploy --admin-key <key> --url "$(cat .convex-local/.e2e-convex-url)"
 No frontend restart is needed. The URLs haven't changed — only the backend functions were updated. The next `page.goto()` in your tests will connect to the same ephemeral port with the updated functions.
 
 ## Troubleshooting
+
+### Local backend exits before deploy
+
+The harness pins and starts the precompiled Convex local backend through `scripts/lib/shared.ts` with matching local dev instance credentials.
+
+Error indicators: `--instance-secret is required` or `BadAdminKey`.
+
+Action: confirm the binary came from the pinned release in `scripts/lib/shared.ts`, remove stale files under `.convex-local/convex-local-backend*`, then restart the harness.
 
 ### Tests connect to port 3210 instead of the ephemeral port
 

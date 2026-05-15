@@ -318,6 +318,7 @@ export class CommunityAdminComponent implements HasUnsavedChanges {
   readonly createFormMaxRedemptions = signal('');
   readonly createFormExpires = signal('');
   readonly clipboardStatus = signal<string | null>(null);
+  readonly createdLinkTokens = signal<Record<string, string>>({});
 
   openCreateDialog() {
     this.createFormLabel.set('');
@@ -374,11 +375,19 @@ export class CommunityAdminComponent implements HasUnsavedChanges {
 
       toast.success('Magic link created');
       this.closeCreateDialog();
+      this.createdLinkTokens.update((tokens) => ({
+        ...tokens,
+        [result.linkId]: result.token,
+      }));
 
-      // Auto-copy the new link using current origin
-      await this.copyToClipboard(
+      const copied = await this.copyToClipboard(
         this.browser.absoluteUrl(`/invite/${result.token}`),
       );
+      if (copied) {
+        const copiedMessage = `Copied link for ${label ?? 'new link'}`;
+        this.clipboardStatus.set(copiedMessage);
+        toast.success(copiedMessage);
+      }
     } catch (e) {
       logger.error('Failed to create magic link', e);
       const message = e instanceof Error ? e.message : 'Failed to create link';
@@ -446,6 +455,10 @@ export class CommunityAdminComponent implements HasUnsavedChanges {
 
   getLinkIdentifier(link: {label?: string; tokenPrefix?: string}): string {
     return link.label || link.tokenPrefix || 'Link';
+  }
+
+  createdTokenFor(linkId: Id<'magic_links'>): string | null {
+    return this.createdLinkTokens()[linkId] ?? null;
   }
 
   private async copyToClipboard(text: string): Promise<boolean> {

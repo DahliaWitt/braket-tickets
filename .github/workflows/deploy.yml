@@ -173,8 +173,6 @@ jobs:
       DISCORD_CLIENT_SECRET: ${{ secrets.DISCORD_CLIENT_SECRET }}
       EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
       EMAIL_REPLY_TO: ${{ secrets.EMAIL_REPLY_TO }}
-      POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY || secrets.POSTHOG_KEY }}
-      POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
       RESEND_WEBHOOK_SECRET: ${{ secrets.RESEND_WEBHOOK_SECRET }}
       SITE_URL: ${{ secrets.SITE_URL }}
@@ -256,8 +254,6 @@ jobs:
         run: pnpm build
         env:
           CONVEX_URL: ${{ secrets.CONVEX_URL }}
-          POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
-          POSTHOG_KEY: ${{ secrets.POSTHOG_KEY }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
 
@@ -334,6 +330,20 @@ jobs:
           echo "needs_deploy=${needs_deploy}" >> "${GITHUB_OUTPUT}"
           echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
 
+      - name: Validate CONVEX_LOG_SINK
+        if: ${{ steps.status.outputs.needs_deploy == 'true' }}
+        env:
+          CONVEX_LOG_SINK: ${{ secrets.CONVEX_LOG_SINK }}
+        run: |
+          case "${CONVEX_LOG_SINK}" in
+            sentry|none)
+              ;;
+            *)
+              echo "::error::CONVEX_LOG_SINK must be exactly 'sentry' or 'none'; got '${CONVEX_LOG_SINK:-<unset>}'"
+              exit 1
+              ;;
+          esac
+
       - name: Deploy observability services (changed)
         if: ${{ steps.status.outputs.needs_deploy == 'true' && needs.changes.outputs.observability == 'true' }}
         run: docker compose -f ops/docker-compose.yml up -d --build
@@ -347,9 +357,6 @@ jobs:
           CONVEX_LOG_INCLUDE_SUCCESS: ${{ secrets.CONVEX_LOG_INCLUDE_SUCCESS }}
           CONVEX_LOG_RECONNECT_MS: ${{ secrets.CONVEX_LOG_RECONNECT_MS }}
           CONVEX_LOG_SINK: ${{ secrets.CONVEX_LOG_SINK }}
-          POSTHOG_LOGS_HOST: ${{ secrets.POSTHOG_LOGS_HOST }}
-          POSTHOG_LOGS_PROJECT_TOKEN: ${{ secrets.POSTHOG_LOGS_PROJECT_TOKEN || secrets.POSTHOG_KEY }}
-          POSTHOG_LOGS_SERVICE_NAME: ${{ secrets.POSTHOG_LOGS_SERVICE_NAME }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           BRAKET_APPDATA_ROOT: /mnt/user/appdata/braket-tickets
 
@@ -366,9 +373,6 @@ jobs:
           CONVEX_LOG_INCLUDE_SUCCESS: ${{ secrets.CONVEX_LOG_INCLUDE_SUCCESS }}
           CONVEX_LOG_RECONNECT_MS: ${{ secrets.CONVEX_LOG_RECONNECT_MS }}
           CONVEX_LOG_SINK: ${{ secrets.CONVEX_LOG_SINK }}
-          POSTHOG_LOGS_HOST: ${{ secrets.POSTHOG_LOGS_HOST }}
-          POSTHOG_LOGS_PROJECT_TOKEN: ${{ secrets.POSTHOG_LOGS_PROJECT_TOKEN || secrets.POSTHOG_KEY }}
-          POSTHOG_LOGS_SERVICE_NAME: ${{ secrets.POSTHOG_LOGS_SERVICE_NAME }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           BRAKET_APPDATA_ROOT: /mnt/user/appdata/braket-tickets
 

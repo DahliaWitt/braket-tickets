@@ -150,11 +150,10 @@ If a deploy already failed due to a required field on existing data:
 
 ### Check the failing path
 
-1. Search PostHog for `convex.request_id` and the suspected `convex.function_name`
-2. Open matching events and read the `convex.raw_line` context to trace function arguments and user context
-3. Confirm `convex.request_id` and `convex.function_name` in the same event sequence to identify the failing path
-4. Check logs in Convex Dashboard only after the first-pass PostHog lookup
-5. If frontend capture is relevant, use Sentry as a passive fallback for client-side context
+1. Search Sentry for the suspected `convex.function_name` or related error message.
+2. Open matching events and read the sanitized Convex context to trace the failing path.
+3. Check logs in Convex Dashboard if Sentry has no matching forwarded event.
+4. If frontend capture is relevant, use Sentry for client-side context.
 
 ### Match the error to the likely cause
 
@@ -198,7 +197,7 @@ localStorage.setItem('debug', 'verbose');
 | Cleanup old email delivery failures    | Daily            | `emailDeliveryFailures` rows older than 30 days                            |
 | Cleanup Resend component email records | Daily            | Resend component delivery metadata after provider status retention windows |
 
-Expired ticket orders are released by the order expiry path, not by a cron. If that path is broken, investigate `orders:expire` and the Stripe checkout expiry handler.
+Expired ticket orders are released by the order expiry path, not by a cron. If that path is broken, investigate `orders/core:expire` and the Stripe checkout expiry handler. If inventory appears held with no open primary orders, use the held-count reconciliation steps in `docs/runbooks/payments.md`.
 
 ### Resume the cron path
 

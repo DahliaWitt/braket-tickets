@@ -132,6 +132,32 @@ export class DashboardComponentHarness extends ComponentHarness {
     return (await rows[index].text()).trim();
   }
 
+  async getResubmitStripText(): Promise<string | null> {
+    const el = await this.locatorForOptional(
+      '[data-testid="dashboard-resubmit-strip"]',
+    )();
+    return el ? (await el.text()).trim() : null;
+  }
+
+  async getResubmitCtaHref(): Promise<string | null> {
+    const el = await this.locatorForOptional(
+      '[data-testid="dashboard-resubmit-cta"]',
+    )();
+    return el ? el.getAttribute('href') : null;
+  }
+
+  async getCommunityResubmitHrefs(): Promise<string[]> {
+    const links = await this.locatorForAll(
+      '[data-testid="dashboard-community-resubmit"]',
+    )();
+    const hrefs: string[] = [];
+    for (const link of links) {
+      const href = await link.getAttribute('href');
+      if (href) hrefs.push(href);
+    }
+    return hrefs;
+  }
+
   /** Check whether the application status element is present. */
   async isApplicationStatusVisible(): Promise<boolean> {
     const el = await this.locatorForOptional(

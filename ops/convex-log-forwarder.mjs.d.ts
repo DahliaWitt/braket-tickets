@@ -30,15 +30,7 @@ declare module './convex-log-forwarder.mjs' {
     convexEnvFile: string;
     reconnectDelayMs: number;
     maxInMemoryDedup: number;
-    sink: 'posthog' | 'sentry' | 'both' | 'none';
-  }
-
-  interface PostHogConfig extends BaseConfig {
-    sink: 'posthog';
-    posthogServiceName: string;
-    posthogHost: string;
-    posthogEndpoint: string;
-    posthogProjectToken: string;
+    sink: 'sentry' | 'none';
   }
 
   interface SentryConfig extends BaseConfig {
@@ -47,57 +39,13 @@ declare module './convex-log-forwarder.mjs' {
     sentryEnvelopeEndpoint: string;
   }
 
-  interface BothConfig extends BaseConfig {
-    sink: 'both';
-    posthogServiceName: string;
-    posthogHost: string;
-    posthogEndpoint: string;
-    posthogProjectToken: string;
-    sentryDsn: string;
-    sentryEnvelopeEndpoint: string;
-  }
-
   interface NoneConfig extends BaseConfig {
     sink: 'none';
-    posthogProjectToken: undefined;
-    posthogHost: undefined;
-    posthogEndpoint: undefined;
     sentryDsn: undefined;
     sentryEnvelopeEndpoint: undefined;
   }
 
-  type RuntimeConfig = PostHogConfig | SentryConfig | BothConfig | NoneConfig;
-
-  // ── PostHog OTLP payload ──────────────────────────────────────────
-
-  interface AttributeValue {
-    stringValue: string;
-  }
-
-  interface Attribute {
-    key: string;
-    value: AttributeValue;
-  }
-
-  interface LogRecord {
-    timeUnixNano: string;
-    severityText: string;
-    severityNumber: number;
-    body: {stringValue: string};
-    attributes: Attribute[];
-  }
-
-  interface ScopeLog {
-    scope: {name: string; version: string};
-    logRecords: LogRecord[];
-  }
-
-  interface PostHogPayload {
-    resourceLogs: Array<{
-      resource: {attributes: Attribute[]};
-      scopeLogs: ScopeLog[];
-    }>;
-  }
+  type RuntimeConfig = SentryConfig | NoneConfig;
 
   // ── Exported functions ────────────────────────────────────────────
 
@@ -109,11 +57,6 @@ declare module './convex-log-forwarder.mjs' {
     parsed: unknown,
     rawLine: string,
   ): NormalizedEvent | null;
-
-  export function createPostHogPayload(
-    event: NormalizedEvent,
-    config: RuntimeConfig,
-  ): PostHogPayload;
 
   export function sendNormalizedEvent(
     event: NormalizedEvent,

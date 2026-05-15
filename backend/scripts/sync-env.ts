@@ -23,7 +23,6 @@ import {
   parseSyncEnvArgs,
   validateProductionSyncEnvironment,
 } from './sync-env-safety.ts';
-import {resolveConvexEnvValue} from './sync-env-values.ts';
 
 // ── ANSI colors ────────────────────────────────────────────────────────────────
 
@@ -42,8 +41,6 @@ const COMMON_SYNC_KEYS = [
   'GOOGLE_CLIENT_SECRET',
   'DISCORD_CLIENT_ID',
   'DISCORD_CLIENT_SECRET',
-  'POSTHOG_API_KEY',
-  'POSTHOG_HOST',
   'SITE_URL',
   'TOKEN_DIGEST_SECRET',
   'EMAIL_FROM',
@@ -164,7 +161,7 @@ if (isProd) {
 // ── Build list of keys to sync ─────────────────────────────────────────────────
 
 const keysToSync: [string, string][] = modeSyncKeys.flatMap((key) => {
-  const value = resolveConvexEnvValue(key, process.env);
+  const value = process.env[key] ?? '';
   return value ? [[key, value]] : [];
 });
 

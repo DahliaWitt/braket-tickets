@@ -9,7 +9,6 @@ import {type ComponentFixture, TestBed} from '@angular/core/testing';
 import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
 import {type HarnessLoader} from '@angular/cdk/testing';
 import type {Stripe, StripeEmbeddedCheckout} from '@stripe/stripe-js';
-import {AnalyticsService} from '@/core/services/analytics.service';
 import {
   STRIPE_JS_LOADER,
   StripePaymentComponent,
@@ -43,9 +42,6 @@ function createStripeCheckoutMock(): StripeCheckoutClient {
       [publishableKey]="publishableKey()"
       [checkoutSessionFetcher]="checkoutSessionFetcher"
       [mockPayments]="true"
-      [eventId]="eventId()"
-      [checkoutKind]="checkoutKind()"
-      [orderId]="orderId()"
       [amount]="amount()"
       [paymentLabel]="paymentLabel()"
       (paymentConfirmed)="confirmed = true"
@@ -55,11 +51,6 @@ function createStripeCheckoutMock(): StripeCheckoutClient {
 })
 class TestHostComponent {
   readonly publishableKey = input<string>('pk_test_mock');
-  readonly eventId = input<string | null>(null);
-  readonly checkoutKind = input<'primary' | 'guest' | 'free' | 'resale'>(
-    'primary',
-  );
-  readonly orderId = input<string | null>(null);
   readonly amount = input<number>(2500);
   readonly paymentLabel = input<string>('Total');
   confirmed = false;
@@ -75,16 +66,11 @@ describe('StripePaymentComponent', () => {
   let fixture: ComponentFixture<TestHostComponent>;
   let host: TestHostComponent;
   let loader: HarnessLoader;
-  let analyticsServiceMock: {capture: ReturnType<typeof vi.fn>};
 
   beforeEach(async () => {
-    analyticsServiceMock = {capture: vi.fn()};
     await TestBed.configureTestingModule({
       imports: [TestHostComponent],
-      providers: [
-        provideZonelessChangeDetection(),
-        {provide: AnalyticsService, useValue: analyticsServiceMock},
-      ],
+      providers: [provideZonelessChangeDetection()],
     }).compileComponents();
 
     fixture = TestBed.createComponent(TestHostComponent);
@@ -143,32 +129,15 @@ describe('StripePaymentComponent', () => {
     expect(await harness.isPaymentElementVisible()).toBe(true);
   });
 
-  it('captures stripe_checkout_mounted once after the embedded checkout mounts', async () => {
-    fixture.componentRef.setInput('eventId', 'event_123');
-    fixture.componentRef.setInput('orderId', 'order_123');
-    fixture.componentRef.setInput('checkoutKind', 'primary');
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
+  it('mounts embedded checkout for the current session', async () => {
     const harness = await loader.getHarness(AppStripePaymentHarness);
 
     await harness.clickPay();
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(analyticsServiceMock.capture).toHaveBeenCalledTimes(1);
-    expect(analyticsServiceMock.capture).toHaveBeenCalledWith(
-      'stripe_checkout_mounted',
-      expect.objectContaining({
-        event_id: 'event_123',
-        order_id: 'order_123',
-        checkout_kind: 'primary',
-      }),
-    );
-
     fixture.detectChanges();
-    expect(analyticsServiceMock.capture).toHaveBeenCalledTimes(1);
+    expect(await harness.isPaymentElementVisible()).toBe(true);
   });
 
   it('should emit paymentConfirmed after completing mock checkout', async () => {
@@ -249,7 +218,6 @@ describe('StripePaymentComponent — Stripe.js loading', () => {
       imports: [StripePaymentComponent],
       providers: [
         provideZonelessChangeDetection(),
-        {provide: AnalyticsService, useValue: {capture: vi.fn()}},
         {provide: STRIPE_JS_LOADER, useValue: loadStripeMock},
       ],
     }).compileComponents();
@@ -338,7 +306,6 @@ describe('StripePaymentComponent — Stripe.js loading', () => {
       imports: [StripePaymentComponent],
       providers: [
         provideZonelessChangeDetection(),
-        {provide: AnalyticsService, useValue: {capture: vi.fn()}},
         {provide: STRIPE_JS_LOADER, useValue: loadStripeMock},
       ],
     }).compileComponents();
@@ -377,10 +344,7 @@ describe('StripePaymentComponent — resetKey (BRA-395)', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [StripePaymentComponent],
-      providers: [
-        provideZonelessChangeDetection(),
-        {provide: AnalyticsService, useValue: {capture: vi.fn()}},
-      ],
+      providers: [provideZonelessChangeDetection()],
     }).compileComponents();
 
     fixture = TestBed.createComponent(StripePaymentComponent);
@@ -481,10 +445,7 @@ describe('StripePaymentComponent — fetchClientSecret error handling (BRA-315)'
     const Host = createFailingFetcherHost(fetcher);
     await TestBed.configureTestingModule({
       imports: [Host],
-      providers: [
-        provideZonelessChangeDetection(),
-        {provide: AnalyticsService, useValue: {capture: vi.fn()}},
-      ],
+      providers: [provideZonelessChangeDetection()],
     }).compileComponents();
 
     const fixture = TestBed.createComponent(Host);

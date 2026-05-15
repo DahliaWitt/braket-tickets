@@ -14,9 +14,12 @@ import treeKillLib from 'tree-kill';
 /**
  * Hardcoded admin key for the local Convex backend only.
  * This is intentionally committed — it has no production access.
+ * It is generated for CONVEX_LOCAL_BACKEND_INSTANCE_NAME and
+ * CONVEX_LOCAL_BACKEND_INSTANCE_SECRET below.
  */
 export const ADMIN_KEY =
-  '0135d8598650f8f5cb0f30c34ec2e2bb62793bc28717c8eb6fb577996d50be5f4281b59181095065c5d0f86a2c31ddbe9b597ec62b47ded69782cd';
+  process.env['CONVEX_LOCAL_BACKEND_ADMIN_KEY'] ??
+  'carnitas|019cb1e9d2a276fed585622e93d15bb5a3a61d278d6d4ca11b0b7a3f87e5c3635843e8c5e7';
 
 export const PROJECT_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -31,6 +34,16 @@ export const CONVEX_CLI = path.join(
 );
 
 export const LOCAL_DIR = path.join(PROJECT_ROOT, '.convex-local');
+export const DEFAULT_CONVEX_LOCAL_BACKEND_RELEASE =
+  'precompiled-2026-05-12-cadb2c2';
+export const CONVEX_LOCAL_BACKEND_RELEASE =
+  process.env['CONVEX_LOCAL_BACKEND_RELEASE'] ??
+  DEFAULT_CONVEX_LOCAL_BACKEND_RELEASE;
+export const CONVEX_LOCAL_BACKEND_INSTANCE_NAME =
+  process.env['CONVEX_LOCAL_BACKEND_INSTANCE_NAME'] ?? 'carnitas';
+export const CONVEX_LOCAL_BACKEND_INSTANCE_SECRET =
+  process.env['CONVEX_LOCAL_BACKEND_INSTANCE_SECRET'] ??
+  '4361726e697461732c206c69746572616c6c79206d65616e696e6720226c6974';
 
 // ── sleep ──────────────────────────────────────────────────────────────────────
 
@@ -503,7 +516,7 @@ function detectBackendPackage(): string | null {
 
 /**
  * Downloads the convex-local-backend binary into targetDir.
- * Skips download if the binary already exists and is executable.
+ * Skips download if the pinned binary already exists and is executable.
  */
 async function downloadBackendBinary(targetDir: string): Promise<string> {
   const pkg = detectBackendPackage();
@@ -516,19 +529,28 @@ async function downloadBackendBinary(targetDir: string): Promise<string> {
   fs.mkdirSync(targetDir, {recursive: true});
 
   const binaryPath = path.join(targetDir, 'convex-local-backend');
+  const releaseMarkerPath = path.join(
+    targetDir,
+    'convex-local-backend.release',
+  );
 
   if (
     fs.existsSync(binaryPath) &&
-    (fs.statSync(binaryPath).mode & 0o111) !== 0
+    (fs.statSync(binaryPath).mode & 0o111) !== 0 &&
+    fs.existsSync(releaseMarkerPath) &&
+    fs.readFileSync(releaseMarkerPath, 'utf-8').trim() ===
+      CONVEX_LOCAL_BACKEND_RELEASE
   ) {
     // Already downloaded and executable
     return binaryPath;
   }
 
   const zipPath = path.join(targetDir, pkg);
-  const downloadUrl = `https://github.com/get-convex/convex-backend/releases/latest/download/${pkg}`;
+  const downloadUrl = `https://github.com/get-convex/convex-backend/releases/download/${CONVEX_LOCAL_BACKEND_RELEASE}/${pkg}`;
 
-  console.log(`Downloading convex-local-backend (${pkg})...`);
+  console.log(
+    `Downloading convex-local-backend ${CONVEX_LOCAL_BACKEND_RELEASE} (${pkg})...`,
+  );
   execFileSync(
     'curl',
     [
@@ -550,6 +572,7 @@ async function downloadBackendBinary(targetDir: string): Promise<string> {
 
   execFileSync('unzip', ['-o', zipPath, '-d', targetDir], {stdio: 'inherit'});
   fs.chmodSync(binaryPath, 0o755);
+  fs.writeFileSync(releaseMarkerPath, `${CONVEX_LOCAL_BACKEND_RELEASE}\n`);
 
   return binaryPath;
 }
@@ -761,6 +784,10 @@ export async function startBackendBinary(
     String(port),
     '--site-proxy-port',
     String(sitePort),
+    '--instance-secret',
+    CONVEX_LOCAL_BACKEND_INSTANCE_SECRET,
+    '--instance-name',
+    CONVEX_LOCAL_BACKEND_INSTANCE_NAME,
     '--local-storage',
     storageDir,
     dbSpec,
