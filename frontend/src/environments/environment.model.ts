@@ -9,11 +9,6 @@ export interface StripeEnvironment {
   mockPayments: boolean;
 }
 
-export interface PostHogEnvironment {
-  apiKey: string;
-  host: string;
-}
-
 export interface AppEnvironment {
   production: boolean;
   convexUrl: string;
@@ -27,5 +22,4 @@ export interface AppEnvironment {
   enableSentryReplay: boolean;
   sentryReplaySessionSampleRate: number;
   sentryReplayOnErrorSampleRate: number;
-  posthog: PostHogEnvironment;
 }

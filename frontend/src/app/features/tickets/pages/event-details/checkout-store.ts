@@ -2,7 +2,6 @@ import {computed, inject, Injectable, signal, type Signal} from '@angular/core';
 import {AuthService} from '@/core/services/auth.service';
 import {type EventDetail} from '@/core/models/event.types';
 import type {TicketTier} from '@shared/domain/ticket-tier';
-import type {CheckoutKind} from '@/core/analytics/events';
 
 interface CheckoutSources {
   event: Signal<EventDetail | null>;
@@ -56,15 +55,6 @@ export class CheckoutStore {
     () => this.activeCheckoutSessionId() !== null,
   );
   readonly buyerEmail = computed(() => this.auth.email() ?? this.guestEmail());
-  readonly checkoutKind = computed<CheckoutKind>(() =>
-    this.isResalePurchase()
-      ? 'resale'
-      : this.totalAmount() === 0
-        ? 'free'
-        : this.auth.user()
-          ? 'primary'
-          : 'guest',
-  );
   readonly maxTickets = computed(() => {
     const evt = this.event();
     const sources = this.sources();

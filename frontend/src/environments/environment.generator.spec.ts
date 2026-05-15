@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import {describe, expect, it} from 'vitest';
 
 import {
   createAngularDefineArgs,
@@ -14,14 +14,12 @@ describe('runtime-config', () => {
       DEV_PASSWORD: 'super-secret-password',
       GITHUB_SHA: '1234567890abcdef',
       GITHUB_REF_NAME: 'test-branch',
-      POSTHOG_KEY: 'posthog-public-key',
     });
 
     const serializedEnvironment = JSON.stringify(environment);
 
     expect(serializedEnvironment).not.toContain('super-secret-password');
     expect(serializedEnvironment).not.toContain('DEV_PASSWORD');
-    expect(serializedEnvironment).toContain('posthog-public-key');
   });
 
   it('creates an e2e config from the harness-provided Convex URLs', () => {

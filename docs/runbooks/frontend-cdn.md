@@ -85,7 +85,7 @@ Common causes:
 The current CSP lives in `frontend/public/_headers`. These directives matter most during incident response:
 
 - `style-src 'unsafe-inline'` is required due to Angular/Tailwind runtime styles
-- `connect-src` must include the Convex deployment URL and Stripe/PostHog/Sentry endpoints
+- `connect-src` must include the Convex deployment URL and Stripe/Sentry endpoints
 - Stripe Embedded Checkout requires `script-src` entries for `https://js.stripe.com` and `https://*.js.stripe.com`
 - Stripe Connect embedded components require `script-src` and `frame-src` entries for `https://connect-js.stripe.com` (distinct hostname; not covered by `*.js.stripe.com`). See BRA-433.
 - Stripe Embedded Checkout requires `frame-src` entries for `https://js.stripe.com`, `https://*.js.stripe.com`, and `https://hooks.stripe.com`

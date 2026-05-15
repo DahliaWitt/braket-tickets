@@ -10,9 +10,7 @@ import {sanitize} from '../shared/log-sanitizer.mjs';
 
 const ERROR_WORD_RE =
   /(^|[^a-z0-9])(error|exception|fatal|panic|failed|failure|uncaught)([^a-z0-9]|$)/i;
-const DEFAULT_POSTHOG_HOST = 'https://us.i.posthog.com';
-const DEFAULT_SINK = 'posthog';
-const DEFAULT_POSTHOG_SERVICE_NAME = 'convex-log-forwarder';
+const DEFAULT_SINK = 'none';
 
 const recentlyForwarded = new Map();
 
@@ -278,23 +276,7 @@ async function sendNormalizedEvent(event, config) {
   }
   if (config.sink === 'sentry') {
     await sendToSentry(event, config);
-    return;
   }
-  if (config.sink === 'both') {
-    const results = await Promise.allSettled([
-      sendToPostHog(event, config),
-      sendToSentry(event, config),
-    ]);
-    const failures = results.filter((result) => result.status === 'rejected');
-    if (failures.length > 0) {
-      throw new AggregateError(
-        failures.map((failure) => failure.reason),
-        'Failed to forward Convex log to every configured sink',
-      );
-    }
-    return;
-  }
-  await sendToPostHog(event, config);
 }
 
 async function sendToSentry(event, config) {
@@ -347,78 +329,6 @@ async function sendToSentry(event, config) {
   if (!response.ok) {
     const body = await response.text();
     throw new Error(`Sentry rejected event (${response.status}): ${body}`);
-  }
-}
-
-function createPostHogPayload(event, config) {
-  const attributes = [
-    {key: 'convex.request_id', value: {stringValue: event.requestId || ''}},
-    {
-      key: 'convex.function_name',
-      value: {stringValue: event.functionName || ''},
-    },
-    {key: 'convex.raw_line', value: {stringValue: event.rawLine || ''}},
-    {key: 'convex.target', value: {stringValue: config.convexLogTarget || ''}},
-  ];
-
-  if (event.sentryTraceId) {
-    attributes.push({
-      key: 'convex.sentry_trace_id',
-      value: {stringValue: event.sentryTraceId},
-    });
-  }
-
-  return {
-    resourceLogs: [
-      {
-        resource: {
-          attributes: [
-            {
-              key: 'service.name',
-              value: {stringValue: config.posthogServiceName},
-            },
-            {key: 'service.namespace', value: {stringValue: 'braket-tickets'}},
-          ],
-        },
-        scopeLogs: [
-          {
-            scope: {
-              name: 'convex-log-forwarder',
-              version: '1',
-            },
-            logRecords: [
-              {
-                timeUnixNano: `${Date.now()}000000`,
-                severityText: event.level,
-                severityNumber: normalizeSeverityNumber(event.level),
-                body: {
-                  stringValue: event.message,
-                },
-                attributes,
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  };
-}
-
-async function sendToPostHog(event, config) {
-  const payload = createPostHogPayload(event, config);
-
-  const response = await fetch(config.posthogEndpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.posthogProjectToken}`,
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`PostHog rejected event (${response.status}): ${body}`);
   }
 }
 
@@ -501,22 +411,6 @@ function normalizeLevel(candidate, rawLine) {
   return 'info';
 }
 
-function normalizeSeverityNumber(level) {
-  switch (level) {
-    case 'error':
-      return 17;
-    case 'fatal':
-      return 21;
-    case 'warning':
-      return 13;
-    case 'debug':
-      return 5;
-    case 'info':
-    default:
-      return 9;
-  }
-}
-
 function parsePositiveInt(value, fallback) {
   if (!value) return fallback;
   const parsed = Number.parseInt(value, 10);
@@ -544,27 +438,12 @@ function buildSentryEnvelopeEndpoint(dsn) {
   return `${parsed.protocol}//${parsed.host}${pathPrefix}api/${projectId}/envelope/`;
 }
 
-function buildPostHogEndpoint(host) {
-  const resolved = new URL(host);
-  return new URL('/i/v1/logs', resolved).toString();
-}
-
-function resolvePostHogServiceName(source) {
-  const serviceName = source.POSTHOG_LOGS_SERVICE_NAME;
-  return String(serviceName ?? '').trim() || DEFAULT_POSTHOG_SERVICE_NAME;
-}
-
 function normalizeSink(value) {
   if (!value || value.trim() === '') {
     return DEFAULT_SINK;
   }
   const normalized = value.trim().toLowerCase();
-  if (
-    normalized === 'posthog' ||
-    normalized === 'sentry' ||
-    normalized === 'both' ||
-    normalized === 'none'
-  ) {
+  if (normalized === 'sentry' || normalized === 'none') {
     return normalized;
   }
   throw new Error(`Unsupported CONVEX_LOG_SINK: ${value}`);
@@ -588,41 +467,6 @@ export function buildRuntimeConfig(env = process.env) {
     sink,
   };
 
-  if (sink === 'posthog' || sink === 'both') {
-    const posthogProjectToken = source.POSTHOG_LOGS_PROJECT_TOKEN?.trim();
-    if (!posthogProjectToken) {
-      throw new Error(
-        `POSTHOG_LOGS_PROJECT_TOKEN is required when sink is ${sink}`,
-      );
-    }
-    const posthogServiceName = resolvePostHogServiceName(source);
-    const posthogHost = source.POSTHOG_LOGS_HOST ?? DEFAULT_POSTHOG_HOST;
-    const posthogEndpoint = buildPostHogEndpoint(posthogHost);
-    if (sink === 'both') {
-      const sentryDsn = source.SENTRY_DSN?.trim() ?? '';
-      if (!sentryDsn) {
-        throw new Error('SENTRY_DSN is required when sink is both');
-      }
-      const sentryEnvelopeEndpoint = buildSentryEnvelopeEndpoint(sentryDsn);
-      return {
-        ...config,
-        posthogServiceName,
-        posthogHost,
-        posthogEndpoint,
-        posthogProjectToken,
-        sentryDsn,
-        sentryEnvelopeEndpoint,
-      };
-    }
-    return {
-      ...config,
-      posthogServiceName,
-      posthogHost,
-      posthogEndpoint,
-      posthogProjectToken,
-    };
-  }
-
   if (sink === 'sentry') {
     const sentryDsn = source.SENTRY_DSN?.trim() ?? '';
     if (!sentryDsn) {
@@ -638,9 +482,6 @@ export function buildRuntimeConfig(env = process.env) {
 
   return {
     ...config,
-    posthogProjectToken: undefined,
-    posthogHost: undefined,
-    posthogEndpoint: undefined,
     sentryDsn: undefined,
     sentryEnvelopeEndpoint: undefined,
   };
@@ -653,7 +494,7 @@ const isMainModule = (() => {
   return fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
 })();
 
-export {createPostHogPayload, normalizeEvent, sendNormalizedEvent};
+export {normalizeEvent, sendNormalizedEvent};
 
 if (isMainModule) {
   await runForever(buildRuntimeConfig());

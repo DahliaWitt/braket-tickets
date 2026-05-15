@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1120" height="660" viewBox="0 0 1120 660" role="img" aria-labelledby="title desc">
   <title id="title">Braket Tickets architecture</title>
-  <desc id="desc">Angular frontend connects to Convex, Stripe, PostHog, Sentry, Better Auth, guest sessions, and test layers.</desc>
+  <desc id="desc">Angular frontend connects to Convex, Stripe, Sentry, Better Auth, guest sessions, and test layers.</desc>
   <defs>
     <style>
       .bg{fill:#111114}
@@ -36,7 +36,7 @@
   <rect class="box" x="900" y="278" width="160" height="64" rx="10"/>
   <text class="text" x="980" y="316" text-anchor="middle">Email Jobs</text>
   <rect class="box" x="900" y="378" width="160" height="64" rx="10"/>
-  <text class="text" x="980" y="416" text-anchor="middle">PostHog</text>
+  <text class="text" x="980" y="416" text-anchor="middle">Sentry Logs</text>
   <rect class="box" x="900" y="478" width="160" height="64" rx="10"/>
   <text class="text" x="980" y="516" text-anchor="middle">Sentry</text>
 

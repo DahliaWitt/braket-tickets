@@ -5590,5 +5590,4 @@ export declare const components: {
   stripePool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"stripePool">;
   migrations: import("@convex-dev/migrations/_generated/component.js").ComponentApi<"migrations">;
   authz: import("@djpanda/convex-authz/_generated/component.js").ComponentApi<"authz">;
-  posthog: import("@posthog/convex/_generated/component.js").ComponentApi<"posthog">;
 };

@@ -54,7 +54,6 @@ updates:
       observability:
         patterns:
           - '@sentry/*'
-          - 'posthog-js'
           - '@codecov/*'
           - 'codecov'
         group-by: 'dependency-name'

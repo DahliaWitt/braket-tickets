@@ -26,7 +26,6 @@ import {
   type VettingQuestion,
 } from '@/core/services/communities.service';
 import {AuthService} from '@/core/services/auth.service';
-import {AnalyticsService} from '@/core/services/analytics.service';
 import {toast} from 'ngx-sonner';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
@@ -99,7 +98,6 @@ export class AdminCommunityEditorComponent {
   private communitiesService = inject(CommunitiesService);
   private convex = injectConvex();
   private auth = inject(AuthService);
-  private analytics = inject(AnalyticsService);
   private browser = inject(BrowserPlatformService);
 
   readonly id = input<string | undefined>();
@@ -501,16 +499,11 @@ export class AdminCommunityEditorComponent {
     this.stripeError.set(null);
 
     try {
-      const connectedAccountPresent = this.stripeConnectedAccountId() !== null;
       const {stripeConnectedAccountId} = await this.convex.action(
         api.stripe.actions.createConnectedAccount,
         {organizerId},
       );
       this.stripeConnectedAccountId.set(stripeConnectedAccountId);
-      this.analytics.capture('stripe_connect_onboarding_started', {
-        organizer_id: organizerId,
-        connected_account_present: connectedAccountPresent,
-      });
       await this.refreshStripeStatus();
     } catch (error) {
       logger.error('Failed to connect Stripe account', error);
