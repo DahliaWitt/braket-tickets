@@ -14,9 +14,12 @@ import treeKillLib from 'tree-kill';
 /**
  * Hardcoded admin key for the local Convex backend only.
  * This is intentionally committed — it has no production access.
+ * It is generated for CONVEX_LOCAL_BACKEND_INSTANCE_NAME and
+ * CONVEX_LOCAL_BACKEND_INSTANCE_SECRET below.
  */
 export const ADMIN_KEY =
-  '0135d8598650f8f5cb0f30c34ec2e2bb62793bc28717c8eb6fb577996d50be5f4281b59181095065c5d0f86a2c31ddbe9b597ec62b47ded69782cd';
+  process.env['CONVEX_LOCAL_BACKEND_ADMIN_KEY'] ??
+  'carnitas|019cb1e9d2a276fed585622e93d15bb5a3a61d278d6d4ca11b0b7a3f87e5c3635843e8c5e7';
 
 export const PROJECT_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -36,6 +39,11 @@ export const DEFAULT_CONVEX_LOCAL_BACKEND_RELEASE =
 export const CONVEX_LOCAL_BACKEND_RELEASE =
   process.env['CONVEX_LOCAL_BACKEND_RELEASE'] ??
   DEFAULT_CONVEX_LOCAL_BACKEND_RELEASE;
+export const CONVEX_LOCAL_BACKEND_INSTANCE_NAME =
+  process.env['CONVEX_LOCAL_BACKEND_INSTANCE_NAME'] ?? 'carnitas';
+export const CONVEX_LOCAL_BACKEND_INSTANCE_SECRET =
+  process.env['CONVEX_LOCAL_BACKEND_INSTANCE_SECRET'] ??
+  '4361726e697461732c206c69746572616c6c79206d65616e696e6720226c6974';
 
 // ── sleep ──────────────────────────────────────────────────────────────────────
 
@@ -776,6 +784,10 @@ export async function startBackendBinary(
     String(port),
     '--site-proxy-port',
     String(sitePort),
+    '--instance-secret',
+    CONVEX_LOCAL_BACKEND_INSTANCE_SECRET,
+    '--instance-name',
+    CONVEX_LOCAL_BACKEND_INSTANCE_NAME,
     '--local-storage',
     storageDir,
     dbSpec,
