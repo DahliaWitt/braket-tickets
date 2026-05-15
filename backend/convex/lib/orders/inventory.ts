@@ -1,6 +1,6 @@
 import type {Doc, Id} from '../../_generated/dataModel';
 import type {MutationCtx, QueryCtx} from '../../_generated/server';
-import {throwOrderError} from './access';
+import {assertPositiveInteger, throwOrderError} from './access';
 
 type InventoryReadCtx = {
   db: QueryCtx['db'] | MutationCtx['db'];
@@ -67,6 +67,8 @@ export async function reservePrimaryInventoryHold(
     quantity: number;
   },
 ): Promise<void> {
+  assertPositiveInteger(args.quantity, 'Quantity');
+
   if (!args.event.inventoryId) {
     throwOrderError(
       'INVALID_STATE',
