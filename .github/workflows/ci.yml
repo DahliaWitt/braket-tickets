@@ -17,7 +17,36 @@ permissions:
 
 jobs:
   lint:
-    name: Lint + Typecheck (ESLint + tsc)
+    name: Lint
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'self-hosted' }}
+    timeout-minutes: 10
+    environment:
+      name: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' && 'production' || github.event_name == 'pull_request' && github.base_ref == 'develop' && 'development' || github.ref_name == 'main' && 'production' || 'development' }}
+      deployment: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Setup pnpm
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork
+        uses: pnpm/action-setup@c336a2788d9774dccfdeb4823a5058ccc9f07453 # v4.3.0
+      - name: Setup Node.js
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Install root dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Lint (root eslint + convex eslint + angular-eslint rules + ifttt-lint)
+        env:
+          CI: true
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: pnpm lint
+
+      - name: Enforce Convex sanitized logging
+        run: pnpm check:convex-logging
+
+  typecheck:
+    name: Typecheck
     runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'self-hosted' }}
     timeout-minutes: 10
     environment:
@@ -39,25 +68,23 @@ jobs:
           node-version: '22'
       - name: Install root dependencies
         run: pnpm install --frozen-lockfile
-      - name: Install frontend dependencies
-        working-directory: ./frontend
-        run: pnpm install --frozen-lockfile
       - name: Check Convex generated files are fresh
         if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
         run: pnpm check:convex-generated
-      - name: Lint (root eslint + convex eslint + angular-eslint rules + ifttt-lint)
-        env:
-          CI: true
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: pnpm lint
       - name: Typecheck (frontend tsc + convex typecheck)
         run: pnpm typecheck
 
-      - name: Enforce Convex sanitized logging
-        run: pnpm check:convex-logging
+  lint-typecheck:
+    name: Lint + Typecheck (ESLint + tsc)
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'self-hosted' }}
+    timeout-minutes: 2
+    needs: [lint, typecheck]
+    steps:
+      - name: Confirm lint and typecheck passed
+        run: echo "Lint and typecheck jobs passed."
 
-  test:
-    name: Unit Tests
+  frontend-unit-tests:
+    name: Frontend Unit Tests
     runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'self-hosted' }}
     timeout-minutes: 10
     environment:
@@ -78,9 +105,6 @@ jobs:
           node-version: '22'
       - name: Install root dependencies
         run: pnpm install --frozen-lockfile
-      - name: Install frontend dependencies
-        working-directory: ./frontend
-        run: pnpm install --frozen-lockfile
       - name: Unit tests (frontend)
         working-directory: ./frontend
         # Frontend's package script already includes a `--` shim for forwarding args through `sh -c`,
@@ -88,10 +112,6 @@ jobs:
         run: pnpm test -- --coverage --reporter=json --outputFile=../reports/frontend-test-results.json
         env:
           CONVEX_URL: https://placeholder.convex.cloud
-      - name: Unit tests (convex)
-        # Coverage, JSON reporter, and outputFile are configured in backend/vitest.config.ts
-        # when CI=true. No extra flags needed — just `--` to forward `--coverage` through pnpm.
-        run: pnpm test:convex -- --coverage
       - name: Assert frontend coverage report exists
         id: assert_frontend_coverage
         if: always()
@@ -100,6 +120,43 @@ jobs:
             echo "Missing frontend coverage report: frontend/coverage/coverage-final.json"
             exit 1
           }
+      - name: Upload frontend coverage to Codecov
+        if: ${{ always() && env.CODECOV_TOKEN != '' && steps.assert_frontend_coverage.outcome == 'success' }}
+        uses: codecov/codecov-action@1f60566a86da84c4b4b64c17662a90de97fbb8d7 # v5.4.2
+        with:
+          token: ${{ env.CODECOV_TOKEN }}
+          files: frontend/coverage/coverage-final.json
+          flags: frontend
+          slug: ${{ github.repository }}
+          disable_search: true
+          fail_ci_if_error: true
+
+  convex-unit-tests:
+    name: Convex Unit Tests
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'self-hosted' }}
+    timeout-minutes: 10
+    environment:
+      name: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' && 'production' || github.event_name == 'pull_request' && github.base_ref == 'develop' && 'development' || github.ref_name == 'main' && 'production' || 'development' }}
+      deployment: false
+    env:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Setup pnpm
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork
+        uses: pnpm/action-setup@c336a2788d9774dccfdeb4823a5058ccc9f07453 # v4.3.0
+      - name: Setup Node.js
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Install root dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Unit tests (convex)
+        # Coverage, JSON reporter, and outputFile are configured in backend/vitest.config.ts
+        # when CI=true. No extra flags needed — just `--` to forward `--coverage` through pnpm.
+        run: pnpm test:convex -- --coverage
       - name: Assert convex coverage report exists
         id: assert_convex_coverage
         if: always()
@@ -109,18 +166,8 @@ jobs:
             echo "This usually means the convex tests did not run or coverage generation failed."
             exit 1
           }
-      - name: Upload frontend coverage to Codecov
-        if: ${{ always() && env.CODECOV_TOKEN != '' && steps.assert_frontend_coverage.outcome == 'success' && steps.assert_convex_coverage.outcome == 'success' }}
-        uses: codecov/codecov-action@1f60566a86da84c4b4b64c17662a90de97fbb8d7 # v5.4.2
-        with:
-          token: ${{ env.CODECOV_TOKEN }}
-          files: frontend/coverage/coverage-final.json
-          flags: frontend
-          slug: ${{ github.repository }}
-          disable_search: true
-          fail_ci_if_error: true
       - name: Upload convex coverage to Codecov
-        if: ${{ always() && env.CODECOV_TOKEN != '' && steps.assert_frontend_coverage.outcome == 'success' && steps.assert_convex_coverage.outcome == 'success' }}
+        if: ${{ always() && env.CODECOV_TOKEN != '' && steps.assert_convex_coverage.outcome == 'success' }}
         uses: codecov/codecov-action@1f60566a86da84c4b4b64c17662a90de97fbb8d7 # v5.4.2
         with:
           token: ${{ env.CODECOV_TOKEN }}
@@ -129,6 +176,15 @@ jobs:
           slug: ${{ github.repository }}
           disable_search: true
           fail_ci_if_error: true
+
+  test:
+    name: Unit Tests
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'self-hosted' }}
+    timeout-minutes: 2
+    needs: [frontend-unit-tests, convex-unit-tests]
+    steps:
+      - name: Confirm unit tests passed
+        run: echo "Frontend and Convex unit test jobs passed."
 
   stripe-contracts:
     name: Stripe Sandbox Contracts
@@ -175,9 +231,6 @@ jobs:
         with:
           node-version: '22'
       - name: Install root dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Install frontend dependencies
-        working-directory: ./frontend
         run: pnpm install --frozen-lockfile
       - name: Build frontend with stats
         id: build_frontend
@@ -243,9 +296,6 @@ jobs:
           node-version: '22'
       - name: Install root dependencies
         run: pnpm install --frozen-lockfile
-      - name: Install frontend dependencies
-        working-directory: ./frontend
-        run: pnpm install --frozen-lockfile
       - name: Build Storybook
         working-directory: ./frontend
         run: pnpm build-storybook
@@ -265,9 +315,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Install root dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Check affected E2E tests
         id: check
-        run: npx tsx scripts/run-affected-e2e.ts --check-only
+        run: pnpm exec tsx scripts/run-affected-e2e.ts --check-only
 
   e2e:
     name: E2E Tests
@@ -290,10 +343,6 @@ jobs:
       - name: Install root dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Install frontend dependencies
-        working-directory: ./frontend
-        run: pnpm install --frozen-lockfile
-
       - name: Fix interrupted dpkg state
         run: sudo dpkg --configure -a 2>/dev/null || true
 
@@ -312,7 +361,7 @@ jobs:
           fi
 
       - name: Run E2E tests
-        run: npx tsx scripts/run-affected-e2e.ts
+        run: pnpm exec tsx scripts/run-affected-e2e.ts
         env:
           # Safety defaults: E2E must target a local ephemeral Convex backend.
           # e2e.ts will replace these with per-run ephemeral ports.

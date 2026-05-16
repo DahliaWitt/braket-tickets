@@ -12,12 +12,12 @@ This project uses layered validation: automatic checks run continuously, manual 
 
 ## Automatic (No Action Required)
 
-| Layer                 | Trigger      | Blocks? | Details                                                                 |
-| --------------------- | ------------ | ------- | ----------------------------------------------------------------------- |
-| VS Code TypeScript    | As you type  | No      | Red squiggles in Problems panel                                         |
-| Pre-commit hook       | `git commit` | Yes     | Frontend + Convex typecheck (<5s)                                       |
-| Pre-merge-commit hook | `git merge`  | Yes     | Full `validate.sh all`: lint, typecheck, tests, build, LLM-selected E2E |
-| GitHub Actions CI     | Push / PR    | Yes     | Lint, unit tests, Stripe sandbox contracts, build; affected E2E on PRs  |
+| Layer                 | Trigger      | Blocks? | Details                                                                                              |
+| --------------------- | ------------ | ------- | ---------------------------------------------------------------------------------------------------- |
+| VS Code TypeScript    | As you type  | No      | Red squiggles in Problems panel                                                                      |
+| Pre-commit hook       | `git commit` | Yes     | Frontend + Convex typecheck (<5s)                                                                    |
+| Pre-merge-commit hook | `git merge`  | Yes     | Full `validate.sh all`: lint, typecheck, tests, build, LLM-selected E2E                              |
+| GitHub Actions CI     | Push / PR    | Yes     | Parallel lint/typecheck and frontend/Convex unit jobs, Stripe sandbox contracts, build, affected E2E |
 
 **Setup**: Git hooks are installed automatically by Husky when you run `pnpm install`.
 
@@ -101,9 +101,13 @@ cd frontend && pnpm start
 
 ```
 ci.yml
-├── lint (ESLint + tsc + Convex generated files + sanitized logging + file coupling)
+├── lint (ESLint + sanitized logging + file coupling)
+├── typecheck (tsc + Convex generated files)
+├── lint-typecheck (compatibility aggregate)
 │   └── stripe-contracts (runs against Stripe sandbox)
-├── test (frontend + convex unit suites)
+├── frontend-unit-tests
+├── convex-unit-tests
+├── test (compatibility aggregate)
 ├── build (frontend production build with bundle analysis)
 ├── e2e-check (affected test detector)
 │   └── e2e (conditional on e2e-check output)
@@ -111,9 +115,13 @@ ci.yml
 
 **Job Details**:
 
-- `lint`: Checks Convex generated files are fresh, runs lint, typecheck, enforces Convex sanitized logging, and checks file coupling (ifttt-lint)
+- `lint`: Runs lint, enforces Convex sanitized logging, and checks file coupling (ifttt-lint)
+- `typecheck`: Checks Convex generated files are fresh and runs typecheck
+- `frontend-unit-tests`: Runs frontend unit tests and uploads frontend coverage
+- `convex-unit-tests`: Runs Convex unit tests and uploads Convex coverage
+- `lint-typecheck` / `test`: Compatibility aggregate checks for branch protection
 - `stripe-contracts`: Runs `pnpm test:convex:sandbox` against Stripe sandbox; needs `lint` to pass
-- `e2e-check`: Detects affected E2E tests; needs `lint`, `test`, and `build` to pass
+- `e2e-check`: Detects affected E2E tests
 - `e2e`: Runs only if `e2e-check` determines tests are needed
 
 ## Troubleshooting

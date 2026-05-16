@@ -34,13 +34,13 @@ Jump to:
 
 ## Pipeline Map
 
-| Workflow                   | Trigger                                                                                              | Jobs                                                                                                               |
-| -------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `CI`                       | Pushes to `main` or `develop`; pull requests targeting `main` or `develop`                           | `lint`, `test`, `stripe-contracts`, `build`, `storybook`, `e2e-check`, conditional `e2e`, branch-gated deploy call |
-| `Release`                  | Pushes to `main`                                                                                     | Creates GitHub releases with `GITHUB_TOKEN` and opens or updates Release Please PRs with `RELEASE_PLEASE_TOKEN`    |
-| `Release Automerge`        | Release Please pull requests targeting `main`                                                        | Validates the release PR branch, title, author, and changed files, then enables squash auto-merge                  |
-| `Deploy to Production`     | Reusable workflow called from a successful `CI` push run on `main`                                   | `changes`, `deploy-convex`, `deploy-frontend`, `deploy-observability`, `record-deployment`                         |
-| `Deploy Preview (develop)` | Reusable workflow called from a successful `CI` push run on `develop`, or manual `workflow_dispatch` | `changes`, `deploy-convex-dev`, `deploy-frontend-preview`, `deploy-observability-dev`, `record-deployment`         |
+| Workflow                   | Trigger                                                                                              | Jobs                                                                                                                                                                                          |
+| -------------------------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CI`                       | Pushes to `main` or `develop`; pull requests targeting `main` or `develop`                           | `lint`, `typecheck`, `lint-typecheck`, `frontend-unit-tests`, `convex-unit-tests`, `test`, `stripe-contracts`, `build`, `storybook`, `e2e-check`, conditional `e2e`, branch-gated deploy call |
+| `Release`                  | Pushes to `main`                                                                                     | Creates GitHub releases with `GITHUB_TOKEN` and opens or updates Release Please PRs with `RELEASE_PLEASE_TOKEN`                                                                               |
+| `Release Automerge`        | Release Please pull requests targeting `main`                                                        | Validates the release PR branch, title, author, and changed files, then enables squash auto-merge                                                                                             |
+| `Deploy to Production`     | Reusable workflow called from a successful `CI` push run on `main`                                   | `changes`, `deploy-convex`, `deploy-frontend`, `deploy-observability`, `record-deployment`                                                                                                    |
+| `Deploy Preview (develop)` | Reusable workflow called from a successful `CI` push run on `develop`, or manual `workflow_dispatch` | `changes`, `deploy-convex-dev`, `deploy-frontend-preview`, `deploy-observability-dev`, `record-deployment`                                                                                    |
 
 PRs do not deploy. Automatic deploys use `workflow_run` and the deploy workflows require the completed CI run to be a successful `push` event on `main` or `develop`. Pull request CI completions can never pass the deploy-context branch/event guard.
 
@@ -138,24 +138,14 @@ Expected values:
 
 The `lint` job runs these checks:
 
-- `pnpm check:convex-generated`
 - `pnpm lint`
-- `pnpm typecheck`
 - `pnpm check:convex-logging`
 - `ifttt-lint` against the merge diff
-
-GitHub Actions runs that freshness gate with the job's selected GitHub environment
-(`development` for `develop` and preview PRs, `production` for `main` and production PRs)
-and expects `CONVEX_DEPLOYMENT` to be present as an environment-scoped GitHub variable.
-That variable is Doppler-synced and must exist before `pnpm check:convex-generated`
-can resolve the existing Convex deployment.
 
 Local repro:
 
 ```bash
-pnpm check:convex-generated
 pnpm lint
-pnpm typecheck
 pnpm check:convex-logging
 ```
 
@@ -167,9 +157,33 @@ MERGE_BASE=$(git merge-base HEAD "${BASE_SHA:-HEAD~1}" 2>/dev/null || echo "HEAD
 git diff "$MERGE_BASE" HEAD | pnpm exec ifttt-lint -
 ```
 
-### `test`
+### `typecheck`
 
-The `test` job runs frontend and Convex unit suites plus coverage assertions.
+The `typecheck` job runs these checks:
+
+- `pnpm check:convex-generated`
+- `pnpm typecheck`
+
+GitHub Actions runs that freshness gate with the job's selected GitHub environment
+(`development` for `develop` and preview PRs, `production` for `main` and production PRs)
+and expects `CONVEX_DEPLOYMENT` to be present as an environment-scoped GitHub variable.
+That variable is Doppler-synced and must exist before `pnpm check:convex-generated`
+can resolve the existing Convex deployment.
+
+Local repro:
+
+```bash
+pnpm check:convex-generated
+pnpm typecheck
+```
+
+### `frontend-unit-tests`, `convex-unit-tests`, and `test`
+
+The frontend and Convex unit suites run as separate parallel jobs:
+
+- `frontend-unit-tests`: frontend Vitest suite plus `frontend/coverage/coverage-final.json`
+- `convex-unit-tests`: Convex Vitest suite plus `backend/coverage/coverage-final.json`
+- `test`: compatibility aggregate that passes only after both unit jobs pass
 
 Local repro:
 
@@ -212,7 +226,7 @@ This CI build job only injects `CONVEX_URL`, `SQUARE_APPLICATION_ID`, and `SQUAR
 `e2e-check` decides whether the E2E suite runs at all:
 
 ```bash
-npx tsx scripts/run-affected-e2e.ts --check-only
+pnpm exec tsx scripts/run-affected-e2e.ts --check-only
 ```
 
 If `e2e` is skipped unexpectedly, inspect the `e2e-check` output first. The deploy path is not blocked by a skipped `e2e` job when the gate decides nothing relevant changed.
