@@ -282,16 +282,13 @@ export async function sendBroadcast(
     }),
   );
 
-  await insertAdminAuditLog(
-    {db: ctx.db},
-    {
-      adminId: userId,
-      action: 'event.broadcast-email.send.all_holders',
-      eventId: args.eventId,
-      organizerId: event.organizerId,
-      source: 'admin-ui',
-    },
-  );
+  await insertAdminAuditLog(ctx, {
+    adminId: userId,
+    action: 'event.broadcast-email.send.all_holders',
+    eventId: args.eventId,
+    organizerId: event.organizerId,
+    source: 'admin-ui',
+  });
 
   return {success: true as const, recipientCount: recipients.length};
 }

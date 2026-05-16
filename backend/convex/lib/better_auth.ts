@@ -10,7 +10,7 @@ import {generateRandomString} from 'better-auth/crypto';
 
 import {components, internal} from '../_generated/api';
 import type {DataModel, Doc} from '../_generated/dataModel';
-import type {MutationCtx} from '../_generated/server';
+import {env, type MutationCtx} from '../_generated/server';
 import authConfig from '../auth.config';
 import {adapterFindMany} from './better_auth_adapter';
 import {insertAdminAuditLog} from './admin_audit_log';
@@ -234,23 +234,18 @@ export function resolveSocialProviderAvailability(): {
   google: boolean;
   discord: boolean;
 } {
-  const google = Boolean(
-    process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET,
-  );
-  const discord = Boolean(
-    process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET,
-  );
+  const google = Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
+  const discord = Boolean(env.DISCORD_CLIENT_ID && env.DISCORD_CLIENT_SECRET);
 
   return {google, discord};
 }
 
 function buildAllowedFrontendOrigins(frontendUrl: string): Set<string> {
   const allowedOrigins = new Set<string>([new URL(frontendUrl).origin]);
-  const authBaseUrl =
-    process.env.CONVEX_SITE_URL || process.env.AUTH_BASE_URL || '';
+  const authBaseUrl = env.CONVEX_SITE_URL || env.AUTH_BASE_URL || '';
   const isLocalDevelopment =
     authBaseUrl.includes('127.0.0.1') || authBaseUrl.includes('localhost');
-  const allowLocalhost = process.env.ALLOW_LOCALHOST_CORS === 'true';
+  const allowLocalhost = env.ALLOW_LOCALHOST_CORS === 'true';
 
   if (allowLocalhost || isLocalDevelopment) {
     for (const port of LOCAL_FRONTEND_PORTS) {
@@ -358,14 +353,11 @@ export const authComponent = createClient<DataModel>(components.betterAuth, {
             emailVerificationTime: Date.now(),
           });
 
-          await insertAdminAuditLog(
-            {db: ctx.db},
-            {
-              adminId: appUser._id,
-              action: 'account.email_change.completed',
-              source: 'better_auth_trigger',
-            },
-          );
+          await insertAdminAuditLog(ctx, {
+            adminId: appUser._id,
+            action: 'account.email_change.completed',
+            source: 'better_auth_trigger',
+          });
 
           return;
         }
@@ -412,15 +404,12 @@ export const authComponent = createClient<DataModel>(components.betterAuth, {
           return;
         }
 
-        await insertAdminAuditLog(
-          {db: ctx.db},
-          {
-            adminId: appUser._id,
-            action: 'account.provider.linked',
-            source: 'better_auth_account_trigger',
-            reason: account.providerId,
-          },
-        );
+        await insertAdminAuditLog(ctx, {
+          adminId: appUser._id,
+          action: 'account.provider.linked',
+          source: 'better_auth_account_trigger',
+          reason: account.providerId,
+        });
       },
     },
     session: {
@@ -441,7 +430,7 @@ export const {onCreate, onUpdate, onDelete} = authComponent.triggersApi();
  * Throws if neither CONVEX_SITE_URL nor AUTH_BASE_URL is set.
  */
 export function resolveAuthBaseUrl(): string {
-  const url = process.env.CONVEX_SITE_URL || process.env.AUTH_BASE_URL;
+  const url = env.CONVEX_SITE_URL || env.AUTH_BASE_URL;
   if (!url) {
     throw new Error(
       'AUTH_BASE_URL or CONVEX_SITE_URL must be set. ' +
@@ -458,7 +447,7 @@ function getAuthConfig() {
   const isLocalDevelopment =
     AUTH_BASE_URL.includes('127.0.0.1') || AUTH_BASE_URL.includes('localhost');
 
-  const allowLocalhost = process.env.ALLOW_LOCALHOST_CORS === 'true';
+  const allowLocalhost = env.ALLOW_LOCALHOST_CORS === 'true';
   const trustedOriginSet = new Set<string>([FRONTEND_URL]);
 
   if (allowLocalhost) {
@@ -562,13 +551,13 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
     },
     socialProviders: {
       google: {
-        clientId: process.env.GOOGLE_CLIENT_ID || '',
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+        clientId: env.GOOGLE_CLIENT_ID || '',
+        clientSecret: env.GOOGLE_CLIENT_SECRET || '',
         enabled: providerAvailability.google,
       },
       discord: {
-        clientId: process.env.DISCORD_CLIENT_ID || '',
-        clientSecret: process.env.DISCORD_CLIENT_SECRET || '',
+        clientId: env.DISCORD_CLIENT_ID || '',
+        clientSecret: env.DISCORD_CLIENT_SECRET || '',
         enabled: providerAvailability.discord,
       },
     },

@@ -15,7 +15,10 @@ export function getRemainingPrimaryInventory(
   event: Pick<Doc<'events'>, 'totalTickets'>,
   inventory: Pick<Doc<'event_inventory'>, 'soldCount' | 'heldCount'>,
 ): number {
-  return Math.max(0, event.totalTickets - inventory.soldCount - inventory.heldCount);
+  return Math.max(
+    0,
+    event.totalTickets - inventory.soldCount - inventory.heldCount,
+  );
 }
 
 export async function requireEventWithInventory(
@@ -36,17 +39,11 @@ export async function requireEventWithInventory(
 
   const inventory = await ctx.db.get('event_inventory', event.inventoryId);
   if (!inventory) {
-    throwOrderError(
-      'INVALID_STATE',
-      'Event inventory row could not be loaded',
-    );
+    throwOrderError('INVALID_STATE', 'Event inventory row could not be loaded');
   }
 
   if (inventory.eventId !== event._id) {
-    throwOrderError(
-      'INVALID_STATE',
-      'Event inventory linkage is invalid',
-    );
+    throwOrderError('INVALID_STATE', 'Event inventory linkage is invalid');
   }
 
   return {event, inventory};
@@ -82,10 +79,7 @@ export async function assertEventTotalTicketsUpdateAllowed(
     totalTickets: number;
   },
 ): Promise<void> {
-  const {inventory} = await requireEventWithInventory(
-    {db: ctx.db},
-    args.eventId,
-  );
+  const {inventory} = await requireEventWithInventory(ctx, args.eventId);
   assertCanSetEventTotalTickets({
     totalTickets: args.totalTickets,
     inventory,

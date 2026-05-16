@@ -154,6 +154,7 @@ export type DataModel = {
       magicLinkId?: Id<"magic_links">;
       organizerId?: Id<"organizers">;
       reason?: string;
+      requestId?: string;
       source?: string;
       targetUserId?: Id<"users">;
       trustedOrganizerId?: Id<"organizers">;
@@ -173,6 +174,7 @@ export type DataModel = {
       | "magicLinkId"
       | "organizerId"
       | "reason"
+      | "requestId"
       | "source"
       | "targetUserId"
       | "trustedOrganizerId"

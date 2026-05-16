@@ -173,8 +173,6 @@ jobs:
       DISCORD_CLIENT_SECRET: ${{ secrets.DISCORD_CLIENT_SECRET }}
       EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
       EMAIL_REPLY_TO: ${{ secrets.EMAIL_REPLY_TO }}
-      POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY || secrets.POSTHOG_KEY }}
-      POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
       RESEND_WEBHOOK_SECRET: ${{ secrets.RESEND_WEBHOOK_SECRET }}
       SITE_URL: ${{ secrets.SITE_URL }}

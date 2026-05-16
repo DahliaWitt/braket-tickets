@@ -179,13 +179,10 @@ async function buildDirectoryEntry(
     hasMagicLinkAccess,
   ] = await Promise.all([
     ctx.db.get('users', userId),
-    getLatestApplicationForOrganizer(
-      {db: ctx.db},
-      {
-        organizerId,
-        userId,
-      },
-    ),
+    getLatestApplicationForOrganizer(ctx, {
+      organizerId,
+      userId,
+    }),
     isCommunityMember(ctx, userId, organizerId),
     isCommunityAdmin(ctx, userId, organizerId),
     hasOrganizerMagicLinkRedemption(ctx, organizerId, userId),

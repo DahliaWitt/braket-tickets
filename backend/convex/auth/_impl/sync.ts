@@ -137,15 +137,12 @@ async function insertUserScopedAuditLog(
   action: AdminAuditAction,
   reason?: string,
 ): Promise<void> {
-  await insertAdminAuditLog(
-    {db: ctx.db},
-    {
-      adminId: userId,
-      action,
-      source: 'better_auth_sync',
-      ...(reason ? {reason} : {}),
-    },
-  );
+  await insertAdminAuditLog(ctx, {
+    adminId: userId,
+    action,
+    source: 'better_auth_sync',
+    ...(reason ? {reason} : {}),
+  });
 }
 
 function resolveExistingUserSocialSignupCompletion(
@@ -384,15 +381,12 @@ export async function backfillAuthUserLinksHandler(
       return;
     }
 
-    await insertAdminAuditLog(
-      {db: ctx.db},
-      {
-        adminId: args.actorUserId,
-        action,
-        source: 'auth_sync_backfill',
-        ...(reason ? {reason} : {}),
-      },
-    );
+    await insertAdminAuditLog(ctx, {
+      adminId: args.actorUserId,
+      action,
+      source: 'auth_sync_backfill',
+      ...(reason ? {reason} : {}),
+    });
   };
 
   for (const user of result.page) {

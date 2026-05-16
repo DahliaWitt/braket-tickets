@@ -148,13 +148,26 @@ If a deploy already failed due to a required field on existing data:
 
 **Symptom:** Users report backend failures, or function errors appear to be rising.
 
+For readonly deployment checks, prefer an inline query over creating temporary functions:
+
+```bash
+pnpm convex run --prod --inline-query 'await ctx.db.query("adminAuditLogs").order("desc").take(5)'
+pnpm convex run --deployment staging --inline-query 'await ctx.db.query("events").take(5)'
+```
+
+For scoped agent or worktree experiments, create an expiring deployment and deployment-scoped token instead of reusing staging:
+
+```bash
+pnpm convex deployment create dev/my-worktree --type dev --expiration "in 7 days" --select
+pnpm convex deployment token create my-worktree-ci --save-env --deployment dev/my-worktree
+```
+
 ### Check the failing path
 
-1. Search PostHog for `convex.request_id` and the suspected `convex.function_name`
-2. Open matching events and read the `convex.raw_line` context to trace function arguments and user context
-3. Confirm `convex.request_id` and `convex.function_name` in the same event sequence to identify the failing path
-4. Check logs in Convex Dashboard only after the first-pass PostHog lookup
-5. If frontend capture is relevant, use Sentry as a passive fallback for client-side context
+1. Check Convex Dashboard logs for the request id, function name, and failure payload.
+2. For admin-sensitive changes, inspect the relevant `adminAuditLogs.requestId` row when available.
+3. Use `pnpm convex run --inline-query` for readonly data checks.
+4. If frontend capture is relevant, use Sentry as a passive fallback for client-side context.
 
 ### Match the error to the likely cause
 

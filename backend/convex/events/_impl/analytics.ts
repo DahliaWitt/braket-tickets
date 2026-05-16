@@ -15,9 +15,12 @@ import {
 } from '../../lib/ticket_roster_projection';
 import {type RosterStatus} from '../../lib/validators/ticketing';
 import {throwAppError} from '../../lib/errors';
+import {logTransactionMetrics} from '../../lib/runtime_metadata';
 import {TICKET_STATUSES, type TicketStatus} from '@shared/domain/ticket-status';
 
 const ROSTER_EXPORT_SIZE_CAP = 5000;
+const ROSTER_PAGINATION_MAXIMUM_ROWS_READ = 2000;
+const ROSTER_SEARCH_MAXIMUM_ROWS_READ = 5000;
 const HOUR_MS = 60 * 60 * 1000;
 const ACTIVE_ROSTER_EXPORT_STATUSES = [
   'valid',
@@ -137,7 +140,12 @@ async function paginateRosterTickets(
           q.eq('eventId', args.eventId).eq('rosterIsActive', true),
         );
 
-  return await ticketQuery.paginate(args.paginationOpts);
+  return await ticketQuery.paginate({
+    ...args.paginationOpts,
+    maximumRowsRead:
+      args.paginationOpts.maximumRowsRead ??
+      ROSTER_PAGINATION_MAXIMUM_ROWS_READ,
+  });
 }
 
 export async function getEventCheckInSummary(
@@ -226,6 +234,7 @@ export async function getEventAttendeeRosterPage(
   const {isDoorStaff} = await requireAnalyticsAccess(ctx, args.eventId);
 
   const result = await paginateRosterTickets(ctx, args);
+  await logTransactionMetrics(ctx, 'events.analytics.rosterPage');
   return {
     ...result,
     page: result.page.map((ticket) =>
@@ -266,6 +275,9 @@ export async function searchEventAttendeesPage(
       paginationOpts: {
         ...args.paginationOpts,
         numItems: remainingItems,
+        maximumRowsRead:
+          args.paginationOpts.maximumRowsRead ??
+          ROSTER_SEARCH_MAXIMUM_ROWS_READ,
         cursor,
       },
     });
@@ -282,6 +294,7 @@ export async function searchEventAttendeesPage(
     isDone = result.isDone;
   }
 
+  await logTransactionMetrics(ctx, 'events.analytics.searchAttendeesPage');
   return {
     page: matches.map((ticket) =>
       rosterRowFromProjectedTicket(ticket, isDoorStaff),
@@ -383,6 +396,7 @@ export async function _getEventAttendeeRosterInternal(
     rosterRowFromProjectedTicket(ticket, false),
   );
   sortRosterRows(rows);
+  await logTransactionMetrics(ctx, 'events.analytics.rosterExport');
 
   return rows;
 }
@@ -397,18 +411,15 @@ export async function recordRosterExport(
     includeRefunded: boolean;
   },
 ): Promise<null> {
-  await insertAdminAuditLog(
-    {db: ctx.db},
-    {
-      adminId: args.adminId,
-      action: ADMIN_AUDIT_ACTIONS.EVENT_ROSTER_EXPORTED,
-      eventId: args.eventId,
-      organizerId: args.organizerId,
-      source: JSON.stringify({
-        rowCount: args.rowCount,
-        includeRefunded: args.includeRefunded,
-      }),
-    },
-  );
+  await insertAdminAuditLog(ctx, {
+    adminId: args.adminId,
+    action: ADMIN_AUDIT_ACTIONS.EVENT_ROSTER_EXPORTED,
+    eventId: args.eventId,
+    organizerId: args.organizerId,
+    source: JSON.stringify({
+      rowCount: args.rowCount,
+      includeRefunded: args.includeRefunded,
+    }),
+  });
   return null;
 }

@@ -3,7 +3,7 @@
  * redirect links handed to third-party services (Stripe Connect, Better Auth
  * social callbacks, transactional email links).
  *
- * - Production / staging: requires process.env.SITE_URL. Throws otherwise.
+ * - Production / staging: requires SITE_URL. Throws otherwise.
  * - Unit-test / IS_TEST runtime: falls back to http://localhost:4200 so
  *   tests do not have to manage env vars.
  *
@@ -11,11 +11,12 @@
  * `process.env.SITE_URL` directly. See AGENTS.md for the rationale.
  */
 import {isTestEnvironment, isUnitTestRuntime} from './environment';
+import {env} from '../_generated/server';
 
 const LOCAL_FALLBACK = 'http://localhost:4200';
 
 export function resolveSiteUrl(): string {
-  const siteUrl = process.env.SITE_URL;
+  const siteUrl = env.SITE_URL;
   if (siteUrl) return stripTrailingSlash(siteUrl);
   if (isUnitTestRuntime() || isTestEnvironment()) return LOCAL_FALLBACK;
   throw new Error(

@@ -12,6 +12,7 @@
     "types": ["node", "vitest"]
   },
   "include": [
+    "convex-env-defaults.ts",
     "seed.ts",
     "seed-client.ts",
     "seed-session.ts",

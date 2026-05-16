@@ -127,6 +127,7 @@ export class ConvexBackend {
       );
       await this._setIsTest();
       await this._setSiteUrl(appPort);
+      await this._setRequiredPredeployEnv(appPort);
 
       await this._deployWithRetry();
 
@@ -166,6 +167,7 @@ export class ConvexBackend {
         if (this.mode === 'dev') {
           await this._guardIsTestFalse();
         }
+        await this._setRequiredPredeployEnv(appPort);
         await this._deployWithRetry();
         await this._waitForMutationReady(appPort);
 
@@ -592,6 +594,22 @@ export class ConvexBackend {
       const msg = err instanceof Error ? err.message : String(err);
       console.warn(`[${this.instanceId}] Failed to set SITE_URL: ${msg}`);
     }
+  }
+
+  private async _setRequiredPredeployEnv(appPort: number): Promise<void> {
+    const env = buildEnv(this.mode, {
+      convex: this._convexPort!,
+      convexSite: this._convexSitePort!,
+      app: appPort,
+    });
+    await setAllEnvVars(
+      [
+        ['BETTER_AUTH_SECRET', env['BETTER_AUTH_SECRET']!],
+        ['TOKEN_DIGEST_SECRET', env['TOKEN_DIGEST_SECRET']!],
+      ],
+      this.convexUrl,
+      `${this.instanceId} predeploy`,
+    );
   }
 
   /** Ensure IS_TEST=false for dev backends to prevent contamination. */

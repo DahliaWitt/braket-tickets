@@ -1,13 +1,49 @@
 import {defineApp} from 'convex/server';
+import {v} from 'convex/values';
 import betterAuth from '@convex-dev/better-auth/convex.config';
 import rateLimiter from '@convex-dev/rate-limiter/convex.config';
 import resend from '@convex-dev/resend/convex.config.js';
 import workpool from '@convex-dev/workpool/convex.config';
 import migrations from '@convex-dev/migrations/convex.config';
 import authz from '@djpanda/convex-authz/convex.config';
-import posthog from '@posthog/convex/convex.config.js';
 
-const app: ReturnType<typeof defineApp> = defineApp();
+const app: ReturnType<typeof defineApp> = defineApp({
+  env: {
+    ALLOW_LOCALHOST_CORS: v.optional(v.string()),
+    AUTH_BASE_URL: v.optional(v.string()),
+    BETTER_AUTH_SECRET: v.string(),
+    CONVEX_CLOUD_URL: v.optional(v.string()),
+    CONVEX_SITE_URL: v.optional(v.string()),
+    DEV_SEED: v.optional(v.string()),
+    DEV_SEED_EXPIRES_AT: v.optional(v.string()),
+    DEV_SEED_TOKEN: v.optional(v.string()),
+    DISCORD_CLIENT_ID: v.optional(v.string()),
+    DISCORD_CLIENT_SECRET: v.optional(v.string()),
+    E2E_CONVEX_SITE_URL: v.optional(v.string()),
+    EMAIL_FROM: v.optional(v.string()),
+    EMAIL_REPLY_TO: v.optional(v.string()),
+    GOOGLE_CLIENT_ID: v.optional(v.string()),
+    GOOGLE_CLIENT_SECRET: v.optional(v.string()),
+    IS_TEST: v.optional(v.string()),
+    JWT_PRIVATE_KEY: v.optional(v.string()),
+    JWKS: v.optional(v.string()),
+    RESEND_API_KEY: v.optional(v.string()),
+    RESEND_TEST_MODE: v.optional(v.string()),
+    RESEND_WEBHOOK_SECRET: v.optional(v.string()),
+    SITE_URL: v.optional(v.string()),
+    SMTP_FROM: v.optional(v.string()),
+    SMTP_HOST: v.optional(v.string()),
+    SMTP_PASS: v.optional(v.string()),
+    SMTP_PORT: v.optional(v.string()),
+    SMTP_REPLY_TO: v.optional(v.string()),
+    SMTP_USER: v.optional(v.string()),
+    STRIPE_SECRET_KEY: v.optional(v.string()),
+    STRIPE_WEBHOOK_SECRET: v.optional(v.string()),
+    STRIPE_WEBHOOK_SECRET_CONNECT: v.optional(v.string()),
+    STRIPE_WEBHOOK_SECRET_V2_EVENTS: v.optional(v.string()),
+    TOKEN_DIGEST_SECRET: v.string(),
+  },
+});
 app.use(betterAuth);
 app.use(rateLimiter);
 app.use(resend);
@@ -15,6 +51,5 @@ app.use(workpool, {name: 'payoutPool'});
 app.use(workpool, {name: 'stripePool'});
 app.use(migrations);
 app.use(authz);
-app.use(posthog);
 
 export default app;

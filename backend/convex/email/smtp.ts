@@ -3,7 +3,7 @@
 import nodemailer from 'nodemailer';
 import {v} from 'convex/values';
 import {internal} from '../_generated/api';
-import {internalAction} from '../_generated/server';
+import {env, internalAction} from '../_generated/server';
 import {logger} from '../lib/logger';
 import {withRetry} from '../lib/resilience';
 import {emailDeliverySourceValidator} from '../lib/validators/email_delivery';
@@ -48,14 +48,12 @@ async function sendViaSmtp(
 ): Promise<void> {
   const defaultHost =
     logLabel === 'preview' ? 'smtp.ethereal.email' : 'smtp.gmail.com';
-  const SMTP_HOST = process.env['SMTP_HOST'] || defaultHost;
-  const SMTP_PORT = process.env['SMTP_PORT'] || '587';
-  const SMTP_USER = process.env['SMTP_USER'];
-  const SMTP_PASS = process.env['SMTP_PASS'];
-  const SMTP_FROM =
-    process.env['EMAIL_FROM'] || process.env['SMTP_FROM'] || SMTP_USER;
-  const SMTP_REPLY_TO =
-    process.env['EMAIL_REPLY_TO'] || process.env['SMTP_REPLY_TO'];
+  const SMTP_HOST = env.SMTP_HOST || defaultHost;
+  const SMTP_PORT = env.SMTP_PORT || '587';
+  const SMTP_USER = env.SMTP_USER;
+  const SMTP_PASS = env.SMTP_PASS;
+  const SMTP_FROM = env.EMAIL_FROM || env.SMTP_FROM || SMTP_USER;
+  const SMTP_REPLY_TO = env.EMAIL_REPLY_TO || env.SMTP_REPLY_TO;
 
   if (!SMTP_USER || !SMTP_PASS) {
     throw new Error(

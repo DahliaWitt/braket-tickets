@@ -57,16 +57,13 @@ export async function createMagicLinkHandler(
 
   const result = await createMagicLink(ctx, actor, args);
 
-  await insertAdminAuditLog(
-    {db: ctx.db},
-    {
-      adminId: actorId,
-      action: ADMIN_AUDIT_ACTIONS.MAGIC_LINK_CREATE,
-      organizerId: args.organizerId,
-      magicLinkId: result.linkId,
-      source: 'admin-ui',
-    },
-  );
+  await insertAdminAuditLog(ctx, {
+    adminId: actorId,
+    action: ADMIN_AUDIT_ACTIONS.MAGIC_LINK_CREATE,
+    organizerId: args.organizerId,
+    magicLinkId: result.linkId,
+    source: 'admin-ui',
+  });
 
   return result;
 }
@@ -121,16 +118,13 @@ export async function updateMagicLinkStatusHandler(
   const transition = resolveMagicLinkTransition(link.status, args.action);
   await ctx.db.patch('magic_links', args.linkId, transition);
 
-  await insertAdminAuditLog(
-    {db: ctx.db},
-    {
-      adminId: actorId,
-      action: ACTION_TO_AUDIT[args.action],
-      organizerId: link.organizerId,
-      magicLinkId: args.linkId,
-      source: 'admin-ui',
-    },
-  );
+  await insertAdminAuditLog(ctx, {
+    adminId: actorId,
+    action: ACTION_TO_AUDIT[args.action],
+    organizerId: link.organizerId,
+    magicLinkId: args.linkId,
+    source: 'admin-ui',
+  });
 
   return {success: true};
 }

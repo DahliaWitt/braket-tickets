@@ -3,7 +3,7 @@
 /* eslint-disable @convex-dev/import-wrong-runtime -- Stripe action implementations run in the Node runtime and compose Node-only Stripe helpers. */
 
 import type Stripe from 'stripe';
-import type {ActionCtx} from '../../_generated/server';
+import {env, type ActionCtx} from '../../_generated/server';
 import type {Doc, Id} from '../../_generated/dataModel';
 import {internal} from '../../_generated/api';
 import type {FunctionReturnType} from 'convex/server';
@@ -1093,7 +1093,7 @@ function isTrustedLocalReturnOrigin(url: URL): boolean {
     return false;
   }
   return (
-    process.env.ALLOW_LOCALHOST_CORS === 'true' ||
+    env.ALLOW_LOCALHOST_CORS === 'true' ||
     isTestEnvironment() ||
     isUnitTestRuntime()
   );
@@ -1194,9 +1194,9 @@ function constructVerifiedEvent(
   stripe: Stripe,
   payload: string,
   signature: string,
-  secretEnvVar: string,
+  secretEnvVar: 'STRIPE_WEBHOOK_SECRET' | 'STRIPE_WEBHOOK_SECRET_CONNECT',
 ): Stripe.Event {
-  const secret = process.env[secretEnvVar];
+  const secret = env[secretEnvVar];
   if (!secret) {
     throwAppError('CONFIGURATION_ERROR', `${secretEnvVar} not configured`);
   }
@@ -1342,7 +1342,7 @@ export async function verifyAndProcessV2EventNotificationImpl(
   ctx: ActionCtx,
   args: {payload: string; signature: string},
 ): Promise<null> {
-  const secret = process.env['STRIPE_WEBHOOK_SECRET_V2_EVENTS'];
+  const secret = env.STRIPE_WEBHOOK_SECRET_V2_EVENTS;
   if (!secret) {
     throwAppError(
       'CONFIGURATION_ERROR',

@@ -119,15 +119,12 @@ export async function updateCommunity(
         organizerId: args.id,
       });
       if (unpublishedCount > 0) {
-        await insertAdminAuditLog(
-          {db: ctx.db},
-          {
-            adminId: userId,
-            action: 'organizer.cascadeUnpublishEvents',
-            organizerId: args.id,
-            reason: `Unpublished ${unpublishedCount} event(s) due to community draft transition`,
-          },
-        );
+        await insertAdminAuditLog(ctx, {
+          adminId: userId,
+          action: 'organizer.cascadeUnpublishEvents',
+          organizerId: args.id,
+          reason: `Unpublished ${unpublishedCount} event(s) due to community draft transition`,
+        });
       }
     }
   }
@@ -146,27 +143,21 @@ export async function updateCommunity(
       );
 
       if (cleanedCount > 0) {
-        await insertAdminAuditLog(
-          {db: ctx.db},
-          {
-            adminId: userId,
-            action: 'organizer.cleanupOrphanedAnswers',
-            organizerId: args.id,
-            reason: `Cleaned ${cleanedCount} application(s): removed answer keys [${removedIds.join(', ')}]`,
-          },
-        );
+        await insertAdminAuditLog(ctx, {
+          adminId: userId,
+          action: 'organizer.cleanupOrphanedAnswers',
+          organizerId: args.id,
+          reason: `Cleaned ${cleanedCount} application(s): removed answer keys [${removedIds.join(', ')}]`,
+        });
       }
     }
   }
 
-  await insertAdminAuditLog(
-    {db: ctx.db},
-    {
-      adminId: userId,
-      action: 'organizer.update',
-      organizerId: args.id,
-    },
-  );
+  await insertAdminAuditLog(ctx, {
+    adminId: userId,
+    action: 'organizer.update',
+    organizerId: args.id,
+  });
 
   return null;
 }

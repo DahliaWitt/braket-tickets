@@ -383,6 +383,10 @@ export function buildEnv(
     BETTER_AUTH_SECRET:
       process.env['BETTER_AUTH_SECRET'] ??
       'local-dev-only-not-secure-change-me',
+    // Required by Convex typed env validation before the first local deploy.
+    TOKEN_DIGEST_SECRET:
+      process.env['TOKEN_DIGEST_SECRET'] ??
+      'local-dev-token-digest-secret-for-local-only',
   };
 
   // Mirror scripts/sync-convex-env.js, but only set keys that exist to avoid

@@ -85,15 +85,12 @@ export const cancel = mutation({
       status: 'cancelled',
     });
 
-    await insertAdminAuditLog(
-      {db: ctx.db},
-      {
-        adminId: userId,
-        action: 'admin_invite.cancel',
-        organizerId: invite.organizerId,
-        source: `invite:${args.inviteId}`,
-      },
-    );
+    await insertAdminAuditLog(ctx, {
+      adminId: userId,
+      action: 'admin_invite.cancel',
+      organizerId: invite.organizerId,
+      source: `invite:${args.inviteId}`,
+    });
 
     return null;
   },

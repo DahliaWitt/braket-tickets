@@ -84,16 +84,13 @@ export async function insertSeedMagicLinkRedemption(
     });
   }
 
-  await insertAdminAuditLog(
-    {db: ctx.db},
-    {
-      adminId: link.createdBy,
-      action: 'magic_link.redemption',
-      source: `redeemer:${args.userId ?? 'guest'} link:${args.magicLinkId} community_admin:${link.createdBy}`,
-      magicLinkId: args.magicLinkId,
-      organizerId: link.organizerId,
-    },
-  );
+  await insertAdminAuditLog(ctx, {
+    adminId: link.createdBy,
+    action: 'magic_link.redemption',
+    source: `redeemer:${args.userId ?? 'guest'} link:${args.magicLinkId} community_admin:${link.createdBy}`,
+    magicLinkId: args.magicLinkId,
+    organizerId: link.organizerId,
+  });
 
   return redemptionId;
 }

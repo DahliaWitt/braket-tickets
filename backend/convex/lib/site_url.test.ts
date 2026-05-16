@@ -1,10 +1,17 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 
+function restoreEnv(snapshot: NodeJS.ProcessEnv): void {
+  for (const key of Object.keys(process.env)) {
+    delete process.env[key];
+  }
+  Object.assign(process.env, snapshot);
+}
+
 describe('resolveSiteUrl', () => {
   const originalEnv = {...process.env};
 
   afterEach(() => {
-    process.env = {...originalEnv};
+    restoreEnv(originalEnv);
     vi.resetModules();
     vi.doUnmock('./environment');
   });

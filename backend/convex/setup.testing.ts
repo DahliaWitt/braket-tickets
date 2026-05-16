@@ -6,7 +6,6 @@ import {register as registerRateLimiter} from '@convex-dev/rate-limiter/test';
 import resendTest from '@convex-dev/resend/test';
 import workpoolTest from '@convex-dev/workpool/test';
 import authzTest from '@djpanda/convex-authz/test';
-import posthogTest from '@posthog/convex/test';
 
 type BaseConvexTest = TestConvex<typeof schema>;
 
@@ -45,7 +44,6 @@ export const convexTest = (): ConvexTestInstance => {
   workpoolTest.register(t, 'payoutPool');
   workpoolTest.register(t, 'stripePool');
   authzTest.register(t, 'authz');
-  posthogTest.register(t, 'posthog');
   return t;
 };
 

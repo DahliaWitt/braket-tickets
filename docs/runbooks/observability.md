@@ -181,10 +181,9 @@ PostHog analytics are non-critical. A gap in analytics data does not affect user
 1. Check `frontend/src/app/core/services/analytics.service.ts` for initialization errors
 2. Verify both preview and production builds use the shared `POSTHOG_KEY`
 3. Verify deployed frontend builds resolve `POSTHOG_HOST` to `/ingest`
-4. Verify Convex backend env resolves `POSTHOG_HOST` to a full PostHog ingest host, not `/ingest`
-5. Filter the PostHog project by `environment=preview` or `environment=production` to confirm traffic separation
-6. Check the Pages Function at `frontend/functions/ingest/[[path]].ts` and the route splitter in `frontend/functions/ingest/proxy.ts` if proxy requests fail
-7. Check PostHog status page for service outages
+4. Filter the PostHog project by `environment=preview` or `environment=production` to confirm traffic separation
+5. Check the Pages Function at `frontend/functions/ingest/[[path]].ts` and the route splitter in `frontend/functions/ingest/proxy.ts` if proxy requests fail
+6. Check PostHog status page for service outages
 
 The `/ingest` Pages Function enriches JSON event payloads with Cloudflare `metroCode`, `country`, and `regionCode` as `metro_code`, `country_code`, and `region_code` when those fields are available. The proxy code strips the visitor IP headers that it controls (`cf-connecting-ip`, `cf-connecting-ipv6`, `true-client-ip`, `x-forwarded-for`, and `x-real-ip`), but Cloudflare may still attach network-level client IP metadata on Worker subrequests to non-Cloudflare origins.
 

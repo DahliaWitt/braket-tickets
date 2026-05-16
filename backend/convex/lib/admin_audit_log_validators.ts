@@ -16,6 +16,7 @@ export const adminAuditLogFields = {
   trustingOrganizerId: v.optional(v.id('organizers')),
   trustedOrganizerId: v.optional(v.id('organizers')),
   source: v.optional(v.string()),
+  requestId: v.optional(v.string()),
   reason: v.optional(v.string()),
   deletedEventName: v.optional(v.string()),
 };

@@ -173,8 +173,6 @@ jobs:
       EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
       EMAIL_REPLY_TO: ${{ secrets.EMAIL_REPLY_TO }}
       IS_TEST: ${{ secrets.IS_TEST }}
-      POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY || secrets.POSTHOG_KEY }}
-      POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
       RESEND_WEBHOOK_SECRET: ${{ secrets.RESEND_WEBHOOK_SECRET }}
       SITE_URL: ${{ secrets.SITE_URL }}

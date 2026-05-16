@@ -1,6 +1,7 @@
 'use node';
 
 import Stripe from 'stripe';
+import {env} from '../_generated/server';
 import {logger} from './logger';
 import {withRetry} from './resilience';
 import {throwAppError} from './errors';
@@ -23,7 +24,7 @@ import {throwAppError} from './errors';
  * local dev without `STRIPE_SECRET_KEY`) do not crash on import.
  */
 export function getStripeClient(): Stripe {
-  const secretKey = process.env['STRIPE_SECRET_KEY'];
+  const secretKey = env.STRIPE_SECRET_KEY;
   if (!secretKey) {
     // Structured shape so the frontend/ops can branch on `code` rather
     // than pattern-matching free-text messages. Every other ConvexError

@@ -58,6 +58,16 @@ If a raw command such as `pnpm convex ...` fails because env vars are missing, u
 doppler run -p braket-tickets -c local -- pnpm convex dev
 ```
 
+For direct Convex local-deployment work, use Convex's selected local deployment:
+
+```bash
+pnpm convex:local:create   # one-time, requires convex login
+pnpm convex:local:select
+pnpm convex:local:once
+```
+
+If `pnpm convex:local:create` fails with "Cannot create a deployment in anonymous mode", run `pnpm convex login` first. Keep using `pnpm dev` / `pnpm dev:fresh` for app development because those commands also manage Doppler, local auth secrets, seed/reset behavior, and Angular runtime URL injection.
+
 Do not wrap commands that already inject Doppler for you, such as `pnpm dev`, `pnpm test:frontend`, `pnpm test:e2e:serve`, or `pnpm validate`.
 
 ## Fix the wrong environment mapping

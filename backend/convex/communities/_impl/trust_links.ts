@@ -71,16 +71,13 @@ export async function createTrustLinkHandler(
     actorId: userId,
   });
   await enqueueOrganizerDirectoryRebuild(ctx, args.trustingOrganizerId);
-  await insertAdminAuditLog(
-    {db: ctx.db},
-    {
-      adminId: userId,
-      action: 'trust_link_created',
-      organizerId: args.trustingOrganizerId,
-      trustingOrganizerId: args.trustingOrganizerId,
-      trustedOrganizerId: args.trustedOrganizerId,
-    },
-  );
+  await insertAdminAuditLog(ctx, {
+    adminId: userId,
+    action: 'trust_link_created',
+    organizerId: args.trustingOrganizerId,
+    trustingOrganizerId: args.trustingOrganizerId,
+    trustedOrganizerId: args.trustedOrganizerId,
+  });
 
   return null;
 }
@@ -116,16 +113,13 @@ export async function removeTrustLinkHandler(
     },
   );
   await enqueueOrganizerDirectoryRebuild(ctx, args.trustingOrganizerId);
-  await insertAdminAuditLog(
-    {db: ctx.db},
-    {
-      adminId: userId,
-      action: 'trust_link_revoked',
-      organizerId: args.trustingOrganizerId,
-      trustingOrganizerId: args.trustingOrganizerId,
-      trustedOrganizerId: args.trustedOrganizerId,
-    },
-  );
+  await insertAdminAuditLog(ctx, {
+    adminId: userId,
+    action: 'trust_link_revoked',
+    organizerId: args.trustingOrganizerId,
+    trustingOrganizerId: args.trustingOrganizerId,
+    trustedOrganizerId: args.trustedOrganizerId,
+  });
 
   return null;
 }

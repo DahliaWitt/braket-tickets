@@ -45,7 +45,23 @@ pnpm seed:fixture
 
 When `pnpm test:e2e:serve` is running, local E2E backends use an ephemeral port. `pnpm seed:fresh` auto-detects the current local backend via `.convex-local/.e2e-convex-url` so you do not need to set `CONVEX_URL` in Doppler for local E2E runs.
 
-Common local repo entrypoints now auto-run through Doppler's `local` config when `DOPPLER_CONFIG` is not already set. They use explicit project/config flags, so separate worktrees do not need their own `doppler setup` entry. Raw Convex commands should run from the repo root, for example `doppler run -p braket-tickets -c local -- pnpm convex dev`.
+Common local repo entrypoints now auto-run through Doppler's `local` config when `DOPPLER_CONFIG` is not already set. They use explicit project/config flags, so separate worktrees do not need their own `doppler setup` entry.
+
+Raw Convex commands should run from the repo root, for example:
+
+```bash
+doppler run -p braket-tickets -c local -- pnpm convex dev
+```
+
+Core contributors can also use Convex's built-in local deployment selection for direct CLI work:
+
+```bash
+pnpm convex:local:create   # one-time, requires convex login
+pnpm convex:local:select
+pnpm convex:local:once
+```
+
+The repo's `pnpm dev`, `pnpm dev:fresh`, and E2E commands still use the Braket harness because they must inject Doppler, E2E JWT/JWKS, reset and seed data, and hand the selected Convex URLs to Angular.
 
 ### Contributing without Doppler
 
@@ -113,7 +129,9 @@ This follows Doppler's GitHub Actions integration, which syncs each selected Dop
 
 ## Convex
 
-Convex is not the source of truth. Backend variables are pushed from the currently injected environment using `backend/scripts/sync-env.ts`.
+Convex is not the secret source of truth. Backend variables are declared in `backend/convex/convex.config.ts`, and Convex runtime code imports the generated typed `env` from `backend/convex/_generated/server`.
+
+Secrets still come from Doppler and are pushed from the currently injected environment using `backend/scripts/sync-env.ts`.
 
 Manual sync commands:
 
@@ -127,12 +145,17 @@ DOPPLER_CONFIG=prd pnpm sync:env:prod
 
 The sync script only pushes an explicit allowlist of backend variables, not every shell variable. GitHub Actions can run `pnpm sync:env:dev` or `pnpm sync:env:prod` directly because the selected environment secrets are already injected by GitHub.
 
-### Backend PostHog Product Analytics Variables
+### Convex Defaults
 
-| Variable          | Runtime        | Description                                                                                                                                                                        |
-| ----------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POSTHOG_API_KEY` | Convex backend | PostHog project API key used by `@posthog/convex` for backend product events.                                                                                                      |
-| `POSTHOG_HOST`    | Convex backend | PostHog API host for backend capture. If the deploy environment uses `/ingest` for the frontend proxy, `backend/scripts/sync-env.ts` syncs Convex with `https://us.i.posthog.com`. |
+Convex project defaults are allowed for non-secret defaults only. Use this for operator ergonomics, not for API keys, signing secrets, OAuth secrets, Stripe secrets, or webhook secrets.
+
+```bash
+pnpm convex:env:defaults:dev
+pnpm convex:env:defaults:preview
+pnpm convex:env:defaults:prod
+```
+
+The current defaults script only sets non-secret deployment-type defaults such as `ALLOW_LOCALHOST_CORS` and `RESEND_TEST_MODE`.
 
 ### Self-Hosted Observability Variables
 
@@ -176,7 +199,8 @@ To add a new variable such as `NEW_API_KEY`:
 2. If the frontend needs it at build time, map it in `frontend/scripts/runtime-config.ts`.
 3. If Convex needs it at runtime, add it to the allowlist in `backend/scripts/sync-env.ts`.
 4. If CI uses it directly, reference `${{ secrets.NEW_API_KEY }}` in the workflow. Do not set it manually in GitHub; Doppler sync owns that.
-5. Verify locally with the normal repo scripts (`pnpm dev`, `pnpm test:frontend`, `./scripts/validate.sh`) or use `doppler run -p braket-tickets -c local -- ...` for raw commands, then verify the relevant deploy path.
+5. If Convex needs it at runtime, declare it in `backend/convex/convex.config.ts` and import it from generated `env` instead of reading `process.env` directly in production Convex code.
+6. Verify locally with the normal repo scripts (`pnpm dev`, `pnpm test:frontend`, `./scripts/validate.sh`) or use `doppler run -p braket-tickets -c local -- ...` for raw commands, then verify the relevant deploy path.
 
 ## Frontend Build Variables
 
@@ -190,7 +214,7 @@ Common frontend-exposed variables:
 - `POSTHOG_HOST`
 - `SENTRY_DSN`
 
-To preserve the Cloudflare proxy routes used in deployed frontend builds, set `POSTHOG_HOST=/ingest` in `stg` and `prd`. Convex backend capture cannot use that relative host; the backend sync script maps `/ingest` to `https://us.i.posthog.com`.
+To preserve the Cloudflare proxy routes used in deployed frontend builds, set `POSTHOG_HOST=/ingest` in `stg` and `prd`. Backend product analytics no longer use the Convex PostHog component; frontend analytics and the self-hosted log forwarder own PostHog ingestion.
 
 ## Authentication Provider Variables (Convex Backend)
 

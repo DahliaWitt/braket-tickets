@@ -4,6 +4,7 @@ import {
   getAdminAuditCategoryForAction,
   type AdminAuditAction,
 } from './admin_audit_actions';
+import {getRequestIdSafe} from './runtime_metadata';
 
 export type AdminAuditLogInsert = Omit<
   Doc<'adminAuditLogs'>,
@@ -13,7 +14,10 @@ export type AdminAuditLogInsert = Omit<
 };
 
 type AdminAuditLogDb = Pick<MutationCtx['db'], 'insert'>;
-type AdminAuditLogWriteCtx = {db: AdminAuditLogDb};
+type AdminAuditLogWriteCtx = {
+  db: AdminAuditLogDb;
+  meta?: MutationCtx['meta'];
+};
 
 /**
  * Inserts an admin audit log entry with normalized optional fields.
@@ -26,6 +30,11 @@ export async function insertAdminAuditLog(
   entry: AdminAuditLogInsert,
 ): Promise<Id<'adminAuditLogs'>> {
   const actionCategory = getAdminAuditCategoryForAction(entry.action);
+  const requestId =
+    entry.requestId ??
+    (ctx.meta !== undefined
+      ? await getRequestIdSafe({meta: ctx.meta})
+      : undefined);
   const document: AdminAuditLogInsert = {
     adminId: entry.adminId,
     action: entry.action,
@@ -50,6 +59,7 @@ export async function insertAdminAuditLog(
       ? {organizerId: entry.organizerId}
       : {}),
     ...(entry.source !== undefined ? {source: entry.source} : {}),
+    ...(requestId !== undefined ? {requestId} : {}),
     ...(entry.reason !== undefined ? {reason: entry.reason} : {}),
     ...(entry.deletedEventName !== undefined
       ? {deletedEventName: entry.deletedEventName}

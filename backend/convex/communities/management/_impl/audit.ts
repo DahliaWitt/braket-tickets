@@ -8,6 +8,9 @@ import {
 } from '../../../lib/admin_audit_actions';
 import {requireManageCommunity} from '../../../lib/access';
 import {requireUser} from '../../../lib/auth_identity';
+import {logTransactionMetrics} from '../../../lib/runtime_metadata';
+
+const AUDIT_LOG_MAXIMUM_ROWS_READ = 2000;
 
 type AuditLogPageRow = {
   _id: Id<'adminAuditLogs'>;
@@ -51,16 +54,13 @@ export async function recordCheckInLog(
     source?: string;
   },
 ): Promise<null> {
-  await insertAdminAuditLog(
-    {db: ctx.db},
-    {
-      adminId: args.adminId,
-      action: args.action,
-      eventId: args.eventId,
-      organizerId: args.organizerId,
-      source: args.source,
-    },
-  );
+  await insertAdminAuditLog(ctx, {
+    adminId: args.adminId,
+    action: args.action,
+    eventId: args.eventId,
+    organizerId: args.organizerId,
+    source: args.source,
+  });
   return null;
 }
 
@@ -86,18 +86,15 @@ export async function logAdminAccess(
     organizerId = app?.organizerId ?? undefined;
   }
 
-  await insertAdminAuditLog(
-    {db: ctx.db},
-    {
-      adminId: args.adminId,
-      action: args.action,
-      eventId: args.eventId,
-      applicationId: args.applicationId,
-      targetUserId: args.targetUserId,
-      organizerId,
-      source: args.source,
-    },
-  );
+  await insertAdminAuditLog(ctx, {
+    adminId: args.adminId,
+    action: args.action,
+    eventId: args.eventId,
+    applicationId: args.applicationId,
+    targetUserId: args.targetUserId,
+    organizerId,
+    source: args.source,
+  });
   return null;
 }
 
@@ -119,7 +116,12 @@ export async function listAuditLogs(
               : range;
           })
           .order('desc')
-          .paginate(args.paginationOpts)
+          .paginate({
+            ...args.paginationOpts,
+            maximumRowsRead:
+              args.paginationOpts.maximumRowsRead ??
+              AUDIT_LOG_MAXIMUM_ROWS_READ,
+          })
       : await ctx.db
           .query('adminAuditLogs')
           .withIndex('by_organizer_and_actionCategory', (q) => {
@@ -131,7 +133,12 @@ export async function listAuditLogs(
               : range;
           })
           .order('desc')
-          .paginate(args.paginationOpts);
+          .paginate({
+            ...args.paginationOpts,
+            maximumRowsRead:
+              args.paginationOpts.maximumRowsRead ??
+              AUDIT_LOG_MAXIMUM_ROWS_READ,
+          });
 
   const enriched = await Promise.all(
     rawPage.page.map(async (log) => {
@@ -201,5 +208,9 @@ export async function listAuditLogs(
     }),
   );
 
+  await logTransactionMetrics(
+    ctx,
+    'communities.management.audit.listAuditLogs',
+  );
   return {...rawPage, page: enriched};
 }

@@ -105,25 +105,19 @@ export async function grantCommunityAdmin(
   }
 
   if (roleAdded) {
-    await insertAdminAuditLog(
-      {db: ctx.db},
-      {
-        adminId: callerId,
-        action: 'community_admin.grant',
-        organizerId,
-        targetUserId: args.userId,
-      },
-    );
+    await insertAdminAuditLog(ctx, {
+      adminId: callerId,
+      action: 'community_admin.grant',
+      organizerId,
+      targetUserId: args.userId,
+    });
   } else if (memberAdded) {
-    await insertAdminAuditLog(
-      {db: ctx.db},
-      {
-        adminId: callerId,
-        action: 'community_admin.member_repair',
-        organizerId,
-        targetUserId: args.userId,
-      },
-    );
+    await insertAdminAuditLog(ctx, {
+      adminId: callerId,
+      action: 'community_admin.member_repair',
+      organizerId,
+      targetUserId: args.userId,
+    });
   }
 
   return null;
@@ -192,15 +186,12 @@ export async function revokeCommunityAdmin(
     await ctx.db.delete('adminNotificationPreferences', notifPref._id);
   }
 
-  await insertAdminAuditLog(
-    {db: ctx.db},
-    {
-      adminId: callerId,
-      action: 'community_admin.revoke',
-      organizerId,
-      targetUserId: args.userId,
-    },
-  );
+  await insertAdminAuditLog(ctx, {
+    adminId: callerId,
+    action: 'community_admin.revoke',
+    organizerId,
+    targetUserId: args.userId,
+  });
 
   return null;
 }

@@ -3,7 +3,7 @@
 [![License: ACSL v1.4](https://img.shields.io/badge/license-ACSL%20v1.4-a855f7)](LICENSE)
 [![CI](https://github.com/DahliaWitt/braket-tickets/actions/workflows/ci.yml/badge.svg)](https://github.com/DahliaWitt/braket-tickets/actions/workflows/ci.yml)
 [![Angular](https://img.shields.io/badge/Angular-v21-dd0031?logo=angular&logoColor=white)](https://angular.dev)
-[![Convex](https://img.shields.io/badge/Convex-v1.34-f97316?logo=convex&logoColor=white)](https://convex.dev)
+[![Convex](https://img.shields.io/badge/Convex-v1.39.1-f97316?logo=convex&logoColor=white)](https://convex.dev)
 ![works on my machine](https://img.shields.io/badge/works%20on-my%20machine-22c55e)
 ![trans rights are human rights](https://img.shields.io/badge/trans%20rights-are%20human%20rights-5bcefa)
 ![enshittification resistant](https://img.shields.io/badge/enshittification-resistant-a855f7)
@@ -109,6 +109,12 @@ pnpm install
 doppler login
 pnpm dev          # starts frontend + Convex backend (keeps running)
 ```
+
+For direct Convex CLI local-deployment work, run `pnpm convex:local:create`
+once after login, then use `pnpm convex:local:once` for a one-shot local push.
+The repo dev and E2E harnesses still own their own local backend lifecycle so
+they can inject Doppler, runtime JWT/JWKS, resets, seeds, and Angular runtime
+URLs without changing the public commands.
 
 **Without Doppler** (external contributors):
 

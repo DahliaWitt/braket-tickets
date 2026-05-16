@@ -1,3 +1,5 @@
+import {env} from '../_generated/server';
+
 export type BearerTokenPurpose =
   | 'admin_invite'
   | 'magic_link'
@@ -12,7 +14,7 @@ const TOKEN_BYTE_LENGTH = 32;
 const TOKEN_PREFIX_LENGTH = 8;
 
 function getDigestSecret(): string {
-  const secret = process.env['TOKEN_DIGEST_SECRET'];
+  const secret = env.TOKEN_DIGEST_SECRET;
   if (!secret) {
     throw new Error('TOKEN_DIGEST_SECRET is required for bearer token digests');
   }

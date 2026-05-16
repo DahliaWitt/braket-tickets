@@ -251,6 +251,7 @@ export default tseslint.config(
     },
     rules: {
       'max-lines': 'off',
+      '@convex-dev/explicit-table-ids': 'error',
       '@convex-dev/no-collect-in-query': 'warn',
       'braket-convex/no-v-any': 'error',
       'braket-convex/no-raw-convex-error': 'error',

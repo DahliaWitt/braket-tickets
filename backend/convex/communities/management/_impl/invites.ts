@@ -153,16 +153,13 @@ export async function redeemInvite(
     redeemedAt: Date.now(),
   });
 
-  await insertAdminAuditLog(
-    {db: ctx.db},
-    {
-      adminId: invite.invitedBy,
-      action: 'admin_invite.redeem',
-      organizerId: invite.organizerId,
-      targetUserId: userId,
-      source: `invite:${invite._id}`,
-    },
-  );
+  await insertAdminAuditLog(ctx, {
+    adminId: invite.invitedBy,
+    action: 'admin_invite.redeem',
+    organizerId: invite.organizerId,
+    targetUserId: userId,
+    source: `invite:${invite._id}`,
+  });
 
   return {organizerId: invite.organizerId};
 }

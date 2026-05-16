@@ -1,4 +1,5 @@
 import {looksLikeProduction} from './environment';
+import {env} from '../_generated/server';
 
 export type EmailDeliveryMode = 'resend' | 'ethereal';
 
@@ -12,22 +13,16 @@ export function isEmailPreviewMode(): boolean {
 
 export function hasConfiguredEmailDeliveryCredentials(): boolean {
   if (getEmailDeliveryMode() === 'ethereal') {
-    return Boolean(process.env['SMTP_USER'] && process.env['SMTP_PASS']);
+    return Boolean(env.SMTP_USER && env.SMTP_PASS);
   }
 
-  return Boolean(
-    process.env['RESEND_API_KEY'] &&
-    (process.env['EMAIL_FROM'] || process.env['SMTP_FROM']),
-  );
+  return Boolean(env.RESEND_API_KEY && (env.EMAIL_FROM || env.SMTP_FROM));
 }
 
 export function hasConfiguredCriticalEmailCredentials(): boolean {
   if (getEmailDeliveryMode() === 'ethereal') {
-    return Boolean(process.env['SMTP_USER'] && process.env['SMTP_PASS']);
+    return Boolean(env.SMTP_USER && env.SMTP_PASS);
   }
 
-  return Boolean(
-    process.env['RESEND_API_KEY'] &&
-    (process.env['EMAIL_FROM'] || process.env['SMTP_FROM']),
-  );
+  return Boolean(env.RESEND_API_KEY && (env.EMAIL_FROM || env.SMTP_FROM));
 }

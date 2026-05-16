@@ -1,6 +1,5 @@
 import type {ActionCtx, MutationCtx} from '../_generated/server';
 
-import {posthog} from '../posthog';
 import {
   isUnitTestRuntime,
   looksLikeProduction,
@@ -227,30 +226,17 @@ export async function captureBackendEvent(
   ctx: AnalyticsCtx,
   input: CaptureBackendEventInput,
 ): Promise<void> {
+  void ctx;
   const properties = sanitizeAnalyticsProperties(input.properties);
 
   if (input.processPersonProfile !== true) {
     properties['$process_person_profile'] = false;
   }
 
-  try {
-    await posthog.capture(ctx, {
-      distinctId: input.distinctId,
-      event: input.event,
-      properties,
-      uuid: input.uuid,
-      disableGeoip: true,
-    });
-  } catch (error: unknown) {
-    logger.warn('analytics', 'PostHog capture failed', {
-      event: input.event,
-      uuid: input.uuid,
-      error:
-        error instanceof Error
-          ? error.message
-          : typeof error === 'string'
-            ? error
-            : 'unknown error',
-    });
-  }
+  logger.info('analytics', 'Backend analytics event captured locally', {
+    distinctId: input.distinctId,
+    event: input.event,
+    properties,
+    uuid: input.uuid,
+  });
 }

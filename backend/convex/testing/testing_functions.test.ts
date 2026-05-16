@@ -486,7 +486,10 @@ describe('token-gated seed facade', () => {
   const originalEnv = {...process.env};
 
   afterEach(() => {
-    process.env = {...originalEnv};
+    for (const key of Object.keys(process.env)) {
+      delete process.env[key];
+    }
+    Object.assign(process.env, originalEnv);
   });
 
   function enableSeedSession(): void {

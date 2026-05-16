@@ -3,7 +3,7 @@
 import {Resend as ResendSdk} from 'resend';
 import {v} from 'convex/values';
 import {api, internal} from '../_generated/api';
-import {internalAction} from '../_generated/server';
+import {env, internalAction} from '../_generated/server';
 import {
   emailFromAddress,
   emailHeadersToArray,
@@ -152,7 +152,7 @@ export const send = internalAction({
       return null;
     }
 
-    const apiKey = process.env['RESEND_API_KEY'];
+    const apiKey = env.RESEND_API_KEY;
     if (!apiKey) {
       const error = new Error(
         'Email delivery is not configured (missing RESEND_API_KEY)',

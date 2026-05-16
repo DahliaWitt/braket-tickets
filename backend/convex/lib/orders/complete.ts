@@ -106,7 +106,7 @@ export async function completePrimaryOrderState(
   }
 
   const {event, inventory} = await requireEventWithInventory(
-    {db: ctx.db},
+    ctx,
     order.eventId,
   );
 
@@ -237,7 +237,7 @@ export async function completeResaleOrderState(
   }
 
   const {event, inventory} = await requireEventWithInventory(
-    {db: ctx.db},
+    ctx,
     order.eventId,
   );
   assertEventStillFulfillable(event);

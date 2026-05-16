@@ -48,15 +48,12 @@ export async function grantCommunityScanner(
     actorId: callerId,
   });
 
-  await insertAdminAuditLog(
-    {db: ctx.db},
-    {
-      adminId: callerId,
-      action: 'community_scanner.grant',
-      organizerId: args.organizerId,
-      targetUserId: args.userId,
-    },
-  );
+  await insertAdminAuditLog(ctx, {
+    adminId: callerId,
+    action: 'community_scanner.grant',
+    organizerId: args.organizerId,
+    targetUserId: args.userId,
+  });
 
   return null;
 }
@@ -88,15 +85,12 @@ export async function revokeCommunityScanner(
     actorId: callerId,
   });
 
-  await insertAdminAuditLog(
-    {db: ctx.db},
-    {
-      adminId: callerId,
-      action: 'community_scanner.revoke',
-      organizerId: args.organizerId,
-      targetUserId: args.userId,
-    },
-  );
+  await insertAdminAuditLog(ctx, {
+    adminId: callerId,
+    action: 'community_scanner.revoke',
+    organizerId: args.organizerId,
+    targetUserId: args.userId,
+  });
 
   return null;
 }

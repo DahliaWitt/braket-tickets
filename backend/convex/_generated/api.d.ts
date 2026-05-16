@@ -2325,6 +2325,7 @@ export declare const api: {
           magicLinkId?: Id<"magic_links">;
           organizerId?: Id<"organizers">;
           reason?: string;
+          requestId?: string;
           source?: string;
           targetUserId?: Id<"users">;
           trustedOrganizerId?: Id<"organizers">;
@@ -5590,5 +5591,4 @@ export declare const components: {
   stripePool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"stripePool">;
   migrations: import("@convex-dev/migrations/_generated/component.js").ComponentApi<"migrations">;
   authz: import("@djpanda/convex-authz/_generated/component.js").ComponentApi<"authz">;
-  posthog: import("@posthog/convex/_generated/component.js").ComponentApi<"posthog">;
 };

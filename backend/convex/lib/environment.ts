@@ -4,7 +4,14 @@
  * These prevent test-only code paths (mock payments, dev admin auto-promotion)
  * from activating on production deployments even if IS_TEST is misconfigured.
  */
+import {
+  env,
+  type ActionCtx,
+  type MutationCtx,
+  type QueryCtx,
+} from '../_generated/server';
 import {logger} from './logger';
+import {getDeploymentNameSafe} from './runtime_metadata';
 
 /** Known staging deployment URL — not production, but internet-facing. */
 const STAGING_URL_FRAGMENT = 'bright-swordfish-194';
@@ -27,9 +34,7 @@ function isConvexCloudUrl(value: string | undefined): boolean {
  * Returns true if the CONVEX_CLOUD_URL matches the known staging deployment.
  */
 export function looksLikeStaging(): boolean {
-  return (
-    hostnameForUrl(process.env['CONVEX_CLOUD_URL']) === STAGING_CONVEX_HOSTNAME
-  );
+  return hostnameForUrl(env.CONVEX_CLOUD_URL) === STAGING_CONVEX_HOSTNAME;
 }
 
 function isLocalUrl(value: string | undefined): boolean {
@@ -38,11 +43,11 @@ function isLocalUrl(value: string | undefined): boolean {
 
 function looksLikeLocalDeployment(): boolean {
   return [
-    process.env['CONVEX_CLOUD_URL'],
-    process.env['CONVEX_SITE_URL'],
-    process.env['E2E_CONVEX_SITE_URL'],
-    process.env['AUTH_BASE_URL'],
-    process.env['SITE_URL'],
+    env.CONVEX_CLOUD_URL,
+    env.CONVEX_SITE_URL,
+    env.E2E_CONVEX_SITE_URL,
+    env.AUTH_BASE_URL,
+    env.SITE_URL,
   ].some((value) => isLocalUrl(value));
 }
 
@@ -51,7 +56,7 @@ function looksLikeLocalDeployment(): boolean {
  * (i.e., a .convex.cloud URL that is NOT dev and NOT the known staging deployment).
  */
 export function looksLikeProduction(): boolean {
-  const url = process.env['CONVEX_CLOUD_URL'] ?? '';
+  const url = env.CONVEX_CLOUD_URL ?? '';
   if (!isConvexCloudUrl(url)) return false;
   if (hostnameForUrl(url).includes('dev')) return false;
   if (looksLikeStaging()) return false;
@@ -59,7 +64,7 @@ export function looksLikeProduction(): boolean {
 }
 
 function seedDeploymentIsAllowed(): boolean {
-  const cloudUrl = process.env['CONVEX_CLOUD_URL'];
+  const cloudUrl = env.CONVEX_CLOUD_URL;
   if (cloudUrl) {
     if (isLocalUrl(cloudUrl)) return true;
     if (looksLikeStaging()) return true;
@@ -80,7 +85,7 @@ function seedDeploymentIsAllowed(): boolean {
  * production or staging even if IS_TEST is accidentally set.
  */
 export function isTestEnvironment(): boolean {
-  if (process.env['IS_TEST'] !== 'true') {
+  if (env.IS_TEST !== 'true') {
     return false;
   }
 
@@ -107,7 +112,7 @@ export function isTestEnvironment(): boolean {
  * Set it temporarily when seeding, then unset it.
  */
 export function isDevSeedEnvironment(): boolean {
-  if (process.env['DEV_SEED'] !== 'true') {
+  if (env.DEV_SEED !== 'true') {
     return false;
   }
 
@@ -137,7 +142,7 @@ export function isSeedAuthorized(seedToken: string, now = Date.now()): boolean {
     return false;
   }
 
-  const expectedToken = process.env['DEV_SEED_TOKEN'] ?? '';
+  const expectedToken = env.DEV_SEED_TOKEN ?? '';
   if (
     seedToken.length < MIN_SEED_TOKEN_LENGTH ||
     expectedToken.length < MIN_SEED_TOKEN_LENGTH ||
@@ -150,7 +155,7 @@ export function isSeedAuthorized(seedToken: string, now = Date.now()): boolean {
     return false;
   }
 
-  const expiresAt = Number(process.env['DEV_SEED_EXPIRES_AT'] ?? '');
+  const expiresAt = Number(env.DEV_SEED_EXPIRES_AT ?? '');
   if (!Number.isFinite(expiresAt) || expiresAt <= now) {
     logger.error(
       'environment',
@@ -179,4 +184,27 @@ export function requireSeedAuthorization(
  */
 export function isUnitTestRuntime(): boolean {
   return process.env['VITEST'] === 'true';
+}
+
+export async function looksLikeStagingFromContext(
+  ctx: Pick<QueryCtx | MutationCtx | ActionCtx, 'meta'>,
+): Promise<boolean> {
+  const deploymentName = await getDeploymentNameSafe(ctx);
+  if (deploymentName !== undefined) {
+    return deploymentName === STAGING_URL_FRAGMENT;
+  }
+  return looksLikeStaging();
+}
+
+export async function looksLikeProductionFromContext(
+  ctx: Pick<QueryCtx | MutationCtx | ActionCtx, 'meta'>,
+): Promise<boolean> {
+  const deploymentName = await getDeploymentNameSafe(ctx);
+  if (deploymentName !== undefined) {
+    if (deploymentName === STAGING_URL_FRAGMENT) return false;
+    if (deploymentName.startsWith('local-')) return false;
+    if (deploymentName.startsWith('anonymous-')) return false;
+    return !deploymentName.includes('dev');
+  }
+  return looksLikeProduction();
 }

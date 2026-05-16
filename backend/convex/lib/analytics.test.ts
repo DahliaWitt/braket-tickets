@@ -1,19 +1,19 @@
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 
-const {warnMock, captureMock} = vi.hoisted(() => ({
-  warnMock: vi.fn(),
-  captureMock: vi.fn(),
+function restoreEnv(snapshot: NodeJS.ProcessEnv): void {
+  for (const key of Object.keys(process.env)) {
+    delete process.env[key];
+  }
+  Object.assign(process.env, snapshot);
+}
+
+const {infoMock} = vi.hoisted(() => ({
+  infoMock: vi.fn(),
 }));
 
 vi.mock('./logger', () => ({
   logger: {
-    warn: warnMock,
-  },
-}));
-
-vi.mock('../posthog', () => ({
-  posthog: {
-    capture: captureMock,
+    info: infoMock,
   },
 }));
 
@@ -31,9 +31,8 @@ describe('analytics helpers', () => {
   const originalEnv = {...process.env};
 
   beforeEach(() => {
-    process.env = {...originalEnv};
-    warnMock.mockReset();
-    captureMock.mockReset();
+    restoreEnv(originalEnv);
+    infoMock.mockReset();
   });
 
   it('redacts denylisted keys and non-primitive objects', () => {
@@ -138,9 +137,7 @@ describe('analytics helpers', () => {
     );
   });
 
-  it('swallows PostHog failures and logs a warning', async () => {
-    captureMock.mockRejectedValueOnce(new Error('boom'));
-
+  it('logs backend analytics events locally after sanitizing properties', async () => {
     await captureBackendEvent(
       {scheduler: {} as never},
       {
@@ -151,13 +148,13 @@ describe('analytics helpers', () => {
       },
     );
 
-    expect(captureMock).toHaveBeenCalledWith(
-      {scheduler: {} as never},
+    expect(infoMock).toHaveBeenCalledWith(
+      'analytics',
+      'Backend analytics event captured locally',
       expect.objectContaining({
         distinctId: 'user_123',
         event: 'checkout_completed',
         uuid: 'checkout_completed:user_123',
-        disableGeoip: true,
         properties: expect.objectContaining({
           schema_version: ANALYTICS_SCHEMA_VERSION,
           environment: 'test',
@@ -165,15 +162,6 @@ describe('analytics helpers', () => {
           safe: 'ok',
           $process_person_profile: false,
         }),
-      }),
-    );
-    expect(warnMock).toHaveBeenCalledWith(
-      'analytics',
-      'PostHog capture failed',
-      expect.objectContaining({
-        event: 'checkout_completed',
-        uuid: 'checkout_completed:user_123',
-        error: 'boom',
       }),
     );
   });

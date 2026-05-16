@@ -8,11 +8,18 @@ import {
   looksLikeStaging,
 } from './environment';
 
+function restoreEnv(snapshot: NodeJS.ProcessEnv): void {
+  for (const key of Object.keys(process.env)) {
+    delete process.env[key];
+  }
+  Object.assign(process.env, snapshot);
+}
+
 describe('looksLikeStaging', () => {
   const originalEnv = {...process.env};
 
   afterEach(() => {
-    process.env = {...originalEnv};
+    restoreEnv(originalEnv);
   });
 
   it('returns true for the known staging URL', () => {
@@ -42,7 +49,7 @@ describe('looksLikeProduction', () => {
   const originalEnv = {...process.env};
 
   afterEach(() => {
-    process.env = {...originalEnv};
+    restoreEnv(originalEnv);
   });
 
   it('returns true for .convex.cloud URLs without dev or staging', () => {
@@ -87,7 +94,7 @@ describe('isTestEnvironment', () => {
   const originalEnv = {...process.env};
 
   afterEach(() => {
-    process.env = {...originalEnv};
+    restoreEnv(originalEnv);
   });
 
   it('returns true when IS_TEST=true and not production or staging', () => {
@@ -168,7 +175,7 @@ describe('isDevSeedEnvironment', () => {
   const originalEnv = {...process.env};
 
   afterEach(() => {
-    process.env = {...originalEnv};
+    restoreEnv(originalEnv);
   });
 
   it('returns true when DEV_SEED=true on localhost', () => {
@@ -245,7 +252,7 @@ describe('isUnitTestRuntime', () => {
   const originalEnv = {...process.env};
 
   afterEach(() => {
-    process.env = {...originalEnv};
+    restoreEnv(originalEnv);
   });
 
   it('returns true when running under Vitest', () => {
@@ -266,7 +273,7 @@ describe('isSeedAuthorized', () => {
   const token = 'seed-token-0123456789abcdef0123456789abcdef';
 
   afterEach(() => {
-    process.env = {...originalEnv};
+    restoreEnv(originalEnv);
   });
 
   function setValidSeedEnv(): void {

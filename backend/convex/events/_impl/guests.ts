@@ -32,17 +32,14 @@ export async function add(
     ...args,
   });
 
-  await insertAdminAuditLog(
-    {db: ctx.db},
-    {
-      adminId: user._id,
-      action: ADMIN_AUDIT_ACTIONS.GUEST_ADD,
-      eventId: args.eventId,
-      organizerId: event.organizerId,
-      reason: args.name,
-      source: 'admin-ui',
-    },
-  );
+  await insertAdminAuditLog(ctx, {
+    adminId: user._id,
+    action: ADMIN_AUDIT_ACTIONS.GUEST_ADD,
+    eventId: args.eventId,
+    organizerId: event.organizerId,
+    reason: args.name,
+    source: 'admin-ui',
+  });
 
   return guestId;
 }

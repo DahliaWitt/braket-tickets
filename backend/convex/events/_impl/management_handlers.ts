@@ -352,16 +352,13 @@ export async function create(
     previousStatus: 'draft',
   });
 
-  await insertAdminAuditLog(
-    {db: ctx.db},
-    {
-      adminId: userId,
-      action: 'event.create',
-      eventId,
-      organizerId: args.organizerId,
-      source: 'admin-ui',
-    },
-  );
+  await insertAdminAuditLog(ctx, {
+    adminId: userId,
+    action: 'event.create',
+    eventId,
+    organizerId: args.organizerId,
+    source: 'admin-ui',
+  });
 
   return eventId;
 }
@@ -474,38 +471,29 @@ export async function update(
   });
 
   if (organizerChanged) {
-    await insertAdminAuditLog(
-      {db: ctx.db},
-      {
-        adminId: userId,
-        action: 'event.organizer_reassign.from',
-        eventId: id,
-        organizerId: event.organizerId,
-        source: 'admin-ui',
-      },
-    );
-    await insertAdminAuditLog(
-      {db: ctx.db},
-      {
-        adminId: userId,
-        action: 'event.organizer_reassign.to',
-        eventId: id,
-        organizerId: nextOrganizerId,
-        source: 'admin-ui',
-      },
-    );
-  }
-
-  await insertAdminAuditLog(
-    {db: ctx.db},
-    {
+    await insertAdminAuditLog(ctx, {
       adminId: userId,
-      action: 'event.update',
+      action: 'event.organizer_reassign.from',
+      eventId: id,
+      organizerId: event.organizerId,
+      source: 'admin-ui',
+    });
+    await insertAdminAuditLog(ctx, {
+      adminId: userId,
+      action: 'event.organizer_reassign.to',
       eventId: id,
       organizerId: nextOrganizerId,
       source: 'admin-ui',
-    },
-  );
+    });
+  }
+
+  await insertAdminAuditLog(ctx, {
+    adminId: userId,
+    action: 'event.update',
+    eventId: id,
+    organizerId: nextOrganizerId,
+    source: 'admin-ui',
+  });
   return null;
 }
 
@@ -555,17 +543,14 @@ export async function remove(
     await cleanupReplacedUpload(ctx, deletedPosterId);
   }
 
-  await insertAdminAuditLog(
-    {db: ctx.db},
-    {
-      adminId: userId,
-      action: 'event.delete',
-      eventId: args.id,
-      organizerId: event.organizerId,
-      source: 'admin-ui',
-      deletedEventName: event.title,
-    },
-  );
+  await insertAdminAuditLog(ctx, {
+    adminId: userId,
+    action: 'event.delete',
+    eventId: args.id,
+    organizerId: event.organizerId,
+    source: 'admin-ui',
+    deletedEventName: event.title,
+  });
   return null;
 }
 
@@ -630,17 +615,14 @@ export async function continueEventRemovalCleanup(
     await cleanupReplacedUpload(ctx, deletedPosterId);
   }
 
-  await insertAdminAuditLog(
-    {db: ctx.db},
-    {
-      adminId: args.adminId,
-      action: 'event.delete',
-      eventId: args.eventId,
-      organizerId: event.organizerId,
-      source: 'admin-ui',
-      deletedEventName: event.title,
-    },
-  );
+  await insertAdminAuditLog(ctx, {
+    adminId: args.adminId,
+    action: 'event.delete',
+    eventId: args.eventId,
+    organizerId: event.organizerId,
+    source: 'admin-ui',
+    deletedEventName: event.title,
+  });
   return null;
 }
 

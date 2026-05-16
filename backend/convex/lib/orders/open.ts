@@ -266,10 +266,7 @@ export async function openPrimaryOrderState(
     now,
   );
 
-  const {event, inventory} = await requireEventWithInventory(
-    {db: ctx.db},
-    args.eventId,
-  );
+  const {event, inventory} = await requireEventWithInventory(ctx, args.eventId);
   assertPurchasableEvent(event);
   assertInventoryCanCoverQuantity({event, inventory, quantity: args.quantity});
 
@@ -401,10 +398,7 @@ export async function openResaleOrderState(
     now,
   );
 
-  const {event, inventory} = await requireEventWithInventory(
-    {db: ctx.db},
-    args.eventId,
-  );
+  const {event, inventory} = await requireEventWithInventory(ctx, args.eventId);
   assertPurchasableEvent(event);
   if (!event.resaleEnabled) {
     throwOrderError(

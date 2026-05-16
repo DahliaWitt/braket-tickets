@@ -173,7 +173,7 @@ export async function syncCurrentUserHandler(ctx: MutationCtx): Promise<{
       );
       if (appUser) {
         await insertAuthAuditLog(
-          {db: ctx.db},
+          ctx,
           appUser._id,
           'auth.social_signin.blocked',
           'social_callback',
@@ -225,7 +225,7 @@ export async function completeSocialSignupOnboardingHandler(
       socialSignupCompletionRequired: false,
     });
     await insertAuthAuditLog(
-      {db: ctx.db},
+      ctx,
       userId,
       'auth.social_signup.completed',
       'social_signup_completion',
@@ -340,7 +340,7 @@ export async function unlinkSocialAccountHandler(
     });
 
     await insertAuthAuditLog(
-      {db: ctx.db},
+      ctx,
       userId,
       'account.provider.unlinked',
       'account_settings',
@@ -382,7 +382,7 @@ export async function setPasswordHandler(
     }
 
     await insertAuthAuditLog(
-      {db: ctx.db},
+      ctx,
       userId,
       'account.password.created',
       'account_settings',
@@ -413,14 +413,11 @@ export async function cancelEmailChangeHandler(
     pendingEmail: undefined,
   });
 
-  await insertAdminAuditLog(
-    {db: ctx.db},
-    {
-      adminId: userId,
-      action: 'account.email_change.cancelled',
-      source: 'account_settings',
-    },
-  );
+  await insertAdminAuditLog(ctx, {
+    adminId: userId,
+    action: 'account.email_change.cancelled',
+    source: 'account_settings',
+  });
 
   return null;
 }
@@ -448,26 +445,20 @@ export async function requestEmailChangeHandler(
     throws: true,
   });
 
-  await insertAdminAuditLog(
-    {db: ctx.db},
-    {
-      adminId: userId,
-      action: 'account.email_change.requested',
-      source: 'account_settings',
-    },
-  );
+  await insertAdminAuditLog(ctx, {
+    adminId: userId,
+    action: 'account.email_change.requested',
+    source: 'account_settings',
+  });
 
   const fail = async (
     message: string,
   ): Promise<{success: false; message: string}> => {
-    await insertAdminAuditLog(
-      {db: ctx.db},
-      {
-        adminId: userId,
-        action: 'account.email_change.failed',
-        source: 'account_settings',
-      },
-    );
+    await insertAdminAuditLog(ctx, {
+      adminId: userId,
+      action: 'account.email_change.failed',
+      source: 'account_settings',
+    });
     return {success: false, message};
   };
 
@@ -509,14 +500,11 @@ export async function requestEmailChangeHandler(
       headers,
     });
 
-    await insertAdminAuditLog(
-      {db: ctx.db},
-      {
-        adminId: userId,
-        action: 'account.email_change.verification_queued',
-        source: 'account_settings',
-      },
-    );
+    await insertAdminAuditLog(ctx, {
+      adminId: userId,
+      action: 'account.email_change.verification_queued',
+      source: 'account_settings',
+    });
     return {success: true};
   } catch (err: unknown) {
     await ctx.db.patch('users', userId, {

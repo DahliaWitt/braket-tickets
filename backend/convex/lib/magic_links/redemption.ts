@@ -133,16 +133,13 @@ export async function redeemMagicLink(
     userId,
   });
 
-  await insertAdminAuditLog(
-    {db: ctx.db},
-    {
-      adminId: linkDoc.createdBy,
-      action: 'magic_link.redemption',
-      source: `redeemer:${userId} link:${linkDoc._id} community_admin:${linkDoc.createdBy}`,
-      magicLinkId: linkDoc._id,
-      organizerId,
-    },
-  );
+  await insertAdminAuditLog(ctx, {
+    adminId: linkDoc.createdBy,
+    action: 'magic_link.redemption',
+    source: `redeemer:${userId} link:${linkDoc._id} community_admin:${linkDoc.createdBy}`,
+    magicLinkId: linkDoc._id,
+    organizerId,
+  });
 
   return {
     success: true,

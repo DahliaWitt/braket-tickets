@@ -47,21 +47,18 @@ export async function insertSeedAuditLog(
   ctx: MutationCtx,
   args: InsertSeedAuditLogArgs,
 ): Promise<Id<'adminAuditLogs'>> {
-  return await insertAdminAuditLog(
-    {db: ctx.db},
-    {
-      adminId: args.adminId,
-      action: args.action,
-      organizerId: args.organizerId,
-      eventId: args.eventId,
-      applicationId: args.applicationId,
-      magicLinkId: args.magicLinkId,
-      trustingOrganizerId: args.trustingOrganizerId,
-      trustedOrganizerId: args.trustedOrganizerId,
-      source: args.source,
-      reason: args.reason,
-    },
-  );
+  return await insertAdminAuditLog(ctx, {
+    adminId: args.adminId,
+    action: args.action,
+    organizerId: args.organizerId,
+    eventId: args.eventId,
+    applicationId: args.applicationId,
+    magicLinkId: args.magicLinkId,
+    trustingOrganizerId: args.trustingOrganizerId,
+    trustedOrganizerId: args.trustedOrganizerId,
+    source: args.source,
+    reason: args.reason,
+  });
 }
 
 export async function insertSeedAdminInvite(

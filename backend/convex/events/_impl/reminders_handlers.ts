@@ -125,16 +125,13 @@ export async function sendTicketPurchaseReminder(
   });
 
   // 11. Audit log
-  await insertAdminAuditLog(
-    {db: ctx.db},
-    {
-      adminId: userId,
-      action: 'event.reminder-email.send.approved_no_ticket',
-      eventId: args.eventId,
-      organizerId: event.organizerId,
-      source: 'admin-ui',
-    },
-  );
+  await insertAdminAuditLog(ctx, {
+    adminId: userId,
+    action: 'event.reminder-email.send.approved_no_ticket',
+    eventId: args.eventId,
+    organizerId: event.organizerId,
+    source: 'admin-ui',
+  });
 
   return {
     segment: TICKET_REMINDER_SEGMENT,

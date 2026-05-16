@@ -1,4 +1,5 @@
 import {resolveSiteUrl} from '../../lib/site_url';
+import {env} from '../../_generated/server';
 
 export type HttpEnvironmentConfig = {
   allowedOrigins: string[];
@@ -12,7 +13,7 @@ export function resolveHttpEnvironmentConfig(): HttpEnvironmentConfig {
   const effectiveSiteUrl = resolveSiteUrl();
 
   const allowLocalhost =
-    process.env.ALLOW_LOCALHOST_CORS === 'true' ||
+    env.ALLOW_LOCALHOST_CORS === 'true' ||
     effectiveSiteUrl.includes('localhost') ||
     effectiveSiteUrl.includes('127.0.0.1');
 
@@ -48,11 +49,11 @@ export function getWriteCorsHeaders(
   if (origin && config.allowedOrigins.includes(origin)) {
     return {
       'Access-Control-Allow-Origin': origin,
-      'Vary': 'Origin',
+      Vary: 'Origin',
     };
   }
   return {
     'Access-Control-Allow-Origin': config.effectiveSiteUrl,
-    'Vary': 'Origin',
+    Vary: 'Origin',
   };
 }

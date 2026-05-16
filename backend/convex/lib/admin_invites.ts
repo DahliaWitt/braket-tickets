@@ -85,15 +85,12 @@ export async function createAndSendAdminInvite(
     },
   );
 
-  await insertAdminAuditLog(
-    {db: ctx.db},
-    {
-      adminId: args.invitedBy,
-      action: 'admin_invite.create',
-      organizerId: args.organizerId,
-      source: `email:${args.email} invite:${inviteId}`,
-    },
-  );
+  await insertAdminAuditLog(ctx, {
+    adminId: args.invitedBy,
+    action: 'admin_invite.create',
+    organizerId: args.organizerId,
+    source: `email:${args.email} invite:${inviteId}`,
+  });
 
   return {inviteId, inviteUrl: redeemUrl};
 }
