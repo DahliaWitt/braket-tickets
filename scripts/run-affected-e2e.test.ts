@@ -114,6 +114,12 @@ describe('determineTests', () => {
     expect(() => assertSafeGitRef('after', 'origin/develop;echo nope')).toThrow(
       /Unsafe git ref/,
     );
+    expect(() => assertSafeGitRef('baseRef', '--upload-pack=sh')).toThrow(
+      /Unsafe git ref/,
+    );
+    expect(() => assertSafeGitRef('baseRef', 'origin/main..HEAD')).toThrow(
+      /Unsafe git ref/,
+    );
   });
 
   it('skips non-e2e unit test changes', () => {

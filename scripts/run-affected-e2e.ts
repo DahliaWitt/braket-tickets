@@ -1,4 +1,4 @@
-import {execSync} from 'child_process';
+import {execFileSync, execSync} from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import {pathToFileURL} from 'url';
@@ -6,7 +6,7 @@ import {resolveValidationBaseRef} from './lib/validation-base';
 
 // Configuration
 const E2E_DIR = 'frontend/e2e';
-const SAFE_GIT_REF_PATTERN = /^[A-Za-z0-9._/^-]+$/;
+const SAFE_GIT_REF_PATTERN = /^(?!-)(?!.*\.\.)[A-Za-z0-9._/^-]+$/;
 const GLOBAL_TRIGGERS: string[] = [
   'backend/convex/schema.ts',
   'backend/convex/convex.config.ts',
@@ -264,9 +264,11 @@ function resolvePushCompareRef(event: PushEvent): string | null {
   return null;
 }
 
+export class UnsafeGitRefError extends Error {}
+
 export function assertSafeGitRef(name: string, value: string): string {
   if (!SAFE_GIT_REF_PATTERN.test(value)) {
-    throw new Error(`Unsafe git ref for ${name}: ${value}`);
+    throw new UnsafeGitRefError(`Unsafe git ref for ${name}: ${value}`);
   }
   return value;
 }
@@ -301,15 +303,21 @@ function getChangedFiles(): string[] {
               pushCompareRef,
             );
             try {
-              execSync(`git rev-parse --verify ${safePushCompareRef}`, {
-                stdio: 'ignore',
-              });
+              execFileSync(
+                'git',
+                ['rev-parse', '--verify', safePushCompareRef],
+                {
+                  stdio: 'ignore',
+                },
+              );
               console.log(
                 `Detecting push changes against '${safePushCompareRef}...${after}'...`,
               );
-              return execSync(
-                `git diff --name-only ${safePushCompareRef}...${after}`,
-              )
+              return execFileSync('git', [
+                'diff',
+                '--name-only',
+                `${safePushCompareRef}...${after}`,
+              ])
                 .toString()
                 .trim()
                 .split('\n')
@@ -326,7 +334,12 @@ function getChangedFiles(): string[] {
             console.log(
               `Detecting push changes against '${safeBefore}..${after}'...`,
             );
-            return execSync(`git diff --name-only ${safeBefore} ${after}`)
+            return execFileSync('git', [
+              'diff',
+              '--name-only',
+              safeBefore,
+              after,
+            ])
               .toString()
               .trim()
               .split('\n')
@@ -340,10 +353,16 @@ function getChangedFiles(): string[] {
             event.pull_request?.head?.sha ?? process.env['GITHUB_SHA'];
 
           if (baseSha && headSha) {
+            const safeBaseSha = assertSafeGitRef('baseSha', baseSha);
+            const safeHeadSha = assertSafeGitRef('headSha', headSha);
             console.log(
-              `Detecting PR changes against '${baseSha}...${headSha}'...`,
+              `Detecting PR changes against '${safeBaseSha}...${safeHeadSha}'...`,
             );
-            return execSync(`git diff --name-only ${baseSha}...${headSha}`)
+            return execFileSync('git', [
+              'diff',
+              '--name-only',
+              `${safeBaseSha}...${safeHeadSha}`,
+            ])
               .toString()
               .trim()
               .split('\n')
@@ -351,30 +370,42 @@ function getChangedFiles(): string[] {
           }
         }
       } catch (e: unknown) {
+        if (e instanceof UnsafeGitRefError) {
+          throw e;
+        }
         const msg = e instanceof Error ? e.message : String(e);
         console.warn(`Failed to parse CI event payload: ${msg}`);
       }
     }
 
-    const baseRef = resolveValidationBaseRef();
+    const baseRef = assertSafeGitRef('baseRef', resolveValidationBaseRef());
 
     console.log(`Detecting changes against '${baseRef}'...`);
 
     // Check if baseRef exists
     try {
-      execSync(`git rev-parse --verify ${baseRef}`, {stdio: 'ignore'});
+      execFileSync('git', ['rev-parse', '--verify', baseRef], {
+        stdio: 'ignore',
+      });
     } catch {
       console.log(`Ref ${baseRef} not found, comparing against HEAD^`);
-      return execSync('git diff --name-only HEAD^ HEAD')
+      return execFileSync('git', ['diff', '--name-only', 'HEAD^', 'HEAD'])
         .toString()
         .trim()
         .split('\n')
         .filter(Boolean);
     }
 
-    const diffCommand = `git diff --name-only ${baseRef}...HEAD`; // 3-dot diff: changes in HEAD since divergence
-    return execSync(diffCommand).toString().trim().split('\n').filter(Boolean);
+    // 3-dot diff: changes in HEAD since divergence.
+    return execFileSync('git', ['diff', '--name-only', `${baseRef}...HEAD`])
+      .toString()
+      .trim()
+      .split('\n')
+      .filter(Boolean);
   } catch (e: unknown) {
+    if (e instanceof UnsafeGitRefError) {
+      throw e;
+    }
     const msg = e instanceof Error ? e.message : String(e);
     console.error('Failed to get changed files:', msg);
     if (process.env['CI']) {
@@ -504,9 +535,17 @@ function shellQuote(value: string): string {
  */
 function getUncommittedFiles(): string[] {
   try {
-    const staged = execSync('git diff --cached --name-only').toString().trim();
-    const unstaged = execSync('git diff --name-only').toString().trim();
-    const untracked = execSync('git ls-files --others --exclude-standard')
+    const staged = execFileSync('git', ['diff', '--cached', '--name-only'])
+      .toString()
+      .trim();
+    const unstaged = execFileSync('git', ['diff', '--name-only'])
+      .toString()
+      .trim();
+    const untracked = execFileSync('git', [
+      'ls-files',
+      '--others',
+      '--exclude-standard',
+    ])
       .toString()
       .trim();
     const combined = new Set<string>([

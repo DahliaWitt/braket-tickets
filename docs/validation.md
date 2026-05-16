@@ -116,7 +116,7 @@ ci.yml
 **Job Details**:
 
 - `lint`: Runs lint, enforces Convex sanitized logging, and checks file coupling (ifttt-lint)
-- `typecheck`: Checks Convex generated files are fresh and runs typecheck
+- `typecheck`: Runs typecheck. Convex generated-file freshness is enforced by `check:convex-generated` inside the `typecheck` job only in non-fork CI contexts; fork PRs skip that freshness check.
 - `frontend-unit-tests`: Runs frontend unit tests and uploads frontend coverage
 - `convex-unit-tests`: Runs Convex unit tests and uploads Convex coverage
 - `lint-typecheck` / `test`: Compatibility aggregate checks for branch protection
