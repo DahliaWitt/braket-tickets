@@ -48,12 +48,22 @@ interface PullRequestEvent {
 
 type GithubEvent = PushEvent & PullRequestEvent;
 
-const SAFE_GIT_REF_PATTERN =
-  /^(?!-)(?!.*\.\.)(?!.*[\s~^:?*[\]\\\x00-\x1f\x7f])[\w./-]+$/;
+const SAFE_GIT_REF_PATTERN = /^(?!-)(?!.*\.\.)(?!.*[\s~^:?*[\]\\])[\w./-]+$/;
+
+function hasControlCharacter(value: string): boolean {
+  return Array.from(value).some((char) => {
+    const code = char.charCodeAt(0);
+    return code <= 31 || code === 127;
+  });
+}
 
 function assertSafeGitRef(ref: string, label: string): string {
   const trimmed = ref.trim();
-  if (trimmed !== ref || !SAFE_GIT_REF_PATTERN.test(trimmed)) {
+  if (
+    trimmed !== ref ||
+    hasControlCharacter(trimmed) ||
+    !SAFE_GIT_REF_PATTERN.test(trimmed)
+  ) {
     throw new Error(`Unsafe git ref for ${label}`);
   }
   return trimmed;
