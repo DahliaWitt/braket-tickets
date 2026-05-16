@@ -79,7 +79,18 @@ jobs:
     runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'self-hosted' }}
     timeout-minutes: 2
     needs: [lint, typecheck]
+    if: ${{ always() }}
     steps:
+      - name: Check lint and typecheck results
+        env:
+          LINT_RESULT: ${{ needs.lint.result }}
+          TYPECHECK_RESULT: ${{ needs.typecheck.result }}
+        run: |
+          if [ "$LINT_RESULT" != "success" ] || [ "$TYPECHECK_RESULT" != "success" ]; then
+            echo "lint result: $LINT_RESULT"
+            echo "typecheck result: $TYPECHECK_RESULT"
+            exit 1
+          fi
       - name: Confirm lint and typecheck passed
         run: echo "Lint and typecheck jobs passed."
 
@@ -182,7 +193,18 @@ jobs:
     runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'self-hosted' }}
     timeout-minutes: 2
     needs: [frontend-unit-tests, convex-unit-tests]
+    if: ${{ always() }}
     steps:
+      - name: Check unit test results
+        env:
+          FRONTEND_UNIT_RESULT: ${{ needs.frontend-unit-tests.result }}
+          CONVEX_UNIT_RESULT: ${{ needs.convex-unit-tests.result }}
+        run: |
+          if [ "$FRONTEND_UNIT_RESULT" != "success" ] || [ "$CONVEX_UNIT_RESULT" != "success" ]; then
+            echo "frontend-unit-tests result: $FRONTEND_UNIT_RESULT"
+            echo "convex-unit-tests result: $CONVEX_UNIT_RESULT"
+            exit 1
+          fi
       - name: Confirm unit tests passed
         run: echo "Frontend and Convex unit test jobs passed."
 

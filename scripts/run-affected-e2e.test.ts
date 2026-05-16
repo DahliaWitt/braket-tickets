@@ -1,5 +1,5 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {determineTests} from './run-affected-e2e';
+import {assertSafeGitRef, determineTests} from './run-affected-e2e';
 
 describe('determineTests', () => {
   beforeEach(() => {
@@ -94,6 +94,25 @@ describe('determineTests', () => {
         runAll: true,
         specs: [],
       },
+    );
+  });
+
+  it('only maps access directory files through the access prefix', () => {
+    expect(
+      determineTests(['backend/convex/lib/access/permissions.ts']).runAll,
+    ).toBe(false);
+    expect(determineTests(['backend/convex/lib/access_control.ts'])).toEqual({
+      runAll: true,
+      specs: [],
+    });
+  });
+
+  it('rejects unsafe git refs before shelling out', () => {
+    expect(assertSafeGitRef('after', 'origin/develop^')).toBe(
+      'origin/develop^',
+    );
+    expect(() => assertSafeGitRef('after', 'origin/develop;echo nope')).toThrow(
+      /Unsafe git ref/,
     );
   });
 

@@ -166,9 +166,10 @@ The `typecheck` job runs these checks:
 
 GitHub Actions runs that freshness gate with the job's selected GitHub environment
 (`development` for `develop` and preview PRs, `production` for `main` and production PRs)
-and expects `CONVEX_DEPLOYMENT` to be present as an environment-scoped GitHub variable.
-That variable is Doppler-synced and must exist before `pnpm check:convex-generated`
-can resolve the existing Convex deployment.
+and expects `CONVEX_DEPLOYMENT` to be present as an environment-scoped GitHub secret.
+The workflow references `secrets.CONVEX_DEPLOYMENT`, which `pnpm check:convex-generated`
+uses to resolve the existing Convex deployment. Check the GitHub Environment's
+Secrets section, not the Variables section, when this value is missing.
 
 Local repro:
 

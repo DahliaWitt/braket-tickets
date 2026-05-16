@@ -6,6 +6,7 @@ import {resolveValidationBaseRef} from './lib/validation-base';
 
 // Configuration
 const E2E_DIR = 'frontend/e2e';
+const SAFE_GIT_REF_PATTERN = /^[A-Za-z0-9._/^-]+$/;
 const GLOBAL_TRIGGERS: string[] = [
   'backend/convex/schema.ts',
   'backend/convex/convex.config.ts',
@@ -202,8 +203,8 @@ const BACKEND_PREFIX_SPEC_MAP: SpecMapping[] = [
     prefix: 'backend/convex/lib/users/',
     specs: [...AUTH_SPECS, ...COMMUNITY_SPECS],
   },
-  {prefix: 'backend/convex/lib/access', specs: SECURITY_SPECS},
-  {prefix: 'backend/convex/lib/auth', specs: SECURITY_SPECS},
+  {prefix: 'backend/convex/lib/access/', specs: SECURITY_SPECS},
+  {prefix: 'backend/convex/lib/auth/', specs: SECURITY_SPECS},
   {prefix: 'backend/convex/lib/better_auth', specs: AUTH_SPECS},
   {prefix: 'backend/convex/lib/inventory', specs: PAYMENT_SPECS},
   {prefix: 'backend/convex/lib/management_limits', specs: EVENT_SPECS},
@@ -263,6 +264,13 @@ function resolvePushCompareRef(event: PushEvent): string | null {
   return null;
 }
 
+export function assertSafeGitRef(name: string, value: string): string {
+  if (!SAFE_GIT_REF_PATTERN.test(value)) {
+    throw new Error(`Unsafe git ref for ${name}: ${value}`);
+  }
+  return value;
+}
+
 /**
  * Get list of changed files
  */
@@ -279,19 +287,28 @@ function getChangedFiles(): string[] {
 
         if (eventName === 'push') {
           const before = event.before;
-          const after = event.after ?? process.env['GITHUB_SHA'];
+          const after =
+            event.after !== undefined
+              ? assertSafeGitRef('after', event.after)
+              : process.env['GITHUB_SHA'] !== undefined
+                ? assertSafeGitRef('GITHUB_SHA', process.env['GITHUB_SHA'])
+                : undefined;
           const pushCompareRef = resolvePushCompareRef(event);
 
           if (pushCompareRef && after) {
+            const safePushCompareRef = assertSafeGitRef(
+              'pushCompareRef',
+              pushCompareRef,
+            );
             try {
-              execSync(`git rev-parse --verify ${pushCompareRef}`, {
+              execSync(`git rev-parse --verify ${safePushCompareRef}`, {
                 stdio: 'ignore',
               });
               console.log(
-                `Detecting push changes against '${pushCompareRef}...${after}'...`,
+                `Detecting push changes against '${safePushCompareRef}...${after}'...`,
               );
               return execSync(
-                `git diff --name-only ${pushCompareRef}...${after}`,
+                `git diff --name-only ${safePushCompareRef}...${after}`,
               )
                 .toString()
                 .trim()
@@ -305,10 +322,11 @@ function getChangedFiles(): string[] {
           }
 
           if (before && after && !/^0+$/.test(before)) {
+            const safeBefore = assertSafeGitRef('before', before);
             console.log(
-              `Detecting push changes against '${before}..${after}'...`,
+              `Detecting push changes against '${safeBefore}..${after}'...`,
             );
-            return execSync(`git diff --name-only ${before} ${after}`)
+            return execSync(`git diff --name-only ${safeBefore} ${after}`)
               .toString()
               .trim()
               .split('\n')
@@ -504,28 +522,36 @@ function getUncommittedFiles(): string[] {
   }
 }
 
+function emitCheckOnlyOutput(shouldRun: boolean): void {
+  const outputFile = process.env['GITHUB_OUTPUT'];
+  if (outputFile) {
+    fs.appendFileSync(outputFile, `should_run=${String(shouldRun)}\n`);
+  }
+  console.log(`E2E check: should_run=${String(shouldRun)}`);
+}
+
 function main(): void {
   const committedChanges = getChangedFiles();
   const uncommittedChanges = getUncommittedFiles();
   const changedFiles = Array.from(
     new Set([...committedChanges, ...uncommittedChanges]),
   );
+  const isCheckOnly = process.argv.includes('--check-only');
 
   if (changedFiles.length === 0) {
     console.log('No relevant changes detected. Skipping E2E tests.');
+    if (isCheckOnly) {
+      emitCheckOnlyOutput(false);
+    }
     process.exit(0);
   }
 
   const {runAll, specs} = determineTests(changedFiles);
 
   // --check-only: output whether E2E should run, then exit (no test execution)
-  if (process.argv.includes('--check-only')) {
+  if (isCheckOnly) {
     const shouldRun = runAll || specs.length > 0;
-    const outputFile = process.env['GITHUB_OUTPUT'];
-    if (outputFile) {
-      fs.appendFileSync(outputFile, `should_run=${String(shouldRun)}\n`);
-    }
-    console.log(`E2E check: should_run=${String(shouldRun)}`);
+    emitCheckOnlyOutput(shouldRun);
     process.exit(0);
   }
 

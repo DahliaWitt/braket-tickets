@@ -102,9 +102,9 @@ cd frontend && pnpm start
 ```
 ci.yml
 ├── lint (ESLint + sanitized logging + file coupling)
+│   └── stripe-contracts (runs against Stripe sandbox)
 ├── typecheck (tsc + Convex generated files)
 ├── lint-typecheck (compatibility aggregate)
-│   └── stripe-contracts (runs against Stripe sandbox)
 ├── frontend-unit-tests
 ├── convex-unit-tests
 ├── test (compatibility aggregate)
