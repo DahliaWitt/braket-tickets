@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.15](https://github.com/DahliaWitt/braket-tickets/compare/v0.1.14...v0.1.15) (2026-05-16)
+
+
+### Bug Fixes
+
+* **admin:** restore reusable magic link actions ([#77](https://github.com/DahliaWitt/braket-tickets/issues/77)) ([b25c032](https://github.com/DahliaWitt/braket-tickets/commit/b25c03293286977fa64dd252dbd27df5ee2cf116))
+* **admin:** restore reusable magic link actions ([#77](https://github.com/DahliaWitt/braket-tickets/issues/77)) ([#78](https://github.com/DahliaWitt/braket-tickets/issues/78)) ([6cfad60](https://github.com/DahliaWitt/braket-tickets/commit/6cfad60cbde31a37a8a0ebad35bc0e45d1cfd9de))
+
 ## [0.1.14](https://github.com/DahliaWitt/braket-tickets/compare/v0.1.13...v0.1.14) (2026-05-15)
 
 
