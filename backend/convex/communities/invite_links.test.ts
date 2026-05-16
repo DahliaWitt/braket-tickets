@@ -1603,18 +1603,21 @@ describe('listMyLinks query', () => {
 
   it('returns empty array for unauthenticated user', async () => {
     const t = convexTest();
+    const organizerId = await seedOrganizerHelper(t, 'Unauthed Links Org');
 
-    const result = await t.query(api.communities.invite_links.listMyLinks, {});
+    const result = await t.query(api.communities.invite_links.listMyLinks, {
+      organizerId,
+    });
     expect(result).toEqual([]);
   });
 
   it('returns empty array when community admin has no links', async () => {
     const t = convexTest();
-    const {asCommunityAdmin} = await setupCommunityAdmin(t);
+    const {orgId, asCommunityAdmin} = await setupCommunityAdmin(t);
 
     const result = await asCommunityAdmin.query(
       api.communities.invite_links.listMyLinks,
-      {},
+      {organizerId: orgId},
     );
     expect(result).toEqual([]);
   });
@@ -1652,10 +1655,42 @@ describe('listMyLinks query', () => {
 
     const result = await asCommunityAdmin.query(
       api.communities.invite_links.listMyLinks,
-      {},
+      {organizerId: orgId},
     );
     expect(result).toHaveLength(1);
     expect(result[0].tokenPrefix).toBe('my-link');
+  });
+
+  it("returns only the selected community's links for an admin who manages multiple communities", async () => {
+    const t = convexTest();
+    const {userId, orgId, asCommunityAdmin} = await setupCommunityAdmin(t);
+    const otherOrgId = await seedOrganizerHelper(t, 'Second Managed Org');
+    await assignCommunityAdmin(t, userId, otherOrgId);
+
+    await t.run(async (ctx) => {
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- test setup for cross-community magic_links filtering
+      await ctx.db.insert('magic_links', {
+        token: 'selected-community-link',
+        createdBy: userId,
+        organizerId: orgId,
+        status: 'active',
+      });
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- test setup for cross-community magic_links filtering
+      await ctx.db.insert('magic_links', {
+        token: 'other-managed-community-link',
+        createdBy: userId,
+        organizerId: otherOrgId,
+        status: 'active',
+      });
+    });
+
+    const result = await asCommunityAdmin.query(
+      api.communities.invite_links.listMyLinks,
+      {organizerId: orgId},
+    );
+
+    expect(result).toHaveLength(1);
+    expect(result[0].tokenPrefix).toBe('selected');
   });
 
   it("hides the caller's links after their community admin access is revoked", async () => {
@@ -1681,7 +1716,7 @@ describe('listMyLinks query', () => {
 
     const result = await asCommunityAdmin.query(
       api.communities.invite_links.listMyLinks,
-      {},
+      {organizerId: orgId},
     );
     expect(result).toEqual([]);
   });
@@ -1712,7 +1747,7 @@ describe('listMyLinks query', () => {
 
     const result = await asCommunityAdmin.query(
       api.communities.invite_links.listMyLinks,
-      {},
+      {organizerId: orgId},
     );
     expect(result).toHaveLength(1);
     expect(result[0].tokenPrefix).toBe('visible-');
@@ -1750,7 +1785,7 @@ describe('listMyLinks query', () => {
 
     const result = await asCommunityAdmin.query(
       api.communities.invite_links.listMyLinks,
-      {},
+      {organizerId: orgId},
     );
     expect(result).toHaveLength(1);
     expect(result[0].redemptionCount).toBe(3);
@@ -1788,7 +1823,7 @@ describe('listMyLinks query', () => {
 
     const result = await asCommunityAdmin.query(
       api.communities.invite_links.listMyLinks,
-      {},
+      {organizerId: orgId},
     );
     expect(result).toHaveLength(1);
     expect(result[0].lastUsedAt).toBe(3000);
@@ -1810,7 +1845,7 @@ describe('listMyLinks query', () => {
 
     const result = await asCommunityAdmin.query(
       api.communities.invite_links.listMyLinks,
-      {},
+      {organizerId: orgId},
     );
     expect(result).toHaveLength(1);
     expect(result[0].redemptionCount).toBe(0);
@@ -1833,7 +1868,7 @@ describe('listMyLinks query', () => {
 
     const result = await asCommunityAdmin.query(
       api.communities.invite_links.listMyLinks,
-      {},
+      {organizerId: orgId},
     );
     expect(result).toHaveLength(1);
     expect(result[0]).not.toHaveProperty('url');
@@ -1869,7 +1904,7 @@ describe('listMyLinks query', () => {
 
     const result = await asCommunityAdmin.query(
       api.communities.invite_links.listMyLinks,
-      {},
+      {organizerId: orgId},
     );
     expect(result).toHaveLength(3);
 
@@ -1897,7 +1932,7 @@ describe('listMyLinks query', () => {
 
     const result = await asCommunityAdmin.query(
       api.communities.invite_links.listMyLinks,
-      {},
+      {organizerId: orgId},
     );
     expect(result).toHaveLength(1);
     expect(result[0].label).toBe('My Party Link');
@@ -1920,10 +1955,10 @@ describe('listPastMyLinks', () => {
 
   it('returns empty array for unauthenticated user', async () => {
     const t = convexTest();
-    const result = await t.query(
-      api.communities.invite_links.listPastMyLinks,
-      {},
-    );
+    const organizerId = await seedOrganizerHelper(t, 'Unauthed Past Links Org');
+    const result = await t.query(api.communities.invite_links.listPastMyLinks, {
+      organizerId,
+    });
     expect(result).toEqual([]);
   });
 
@@ -1944,7 +1979,7 @@ describe('listPastMyLinks', () => {
 
     const result = await asAdmin.query(
       api.communities.invite_links.listPastMyLinks,
-      {},
+      {organizerId: orgId},
     );
     expect(result).toHaveLength(1);
     expect(result[0].label).toBe('Archived Link');
@@ -1958,14 +1993,14 @@ describe('listPastMyLinks', () => {
 
     const result = await asAdmin.query(
       api.communities.invite_links.listPastMyLinks,
-      {},
+      {organizerId: orgId},
     );
     expect(result).toEqual([]);
   });
 
   it('excludes other creators soft-deleted links', async () => {
     const t = convexTest();
-    const {asAdmin} = await setupAdmin(t);
+    const {orgId, asAdmin} = await setupAdmin(t);
 
     const otherUserId = (await t.mutation(
       api.testing.users.createUserDirectly,
@@ -1989,7 +2024,7 @@ describe('listPastMyLinks', () => {
 
     const result = await asAdmin.query(
       api.communities.invite_links.listPastMyLinks,
-      {},
+      {organizerId: orgId},
     );
     expect(result).toEqual([]);
   });
@@ -2023,7 +2058,7 @@ describe('listPastMyLinks', () => {
 
     const result = await asAdmin.query(
       api.communities.invite_links.listPastMyLinks,
-      {},
+      {organizerId: orgId},
     );
     expect(result).toHaveLength(1);
     expect(result[0].redemptionCount).toBe(1);
@@ -2046,7 +2081,7 @@ describe('listPastMyLinks', () => {
 
     const result = await asAdmin.query(
       api.communities.invite_links.listPastMyLinks,
-      {},
+      {organizerId: orgId},
     );
     expect(result).toHaveLength(1);
     expect(typeof result[0].deletedAt).toBe('number');

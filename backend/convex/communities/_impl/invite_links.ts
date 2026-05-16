@@ -137,18 +137,20 @@ export async function updateMagicLinkStatusHandler(
 
 export async function listMyLinksHandler(
   ctx: QueryCtx,
+  args: {organizerId: Id<'organizers'>},
 ): Promise<MagicLinksListItem[]> {
   const userId = await getAuthUserId(ctx);
   if (!userId) return [];
 
-  return getMagicLinksForCreator(ctx, userId);
+  return getMagicLinksForCreator(ctx, userId, args.organizerId);
 }
 
 export async function listPastMyLinksHandler(
   ctx: QueryCtx,
+  args: {organizerId: Id<'organizers'>},
 ): Promise<PastMagicLinksListItem[]> {
   const userId = await getAuthUserId(ctx);
   if (!userId) return [];
 
-  return getPastMagicLinksForCreator(ctx, userId);
+  return getPastMagicLinksForCreator(ctx, userId, args.organizerId);
 }

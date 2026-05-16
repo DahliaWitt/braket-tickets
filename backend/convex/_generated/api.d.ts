@@ -293,7 +293,7 @@ export declare const api: {
       listMyLinks: FunctionReference<
         "query",
         "public",
-        {},
+        { organizerId: Id<"organizers"> },
         Array<{
           _creationTime: number;
           _id: Id<"magic_links">;
@@ -309,7 +309,7 @@ export declare const api: {
       listPastMyLinks: FunctionReference<
         "query",
         "public",
-        {},
+        { organizerId: Id<"organizers"> },
         Array<{
           _creationTime: number;
           _id: Id<"magic_links">;
