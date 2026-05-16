@@ -4,10 +4,23 @@ name: Deploy Preview (develop)
 # Dev site: https://dev.community.braket.gay
 
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [develop]
+  workflow_call:
+    inputs:
+      ref:
+        description: Git SHA to deploy.
+        required: false
+        default: ''
+        type: string
+      branch:
+        description: Branch label for the deploy target.
+        required: false
+        default: ''
+        type: string
+      force_all:
+        description: Force all preview deploy slices to run.
+        required: false
+        default: true
+        type: boolean
   workflow_dispatch:
     inputs:
       ref:
@@ -39,19 +52,19 @@ jobs:
     runs-on: self-hosted
     if: >-
       ${{
-        github.event_name == 'workflow_dispatch' ||
-        (
-          github.event_name == 'workflow_run' &&
-          github.event.workflow_run.event == 'push' &&
-          github.event.workflow_run.conclusion == 'success' &&
-          github.event.workflow_run.head_branch == 'develop'
-        )
+        github.event_name == 'workflow_call' ||
+        github.event_name == 'workflow_dispatch'
       }}
     outputs:
       ref: ${{ steps.resolve.outputs.ref }}
       branch: ${{ steps.resolve.outputs.branch }}
       force_all: ${{ steps.resolve.outputs.force_all }}
     steps:
+      - name: Checkout repository for ref validation
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
       - name: Resolve deploy ref
         id: resolve
         env:
@@ -60,22 +73,27 @@ jobs:
           INPUT_BRANCH: ${{ inputs.branch }}
           INPUT_FORCE_ALL: ${{ inputs.force_all }}
           INPUT_REF: ${{ inputs.ref }}
-          WORKFLOW_EVENT: ${{ github.event_name }}
-          WORKFLOW_RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
-          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
 
-          ref="${INPUT_REF:-${WORKFLOW_RUN_SHA:-${DEFAULT_SHA}}}"
-          branch="${INPUT_BRANCH:-${WORKFLOW_RUN_BRANCH:-${DEFAULT_BRANCH}}}"
+          ref="${INPUT_REF:-${DEFAULT_SHA}}"
+          branch="${INPUT_BRANCH:-${DEFAULT_BRANCH}}"
           force_all="${INPUT_FORCE_ALL:-true}"
-
-          if [ "${WORKFLOW_EVENT}" = "workflow_run" ]; then
-            force_all=true
-          fi
 
           if [ "${branch}" != "develop" ]; then
             echo "Development deploys must come from develop; got ${branch}."
+            exit 1
+          fi
+
+          git fetch --no-tags origin +develop:refs/remotes/origin/develop
+
+          if ! git cat-file -e "${ref}^{commit}" 2>/dev/null; then
+            echo "::error::Development deploy ref ${ref} is not a commit available in this repository."
+            exit 1
+          fi
+
+          if ! git merge-base --is-ancestor "${ref}" origin/develop; then
+            echo "::error::Development deploy ref ${ref} is not contained in origin/develop."
             exit 1
           fi
 

@@ -2,9 +2,9 @@ name: CI
 
 concurrency:
   # PRs: cancel stale runs on re-push (github.head_ref = PR branch name)
-  # Branch pushes (develop/main): one run at a time, newest cancels in-progress
+  # Branch pushes (develop/main): one run at a time without interrupting deploys
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 on:
   push:
@@ -343,3 +343,51 @@ jobs:
           name: playwright-report
           path: frontend/playwright-report
           retention-days: 3
+
+  deploy-development:
+    name: Deploy Development
+    needs: [lint, test, stripe-contracts, build, storybook, e2e-check, e2e]
+    if: >-
+      ${{
+        always() &&
+        github.event_name == 'push' &&
+        github.ref_name == 'develop' &&
+        needs.lint.result == 'success' &&
+        needs.test.result == 'success' &&
+        needs.stripe-contracts.result == 'success' &&
+        needs.build.result == 'success' &&
+        needs.storybook.result == 'success' &&
+        needs.e2e-check.result == 'success' &&
+        (needs.e2e.result == 'success' || needs.e2e.result == 'skipped')
+      }}
+    uses: ./.github/workflows/deploy-preview.yml
+    secrets: inherit
+    with:
+      ref: ${{ github.sha }}
+      branch: develop
+      force_all: true
+
+  deploy-production:
+    name: Deploy Production
+    needs: [lint, test, stripe-contracts, build, storybook, e2e-check, e2e]
+    if: >-
+      ${{
+        always() &&
+        github.event_name == 'push' &&
+        github.ref_name == 'main' &&
+        needs.lint.result == 'success' &&
+        needs.test.result == 'success' &&
+        needs.stripe-contracts.result == 'success' &&
+        needs.build.result == 'success' &&
+        needs.storybook.result == 'success' &&
+        needs.e2e-check.result == 'success' &&
+        (needs.e2e.result == 'success' || needs.e2e.result == 'skipped')
+      }}
+    permissions:
+      contents: write
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit
+    with:
+      ref: ${{ github.sha }}
+      branch: main
+      force_all: true
