@@ -63,6 +63,11 @@ jobs:
       branch: ${{ steps.resolve.outputs.branch }}
       force_all: ${{ steps.resolve.outputs.force_all }}
     steps:
+      - name: Checkout repository for ref validation
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
       - name: Resolve deploy ref
         id: resolve
         env:
@@ -80,6 +85,18 @@ jobs:
 
           if [ "${branch}" != "main" ]; then
             echo "Production deploys must come from main; got ${branch}."
+            exit 1
+          fi
+
+          git fetch --no-tags origin +main:refs/remotes/origin/main
+
+          if ! git cat-file -e "${ref}^{commit}" 2>/dev/null; then
+            echo "::error::Production deploy ref ${ref} is not a commit available in this repository."
+            exit 1
+          fi
+
+          if ! git merge-base --is-ancestor "${ref}" origin/main; then
+            echo "::error::Production deploy ref ${ref} is not contained in origin/main."
             exit 1
           fi
 
