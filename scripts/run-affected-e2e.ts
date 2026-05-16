@@ -6,7 +6,6 @@ import {resolveValidationBaseRef} from './lib/validation-base';
 
 // Configuration
 const E2E_DIR = 'frontend/e2e';
-const SAFE_GIT_REF_PATTERN = /^(?!-)(?!.*\.\.)[A-Za-z0-9._/^-]+$/;
 const GLOBAL_TRIGGERS: string[] = [
   'backend/convex/schema.ts',
   'backend/convex/convex.config.ts',
@@ -249,6 +248,41 @@ interface PullRequestEvent {
 
 type GithubEvent = PushEvent & PullRequestEvent;
 
+const SAFE_GIT_REF_PATTERN = /^(?!-)(?!.*\.\.)(?!.*[\s~:?*[\]\\])[\w./^-]+$/;
+
+function hasControlCharacter(value: string): boolean {
+  return Array.from(value).some((char) => {
+    const code = char.charCodeAt(0);
+    return code <= 31 || code === 127;
+  });
+}
+
+export class UnsafeGitRefError extends Error {}
+
+export function assertSafeGitRef(name: string, value: string): string {
+  const trimmed = value.trim();
+  if (
+    trimmed !== value ||
+    hasControlCharacter(trimmed) ||
+    !SAFE_GIT_REF_PATTERN.test(trimmed)
+  ) {
+    throw new UnsafeGitRefError(`Unsafe git ref for ${name}: ${value}`);
+  }
+  return trimmed;
+}
+
+function gitOutput(args: string[]): string {
+  return execFileSync('git', args, {encoding: 'utf8'});
+}
+
+function gitIgnore(args: string[]): void {
+  execFileSync('git', args, {stdio: 'ignore'});
+}
+
+function splitGitLines(output: string): string[] {
+  return output.trim().split('\n').filter(Boolean);
+}
+
 function resolvePushCompareRef(event: PushEvent): string | null {
   const explicitRef = process.env['E2E_PUSH_BASE_REF']?.trim();
   if (explicitRef) {
@@ -262,15 +296,6 @@ function resolvePushCompareRef(event: PushEvent): string | null {
   }
 
   return null;
-}
-
-export class UnsafeGitRefError extends Error {}
-
-export function assertSafeGitRef(name: string, value: string): string {
-  if (!SAFE_GIT_REF_PATTERN.test(value)) {
-    throw new UnsafeGitRefError(`Unsafe git ref for ${name}: ${value}`);
-  }
-  return value;
 }
 
 /**
@@ -302,48 +327,35 @@ function getChangedFiles(): string[] {
               'pushCompareRef',
               pushCompareRef,
             );
+            const safeAfter = assertSafeGitRef('after', after);
             try {
-              execFileSync(
-                'git',
-                ['rev-parse', '--verify', safePushCompareRef],
-                {
-                  stdio: 'ignore',
-                },
-              );
+              gitIgnore(['rev-parse', '--verify', safePushCompareRef]);
               console.log(
-                `Detecting push changes against '${safePushCompareRef}...${after}'...`,
+                `Detecting push changes against '${safePushCompareRef}...${safeAfter}'...`,
               );
-              return execFileSync('git', [
-                'diff',
-                '--name-only',
-                `${safePushCompareRef}...${after}`,
-              ])
-                .toString()
-                .trim()
-                .split('\n')
-                .filter(Boolean);
+              return splitGitLines(
+                gitOutput([
+                  'diff',
+                  '--name-only',
+                  `${safePushCompareRef}...${safeAfter}`,
+                ]),
+              );
             } catch {
               console.warn(
-                `Push compare ref '${pushCompareRef}' unavailable, falling back to '${before}..${after}'`,
+                `Push compare ref '${safePushCompareRef}' unavailable, falling back to '${before}..${safeAfter}'`,
               );
             }
           }
 
           if (before && after && !/^0+$/.test(before)) {
             const safeBefore = assertSafeGitRef('before', before);
+            const safeAfter = assertSafeGitRef('after', after);
             console.log(
-              `Detecting push changes against '${safeBefore}..${after}'...`,
+              `Detecting push changes against '${safeBefore}..${safeAfter}'...`,
             );
-            return execFileSync('git', [
-              'diff',
-              '--name-only',
-              safeBefore,
-              after,
-            ])
-              .toString()
-              .trim()
-              .split('\n')
-              .filter(Boolean);
+            return splitGitLines(
+              gitOutput(['diff', '--name-only', safeBefore, safeAfter]),
+            );
           }
         }
 
@@ -358,15 +370,13 @@ function getChangedFiles(): string[] {
             console.log(
               `Detecting PR changes against '${safeBaseSha}...${safeHeadSha}'...`,
             );
-            return execFileSync('git', [
-              'diff',
-              '--name-only',
-              `${safeBaseSha}...${safeHeadSha}`,
-            ])
-              .toString()
-              .trim()
-              .split('\n')
-              .filter(Boolean);
+            return splitGitLines(
+              gitOutput([
+                'diff',
+                '--name-only',
+                `${safeBaseSha}...${safeHeadSha}`,
+              ]),
+            );
           }
         }
       } catch (e: unknown) {
@@ -384,24 +394,16 @@ function getChangedFiles(): string[] {
 
     // Check if baseRef exists
     try {
-      execFileSync('git', ['rev-parse', '--verify', baseRef], {
-        stdio: 'ignore',
-      });
+      gitIgnore(['rev-parse', '--verify', baseRef]);
     } catch {
       console.log(`Ref ${baseRef} not found, comparing against HEAD^`);
-      return execFileSync('git', ['diff', '--name-only', 'HEAD^', 'HEAD'])
-        .toString()
-        .trim()
-        .split('\n')
-        .filter(Boolean);
+      return splitGitLines(gitOutput(['diff', '--name-only', 'HEAD^', 'HEAD']));
     }
 
-    // 3-dot diff: changes in HEAD since divergence.
-    return execFileSync('git', ['diff', '--name-only', `${baseRef}...HEAD`])
-      .toString()
-      .trim()
-      .split('\n')
-      .filter(Boolean);
+    // 3-dot diff: changes in HEAD since divergence
+    return splitGitLines(
+      gitOutput(['diff', '--name-only', `${baseRef}...HEAD`]),
+    );
   } catch (e: unknown) {
     if (e instanceof UnsafeGitRefError) {
       throw e;
@@ -535,19 +537,13 @@ function shellQuote(value: string): string {
  */
 function getUncommittedFiles(): string[] {
   try {
-    const staged = execFileSync('git', ['diff', '--cached', '--name-only'])
-      .toString()
-      .trim();
-    const unstaged = execFileSync('git', ['diff', '--name-only'])
-      .toString()
-      .trim();
-    const untracked = execFileSync('git', [
+    const staged = gitOutput(['diff', '--cached', '--name-only']).trim();
+    const unstaged = gitOutput(['diff', '--name-only']).trim();
+    const untracked = gitOutput([
       'ls-files',
       '--others',
       '--exclude-standard',
-    ])
-      .toString()
-      .trim();
+    ]).trim();
     const combined = new Set<string>([
       ...staged.split('\n').filter(Boolean),
       ...unstaged.split('\n').filter(Boolean),

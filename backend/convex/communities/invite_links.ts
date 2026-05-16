@@ -69,7 +69,9 @@ export const updateStatus = mutation({
 });
 
 export const listMyLinks = query({
-  args: {},
+  args: {
+    organizerId: v.id('organizers'),
+  },
   returns: v.array(
     v.object({
       _id: v.id('magic_links'),
@@ -87,7 +89,9 @@ export const listMyLinks = query({
 });
 
 export const listPastMyLinks = query({
-  args: {},
+  args: {
+    organizerId: v.id('organizers'),
+  },
   returns: v.array(
     v.object({
       _id: v.id('magic_links'),

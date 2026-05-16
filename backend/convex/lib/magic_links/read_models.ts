@@ -2,7 +2,7 @@ import type {Doc, Id} from '../../_generated/dataModel';
 import type {DatabaseReader, QueryCtx} from '../../_generated/server';
 import {
   loadAllMagicLinkRedemptionsByMagicLink,
-  loadAllMagicLinksByCreator,
+  loadAllMagicLinksByOrganizerAndCreator,
   loadFirstMagicLinkByToken,
 } from '../../lib/indexed_loaders';
 import {resolveSiteUrl} from '../../lib/site_url';
@@ -121,21 +121,24 @@ export async function mapMagicLinkForAdmin(
 export async function getMagicLinksForCreator(
   ctx: MagicLinksReadCtx,
   creatorId: Id<'users'>,
+  organizerId: Id<'organizers'>,
 ): Promise<MagicLinksListItem[]> {
-  const links = await loadAllMagicLinksByCreator(ctx.db, creatorId);
+  if (!(await canManageCommunity(ctx, creatorId, organizerId))) {
+    return [];
+  }
+
+  const links = await loadAllMagicLinksByOrganizerAndCreator(
+    ctx.db,
+    organizerId,
+    creatorId,
+  );
 
   const visibleLinks = links.filter((link) => !link.deletedAt) as Array<
     Doc<'magic_links'> & {status: MagicLinkAdminStatus}
   >;
-  const access = await Promise.all(
-    visibleLinks.map((link) =>
-      canManageCommunity(ctx, creatorId, link.organizerId),
-    ),
-  );
-  const authorizedLinks = visibleLinks.filter((_, index) => access[index]);
 
   const result = await Promise.all(
-    authorizedLinks.map((link) => mapMagicLinkForAdmin(ctx.db, link)),
+    visibleLinks.map((link) => mapMagicLinkForAdmin(ctx.db, link)),
   );
 
   return result;
@@ -144,23 +147,26 @@ export async function getMagicLinksForCreator(
 export async function getPastMagicLinksForCreator(
   ctx: MagicLinksReadCtx,
   creatorId: Id<'users'>,
+  organizerId: Id<'organizers'>,
 ): Promise<PastMagicLinksListItem[]> {
-  const links = await loadAllMagicLinksByCreator(ctx.db, creatorId);
+  if (!(await canManageCommunity(ctx, creatorId, organizerId))) {
+    return [];
+  }
+
+  const links = await loadAllMagicLinksByOrganizerAndCreator(
+    ctx.db,
+    organizerId,
+    creatorId,
+  );
 
   const deletedLinks = links.filter(
     (link) => link.deletedAt !== undefined,
   ) as Array<
     Doc<'magic_links'> & {status: MagicLinkAdminStatus; deletedAt: number}
   >;
-  const access = await Promise.all(
-    deletedLinks.map((link) =>
-      canManageCommunity(ctx, creatorId, link.organizerId),
-    ),
-  );
-  const authorizedLinks = deletedLinks.filter((_, index) => access[index]);
 
   const result = await Promise.all(
-    authorizedLinks.map(async (link) => {
+    deletedLinks.map(async (link) => {
       const base = await mapMagicLinkForAdmin(ctx.db, link);
       return {...base, deletedAt: link.deletedAt};
     }),
