@@ -152,7 +152,7 @@ For readonly deployment checks, prefer an inline query over creating temporary f
 
 ```bash
 pnpm convex run --prod --inline-query 'await ctx.db.query("adminAuditLogs").order("desc").take(5)'
-pnpm convex run --deployment staging --inline-query 'await ctx.db.query("events").take(5)'
+pnpm convex run --deployment dev/your-username --inline-query 'await ctx.db.query("events").take(5)'
 ```
 
 For scoped agent or worktree experiments, create an expiring deployment and deployment-scoped token instead of reusing staging:

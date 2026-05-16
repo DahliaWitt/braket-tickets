@@ -1,8 +1,8 @@
 ---
 name: convex-quickstart
 description:
-  Creates or adds Convex to an app. Use for new Convex projects, npm create
-  convex@latest, frontend setup, env vars, or the first npx convex dev run.
+  Creates or adds Convex to an app. Use for new Convex projects, pnpm create
+  convex@latest, frontend setup, env vars, or the first pnpm exec convex dev run.
 ---
 
 # Convex Quickstart
@@ -25,9 +25,9 @@ Set up a working Convex project as fast as possible.
 ## Workflow
 
 1. Determine the starting point: new project or existing app
-2. If new project, pick a template and scaffold with `npm create convex@latest`
+2. If new project, pick a template and scaffold with `pnpm create convex@latest`
 3. If existing app, install `convex` and wire up the provider
-4. Run `npx convex dev` to connect a deployment and start the dev loop
+4. Run `pnpm exec convex dev` to connect a deployment and start the dev loop
 5. Verify the setup works
 
 ## Path 1: New Project (Recommended)
@@ -53,8 +53,8 @@ simple apps or `nextjs-shadcn` for apps that need SSR or API routes.
 You can also use any GitHub repo as a template:
 
 ```bash
-npm create convex@latest my-app -- -t owner/repo
-npm create convex@latest my-app -- -t owner/repo#branch
+pnpm create convex@latest my-app -- -t owner/repo
+pnpm create convex@latest my-app -- -t owner/repo#branch
 ```
 
 ### Scaffold the project
@@ -62,31 +62,31 @@ npm create convex@latest my-app -- -t owner/repo#branch
 Always pass the project name and template flag to avoid interactive prompts:
 
 ```bash
-npm create convex@latest my-app -- -t react-vite-shadcn
+pnpm create convex@latest my-app -- -t react-vite-shadcn
 cd my-app
-npm install
+pnpm install
 ```
 
-The scaffolding tool creates files but does not run `npm install`, so you must
+The scaffolding tool creates files but does not run `pnpm install`, so you must
 run it yourself.
 
 To scaffold in the current directory (if it is empty):
 
 ```bash
-npm create convex@latest . -- -t react-vite-shadcn
-npm install
+pnpm create convex@latest . -- -t react-vite-shadcn
+pnpm install
 ```
 
 ### Start the dev loop
 
-`npx convex dev` is a long-running watcher process that syncs backend code to a
+`pnpm exec convex dev` is a long-running watcher process that syncs backend code to a
 Convex deployment on every save. It also requires authentication on first run
 (browser-based OAuth). Both of these make it unsuitable for an agent to run
 directly.
 
 **Ask the user to run this themselves:**
 
-Tell the user to run `npx convex dev` in their terminal. On first run it will
+Tell the user to run `pnpm exec convex dev` in their terminal. On first run it will
 prompt them to log in or develop anonymously. Once running, it will:
 
 - Create a Convex project and dev deployment
@@ -94,7 +94,7 @@ prompt them to log in or develop anonymously. Once running, it will:
 - Create the `convex/` directory with generated types
 - Watch for changes and sync continuously
 
-The user should keep `npx convex dev` running in the background while you work
+The user should keep `pnpm exec convex dev` running in the background while you work
 on code. The watcher will automatically pick up any files you create or edit in
 `convex/`.
 
@@ -107,7 +107,7 @@ anonymously without user interaction.
 The user should also run the frontend dev server in a separate terminal:
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
 Vite apps serve on `http://localhost:5173`, Next.js on `http://localhost:3000`.
@@ -143,12 +143,12 @@ the backend.
 ### Install
 
 ```bash
-npm install convex
+pnpm add convex
 ```
 
 ### Initialize and start dev loop
 
-Ask the user to run `npx convex dev` in their terminal. This handles login,
+Ask the user to run `pnpm exec convex dev` in their terminal. This handles login,
 creates the `convex/` directory, writes the deployment URL to `.env.local`, and
 starts the file watcher. See the notes in Path 1 about why the agent should not
 run this directly.
@@ -249,7 +249,7 @@ The env var name depends on the framework:
 | Remix        | `CONVEX_URL`             |
 | React Native | `EXPO_PUBLIC_CONVEX_URL` |
 
-`npx convex dev` writes the correct variable to `.env.local` automatically.
+`pnpm exec convex dev` writes the correct variable to `.env.local` automatically.
 
 ## Agent Mode (Cloud and Headless Agents)
 
@@ -260,7 +260,7 @@ anonymous deployment.
 Add `CONVEX_AGENT_MODE=anonymous` to `.env.local`, or set it inline:
 
 ```bash
-CONVEX_AGENT_MODE=anonymous npx convex dev
+CONVEX_AGENT_MODE=anonymous pnpm exec convex dev
 ```
 
 This runs a local Convex backend on the VM without requiring authentication, and
@@ -270,7 +270,7 @@ avoids conflicting with the user's personal dev deployment.
 
 After setup, confirm everything is working:
 
-1. The user confirms `npx convex dev` is running without errors
+1. The user confirms `pnpm exec convex dev` is running without errors
 2. The `convex/_generated/` directory exists and has `api.ts` and `server.ts`
 3. `.env.local` contains the deployment URL
 
@@ -338,13 +338,13 @@ function Tasks() {
 
 ## Development vs Production
 
-Always use `npx convex dev` during development. It runs against your personal
+Always use `pnpm exec convex dev` during development. It runs against your personal
 dev deployment and syncs code on save.
 
 When ready to ship, deploy to production:
 
 ```bash
-npx convex deploy
+pnpm exec convex deploy
 ```
 
 This pushes to the production deployment, which is separate from dev. Do not use
@@ -364,10 +364,10 @@ This pushes to the production deployment, which is separate from dev. Do not use
 ## Checklist
 
 - [ ] Determined starting point: new project or existing app
-- [ ] If new project: scaffolded with `npm create convex@latest` using
+- [ ] If new project: scaffolded with `pnpm create convex@latest` using
       appropriate template
 - [ ] If existing app: installed `convex` and wired up the provider
-- [ ] User has `npx convex dev` running and connected to a deployment
+- [ ] User has `pnpm exec convex dev` running and connected to a deployment
 - [ ] `convex/_generated/` directory exists with types
 - [ ] `.env.local` has the deployment URL
 - [ ] Verified a basic query/mutation round-trip works

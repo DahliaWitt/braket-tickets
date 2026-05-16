@@ -4,7 +4,9 @@ import {
   isSeedAuthorized,
   isTestEnvironment,
   isUnitTestRuntime,
+  looksLikeProductionFromContext,
   looksLikeProduction,
+  looksLikeStagingFromContext,
   looksLikeStaging,
 } from './environment';
 
@@ -87,6 +89,105 @@ describe('looksLikeProduction', () => {
   it('returns false for empty CONVEX_CLOUD_URL', () => {
     process.env['CONVEX_CLOUD_URL'] = '';
     expect(looksLikeProduction()).toBe(false);
+  });
+});
+
+function ctxWithDeploymentName(
+  name: string | undefined,
+): Parameters<typeof looksLikeStagingFromContext>[0] {
+  return {
+    meta: {
+      getDeploymentMetadata: vi.fn(async () =>
+        name === undefined
+          ? undefined
+          : {
+              name,
+              region: null,
+              class: 's16' as const,
+            },
+      ),
+    },
+  } as unknown as Parameters<typeof looksLikeStagingFromContext>[0];
+}
+
+describe('looksLikeStagingFromContext', () => {
+  const originalEnv = {...process.env};
+
+  afterEach(() => {
+    restoreEnv(originalEnv);
+  });
+
+  it('returns true for the known staging deployment name', async () => {
+    await expect(
+      looksLikeStagingFromContext(
+        ctxWithDeploymentName('bright-swordfish-194'),
+      ),
+    ).resolves.toBe(true);
+  });
+
+  it('returns false for non-staging deployment names', async () => {
+    await expect(
+      looksLikeStagingFromContext(ctxWithDeploymentName('ordinary-bison-123')),
+    ).resolves.toBe(false);
+  });
+
+  it('falls back to URL-based staging detection when deployment name is unavailable', async () => {
+    process.env['CONVEX_CLOUD_URL'] =
+      'https://bright-swordfish-194.convex.cloud';
+
+    await expect(
+      looksLikeStagingFromContext(ctxWithDeploymentName(undefined)),
+    ).resolves.toBe(true);
+  });
+
+  it('falls back to false URL-based staging detection when deployment name is unavailable', async () => {
+    process.env['CONVEX_CLOUD_URL'] = 'https://braket-abc123.convex.cloud';
+
+    await expect(
+      looksLikeStagingFromContext(ctxWithDeploymentName(undefined)),
+    ).resolves.toBe(false);
+  });
+});
+
+describe('looksLikeProductionFromContext', () => {
+  const originalEnv = {...process.env};
+
+  afterEach(() => {
+    restoreEnv(originalEnv);
+  });
+
+  it.each([
+    'local-braket-tickets',
+    'anonymous-agent-123',
+    'braket-dev-123',
+    'bright-swordfish-194',
+  ])('returns false for non-production deployment name %s', async (name) => {
+    await expect(
+      looksLikeProductionFromContext(ctxWithDeploymentName(name)),
+    ).resolves.toBe(false);
+  });
+
+  it('returns true for production-like deployment names', async () => {
+    await expect(
+      looksLikeProductionFromContext(ctxWithDeploymentName('braket-abc123')),
+    ).resolves.toBe(true);
+  });
+
+  it('falls back to URL-based production detection when deployment name is unavailable', async () => {
+    process.env['CONVEX_CLOUD_URL'] = 'https://braket-abc123.convex.cloud';
+
+    await expect(
+      looksLikeProductionFromContext(ctxWithDeploymentName(undefined)),
+    ).resolves.toBe(true);
+  });
+
+  it('falls back to false URL-based production detection when deployment name is unavailable', async () => {
+    process.env['CONVEX_CLOUD_URL'] =
+      'https://bright-swordfish-194.convex.cloud';
+
+    await expect(
+      looksLikeProductionFromContext(ctxWithDeploymentName(undefined)),
+    ).resolves.toBe(false);
   });
 });
 

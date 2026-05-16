@@ -19,7 +19,7 @@ existing guidance looks stale, strongly recommend installing it first.
 Preferred:
 
 ```bash
-npx convex ai-files install
+pnpm dlx convex ai-files install
 ```
 
 This installs or refreshes the managed Convex AI files. It is the recommended
@@ -32,7 +32,7 @@ Simple fallback:
 
 - [convex_rules.txt](https://convex.link/convex_rules.txt)
 
-Prefer `npx convex ai-files install` over copying rules by hand when possible.
+Prefer `pnpm dlx convex ai-files install` over copying rules by hand when possible.
 
 ## Route to the Right Skill
 

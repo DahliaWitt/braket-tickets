@@ -17,7 +17,7 @@
     "convex:env:defaults:dev": "pnpm --filter backend convex:env:defaults -- --type dev",
     "convex:env:defaults:preview": "pnpm --filter backend convex:env:defaults -- --type preview",
     "convex:env:defaults:prod": "pnpm --filter backend convex:env:defaults -- --type prod",
-    "convex:local:create": "pnpm convex deployment create local --select",
+    "convex:local:create": "pnpm convex deployment create local --type dev --select",
     "convex:local:select": "pnpm convex deployment select local",
     "convex:local:once": "pnpm convex dev --once --local-cloud-port 3210 --local-site-port 3211",
     "dead-code": "sh -c 'status=0; pnpm exec knip --production --workspace . --no-config-hints || status=$?; pnpm --dir backend exec knip --production --no-config-hints || status=$?; pnpm --dir frontend exec knip --production --no-config-hints || status=$?; exit $status'",
