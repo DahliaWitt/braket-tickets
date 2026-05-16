@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.1.14](https://github.com/DahliaWitt/braket-tickets/compare/v0.1.13...v0.1.14) (2026-05-15)
+
+
+### Features
+
+* **vetting:** surface rejected application resubmission ([#74](https://github.com/DahliaWitt/braket-tickets/issues/74)) ([15529ec](https://github.com/DahliaWitt/braket-tickets/commit/15529ec188211b739cea257c49349187c091cdb8))
+
+
+### Bug Fixes
+
+* **admin:** add magic link copy affordance ([#70](https://github.com/DahliaWitt/braket-tickets/issues/70)) ([2b0e28d](https://github.com/DahliaWitt/braket-tickets/commit/2b0e28d064ae38e4d9020c83679770ece17f08e9))
+* **orders:** prevent stale checkout holds ([#73](https://github.com/DahliaWitt/braket-tickets/issues/73)) ([8e6a66a](https://github.com/DahliaWitt/braket-tickets/commit/8e6a66ae6302e0623765af5838e0cec71bf9c4e2))
+* **vetting:** update application prompt copy ([#71](https://github.com/DahliaWitt/braket-tickets/issues/71)) ([f5d0d36](https://github.com/DahliaWitt/braket-tickets/commit/f5d0d369a8222ccf5d2cd26b6c2e0aba724a3153))
+
+
+### Code Refactoring
+
+* **analytics:** remove PostHog ([#72](https://github.com/DahliaWitt/braket-tickets/issues/72)) ([67e6046](https://github.com/DahliaWitt/braket-tickets/commit/67e6046b5d5d3a06b705ff87798ed5fef61a5c25))
+
+## [0.1.13](https://github.com/DahliaWitt/braket-tickets/compare/v0.1.12...v0.1.13) (2026-05-12)
+
+
+### Features
+
+* **events:** unify event listing to horizontal row layout ([#63](https://github.com/DahliaWitt/braket-tickets/issues/63)) ([3d254e2](https://github.com/DahliaWitt/braket-tickets/commit/3d254e23a0fea9488519392298ae4abcef01e392))
+* **feedback:** use sentry feedback form ([#66](https://github.com/DahliaWitt/braket-tickets/issues/66)) ([f17100c](https://github.com/DahliaWitt/braket-tickets/commit/f17100c368d9486a2fc8939dc86966890a99da9b))
+
+
+### Bug Fixes
+
+* **email:** use LA time for vetting notifications ([#60](https://github.com/DahliaWitt/braket-tickets/issues/60)) ([f32d2ee](https://github.com/DahliaWitt/braket-tickets/commit/f32d2eeeaf8c7fa82ad55ad1dc6a07dd8b2642e0))
+* **events:** preserve Los Angeles event times ([#62](https://github.com/DahliaWitt/braket-tickets/issues/62)) ([df38740](https://github.com/DahliaWitt/braket-tickets/commit/df38740b0f2c9a5ecc43d37ee5edb9ec581aa3b4))
+* **frontend:** prevent stale bundle html fallbacks ([#67](https://github.com/DahliaWitt/braket-tickets/issues/67)) ([b074aff](https://github.com/DahliaWitt/braket-tickets/commit/b074affeb6cbf240d9c4fbd3adab399650d6e10a))
+* **frontend:** suppress optional Sentry replay load failures ([#65](https://github.com/DahliaWitt/braket-tickets/issues/65)) ([3ba8e04](https://github.com/DahliaWitt/braket-tickets/commit/3ba8e041605e8cb1faf6494b91c3565db0b0abd9))
+
 ## [0.1.12](https://github.com/DahliaWitt/braket-tickets/compare/v0.1.11...v0.1.12) (2026-05-12)
 
 

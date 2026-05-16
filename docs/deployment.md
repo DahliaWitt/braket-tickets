@@ -22,7 +22,7 @@ This guide covers deploying Braket Tickets to production and preview environment
 
 The Angular frontend deploys to Cloudflare Pages for global CDN distribution.
 
-**Automatic deployment**: After a successful `CI` push run on `main`, GitHub starts the standalone `Deploy to Production` workflow via `workflow_run`. The `deploy-frontend` job in that deploy workflow builds the Angular app and deploys `dist/frontend/browser` to Cloudflare Pages.
+**Automatic deployment**: After a successful `CI` push run on `main`, the `Deploy Production` job calls the reusable `Deploy to Production` workflow. The `deploy-frontend` job in that deploy workflow builds the Angular app and deploys `dist/frontend/browser` to Cloudflare Pages.
 
 The Angular frontend is built as a client-rendered single-page app. Cloudflare Pages serves the compiled browser assets from `dist/frontend/browser` and falls back to the app shell for client-side routes.
 
@@ -106,9 +106,11 @@ Cloudflare Pages automatically creates preview URLs for non-production branches.
 git push origin develop
 ```
 
-Check GitHub Actions for the `CI` run on `develop`, then open the separate `Deploy Preview (develop)` workflow run that starts after CI succeeds. Once complete, access `https://dev.community.braket.gay`.
+Check GitHub Actions for the `CI` run on `develop`, then open the `Deploy Development` reusable workflow call inside that CI run. Once complete, access `https://dev.community.braket.gay`.
 
 ### Promoting to Production
+
+When cutting a named release, run the manual `Prepare Release` workflow first. Merge the Release Please PR into `develop`, then promote `develop` to `main`.
 
 ```bash
 git checkout main
@@ -116,7 +118,7 @@ git merge develop
 git push origin main
 ```
 
-This triggers `CI`; after the push run succeeds, GitHub starts the production deployment workflow.
+This triggers `CI`; after the push run succeeds, `CI` calls the production deployment workflow. The production deploy workflow publishes the GitHub Release only after the deployment succeeds.
 
 ---
 
