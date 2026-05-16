@@ -257,7 +257,6 @@ jobs:
     if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
     runs-on: self-hosted
     timeout-minutes: 5
-    needs: [lint, test, build]
     outputs:
       should_run: ${{ steps.check.outputs.should_run }}
     steps:
@@ -313,7 +312,7 @@ jobs:
           fi
 
       - name: Run E2E tests
-        run: npx tsx scripts/e2e.ts --build
+        run: npx tsx scripts/run-affected-e2e.ts
         env:
           # Safety defaults: E2E must target a local ephemeral Convex backend.
           # e2e.ts will replace these with per-run ephemeral ports.
