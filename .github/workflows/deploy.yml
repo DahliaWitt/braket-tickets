@@ -5,10 +5,23 @@ name: Deploy to Production
 # See ops/docker-compose.yml for local development or self-hosting reference.
 
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [main]
+  workflow_call:
+    inputs:
+      ref:
+        description: Git SHA to deploy.
+        required: false
+        default: ''
+        type: string
+      branch:
+        description: Branch label for the deploy target.
+        required: false
+        default: ''
+        type: string
+      force_all:
+        description: Force all deploy slices to run.
+        required: false
+        default: true
+        type: boolean
   workflow_dispatch:
     inputs:
       ref:
@@ -29,7 +42,9 @@ on:
 
 concurrency:
   group: deploy-production
-  cancel-in-progress: true
+  # GitHub Actions added `queue: max` in May 2026. actionlint v1.7.12 still
+  # reports this as an unknown key until rhysd/actionlint#654 lands.
+  queue: max
 
 permissions:
   contents: read
@@ -40,13 +55,8 @@ jobs:
     runs-on: self-hosted
     if: >-
       ${{
-        github.event_name == 'workflow_dispatch' ||
-        (
-          github.event_name == 'workflow_run' &&
-          github.event.workflow_run.event == 'push' &&
-          github.event.workflow_run.conclusion == 'success' &&
-          github.event.workflow_run.head_branch == 'main'
-        )
+        github.event_name == 'workflow_call' ||
+        github.event_name == 'workflow_dispatch'
       }}
     outputs:
       ref: ${{ steps.resolve.outputs.ref }}
@@ -61,19 +71,12 @@ jobs:
           INPUT_BRANCH: ${{ inputs.branch }}
           INPUT_FORCE_ALL: ${{ inputs.force_all }}
           INPUT_REF: ${{ inputs.ref }}
-          WORKFLOW_EVENT: ${{ github.event_name }}
-          WORKFLOW_RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
-          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
 
-          ref="${INPUT_REF:-${WORKFLOW_RUN_SHA:-${DEFAULT_SHA}}}"
-          branch="${INPUT_BRANCH:-${WORKFLOW_RUN_BRANCH:-${DEFAULT_BRANCH}}}"
+          ref="${INPUT_REF:-${DEFAULT_SHA}}"
+          branch="${INPUT_BRANCH:-${DEFAULT_BRANCH}}"
           force_all="${INPUT_FORCE_ALL:-true}"
-
-          if [ "${WORKFLOW_EVENT}" = "workflow_run" ]; then
-            force_all=true
-          fi
 
           if [ "${branch}" != "main" ]; then
             echo "Production deploys must come from main; got ${branch}."
@@ -333,7 +336,7 @@ jobs:
       - name: Validate CONVEX_LOG_SINK
         if: ${{ steps.status.outputs.needs_deploy == 'true' }}
         env:
-          CONVEX_LOG_SINK: ${{ secrets.CONVEX_LOG_SINK }}
+          CONVEX_LOG_SINK: ${{ secrets.CONVEX_LOG_SINK || 'none' }}
         run: |
           case "${CONVEX_LOG_SINK}" in
             sentry|none)
@@ -356,7 +359,7 @@ jobs:
           CONVEX_LOG_FORWARD_ALL: ${{ secrets.CONVEX_LOG_FORWARD_ALL }}
           CONVEX_LOG_INCLUDE_SUCCESS: ${{ secrets.CONVEX_LOG_INCLUDE_SUCCESS }}
           CONVEX_LOG_RECONNECT_MS: ${{ secrets.CONVEX_LOG_RECONNECT_MS }}
-          CONVEX_LOG_SINK: ${{ secrets.CONVEX_LOG_SINK }}
+          CONVEX_LOG_SINK: ${{ secrets.CONVEX_LOG_SINK || 'none' }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           BRAKET_APPDATA_ROOT: /mnt/user/appdata/braket-tickets
 
@@ -372,7 +375,7 @@ jobs:
           CONVEX_LOG_FORWARD_ALL: ${{ secrets.CONVEX_LOG_FORWARD_ALL }}
           CONVEX_LOG_INCLUDE_SUCCESS: ${{ secrets.CONVEX_LOG_INCLUDE_SUCCESS }}
           CONVEX_LOG_RECONNECT_MS: ${{ secrets.CONVEX_LOG_RECONNECT_MS }}
-          CONVEX_LOG_SINK: ${{ secrets.CONVEX_LOG_SINK }}
+          CONVEX_LOG_SINK: ${{ secrets.CONVEX_LOG_SINK || 'none' }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           BRAKET_APPDATA_ROOT: /mnt/user/appdata/braket-tickets
 
@@ -423,3 +426,92 @@ jobs:
           fi
 
           echo "Production deployment completed for ${{ needs.deploy-context.outputs.ref }}"
+
+  publish-release:
+    name: Publish GitHub Release
+    runs-on: self-hosted
+    needs: [deploy-context, record-deployment]
+    if: >-
+      ${{
+        needs.deploy-context.result == 'success' &&
+        needs.deploy-context.outputs.branch == 'main' &&
+        needs.record-deployment.result == 'success'
+      }}
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout deployed ref
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ needs.deploy-context.outputs.ref }}
+
+      - name: Publish release from manifest
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        env:
+          DEPLOY_REF: ${{ needs.deploy-context.outputs.ref }}
+        with:
+          script: |
+            const fs = require('node:fs');
+
+            const manifest = JSON.parse(
+              fs.readFileSync('.release-please-manifest.json', 'utf8'),
+            );
+            const version = String(manifest['.'] ?? '');
+            if (!/^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$/.test(version)) {
+              core.setFailed(
+                `.release-please-manifest.json does not contain a valid root semver version; got '${version || '<unset>'}'`,
+              );
+              return;
+            }
+
+            const tag = `v${version}`;
+            try {
+              await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag,
+              });
+              core.info(`GitHub Release ${tag} already exists; leaving it unchanged.`);
+              return;
+            } catch (error) {
+              if (error.status !== 404) {
+                throw error;
+              }
+            }
+
+            const escaped = version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const heading = new RegExp(`^## \\[?${escaped}\\]?\\b`);
+            const lines = fs.readFileSync('CHANGELOG.md', 'utf8').split(/\r?\n/);
+            let start = -1;
+            let end = lines.length;
+            for (let index = 0; index < lines.length; index += 1) {
+              const line = lines[index];
+              if (!line.startsWith('## ')) {
+                continue;
+              }
+              if (start === -1 && heading.test(line)) {
+                start = index + 1;
+                continue;
+              }
+              if (start !== -1) {
+                end = index;
+                break;
+              }
+            }
+
+            const body =
+              start === -1
+                ? `Release ${version}`
+                : lines
+                    .slice(start, end)
+                    .join('\n')
+                    .trim() || `Release ${version}`;
+
+            await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              target_commitish: process.env.DEPLOY_REF,
+              name: tag,
+              body,
+            });
