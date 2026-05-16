@@ -9,7 +9,6 @@ import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
 import {provideRouter, Router} from '@angular/router';
 import {CheckoutSidebarComponent} from './checkout-sidebar.component';
 import {CheckoutSidebarHarness} from './checkout-sidebar.component.harness';
-import {AnalyticsService} from '@/core/services/analytics.service';
 import {AuthService} from '@/core/services/auth.service';
 import {STRIPE_CONFIG} from '@/app.tokens';
 import {type EventDetail} from '@/core/models/event.types';
@@ -59,10 +58,6 @@ describe('CheckoutSidebarComponent — logarithmic supporter slider', () => {
         {
           provide: STRIPE_CONFIG,
           useValue: {publishableKey: 'pk_test_fake', mockPayments: true},
-        },
-        {
-          provide: AnalyticsService,
-          useValue: {capture: vi.fn()},
         },
       ],
     });

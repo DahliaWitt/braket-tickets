@@ -29,7 +29,6 @@ import {BraCodeOfConductLinkComponent} from '@ui/components/primitives/code-of-c
 import {readInputValue} from '@ui/utils/dom-event';
 import {StripePaymentComponent} from '../stripe-payment/stripe-payment.component';
 import type {TicketTier} from '@shared/domain/ticket-tier';
-import type {CheckoutKind} from '@/core/analytics/events';
 import {EVENT_VISIBILITY} from '@shared/domain/event-visibility';
 import {type EventDetail} from '@/core/models/event.types';
 
@@ -103,9 +102,7 @@ export class CheckoutSidebarComponent {
   readonly connectedAccountId = input<string | null>(null);
   readonly buyerEmail = input<string | null>(null);
   readonly stripeResetKey = input<number>(0);
-  readonly orderId = input<string | null>(null);
   readonly isResalePurchase = input(false);
-  readonly checkoutKind = input<CheckoutKind>('primary');
   private readonly closeButtonRef =
     viewChild.required<ElementRef<HTMLButtonElement>>('closeButton');
 

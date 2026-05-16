@@ -47,6 +47,7 @@ When investigating a ticketing incident, check these in order:
 - `ticket_orders.state = open` means the order currently holds inventory or a resale listing
 - `ticket_orders.state = completed` means tickets were issued or resale completed
 - `ticket_orders.state = released` means the hold is gone and the order no longer blocks inventory
+- For primary orders, `event_inventory.heldCount` should equal the sum of open primary `ticket_orders.quantity` for the event
 - Refund/dispute status is derived from `order_financial_events` and ticket state, not from mutable order summary fields
 
 ---
@@ -79,11 +80,22 @@ When investigating a ticketing incident, check these in order:
 - If Stripe shows the Checkout Session is `expired` but the order is still `open`, manually run:
 
 ```bash
-pnpm convex run --prod orders:expire '{"orderId":"<order_id>"}'
+pnpm convex run --prod orders/core:expire '{"orderId":"<order_id>","force":true}'
 ```
 
 - If this is a primary order, verify `event_inventory.heldCount` decreases after release.
 - If this is a resale order, verify the listing returns to `status = "listed"` and `pendingOrderId` clears.
+- If there are no open primary orders but `event_inventory.heldCount` is still positive, check for counter drift:
+
+```bash
+pnpm convex run --prod orders/core:getHeldInventoryReconciliation '{"eventId":"<event_id>"}'
+```
+
+Only repair after confirming `openPrimaryHeldCount` is the intended held count and passing the current stored value as a guard:
+
+```bash
+pnpm convex run --prod orders/core:repairHeldInventoryCount '{"eventId":"<event_id>","expectedStoredHeldCount":<current_held_count>}'
+```
 
 ---
 

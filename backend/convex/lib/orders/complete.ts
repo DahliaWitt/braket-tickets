@@ -1,10 +1,5 @@
 import type {Doc, Id} from '../../_generated/dataModel';
 import type {MutationCtx} from '../../_generated/server';
-import {
-  captureBackendEvent,
-  guestDistinctId,
-  userDistinctId,
-} from '../../lib/analytics';
 import {isTestEnvironment, isUnitTestRuntime} from '../../lib/environment';
 import {
   assertValidListingTransition,
@@ -23,46 +18,6 @@ import {
   requireEventWithInventory,
 } from './inventory';
 import {patchOrderState} from './release';
-
-async function distinctIdForOrder(
-  order: Pick<Doc<'ticket_orders'>, 'userId' | 'guestSessionId'>,
-): Promise<string> {
-  return order.userId
-    ? userDistinctId(order.userId)
-    : await guestDistinctId(
-        order.guestSessionId ? `session:${order.guestSessionId}` : 'unknown',
-      );
-}
-
-function checkoutKindForOrder(
-  order: Pick<Doc<'ticket_orders'>, 'kind' | 'amountCents' | 'guestSessionId'>,
-): 'primary' | 'guest' | 'free' | 'resale' {
-  if (order.kind === 'resale') return 'resale';
-  if (order.amountCents === 0) return 'free';
-  return order.guestSessionId ? 'guest' : 'primary';
-}
-
-async function emitCheckoutCompletedEvent(
-  ctx: MutationCtx,
-  order: Doc<'ticket_orders'>,
-): Promise<void> {
-  const checkoutKind = checkoutKindForOrder(order);
-  await captureBackendEvent(ctx, {
-    distinctId: await distinctIdForOrder(order),
-    event: 'checkout_completed',
-    uuid: `checkout_completed:${order._id}`,
-    properties: {
-      actor_role: order.userId ? 'user' : 'guest',
-      auth_state: order.userId ? 'signed_in' : 'guest',
-      order_id: order._id,
-      event_id: order.eventId,
-      checkout_kind: checkoutKind,
-      amount_cents: order.amountCents,
-      currency: order.currency.toLowerCase(),
-      payment_provider: checkoutKind === 'free' ? 'none' : 'stripe',
-    },
-  });
-}
 
 function extractOwnerFieldsFromOrder(
   order: Pick<Doc<'ticket_orders'>, 'userId' | 'guestSessionId'>,
@@ -196,22 +151,6 @@ export async function completePrimaryOrderState(
 
   await enqueueTicketEmailForOrder(ctx, completedOrder);
 
-  const checkoutKind = checkoutKindForOrder(completedOrder);
-  await emitCheckoutCompletedEvent(ctx, completedOrder);
-  await captureBackendEvent(ctx, {
-    distinctId: await distinctIdForOrder(completedOrder),
-    event: 'tickets_issued',
-    uuid: `tickets_issued:${order._id}`,
-    properties: {
-      actor_role: completedOrder.userId ? 'user' : 'guest',
-      auth_state: completedOrder.userId ? 'signed_in' : 'guest',
-      order_id: order._id,
-      event_id: order.eventId,
-      ticket_count: ticketIds.length,
-      checkout_kind: checkoutKind,
-    },
-  });
-
   return completedOrder;
 }
 
@@ -312,8 +251,6 @@ export async function completeResaleOrderState(
       'Completed resale order could not be loaded',
     );
   }
-
-  await emitCheckoutCompletedEvent(ctx, completedOrder);
 
   return completedOrder;
 }

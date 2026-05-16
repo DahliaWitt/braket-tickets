@@ -1,11 +1,6 @@
 import type {Doc, Id} from '../../_generated/dataModel';
 import type {ActionCtx, MutationCtx, QueryCtx} from '../../_generated/server';
 import {internal} from '../../_generated/api';
-import {
-  captureBackendEvent,
-  guestDistinctId,
-  userDistinctId,
-} from '../../lib/analytics';
 import {getAuthUser, getAuthUserId} from '../../lib/auth_identity';
 import {resolveCallerIdentity} from '../../lib/caller_identity';
 import {rateLimiter} from '../../lib/rate_limits';
@@ -33,6 +28,10 @@ import {
   openPrimaryOrderState,
   openResaleOrderState,
 } from '../../lib/orders/open';
+import {
+  getPrimaryHeldInventoryReconciliation,
+  repairPrimaryHeldInventoryCount,
+} from '../../lib/orders/inventory_reconciliation';
 import {releaseOrderState} from '../../lib/orders/release';
 import {getOrderForCaller, throwOrderError} from '../../lib/orders/access';
 import {resolveStripeConnectInfo} from '../../lib/payments/refund_processing';
@@ -149,24 +148,11 @@ type ApplyExternalRefundArgs = {
 
 type ClearCheckoutSessionArgs = {orderId: Id<'ticket_orders'>};
 type CancelOpenOrdersForEventArgs = {eventId: Id<'events'>};
-
-async function distinctIdForOrder(
-  order: Pick<Doc<'ticket_orders'>, 'userId' | 'guestSessionId'>,
-): Promise<string> {
-  return order.userId
-    ? userDistinctId(order.userId)
-    : await guestDistinctId(
-        order.guestSessionId ? `session:${order.guestSessionId}` : 'unknown',
-      );
-}
-
-function checkoutKindForOrder(
-  order: Pick<Doc<'ticket_orders'>, 'kind' | 'amountCents' | 'guestSessionId'>,
-): 'primary' | 'guest' | 'free' | 'resale' {
-  if (order.kind === 'resale') return 'resale';
-  if (order.amountCents === 0) return 'free';
-  return order.guestSessionId ? 'guest' : 'primary';
-}
+type GetHeldInventoryReconciliationArgs = {eventId: Id<'events'>};
+type RepairHeldInventoryCountArgs = {
+  eventId: Id<'events'>;
+  expectedStoredHeldCount?: number;
+};
 
 type CheckoutSessionResult = {
   orderId: Id<'ticket_orders'>;
@@ -533,6 +519,20 @@ export async function getInternalHandler(ctx: QueryCtx, args: GetInternalArgs) {
   return await ctx.db.get('ticket_orders', args.orderId);
 }
 
+export async function getHeldInventoryReconciliationHandler(
+  ctx: QueryCtx,
+  args: GetHeldInventoryReconciliationArgs,
+) {
+  return await getPrimaryHeldInventoryReconciliation(ctx, args.eventId);
+}
+
+export async function repairHeldInventoryCountHandler(
+  ctx: MutationCtx,
+  args: RepairHeldInventoryCountArgs,
+) {
+  return await repairPrimaryHeldInventoryCount(ctx, args);
+}
+
 export async function normalizeTicketOrderIdHandler(
   ctx: QueryCtx,
   args: NormalizeTicketOrderIdArgs,
@@ -630,26 +630,6 @@ export async function expireHandler(ctx: MutationCtx, args: ExpireArgs) {
     reason: 'expired',
     now,
   });
-  const releasedOrder = await ctx.db.get('ticket_orders', args.orderId);
-  if (releasedOrder?.releaseReason === 'expired') {
-    await captureBackendEvent(ctx, {
-      distinctId: await distinctIdForOrder(releasedOrder),
-      event: 'checkout_abandoned',
-      uuid: `checkout_abandoned:${releasedOrder._id}`,
-      properties: {
-        actor_role: releasedOrder.userId ? 'user' : 'guest',
-        auth_state: releasedOrder.userId ? 'signed_in' : 'guest',
-        order_id: releasedOrder._id,
-        event_id: releasedOrder.eventId,
-        checkout_kind: checkoutKindForOrder(releasedOrder),
-        abandonment_source: 'expiration',
-        minutes_since_opened: Math.max(
-          0,
-          Math.floor((now - releasedOrder._creationTime) / 60000),
-        ),
-      },
-    });
-  }
   return null;
 }
 
@@ -657,10 +637,6 @@ export async function releaseForPaymentFailureHandler(
   ctx: MutationCtx,
   args: ReleaseForPaymentFailureArgs,
 ) {
-  // Single read: gate on current state, then either release + emit analytics
-  // or no-op. releaseOpenOrder is the only path that flips state to 'released'
-  // and sets releaseReason, and it short-circuits on non-open state, so there
-  // is no need to re-read the order after the release call.
   const order = await ctx.db.get('ticket_orders', args.orderId);
   if (order?.state !== 'open') {
     return null;
@@ -668,20 +644,6 @@ export async function releaseForPaymentFailureHandler(
   await releaseOrderState(ctx.db, {
     orderId: args.orderId,
     reason: 'payment_failed',
-  });
-  await captureBackendEvent(ctx, {
-    distinctId: await distinctIdForOrder(order),
-    event: 'checkout_failed',
-    uuid: `checkout_failed:${order._id}`,
-    properties: {
-      actor_role: order.userId ? 'user' : 'guest',
-      auth_state: order.userId ? 'signed_in' : 'guest',
-      order_id: order._id,
-      event_id: order.eventId,
-      checkout_kind: checkoutKindForOrder(order),
-      error_code: args.errorCode ?? 'payment_failed',
-      failure_stage: args.failureStage ?? 'payment_intent',
-    },
   });
   return null;
 }

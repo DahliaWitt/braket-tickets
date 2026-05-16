@@ -55,7 +55,6 @@
     "test:e2e:serve": "tsx scripts/e2e-serve.ts",
     "test:e2e:run": "tsx scripts/e2e-run.ts",
     "affected-e2e": "tsx scripts/select-affected-e2e.ts",
-    "analytics:check": "pnpm test:frontend -- src/app/core/analytics && pnpm --filter backend test -- convex/lib/analytics.test.ts",
     "test:frontend": "npx tsx scripts/with-env.ts pnpm --filter frontend test",
     "test:frontend:debug": "npx tsx scripts/with-env.ts env VITEST_VERBOSE=1 pnpm --filter frontend test",
     "test:frontend:report": "npx tsx scripts/with-env.ts env VITEST_VERBOSE=1 VITEST_JSON=1 pnpm --filter frontend test",

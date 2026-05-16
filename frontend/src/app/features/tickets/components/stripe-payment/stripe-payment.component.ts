@@ -18,19 +18,16 @@ import {
   type Stripe,
   type StripeEmbeddedCheckout,
 } from '@stripe/stripe-js';
-import {AnalyticsService} from '@/core/services/analytics.service';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton.component';
 import {logger} from '@/utils/logger';
 import {createClickLock} from '@/utils/submit-guard';
-import type {CheckoutKind} from '@/core/analytics/events';
 import {environment} from '../../../../../environments/environment';
 import {createMockStripeJs} from './stripe-payment.mock';
 
 interface EmbeddedCheckoutSession {
   clientSecret: string;
   connectedAccountId?: string | null;
-  orderId?: string | null;
 }
 
 type StripeCheckoutClient = Pick<Stripe, 'createEmbeddedCheckoutPage'>;
@@ -98,7 +95,6 @@ export const STRIPE_JS_LOADER = new InjectionToken<LoadStripeFn>(
 })
 export class StripePaymentComponent implements AfterViewInit {
   private destroyRef = inject(DestroyRef);
-  private analytics = inject(AnalyticsService);
   private loadStripe = inject(STRIPE_JS_LOADER);
 
   readonly publishableKey = input.required<string>();
@@ -111,8 +107,6 @@ export class StripePaymentComponent implements AfterViewInit {
   readonly resetKey = input<number>(0);
   readonly checkoutSessionFetcher =
     input.required<() => Promise<EmbeddedCheckoutSession>>();
-  readonly eventId = input<string | null>(null);
-  readonly orderId = input<string | null>(null);
   /**
    * Connected account id when the active order is a direct charge on a
    * promoter's Stripe account. Null / undefined for platform-owned
@@ -120,7 +114,6 @@ export class StripePaymentComponent implements AfterViewInit {
    * embedded Checkout session resolves on the correct account.
    */
   readonly connectedAccountId = input<string | null>(null);
-  readonly checkoutKind = input<CheckoutKind>('primary');
   readonly mockPayments = input<boolean>(false);
   readonly buyerEmail = input<string | null>(null);
   readonly amount = input<number>(0);
@@ -305,14 +298,6 @@ export class StripePaymentComponent implements AfterViewInit {
     window.addEventListener('beforeunload', this.beforeUnloadHandler, true);
 
     this.checkoutMounted.set(true);
-    const orderId = this.orderId() ?? session.orderId;
-    if (orderId && this.eventId()) {
-      this.analytics.capture('stripe_checkout_mounted', {
-        order_id: orderId,
-        event_id: this.eventId()!,
-        checkout_kind: this.checkoutKind(),
-      });
-    }
   }
 
   async handlePayment(event: Event) {

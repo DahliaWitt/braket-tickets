@@ -27,6 +27,7 @@ const mockCommunities = [
     slug: 'test-community',
     website: 'https://test.com',
     logoUrl: null,
+    status: 'published',
   },
   {
     _id: 'c2',
@@ -35,6 +36,7 @@ const mockCommunities = [
     slug: 'another',
     website: null,
     logoUrl: 'https://logo.example.com/logo.png',
+    status: 'published',
   },
 ];
 
@@ -617,6 +619,75 @@ describe('CommunityDirectoryComponent', () => {
       });
       const badge = await harness.getStatusBadge('status-rejected');
       expect(badge).toBeTruthy();
+    });
+
+    it('shows a revise CTA for rejected applications when the community is published', async () => {
+      const {harness} = await setup({
+        communities: mockCommunities,
+        isAuthenticated: true,
+        approvals: [],
+        applications: [
+          {
+            _id: 'app-2',
+            _creationTime: 100,
+            organizerId: 'c1',
+            organizerName: 'Test Community',
+            status: 'rejected',
+          },
+        ],
+      });
+
+      const reviseLinks = await harness.getReviseLinks();
+      expect(reviseLinks.length).toBe(1);
+      expect(await reviseLinks[0].text()).toContain('Revise');
+      expect(await reviseLinks[0].getAttribute('href')).toBe(
+        '/vetting/test-community',
+      );
+    });
+
+    it('does not show a revise CTA for rejected applications when the community is unpublished', async () => {
+      const {harness} = await setup({
+        communities: [
+          {
+            ...mockCommunities[0],
+            status: 'draft',
+          },
+        ],
+        isAuthenticated: true,
+        approvals: [],
+        applications: [
+          {
+            _id: 'app-2',
+            _creationTime: 100,
+            organizerId: 'c1',
+            organizerName: 'Test Community',
+            status: 'rejected',
+          },
+        ],
+      });
+
+      expect(await harness.getStatusBadge('status-rejected')).toBeTruthy();
+      expect(await harness.getReviseLinks()).toHaveLength(0);
+    });
+
+    it('does not show a revise CTA for revoked applications', async () => {
+      const {harness} = await setup({
+        communities: mockCommunities,
+        isAuthenticated: true,
+        approvals: [],
+        applications: [
+          {
+            _id: 'app-revoked',
+            _creationTime: 100,
+            organizerId: 'c1',
+            organizerName: 'Test Community',
+            status: 'revoked',
+          },
+        ],
+      });
+
+      expect(await harness.getStatusBadge('status-rejected')).toBeTruthy();
+      expect(await harness.getReviseLinks()).toHaveLength(0);
     });
 
     it('should handle mixed statuses across communities', async () => {
