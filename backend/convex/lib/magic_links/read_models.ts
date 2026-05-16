@@ -123,6 +123,10 @@ export async function getMagicLinksForCreator(
   creatorId: Id<'users'>,
   organizerId: Id<'organizers'>,
 ): Promise<MagicLinksListItem[]> {
+  if (!(await canManageCommunity(ctx, creatorId, organizerId))) {
+    return [];
+  }
+
   const links = await loadAllMagicLinksByOrganizerAndCreator(
     ctx.db,
     organizerId,
@@ -132,9 +136,6 @@ export async function getMagicLinksForCreator(
   const visibleLinks = links.filter((link) => !link.deletedAt) as Array<
     Doc<'magic_links'> & {status: MagicLinkAdminStatus}
   >;
-  if (!(await canManageCommunity(ctx, creatorId, organizerId))) {
-    return [];
-  }
 
   const result = await Promise.all(
     visibleLinks.map((link) => mapMagicLinkForAdmin(ctx.db, link)),
@@ -148,6 +149,10 @@ export async function getPastMagicLinksForCreator(
   creatorId: Id<'users'>,
   organizerId: Id<'organizers'>,
 ): Promise<PastMagicLinksListItem[]> {
+  if (!(await canManageCommunity(ctx, creatorId, organizerId))) {
+    return [];
+  }
+
   const links = await loadAllMagicLinksByOrganizerAndCreator(
     ctx.db,
     organizerId,
@@ -159,9 +164,6 @@ export async function getPastMagicLinksForCreator(
   ) as Array<
     Doc<'magic_links'> & {status: MagicLinkAdminStatus; deletedAt: number}
   >;
-  if (!(await canManageCommunity(ctx, creatorId, organizerId))) {
-    return [];
-  }
 
   const result = await Promise.all(
     deletedLinks.map(async (link) => {
