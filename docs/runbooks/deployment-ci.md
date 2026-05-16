@@ -16,7 +16,6 @@ Source of truth:
 - `.github/workflows/deploy.yml`
 - `.github/workflows/deploy-preview.yml`
 - `.github/workflows/release.yml`
-- `.github/workflows/release-automerge.yml`
 - `ops/docker-compose.yml`
 
 Jump to:
@@ -34,19 +33,39 @@ Jump to:
 
 ## Pipeline Map
 
-| Workflow                   | Trigger                                                                                              | Jobs                                                                                                               |
-| -------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `CI`                       | Pushes to `main` or `develop`; pull requests targeting `main` or `develop`                           | `lint`, `test`, `stripe-contracts`, `build`, `storybook`, `e2e-check`, conditional `e2e`, branch-gated deploy call |
-| `Release`                  | Pushes to `main`                                                                                     | Creates GitHub releases with `GITHUB_TOKEN` and opens or updates Release Please PRs with `RELEASE_PLEASE_TOKEN`    |
-| `Release Automerge`        | Release Please pull requests targeting `main`                                                        | Validates the release PR branch, title, author, and changed files, then enables squash auto-merge                  |
-| `Deploy to Production`     | Reusable workflow called from a successful `CI` push run on `main`                                   | `changes`, `deploy-convex`, `deploy-frontend`, `deploy-observability`, `record-deployment`                         |
-| `Deploy Preview (develop)` | Reusable workflow called from a successful `CI` push run on `develop`, or manual `workflow_dispatch` | `changes`, `deploy-convex-dev`, `deploy-frontend-preview`, `deploy-observability-dev`, `record-deployment`         |
+| Workflow                   | Trigger                                                                                              | Jobs                                                                                                                                 |
+| -------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `CI`                       | Pushes to `main` or `develop`; pull requests targeting `main` or `develop`                           | `lint`, `test`, `stripe-contracts`, `build`, `storybook`, `e2e-check`, conditional `e2e`, branch-gated reusable deploy workflow call |
+| `Prepare Release`          | Manual `workflow_dispatch`                                                                           | Opens or updates a Release Please preparation PR against `develop` with `RELEASE_PLEASE_TOKEN`                                       |
+| `Deploy to Production`     | Reusable workflow called from a successful `CI` push run on `main`, or manual `workflow_dispatch`    | `changes`, `deploy-convex`, `deploy-frontend`, `deploy-observability`, `record-deployment`, `publish-release`                        |
+| `Deploy Preview (develop)` | Reusable workflow called from a successful `CI` push run on `develop`, or manual `workflow_dispatch` | `changes`, `deploy-convex-dev`, `deploy-frontend-preview`, `deploy-observability-dev`, `record-deployment`                           |
 
-PRs do not deploy. Automatic deploys use `workflow_run` and the deploy workflows require the completed CI run to be a successful `push` event on `main` or `develop`. Pull request CI completions can never pass the deploy-context branch/event guard.
+PRs do not deploy. Automatic deploys are reusable workflow calls from `CI` and only run after a successful branch-push CI run on `main` or `develop`. Pull request CI completions do not call deploy workflows.
+
+The production deploy workflow uses `concurrency.queue: max` so production deploy runs wait behind any active production deploy instead of canceling it. GitHub announced this syntax on May 7, 2026, but `actionlint` v1.7.12 does not recognize it yet. Until `rhysd/actionlint#654` lands in an `actionlint` release, ignore only the `unexpected key "queue" for "concurrency" section` warning for `.github/workflows/deploy.yml`.
 
 GitHub Actions jobs that need environment-scoped secrets use the selected GitHub environment. CI and component deploy jobs set `deployment: false` so they can read those secrets without adding entries to the repository Deployments sidebar. Only the final `record-deployment` job in each deploy workflow creates the GitHub Deployment record. That job runs after backend, frontend, and observability work and exits with the deploy result, so the Deployment record is successful only when the deploy workflow succeeds.
 
-When troubleshooting automatic deploys, start from the parent `CI` run on the branch push, confirm it completed successfully, then open the separate `Deploy Preview (develop)` or `Deploy to Production` workflow run for deploy logs.
+When troubleshooting automatic deploys, start from the parent `CI` run on the branch push, confirm it completed successfully, then open the `Deploy Development` or `Deploy Production` reusable workflow call inside that same CI run.
+
+Branch protection on both `develop` and `main` requires these CI checks before merge:
+
+- `Lint + Typecheck (ESLint + tsc)`
+- `Unit Tests`
+- `Stripe Sandbox Contracts`
+- `Build Frontend`
+- `Build Storybook`
+- `E2E Gate`
+- `E2E Tests`
+
+Verify the live policy with:
+
+```bash
+for branch in develop main; do
+  gh api "repos/DahliaWitt/braket-tickets/branches/$branch/protection" \
+    --jq '{branch: "'$branch'", required_status_checks: .required_status_checks.contexts, required_pull_request_reviews: .required_pull_request_reviews.required_approving_review_count}'
+done
+```
 
 ## Check self-hosted runner capacity
 
@@ -79,7 +98,11 @@ If a new runner container starts but GitHub rejects it with `The runner registra
 
 ## Fix Release Please automation
 
-The `Release` workflow runs on pushes to `main` and sets `target-branch: main` so Release Please does not fall back to the repository default branch. It splits Release Please into two steps: the default `GITHUB_TOKEN` creates GitHub releases, and `RELEASE_PLEASE_TOKEN` opens or updates Release Please PRs so those PRs can trigger follow-up workflows. The token needs repository-scoped `Contents: Read and write`, `Pull requests: Read and write`, and `Issues: Read and write` permissions. If release creation fails with `Resource not accessible by personal access token`, confirm the workflow is still using the split-token shape instead of sending `RELEASE_PLEASE_TOKEN` to the create-release path; GitHub documents `Contents: Read and write` as required for the create-release endpoint.
+The `Prepare Release` workflow is manual. Run it before promoting `develop` to `main` when the changelog, manifest, and version should be refreshed. It sets `target-branch: develop` so Release Please prepares the release on the integration branch instead of creating a second post-promotion commit on `main`.
+
+After the Release Please PR has merged into `develop`, promote `develop` to `main` with a merge commit. The production deploy workflow publishes the GitHub Release only after the production deployment succeeds. A GitHub Release should therefore mean that the release manifest version reached production.
+
+`RELEASE_PLEASE_TOKEN` needs repository-scoped `Contents: Read and write`, `Pull requests: Read and write`, and `Issues: Read and write` permissions so the manual preparation workflow can open or update Release Please PRs. Release publishing uses the production deploy workflow's `GITHUB_TOKEN` after deployment succeeds.
 
 The repository Actions workflow permission must allow GitHub Actions to create and approve pull requests. Verify it with:
 
@@ -96,13 +119,13 @@ Expected values:
 }
 ```
 
-The repository auto-merge setting must also be enabled because `Release Automerge` runs `gh pr merge --auto`:
+The repository auto-merge setting can stay enabled for ordinary pull requests, but the release lane no longer depends on an automatic Release Please PR merge to `main`:
 
 ```bash
 gh api repos/DahliaWitt/braket-tickets --jq '{allow_auto_merge,default_branch}'
 ```
 
-Release Please reads conventional commits from `main` history when it builds the release pull request body and `CHANGELOG.md`. This repository uses a Git Flow-style branch model, so promotion PRs from `develop` to `main` must preserve branch ancestry with merge commits. Feature PRs into `develop` should use squash merge with a curated conventional PR title. Promotion PRs into `main` should use a merge commit, not squash or rebase, and their titles should be non-releasable, for example `chore(release): promote develop to main`.
+Release Please reads conventional commits from `develop` history when it builds the release preparation PR body and `CHANGELOG.md`. This repository uses a Git Flow-style branch model, so promotion PRs from `develop` to `main` must preserve branch ancestry with merge commits. Feature PRs into `develop` should use squash merge with a curated conventional PR title. Promotion PRs into `main` should use a merge commit, not squash or rebase, and their titles should be non-releasable, for example `chore(release): promote develop to main`.
 
 The repository merge settings are part of the Release Please contract:
 
@@ -224,8 +247,9 @@ If an automatic deploy never started or the expected job is marked `skipped`, ch
 1. The parent `CI` run must have succeeded.
 2. The triggering event must be a branch push, not a pull request.
 3. The branch must be `main` for production or `develop` for preview.
-4. The deploy workflow's `deploy-context` job must have resolved the expected branch (`main` for production, `develop` for preview).
-5. The automatic deploy path forces all deploy slices after CI success. Manual deploys can still use `force_all=false` for targeted recovery.
+4. The `Deploy Production` or `Deploy Development` reusable workflow call in `CI` must have run.
+5. The deploy workflow's `deploy-context` job must have resolved the expected branch (`main` for production, `develop` for preview).
+6. The automatic deploy path forces all deploy slices after CI success. Manual deploys can still use `force_all=false` for targeted recovery.
 
 Automatic deploys force every deploy slice after CI succeeds. The slice detector is only relevant for manual recovery runs with `force_all=false`:
 

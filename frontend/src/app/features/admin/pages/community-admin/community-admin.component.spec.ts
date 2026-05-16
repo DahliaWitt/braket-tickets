@@ -786,6 +786,35 @@ describe('CommunityAdminComponent', () => {
       expect(text).toContain('A shortcut past the application process');
     });
 
+    it('scopes magic link queries to the selected community', async () => {
+      const selectedId = 'org-selected' as Id<'organizers'>;
+      const {convexMock} = await setup({
+        tab: 'magic-links',
+        selectedId,
+      });
+
+      expect(
+        convexMock.client.onUpdate.mock.calls.some(
+          ([queryRef, args]) =>
+            functionReferenceMatches(
+              queryRef,
+              api.communities.invite_links.listMyLinks,
+            ) &&
+            JSON.stringify(args) === JSON.stringify({organizerId: selectedId}),
+        ),
+      ).toBe(true);
+      expect(
+        convexMock.client.onUpdate.mock.calls.some(
+          ([queryRef, args]) =>
+            functionReferenceMatches(
+              queryRef,
+              api.communities.invite_links.listPastMyLinks,
+            ) &&
+            JSON.stringify(args) === JSON.stringify({organizerId: selectedId}),
+        ),
+      ).toBe(true);
+    });
+
     it('shows the CREATE LINK button when there are magic links', async () => {
       const {convexMock} = await setup({tab: 'magic-links'});
 
