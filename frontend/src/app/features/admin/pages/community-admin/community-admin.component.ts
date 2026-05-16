@@ -274,7 +274,12 @@ export class CommunityAdminComponent implements HasUnsavedChanges {
 
   private readonly linksQuery = injectQuery(
     api.communities.invite_links.listMyLinks,
-    () => (this.activeTab() === 'magic-links' ? {} : skipToken),
+    () => {
+      const organizerId = this.communityCtx.selectedCommunityId();
+      return this.activeTab() === 'magic-links' && organizerId
+        ? {organizerId}
+        : skipToken;
+    },
     {
       onError: (error) => {
         logger.error('Failed to load magic links', error);
@@ -285,7 +290,12 @@ export class CommunityAdminComponent implements HasUnsavedChanges {
 
   private readonly linksPastQuery = injectQuery(
     api.communities.invite_links.listPastMyLinks,
-    () => (this.activeTab() === 'magic-links' ? {} : skipToken),
+    () => {
+      const organizerId = this.communityCtx.selectedCommunityId();
+      return this.activeTab() === 'magic-links' && organizerId
+        ? {organizerId}
+        : skipToken;
+    },
     {
       onError: (error) => {
         logger.error('Failed to load past magic links', error);
