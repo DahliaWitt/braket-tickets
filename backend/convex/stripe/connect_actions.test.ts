@@ -14,20 +14,6 @@ const balanceSettingsUpdateMock = vi.hoisted(() => vi.fn());
 const balanceSettingsRetrieveMock = vi.hoisted(() => vi.fn());
 const accountSessionsCreateMock = vi.hoisted(() => vi.fn());
 const v2AccountLinksCreateMock = vi.hoisted(() => vi.fn());
-const {captureMock} = vi.hoisted(() => ({
-  captureMock: vi.fn(),
-}));
-
-vi.mock('../lib/analytics', async () => {
-  const actual =
-    await vi.importActual<typeof import('../lib/analytics')>(
-      '../lib/analytics',
-    );
-  return {
-    ...actual,
-    captureBackendEvent: captureMock,
-  };
-});
 
 vi.mock('stripe', () => {
   class StripeMock {
@@ -112,7 +98,6 @@ describe('stripe_actions V2 connect management', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    captureMock.mockReset();
     process.env['STRIPE_SECRET_KEY'] = 'sk_test_fake';
 
     v2AccountsCreateMock.mockResolvedValue({id: 'acct_mock'});
@@ -405,20 +390,10 @@ describe('stripe_actions V2 connect management', () => {
         },
       );
 
-      expect(captureMock).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({
-          event: 'stripe_connect_onboarding_completed',
-          distinctId: 'system:stripe',
-          properties: expect.objectContaining({
-            organizer_id: organizerId,
-            connected_account_present: true,
-            stripe_charges_enabled: true,
-            stripe_payouts_enabled: true,
-            stripe_onboarding_status: 'complete',
-          }),
-        }),
-      );
+      const organizer = await t.run(async (ctx) => ctx.db.get(organizerId));
+      expect(organizer?.stripeOnboardingStatus).toBe('complete');
+      expect(organizer?.stripeChargesEnabled).toBe(true);
+      expect(organizer?.stripePayoutsEnabled).toBe(true);
     });
   });
 

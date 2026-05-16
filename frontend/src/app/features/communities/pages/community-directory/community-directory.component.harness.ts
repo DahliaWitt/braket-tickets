@@ -51,6 +51,10 @@ export class CommunityDirectoryComponentHarness extends ComponentHarness {
     return this.locatorForAll('[data-testid="cta-apply"]')();
   }
 
+  async getReviseLinks(): Promise<TestElement[]> {
+    return this.locatorForAll('[data-testid="cta-revise"]')();
+  }
+
   async getViewEventsLinks(): Promise<TestElement[]> {
     return this.locatorForAll('[data-testid="cta-view-events"]')();
   }

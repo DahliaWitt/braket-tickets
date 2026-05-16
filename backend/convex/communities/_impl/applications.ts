@@ -1,11 +1,6 @@
 import {type Infer} from 'convex/values';
 import type {Id} from '../../_generated/dataModel';
 import type {MutationCtx, QueryCtx} from '../../_generated/server';
-import {
-  captureBackendEvent,
-  hashForAnalytics,
-  userDistinctId,
-} from '../../lib/analytics';
 import {guardEmailDedup} from '../../lib/email_dedup';
 import {getAuthUserId, requireUser} from '../../lib/auth_identity';
 import {
@@ -67,45 +62,6 @@ type AuthCtx = Parameters<typeof getAuthUserId>[0];
 type ApplicationListDoc = Parameters<
   typeof buildApplicationListRows
 >[1][number];
-type VettingActorRole = 'community_admin' | 'root_admin' | 'user';
-
-async function resolveReviewerRole(
-  ctx: MutationCtx,
-  userId: Id<'users'>,
-): Promise<Exclude<VettingActorRole, 'user'>> {
-  return (await isPlatformAdmin(ctx, userId))
-    ? 'root_admin'
-    : 'community_admin';
-}
-
-async function emitVettingApplicationEvent(
-  ctx: MutationCtx,
-  args: {
-    event:
-      | 'vetting_application_submitted'
-      | 'vetting_application_approved'
-      | 'vetting_application_rejected';
-    applicationId: Id<'applications'>;
-    communityId: Id<'organizers'>;
-    actorId: Id<'users'>;
-    actorRole: VettingActorRole;
-  },
-): Promise<void> {
-  await captureBackendEvent(ctx, {
-    distinctId: userDistinctId(String(args.actorId)),
-    event: args.event,
-    properties: {
-      actor_role: args.actorRole,
-      auth_state: 'signed_in',
-      application_id_hash: await hashForAnalytics(String(args.applicationId)),
-      community_id: args.communityId,
-      ...(args.event === 'vetting_application_approved' ||
-      args.event === 'vetting_application_rejected'
-        ? {reviewer_role: args.actorRole}
-        : {}),
-    },
-  });
-}
 
 async function requireApplicationAdmin(
   ctx: AuthCtx,
@@ -255,16 +211,6 @@ export async function submitApplication(
     );
   }
 
-  if (args.organizerId) {
-    await emitVettingApplicationEvent(ctx, {
-      event: 'vetting_application_submitted',
-      applicationId,
-      communityId: args.organizerId,
-      actorId: userId,
-      actorRole: 'user',
-    });
-  }
-
   return applicationId;
 }
 
@@ -334,8 +280,6 @@ export async function reviewApplication(
     buildApplicationReviewPatch(args.status, actorId, denyReason),
   );
 
-  const reviewerRole = await resolveReviewerRole(ctx, actorId);
-
   if (args.status === 'approved') {
     await ensureApprovedMarketingPreference(ctx.db, {
       userId: app.userId,
@@ -381,19 +325,6 @@ export async function reviewApplication(
     source: 'admin-ui',
     reason: denyReason,
   });
-
-  if (app.organizerId) {
-    await emitVettingApplicationEvent(ctx, {
-      event:
-        args.status === 'approved'
-          ? 'vetting_application_approved'
-          : 'vetting_application_rejected',
-      applicationId: args.applicationId,
-      communityId: app.organizerId,
-      actorId,
-      actorRole: reviewerRole,
-    });
-  }
 
   return null;
 }

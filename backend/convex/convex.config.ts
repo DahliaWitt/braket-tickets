@@ -5,7 +5,6 @@ import resend from '@convex-dev/resend/convex.config.js';
 import workpool from '@convex-dev/workpool/convex.config';
 import migrations from '@convex-dev/migrations/convex.config';
 import authz from '@djpanda/convex-authz/convex.config';
-import posthog from '@posthog/convex/convex.config.js';
 
 const app: ReturnType<typeof defineApp> = defineApp();
 app.use(betterAuth);
@@ -15,6 +14,5 @@ app.use(workpool, {name: 'payoutPool'});
 app.use(workpool, {name: 'stripePool'});
 app.use(migrations);
 app.use(authz);
-app.use(posthog);
 
 export default app;

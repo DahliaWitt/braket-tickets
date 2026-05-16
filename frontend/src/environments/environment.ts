@@ -1,4 +1,4 @@
-import type { AppEnvironment } from './environment.model';
+import type {AppEnvironment} from './environment.model';
 
 declare const __BRAKET_RUNTIME__: AppEnvironment;
 
@@ -10,11 +10,11 @@ const fallbackEnvironment: AppEnvironment = {
   build: {
     commitHash: 'unknown',
     branch: 'unknown',
-    timestamp: 'local'
+    timestamp: 'local',
   },
   stripe: {
     publishableKey: '',
-    mockPayments: false
+    mockPayments: false,
   },
   sentryDsn: '',
   sentryEnvironment: 'development',
@@ -22,11 +22,9 @@ const fallbackEnvironment: AppEnvironment = {
   enableSentryReplay: false,
   sentryReplaySessionSampleRate: 0,
   sentryReplayOnErrorSampleRate: 0,
-  posthog: {
-    apiKey: '',
-    host: 'https://us.i.posthog.com'
-  }
 };
 
 export const environment: AppEnvironment =
-  typeof __BRAKET_RUNTIME__ === 'undefined' ? fallbackEnvironment : __BRAKET_RUNTIME__;
+  typeof __BRAKET_RUNTIME__ === 'undefined'
+    ? fallbackEnvironment
+    : __BRAKET_RUNTIME__;

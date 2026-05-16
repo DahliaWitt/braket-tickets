@@ -6,7 +6,7 @@
       Privacy Policy
     </h1>
     <p class="mb-8 text-sm text-muted-foreground">
-      Effective Date: May 11, 2026
+      Effective Date: May 15, 2026
     </p>
 
     <section class="mb-8 rounded-lg border border-border bg-card p-6">
@@ -15,8 +15,9 @@
         <li>
           We collect your <strong>name, email, purchase history,</strong>
           community/vetting information you choose to provide, and
-          <strong>how you use the site</strong> (to improve it and keep it
-          reliable).
+          <strong>technical diagnostics</strong> needed to run, secure,
+          troubleshoot, and support the Service, plus
+          <strong>email engagement</strong> for community announcement messages.
         </li>
         <li>
           We <strong>do not collect or store full card numbers or CVV</strong>;
@@ -30,20 +31,20 @@
         <li>
           We <strong>don't sell your data</strong> and don't share it for
           cross-context behavioral advertising. We disclose it only to service
-          providers, payment providers, email delivery providers, PostHog
-          (analytics), Sentry (error monitoring), authentication providers,
-          infrastructure providers, and event organizers when needed to run the
-          service.
+          providers, payment providers, email delivery providers, Sentry (error
+          monitoring), authentication providers, infrastructure providers, and
+          event organizers when needed to run the service.
         </li>
         <li>
-          We use cookies for login sessions and analytics —
+          We use cookies, local storage, and session storage for login, guest
+          checkout, preferences, vetting drafts, and recovery state —
           <strong>not for ads or cross-site tracking</strong>.
         </li>
         <li>
-          When we detect Do Not Track or Global Privacy Control signals, we
-          disable passive frontend PostHog analytics, replay, and persistence.
-          Explicit feedback you submit, essential site functions, backend
-          operational events, and error reporting may still operate.
+          We do not use third-party tools for advertising, cross-site tracking,
+          or cross-context behavioral advertising. Explicit feedback you submit,
+          essential site functions, backend operational logs, and error
+          reporting may still operate.
         </li>
         <li>You must be <strong>18+</strong> to use Braket Tickets.</li>
         <li>
@@ -108,12 +109,17 @@
             administrative actions.
           </li>
           <li>
-            <strong>Internet, Device, and Usage Activity:</strong> Page views,
-            route templates, selected clicks and form submissions marked for
-            analytics, browser and device information, performance data, error
-            diagnostics, and feature interactions. We mask analytics text and
-            form input by default and sanitize event properties before sending
-            them to analytics systems.
+            <strong
+              >Internet, Device, Reliability, and Email Engagement Data:</strong
+            >
+            Route or URL context associated with errors, performance traces, or
+            support workflows; browser and device information; error
+            diagnostics; limited Sentry replay context; first-party marketing
+            email opens and clicks; and activity needed for essential site
+            functions, reliability tooling, and support workflows. We minimize
+            diagnostic detail and avoid sending sensitive checkout,
+            authentication, vetting, ticket, or roster content to reliability
+            providers.
           </li>
           <li>
             <strong>Communications and Email Preferences:</strong> Support
@@ -149,12 +155,20 @@
           >
             <thead>
               <tr class="border-b border-border text-foreground">
-                <th class="py-2 pr-4 font-semibold">Category</th>
-                <th class="py-2 pr-4 font-semibold">Sources</th>
-                <th class="py-2 pr-4 font-semibold">Business Purposes</th>
-                <th class="py-2 pr-4 font-semibold">Disclosed To</th>
-                <th class="py-2 pr-4 font-semibold">Sale/Share Status</th>
-                <th class="py-2 pr-4 font-semibold">Retention Criteria</th>
+                <th scope="col" class="py-2 pr-4 font-semibold">Category</th>
+                <th scope="col" class="py-2 pr-4 font-semibold">Sources</th>
+                <th scope="col" class="py-2 pr-4 font-semibold">
+                  Business Purposes
+                </th>
+                <th scope="col" class="py-2 pr-4 font-semibold">
+                  Disclosed To
+                </th>
+                <th scope="col" class="py-2 pr-4 font-semibold">
+                  Sale/Share Status
+                </th>
+                <th scope="col" class="py-2 pr-4 font-semibold">
+                  Retention Criteria
+                </th>
               </tr>
             </thead>
             <tbody class="align-top">
@@ -261,28 +275,31 @@
               </tr>
               <tr class="border-b border-border">
                 <td class="py-3 pr-4 font-medium text-foreground">
-                  Internet, device, usage, analytics, and diagnostics
+                  Internet, device, reliability, and email engagement
                 </td>
                 <td class="py-3 pr-4">
-                  Your browser or device, Cloudflare, PostHog, Sentry, and
-                  backend operational event logs.
+                  Your browser or device, Cloudflare, Sentry, embedded media
+                  providers, backend operational logs, and first-party email
+                  tracking links or pixels.
                 </td>
                 <td class="py-3 pr-4">
                   Site functionality, reliability, error investigation,
-                  security, fraud prevention, product improvement, performance
-                  monitoring, and abuse prevention.
+                  security, fraud prevention, support and service improvement,
+                  performance monitoring, email deliverability, and abuse
+                  prevention.
                 </td>
                 <td class="py-3 pr-4">
-                  Cloudflare, PostHog, Sentry, infrastructure providers, and
-                  support or administrative personnel.
+                  Cloudflare, Sentry, embedded media providers, infrastructure
+                  providers, email providers, and support or administrative
+                  personnel.
                 </td>
                 <td class="py-3 pr-4">
                   Not sold; not shared for cross-context behavioral advertising.
                 </td>
                 <td class="py-3 pr-4">
-                  According to operational, analytics, security, and error
-                  monitoring needs and provider retention settings; minimized
-                  when no longer needed.
+                  According to operational, security, email deliverability, and
+                  error monitoring needs and provider retention settings;
+                  minimized when no longer needed.
                 </td>
               </tr>
               <tr class="border-b border-border">
@@ -345,11 +362,8 @@
         </div>
 
         <p class="mt-4">
-          We route frontend telemetry through Cloudflare Pages. For analytics,
-          we attach coarse location signals such as metro area, country, and
-          region before forwarding PostHog events. Cloudflare and our telemetry
-          providers may also process technical network metadata as part of
-          request delivery.
+          Cloudflare and our reliability providers may process technical network
+          metadata as part of request delivery, security, and error monitoring.
         </p>
         <p class="mt-4">
           <strong>Important:</strong> We use
@@ -403,25 +417,11 @@
       </h2>
       <div class="space-y-4 text-muted-foreground">
         <p class="mb-4">
-          We use analytics tools (PostHog) to analyze usage and improve the
-          platform. Our PostHog configuration captures page views, page leaves,
-          and a limited allowlist of clicks or form submissions on elements we
-          mark for analytics.
-        </p>
-        <p>
-          Analytics identity is limited to internal account identifiers and role
-          metadata; we do not send your name or email address as PostHog
-          identity properties. Footer feedback is sent through Sentry Feedback
-          so we can review and act on it; this is an explicit submission, not
-          passive analytics capture. We may use masked session replay for
-          quality and support, with text and form inputs hidden by default.
-        </p>
-        <p>
-          Sensitive checkout, authentication, vetting, QR code, ticket PDF,
-          scanner, guest list, attendee, buyer, and roster regions are marked to
-          be blocked from analytics capture. Replay network capture does not
-          record request headers, response headers, request bodies, or response
-          bodies.
+          We do not use third-party tools for advertising, cross-site tracking,
+          or cross-context behavioral advertising. We use Sentry for reliability
+          diagnostics and feedback. Footer feedback is sent through Sentry
+          Feedback so we can review and act on it; this is an explicit
+          submission, not passive behavior tracking.
         </p>
         <p>
           We also use Sentry for error monitoring and performance diagnostics.
@@ -432,13 +432,18 @@
           breadcrumbs. We may also forward sanitized backend and operational
           error logs to Sentry when needed to investigate production failures.
           We configure Sentry not to send default personal information, and any
-          replay collection is masked by default: text and form inputs are
-          hidden and media is blocked. DNT and GPC signals do not disable
-          essential error, security, and reliability monitoring.
+          Sentry replay collection is sampled and masked by default: text and
+          form inputs are hidden and media is blocked. Sentry Feedback may also
+          include the message you submit, the email address you choose to
+          provide, and a screenshot if screenshot capture is enabled for that
+          feedback form. DNT and GPC signals do not disable essential error,
+          security, and reliability monitoring.
         </p>
         <p>
-          We use cookies, local storage, and similar tracking technologies to
-          track the activity on our Service and hold certain information.
+          We use cookies, local storage, session storage, and first-party email
+          tracking links or pixels to operate the Service, remember temporary
+          state, protect accounts, and measure whether community announcement
+          emails were delivered, opened, or clicked.
         </p>
 
         <div>
@@ -448,18 +453,35 @@
           <ul class="list-disc space-y-1 pl-6">
             <li>
               <strong>Cookies:</strong> Small files placed on your device to
-              enable basic features and analytics.
+              enable basic features.
             </li>
             <li>
               <strong>Local Storage:</strong> We use your browser's local
-              storage to save your session, guest checkout state, feature flags,
-              and preferences.
+              storage to save your session, guest checkout state, and
+              preferences.
+            </li>
+            <li>
+              <strong>Session Storage:</strong> We use session storage for
+              temporary browser-tab state, such as draft vetting answers or
+              short-lived recovery state.
+            </li>
+            <li>
+              <strong>First-Party Email Tracking:</strong> Community
+              announcement emails may include Braket-owned open pixels and
+              tracked redirect links so we can count opens, clicks, and
+              unsubscribe activity for those messages.
             </li>
             <li>
               <strong>Error Monitoring and Reliability:</strong> We use
               <strong>Sentry</strong> to investigate failures, trace performance
               problems, and keep the Service secure and reliable. Error
               monitoring is not used for advertising.
+            </li>
+            <li>
+              <strong>Embedded Media:</strong> Some help pages may include
+              YouTube videos using YouTube's privacy-enhanced embed domain.
+              Google or YouTube may still process technical information needed
+              to load or play the embedded video.
             </li>
           </ul>
         </div>
@@ -469,17 +491,23 @@
           <ul class="list-disc space-y-1 pl-6">
             <li>
               <strong>Essential (Strictly Necessary):</strong> These are
-              required for the website to function (e.g., logging you in,
-              processing ticket payments). You cannot opt-out of these.
+              required for the website to function, such as logging you in,
+              processing ticket payments, preserving guest checkout state, and
+              remembering short-lived recovery state. You cannot opt out of
+              these.
             </li>
             <li>
-              <strong>Analytics (Performance):</strong> We use
-              <strong>PostHog</strong> to collect data on how you interact with
-              our website (e.g., pages visited, selected buttons clicked,
-              feature interactions, and client-side performance signals). This
-              data is used solely for improving user experience and service
-              reliability and is <strong>not</strong> used for cross-context
-              behavioral advertising.
+              <strong>Reliability and Security:</strong> Sentry diagnostics,
+              masked replay, operational logs, and related technical metadata
+              help us investigate failures, prevent abuse, and protect the
+              Service. DNT and GPC signals do not disable this monitoring.
+            </li>
+            <li>
+              <strong>Community Email Measurement:</strong> Braket-owned open
+              pixels and tracked links help us understand whether community
+              announcement emails were delivered, opened, clicked, or
+              unsubscribed from. You can opt out of community announcement
+              emails through account settings or unsubscribe links.
             </li>
           </ul>
           <p class="mt-4 font-semibold text-foreground">
@@ -488,21 +516,11 @@
         </div>
 
         <p>
-          PostHog may collect data including device type, browser information,
-          and on-site behavior. We do not intentionally store raw IP addresses
-          in analytics. Instead, we use derived coarse location information to
-          understand broad usage patterns and improve the service. Our proxy
-          code strips visitor IP headers that it controls, while Cloudflare and
-          provider infrastructure may process transient network metadata to
-          deliver requests. You can learn more about how PostHog handles data in
-          their
-          <a
-            href="https://posthog.com/privacy"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="text-primary underline"
-            >Privacy Policy<span class="sr-only"> (opens in new tab)</span></a
-          >.
+          We do not use raw IP addresses for advertising or behavioral
+          profiling. Our Sentry monitor tunnel strips visitor IP headers that it
+          controls before forwarding error envelopes. Cloudflare and provider
+          infrastructure may still process transient network metadata to deliver
+          requests and protect the Service.
         </p>
       </div>
     </section>
@@ -542,7 +560,6 @@
           do so.
         </li>
         <li>To provide customer support.</li>
-        <li>To monitor the usage of the Service (via PostHog).</li>
         <li>
           To investigate site errors and other technical failures (via Sentry).
         </li>
@@ -580,29 +597,29 @@
         </p>
         <ul class="list-disc space-y-1 pl-6">
           <li>
-            <strong>Analytics and Error Monitoring Providers:</strong> We share
-            usage data with PostHog to analyze site traffic, product usage, and
-            service reliability. Browser DNT/GPC signals disable passive
-            frontend PostHog SDK capture, replay, and persistence, but
-            server-side operational analytics may still send sanitized
-            transaction, security, reliability, and business events to PostHog.
-            Explicit feedback submissions are sent through Sentry Feedback. We
-            also share error reports, stack traces, route or URL context,
-            browser and device metadata, performance traces, breadcrumbs, and
-            masked replay context with Sentry so we can detect and troubleshoot
-            failures. Our proxy code strips visitor IP headers that we control,
-            but Cloudflare and these providers may still process technical
-            network metadata as part of request delivery.
+            <strong>Error Monitoring Providers:</strong> Explicit feedback
+            submissions are sent through Sentry Feedback. We also share error
+            reports, stack traces, route or URL context, browser and device
+            metadata, performance traces, breadcrumbs, and masked replay context
+            with Sentry so we can detect and troubleshoot failures. Cloudflare
+            and these providers may still process technical network metadata as
+            part of request delivery.
           </li>
           <li>
             <strong>Infrastructure and Authentication Providers:</strong> We use
             providers such as Convex for application backend, database, file
             storage, and authentication infrastructure; Cloudflare for hosting,
-            DNS, routing, telemetry proxying, and request delivery; and Google
-            or Discord if you choose to sign in with or link those social login
-            providers. These providers process information needed to provide
-            their services, such as account identifiers, authentication status,
-            request metadata, storage records, and technical logs.
+            DNS, routing, error-monitoring proxying, and request delivery; and
+            Google or Discord if you choose to sign in with or link those social
+            login providers. These providers process information needed to
+            provide their services, such as account identifiers, authentication
+            status, request metadata, storage records, and technical logs.
+          </li>
+          <li>
+            <strong>Embedded Media Providers:</strong> Help pages may embed
+            YouTube videos using YouTube's privacy-enhanced embed domain. Google
+            or YouTube may process technical request and playback information
+            when the embedded player loads or plays.
           </li>
           <li>
             <strong>Payment Processors:</strong> We share transaction data with
@@ -698,21 +715,21 @@
         </p>
         <p>
           Some current examples: unconverted guest checkout sessions are
-          designed to expire after 24 hours and are cleaned up regularly; email
-          delivery metadata and delivery-failure records are generally cleaned
-          after about 30 days; internal email-provider component records are
-          generally cleaned after 7 to 30 days depending on status; and
-          administrative audit logs are generally retained for about 365 days.
-          Marketing preference and unsubscribe records may be retained longer so
-          we can honor opt-outs.
+          designed to expire after 24 hours and are cleaned up regularly;
+          operational email delivery metadata and delivery-failure records are
+          generally cleaned after about 30 days; internal email-provider
+          component records are generally cleaned after 7 to 30 days depending
+          on status; and administrative audit logs are generally retained for
+          about 365 days. Marketing engagement, preference, and unsubscribe
+          records may be retained longer so we can measure community
+          announcement delivery and honor opt-outs.
         </p>
         <p>
           Deletion or minimization may not immediately remove data from backups,
-          provider systems, financial processors, error monitoring systems,
-          analytics systems, or records that we must keep for legal, tax,
-          accounting, fraud-prevention, dispute, safety, or security reasons.
-          Provider-side records follow those providers' own retention and
-          deletion processes.
+          provider systems, financial processors, error monitoring systems, or
+          records that we must keep for legal, tax, accounting,
+          fraud-prevention, dispute, safety, or security reasons. Provider-side
+          records follow those providers' own retention and deletion processes.
         </p>
       </div>
     </section>
@@ -739,14 +756,11 @@
           mechanisms.
         </p>
         <p>
-          When your browser sends a Do Not Track signal or a Global Privacy
-          Control signal, we use that signal to disable passive frontend PostHog
-          analytics, session replay, and persistence. No passive frontend usage
-          events are captured through the PostHog browser SDK, and we configure
-          that SDK not to persist PostHog analytics cookies or local storage
-          entries. Because we do not sell personal information or share it for
-          cross-context behavioral advertising, GPC does not need to disable any
-          advertising sale or sharing flow.
+          We do not use third-party tools for advertising, cross-site tracking,
+          or cross-context behavioral advertising. Because we do not sell
+          personal information or share it for cross-context behavioral
+          advertising, GPC does not need to disable any advertising sale or
+          sharing flow.
         </p>
         <p>
           The footer feedback form is an explicit way to send us feedback
@@ -759,11 +773,13 @@
           >.
         </p>
         <p>
-          Essential cookies and local storage required for authentication,
-          session management, payment checkout, and core site functionality are
-          not affected by these signals, as they are necessary for the Service
-          to operate. Backend operational events and error monitoring may still
-          receive diagnostics needed to keep the Service secure and reliable.
+          Essential cookies, local storage, and session storage required for
+          authentication, session management, payment checkout, and core site
+          functionality are not affected by these signals, as they are necessary
+          for the Service to operate. Backend operational events, Sentry
+          diagnostics, and first-party email engagement records may still be
+          created when needed to keep the Service secure, reliable, and
+          accountable for messages we send.
         </p>
         <p>
           You can enable DNT or GPC in your browser settings. Most modern
@@ -788,8 +804,9 @@
       </h2>
       <div class="space-y-4 text-muted-foreground">
         <p>
-          You may review and update your account information by logging into
-          your profile settings. You may also ask us to access, correct, or
+          You may review and update your account information and community email
+          preferences by logging into your profile settings. Marketing emails
+          also include unsubscribe links. You may ask us to access, correct, or
           delete personal information associated with your account by emailing
           us at
           <a href="mailto:contact@braket.gay" class="text-primary underline"

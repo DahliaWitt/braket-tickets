@@ -50,11 +50,7 @@ Keep these in Doppler `prd`:
 
 - `CONVEX_URL`
 - `STRIPE_PUBLISHABLE_KEY`
-- `POSTHOG_KEY`
-- `POSTHOG_HOST`
 - `SENTRY_DSN`
-
-Set `POSTHOG_HOST=/ingest` so analytics traffic goes through the Cloudflare Pages reverse proxy.
 
 ### Convex Backend
 
@@ -94,16 +90,13 @@ Cloudflare Pages automatically creates preview URLs for non-production branches.
 
 2. **Add secrets to `development` environment**:
 
-| Secret                  | Description                                                       |
-| ----------------------- | ----------------------------------------------------------------- |
-| `CONVEX_DEPLOY_KEY`     | Deploy key for dev Convex (from Convex dashboard)                 |
-| `CONVEX_URL`            | Dev Convex HTTP endpoint                                          |
-| `CLOUDFLARE_API_TOKEN`  | Environment-scoped Cloudflare Pages token with least privilege    |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID (can reuse from production)                 |
-| `POSTHOG_KEY`           | PostHog project key (preview events tagged `environment=preview`) |
-| `SENTRY_DSN`            | Sentry DSN (use separate preview project)                         |
-
-Preview builds force `POSTHOG_HOST=/ingest` automatically. Use PostHog filters like `environment=preview` to keep preview traffic out of production dashboards.
+| Secret                  | Description                                                    |
+| ----------------------- | -------------------------------------------------------------- |
+| `CONVEX_DEPLOY_KEY`     | Deploy key for dev Convex (from Convex dashboard)              |
+| `CONVEX_URL`            | Dev Convex HTTP endpoint                                       |
+| `CLOUDFLARE_API_TOKEN`  | Environment-scoped Cloudflare Pages token with least privilege |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID (can reuse from production)              |
+| `SENTRY_DSN`            | Sentry DSN (use separate preview project)                      |
 
 3. **Convex dev deployment**: Get the deploy key from Convex Dashboard → dev deployment → Settings → Deploy Keys.
 

@@ -85,7 +85,7 @@ If you rotate test-mode Stripe credentials for preview or sandbox work, repeat t
    - `development` for `.github/workflows/deploy-preview.yml`
 4. Trigger the matching frontend deploy and confirm it succeeds.
 
-## Rotate PostHog or Sentry keys
+## Rotate Sentry keys
 
 1. Generate the new key in the provider dashboard.
 2. Update the value in Doppler `prd`.

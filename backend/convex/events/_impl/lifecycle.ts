@@ -1,8 +1,7 @@
-import type {Doc, Id} from '../../_generated/dataModel';
+import type {Id} from '../../_generated/dataModel';
 import type {EventStatus} from '@shared/domain/event-status';
 import {internal} from '../../_generated/api';
 import type {MutationCtx} from '../../_generated/server';
-import {captureBackendEvent, userDistinctId} from '../../lib/analytics';
 import {isPublishedCommunity} from '../../lib/community_status';
 import {
   assertMarketingAnnouncementScheduleWindow,
@@ -17,16 +16,6 @@ type EventLifecycleCtx = Pick<
   'db' | 'scheduler' | 'runMutation' | 'runQuery'
 >;
 const QUEUE_NOW_BUFFER_MS = 61_000;
-
-function getTicketTierCount(
-  event: Pick<Doc<'events'>, 'slidingScaleEnabled' | 'supporterDefaultPrice'>,
-): number {
-  return (
-    1 +
-    (event.supporterDefaultPrice !== undefined ? 1 : 0) +
-    (event.slidingScaleEnabled ? 1 : 0)
-  );
-}
 
 export async function autoCancelScheduledMarketingEmail(args: {
   ctx: EventLifecycleCtx;
@@ -136,44 +125,6 @@ export async function maybeScheduleMarketingAnnouncementOnPublish(args: {
     },
     eventId: args.eventId,
     scheduledFor,
-  });
-
-  return true;
-}
-
-export async function maybeEmitEventPublishedOnPublish(args: {
-  ctx: EventLifecycleCtx;
-  actorId: Id<'users'>;
-  eventId: Id<'events'>;
-  organizerId: Id<'organizers'>;
-  nextStatus: EventStatus;
-  previousStatus: EventStatus;
-}): Promise<boolean> {
-  if (args.nextStatus !== 'published' || args.previousStatus === 'published') {
-    return false;
-  }
-
-  const event = await args.ctx.db.get('events', args.eventId);
-  if (!event) {
-    return false;
-  }
-
-  const isRootAdmin = await args.ctx.runQuery(
-    internal.lib.access._isRootAdmin,
-    {userId: args.actorId},
-  );
-
-  await captureBackendEvent(args.ctx, {
-    distinctId: userDistinctId(String(args.actorId)),
-    event: 'event_published',
-    properties: {
-      actor_role: isRootAdmin ? 'root_admin' : 'community_admin',
-      auth_state: 'signed_in',
-      event_id: args.eventId,
-      organizer_id: args.organizerId,
-      event_visibility: event.visibility,
-      ticket_tier_count: getTicketTierCount(event),
-    },
   });
 
   return true;

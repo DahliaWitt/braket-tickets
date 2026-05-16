@@ -1,6 +1,7 @@
 import {v} from 'convex/values';
 import {userProfileValidator} from '../users/validators';
 import {vettingQuestionValidator} from '../communities/validators';
+import {communityPublicationStatusValueValidator} from '../validators/communities';
 import {
   applicationAnswersValidator,
   applicationStatusValidator,
@@ -29,6 +30,8 @@ export const applicationWithOrganizerValidator = v.object({
   _creationTime: v.number(),
   organizerId: v.optional(v.id('organizers')),
   organizerName: v.string(),
+  organizerSlug: v.optional(v.string()),
+  organizerStatus: v.optional(communityPublicationStatusValueValidator),
   organizerLogoUrl: v.optional(v.string()),
   status: applicationStatusValidator,
   denyReason: v.optional(v.string()),

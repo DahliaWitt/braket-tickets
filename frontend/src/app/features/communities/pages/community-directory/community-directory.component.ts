@@ -211,12 +211,36 @@ type CommunityListItem = FunctionReturnType<
                         Pending
                       </span>
                     } @else if (status === 'rejected') {
-                      <span
-                        data-testid="status-rejected"
-                        class="inline-flex min-h-6 items-center gap-1 rounded bg-destructive/10 px-2 py-1 font-mono text-xs tracking-widest text-destructive uppercase"
+                      <div
+                        class="flex flex-wrap items-center justify-end gap-2"
                       >
-                        Rejected
-                      </span>
+                        <span
+                          data-testid="status-rejected"
+                          class="inline-flex min-h-6 items-center gap-1 rounded bg-destructive/10 px-2 py-1 font-mono text-xs tracking-widest text-destructive uppercase"
+                        >
+                          Rejected
+                        </span>
+                        @if (
+                          community.status === 'published' &&
+                          latestApplicationStatusMap().get(community._id) ===
+                            'rejected'
+                        ) {
+                          <a
+                            data-testid="cta-revise"
+                            [routerLink]="[
+                              '/vetting',
+                              community.slug ?? community._id,
+                            ]"
+                            [attr.aria-label]="
+                              'Revise application for ' + community.name
+                            "
+                            class="inline-flex min-h-6 items-center gap-1 font-mono text-xs tracking-widest text-primary uppercase transition-colors hover:text-primary/80"
+                          >
+                            Revise
+                            <span aria-hidden="true">&rarr;</span>
+                          </a>
+                        }
+                      </div>
                     } @else {
                       <a
                         data-testid="cta-apply"
@@ -354,6 +378,22 @@ export class CommunityDirectoryComponent {
       return map;
     },
   );
+
+  readonly latestApplicationStatusMap = computed(() => {
+    const map = new Map<
+      string,
+      'pending' | 'approved' | 'rejected' | 'revoked'
+    >();
+    if (!this.auth.isAuthenticated()) return map;
+
+    const applications = this.myApplicationsQuery.data() ?? [];
+    for (const app of applications) {
+      if (!app.organizerId || map.has(app.organizerId)) continue;
+      map.set(app.organizerId, app.status);
+    }
+
+    return map;
+  });
 
   protected retryDirectoryLoad(): void {
     if (this.auth.isAuthenticated()) {

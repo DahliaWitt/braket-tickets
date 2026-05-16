@@ -10,7 +10,7 @@ access: public
 
 This runbook is for the Braket operator handling access, correction, deletion,
 and California-style privacy requests sent to `contact@braket.gay`. It assumes
-access to Convex Dashboard, Stripe Dashboard, PostHog, Sentry, Resend, and the
+access to Convex Dashboard, Stripe Dashboard, Sentry, Resend, and the
 private support inbox.
 
 This is an operations checklist, not legal advice. Use it to preserve evidence,
@@ -22,7 +22,6 @@ Source of truth:
 
 - [`privacy-policy.html`](../../frontend/src/app/features/legal/pages/privacy-policy/privacy-policy.html)
 - [`schema.ts`](../../backend/convex/schema.ts)
-- [`posthog-event-contract.md`](../analytics/posthog-event-contract.md)
 - [`email-delivery.md`](./email-delivery.md)
 - [`payments.md`](./payments.md)
 - [`convex-backend.md`](./convex-backend.md)
@@ -30,7 +29,6 @@ Source of truth:
 Provider references:
 
 - [California DOJ CCPA page](https://www.oag.ca.gov/privacy/ccpa)
-- [PostHog data deletion docs](https://posthog.com/docs/privacy/data-storage#data-deletion)
 - [Sentry JavaScript data collected docs](https://docs.sentry.io/platforms/javascript/guides/react/data-management/data-collected/)
 - [Sentry replay deletion docs](https://docs.sentry.io/product/explore/session-replay/replay-page-and-filters/)
 - [Stripe deletion request docs](https://docs.stripe.com/privacy/deletion-requests)
@@ -222,32 +220,6 @@ Record the Stripe action taken:
 - object not eligible yet, with reason
 - requester directed to `privacy@stripe.com`
 - organizer connected account closure or support flow started
-
-### PostHog
-
-Braket identifies signed-in users in PostHog with the Convex `users._id`.
-Backend events use the same user ID for user activity, hashed guest distinct IDs
-for guest orders, and `system:stripe` or `system:convex` for system events.
-
-For a signed-in requester:
-
-1. Search PostHog Persons for the Convex user ID.
-2. Delete the person and associated events when deletion is requested.
-3. Check PostHog deletion status until queued event deletion completes.
-
-For a guest requester:
-
-1. Search PostHog events by `order_id`, `event_id`, `checkout_kind = guest`,
-   and the known request window.
-2. Open the matching person profile from the event.
-3. Delete the person and associated events when deletion is requested.
-
-PostHog event deletion is asynchronous. Record the PostHog person UUID, whether
-events and recordings were queued, and the deletion status check result.
-
-Do not promise that DNT or GPC removed backend operational events. The Privacy
-Policy says those signals disable browser-side passive PostHog SDK capture,
-replay, and persistence, while backend operational events may still be sent.
 
 ### Sentry
 

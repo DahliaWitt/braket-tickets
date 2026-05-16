@@ -16,7 +16,6 @@ import {toSignal} from '@angular/core/rxjs-interop';
 import {DatePipe, NgOptimizedImage} from '@angular/common';
 import {ActivatedRoute, Router, RouterLink} from '@angular/router';
 import {AuthService} from '@/core/services/auth.service';
-import {AnalyticsService} from '@/core/services/analytics.service';
 import {injectQuery, skipToken} from 'convex-angular';
 import {PaymentService} from '@/features/tickets/services/payment.service';
 import {ApplicationsService} from '@/features/vetting/services/applications.service';
@@ -78,7 +77,6 @@ export class EventDetailsComponent {
   route = inject(ActivatedRoute);
   router = inject(Router);
   auth = inject(AuthService);
-  private readonly analytics = inject(AnalyticsService);
   paymentService = inject(PaymentService);
   appsService = inject(ApplicationsService);
   communitiesService = inject(CommunitiesService);
@@ -333,10 +331,7 @@ export class EventDetailsComponent {
   readonly activeConnectedAccountId =
     this.checkoutStore.activeConnectedAccountId;
   readonly checkoutLocked = this.checkoutStore.checkoutLocked;
-  private lastTrackedEventViewedId: string | null = null;
-
   readonly totalAmount = this.checkoutStore.totalAmount;
-  readonly checkoutKind = this.checkoutStore.checkoutKind;
   readonly supporterSliderMax = this.checkoutStore.supporterSliderMax;
   readonly communitySliderMax = this.checkoutStore.communitySliderMax;
 
@@ -460,26 +455,6 @@ export class EventDetailsComponent {
         resumeSessionToken,
       );
     });
-
-    effect(() => {
-      const evt = this.event();
-      const availability = this.availability();
-      if (!evt || !availability) return;
-      if (this.lastTrackedEventViewedId === evt._id) return;
-
-      this.lastTrackedEventViewedId = evt._id;
-      this.analytics.capture('event_viewed', {
-        event_id: evt._id,
-        organizer_id: evt.organizerId,
-        event_visibility: evt.visibility,
-        purchase_access_source:
-          evt.visibility === EVENT_VISIBILITY.PUBLIC
-            ? 'open_access'
-            : availability.purchaseAccess.allowed
-              ? (availability.purchaseAccess.source ?? 'direct')
-              : 'denied',
-      });
-    });
   }
 
   navigateToLogin(): void {
@@ -549,12 +524,6 @@ export class EventDetailsComponent {
       this.checkoutStore.updateQuantity(0);
     }
 
-    this.analytics.capture('checkout_panel_opened', {
-      event_id: this.event()?._id ?? this.id(),
-      checkout_kind: this.checkoutKind(),
-      ticket_count: this.checkoutQuantity(),
-      tier: this.selectedTier(),
-    });
     this.sidebarFocus.captureCurrentTrigger();
     this.isPaymentSidebarOpen.set(true);
     this.paymentStatus.set('idle');
