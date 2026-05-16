@@ -1,4 +1,4 @@
-import {execSync} from 'child_process';
+import {execFileSync, execSync} from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import {resolveValidationBaseRef} from './lib/validation-base';
@@ -48,6 +48,29 @@ interface PullRequestEvent {
 
 type GithubEvent = PushEvent & PullRequestEvent;
 
+const SAFE_GIT_REF_PATTERN =
+  /^(?!-)(?!.*\.\.)(?!.*[\s~^:?*[\]\\\x00-\x1f\x7f])[\w./-]+$/;
+
+function assertSafeGitRef(ref: string, label: string): string {
+  const trimmed = ref.trim();
+  if (trimmed !== ref || !SAFE_GIT_REF_PATTERN.test(trimmed)) {
+    throw new Error(`Unsafe git ref for ${label}`);
+  }
+  return trimmed;
+}
+
+function gitOutput(args: string[]): string {
+  return execFileSync('git', args, {encoding: 'utf8'});
+}
+
+function gitIgnore(args: string[]): void {
+  execFileSync('git', args, {stdio: 'ignore'});
+}
+
+function splitGitLines(output: string): string[] {
+  return output.trim().split('\n').filter(Boolean);
+}
+
 function resolvePushCompareRef(event: PushEvent): string | null {
   const explicitRef = process.env['E2E_PUSH_BASE_REF']?.trim();
   if (explicitRef) {
@@ -73,7 +96,9 @@ function getChangedFiles(): string[] {
 
     if (eventName && eventPath && fs.existsSync(eventPath)) {
       try {
-        const event = JSON.parse(fs.readFileSync(eventPath, 'utf8')) as GithubEvent;
+        const event = JSON.parse(
+          fs.readFileSync(eventPath, 'utf8'),
+        ) as GithubEvent;
 
         if (eventName === 'push') {
           const before = event.before;
@@ -81,44 +106,60 @@ function getChangedFiles(): string[] {
           const pushCompareRef = resolvePushCompareRef(event);
 
           if (pushCompareRef && after) {
+            const safePushCompareRef = assertSafeGitRef(
+              pushCompareRef,
+              'push compare ref',
+            );
+            const safeAfter = assertSafeGitRef(after, 'push after sha');
             try {
-              execSync(`git rev-parse --verify ${pushCompareRef}`, {stdio: 'ignore'});
+              gitIgnore(['rev-parse', '--verify', safePushCompareRef]);
               console.log(
-                `Detecting push changes against '${pushCompareRef}...${after}'...`,
+                `Detecting push changes against '${safePushCompareRef}...${safeAfter}'...`,
               );
-              return execSync(`git diff --name-only ${pushCompareRef}...${after}`)
-                .toString()
-                .trim()
-                .split('\n')
-                .filter(Boolean);
+              return splitGitLines(
+                gitOutput([
+                  'diff',
+                  '--name-only',
+                  `${safePushCompareRef}...${safeAfter}`,
+                ]),
+              );
             } catch {
               console.warn(
-                `Push compare ref '${pushCompareRef}' unavailable, falling back to '${before}..${after}'`,
+                `Push compare ref '${safePushCompareRef}' unavailable, falling back to '${before}..${safeAfter}'`,
               );
             }
           }
 
           if (before && after && !/^0+$/.test(before)) {
-            console.log(`Detecting push changes against '${before}..${after}'...`);
-            return execSync(`git diff --name-only ${before} ${after}`)
-              .toString()
-              .trim()
-              .split('\n')
-              .filter(Boolean);
+            const safeBefore = assertSafeGitRef(before, 'push before sha');
+            const safeAfter = assertSafeGitRef(after, 'push after sha');
+            console.log(
+              `Detecting push changes against '${safeBefore}..${safeAfter}'...`,
+            );
+            return splitGitLines(
+              gitOutput(['diff', '--name-only', safeBefore, safeAfter]),
+            );
           }
         }
 
         if (eventName === 'pull_request') {
           const baseSha = event.pull_request?.base?.sha;
-          const headSha = event.pull_request?.head?.sha ?? process.env['GITHUB_SHA'];
+          const headSha =
+            event.pull_request?.head?.sha ?? process.env['GITHUB_SHA'];
 
           if (baseSha && headSha) {
-            console.log(`Detecting PR changes against '${baseSha}...${headSha}'...`);
-            return execSync(`git diff --name-only ${baseSha}...${headSha}`)
-              .toString()
-              .trim()
-              .split('\n')
-              .filter(Boolean);
+            const safeBaseSha = assertSafeGitRef(baseSha, 'PR base sha');
+            const safeHeadSha = assertSafeGitRef(headSha, 'PR head sha');
+            console.log(
+              `Detecting PR changes against '${safeBaseSha}...${safeHeadSha}'...`,
+            );
+            return splitGitLines(
+              gitOutput([
+                'diff',
+                '--name-only',
+                `${safeBaseSha}...${safeHeadSha}`,
+              ]),
+            );
           }
         }
       } catch (e: unknown) {
@@ -127,29 +168,32 @@ function getChangedFiles(): string[] {
       }
     }
 
-    const baseRef = resolveValidationBaseRef();
+    const baseRef = assertSafeGitRef(
+      resolveValidationBaseRef(),
+      'validation base ref',
+    );
 
     console.log(`Detecting changes against '${baseRef}'...`);
 
     // Check if baseRef exists
     try {
-      execSync(`git rev-parse --verify ${baseRef}`, {stdio: 'ignore'});
+      gitIgnore(['rev-parse', '--verify', baseRef]);
     } catch {
       console.log(`Ref ${baseRef} not found, comparing against HEAD^`);
-      return execSync('git diff --name-only HEAD^ HEAD')
-        .toString()
-        .trim()
-        .split('\n')
-        .filter(Boolean);
+      return splitGitLines(gitOutput(['diff', '--name-only', 'HEAD^', 'HEAD']));
     }
 
-    const diffCommand = `git diff --name-only ${baseRef}...HEAD`; // 3-dot diff: changes in HEAD since divergence
-    return execSync(diffCommand).toString().trim().split('\n').filter(Boolean);
+    // 3-dot diff: changes in HEAD since divergence
+    return splitGitLines(
+      gitOutput(['diff', '--name-only', `${baseRef}...HEAD`]),
+    );
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error('Failed to get changed files:', msg);
     if (process.env['CI']) {
-      console.error('Failing in CI - git errors must not silently skip E2E tests.');
+      console.error(
+        'Failing in CI - git errors must not silently skip E2E tests.',
+      );
       process.exit(1);
     }
     return [];
@@ -244,11 +288,13 @@ function shellQuote(value: string): string {
  */
 function getUncommittedFiles(): string[] {
   try {
-    const staged = execSync('git diff --cached --name-only').toString().trim();
-    const unstaged = execSync('git diff --name-only').toString().trim();
-    const untracked = execSync('git ls-files --others --exclude-standard')
-      .toString()
-      .trim();
+    const staged = gitOutput(['diff', '--cached', '--name-only']).trim();
+    const unstaged = gitOutput(['diff', '--name-only']).trim();
+    const untracked = gitOutput([
+      'ls-files',
+      '--others',
+      '--exclude-standard',
+    ]).trim();
     const combined = new Set<string>([
       ...staged.split('\n').filter(Boolean),
       ...unstaged.split('\n').filter(Boolean),
@@ -265,7 +311,9 @@ function getUncommittedFiles(): string[] {
 // Execution
 const committedChanges = getChangedFiles();
 const uncommittedChanges = getUncommittedFiles();
-const changedFiles = Array.from(new Set([...committedChanges, ...uncommittedChanges]));
+const changedFiles = Array.from(
+  new Set([...committedChanges, ...uncommittedChanges]),
+);
 
 if (changedFiles.length === 0) {
   console.log('No relevant changes detected. Skipping E2E tests.');

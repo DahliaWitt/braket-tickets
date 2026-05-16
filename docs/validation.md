@@ -111,7 +111,7 @@ ci.yml
 
 **Job Details**:
 
-- `lint`: Checks Convex generated files are fresh, runs lint, typecheck, enforces Convex sanitized logging, and checks file coupling (ifttt-lint)
+- `lint`: Runs lint, typecheck, Convex sanitized logging, and file coupling checks (ifttt-lint). Convex generated-file freshness is handled by the separate `check:convex-generated` step in this job, and only runs in non-fork CI contexts; forked pull requests skip it.
 - `stripe-contracts`: Runs `pnpm test:convex:sandbox` against Stripe sandbox; needs `lint` to pass
 - `e2e-check`: Detects affected E2E tests; needs `lint`, `test`, and `build` to pass
 - `e2e`: Runs only if `e2e-check` determines tests are needed
