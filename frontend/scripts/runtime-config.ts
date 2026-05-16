@@ -11,7 +11,6 @@ export type FrontendRuntimeMode =
 
 const DEFAULT_LOCAL_CONVEX_URL = 'http://127.0.0.1:3210';
 const DEFAULT_LOCAL_CONVEX_SITE_URL = 'http://127.0.0.1:3211';
-const DEFAULT_POSTHOG_HOST = 'https://us.i.posthog.com';
 const DEFAULT_BUILD_TIMESTAMP = 'local';
 
 function getEnv(env: NodeJS.ProcessEnv, key: string, fallback = ''): string {
@@ -32,7 +31,11 @@ function deriveConvexSiteUrl(convexUrl: string): string {
   return convexUrl.replace('.convex.cloud', '.convex.site');
 }
 
-function assertNotProd(convexUrl: string, context: string, env: NodeJS.ProcessEnv): void {
+function assertNotProd(
+  convexUrl: string,
+  context: string,
+  env: NodeJS.ProcessEnv,
+): void {
   const prodConvexUrl = getEnv(env, 'PROD_CONVEX_URL');
 
   if (prodConvexUrl === '' || convexUrl !== prodConvexUrl) {
@@ -44,7 +47,10 @@ function assertNotProd(convexUrl: string, context: string, env: NodeJS.ProcessEn
   );
 }
 
-function getGitInfo(env: NodeJS.ProcessEnv): {commitHash: string; branch: string} {
+function getGitInfo(env: NodeJS.ProcessEnv): {
+  commitHash: string;
+  branch: string;
+} {
   const commitHashFromEnv = getEnv(env, 'GITHUB_SHA');
   const branchFromEnv = getEnv(env, 'GITHUB_REF_NAME');
 
@@ -100,7 +106,11 @@ export function createFrontendRuntimeConfig(
       return {
         production: false,
         convexUrl,
-        convexSiteUrl: getEnv(env, 'CONVEX_SITE_URL', deriveConvexSiteUrl(convexUrl)),
+        convexSiteUrl: getEnv(
+          env,
+          'CONVEX_SITE_URL',
+          deriveConvexSiteUrl(convexUrl),
+        ),
         isE2E: false,
         build,
         stripe: {
@@ -113,10 +123,6 @@ export function createFrontendRuntimeConfig(
         enableSentryReplay: false,
         sentryReplaySessionSampleRate: 0,
         sentryReplayOnErrorSampleRate: 0,
-        posthog: {
-          apiKey: getEnv(env, 'POSTHOG_KEY'),
-          host: getEnv(env, 'POSTHOG_HOST', DEFAULT_POSTHOG_HOST),
-        },
       };
     }
     case 'preview': {
@@ -130,7 +136,11 @@ export function createFrontendRuntimeConfig(
       return {
         production: true,
         convexUrl,
-        convexSiteUrl: getEnv(env, 'CONVEX_SITE_URL', deriveConvexSiteUrl(convexUrl)),
+        convexSiteUrl: getEnv(
+          env,
+          'CONVEX_SITE_URL',
+          deriveConvexSiteUrl(convexUrl),
+        ),
         isE2E: false,
         build,
         stripe: {
@@ -143,10 +153,6 @@ export function createFrontendRuntimeConfig(
         enableSentryReplay: sentryDsn !== '',
         sentryReplaySessionSampleRate: sentryDsn !== '' ? 0.05 : 0,
         sentryReplayOnErrorSampleRate: sentryDsn !== '' ? 1 : 0,
-        posthog: {
-          apiKey: getEnv(env, 'POSTHOG_KEY'),
-          host: getEnv(env, 'POSTHOG_HOST', DEFAULT_POSTHOG_HOST),
-        },
       };
     }
     case 'production': {
@@ -156,7 +162,11 @@ export function createFrontendRuntimeConfig(
       return {
         production: true,
         convexUrl,
-        convexSiteUrl: getEnv(env, 'CONVEX_SITE_URL', deriveConvexSiteUrl(convexUrl)),
+        convexSiteUrl: getEnv(
+          env,
+          'CONVEX_SITE_URL',
+          deriveConvexSiteUrl(convexUrl),
+        ),
         isE2E: false,
         build,
         stripe: {
@@ -169,10 +179,6 @@ export function createFrontendRuntimeConfig(
         enableSentryReplay: sentryDsn !== '',
         sentryReplaySessionSampleRate: sentryDsn !== '' ? 0.05 : 0,
         sentryReplayOnErrorSampleRate: sentryDsn !== '' ? 1 : 0,
-        posthog: {
-          apiKey: getEnv(env, 'POSTHOG_KEY'),
-          host: getEnv(env, 'POSTHOG_HOST', DEFAULT_POSTHOG_HOST),
-        },
       };
     }
     case 'test': {
@@ -184,7 +190,11 @@ export function createFrontendRuntimeConfig(
       return {
         production: true,
         convexUrl,
-        convexSiteUrl: getEnv(env, 'CONVEX_SITE_URL', deriveConvexSiteUrl(convexUrl)),
+        convexSiteUrl: getEnv(
+          env,
+          'CONVEX_SITE_URL',
+          deriveConvexSiteUrl(convexUrl),
+        ),
         isE2E: false,
         build,
         stripe: {
@@ -197,10 +207,6 @@ export function createFrontendRuntimeConfig(
         enableSentryReplay: false,
         sentryReplaySessionSampleRate: 0,
         sentryReplayOnErrorSampleRate: 0,
-        posthog: {
-          apiKey: getEnv(env, 'POSTHOG_KEY'),
-          host: getEnv(env, 'POSTHOG_HOST', DEFAULT_POSTHOG_HOST),
-        },
       };
     }
     case 'e2e': {
@@ -212,7 +218,11 @@ export function createFrontendRuntimeConfig(
       return {
         production: false,
         convexUrl,
-        convexSiteUrl: getEnv(env, 'CONVEX_SITE_URL', DEFAULT_LOCAL_CONVEX_SITE_URL),
+        convexSiteUrl: getEnv(
+          env,
+          'CONVEX_SITE_URL',
+          DEFAULT_LOCAL_CONVEX_SITE_URL,
+        ),
         isE2E: true,
         build: {
           ...build,
@@ -228,10 +238,6 @@ export function createFrontendRuntimeConfig(
         enableSentryReplay: false,
         sentryReplaySessionSampleRate: 0,
         sentryReplayOnErrorSampleRate: 0,
-        posthog: {
-          apiKey: getEnv(env, 'POSTHOG_KEY'),
-          host: getEnv(env, 'POSTHOG_HOST', DEFAULT_POSTHOG_HOST),
-        },
       };
     }
   }
@@ -241,7 +247,10 @@ export function createAngularDefineArgs(
   mode: FrontendRuntimeMode,
   env: NodeJS.ProcessEnv = process.env,
 ): string[] {
-  return ['--define', `__BRAKET_RUNTIME__=${JSON.stringify(createFrontendRuntimeConfig(mode, env))}`];
+  return [
+    '--define',
+    `__BRAKET_RUNTIME__=${JSON.stringify(createFrontendRuntimeConfig(mode, env))}`,
+  ];
 }
 
 export function createVitestDefine(

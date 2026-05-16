@@ -822,6 +822,60 @@ describe('CommunityAdminComponent', () => {
       expect(await newHarness.hasCreateLinkButton()).toBe(true);
     });
 
+    it('shows the CREATE LINK button when only past magic links exist', async () => {
+      const pastLink = {
+        ...makeMagicLink({
+          _id: 'link-past-only' as Id<'magic_links'>,
+          tokenPrefix: 'pastonly',
+          label: 'Past Only',
+        }),
+        deletedAt: Date.now(),
+      } satisfies PastMagicLinksList[number];
+      const controller = createMagicLinksQueryController([], [pastLink]);
+      const {fixture, harness} = await setup({
+        tab: 'magic-links',
+        magicLinksController: controller,
+      });
+
+      expect(await harness.hasCreateLinkButton()).toBe(true);
+
+      await harness.clickCreateLinkButton();
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(await harness.hasCreateDialog()).toBe(true);
+    });
+
+    it('keeps the CREATE LINK button visible on the past magic-links filter', async () => {
+      const activeLink = makeMagicLink({
+        _id: 'link-active-with-past' as Id<'magic_links'>,
+        tokenPrefix: 'active01',
+        label: 'Active Link',
+      });
+      const pastLink = {
+        ...makeMagicLink({
+          _id: 'link-past-filter' as Id<'magic_links'>,
+          tokenPrefix: 'pastflt',
+          label: 'Past Filter',
+        }),
+        deletedAt: Date.now(),
+      } satisfies PastMagicLinksList[number];
+      const controller = createMagicLinksQueryController(
+        [activeLink],
+        [pastLink],
+      );
+      const {fixture, harness} = await setup({
+        tab: 'magic-links',
+        magicLinksController: controller,
+      });
+
+      await harness.setMagicLinksFilter('past');
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(await harness.hasCreateLinkButton()).toBe(true);
+    });
+
     it('opens the create dialog from the no-link empty-state CTA', async () => {
       const {fixture, harness} = await setup({tab: 'magic-links'});
 

@@ -1,41 +1,9 @@
-import {beforeEach, describe, expect, it, vi} from 'vitest';
+import {describe, expect, it, vi} from 'vitest';
 import {api, internal} from '../_generated/api';
 import type {Id} from '../_generated/dataModel';
 import type {EventVisibility} from '@shared/domain/event-visibility';
 import {convexTest, finishAllScheduledFunctions} from '../setup.testing';
 import {ORDER_RELEASE_GRACE_MS} from '../lib/constants';
-import {guestDistinctId} from '../lib/analytics';
-
-const {captureMock} = vi.hoisted(() => ({
-  captureMock: vi.fn(),
-}));
-
-vi.mock('../lib/analytics', async () => {
-  const actual =
-    await vi.importActual<typeof import('../lib/analytics')>(
-      '../lib/analytics',
-    );
-  return {
-    ...actual,
-    captureBackendEvent: captureMock,
-  };
-});
-
-type AnalyticsCaptureInputForTest = {
-  distinctId: string;
-  event: string;
-  properties?: Record<string, unknown>;
-};
-
-function capturedAnalyticsEvents(): AnalyticsCaptureInputForTest[] {
-  return captureMock.mock.calls.map(
-    ([, input]) => input as AnalyticsCaptureInputForTest,
-  );
-}
-
-beforeEach(() => {
-  captureMock.mockReset();
-});
 
 async function createUser(
   t: ReturnType<typeof convexTest>,
@@ -313,6 +281,176 @@ describe('orders', () => {
     expect(inventory?.heldCount).toBe(1);
   });
 
+  it('same-owner replacement with a different amount supersedes without leaking held inventory', async () => {
+    const t = convexTest();
+    const userId = await createUser(
+      t,
+      'Supporter Buyer',
+      'supporter-replace@example.com',
+    );
+    const {eventId, inventoryId} = await createEventWithInventory(t, {
+      supporterDefaultPrice: 3000,
+    });
+
+    const asUser = t.withIdentity({subject: userId});
+    const first = await asUser.mutation(api.orders.core.open, {
+      eventId,
+      quantity: 1,
+      tier: 'supporter',
+      totalAmount: 4000,
+    });
+    const second = await asUser.mutation(api.orders.core.open, {
+      eventId,
+      quantity: 1,
+      tier: 'supporter',
+      totalAmount: 3000,
+    });
+
+    expect(second.orderId).not.toBe(first.orderId);
+
+    const firstOrder = await t.run(async (ctx) =>
+      ctx.db.get('ticket_orders', first.orderId),
+    );
+    const secondOrder = await t.run(async (ctx) =>
+      ctx.db.get('ticket_orders', second.orderId),
+    );
+    let inventory = await t.run(async (ctx) =>
+      ctx.db.get('event_inventory', inventoryId),
+    );
+
+    expect(firstOrder?.state).toBe('released');
+    expect(firstOrder?.releaseReason).toBe('superseded');
+    expect(secondOrder?.state).toBe('open');
+    expect(inventory?.heldCount).toBe(1);
+
+    await t.action(internal.orders.core.settlePaidOrderFromStripe, {
+      orderId: second.orderId,
+      stripePaymentIntentId: 'pi_superseded_replacement',
+      stripeChargeId: 'ch_superseded_replacement',
+      note: 'superseded_replacement',
+    });
+
+    inventory = await t.run(async (ctx) =>
+      ctx.db.get('event_inventory', inventoryId),
+    );
+    expect(inventory?.heldCount).toBe(0);
+    expect(inventory?.soldCount).toBe(1);
+  });
+
+  it('same-owner replacement can reuse held capacity at the sold-out boundary', async () => {
+    const t = convexTest();
+    const userId = await createUser(
+      t,
+      'Boundary Buyer',
+      'boundary-replace@example.com',
+    );
+    const {eventId, inventoryId} = await createEventWithInventory(t, {
+      totalTickets: 2,
+      soldCount: 1,
+      supporterDefaultPrice: 3000,
+    });
+
+    const asUser = t.withIdentity({subject: userId});
+    const first = await asUser.mutation(api.orders.core.open, {
+      eventId,
+      quantity: 1,
+      tier: 'supporter',
+      totalAmount: 4000,
+    });
+    const second = await asUser.mutation(api.orders.core.open, {
+      eventId,
+      quantity: 1,
+      tier: 'supporter',
+      totalAmount: 3000,
+    });
+
+    expect(second.orderId).not.toBe(first.orderId);
+
+    const firstOrder = await t.run(async (ctx) =>
+      ctx.db.get('ticket_orders', first.orderId),
+    );
+    const inventory = await t.run(async (ctx) =>
+      ctx.db.get('event_inventory', inventoryId),
+    );
+
+    expect(firstOrder?.state).toBe('released');
+    expect(firstOrder?.releaseReason).toBe('superseded');
+    expect(inventory?.soldCount).toBe(1);
+    expect(inventory?.heldCount).toBe(1);
+  });
+
+  it('invalid same-owner replacement leaves the existing hold open', async () => {
+    const t = convexTest();
+    const userId = await createUser(
+      t,
+      'Invalid Replacement Buyer',
+      'invalid-replacement@example.com',
+    );
+    const {eventId, inventoryId} = await createEventWithInventory(t, {
+      supporterDefaultPrice: 3000,
+    });
+
+    const asUser = t.withIdentity({subject: userId});
+    const first = await asUser.mutation(api.orders.core.open, {
+      eventId,
+      quantity: 1,
+      tier: 'supporter',
+      totalAmount: 4000,
+    });
+
+    await expect(
+      asUser.mutation(api.orders.core.open, {
+        eventId,
+        quantity: 1,
+        tier: 'supporter',
+        totalAmount: 2600,
+      }),
+    ).rejects.toThrow('Amount below supporter minimum');
+
+    const firstOrder = await t.run(async (ctx) =>
+      ctx.db.get('ticket_orders', first.orderId),
+    );
+    const inventory = await t.run(async (ctx) =>
+      ctx.db.get('event_inventory', inventoryId),
+    );
+
+    expect(firstOrder?.state).toBe('open');
+    expect(inventory?.heldCount).toBe(1);
+  });
+
+  it('internal held inventory reconciliation reports and repairs primary hold drift', async () => {
+    const t = convexTest();
+    const {eventId, inventoryId} = await createEventWithInventory(t);
+
+    await t.run(async (ctx) => {
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- simulates production counter drift for the internal repair mutation.
+      await ctx.db.patch('event_inventory', inventoryId, {heldCount: 5});
+    });
+
+    const before = await t.query(
+      internal.orders.core.getHeldInventoryReconciliation,
+      {eventId},
+    );
+
+    expect(before.storedHeldCount).toBe(5);
+    expect(before.openPrimaryHeldCount).toBe(0);
+    expect(before.drift).toBe(5);
+
+    const repaired = await t.mutation(
+      internal.orders.core.repairHeldInventoryCount,
+      {eventId, expectedStoredHeldCount: 5},
+    );
+    const inventory = await t.run(async (ctx) =>
+      ctx.db.get('event_inventory', inventoryId),
+    );
+
+    expect(repaired.repaired).toBe(true);
+    expect(repaired.storedHeldCount).toBe(0);
+    expect(repaired.openPrimaryHeldCount).toBe(0);
+    expect(repaired.drift).toBe(0);
+    expect(inventory?.heldCount).toBe(0);
+  });
+
   it('openForGuest creates an open order owned by the guest session', async () => {
     const t = convexTest();
     const {eventId, inventoryId} = await createEventWithInventory(t);
@@ -337,64 +475,6 @@ describe('orders', () => {
     expect(order?.userId).toBeUndefined();
     expect(order?.state).toBe('open');
     expect(inventory?.heldCount).toBe(1);
-  });
-
-  it('uses one guest analytics distinct ID from open through expiry', async () => {
-    const t = convexTest();
-    const {eventId} = await createEventWithInventory(t);
-    const {sessionId, sessionToken} = await createGuestSession(t);
-    const expectedDistinctId = await guestDistinctId(`session:${sessionId}`);
-
-    const result = await t.mutation(api.orders.core.openForGuest, {
-      sessionToken,
-      eventId,
-      quantity: 1,
-      tier: 'regular',
-      totalAmount: 2500,
-    });
-
-    await t.mutation(internal.orders.core.expire, {
-      orderId: result.orderId,
-      force: true,
-    });
-
-    const events = capturedAnalyticsEvents();
-    expect(
-      events.find((event) => event.event === 'ticket_order_opened')?.distinctId,
-    ).toBe(expectedDistinctId);
-    expect(
-      events.find((event) => event.event === 'checkout_abandoned')?.distinctId,
-    ).toBe(expectedDistinctId);
-  });
-
-  it('uses one guest analytics distinct ID for free checkout completion', async () => {
-    const t = convexTest();
-    const {eventId} = await createEventWithInventory(t, {price: 0});
-    const {sessionId, sessionToken} = await createGuestSession(t);
-    const expectedDistinctId = await guestDistinctId(`session:${sessionId}`);
-
-    await t.mutation(api.orders.core.claimFreeTicketAsGuest, {
-      sessionToken,
-      eventId,
-      quantity: 1,
-      tier: 'regular',
-    });
-
-    const events = capturedAnalyticsEvents();
-    const checkoutCompleted = events.find(
-      (event) => event.event === 'checkout_completed',
-    );
-    expect(
-      events.find((event) => event.event === 'ticket_order_opened')?.distinctId,
-    ).toBe(expectedDistinctId);
-    expect(checkoutCompleted?.distinctId).toBe(expectedDistinctId);
-    expect(
-      events.find((event) => event.event === 'tickets_issued')?.distinctId,
-    ).toBe(expectedDistinctId);
-    expect(checkoutCompleted?.properties).toMatchObject({
-      checkout_kind: 'free',
-      payment_provider: 'none',
-    });
   });
 
   it('completes a normal authenticated free claim', async () => {
@@ -663,7 +743,7 @@ describe('orders', () => {
     expect(third.state).toBe('open');
   });
 
-  it('uses caller-provided analytics metadata for checkout failures', async () => {
+  it('releases an order for caller-reported payment failures', async () => {
     const t = convexTest();
     const buyerId = await createUser(
       t,
@@ -685,16 +765,11 @@ describe('orders', () => {
       failureStage: 'checkout_session',
     });
 
-    const checkoutFailed = capturedAnalyticsEvents().find(
-      (event) => event.event === 'checkout_failed',
+    const releasedOrder = await t.run(async (ctx) =>
+      ctx.db.get('ticket_orders', result.orderId),
     );
-    expect(checkoutFailed?.properties).toMatchObject({
-      order_id: result.orderId,
-      event_id: eventId,
-      checkout_kind: 'primary',
-      error_code: 'connected_account_mismatch',
-      failure_stage: 'checkout_session',
-    });
+    expect(releasedOrder?.state).toBe('released');
+    expect(releasedOrder?.releaseReason).toBe('payment_failed');
   });
 
   it('allows different guest emails to open independent holds', async () => {
@@ -954,26 +1029,6 @@ describe('orders', () => {
     expect(activeBuyerTickets).toHaveLength(1);
     expect(activeBuyerTickets[0]?.tier).toBe('supporter');
     expect(activeBuyerTickets[0]?.orderId).toBe(order.orderId);
-
-    const analyticsEvents = capturedAnalyticsEvents();
-    expect(
-      analyticsEvents.find(
-        (event) =>
-          event.event === 'checkout_completed' &&
-          event.properties?.['order_id'] === order.orderId,
-      )?.properties,
-    ).toMatchObject({
-      checkout_kind: 'resale',
-      payment_provider: 'stripe',
-      amount_cents: 5000,
-    });
-    expect(
-      analyticsEvents.filter(
-        (event) =>
-          event.event === 'tickets_issued' &&
-          event.properties?.['order_id'] === order.orderId,
-      ),
-    ).toHaveLength(0);
   });
 
   it('rejects resale settlement when the listing is no longer pending', async () => {

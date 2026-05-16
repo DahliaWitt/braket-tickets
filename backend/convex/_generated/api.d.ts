@@ -158,6 +158,8 @@ export declare const api: {
           organizerId?: Id<"organizers">;
           organizerLogoUrl?: string;
           organizerName: string;
+          organizerSlug?: string;
+          organizerStatus?: "draft" | "published";
           reason?: string;
           status: "pending" | "approved" | "rejected" | "revoked";
         }>
@@ -4854,6 +4856,19 @@ export declare const internal: {
           userId?: Id<"users">;
         } | null
       >;
+      getHeldInventoryReconciliation: FunctionReference<
+        "query",
+        "internal",
+        { eventId: Id<"events"> },
+        {
+          drift: number;
+          eventId: Id<"events">;
+          inventoryId: Id<"event_inventory">;
+          openPrimaryHeldCount: number;
+          storedHeldCount: number;
+          title: string;
+        }
+      >;
       getInternal: FunctionReference<
         "query",
         "internal",
@@ -4976,6 +4991,20 @@ export declare const internal: {
           orderId: Id<"ticket_orders">;
         },
         null
+      >;
+      repairHeldInventoryCount: FunctionReference<
+        "mutation",
+        "internal",
+        { eventId: Id<"events">; expectedStoredHeldCount?: number },
+        {
+          drift: number;
+          eventId: Id<"events">;
+          inventoryId: Id<"event_inventory">;
+          openPrimaryHeldCount: number;
+          repaired: boolean;
+          storedHeldCount: number;
+          title: string;
+        }
       >;
       settlePaidOrderFromStripe: FunctionReference<
         "action",
@@ -5590,5 +5619,4 @@ export declare const components: {
   stripePool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"stripePool">;
   migrations: import("@convex-dev/migrations/_generated/component.js").ComponentApi<"migrations">;
   authz: import("@djpanda/convex-authz/_generated/component.js").ComponentApi<"authz">;
-  posthog: import("@posthog/convex/_generated/component.js").ComponentApi<"posthog">;
 };

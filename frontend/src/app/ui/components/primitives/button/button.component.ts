@@ -57,8 +57,6 @@ import {mergeClasses} from '@ui/utils/merge-classes';
 export class ZardButtonComponent {
   private readonly elementRef = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly destroyRef = inject(DestroyRef);
-  private readonly initiallyNativeDisabled =
-    this.elementRef.nativeElement.hasAttribute('disabled');
 
   readonly zType = input<ZardButtonTypeVariants>('default');
   readonly zSize = input<ZardButtonSizeVariants>('default');
@@ -68,9 +66,15 @@ export class ZardButtonComponent {
   readonly zLoading = input(false, {transform: booleanAttribute});
   readonly zDisabled = input(false, {transform: booleanAttribute});
   readonly zGlow = input(false, {transform: booleanAttribute});
+  readonly disabled = input(
+    this.elementRef.nativeElement.hasAttribute('disabled'),
+    {
+      transform: booleanAttribute,
+    },
+  );
 
   protected readonly effectivelyDisabled = computed(
-    () => this.zDisabled() || this.zLoading(),
+    () => this.disabled() || this.zDisabled() || this.zLoading(),
   );
 
   private readonly iconOnlyState = signal(false);
@@ -176,7 +180,7 @@ export class ZardButtonComponent {
   );
 
   protected resolvedDisabled(): boolean {
-    return this.effectivelyDisabled() || this.hasNativeDisabledAttribute();
+    return this.effectivelyDisabled();
   }
 
   protected ariaDisabledAttr(): 'true' | null {
@@ -193,7 +197,7 @@ export class ZardButtonComponent {
     if (this.isNativeButton() || this.usesSyntheticButtonBehavior()) {
       return this.resolvedDisabled() ? '' : null;
     }
-    return this.hasNativeDisabledAttribute() ? '' : null;
+    return this.disabled() ? '' : null;
   }
 
   protected tabIndexAttr(): '0' | '-1' | null {
@@ -204,10 +208,6 @@ export class ZardButtonComponent {
       return '-1';
     }
     return this.usesSyntheticButtonBehavior() ? '0' : null;
-  }
-
-  private hasNativeDisabledAttribute(): boolean {
-    return this.initiallyNativeDisabled;
   }
 
   protected onKeydown(event: KeyboardEvent) {

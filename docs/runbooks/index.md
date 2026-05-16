@@ -36,7 +36,7 @@ This index is for engineers and admins who respond to Braket Tickets incidents o
 | [Community Access Ops](./community-access-ops.md)     | Magic link failures, invite redemption, shared vetting, trust-link lifecycle                       | SEV-2               |
 | [Email Delivery](./email-delivery.md)                 | Provider failures, bounces, missing transactional emails                                           | SEV-2               |
 | [Admin Operations](./admin-operations.md)             | Check-in failures, roster mismatches, audit log gaps                                               | SEV-2 / SEV-3       |
-| [Observability](./observability.md)                   | PostHog log gaps, forwarder failures, and backup failures                                          | SEV-2 / SEV-3       |
+| [Observability](./observability.md)                   | Sentry log forwarding, frontend error reporting, and backup failures                               | SEV-2 / SEV-3       |
 | [Secret Rotation](./secret-rotation.md)               | Rotating Stripe keys, email credentials, Convex deploy keys                                        | Planned maintenance |
 | [Social Auth Setup](./social-auth-setup.md)           | Obtaining Google and Discord OAuth credentials                                                     | Initial setup       |
 
@@ -45,7 +45,7 @@ This index is for engineers and admins who respond to Braket Tickets incidents o
 When an incident is reported:
 
 1. Classify the severity with the severity table in this document.
-2. Check PostHog for recent Convex log volume and frontend error reporting in Sentry (if any).
+2. Check Sentry for recent Convex log volume and frontend error reporting.
 3. Check Convex Dashboard for function failures or cron failures.
 4. Check Cloudflare Pages or GitHub Actions if the incident looks deployment-related.
 5. Open the matching runbook and follow the diagnostic steps.
@@ -59,7 +59,6 @@ When an incident is reported:
 | Cloudflare Pages | https://dash.cloudflare.com → Pages → braket-tickets-frontend                                                                                                      |
 | GitHub Actions   | https://github.com/DahliaWitt/braket-tickets/actions                                                                                                               |
 | Sentry           | https://sentry.io (org: o96755, project: 4510889653895168)                                                                                                         |
-| PostHog          | https://us.i.posthog.com                                                                                                                                           |
 | Production Site  | https://community.braket.gay                                                                                                                                       |
 | Preview Site     | Cloudflare Pages `develop` branch; use `https://dev.community.braket.gay` for preview and the direct Pages branch URL only to isolate custom-domain routing issues |
 

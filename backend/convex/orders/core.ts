@@ -45,6 +45,8 @@ import {
   applyExternalRefundHandler,
   clearCheckoutSessionHandler,
   cancelOpenOrdersForEventHandler,
+  getHeldInventoryReconciliationHandler,
+  repairHeldInventoryCountHandler,
 } from './_impl/core_handlers';
 
 const checkoutFailureStageValidator = v.union(
@@ -145,6 +147,38 @@ export const getInternal = internalQuery({
   args: {orderId: v.id('ticket_orders')},
   returns: v.union(ticketOrderDocValidator, v.null()),
   handler: getInternalHandler,
+});
+
+const inventoryHoldReconciliationValidator = v.object({
+  eventId: v.id('events'),
+  inventoryId: v.id('event_inventory'),
+  title: v.string(),
+  storedHeldCount: v.number(),
+  openPrimaryHeldCount: v.number(),
+  drift: v.number(),
+});
+
+export const getHeldInventoryReconciliation = internalQuery({
+  args: {eventId: v.id('events')},
+  returns: inventoryHoldReconciliationValidator,
+  handler: getHeldInventoryReconciliationHandler,
+});
+
+export const repairHeldInventoryCount = internalMutation({
+  args: {
+    eventId: v.id('events'),
+    expectedStoredHeldCount: v.optional(v.number()),
+  },
+  returns: v.object({
+    eventId: v.id('events'),
+    inventoryId: v.id('event_inventory'),
+    title: v.string(),
+    storedHeldCount: v.number(),
+    openPrimaryHeldCount: v.number(),
+    drift: v.number(),
+    repaired: v.boolean(),
+  }),
+  handler: repairHeldInventoryCountHandler,
 });
 
 /**

@@ -10,7 +10,6 @@ import {
 import {toSignal} from '@angular/core/rxjs-interop';
 import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton.component';
 import {toast} from 'ngx-sonner';
-import {AnalyticsService} from '@/core/services/analytics.service';
 import {
   form,
   FormField,
@@ -115,7 +114,6 @@ export class CommunityAdminSettingsComponent {
   protected readonly MAX_COMMUNITY_DESCRIPTION_LENGTH = 2000;
 
   private convex = injectConvex();
-  private analytics = inject(AnalyticsService);
   private dialog = inject(BraDialogService);
   private communityCtx = inject(CommunityContextService);
   private destroyRef = inject(DestroyRef);
@@ -745,16 +743,11 @@ export class CommunityAdminSettingsComponent {
     this.stripeError.set(null);
 
     try {
-      const connectedAccountPresent = this.stripeConnectedAccountId() !== null;
       const {stripeConnectedAccountId} = await this.convex.action(
         api.stripe.actions.createConnectedAccount,
         {organizerId},
       );
       this.stripeConnectedAccountId.set(stripeConnectedAccountId);
-      this.analytics.capture('stripe_connect_onboarding_started', {
-        organizer_id: organizerId,
-        connected_account_present: connectedAccountPresent,
-      });
       // Stay on the page. Check actual KYC status from Stripe so the UI
       // reflects charges_enabled / payouts_enabled, not just account creation.
       // The embedded account-onboarding component mounts below; if it cannot
@@ -827,10 +820,6 @@ export class CommunityAdminSettingsComponent {
           returnOrigin: this.browser.origin(),
         },
       );
-      this.analytics.capture('stripe_connect_onboarding_started', {
-        organizer_id: organizerId,
-        connected_account_present: this.stripeConnectedAccountId() !== null,
-      });
       // Full-page redirect so the Stripe-hosted flow owns the tab; it
       // returns the user to our settings page when done.
       this.browser.assign(url);

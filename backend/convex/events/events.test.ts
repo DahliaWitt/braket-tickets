@@ -1,29 +1,10 @@
 import type {EventStatus} from '@shared/domain/event-status';
 import type {EventVisibility} from '@shared/domain/event-visibility';
 import {convexTest, finishAllScheduledFunctions} from '../setup.testing';
-import {describe, it, expect, vi, assert, beforeEach} from 'vitest';
+import {describe, it, expect, vi, assert} from 'vitest';
 import {api, internal} from '../_generated/api';
 import type {Id} from '../_generated/dataModel';
 import {addMember, authz} from '../lib/authz';
-
-const {captureMock} = vi.hoisted(() => ({
-  captureMock: vi.fn(),
-}));
-
-vi.mock('../lib/analytics', async () => {
-  const actual =
-    await vi.importActual<typeof import('../lib/analytics')>(
-      '../lib/analytics',
-    );
-  return {
-    ...actual,
-    captureBackendEvent: captureMock,
-  };
-});
-
-beforeEach(() => {
-  captureMock.mockReset();
-});
 
 async function createEventWithInventory(
   t: ReturnType<typeof convexTest>,
@@ -195,7 +176,7 @@ describe('Event management data', () => {
     expect(full.isSoldOut).toBe(true);
   });
 
-  it('emits event_published only on a draft-to-published transition', async () => {
+  it('updates a draft event to published', async () => {
     const t = convexTest();
     const adminId = await createRootAdmin(t, 'Publish Admin');
     const organizerId = await t.mutation(
@@ -222,26 +203,17 @@ describe('Event management data', () => {
       },
     });
 
-    captureMock.mockClear();
-
     await asAdmin.mutation(api.events.management.update, {
       id: eventId,
       status: 'published',
     });
 
-    expect(captureMock).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        event: 'event_published',
-        distinctId: adminId,
-        properties: expect.objectContaining({
-          event_id: eventId,
-          organizer_id: organizerId,
-          event_visibility: 'public',
-          ticket_tier_count: 3,
-        }),
-      }),
-    );
+    const event = await t.run(async (ctx) => ctx.db.get(eventId));
+    expect(event?.status).toBe('published');
+    expect(event?.organizerId).toBe(organizerId);
+    expect(event?.visibility).toBe('public');
+    expect(event?.supporterDefaultPrice).toBe(2500);
+    expect(event?.slidingScaleEnabled).toBe(true);
   });
 });
 

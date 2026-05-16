@@ -1,6 +1,6 @@
 import {type HarnessLoader} from '@angular/cdk/testing';
 import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
-import {ChangeDetectionStrategy, Component} from '@angular/core';
+import {ChangeDetectionStrategy, Component, signal} from '@angular/core';
 import {type ComponentFixture, TestBed} from '@angular/core/testing';
 import {vi} from 'vitest';
 import {ZardButtonComponentHarness} from './button.component.harness';
@@ -16,6 +16,49 @@ import {ZardButtonComponent} from './button.component';
   imports: [ZardButtonComponent],
 })
 class TestHostComponent {}
+
+@Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <button type="button" z-button [disabled]="disabled()" (click)="onClick()">
+      Toggle Disabled
+    </button>
+  `,
+  imports: [ZardButtonComponent],
+})
+class ToggleDisabledTestHostComponent {
+  readonly disabled = signal(true);
+  onClick = vi.fn();
+}
+
+@Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <button
+      type="button"
+      z-button
+      [zDisabled]="zDisabled()"
+      (click)="onZDisabledClick()"
+    >
+      Toggle zDisabled
+    </button>
+    <button
+      type="button"
+      z-button
+      [zLoading]="zLoading()"
+      (click)="onZLoadingClick()"
+    >
+      Toggle zLoading
+    </button>
+  `,
+  imports: [ZardButtonComponent],
+})
+class ToggleComponentDisabledTestHostComponent {
+  readonly zDisabled = signal(true);
+  readonly zLoading = signal(true);
+  onZDisabledClick = vi.fn();
+  onZLoadingClick = vi.fn();
+}
 
 describe('ZardButtonComponent', () => {
   let fixture: ComponentFixture<TestHostComponent>;
@@ -53,6 +96,76 @@ describe('ZardButtonComponent', () => {
     expect(await button.isLoading()).toBe(true);
     expect(await button.getAriaBusy()).toBe('true');
     expect(await button.isDisabled()).toBe(true);
+  });
+
+  it('removes native disabled state when a reused host becomes enabled', async () => {
+    const toggleFixture = TestBed.createComponent(
+      ToggleDisabledTestHostComponent,
+    );
+    toggleFixture.detectChanges();
+    const toggleLoader = TestbedHarnessEnvironment.loader(toggleFixture);
+    const button = await toggleLoader.getHarness(
+      ZardButtonComponentHarness.with({text: 'Toggle Disabled'}),
+    );
+
+    expect(await button.isDisabled()).toBe(true);
+
+    toggleFixture.componentInstance.disabled.set(false);
+    toggleFixture.detectChanges();
+
+    expect(await button.isDisabled()).toBe(false);
+
+    await button.click();
+
+    expect(toggleFixture.componentInstance.onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('removes disabled state when zDisabled becomes false', async () => {
+    const toggleFixture = TestBed.createComponent(
+      ToggleComponentDisabledTestHostComponent,
+    );
+    toggleFixture.detectChanges();
+    const toggleLoader = TestbedHarnessEnvironment.loader(toggleFixture);
+    const button = await toggleLoader.getHarness(
+      ZardButtonComponentHarness.with({text: 'Toggle zDisabled'}),
+    );
+
+    expect(await button.isDisabled()).toBe(true);
+
+    toggleFixture.componentInstance.zDisabled.set(false);
+    toggleFixture.detectChanges();
+
+    expect(await button.isDisabled()).toBe(false);
+
+    await button.click();
+
+    expect(
+      toggleFixture.componentInstance.onZDisabledClick,
+    ).toHaveBeenCalledTimes(1);
+  });
+
+  it('removes disabled state when zLoading becomes false', async () => {
+    const toggleFixture = TestBed.createComponent(
+      ToggleComponentDisabledTestHostComponent,
+    );
+    toggleFixture.detectChanges();
+    const toggleLoader = TestbedHarnessEnvironment.loader(toggleFixture);
+    const button = await toggleLoader.getHarness(
+      ZardButtonComponentHarness.with({text: 'Toggle zLoading'}),
+    );
+
+    expect(await button.isDisabled()).toBe(true);
+
+    toggleFixture.componentInstance.zLoading.set(false);
+    toggleFixture.detectChanges();
+
+    expect(await button.isDisabled()).toBe(false);
+
+    await button.click();
+
+    expect(
+      toggleFixture.componentInstance.onZLoadingClick,
+    ).toHaveBeenCalledTimes(1);
   });
 });
 

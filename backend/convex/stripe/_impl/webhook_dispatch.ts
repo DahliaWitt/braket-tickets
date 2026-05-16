@@ -5,7 +5,6 @@ import type {Id} from '../../_generated/dataModel';
 import type {ActionCtx} from '../../_generated/server';
 import {internal} from '../../_generated/api';
 import {logger} from '../../lib/logger';
-import {captureBackendEvent, systemDistinctId} from '../../lib/analytics';
 import {mapStripeDisputeStatus, summarizeStripeError} from '../../lib/stripe';
 import {STRIPE_WEBHOOK_IN_FLIGHT_CODE} from '../../lib/stripe_webhook_errors';
 import {throwAppError} from '../../lib/errors';
@@ -133,18 +132,6 @@ async function withClaim(
       'skipping duplicate Stripe webhook event',
       logContext,
     );
-    await captureBackendEvent(ctx, {
-      distinctId: systemDistinctId('stripe'),
-      event: 'payment_webhook_processed',
-      uuid: `payment_webhook_processed:${event.id}`,
-      properties: {
-        actor_role: 'system',
-        auth_state: 'system',
-        stripe_event_type: event.type,
-        result: 'skipped',
-        error_code: claim.reason,
-      },
-    });
     return;
   }
 
@@ -214,19 +201,6 @@ async function withClaim(
       failureReason: result.nonActionable,
       orderId: result.orderId,
     });
-    await captureBackendEvent(ctx, {
-      distinctId: systemDistinctId('stripe'),
-      event: 'payment_webhook_processed',
-      uuid: `payment_webhook_processed:${event.id}`,
-      properties: {
-        actor_role: 'system',
-        auth_state: 'system',
-        stripe_event_type: event.type,
-        result: 'failed',
-        error_code: result.nonActionable,
-        order_id: result.orderId,
-      },
-    });
     return;
   }
 
@@ -234,18 +208,6 @@ async function withClaim(
     claimId: claim.claimId,
     outcome: 'completed',
     orderId: result.orderId,
-  });
-  await captureBackendEvent(ctx, {
-    distinctId: systemDistinctId('stripe'),
-    event: 'payment_webhook_processed',
-    uuid: `payment_webhook_processed:${event.id}`,
-    properties: {
-      actor_role: 'system',
-      auth_state: 'system',
-      stripe_event_type: event.type,
-      result: 'completed',
-      order_id: result.orderId,
-    },
   });
 }
 
