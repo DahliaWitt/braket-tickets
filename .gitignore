@@ -15,6 +15,7 @@ package-lock.json
 debug.log
 
 frontend/public/runtime-env.js
+frontend/.generated-public/
 
 # Convex local backend (binary, databases, logs, storage, port files)
 .convex-local/

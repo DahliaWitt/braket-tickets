@@ -1,12 +1,16 @@
-import { type Routes } from '@angular/router';
-import { authGuard, authenticatedMatch } from '@/core/guards/auth.guards';
+import {type Routes} from '@angular/router';
+import {authGuard, authenticatedMatch} from '@/core/guards/auth.guards';
+import {HELP_CENTER_ROUTES} from '@/features/help/help-center.routes.generated';
 
 // LINT.IfChange
 export const routes: Routes = [
   // === Chrome-less routes (no header/footer) ===
   {
     path: 'login',
-    loadComponent: () => import('./features/auth/pages/login/login.component').then((m) => m.LoginComponent),
+    loadComponent: () =>
+      import('./features/auth/pages/login/login.component').then(
+        (m) => m.LoginComponent,
+      ),
   },
   {
     path: 'confirm/verification',
@@ -63,7 +67,9 @@ export const routes: Routes = [
   {
     path: 'verify-email',
     redirectTo: ({queryParams}) => {
-      const qs = new URLSearchParams(queryParams as Record<string, string>).toString();
+      const qs = new URLSearchParams(
+        queryParams as Record<string, string>,
+      ).toString();
       return qs ? `/confirm/verification?${qs}` : '/confirm/verification';
     },
     pathMatch: 'full',
@@ -72,19 +78,31 @@ export const routes: Routes = [
   {
     path: 'api/auth/verify-email',
     redirectTo: ({queryParams}) => {
-      const qs = new URLSearchParams(queryParams as Record<string, string>).toString();
+      const qs = new URLSearchParams(
+        queryParams as Record<string, string>,
+      ).toString();
       return qs ? `/confirm/verification?${qs}` : '/confirm/verification';
     },
     pathMatch: 'full',
   },
   // Redirect legacy /join/ and /apply/ paths to /invite/ (BRA-127).
   // Must use RedirectFunction to carry the route param.
-  { path: 'join/:token', redirectTo: ({ params }) => `/invite/${params['token']}`, pathMatch: 'full' },
-  { path: 'apply/:token', redirectTo: ({ params }) => `/invite/${params['token']}`, pathMatch: 'full' },
+  {
+    path: 'join/:token',
+    redirectTo: ({params}) => `/invite/${params['token']}`,
+    pathMatch: 'full',
+  },
+  {
+    path: 'apply/:token',
+    redirectTo: ({params}) => `/invite/${params['token']}`,
+    pathMatch: 'full',
+  },
   {
     path: 'invite/:token',
     loadComponent: () =>
-      import('./features/invite/pages/invite/invite.component').then((m) => m.InviteComponent),
+      import('./features/invite/pages/invite/invite.component').then(
+        (m) => m.InviteComponent,
+      ),
   },
   {
     path: 'admin-invite/:token',
@@ -96,7 +114,9 @@ export const routes: Routes = [
   {
     path: 'vetting/:id',
     loadComponent: () =>
-      import('./features/vetting/pages/vetting/vetting.component').then((m) => m.VettingComponent),
+      import('./features/vetting/pages/vetting/vetting.component').then(
+        (m) => m.VettingComponent,
+      ),
     canActivate: [authGuard],
   },
   {
@@ -105,13 +125,23 @@ export const routes: Routes = [
       import('./features/admin/scanner.routes').then((m) => m.SCANNER_ROUTES),
   },
   // Redirect short community-events URLs to the canonical events page with query param.
-  { path: 'c/:slug', redirectTo: ({ params }) => `/events?community=${params['slug']}`, pathMatch: 'full' },
-  { path: 'communities/:slug', redirectTo: ({ params }) => `/events?community=${params['slug']}`, pathMatch: 'full' },
+  {
+    path: 'c/:slug',
+    redirectTo: ({params}) => `/events?community=${params['slug']}`,
+    pathMatch: 'full',
+  },
+  {
+    path: 'communities/:slug',
+    redirectTo: ({params}) => `/events?community=${params['slug']}`,
+    pathMatch: 'full',
+  },
   // === Layout routes (shared header + footer via MainLayoutComponent) ===
   {
     path: '',
     loadComponent: () =>
-      import('./layout/main-layout/main-layout.component').then((m) => m.MainLayoutComponent),
+      import('./layout/main-layout/main-layout.component').then(
+        (m) => m.MainLayoutComponent,
+      ),
     children: [
       // canMatch selects this route for authenticated users.
       // canActivate handles edge cases: social signup completion redirect, session expiry.
@@ -119,29 +149,39 @@ export const routes: Routes = [
         path: '',
         canMatch: [authenticatedMatch],
         loadComponent: () =>
-          import('./features/dashboard/pages/dashboard/dashboard.component').then((m) => m.DashboardComponent),
+          import('./features/dashboard/pages/dashboard/dashboard.component').then(
+            (m) => m.DashboardComponent,
+          ),
         canActivate: [authGuard],
       },
       // Unauthenticated users see landing page at /
       {
         path: '',
         loadComponent: () =>
-          import('./features/landing/pages/landing/landing.component').then((m) => m.LandingComponent),
+          import('./features/landing/pages/landing/landing.component').then(
+            (m) => m.LandingComponent,
+          ),
       },
       {
         path: 'about',
         loadComponent: () =>
-          import('./features/about/pages/about/about.component').then((m) => m.AboutComponent),
+          import('./features/about/pages/about/about.component').then(
+            (m) => m.AboutComponent,
+          ),
       },
       {
         path: 'support',
         loadComponent: () =>
-          import('./features/support/pages/support/support.component').then((m) => m.SupportComponent),
+          import('./features/support/pages/support/support.component').then(
+            (m) => m.SupportComponent,
+          ),
       },
       {
         path: 'privacy',
         loadComponent: () =>
-          import('./features/legal/pages/privacy-policy/privacy-policy').then((m) => m.PrivacyPolicyComponent),
+          import('./features/legal/pages/privacy-policy/privacy-policy').then(
+            (m) => m.PrivacyPolicyComponent,
+          ),
       },
       {
         path: 'terms',
@@ -191,14 +231,12 @@ export const routes: Routes = [
       {
         path: 'tickets',
         loadComponent: () =>
-          import('./features/tickets/pages/tickets/tickets.component').then((m) => m.TicketsComponent),
+          import('./features/tickets/pages/tickets/tickets.component').then(
+            (m) => m.TicketsComponent,
+          ),
         canActivate: [authGuard],
       },
-      {
-        path: 'help',
-        loadChildren: () =>
-          import('./features/help/help.routes').then((m) => m.HELP_ROUTES),
-      },
+      ...HELP_CENTER_ROUTES,
       {
         path: 'admin',
         loadChildren: () =>
@@ -207,23 +245,29 @@ export const routes: Routes = [
       {
         path: 'account',
         loadComponent: () =>
-          import('./features/auth/pages/account/account.component').then((m) => m.AccountComponent),
+          import('./features/auth/pages/account/account.component').then(
+            (m) => m.AccountComponent,
+          ),
         canActivate: [authGuard],
       },
       {
         path: 'community-admin',
         loadChildren: () =>
-          import('./features/admin/community-admin.routes').then((m) => m.COMMUNITY_ADMIN_ROUTES),
+          import('./features/admin/community-admin.routes').then(
+            (m) => m.COMMUNITY_ADMIN_ROUTES,
+          ),
       },
       {
         path: 'not-found',
         loadComponent: () =>
-          import('./features/not-found/not-found.component').then((m) => m.NotFoundComponent),
+          import('./features/not-found/not-found.component').then(
+            (m) => m.NotFoundComponent,
+          ),
       },
     ],
   },
 
   // Wildcard — MUST be last. Redirects to layout child so 404 gets chrome.
-  { path: '**', redirectTo: 'not-found' },
+  {path: '**', redirectTo: 'not-found'},
 ];
-// LINT.ThenChange(../../e2e/audit/audit-routes.ts)
+// LINT.ThenChange("../../e2e/audit/audit-routes.ts")

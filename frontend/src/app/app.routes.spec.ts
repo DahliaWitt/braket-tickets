@@ -7,7 +7,6 @@ import {ADMIN_ROUTES} from '@/features/admin/admin.routes';
 import {COMMUNITY_ADMIN_ROUTES} from '@/features/admin/community-admin.routes';
 import {CommunityContextService} from '@/features/admin/services/community-context.service';
 import {SCANNER_ROUTES} from '@/features/admin/scanner.routes';
-import {HELP_ROUTES} from '@/features/help/help.routes';
 import {
   vi,
   describe,
@@ -144,6 +143,11 @@ describe('app.routes', () => {
       await expect(scannerRoute?.loadChildren?.()).resolves.toBe(
         SCANNER_ROUTES,
       );
+    });
+
+    it('does not expose the help center route', () => {
+      const helpRoute = layoutChildren.find((r) => r.path === 'help');
+      expect(helpRoute).toBeUndefined();
     });
   });
 
@@ -452,133 +456,6 @@ describe('app.routes', () => {
           queryParams: {returnUrl: '/dashboard'},
         },
       );
-    });
-  });
-
-  describe('HELP_ROUTES helpSectionGuard', () => {
-    const helpShellRoute = HELP_ROUTES[0];
-    const helpChildren = helpShellRoute?.children ?? [];
-
-    function getHelpSectionGuard() {
-      const sectionChild = helpChildren.find((r) => r.path === ':section');
-      return sectionChild?.canMatch?.[0] as (
-        route: unknown,
-        segments: {path: string}[],
-      ) => boolean | Observable<boolean>;
-    }
-
-    it.each(['users', 'developers'])(
-      'allows public section "%s" synchronously',
-      (section) => {
-        const guard = getHelpSectionGuard();
-        expect(guard({}, [{path: section}])).toBe(true);
-      },
-    );
-
-    it.each(['invalid', 'settings', ''])(
-      'rejects invalid section "%s"',
-      (section) => {
-        const guard = getHelpSectionGuard();
-        expect(guard({}, [{path: section}])).toBe(false);
-      },
-    );
-
-    it('rejects empty segments', () => {
-      const guard = getHelpSectionGuard();
-      expect(guard({}, [])).toBe(false);
-    });
-
-    it('allows "admins" section for root_admin after auth settles', async () => {
-      mockAuthService.isAuthenticated.mockReturnValue(true);
-      mockAuthService.authInitialized.set(true);
-      mockAuthService.user.set({_id: 'user-1'});
-      mockAuthService.userRole.mockReturnValue('root_admin');
-
-      const result = await TestBed.runInInjectionContext(() => {
-        const guardResult = getHelpSectionGuard()({}, [{path: 'admins'}]);
-        return firstValueFrom(guardResult as Observable<boolean>);
-      });
-
-      expect(result).toBe(true);
-    });
-
-    it('allows "admins" section for community_admin after auth settles', async () => {
-      mockAuthService.isAuthenticated.mockReturnValue(true);
-      mockAuthService.authInitialized.set(true);
-      mockAuthService.user.set({_id: 'user-1'});
-      mockAuthService.userRole.mockReturnValue('community_admin');
-
-      const result = await TestBed.runInInjectionContext(() => {
-        const guardResult = getHelpSectionGuard()({}, [{path: 'admins'}]);
-        return firstValueFrom(guardResult as Observable<boolean>);
-      });
-
-      expect(result).toBe(true);
-    });
-
-    it('denies "admins" section for regular users after auth settles', async () => {
-      mockAuthService.isAuthenticated.mockReturnValue(true);
-      mockAuthService.authInitialized.set(true);
-      mockAuthService.user.set({_id: 'user-1'});
-      mockAuthService.userRole.mockReturnValue('member');
-
-      const result = await TestBed.runInInjectionContext(() => {
-        const guardResult = getHelpSectionGuard()({}, [{path: 'admins'}]);
-        return firstValueFrom(guardResult as Observable<boolean>);
-      });
-
-      expect(result).toBe(false);
-    });
-
-    it('denies "admins" section for unauthenticated users', async () => {
-      mockAuthService.isAuthenticated.mockReturnValue(false);
-      mockAuthService.authInitialized.set(true);
-      mockAuthService.user.set(null);
-      mockAuthService.userRole.mockReturnValue(null);
-
-      const result = await TestBed.runInInjectionContext(() => {
-        const guardResult = getHelpSectionGuard()({}, [{path: 'admins'}]);
-        return firstValueFrom(guardResult as Observable<boolean>);
-      });
-
-      expect(result).toBe(false);
-    });
-
-    it('waits for auth to settle before deciding on "admins"', async () => {
-      mockAuthService.authInitialized.set(false);
-      mockAuthService.isAuthenticated.mockReturnValue(true);
-      mockAuthService.userRole.mockReturnValue('root_admin');
-
-      let resolved = false;
-      const resultPromise = TestBed.runInInjectionContext(() => {
-        const guardResult = getHelpSectionGuard()({}, [{path: 'admins'}]);
-        return firstValueFrom(guardResult as Observable<boolean>);
-      }).then((r) => {
-        resolved = true;
-        return r;
-      });
-
-      await new Promise((r) => setTimeout(r, 50));
-      expect(resolved).toBe(false);
-
-      mockAuthService.authInitialized.set(true);
-      mockAuthService.user.set({_id: 'user-1'});
-      const result = await resultPromise;
-      expect(result).toBe(true);
-    });
-
-    it('denies "admins" on auth timeout', async () => {
-      vi.useFakeTimers();
-      mockAuthService.authInitialized.set(false);
-
-      const resultPromise = TestBed.runInInjectionContext(() => {
-        const guardResult = getHelpSectionGuard()({}, [{path: 'admins'}]);
-        return firstValueFrom(guardResult as Observable<boolean>);
-      });
-
-      await vi.advanceTimersByTimeAsync(16_000);
-      const result = await resultPromise;
-      expect(result).toBe(false);
     });
   });
 });
