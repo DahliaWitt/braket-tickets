@@ -25,11 +25,11 @@
             "assets": [
               {
                 "glob": "**/*",
-                "input": "public"
+                "input": ".generated-public"
               },
               {
                 "glob": "**/*",
-                "input": "public/.well-known",
+                "input": ".generated-public/.well-known",
                 "output": ".well-known"
               }
             ],

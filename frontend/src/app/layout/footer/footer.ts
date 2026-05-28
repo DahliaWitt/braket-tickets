@@ -4,6 +4,7 @@ import {RouterLink} from '@angular/router';
 import {BraToastService} from '@ui/components/composites/toast/toast.service';
 import {FeedbackService} from '@/core/services/feedback.service';
 import {logger} from '@/utils/logger';
+import {HELP_CENTER_FOOTER_LINKS} from '@/features/help/help-center.footer-link.generated';
 
 @Component({
   selector: 'app-footer',
@@ -37,11 +38,13 @@ import {logger} from '@/utils/logger';
           class="rounded-sm py-1 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
           >About</a
         >
-        <a
-          routerLink="/help"
-          class="rounded-sm py-1 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
-          >Help</a
-        >
+        @for (link of helpCenterFooterLinks; track link.routerLink) {
+          <a
+            [routerLink]="link.routerLink"
+            class="rounded-sm py-1 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+            >{{ link.label }}</a
+          >
+        }
         <button
           type="button"
           (click)="openFeedback()"
@@ -57,6 +60,8 @@ import {logger} from '@/utils/logger';
   `,
 })
 export class FooterComponent {
+  protected readonly helpCenterFooterLinks = HELP_CENTER_FOOTER_LINKS;
+
   private readonly feedback = inject(FeedbackService);
   private readonly toast = inject(BraToastService);
 
