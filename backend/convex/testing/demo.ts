@@ -25,8 +25,18 @@ import {
   upsertSeedAdminNotificationPreference,
 } from './admin';
 import {connectedAccountStatusValidator} from '../lib/validators/stripe_connect';
+import {toDateKeyInEventTimeZone} from '../lib/timezone';
 
 type ConnectedAccountStatus = Infer<typeof connectedAccountStatusValidator>;
+
+const DEMO_FUTURE_EVENT_OFFSET_DAYS = 60;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function demoFutureEventDateKey(): string {
+  return toDateKeyInEventTimeZone(
+    new Date(Date.now() + DEMO_FUTURE_EVENT_OFFSET_DAYS * DAY_MS),
+  );
+}
 
 export const seedDemoDataArgsValidator = {
   cooperId: v.id('users'),
@@ -302,7 +312,7 @@ export async function insertSeedDemoData(
   await addSeedTrustLink(ctx, sisterCityId, lot45Id);
 
   // ── 5. Events ──
-  const futureDate = '2026-05-15';
+  const futureDate = demoFutureEventDateKey();
   const pastDate = '2026-02-20';
 
   const concreteWaxId = await insertSeedEvent(ctx, {

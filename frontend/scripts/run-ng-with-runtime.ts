@@ -4,6 +4,7 @@ import {
   createAngularDefineArgs,
   type FrontendRuntimeMode,
 } from './runtime-config';
+import {syncHelpCenterShipping} from './help-center-shipping';
 
 const rawArgs = process.argv.slice(2);
 
@@ -48,6 +49,9 @@ function resolveMode(args: string[]): FrontendRuntimeMode {
 }
 
 const mode = resolveMode(rawArgs);
+
+syncHelpCenterShipping();
+
 const result = spawnSync(
   'npx',
   ['ng', ...rawArgs, ...createAngularDefineArgs(mode, process.env)],
