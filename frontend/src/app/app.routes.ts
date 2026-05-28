@@ -1,6 +1,6 @@
 import {type Routes} from '@angular/router';
 import {authGuard, authenticatedMatch} from '@/core/guards/auth.guards';
-import {HELP_CENTER_ROUTES} from '@/features/help/help-center.routes.generated';
+import {HELP_CENTER_ROUTES} from './features/help/help-center.routes.generated';
 
 // LINT.IfChange
 export const routes: Routes = [
