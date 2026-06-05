@@ -1,5 +1,6 @@
 import {execFileSync} from 'node:child_process';
 
+import {HELP_CENTER_ENABLED} from '../src/app/features/help/help-center.config';
 import type {AppEnvironment} from '../src/environments/environment.model';
 
 export type FrontendRuntimeMode =
@@ -250,6 +251,8 @@ export function createAngularDefineArgs(
   return [
     '--define',
     `__BRAKET_RUNTIME__=${JSON.stringify(createFrontendRuntimeConfig(mode, env))}`,
+    '--define',
+    `__HELP_CENTER_ENABLED__=${JSON.stringify(HELP_CENTER_ENABLED)}`,
   ];
 }
 
@@ -259,5 +262,6 @@ export function createVitestDefine(
 ): Record<string, string> {
   return {
     __BRAKET_RUNTIME__: JSON.stringify(createFrontendRuntimeConfig(mode, env)),
+    __HELP_CENTER_ENABLED__: JSON.stringify(HELP_CENTER_ENABLED),
   };
 }

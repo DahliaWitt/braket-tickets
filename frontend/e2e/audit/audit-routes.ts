@@ -1,4 +1,5 @@
-import { AuditRoute } from './audit-types';
+import {AuditRoute} from './audit-types';
+import {HELP_CENTER_AUDIT_ROUTES} from './help-center-audit-routes.generated';
 
 /**
  * Full route matrix for the visual audit suite.
@@ -42,12 +43,7 @@ export const AUDIT_ROUTES: AuditRoute[] = [
     role: 'anon',
     readyLocator: '[data-testid="community-picker-card"]',
   },
-  {
-    label: 'Help',
-    path: '/help',
-    role: 'anon',
-    readyLocator: 'role=heading[level=1]',
-  },
+  ...HELP_CENTER_AUDIT_ROUTES,
   {
     label: 'Support',
     path: '/support',
