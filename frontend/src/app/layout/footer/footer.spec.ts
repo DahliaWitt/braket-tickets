@@ -53,6 +53,10 @@ describe('FooterComponent', () => {
     expect(await harness.hasFooterLandmark()).toBe(true);
   });
 
+  it('does not render a help link', async () => {
+    expect(await harness.getNavText()).not.toContain('Help');
+  });
+
   it('opens the Sentry feedback form', async () => {
     await harness.clickFeedback();
 
