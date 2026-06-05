@@ -25,7 +25,7 @@ describe('EventManagementGuestsTabComponent', () => {
     create: ReturnType<typeof vi.fn>;
   };
   let browserPlatformMock: {
-    navigateWithAnchor: ReturnType<typeof vi.fn>;
+    downloadBlob: ReturnType<typeof vi.fn>;
   };
 
   const addGuestResult = {
@@ -56,13 +56,13 @@ describe('EventManagementGuestsTabComponent', () => {
       sendGuestTicket: vi.fn().mockResolvedValue(undefined),
       getGuestTicketPdf: vi
         .fn()
-        .mockResolvedValue('data:application/pdf;base64,guest'),
+        .mockResolvedValue('data:application/pdf;base64,JVBERg=='),
     };
     dialogServiceMock = {
       create: vi.fn(),
     };
     browserPlatformMock = {
-      navigateWithAnchor: vi.fn(),
+      downloadBlob: vi.fn(),
     };
 
     await TestBed.configureTestingModule({
@@ -165,10 +165,13 @@ describe('EventManagementGuestsTabComponent', () => {
     expect(adminEventsServiceMock.getGuestTicketPdf).toHaveBeenCalledWith(
       'guest-1',
     );
-    expect(browserPlatformMock.navigateWithAnchor).toHaveBeenCalledWith(
-      'data:application/pdf;base64,guest',
+    expect(browserPlatformMock.downloadBlob).toHaveBeenCalledWith(
+      expect.any(Blob),
       'guest-ticket-guest-1.pdf',
     );
+    const [blob] = browserPlatformMock.downloadBlob.mock.calls[0] as [Blob];
+    expect(blob.type).toBe('application/pdf');
+    expect(blob.size).toBe(4);
     expect(toast.success).toHaveBeenCalledWith(
       'Guest ticket download started.',
     );

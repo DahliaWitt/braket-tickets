@@ -1,8 +1,5 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {
-  executeStoredProcessorRefund,
-  requireRootAdminAction,
-} from '../lib/payments/refund_processing';
+import {executeStoredProcessorRefund} from '../lib/payments/refund_processing';
 
 describe('payments action helpers', () => {
   const runQuery = vi.fn();
@@ -16,23 +13,6 @@ describe('payments action helpers', () => {
     vi.unstubAllGlobals();
   });
 
-  it('requireRootAdminAction returns the authenticated root admin id', async () => {
-    runQuery.mockResolvedValueOnce('user_123').mockResolvedValueOnce(true);
-
-    const userId = await requireRootAdminAction({runQuery} as never);
-
-    expect(userId).toBe('user_123');
-    expect(runQuery).toHaveBeenCalledTimes(2);
-  });
-
-  it('requireRootAdminAction rejects non-admin callers', async () => {
-    runQuery.mockResolvedValueOnce('user_123').mockResolvedValueOnce(false);
-
-    await expect(
-      requireRootAdminAction({runQuery} as never),
-    ).rejects.toThrow();
-  });
-
   it('executeStoredProcessorRefund routes Connect refunds through the snapshotted connectedAccountId', async () => {
     // resolveStripeConnectInfo: orders.getInternal returns an order with
     // a snapshotted connectedAccountId (Task 2 Step 3).
@@ -40,18 +20,18 @@ describe('payments action helpers', () => {
       _id: 'order_123',
       connectedAccountId: 'acct_123',
     });
-    runAction.mockResolvedValueOnce({success: true, refundId: 're_connect_123'});
+    runAction.mockResolvedValueOnce({
+      success: true,
+      refundId: 're_connect_123',
+    });
 
-    await executeStoredProcessorRefund(
-      {runQuery, runAction} as never,
-      {
-        stripePaymentIntentId: 'pi_123',
-        orderId: 'order_123' as never,
-        amountCents: 2500,
-        reason: 'Admin refund',
-        stripeIdempotencyKey: 'stripe-refund-key-123',
-      },
-    );
+    await executeStoredProcessorRefund({runQuery, runAction} as never, {
+      stripePaymentIntentId: 'pi_123',
+      orderId: 'order_123' as never,
+      amountCents: 2500,
+      reason: 'Admin refund',
+      stripeIdempotencyKey: 'stripe-refund-key-123',
+    });
 
     expect(runAction).toHaveBeenCalledTimes(1);
     expect(runAction.mock.calls[0]?.[1]).toMatchObject({
@@ -71,18 +51,18 @@ describe('payments action helpers', () => {
       _id: 'order_platform',
       connectedAccountId: undefined,
     });
-    runAction.mockResolvedValueOnce({success: true, refundId: 're_platform_123'});
+    runAction.mockResolvedValueOnce({
+      success: true,
+      refundId: 're_platform_123',
+    });
 
-    await executeStoredProcessorRefund(
-      {runQuery, runAction} as never,
-      {
-        stripePaymentIntentId: 'pi_platform',
-        orderId: 'order_platform' as never,
-        amountCents: 1000,
-        reason: 'Platform refund',
-        stripeIdempotencyKey: 'stripe-platform-key',
-      },
-    );
+    await executeStoredProcessorRefund({runQuery, runAction} as never, {
+      stripePaymentIntentId: 'pi_platform',
+      orderId: 'order_platform' as never,
+      amountCents: 1000,
+      reason: 'Platform refund',
+      stripeIdempotencyKey: 'stripe-platform-key',
+    });
 
     expect(runAction).toHaveBeenCalledTimes(1);
     const call = runAction.mock.calls[0]?.[1] as Record<string, unknown>;

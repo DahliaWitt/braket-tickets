@@ -26,6 +26,7 @@ describe('AttendeeExportService', () => {
   let service: AttendeeExportService;
   let createObjectURLMock: Mock;
   let revokeObjectURLMock: Mock;
+  let setTimeoutMock: Mock;
   let mockPdfDependencies: PdfExportDependencies;
 
   const jsPDFMockedSave = vi.fn();
@@ -162,6 +163,9 @@ describe('AttendeeExportService', () => {
     revokeObjectURLMock = vi.fn();
     globalThis.URL.createObjectURL = createObjectURLMock;
     globalThis.URL.revokeObjectURL = revokeObjectURLMock;
+    setTimeoutMock = vi
+      .spyOn(window, 'setTimeout')
+      .mockReturnValue(1 as unknown as ReturnType<typeof setTimeout>) as Mock;
 
     // Mock document methods
     vi.spyOn(document.body, 'appendChild').mockImplementation((node) => node);
@@ -224,7 +228,8 @@ describe('AttendeeExportService', () => {
 
       expect(createObjectURLMock).toHaveBeenCalled();
       expect(clickSpy).toHaveBeenCalled();
-      expect(revokeObjectURLMock).toHaveBeenCalled();
+      expect(revokeObjectURLMock).not.toHaveBeenCalled();
+      expect(setTimeoutMock).toHaveBeenCalledWith(expect.any(Function), 60_000);
     });
 
     it('should only include enabled fields in CSV', async () => {
