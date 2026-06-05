@@ -16,23 +16,6 @@ export interface StoredProcessorRefundResult {
   connectedAccountNetCents?: number;
 }
 
-export async function requireRootAdminAction(
-  ctx: Pick<ActionCtx, 'runQuery'>,
-): Promise<Id<'users'>> {
-  const userId = await ctx.runQuery(
-    internal.lib.auth_helpers.getAuthUserIdInternal,
-    {},
-  );
-  if (!userId) throwUnauthenticated();
-
-  const isRootAdminUser = await ctx.runQuery(internal.lib.access._isRootAdmin, {
-    userId,
-  });
-  if (!isRootAdminUser) throwUnauthorized();
-
-  return userId;
-}
-
 /**
  * Require the authenticated caller to have refund access for the given
  * order. Refund access is granted to community admins of the organizer
