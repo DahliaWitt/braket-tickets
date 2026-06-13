@@ -31,4 +31,20 @@ describe('ticket PDF action helpers', () => {
     ]);
     expect(artifacts.every((artifact) => artifact.qrCodeDataUrl)).toBe(true);
   });
+
+  it('uses event-timezone midnight for legacy date-only event dates', async () => {
+    const [artifact] = await buildOrderTicketPdfArtifacts({
+      event: {
+        title: 'Legacy Date Night',
+        date: '2026-02-26',
+      },
+      tickets: [{_id: 'ticket_one' as Id<'tickets'>}],
+      attendeeName: 'Legacy Buyer',
+      promoterName: 'Prism Society',
+    });
+
+    expect(artifact?.pdfData.eventDate).toBe(
+      new Date('2026-02-26T08:00:00.000Z').getTime(),
+    );
+  });
 });

@@ -21,6 +21,11 @@ describe('SettlementExportService', () => {
   const jsPDFMockedSave = vi.fn();
   const jsPDFMockedAddPage = vi.fn();
   const jsPDFMockedGetNumberOfPages = vi.fn(() => 1);
+  let lastPdfDocument: MockJsPdfDocument | null = null;
+
+  function rememberPdfDocument(document: MockJsPdfDocument): void {
+    lastPdfDocument = document;
+  }
 
   class MockJsPdfDocument {
     save = jsPDFMockedSave;
@@ -43,6 +48,10 @@ describe('SettlementExportService', () => {
         getHeight: () => 297,
       },
     };
+
+    constructor() {
+      rememberPdfDocument(this);
+    }
   }
 
   const createMockData = (includeRefunds: boolean): SettlementExportInput => {
@@ -157,6 +166,7 @@ describe('SettlementExportService', () => {
     jsPDFMockedAddPage.mockReset();
     jsPDFMockedGetNumberOfPages.mockReset();
     jsPDFMockedGetNumberOfPages.mockReturnValue(1);
+    lastPdfDocument = null;
 
     mockPdfDependencies = {
       jsPDF: MockJsPdfDocument as unknown as PdfExportDependencies['jsPDF'],
@@ -193,6 +203,36 @@ describe('SettlementExportService', () => {
     const filename = jsPDFMockedSave.mock.calls[0][0] as string;
     expect(filename).toContain('settlement-test-event-settlement-');
     expect(filename).toContain('.pdf');
+  });
+
+  it('formats the event date in the platform timezone in the PDF', async () => {
+    const mockData = createMockData(false);
+    mockData.event.date = '2026-02-27T07:30:00.000Z';
+
+    await service.export(mockData);
+
+    const textCalls = lastPdfDocument?.text.mock.calls ?? [];
+    expect(textCalls).toContainEqual([
+      'Date: Thursday, February 26, 2026',
+      18,
+      49,
+    ]);
+    expect(
+      textCalls.some(([text]) => text === 'Date: Friday, February 27, 2026'),
+    ).toBe(false);
+  });
+
+  it('prints Unknown instead of falling back to browser-local formatting for invalid event dates', async () => {
+    const mockData = createMockData(false);
+    mockData.event.date = '2026-02-31';
+
+    await service.export(mockData);
+
+    expect(lastPdfDocument?.text.mock.calls).toContainEqual([
+      'Date: Unknown',
+      18,
+      49,
+    ]);
   });
 
   it('should NOT add a second page when there are no refunds', async () => {

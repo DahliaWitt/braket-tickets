@@ -5,23 +5,19 @@ import {
   effect,
   input,
 } from '@angular/core';
-import { injectQuery } from 'convex-angular';
-import { api } from '@convex/_generated/api';
-import { type Id } from '@convex/_generated/dataModel';
-import { type FunctionReturnType } from 'convex/server';
-import { logger } from '@/utils/logger';
+import {injectQuery} from 'convex-angular';
+import {api} from '@convex/_generated/api';
+import {type Id} from '@convex/_generated/dataModel';
+import {type FunctionReturnType} from 'convex/server';
+import {logger} from '@/utils/logger';
+import {formatEventDate} from '@/utils/event-date-format';
 
-type RecentCheckInEntry = FunctionReturnType<typeof api.events.analytics.getRecentCheckIns>[number];
+type RecentCheckInEntry = FunctionReturnType<
+  typeof api.events.analytics.getRecentCheckIns
+>[number];
 
 function formatTimestamp(ms: number): string {
-  const d = new Date(ms);
-  const h = d.getHours();
-  const m = d.getMinutes();
-  const s = d.getSeconds();
-  const hh = String(h).padStart(2, '0');
-  const mm = String(m).padStart(2, '0');
-  const ss = String(s).padStart(2, '0');
-  return `${hh}:${mm}:${ss}`;
+  return formatEventDate(ms, 'HH:mm:ss') ?? '';
 }
 
 @Component({
@@ -67,13 +63,15 @@ function formatTimestamp(ms: number): string {
           data-testid="feed-empty-state"
           aria-label="No check-ins yet"
         >
-          <span class="font-mono text-sm uppercase tracking-widest text-muted-foreground">
+          <span
+            class="font-mono text-sm tracking-widest text-muted-foreground uppercase"
+          >
             WAITING FOR FIRST SCAN
           </span>
         </div>
       } @else {
         <!-- Vertical ticker with hairline left rule -->
-        <div class="border-l border-border/40 pl-4 space-y-3">
+        <div class="space-y-3 border-l border-border/40 pl-4">
           @for (entry of entries(); track entry.ticketId) {
             <div
               class="feed-entry-enter flex items-baseline gap-3"
@@ -82,22 +80,27 @@ function formatTimestamp(ms: number): string {
             >
               <!-- Space Mono timestamp in burnt amber -->
               <span
-                class="font-mono text-xs text-amber-600 dark:text-amber-400 tabular-nums shrink-0 leading-tight"
+                class="shrink-0 font-mono text-xs leading-tight text-amber-600 tabular-nums dark:text-amber-400"
                 data-testid="feed-entry-timestamp"
-                aria-label="Checked in at {{ formatTimestamp(entry.checkedInAt) }}"
-              >{{ formatTimestamp(entry.checkedInAt) }}</span>
+                aria-label="Checked in at {{
+                  formatTimestamp(entry.checkedInAt)
+                }}"
+                >{{ formatTimestamp(entry.checkedInAt) }}</span
+              >
 
               <!-- Attendee name in Inter -->
               <span
-                class="text-sm font-sans text-foreground leading-tight truncate"
+                class="truncate font-sans text-sm leading-tight text-foreground"
                 data-testid="feed-entry-name"
-              >{{ entry.attendeeName }}</span>
+                >{{ entry.attendeeName }}</span
+              >
 
               <!-- Tier in muted plum -->
               <span
-                class="font-mono text-2xs uppercase tracking-wider text-primary/60 shrink-0 leading-tight"
+                class="shrink-0 font-mono text-2xs leading-tight tracking-wider text-primary/60 uppercase"
                 data-testid="feed-entry-tier"
-              >{{ entry.tierName }}</span>
+                >{{ entry.tierName }}</span
+              >
             </div>
           }
         </div>
@@ -110,7 +113,7 @@ export class CheckInActivityFeedComponent {
 
   private readonly recentCheckInsQuery = injectQuery(
     api.events.analytics.getRecentCheckIns,
-    () => ({ eventId: this.eventId(), limit: 20 }),
+    () => ({eventId: this.eventId(), limit: 20}),
   );
 
   readonly entries = computed((): RecentCheckInEntry[] => {
@@ -125,7 +128,10 @@ export class CheckInActivityFeedComponent {
     effect(() => {
       const err = this.recentCheckInsQuery.error();
       if (err) {
-        logger.error('[CheckInActivityFeed] Failed to load recent check-ins', err);
+        logger.error(
+          '[CheckInActivityFeed] Failed to load recent check-ins',
+          err,
+        );
       }
     });
   }

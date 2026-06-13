@@ -9,11 +9,12 @@ import {
   afterNextRender,
   type OnDestroy,
 } from '@angular/core';
-import {DatePipe, NgOptimizedImage} from '@angular/common';
+import {NgOptimizedImage} from '@angular/common';
 import {RouterLink} from '@angular/router';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 import {ZardCardComponent} from '@ui/components/primitives/card/card.component';
 import type {EventVisibility} from '@shared/domain/event-visibility';
+import {EventDatePipe} from '@/utils/event-date.pipe';
 
 export interface EventCardData {
   _id: string; // intentionally string, not Id<'events'> — UI components don't import Convex types
@@ -38,7 +39,7 @@ export interface EventCardData {
   selector: 'app-event-card',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    DatePipe,
+    EventDatePipe,
     RouterLink,
     NgOptimizedImage,
     ZardButtonComponent,
@@ -118,8 +119,8 @@ export interface EventCardData {
             data-testid="event-card-date"
             class="font-mono text-sm font-bold text-muted-foreground"
           >
-            {{ event().date | date: 'mediumDate' }},
-            {{ event().date | date: 'shortTime' }}
+            {{ event().date | eventDate: 'mediumDate' }},
+            {{ event().date | eventDate: 'shortTime' }}
           </p>
           @if (event().location) {
             <p

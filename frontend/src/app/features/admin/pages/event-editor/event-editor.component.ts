@@ -35,9 +35,12 @@ import {
   type PublishedEvent,
 } from '@/features/admin/components/event-publish-dialog/event-publish-dialog.component';
 import {
-  parseEventDate,
   formatDateYmd,
   isDateDirty,
+  formatEventTimeInput,
+  parseEventDateInEventTimeZone,
+  combineLocalEventDateTime,
+  isLocalEventDateTimeValid,
 } from '@/features/admin/utils/event-date.utils';
 import {type EditableEvent} from '@/core/models/event.types';
 import {type Id} from '@convex/_generated/dataModel';
@@ -50,6 +53,7 @@ import {extractConvexErrorMessage} from '@/core/utils/error-message.utils';
 import {toast} from 'ngx-sonner';
 import {logger} from '@/utils/logger';
 import {safeResourceValue} from '@/utils/resource';
+import {getTodayInEventTimeZone} from '@/utils/event-date-format';
 import {
   isSignalFormFieldInvalid,
   signalFormFieldHasError,
@@ -91,18 +95,15 @@ interface ResolvedCreateCommunityScope {
 }
 
 const DEFAULT_NOTAFLOF_MAX_AMOUNT = '10';
-const EVENT_DATE_TIME_ZONE = 'America/Los_Angeles';
 const STRICT_USD_AMOUNT_PATTERN = /^(?:\d+|\d+\.\d{1,2}|\.\d{1,2})$/;
 const INVALID_USD_AMOUNT_MESSAGE = 'Use a dollar amount like 20 or 20.00';
-const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 type StrictUsdParseResult =
   | {valid: true; cents: number}
   | {valid: false; reason: 'blank' | 'negative' | 'invalid'};
 
 function startOfToday(): Date {
-  const today = new Date();
-  return new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  return getTodayInEventTimeZone();
 }
 
 function createEmptyEventFormModel(organizerId = ''): EventFormModel {
@@ -122,99 +123,6 @@ function createEmptyEventFormModel(organizerId = ''): EventFormModel {
     organizerId,
     visibility: 'private',
   };
-}
-
-const eventDateTimePartsFormatter = new Intl.DateTimeFormat('en-CA', {
-  timeZone: EVENT_DATE_TIME_ZONE,
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-  hourCycle: 'h23',
-});
-
-function getDateTimePart(
-  parts: Intl.DateTimeFormatPart[],
-  type: Intl.DateTimeFormatPartTypes,
-): string {
-  const value = parts.find((part) => part.type === type)?.value;
-  if (value === undefined) throw new Error(`Missing date part: ${type}`);
-  return value;
-}
-
-function parseEventDateTimeParts(
-  value: string,
-): Intl.DateTimeFormatPart[] | null {
-  if (DATE_ONLY_REGEX.test(value)) return null;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return eventDateTimePartsFormatter.formatToParts(parsed);
-}
-
-function formatEventTimeInput(value: string | null | undefined): string {
-  if (!value) return '20:00';
-  const parts = parseEventDateTimeParts(value);
-  // Date-only legacy rows make parseEventDateTimeParts return null; keep them
-  // on the default 20:00 path. Change this with getDateTimePart if legacy
-  // rows get a different backfill/default policy.
-  if (!parts) return '20:00';
-  return `${getDateTimePart(parts, 'hour')}:${getDateTimePart(parts, 'minute')}`;
-}
-
-function parseEventDateInEventTimeZone(
-  value: string | null | undefined,
-): Date | null {
-  if (!value) return null;
-
-  const dateOnlyDate = parseEventDate(value);
-  if (dateOnlyDate && DATE_ONLY_REGEX.test(value)) return dateOnlyDate;
-
-  const parts = parseEventDateTimeParts(value);
-  if (!parts) return null;
-
-  return new Date(
-    Number(getDateTimePart(parts, 'year')),
-    Number(getDateTimePart(parts, 'month')) - 1,
-    Number(getDateTimePart(parts, 'day')),
-  );
-}
-
-function combineLocalEventDateTime(date: Date, time: string): Date {
-  const [hours = 0, minutes = 0] = time.split(':').map(Number);
-  const desiredUtc = Date.UTC(
-    date.getFullYear(),
-    date.getMonth(),
-    date.getDate(),
-    hours,
-    minutes,
-    0,
-    0,
-  );
-  let candidateUtc = desiredUtc;
-
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    const parts = eventDateTimePartsFormatter.formatToParts(
-      new Date(candidateUtc),
-    );
-    const renderedUtc = Date.UTC(
-      Number(getDateTimePart(parts, 'year')),
-      Number(getDateTimePart(parts, 'month')) - 1,
-      Number(getDateTimePart(parts, 'day')),
-      Number(getDateTimePart(parts, 'hour')),
-      Number(getDateTimePart(parts, 'minute')),
-      Number(getDateTimePart(parts, 'second')),
-      0,
-    );
-    const diff = desiredUtc - renderedUtc;
-    if (diff === 0) return new Date(candidateUtc);
-    candidateUtc += diff;
-  }
-
-  throw new Error(
-    `Could not resolve event time in ${EVENT_DATE_TIME_ZONE}: ${date.toISOString()} ${time}`,
-  );
 }
 
 function parseStrictUsdCents(value: string): StrictUsdParseResult {
@@ -529,6 +437,18 @@ export class EventEditorComponent implements HasUnsavedChanges {
 
     required(f.date);
     required(f.time);
+    validate(f.time, (ctx) => {
+      const date = ctx.valueOf(f.date);
+      const time = ctx.value();
+      if (!date || !time) return null;
+
+      return isLocalEventDateTimeValid(date, time)
+        ? null
+        : {
+            kind: 'invalidEventTime',
+            message: 'Choose a valid time for this date',
+          };
+    });
     validate(f.date, ({value}) => {
       const date = value();
       if (!date) return null;

@@ -85,7 +85,7 @@ jobs:
         working-directory: ./frontend
         # Frontend's package script already includes a `--` shim for forwarding args through `sh -c`,
         # so coverage flags must be passed with `pnpm test -- --coverage ...`.
-        run: pnpm test -- --coverage --reporter=json --outputFile=../reports/frontend-test-results.json
+        run: pnpm test -- --coverage
         env:
           CONVEX_URL: https://placeholder.convex.cloud
       - name: Unit tests (convex)

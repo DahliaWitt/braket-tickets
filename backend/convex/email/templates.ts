@@ -6,6 +6,7 @@
 
 import {resolveSiteUrl} from '../lib/site_url';
 import {EVENT_DATE_TIME_ZONE} from '../lib/timezone';
+import {eventStartInstantMs} from '@shared/event-time';
 
 /** Escapes HTML special characters to prevent XSS in email templates. */
 function escapeHtml(unsafe: string): string {
@@ -30,8 +31,8 @@ const baseStyles = {
 };
 
 function formatEventDateTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
+  const startsAtMs = eventStartInstantMs(value);
+  if (startsAtMs === null) return value;
 
   return new Intl.DateTimeFormat('en-US', {
     timeZone: EVENT_DATE_TIME_ZONE,
@@ -42,7 +43,7 @@ function formatEventDateTime(value: string): string {
     hour: 'numeric',
     minute: '2-digit',
     timeZoneName: 'short',
-  }).format(date);
+  }).format(new Date(startsAtMs));
 }
 
 const vettingSubmissionTimeFormatter = new Intl.DateTimeFormat('en-US', {
@@ -297,14 +298,7 @@ export function purchasedTicketTemplate(
   isGuest = false,
   community?: {slug?: string; hasCodeOfConduct?: boolean},
 ): {subject: string; html: string} {
-  const dateStr = new Date(event.date).toLocaleDateString(undefined, {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  const dateStr = formatEventDateTime(event.date);
 
   // Escape user-controlled data to prevent XSS
   const safeTitle = escapeHtml(event.title);
@@ -364,14 +358,7 @@ export function resaleAvailableTemplate(
 ): {subject: string; html: string} {
   const safeTitle = escapeHtml(event.title);
   const safeLocation = event.location ? escapeHtml(event.location) : '';
-  const dateStr = new Date(event.date).toLocaleDateString(undefined, {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  const dateStr = formatEventDateTime(event.date);
   const siteUrl = resolveSiteUrl();
   const eventUrl = `${siteUrl}/events/${eventId}`;
 
@@ -427,14 +414,7 @@ export function ticketPurchaseReminderTemplate(args: {
   const unsubUrl = `${apiSiteUrl}/api/unsubscribe?token=${encodeURIComponent(unsubToken)}`;
   const oneClickUnsubUrl = `${apiSiteUrl}/api/unsubscribe/one-click?token=${encodeURIComponent(unsubToken)}`;
   const listId = `Braket Tickets ${organizer.id} <reminders.${organizer.id}.braket.gay>`;
-  const dateStr = new Date(event.date).toLocaleDateString(undefined, {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  const dateStr = formatEventDateTime(event.date);
 
   const content = `
       <h2 style="margin: 0 0 16px 0; font-family: 'Syne', 'Chakra Petch', system-ui, sans-serif; font-size: 24px; line-height: 1.15; font-weight: 700; color: ${baseStyles.textLight};">
@@ -476,7 +456,7 @@ export function ticketPurchaseReminderTemplate(args: {
 
   const textLines = [
     `Ticket reminder for ${event.title}`,
-    `${event.date}${event.location ? ` · ${event.location}` : ''}`,
+    `${dateStr}${event.location ? ` · ${event.location}` : ''}`,
     '',
     message,
     '',

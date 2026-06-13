@@ -24,14 +24,15 @@ import {type CheckInMode} from '@/features/admin/components/check-in-summary-str
 import {BraDarkMode, EDarkModes} from '@ui/services/dark-mode';
 import type {TicketTier} from '@shared/domain/ticket-tier';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
+import {EVENT_DATE_TIME_ZONE} from '@/utils/event-date-format';
+import {eventStartInstantMs} from '@shared/event-time';
 
 /** 2-hour buffer after event start before door-rush mode ends */
 const DOOR_RUSH_BUFFER_MS = 2 * 60 * 60 * 1000;
 /** Assumed event duration in ms used for door-rush window when no endsAt exists */
 const ASSUMED_EVENT_DURATION_MS = 8 * 60 * 60 * 1000;
-const PLATFORM_TIME_ZONE = 'America/Los_Angeles';
 const platformChartTimeFormatter = new Intl.DateTimeFormat('en-US', {
-  timeZone: PLATFORM_TIME_ZONE,
+  timeZone: EVENT_DATE_TIME_ZONE,
   minute: '2-digit',
   hour: 'numeric',
   hour12: true,
@@ -72,7 +73,7 @@ export interface TierPricingStat {
   templateUrl: './event-analytics-tab.component.html',
 })
 export class EventAnalyticsTabComponent {
-  protected readonly platformTimeZone = PLATFORM_TIME_ZONE;
+  protected readonly platformTimeZone = EVENT_DATE_TIME_ZONE;
   private readonly auth = inject(AuthService);
   private readonly browser = inject(BrowserPlatformService);
   private readonly darkMode = inject(BraDarkMode);
@@ -159,7 +160,8 @@ export class EventAnalyticsTabComponent {
   readonly checkInMode = computed((): CheckInMode => {
     const event = this.summary()?.event;
     if (!event?.date) return 'pre-event';
-    const startsAt = new Date(event.date).getTime();
+    const startsAt = eventStartInstantMs(event.date);
+    if (startsAt === null) return 'pre-event';
     const endsAt = startsAt + ASSUMED_EVENT_DURATION_MS;
     const now = Date.now();
     if (now < startsAt) return 'pre-event';

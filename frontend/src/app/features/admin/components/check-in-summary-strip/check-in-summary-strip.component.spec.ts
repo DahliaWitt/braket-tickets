@@ -158,7 +158,7 @@ describe('CheckInSummaryStripComponent', () => {
   });
 
   it('should show peak hour in post-event mode', async () => {
-    const peakStart = new Date(2025, 0, 15, 20, 0, 0).getTime(); // 8 PM
+    const peakStart = Date.parse('2026-02-27T04:00:00.000Z'); // 8 PM in Los Angeles
     const mock = makeMockConvex(
       {totalActive: 100, checkedIn: 80, rate: 0.8, lastCheckInAt: null},
       {peakHourStartsAt: peakStart, peakHourCount: 47, totalCheckedIn: 80},

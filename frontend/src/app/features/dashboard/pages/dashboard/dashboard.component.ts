@@ -5,7 +5,7 @@ import {
   signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
-import {DatePipe, NgOptimizedImage} from '@angular/common';
+import {NgOptimizedImage} from '@angular/common';
 import {AuthService} from '@/core/services/auth.service';
 import {DashboardDataService} from '@/features/dashboard/services/dashboard-data.service';
 import {DashboardPageDataService} from '@/features/dashboard/services/dashboard-page-data.service';
@@ -20,12 +20,13 @@ import {
   getBuyerPricingSummary,
   type BuyerPricingInput,
 } from '@shared/pricing/pricing-summary';
+import {EventDatePipe} from '@/utils/event-date.pipe';
 
 @Component({
   selector: 'app-dashboard',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    DatePipe,
+    EventDatePipe,
     RouterLink,
     NgOptimizedImage,
     ContentLayoutComponent,
