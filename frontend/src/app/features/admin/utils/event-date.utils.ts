@@ -1,6 +1,14 @@
+import {
+  dateKeyToLocalDate,
+  eventLocalDateTimeToUtc,
+  formatEventDateKey,
+  isDateKey,
+  utcToEventLocalParts,
+} from '@shared/event-time';
+
 /**
  * Parses various date string formats into a local-midnight Date.
- * Handles YYYY-MM-DD, ISO strings, and raw Date strings.
+ * Handles YYYY-MM-DD and ISO UTC event dates in the platform event timezone.
  * Returns null for invalid/empty input.
  */
 export function parseEventDate(value: string | null | undefined): Date | null {
@@ -8,29 +16,15 @@ export function parseEventDate(value: string | null | undefined): Date | null {
 
   const ymdMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (ymdMatch) {
-    const year = Number(ymdMatch[1]);
-    const monthIndex = Number(ymdMatch[2]) - 1;
-    const day = Number(ymdMatch[3]);
-    const date = new Date(year, monthIndex, day);
-    return Number.isNaN(date.getTime()) ? null : date;
+    return dateKeyToLocalDate(value);
   }
 
-  // Try to extract YYYY-MM-DD from ISO string (e.g., "2025-01-17T12:34:56.789Z")
-  const isoMatch = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
-  if (isoMatch) {
-    const year = Number(isoMatch[1]);
-    const monthIndex = Number(isoMatch[2]) - 1;
-    const day = Number(isoMatch[3]);
-    const date = new Date(year, monthIndex, day);
-    return Number.isNaN(date.getTime()) ? null : date;
+  const eventDateKey = formatEventDateKey(value);
+  if (eventDateKey) {
+    return dateKeyToLocalDate(eventDateKey);
   }
 
-  // Fallback to parsing as Date
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-
-  // Normalize to local date (remove time component) to avoid timezone issues
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  return null;
 }
 
 /**
@@ -50,6 +44,45 @@ export function compareEventDatesDescending(a: string, b: string): number {
 /** Formats a Date to ISO string for the API. */
 export function formatDateYmd(date: Date): string {
   return date.toISOString();
+}
+
+export function formatLocalDateKey(date: Date): string {
+  const year = String(date.getFullYear()).padStart(4, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function formatEventTimeInput(value: string | null | undefined): string {
+  if (!value) return '20:00';
+  if (isDateKey(value)) return '20:00';
+  return utcToEventLocalParts(value)?.time ?? '20:00';
+}
+
+export function parseEventDateInEventTimeZone(
+  value: string | null | undefined,
+): Date | null {
+  if (!value) return null;
+
+  if (isDateKey(value)) {
+    return dateKeyToLocalDate(value);
+  }
+
+  const parts = utcToEventLocalParts(value);
+  return parts ? dateKeyToLocalDate(parts.dateKey) : null;
+}
+
+export function combineLocalEventDateTime(date: Date, time: string): Date {
+  return new Date(eventLocalDateTimeToUtc(formatLocalDateKey(date), time));
+}
+
+export function isLocalEventDateTimeValid(date: Date, time: string): boolean {
+  try {
+    eventLocalDateTimeToUtc(formatLocalDateKey(date), time);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Compare two nullable Date values by time value (avoids reference equality pitfall). */

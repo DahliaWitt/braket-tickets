@@ -162,8 +162,8 @@
                     {{ event.title }}
                   </h3>
                   <p class="mono-label text-2xs text-muted-foreground/60">
-                    {{ event.date | date: 'mediumDate' }},
-                    {{ event.date | date: 'shortTime' }}
+                    {{ event.date | eventDate: 'mediumDate' }},
+                    {{ event.date | eventDate: 'shortTime' }}
                     &middot;
                     {{ priceSummary(event).primaryText }}
                   </p>
@@ -222,8 +222,8 @@
                     {{ event.title }}
                   </h3>
                   <p class="mono-label text-2xs text-muted-foreground/60">
-                    {{ event.date | date: 'mediumDate' }},
-                    {{ event.date | date: 'shortTime' }}
+                    {{ event.date | eventDate: 'mediumDate' }},
+                    {{ event.date | eventDate: 'shortTime' }}
                   </p>
                   <bra-status-badge status="accent"
                     >Vetting Required</bra-status-badge
@@ -333,8 +333,8 @@
                   <p
                     class="truncate font-mono text-2xs text-muted-foreground/50"
                   >
-                    {{ nextEvt.date | date: 'mediumDate' }},
-                    {{ nextEvt.date | date: 'shortTime' }} &mdash;
+                    {{ nextEvt.date | eventDate: 'mediumDate' }},
+                    {{ nextEvt.date | eventDate: 'shortTime' }} &mdash;
                     {{ nextEvt.title }}
                   </p>
                 }
@@ -543,8 +543,8 @@
                     </a>
                   </h3>
                   <p class="mono-label text-2xs text-muted-foreground">
-                    {{ event.date | date: 'mediumDate' }},
-                    {{ event.date | date: 'shortTime' }}
+                    {{ event.date | eventDate: 'mediumDate' }},
+                    {{ event.date | eventDate: 'shortTime' }}
                     @if (event.location) {
                       <span> &middot; {{ event.location }}</span>
                     }

@@ -17,4 +17,10 @@ describe('validateISODate', () => {
       'Invalid date: must be a valid ISO 8601 UTC date string',
     );
   });
+
+  it('rejects invalid calendar dates instead of normalizing them', () => {
+    expect(() => validateISODate('2030-02-31T20:00:00.000Z')).toThrow(
+      'Invalid date: must be a valid ISO 8601 UTC date string',
+    );
+  });
 });

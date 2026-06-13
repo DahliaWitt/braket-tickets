@@ -305,6 +305,24 @@ describe('confirmPayout', () => {
     expect(settlementData.events.map((event) => event._id)).toContain(eventId);
   });
 
+  it('fails closed when a Connect settlement event has an invalid date', async () => {
+    const t = convexTest();
+    const organizerId = await seedOrganizerWithAccount(t, 'acct_invalid_date');
+    const eventId = await seedEvent(t, organizerId, 'Invalid Date Event');
+
+    await t.run(async (ctx) => {
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Corrupt legacy row used to verify settlement projection fails closed.
+      await ctx.db.patch(eventId, {date: '2026-02-31T08:00:00.000Z'});
+    });
+
+    await expect(
+      t.query(internal.stripe.connect.getSettlementDataForAccount, {
+        stripeConnectedAccountId: 'acct_invalid_date',
+        eligibleBeforeMs: Date.now(),
+      }),
+    ).rejects.toThrow('has an invalid date');
+  });
+
   it('stamps paidOutAt only after confirmed allocations cover the event settlement', async () => {
     const t = convexTest();
     const organizerId = await seedOrganizerWithAccount(t, 'acct_full_paid');

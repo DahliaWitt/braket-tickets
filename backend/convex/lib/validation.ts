@@ -6,6 +6,7 @@
  */
 import type {Doc} from '../_generated/dataModel';
 import {ErrorMessages, throwInvalidInput} from './errors';
+import {parseUtcInstant} from '@shared/event-time';
 export {MAX_COMMUNITY_SLUG_LENGTH} from '@shared/domain/community-slug';
 export {
   MAX_EVENT_TITLE_LENGTH,
@@ -379,10 +380,10 @@ const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
  * Validates that a string is a valid ISO 8601 UTC date string.
  * Rejects human-readable formats (e.g., "Dec 15, 2030") that would silently
  * corrupt index sort order on the by_status_date index.
- * @throws ConvexError if the value fails regex or Date.parse check
+ * @throws ConvexError if the value fails regex or strict UTC instant parsing
  */
 export function validateISODate(value: string, field = 'date'): void {
-  if (!ISO_DATE_REGEX.test(value) || isNaN(Date.parse(value))) {
+  if (!ISO_DATE_REGEX.test(value) || parseUtcInstant(value) === null) {
     throwInvalidInput(
       ErrorMessages.INVALID_INPUT(
         field,

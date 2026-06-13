@@ -1,11 +1,20 @@
-import { ComponentHarness } from '@angular/cdk/testing';
+import {ComponentHarness} from '@angular/cdk/testing';
 
 export class CheckInActivityFeedHarness extends ComponentHarness {
   static hostSelector = 'app-check-in-activity-feed';
 
-  private readonly getEntries = this.locatorForAll('[data-testid="feed-entry"]');
-  private readonly getEmptyState = this.locatorForOptional('[data-testid="feed-empty-state"]');
-  private readonly getNameEls = this.locatorForAll('[data-testid="feed-entry-name"]');
+  private readonly getEntries = this.locatorForAll(
+    '[data-testid="feed-entry"]',
+  );
+  private readonly getEmptyState = this.locatorForOptional(
+    '[data-testid="feed-empty-state"]',
+  );
+  private readonly getNameEls = this.locatorForAll(
+    '[data-testid="feed-entry-name"]',
+  );
+  private readonly getTimestampEls = this.locatorForAll(
+    '[data-testid="feed-entry-timestamp"]',
+  );
 
   async getFeedEntryCount(): Promise<number> {
     return (await this.getEntries()).length;
@@ -16,6 +25,12 @@ export class CheckInActivityFeedHarness extends ComponentHarness {
     const names = await this.getNameEls();
     if (names.length === 0) return null;
     return (await names[0].text()).trim();
+  }
+
+  async getMostRecentEntryTimestamp(): Promise<string | null> {
+    const timestamps = await this.getTimestampEls();
+    if (timestamps.length === 0) return null;
+    return (await timestamps[0].text()).trim();
   }
 
   async isEmptyStateVisible(): Promise<boolean> {

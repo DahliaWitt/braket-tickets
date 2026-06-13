@@ -14,6 +14,7 @@ import {
   throwUnauthenticated,
   throwUnauthorized,
 } from '../lib/errors';
+import {eventStartInstantMs} from '@shared/event-time';
 
 type GuestTicketPdfInput = {
   guest: {
@@ -49,13 +50,21 @@ async function buildGuestTicketPdf({
     eventTitle: event.title,
     promoterName,
     attendeeName: guest.name,
-    eventDate: new Date(event.date).getTime(),
+    eventDate: requireEventStartInstantMs(event.date),
     ticketId: guest._id,
     qrCodeDataUrl,
     ...(event.location ? {location: event.location} : {}),
   });
 
   return {pdfDataUrl, qrCodeDataUrl};
+}
+
+function requireEventStartInstantMs(eventDate: string): number {
+  const startsAtMs = eventStartInstantMs(eventDate);
+  if (startsAtMs === null) {
+    throwAppError('INVALID_EVENT_DATE', 'Event has an invalid date');
+  }
+  return startsAtMs;
 }
 
 export const sendTicket = action({

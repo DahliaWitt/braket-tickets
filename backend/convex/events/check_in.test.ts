@@ -422,12 +422,13 @@ describe('ticketCheckIn.checkIn', () => {
       });
 
       /* eslint-disable no-raw-db-mutations/no-raw-db-mutation -- seedGuest does not support pre-set checkedInAt/checkedInBy; raw insert required to simulate already-checked-in guest */
+      const checkedInAt = new Date('2026-02-27T07:30:00.000Z').getTime();
       const guestId = await t.run(async (ctx) =>
         ctx.db.insert('guests', {
           eventId,
           name: 'Already Here Guest',
           type: 'guest',
-          checkedInAt: Date.now() - 3600000, // 1 hour ago
+          checkedInAt,
           checkedInBy: adminId,
         }),
       );
@@ -440,7 +441,7 @@ describe('ticketCheckIn.checkIn', () => {
       });
 
       expect(result.success).toBe(false);
-      expect(result.message).toContain('Guest already checked in');
+      expect(result.message).toBe('Guest already checked in at 11:30:00 PM');
       expect(result.guest?.checkedInAt).toBeDefined();
     });
 

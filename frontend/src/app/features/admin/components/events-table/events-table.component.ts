@@ -1,4 +1,3 @@
-import {DatePipe} from '@angular/common';
 import {
   Component,
   inject,
@@ -21,6 +20,7 @@ import {type Id} from '@convex/_generated/dataModel';
 import {logger} from '@/utils/logger';
 import {compareEventDatesDescending} from '@/features/admin/utils/event-date.utils';
 import {BraStatusBadgeComponent} from '@ui/components/primitives/status-badge/status-badge.component';
+import {EventDatePipe} from '@/utils/event-date.pipe';
 
 type RouteQueryParams = Readonly<
   Record<string, string | number | boolean | null | undefined>
@@ -30,7 +30,7 @@ type RouteQueryParams = Readonly<
   selector: 'app-admin-events-table',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    DatePipe,
+    EventDatePipe,
     ZardButtonComponent,
     ZardCardComponent,
     EmptyStateComponent,
@@ -144,8 +144,8 @@ type RouteQueryParams = Readonly<
                 <td class="p-5 align-top">
                   <div class="font-mono text-sm text-foreground/80">
                     @if (event.date) {
-                      {{ event.date | date: 'mediumDate' }},
-                      {{ event.date | date: 'shortTime' }}
+                      {{ event.date | eventDate: 'mediumDate' }},
+                      {{ event.date | eventDate: 'shortTime' }}
                     } @else {
                       -
                     }
@@ -250,8 +250,8 @@ type RouteQueryParams = Readonly<
                   </div>
                   <div class="mt-1 font-mono text-xs text-muted-foreground">
                     @if (event.date) {
-                      {{ event.date | date: 'mediumDate' }},
-                      {{ event.date | date: 'shortTime' }}
+                      {{ event.date | eventDate: 'mediumDate' }},
+                      {{ event.date | eventDate: 'shortTime' }}
                     }
                   </div>
                 </div>

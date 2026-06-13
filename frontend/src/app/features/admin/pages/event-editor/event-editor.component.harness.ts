@@ -100,6 +100,7 @@ export class EventEditorHarness extends ComponentHarness {
     '[data-testid="price-error"]',
   );
   private getDateError = this.locatorForOptional('[data-testid="date-error"]');
+  private getTimeError = this.locatorForOptional('[data-testid="time-error"]');
   private getTotalTicketsError = this.locatorForOptional(
     '[data-testid="totalTickets-error"]',
   );
@@ -318,6 +319,11 @@ export class EventEditorHarness extends ComponentHarness {
 
   async getDateErrorText() {
     const error = await this.getDateError();
+    return error ? (await error.text()).trim() : null;
+  }
+
+  async getTimeErrorText() {
+    const error = await this.getTimeError();
     return error ? (await error.text()).trim() : null;
   }
 

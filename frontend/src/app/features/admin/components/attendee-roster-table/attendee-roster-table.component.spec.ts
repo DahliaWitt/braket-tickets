@@ -234,6 +234,20 @@ describe('AttendeeRosterTableComponent', () => {
     expect(row).toBeNull();
   });
 
+  it('formats checked-in timestamps in the platform timezone', async () => {
+    const rows = [
+      makeRow({
+        attendeeName: 'Cheryl Tunt',
+        email: 'alex@test.com',
+        checkedInAt: Date.parse('2026-02-27T07:30:00.000Z'),
+      }),
+    ];
+    await setup(makeMockConvex(rows));
+    const harness = await getHarness(fixture);
+
+    expect(await harness.getCheckInTimeByEmail('alex@test.com')).toBe('23:30');
+  });
+
   it('should toggle show refunded and re-query', async () => {
     const mock = makeMockConvex([makeRow({attendeeName: 'Cheryl Tunt'})]);
     await setup(mock);

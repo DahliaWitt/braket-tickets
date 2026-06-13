@@ -46,6 +46,14 @@ export class AttendeeRosterTableHarness extends ComponentHarness {
     return null;
   }
 
+  async getCheckInTimeByEmail(email: string): Promise<string | null> {
+    const time = await this.locatorForOptional(
+      `[data-testid="roster-row"][data-email="${email}"] [data-testid="row-checkin-time"]`,
+    )();
+    if (!time) return null;
+    return (await time.text()).trim();
+  }
+
   async loadMore(): Promise<void> {
     const btn = await this.getLoadMoreButton();
     if (!btn) throw new Error('Load more button is not visible');
