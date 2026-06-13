@@ -9,7 +9,7 @@ import {
   DestroyRef,
 } from '@angular/core';
 import {DOCUMENT, NgOptimizedImage} from '@angular/common';
-import {RouterLink, RouterLinkActive} from '@angular/router';
+import {type Params, RouterLink, RouterLinkActive} from '@angular/router';
 import {ThemeToggleComponent} from '@ui/components/primitives/theme-toggle/theme-toggle.component';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
@@ -17,6 +17,7 @@ import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
 export interface NavItem {
   label: string;
   routerLink?: string;
+  queryParams?: Params;
   onClick?: () => void;
   class?: string;
   exactMatch?: boolean;
@@ -110,6 +111,7 @@ export interface HeaderAction {
                 z-button
                 zType="ghost"
                 [routerLink]="item.routerLink"
+                [queryParams]="item.queryParams"
                 routerLinkActive="!border-foreground !text-foreground bg-foreground/10"
                 [routerLinkActiveOptions]="{exact: !!item.exactMatch}"
                 [class]="
@@ -196,6 +198,7 @@ export interface HeaderAction {
               @if (item.routerLink) {
                 <a
                   [routerLink]="item.routerLink"
+                  [queryParams]="item.queryParams"
                   routerLinkActive="bg-foreground/10 text-foreground"
                   [routerLinkActiveOptions]="{exact: !!item.exactMatch}"
                   class="block w-full rounded-lg px-4 py-[14px] text-left font-mono text-sm tracking-widest text-muted-foreground uppercase transition-colors hover:bg-muted/50 hover:text-foreground"

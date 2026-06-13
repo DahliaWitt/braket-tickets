@@ -3212,6 +3212,7 @@ export declare const api: {
           email?: string;
           emailVerificationTime?: number;
           globalMarketingOptOut?: boolean;
+          defaultCommunityAdminOrganizerId?: Id<"organizers">;
           id: Id<"users">;
           image?: string;
           isRootAdmin: boolean;
@@ -3340,6 +3341,12 @@ export declare const api: {
         "mutation",
         "public",
         { organizerId: Id<"organizers">; userId: Id<"users"> },
+        null
+      >;
+      setDefaultCommunityAdminOrganizer: FunctionReference<
+        "mutation",
+        "public",
+        { organizerId: Id<"organizers"> },
         null
       >;
       search: FunctionReference<

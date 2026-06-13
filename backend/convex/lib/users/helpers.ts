@@ -68,10 +68,12 @@ export function stripSensitiveUserFields(u: Doc<'users'>) {
     emailChangeTokenExpiry: _ecte,
     authEmailVerified: _aev,
     betterAuthUserId: _buid,
+    defaultCommunityAdminOrganizerId: _dcaoid,
     ...safe
   } = u;
   void _aev;
   void _buid;
+  void _dcaoid;
   return safe;
 }
 

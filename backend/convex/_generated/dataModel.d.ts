@@ -1600,6 +1600,7 @@ export type DataModel = {
       emailChangeTokenExpiry?: number;
       emailVerificationTime?: number;
       globalMarketingOptOut?: boolean;
+      defaultCommunityAdminOrganizerId?: Id<"organizers">;
       image?: string;
       name?: string;
       pendingEmail?: string;
@@ -1618,6 +1619,7 @@ export type DataModel = {
       | "emailChangeTokenExpiry"
       | "emailVerificationTime"
       | "globalMarketingOptOut"
+      | "defaultCommunityAdminOrganizerId"
       | "image"
       | "name"
       | "pendingEmail"
