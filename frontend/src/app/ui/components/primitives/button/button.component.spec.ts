@@ -5,6 +5,7 @@ import {type ComponentFixture, TestBed} from '@angular/core/testing';
 import {vi} from 'vitest';
 import {ZardButtonComponentHarness} from './button.component.harness';
 import {ZardButtonComponent} from './button.component';
+import {ZardIconComponent} from '../icon/icon.component';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -59,6 +60,24 @@ class ToggleComponentDisabledTestHostComponent {
   onZDisabledClick = vi.fn();
   onZLoadingClick = vi.fn();
 }
+
+@Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <button
+      type="button"
+      z-button
+      zType="ghost"
+      zSize="sm"
+      data-testid="projected-loading-action"
+    >
+      <z-icon zType="loader-circle" class="mr-2 animate-spin" />
+      Ticket
+    </button>
+  `,
+  imports: [ZardButtonComponent, ZardIconComponent],
+})
+class ProjectedSpinnerButtonTestHostComponent {}
 
 describe('ZardButtonComponent', () => {
   let fixture: ComponentFixture<TestHostComponent>;
@@ -166,6 +185,30 @@ describe('ZardButtonComponent', () => {
     expect(
       toggleFixture.componentInstance.onZLoadingClick,
     ).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps projected loading spinners centered in button actions', () => {
+    const projectedFixture = TestBed.createComponent(
+      ProjectedSpinnerButtonTestHostComponent,
+    );
+    projectedFixture.detectChanges();
+
+    const action = (
+      projectedFixture.nativeElement as HTMLElement
+    ).querySelector<HTMLElement>('[data-testid="projected-loading-action"]')!;
+    const spinnerHost = action.querySelector<HTMLElement>('z-icon')!;
+    const spinnerSvg = spinnerHost.querySelector<SVGElement>('svg')!;
+    const spinnerHostStyle = getComputedStyle(spinnerHost);
+    const spinnerSvgStyle = getComputedStyle(spinnerSvg);
+
+    expect(spinnerHost.classList.contains('animate-spin')).toBe(true);
+    expect(spinnerHostStyle.display).toBe('inline-flex');
+    expect(spinnerHostStyle.alignItems).toBe('center');
+    expect(spinnerHostStyle.justifyContent).toBe('center');
+    expect(['0', '0px']).toContain(spinnerHostStyle.lineHeight);
+    expect(spinnerHostStyle.transformOrigin).toContain('center');
+    expect(spinnerSvgStyle.display).toBe('block');
+    expect(spinnerSvgStyle.transformOrigin).toContain('center');
   });
 });
 

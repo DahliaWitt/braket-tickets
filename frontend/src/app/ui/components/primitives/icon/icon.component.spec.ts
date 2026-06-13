@@ -5,7 +5,13 @@ import {ZARD_ICONS, type LucideIconData, type ZardIcon} from './icons';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: ` <z-icon [zType]="iconType()" [zStrokeWidth]="strokeWidth()" /> `,
+  template: `
+    <z-icon
+      class="animate-spin text-primary"
+      [zType]="iconType()"
+      [zStrokeWidth]="strokeWidth()"
+    />
+  `,
   imports: [ZardIconComponent],
 })
 class TestHostComponent {
@@ -67,5 +73,15 @@ describe('ZardIconComponent', () => {
     expect(svgElement).toBeTruthy();
     expect(svgElement?.innerHTML).toContain('path');
     expect(svgElement?.getAttribute('stroke-width')).toBe('2');
+  });
+
+  it('keeps animated icons centered on their own SVG box', () => {
+    const svgElement = (
+      fixture.nativeElement as HTMLElement
+    ).querySelector<SVGElement>('svg')!;
+
+    expect(svgElement.classList.contains('animate-spin')).toBe(true);
+    expect(svgElement.classList.contains('block')).toBe(true);
+    expect(svgElement.classList.contains('origin-center')).toBe(true);
   });
 });
