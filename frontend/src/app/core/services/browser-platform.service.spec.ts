@@ -20,6 +20,7 @@ describe('BrowserPlatformService', () => {
           assign: vi.fn(),
         },
         open: vi.fn(),
+        setTimeout: vi.fn(() => 1),
         localStorage: {
           getItem: vi.fn((key: string) => (key === 'debug' ? 'true' : null)),
           setItem: vi.fn(),
@@ -152,7 +153,7 @@ describe('BrowserPlatformService', () => {
     );
   });
 
-  it('downloads blobs with a temporary anchor and revokes the object URL', () => {
+  it('downloads blobs with a temporary anchor and defers object URL revocation', () => {
     const {service, documentStub, appended, removed} = setup();
     const blob = new Blob(['id,name']);
 
@@ -164,8 +165,12 @@ describe('BrowserPlatformService', () => {
     expect(appended).toHaveLength(1);
     expect((appended[0] as HTMLAnchorElement).download).toBe('attendees.csv');
     expect(removed).toEqual(appended);
-    expect(documentStub.defaultView?.URL.revokeObjectURL).toHaveBeenCalledWith(
-      'blob:download',
+    expect(
+      documentStub.defaultView?.URL.revokeObjectURL,
+    ).not.toHaveBeenCalled();
+    expect(documentStub.defaultView?.setTimeout).toHaveBeenCalledWith(
+      expect.any(Function),
+      60_000,
     );
   });
 
@@ -187,6 +192,7 @@ describe('BrowserPlatformService', () => {
     expect(documentStub.defaultView?.URL.revokeObjectURL).toHaveBeenCalledWith(
       'blob:download',
     );
+    expect(documentStub.defaultView?.setTimeout).not.toHaveBeenCalled();
   });
 
   it('writes clipboard text through the browser boundary', async () => {

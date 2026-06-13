@@ -25,6 +25,21 @@ import {ZardTooltipDirective} from '@ui/components/primitives/tooltip/tooltip';
 import {logger} from '@/utils/logger';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
 
+function pdfDataUrlToBlob(dataUrl: string): Blob {
+  const [metadata, base64] = dataUrl.split(',');
+  if (!metadata?.startsWith('data:application/pdf;base64') || !base64) {
+    throw new Error('Invalid PDF data URL');
+  }
+
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return new Blob([bytes], {type: 'application/pdf'});
+}
+
 function isAddGuestDialogResult(value: unknown): value is AddGuestDialogResult {
   if (!value || typeof value !== 'object') {
     return false;
@@ -142,8 +157,8 @@ export class EventManagementGuestsTabComponent {
     try {
       const pdfDataUrl =
         await this.adminEventsService.getGuestTicketPdf(guestId);
-      this.browser.navigateWithAnchor(
-        pdfDataUrl,
+      this.browser.downloadBlob(
+        pdfDataUrlToBlob(pdfDataUrl),
         `guest-ticket-${guestId}.pdf`,
       );
       toast.success('Guest ticket download started.');
