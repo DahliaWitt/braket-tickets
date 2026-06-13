@@ -11,6 +11,9 @@ export class AdminEventsTableHarness extends ComponentHarness {
   private getEditButtons = this.locatorForAll('[data-testid="edit-event"]');
   private getDeleteButtons = this.locatorForAll('[data-testid="delete-event"]');
   private getStatusBadges = this.locatorForAll('[data-testid="event-status"]');
+  private getMobileContent = this.locatorForAll(
+    '[data-testid="event-mobile-content"]',
+  );
 
   async getEntryCount(): Promise<number> {
     return (await this.getEntries()).length;
@@ -19,6 +22,11 @@ export class AdminEventsTableHarness extends ComponentHarness {
   async getEntryTexts(): Promise<string[]> {
     const entries = await this.getEntries();
     return Promise.all(entries.map((entry) => entry.text()));
+  }
+
+  async getMobileContentTextAtIndex(index: number): Promise<string> {
+    const contents = await this.getMobileContent();
+    return (await contents[index]?.text()) ?? '';
   }
 
   async clickCreateEvent(): Promise<void> {

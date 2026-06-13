@@ -258,7 +258,18 @@ type RouteQueryParams = Readonly<
               </div>
             </ng-template>
 
-            <div class="space-y-4">
+            <div class="space-y-4" data-testid="event-mobile-content">
+              <a
+                z-button
+                zType="outline"
+                [zFull]="true"
+                data-testid="manage-event"
+                [href]="eventRouteHref(event, 'manage')"
+                (click)="navigateToEvent($event, event, 'manage')"
+              >
+                MANAGE
+              </a>
+
               <div
                 class="grid grid-cols-1 gap-2 border-t border-b border-border/50 py-3 text-sm"
               >
@@ -288,16 +299,6 @@ type RouteQueryParams = Readonly<
             </div>
 
             <div card-footer class="flex w-full gap-3 pt-0">
-              <a
-                z-button
-                zType="outline"
-                class="flex-1"
-                data-testid="manage-event"
-                [href]="eventRouteHref(event, 'manage')"
-                (click)="navigateToEvent($event, event, 'manage')"
-              >
-                MANAGE
-              </a>
               <a
                 z-button
                 zType="default"
