@@ -1,6 +1,6 @@
-import { cva, type VariantProps } from 'class-variance-authority';
+import {cva, type VariantProps} from 'class-variance-authority';
 
-export const iconVariants = cva('flex items-center justify-center', {
+export const iconVariants = cva('block shrink-0 origin-center', {
   variants: {
     zSize: {
       sm: 'size-3',
