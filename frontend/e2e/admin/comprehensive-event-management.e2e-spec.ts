@@ -86,6 +86,66 @@ async function ensureManagementDataLoaded(
   );
 }
 
+type GuestDownloadProbeEvent =
+  | {
+      kind: 'createObjectURL';
+      size: number;
+      type: string;
+      urlProtocol: string;
+    }
+  | {
+      download: string;
+      hrefProtocol: string;
+      kind: 'anchorClick';
+    };
+
+async function installGuestDownloadProbe(adminPage: Page): Promise<void> {
+  await adminPage.addInitScript(() => {
+    type GuestDownloadWindow = Window & {
+      __braketGuestDownloadEvents?: GuestDownloadProbeEvent[];
+    };
+    const targetWindow = window as GuestDownloadWindow;
+    targetWindow.__braketGuestDownloadEvents = [];
+
+    const originalCreateObjectURL = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = (blob: Blob | MediaSource): string => {
+      const url = originalCreateObjectURL(blob);
+      if (blob instanceof Blob) {
+        targetWindow.__braketGuestDownloadEvents?.push({
+          kind: 'createObjectURL',
+          size: blob.size,
+          type: blob.type,
+          urlProtocol: new URL(url).protocol,
+        });
+      }
+      return url;
+    };
+
+    const originalClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function clickWithProbe() {
+      if (this.download.startsWith('guest-ticket-')) {
+        targetWindow.__braketGuestDownloadEvents?.push({
+          download: this.download,
+          hrefProtocol: new URL(this.href).protocol,
+          kind: 'anchorClick',
+        });
+      }
+      return originalClick.call(this);
+    };
+  });
+}
+
+async function getGuestDownloadProbeEvents(
+  adminPage: Page,
+): Promise<GuestDownloadProbeEvent[]> {
+  return adminPage.evaluate(() => {
+    type GuestDownloadWindow = Window & {
+      __braketGuestDownloadEvents?: GuestDownloadProbeEvent[];
+    };
+    return (window as GuestDownloadWindow).__braketGuestDownloadEvents ?? [];
+  });
+}
+
 async function updateTicketSalesStatusWithRetry(
   adminPage: Page,
   eventId: string,
@@ -798,6 +858,85 @@ test.describe('Comprehensive Admin Event Management', () => {
 
       // Verify guest count updated
       await expect(guestCount).toContainText('2 records', {timeout: 5000});
+    });
+
+    test('guest ticket download uses a PDF Blob URL @smoke', async ({
+      adminPage,
+      convexHelper,
+    }) => {
+      test.setTimeout(60_000);
+      await installGuestDownloadProbe(adminPage);
+
+      const suffix = Date.now();
+      const {orgId} = await setupOrgWithAdmin(
+        convexHelper,
+        suffix,
+        'Guest Download Org',
+      );
+
+      const eventTitle = uniqueName('Guest Ticket Download Event');
+      const eventId = await convexHelper.mutation(
+        api.testing.events.seedEvent,
+        {
+          title: eventTitle,
+          date: '2030-09-15',
+          price: 2500,
+          totalTickets: 75,
+          status: 'published',
+          organizerId: orgId as Id<'organizers'>,
+        },
+      );
+      await convexHelper.mutation(api.testing.guests.seedGuest, {
+        eventId: eventId as Id<'events'>,
+        name: 'Blob Download Guest',
+        email: `blob-download-${suffix}@test.com`,
+        type: 'guest',
+        notes: 'Download smoke test',
+      });
+
+      await ensureManagementDataLoaded(adminPage, eventId, {navigate: true});
+
+      const mgmtEnv = createEnvironment(adminPage);
+      const mgmtHarness = await mgmtEnv.getHarness(EventManagementHarness);
+      await mgmtHarness.clickTab('guests');
+      await expect(
+        adminPage.getByRole('heading', {name: 'Guest List', level: 2}),
+      ).toBeVisible();
+
+      const viewport = adminPage.viewportSize();
+      const isMobile = (viewport?.width ?? 0) < 768;
+      const guestRowSelector = isMobile
+        ? 'div.md\\:hidden z-card[data-testid="guest-row"]'
+        : 'div.hidden.md\\:block tr[data-testid="guest-row"]';
+      const guestRow = adminPage
+        .locator(guestRowSelector)
+        .filter({hasText: 'Blob Download Guest'})
+        .first();
+      await expect(guestRow).toBeVisible({timeout: 10000});
+
+      const downloadButton = guestRow.getByRole('button', {
+        name: /Download ticket for Blob Download Guest/i,
+      });
+      await downloadButton.scrollIntoViewIfNeeded();
+      await downloadButton.click();
+
+      await expect
+        .poll(() => getGuestDownloadProbeEvents(adminPage), {
+          timeout: 15000,
+        })
+        .toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              kind: 'createObjectURL',
+              type: 'application/pdf',
+              urlProtocol: 'blob:',
+            }),
+            expect.objectContaining({
+              hrefProtocol: 'blob:',
+              kind: 'anchorClick',
+            }),
+          ]),
+        );
     });
 
     test('event status transitions: draft -> published -> ended', async ({

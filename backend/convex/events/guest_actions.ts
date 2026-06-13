@@ -15,6 +15,7 @@ import {
   throwUnauthorized,
 } from '../lib/errors';
 import {eventStartInstantMs} from '@shared/event-time';
+import {requireGuestTicketSendAccess} from './_impl/guest_ticket_access';
 
 type GuestTicketPdfInput = {
   guest: {
@@ -71,23 +72,7 @@ export const sendTicket = action({
   args: {guestId: v.id('guests')},
   returns: v.null(),
   handler: async (ctx, args) => {
-    const userId = await ctx.runQuery(
-      internal.lib.auth_helpers.getAuthUserIdInternal,
-      {},
-    );
-    if (!userId) throwUnauthenticated();
-
-    const isRootAdmin = await ctx.runQuery(internal.lib.access._isRootAdmin, {
-      userId,
-    });
-    if (!isRootAdmin) throwUnauthorized();
-
-    const guest = await ctx.runQuery(internal.events.guests.getInternal, {
-      id: args.guestId,
-    });
-    if (!guest) throwNotFound('Guest');
-    if (!guest.email)
-      throwAppError('INVALID_STATE', 'Guest has no email provided');
+    const guest = await requireGuestTicketSendAccess(ctx, args.guestId);
 
     const eventP = ctx.runQuery(internal.events.management.getInternal, {
       id: guest.eventId,

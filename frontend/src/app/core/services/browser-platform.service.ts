@@ -177,11 +177,13 @@ export class BrowserPlatformService {
     link.href = url;
     link.download = filename;
     let attached = false;
+    let clickSucceeded = false;
 
     try {
       this.document.body.appendChild(link);
       attached = true;
       link.click();
+      clickSucceeded = true;
     } finally {
       if (attached) {
         try {
@@ -190,7 +192,11 @@ export class BrowserPlatformService {
           // Preserve the original download error, if any.
         }
       }
-      this.revokeObjectUrl(url);
+      if (clickSucceeded) {
+        this.windowRef.setTimeout(() => this.revokeObjectUrl(url), 60_000);
+      } else {
+        this.revokeObjectUrl(url);
+      }
     }
   }
 

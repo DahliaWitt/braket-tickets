@@ -30,6 +30,27 @@ import {mergeClasses} from '@ui/utils/merge-classes';
       [innerHTML]="svgContent()"
     ></svg>
   `,
+  styles: `
+    z-icon,
+    [z-icon] {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      line-height: 0;
+      vertical-align: middle;
+      transform-origin: center;
+      transform-box: fill-box;
+    }
+
+    z-icon > svg,
+    [z-icon] > svg {
+      display: block;
+      flex-shrink: 0;
+      transform-origin: center;
+      transform-box: fill-box;
+    }
+  `,
   changeDetection: ChangeDetectionStrategy.OnPush,
   encapsulation: ViewEncapsulation.None,
   host: {

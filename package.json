@@ -43,7 +43,7 @@
     "sync:env:prod:preview": "pnpm --filter backend sync:env:prod:preview",
     "typecheck": "pnpm typecheck:frontend && pnpm typecheck:convex && pnpm typecheck:scripts && pnpm typecheck:shared && pnpm typecheck:ops",
     "typecheck:convex": "pnpm --filter backend typecheck",
-    "typecheck:frontend": "npx tsx scripts/with-env.ts pnpm --filter frontend exec ng build --configuration=development --progress=false && pnpm exec tsc --noEmit -p frontend/tsconfig.spec.json && pnpm exec tsc --noEmit -p frontend/scripts/tsconfig.json && pnpm exec tsc --noEmit -p frontend/functions/tsconfig.json",
+    "typecheck:frontend": "pnpm --filter frontend exec tsx scripts/sync-help-center-shipping.ts && npx tsx scripts/with-env.ts pnpm --filter frontend exec ng build --configuration=development --progress=false && pnpm exec tsc --noEmit -p frontend/tsconfig.spec.json && pnpm exec tsc --noEmit -p frontend/scripts/tsconfig.json && pnpm exec tsc --noEmit -p frontend/functions/tsconfig.json",
     "typecheck:scripts": "pnpm exec tsc --noEmit -p scripts/tsconfig.json && pnpm exec tsc --noEmit -p backend/scripts/tsconfig.json",
     "typecheck:shared": "pnpm exec tsc --noEmit -p shared/tsconfig.json",
     "typecheck:ops": "pnpm exec tsc --noEmit -p ops/tsconfig.json",

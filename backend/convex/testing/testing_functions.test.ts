@@ -399,6 +399,14 @@ describe('testing function seed projections', () => {
         .unique();
 
       expect(lot45OutboundTrustLink?._id).toBeTruthy();
+
+      const rooftopListening = await ctx.db.get(
+        result.events.rooftopListeningId,
+      );
+      expect(rooftopListening?.title).toBe('Rooftop Listening');
+      expect(new Date(rooftopListening?.date ?? '').getTime()).toBeGreaterThan(
+        Date.now(),
+      );
     });
   });
 
