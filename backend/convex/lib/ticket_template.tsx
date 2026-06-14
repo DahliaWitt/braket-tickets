@@ -19,6 +19,7 @@ import {INTER_400_BASE64} from './fonts/inter_400';
 import {INTER_700_BASE64} from './fonts/inter_700';
 import {SPACE_MONO_400_BASE64} from './fonts/space_mono_400';
 import {SPACE_MONO_700_BASE64} from './fonts/space_mono_700';
+import {EVENT_DATE_TIME_ZONE} from './timezone';
 
 export interface TicketPdfData {
   eventTitle: string;
@@ -69,21 +70,29 @@ const TITLE_AREA_W = PAGE_W - MARGIN * 2 - 2 - FRAME_INNER_PAD * 2;
 const QR_PANEL_W = 260;
 const ATTENDEE_COLUMN_W = TITLE_AREA_W;
 
-function pad2(n: number): string {
-  return String(n).padStart(2, '0');
-}
-
-function formatDateParts(ts: number): {
+export function formatTicketDateParts(ts: number): {
   weekday: string;
   isoDate: string;
   time: string;
 } {
   const d = new Date(ts);
-  const weekday = d
-    .toLocaleDateString(undefined, {weekday: 'short'})
-    .toUpperCase();
-  const isoDate = `${d.getFullYear()}.${pad2(d.getMonth() + 1)}.${pad2(d.getDate())}`;
+  const dateParts = new Intl.DateTimeFormat('en-US', {
+    timeZone: EVENT_DATE_TIME_ZONE,
+    weekday: 'short',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(d);
+  const part = (type: Intl.DateTimeFormatPartTypes): string => {
+    const value = dateParts.find((candidate) => candidate.type === type)?.value;
+    if (value === undefined)
+      throw new Error(`Missing ticket date part ${type}`);
+    return value;
+  };
+  const weekday = part('weekday').toUpperCase();
+  const isoDate = `${part('year')}.${part('month')}.${part('day')}`;
   const time = d.toLocaleTimeString('en-US', {
+    timeZone: EVENT_DATE_TIME_ZONE,
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
@@ -406,7 +415,7 @@ const s = StyleSheet.create({
 function TicketPage({data}: {data: TicketPdfData}) {
   const titleLines = fitTitleLines(data.eventTitle);
   const attendee = fitAttendeeName(data.attendeeName);
-  const {weekday, isoDate, time} = formatDateParts(data.eventDate);
+  const {weekday, isoDate, time} = formatTicketDateParts(data.eventDate);
   const code = shortTicketCode(data.ticketId);
 
   return (

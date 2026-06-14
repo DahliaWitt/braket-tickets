@@ -2,6 +2,7 @@ import {test, expect, uniqueName} from '../helpers/test-setup';
 import {signInUser} from '../test-utils/auth-helpers';
 import {api} from '@convex/_generated/api';
 import type {Id} from '@convex/_generated/dataModel';
+import {todayDateKey} from '@shared/event-time';
 
 test.describe('Resale Day-Of Listing', () => {
   test.slow();
@@ -10,17 +11,7 @@ test.describe('Resale Day-Of Listing', () => {
     page,
     convexHelper,
   }) => {
-    // TODO: Pull timezone from event config when per-event timezones are supported.
-    const laParts = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'America/Los_Angeles',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).formatToParts(new Date());
-    const year = laParts.find((part) => part.type === 'year')?.value ?? '0000';
-    const month = laParts.find((part) => part.type === 'month')?.value ?? '00';
-    const day = laParts.find((part) => part.type === 'day')?.value ?? '00';
-    const eventDateKey = `${year}-${month}-${day}`;
+    const eventDateKey = todayDateKey();
 
     const sellerEmail = `seller-dayof-${Date.now()}@test.com`;
     const seller = await convexHelper.action(

@@ -194,7 +194,7 @@ export async function revokeCommunityAdmin(
 
   const [targetUser, remainingCommunityIds, targetIsPlatformAdmin] =
     await Promise.all([
-      ctx.db.get(args.userId),
+      ctx.db.get('users', args.userId),
       getUserCommunities(ctx, args.userId),
       isPlatformAdmin(ctx, args.userId),
     ]);

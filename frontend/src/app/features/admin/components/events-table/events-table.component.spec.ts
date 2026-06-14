@@ -48,6 +48,7 @@ describe('AdminEventsTableComponent', () => {
     title: 'Event 1',
     date: '2023-01-01',
     location: 'Loc 1',
+    description: 'A long event description',
     price: 100,
     totalTickets: 10,
     status: 'published',
@@ -264,6 +265,22 @@ describe('AdminEventsTableComponent', () => {
       '/admin/events/1/manage',
     );
     expect(await harness.getEditHrefAtIndex(0)).toBe('/admin/events/1/edit');
+  });
+
+  it('renders the mobile manage action before event details', async () => {
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      AdminEventsTableHarness,
+    );
+
+    const mobileContent = (
+      await harness.getMobileContentTextAtIndex(0)
+    ).toLowerCase();
+
+    expect(mobileContent.indexOf('manage')).toBeGreaterThanOrEqual(0);
+    expect(mobileContent.indexOf('description')).toBeGreaterThan(
+      mobileContent.indexOf('manage'),
+    );
   });
 
   it('should navigate using custom routePrefix', () => {

@@ -17,6 +17,19 @@ import {
   isValidTicketStatus,
   isUsedTicketStatus,
 } from '../../lib/validators/ticketing';
+import {EVENT_DATE_TIME_ZONE} from '../../lib/timezone';
+
+const platformTimeFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: EVENT_DATE_TIME_ZONE,
+  hour: 'numeric',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: true,
+});
+
+function formatPlatformTime(timestamp: number): string {
+  return platformTimeFormatter.format(new Date(timestamp));
+}
 
 type TicketResult = {
   _id: Id<'tickets'>;
@@ -330,7 +343,7 @@ export async function checkIn(
 
     if (guest.checkedInAt) {
       return failCheckIn({
-        message: `Guest already checked in at ${new Date(guest.checkedInAt).toLocaleTimeString()}`,
+        message: `Guest already checked in at ${formatPlatformTime(guest.checkedInAt)}`,
         guest: {
           _id: guest._id,
           _creationTime: guest._creationTime,

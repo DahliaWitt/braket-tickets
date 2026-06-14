@@ -18,18 +18,14 @@ import {ZardInputDirective} from '@ui/components/primitives/input/input.directiv
 import {logger} from '@/utils/logger';
 import {toast} from 'ngx-sonner';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
+import {formatEventDate} from '@/utils/event-date-format';
 
 type RosterRow = FunctionReturnType<
   typeof api.events.analytics.getEventAttendeeRosterPage
 >['page'][number];
 
 function formatTimestampFull(ms: number): string {
-  const d = new Date(ms);
-  const h = d.getHours();
-  const m = d.getMinutes();
-  const hh = String(h).padStart(2, '0');
-  const mm = String(m).padStart(2, '0');
-  return `${hh}:${mm}`;
+  return formatEventDate(ms, 'HH:mm') ?? '';
 }
 
 @Component({
@@ -41,7 +37,7 @@ function formatTimestampFull(ms: number): string {
       <!-- Header row: search, toggle, export -->
       <div class="flex flex-wrap items-center gap-3">
         <!-- Inline search -->
-        <div class="flex-1 min-w-48 max-w-sm relative">
+        <div class="relative max-w-sm min-w-48 flex-1">
           <input
             zInput
             type="search"
@@ -56,19 +52,19 @@ function formatTimestampFull(ms: number): string {
 
         <!-- Show refunded toggle -->
         <label
-          class="flex items-center gap-2 cursor-pointer select-none"
+          class="flex cursor-pointer items-center gap-2 select-none"
           data-testid="show-refunded-label"
         >
           <input
             type="checkbox"
             [checked]="showRefunded()"
             (change)="onToggleRefunded($event)"
-            class="w-4 h-4 rounded border-border accent-primary"
+            class="h-4 w-4 rounded border-border accent-primary"
             aria-label="Show refunded tickets"
             data-testid="show-refunded-toggle"
           />
           <span
-            class="text-xs font-mono uppercase tracking-wider text-muted-foreground"
+            class="font-mono text-xs tracking-wider text-muted-foreground uppercase"
           >
             Show refunded
           </span>
@@ -82,7 +78,7 @@ function formatTimestampFull(ms: number): string {
             zType="ghost"
             [zDisabled]="isExporting()"
             (click)="exportCsv()"
-            class="border border-border/50 font-mono uppercase tracking-widest text-xs ml-auto"
+            class="ml-auto border border-border/50 font-mono text-xs tracking-widest uppercase"
             data-testid="export-csv-button"
             aria-label="Export roster as CSV"
           >
@@ -96,48 +92,48 @@ function formatTimestampFull(ms: number): string {
       </div>
 
       <!-- Table -->
-      <div class="rounded-xl border border-border/60 overflow-x-auto">
+      <div class="overflow-x-auto rounded-xl border border-border/60">
         <table
-          class="w-full text-sm font-sans"
+          class="w-full font-sans text-sm"
           aria-label="Event attendee roster"
           data-testid="roster-table"
         >
           <thead>
             <tr class="border-b border-border/60 bg-muted/30">
               <th
-                class="text-left px-4 py-3 text-xs font-mono uppercase tracking-wider text-muted-foreground"
+                class="px-4 py-3 text-left font-mono text-xs tracking-wider text-muted-foreground uppercase"
               >
                 Name
               </th>
               @if (showEmailColumn()) {
                 <th
-                  class="text-left px-4 py-3 text-xs font-mono uppercase tracking-wider text-muted-foreground"
+                  class="px-4 py-3 text-left font-mono text-xs tracking-wider text-muted-foreground uppercase"
                 >
                   Email
                 </th>
               }
               <th
-                class="text-left px-4 py-3 text-xs font-mono uppercase tracking-wider text-muted-foreground"
+                class="px-4 py-3 text-left font-mono text-xs tracking-wider text-muted-foreground uppercase"
               >
                 Tier
               </th>
               <th
-                class="text-left px-4 py-3 text-xs font-mono uppercase tracking-wider text-muted-foreground hidden sm:table-cell"
+                class="hidden px-4 py-3 text-left font-mono text-xs tracking-wider text-muted-foreground uppercase sm:table-cell"
               >
                 Purchased
               </th>
               <th
-                class="text-left px-4 py-3 text-xs font-mono uppercase tracking-wider text-muted-foreground"
+                class="px-4 py-3 text-left font-mono text-xs tracking-wider text-muted-foreground uppercase"
               >
                 Status
               </th>
               <th
-                class="text-left px-4 py-3 text-xs font-mono uppercase tracking-wider text-muted-foreground"
+                class="px-4 py-3 text-left font-mono text-xs tracking-wider text-muted-foreground uppercase"
               >
                 Checked in
               </th>
               <th
-                class="text-left px-4 py-3 text-xs font-mono uppercase tracking-wider text-muted-foreground hidden md:table-cell"
+                class="hidden px-4 py-3 text-left font-mono text-xs tracking-wider text-muted-foreground uppercase md:table-cell"
               >
                 By
               </th>
@@ -152,7 +148,7 @@ function formatTimestampFull(ms: number): string {
                     class="px-4 py-3"
                   >
                     <div
-                      class="h-4 w-full rounded bg-muted/60 animate-pulse"
+                      class="h-4 w-full animate-pulse rounded bg-muted/60"
                     ></div>
                   </td>
                 </tr>
@@ -161,7 +157,7 @@ function formatTimestampFull(ms: number): string {
               <tr>
                 <td
                   [attr.colspan]="showEmailColumn() ? 7 : 6"
-                  class="px-4 py-8 text-center font-mono text-xs uppercase tracking-widest text-muted-foreground"
+                  class="px-4 py-8 text-center font-mono text-xs tracking-widest text-muted-foreground uppercase"
                   data-testid="roster-empty"
                 >
                   @if (searchQuery()) {
@@ -174,7 +170,7 @@ function formatTimestampFull(ms: number): string {
             } @else {
               @for (row of rows(); track row.ticketId) {
                 <tr
-                  class="hover:bg-muted/20 transition-colors"
+                  class="transition-colors hover:bg-muted/20"
                   data-testid="roster-row"
                   [attr.data-ticket-id]="row.ticketId"
                   [attr.data-email]="row.email ?? ''"
@@ -184,20 +180,20 @@ function formatTimestampFull(ms: number): string {
                   </td>
                   @if (showEmailColumn()) {
                     <td
-                      class="px-4 py-3 text-muted-foreground font-mono text-xs"
+                      class="px-4 py-3 font-mono text-xs text-muted-foreground"
                     >
                       {{ row.email }}
                     </td>
                   }
                   <td class="px-4 py-3">
                     <span
-                      class="font-mono text-xs uppercase tracking-wider text-primary/80"
+                      class="font-mono text-xs tracking-wider text-primary/80 uppercase"
                     >
                       {{ row.tierName }}
                     </span>
                   </td>
                   <td
-                    class="px-4 py-3 text-muted-foreground font-mono text-xs hidden sm:table-cell"
+                    class="hidden px-4 py-3 font-mono text-xs text-muted-foreground sm:table-cell"
                   >
                     {{ row.purchaseDate | date: 'MMM d' }}
                   </td>
@@ -206,19 +202,19 @@ function formatTimestampFull(ms: number): string {
                       row.status === 'valid' || row.status === 'checked_in'
                     ) {
                       <span
-                        class="font-mono text-xs uppercase tracking-wider text-foreground"
+                        class="font-mono text-xs tracking-wider text-foreground uppercase"
                         data-testid="row-status"
                         >ACTIVE</span
                       >
                     } @else if (row.status === 'refunded') {
                       <span
-                        class="font-mono text-xs uppercase tracking-wider text-muted-foreground"
+                        class="font-mono text-xs tracking-wider text-muted-foreground uppercase"
                         data-testid="row-status"
                         >REFUNDED</span
                       >
                     } @else {
                       <span
-                        class="font-mono text-xs uppercase tracking-wider text-muted-foreground"
+                        class="font-mono text-xs tracking-wider text-muted-foreground uppercase"
                         data-testid="row-status"
                         >CANCELLED</span
                       >
@@ -240,7 +236,7 @@ function formatTimestampFull(ms: number): string {
                     }
                   </td>
                   <td
-                    class="px-4 py-3 text-muted-foreground text-xs hidden md:table-cell"
+                    class="hidden px-4 py-3 text-xs text-muted-foreground md:table-cell"
                   >
                     {{ row.checkedInByName ?? '—' }}
                   </td>

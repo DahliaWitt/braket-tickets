@@ -14,6 +14,7 @@ import {payoutSentTemplate} from '../../email/templates';
 import type {OnboardingStatus} from '../../lib/validators/stripe_connect';
 import {isOrganizerPayoutReady} from '../../lib/stripe_connect_state';
 import {computeEventSettlements} from './payouts';
+import {eventStartInstantMs} from '@shared/event-time';
 
 export const MAX_ALLOCATIONS_PER_BATCH = 1_000;
 const MAX_FINANCIAL_EVENTS_PER_MARKER_DERIVATION = 5_000;
@@ -238,14 +239,23 @@ export async function getSettlementDataForAccountImpl(
     );
   }
 
-  const events = rawEvents.map((event) => {
-    const eventDateMs = Date.parse(event.date);
+  const events = rawEvents.flatMap((event) => {
+    const eventDateMs = eventStartInstantMs(event.date);
+    if (eventDateMs === null) {
+      throwAppError(
+        'PAYOUT_SETTLEMENT_INVALID_EVENT_DATE',
+        `Event ${event._id} has an invalid date; refusing to compute payout settlement for Stripe account ${args.stripeConnectedAccountId}`,
+        {
+          eventId: event._id,
+          organizerId: organizer._id,
+          stripeConnectedAccountId: args.stripeConnectedAccountId,
+        },
+      );
+    }
     return {
       _id: event._id,
       date: eventDateMs,
-      eligible: Number.isFinite(eventDateMs)
-        ? eventDateMs <= args.eligibleBeforeMs
-        : false,
+      eligible: eventDateMs <= args.eligibleBeforeMs,
       title: event.title,
     };
   });

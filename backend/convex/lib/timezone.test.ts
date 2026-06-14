@@ -135,6 +135,15 @@ describe('timezone utilities', () => {
       expect(hasEventDatePassed(iso('2026-06-15'))).toBe(true);
     });
 
+    it('should support legacy date-only rows for runtime event gates', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-06-15T20:00:00Z'));
+      expect(hasEventDatePassed('2026-06-15')).toBe(false);
+
+      vi.setSystemTime(new Date('2026-06-16T20:00:00Z'));
+      expect(hasEventDatePassed('2026-06-15')).toBe(true);
+    });
+
     it('should return false when UTC crossed midnight but LA has not (the original bug)', () => {
       vi.useFakeTimers();
       // 2026-02-27T07:30:00Z => 2026-02-26 23:30 in LA (PST, UTC-8)

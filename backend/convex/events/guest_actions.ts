@@ -9,10 +9,12 @@ import {sendEmailDeliveryNow} from '../lib/email_delivery_wrapper';
 // eslint-disable-next-line @convex-dev/import-wrong-runtime -- importer is 'use node'; plugin heuristic misses that. Same pattern as stripe/_impl/checkout.ts.
 import {createTicketPdf} from '../lib/ticket_template';
 import {
+  throwAppError,
   throwNotFound,
   throwUnauthenticated,
   throwUnauthorized,
 } from '../lib/errors';
+import {eventStartInstantMs} from '@shared/event-time';
 import {requireGuestTicketSendAccess} from './_impl/guest_ticket_access';
 
 type GuestTicketPdfInput = {
@@ -49,13 +51,21 @@ async function buildGuestTicketPdf({
     eventTitle: event.title,
     promoterName,
     attendeeName: guest.name,
-    eventDate: new Date(event.date).getTime(),
+    eventDate: requireEventStartInstantMs(event.date),
     ticketId: guest._id,
     qrCodeDataUrl,
     ...(event.location ? {location: event.location} : {}),
   });
 
   return {pdfDataUrl, qrCodeDataUrl};
+}
+
+function requireEventStartInstantMs(eventDate: string): number {
+  const startsAtMs = eventStartInstantMs(eventDate);
+  if (startsAtMs === null) {
+    throwAppError('INVALID_EVENT_DATE', 'Event has an invalid date');
+  }
+  return startsAtMs;
 }
 
 export const sendTicket = action({
