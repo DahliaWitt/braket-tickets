@@ -96,6 +96,7 @@ describe('stripSensitiveUserFields', () => {
       email: 'alice@example.com',
       pendingEmail: 'alice.pending@example.com',
       emailVerificationTime: 123,
+      defaultCommunityAdminOrganizerId: 'org-1' as Id<'organizers'>,
       emailChangeToken: 'secret-token',
       emailChangeTokenExpiry: 456,
       authEmailVerified: true,
@@ -115,6 +116,7 @@ describe('stripSensitiveUserFields', () => {
     expect(result).not.toHaveProperty('emailChangeTokenExpiry');
     expect(result).not.toHaveProperty('authEmailVerified');
     expect(result).not.toHaveProperty('betterAuthUserId');
+    expect(result).not.toHaveProperty('defaultCommunityAdminOrganizerId');
   });
 });
 

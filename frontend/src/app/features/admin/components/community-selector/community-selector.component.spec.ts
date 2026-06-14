@@ -8,6 +8,7 @@ import {CommunitySelectorHarness} from './community-selector.harness';
 import {CommunityContextService} from '../../services/community-context.service';
 import {CommunitiesService} from '@/core/services/communities.service';
 import {AuthService} from '@/core/services/auth.service';
+import {CommunityAdminDefaultService} from '@/features/admin/services/community-admin-default.service';
 import {CONVEX} from 'convex-angular';
 import type {Id} from '@convex/_generated/dataModel';
 import {
@@ -57,6 +58,7 @@ async function setup(options: {
     id: Id<'organizers'>,
   ) => Promise<{name: string; slug?: string | null} | null>;
   userRole?: 'root_admin' | 'community_admin';
+  isSelectedDefault?: boolean;
 }) {
   const activatedRouteStub = {
     snapshot: {
@@ -86,6 +88,11 @@ async function setup(options: {
   const role = options.userRole ?? 'community_admin';
   const authServiceMock = {
     userRole: vi.fn(() => role),
+    user: vi.fn(() => ({_id: 'user-1'})),
+  };
+  const defaultServiceMock = {
+    isDefaultCommunity: vi.fn(() => options.isSelectedDefault ?? false),
+    setDefaultCommunity: vi.fn().mockResolvedValue(undefined),
   };
 
   await TestBed.configureTestingModule({
@@ -96,6 +103,7 @@ async function setup(options: {
       {provide: CommunityContextService, useValue: ctxMock},
       {provide: CommunitiesService, useValue: communitiesServiceMock},
       {provide: AuthService, useValue: authServiceMock},
+      {provide: CommunityAdminDefaultService, useValue: defaultServiceMock},
       {provide: CONVEX, useValue: convexClientMock},
       {provide: ActivatedRoute, useValue: activatedRouteStub},
     ],
@@ -117,6 +125,7 @@ async function setup(options: {
     ctxMock,
     communitiesServiceMock,
     authServiceMock,
+    defaultServiceMock,
     activatedRouteStub,
   };
 }
@@ -151,6 +160,19 @@ describe('CommunitySelectorComponent', () => {
       });
 
       expect(await harness.isDropdownVisible()).toBe(false);
+    });
+
+    it('does not render the default preference action when only one community exists', async () => {
+      const {harness} = await setup({
+        communities: [communityA],
+        selectedId: communityA,
+        selectedName: 'Alpha Crew',
+        hasMultiple: false,
+        isSelectedDefault: true,
+        communitiesServiceGet: vi.fn().mockResolvedValue({name: 'Alpha Crew'}),
+      });
+
+      expect(await harness.hasSetDefaultButton()).toBe(false);
     });
   });
 
@@ -253,6 +275,81 @@ describe('CommunitySelectorComponent', () => {
         replaceUrl: true,
       });
     });
+
+    it('renders a set default action for multi-community admins', async () => {
+      const {harness} = await setup({
+        communities: [communityA, communityB],
+        selectedId: communityA,
+        selectedName: null,
+        hasMultiple: true,
+        communitiesServiceGet: vi
+          .fn()
+          .mockImplementation(async (id: Id<'organizers'>) =>
+            id === communityA
+              ? {name: 'Alpha Crew', slug: 'alpha-crew'}
+              : {name: 'Beta Squad', slug: 'beta-squad'},
+          ),
+      });
+
+      expect(await harness.hasSetDefaultButton()).toBe(true);
+      expect(await harness.getSetDefaultButtonText()).toContain('Set default');
+      expect(await harness.isSetDefaultButtonDisabled()).toBe(false);
+    });
+
+    it('saves the selected community as the default', async () => {
+      const {fixture, harness, defaultServiceMock} = await setup({
+        communities: [communityA, communityB],
+        selectedId: communityB,
+        selectedName: null,
+        hasMultiple: true,
+        communitiesServiceGet: vi
+          .fn()
+          .mockImplementation(async (id: Id<'organizers'>) =>
+            id === communityA
+              ? {name: 'Alpha Crew', slug: 'alpha-crew'}
+              : {name: 'Beta Squad', slug: 'beta-squad'},
+          ),
+      });
+
+      await harness.clickSetDefaultButton();
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(defaultServiceMock.setDefaultCommunity).toHaveBeenCalledWith(
+        communityB,
+      );
+    });
+
+    it('shows the current community as default when it already matches', async () => {
+      const {harness} = await setup({
+        communities: [communityA, communityB],
+        selectedId: communityA,
+        selectedName: null,
+        hasMultiple: true,
+        isSelectedDefault: true,
+        communitiesServiceGet: vi
+          .fn()
+          .mockImplementation(async (id: Id<'organizers'>) =>
+            id === communityA ? {name: 'Alpha Crew'} : {name: 'Beta Squad'},
+          ),
+      });
+
+      expect(await harness.getSetDefaultButtonText()).toContain('Default');
+      expect(await harness.isSetDefaultButtonDisabled()).toBe(true);
+    });
+
+    it('renders the default preference action for root admins with multiple platform communities', async () => {
+      const {harness} = await setup({
+        communities: [communityA, communityB],
+        selectedId: communityA,
+        selectedName: null,
+        hasMultiple: true,
+        userRole: 'root_admin',
+        communitiesServiceGet: vi.fn().mockResolvedValue(null),
+      });
+
+      expect(await harness.hasSetDefaultButton()).toBe(true);
+    });
   });
 
   describe('admin-override mode', () => {
@@ -274,6 +371,7 @@ describe('CommunitySelectorComponent', () => {
       expect(await harness.isDropdownVisible()).toBe(false);
       expect(await harness.isStaticNameVisible()).toBe(true);
       expect(await harness.getStaticNameText()).toBe('Sister City');
+      expect(await harness.hasSetDefaultButton()).toBe(false);
     });
 
     it('does not render the dropdown even when the user administers multiple communities', async () => {

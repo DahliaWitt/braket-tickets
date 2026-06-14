@@ -3,11 +3,14 @@ import {type ComponentFixture, TestBed} from '@angular/core/testing';
 import {provideRouter} from '@angular/router';
 import {MainLayoutComponent} from './main-layout.component';
 import {AuthService} from '@/core/services/auth.service';
-import {signal} from '@angular/core';
+import {signal, type WritableSignal} from '@angular/core';
+import type {Id} from '@convex/_generated/dataModel';
+import {CommunityAdminDefaultService} from '@/features/admin/services/community-admin-default.service';
 
 describe('MainLayoutComponent', () => {
   let fixture: ComponentFixture<MainLayoutComponent>;
   let component: MainLayoutComponent;
+  let defaultCommunityId: WritableSignal<Id<'organizers'> | null>;
   let mockAuth: {
     isAuthenticated: ReturnType<typeof signal>;
     user: ReturnType<typeof signal>;
@@ -26,12 +29,21 @@ describe('MainLayoutComponent', () => {
       isCommunityAdmin: signal(false),
       logout: vi.fn(),
     };
+    defaultCommunityId = signal<Id<'organizers'> | null>(null);
 
     await TestBed.configureTestingModule({
       imports: [MainLayoutComponent],
       providers: [
         provideRouter([]),
         {provide: AuthService, useValue: mockAuth},
+        {
+          provide: CommunityAdminDefaultService,
+          useValue: {
+            defaultCommunityId,
+            isDefaultCommunity: vi.fn(),
+            setDefaultCommunity: vi.fn(),
+          },
+        },
       ],
     }).compileComponents();
 
@@ -89,5 +101,64 @@ describe('MainLayoutComponent', () => {
     const labels = items.map((i) => i.label);
     expect(labels).toContain('COMMUNITY ADMIN');
     expect(labels).not.toContain('ADMIN PORTAL ACCESS');
+  });
+
+  it('should link community admin nav to the saved default community', () => {
+    mockAuth.isAuthenticated.set(true);
+    mockAuth.user.set({
+      _id: 'user-1',
+      name: 'CA',
+      email: 'ca@test.com',
+      communityAdminOrganizerIds: ['org-a', 'org-b'],
+    });
+    mockAuth.isCommunityAdmin.set(true);
+
+    defaultCommunityId.set('org-a' as Id<'organizers'>);
+
+    const communityAdminItem = component
+      .navItems()
+      .find((item) => item.label === 'COMMUNITY ADMIN');
+
+    expect(communityAdminItem?.routerLink).toBe('/community-admin');
+    expect(communityAdminItem?.queryParams).toEqual({community: 'org-a'});
+  });
+
+  it('should ignore saved default community for single-community admins', () => {
+    mockAuth.isAuthenticated.set(true);
+    mockAuth.user.set({
+      _id: 'user-1',
+      name: 'CA',
+      email: 'ca@test.com',
+      communityAdminOrganizerIds: ['org-a'],
+    });
+    mockAuth.isCommunityAdmin.set(true);
+
+    defaultCommunityId.set('org-a' as Id<'organizers'>);
+
+    const communityAdminItem = component
+      .navItems()
+      .find((item) => item.label === 'COMMUNITY ADMIN');
+
+    expect(communityAdminItem?.routerLink).toBe('/community-admin');
+    expect(communityAdminItem?.queryParams).toBeUndefined();
+  });
+
+  it('should use saved default community for root admins', () => {
+    mockAuth.isAuthenticated.set(true);
+    mockAuth.user.set({
+      _id: 'root-1',
+      name: 'Root',
+      email: 'root@test.com',
+      communityAdminOrganizerIds: [],
+    });
+    mockAuth.userRole.set('root_admin');
+
+    defaultCommunityId.set('org-b' as Id<'organizers'>);
+
+    const communityAdminItem = component
+      .navItems()
+      .find((item) => item.label === 'COMMUNITY ADMIN');
+
+    expect(communityAdminItem?.queryParams).toEqual({community: 'org-b'});
   });
 });
