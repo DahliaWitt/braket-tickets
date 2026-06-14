@@ -1,6 +1,12 @@
 import {v} from 'convex/values';
 import {paginationOptsValidator} from 'convex/server';
-import {action, internalQuery, mutation, query} from '../_generated/server';
+import {
+  action,
+  internalQuery,
+  mutation,
+  query,
+  type QueryCtx,
+} from '../_generated/server';
 import type {Doc, Id} from '../_generated/dataModel';
 import {
   getAuthUser,
@@ -26,6 +32,7 @@ import {
   listUsersForRootAdmin,
   searchUsersForAdminScope,
 } from '../lib/users/directory';
+import {throwNotFound} from '../lib/errors';
 import {
   assertCanRevokeMembership,
   revokeMembershipAndCreateAuditLog,
@@ -74,6 +81,25 @@ const EMPTY_USER_APPLICATION_PAGE: UserApplicationPage = {
   continueCursor: '',
 };
 
+async function resolveCurrentUserDefaultCommunityAdminOrganizerId(
+  ctx: QueryCtx,
+  user: Doc<'users'>,
+  communityAdminOrganizerIds: Id<'organizers'>[],
+  rootAdmin: boolean,
+): Promise<Id<'organizers'> | undefined> {
+  const defaultOrganizerId = user.defaultCommunityAdminOrganizerId;
+  if (!defaultOrganizerId) return undefined;
+
+  if (rootAdmin) {
+    const organizer = await ctx.db.get('organizers', defaultOrganizerId);
+    return organizer ? defaultOrganizerId : undefined;
+  }
+
+  return communityAdminOrganizerIds.includes(defaultOrganizerId)
+    ? defaultOrganizerId
+    : undefined;
+}
+
 /**
  * Returns the currently authenticated user.
  *
@@ -88,8 +114,18 @@ export const current = query({
     const safeUser = stripSensitiveUserFields(user);
     const communityAdminOrganizerIds = await getUserCommunities(ctx, user._id);
     const rootAdmin = await isPlatformAdmin(ctx, user._id);
+    const defaultCommunityAdminOrganizerId =
+      await resolveCurrentUserDefaultCommunityAdminOrganizerId(
+        ctx,
+        user,
+        communityAdminOrganizerIds,
+        rootAdmin,
+      );
     return {
       ...safeUser,
+      ...(defaultCommunityAdminOrganizerId
+        ? {defaultCommunityAdminOrganizerId}
+        : {}),
       isRootAdmin: rootAdmin,
       communityAdminOrganizerIds,
       id: user._id, // Compatibility with frontend expecting .id
@@ -167,6 +203,29 @@ export const update = mutation({
       name: safeName,
       image: args.image,
     });
+  },
+});
+
+/**
+ * Saves the authenticated user's preferred community-admin landing community.
+ */
+export const setDefaultCommunityAdminOrganizer = mutation({
+  args: {
+    organizerId: v.id('organizers'),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const {_id: userId} = await requireUser(ctx);
+    const organizer = await ctx.db.get('organizers', args.organizerId);
+    if (!organizer) {
+      throwNotFound('Community');
+    }
+
+    await requireManageCommunity(ctx, userId, args.organizerId);
+    await ctx.db.patch('users', userId, {
+      defaultCommunityAdminOrganizerId: args.organizerId,
+    });
+    return null;
   },
 });
 

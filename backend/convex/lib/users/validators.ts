@@ -23,6 +23,7 @@ export const currentUserFields = {
   ...userProfileFields,
   isRootAdmin: v.boolean(),
   communityAdminOrganizerIds: v.array(v.id('organizers')),
+  defaultCommunityAdminOrganizerId: v.optional(v.id('organizers')),
 };
 
 export const userProfileValidator = v.object(userProfileFields);
