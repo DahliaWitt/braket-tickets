@@ -192,6 +192,22 @@ export async function revokeCommunityAdmin(
     await ctx.db.delete('adminNotificationPreferences', notifPref._id);
   }
 
+  const [targetUser, remainingCommunityIds, targetIsPlatformAdmin] =
+    await Promise.all([
+      ctx.db.get(args.userId),
+      getUserCommunities(ctx, args.userId),
+      isPlatformAdmin(ctx, args.userId),
+    ]);
+  if (
+    targetUser?.defaultCommunityAdminOrganizerId === organizerId &&
+    !targetIsPlatformAdmin &&
+    !remainingCommunityIds.includes(organizerId)
+  ) {
+    await ctx.db.patch('users', args.userId, {
+      defaultCommunityAdminOrganizerId: undefined,
+    });
+  }
+
   await insertAdminAuditLog(
     {db: ctx.db},
     {

@@ -169,6 +169,9 @@ describe('Users Security', () => {
     expect(profile?.communityAdminOrganizerIds).not.toContain(organizerId);
     expect(profile?.communityAdminOrganizerIds).toContain(remainingOrganizerId);
     expect(profile?.defaultCommunityAdminOrganizerId).toBeUndefined();
+
+    const storedTarget = await t.run(async (ctx) => ctx.db.get(targetId));
+    expect(storedTarget?.defaultCommunityAdminOrganizerId).toBeUndefined();
   });
 
   it('rejects unauthenticated default community updates', async () => {
@@ -196,6 +199,27 @@ describe('Users Security', () => {
 
     const profile = await user.query(api.users.profile.current, {});
     expect(profile?.defaultCommunityAdminOrganizerId).toBeUndefined();
+  });
+
+  it('rejects a default community update for a missing community', async () => {
+    const t = convexTest();
+    const rootAdminId = await createUser(t, 'missing-default-root@example.com');
+    const userId = await createUser(t, 'missing-default@example.com');
+    const organizerId = await seedOrganizer(t, 'Missing Default');
+    await t.mutation(api.testing.users.setRootAdminStatus, {
+      userId: rootAdminId,
+      isRootAdmin: true,
+    });
+
+    const rootAdmin = t.withIdentity({subject: rootAdminId});
+    await rootAdmin.mutation(api.communities.profile.remove, {id: organizerId});
+
+    const user = t.withIdentity({subject: userId});
+    await expect(
+      user.mutation(api.users.profile.setDefaultCommunityAdminOrganizer, {
+        organizerId,
+      }),
+    ).rejects.toThrow('Community not found');
   });
 
   it('rejects a community admin default for an unmanaged community', async () => {
@@ -253,5 +277,8 @@ describe('Users Security', () => {
 
     const profile = await rootAdmin.query(api.users.profile.current, {});
     expect(profile?.defaultCommunityAdminOrganizerId).toBeUndefined();
+
+    const storedRootAdmin = await t.run(async (ctx) => ctx.db.get(userId));
+    expect(storedRootAdmin?.defaultCommunityAdminOrganizerId).toBeUndefined();
   });
 });

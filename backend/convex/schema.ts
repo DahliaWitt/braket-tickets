@@ -174,6 +174,9 @@ const schemaTables = {
   })
     .index('by_betterAuthUserId', ['betterAuthUserId'])
     .index('email', ['email'])
+    .index('by_defaultCommunityAdminOrganizerId', [
+      'defaultCommunityAdminOrganizerId',
+    ])
     .searchIndex('search_name_email', {
       searchField: 'name',
       filterFields: ['email'],

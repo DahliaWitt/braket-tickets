@@ -1629,6 +1629,10 @@ export type DataModel = {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_betterAuthUserId: ["betterAuthUserId", "_creationTime"];
+      by_defaultCommunityAdminOrganizerId: [
+        "defaultCommunityAdminOrganizerId",
+        "_creationTime",
+      ];
       email: ["email", "_creationTime"];
     };
     searchIndexes: {
