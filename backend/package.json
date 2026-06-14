@@ -30,7 +30,7 @@
     "@convex-dev/workpool": "^0.4.6",
     "@djpanda/convex-authz": "^2.1.1",
     "@react-pdf/renderer": "^4.5.1",
-    "better-auth": "1.5.6",
+    "better-auth": "1.6.11",
     "convex": "^1.35.1",
     "convex-helpers": "^0.1.114",
     "fontkit": "^2.0.4",
