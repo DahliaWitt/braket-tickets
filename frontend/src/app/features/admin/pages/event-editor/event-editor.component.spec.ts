@@ -22,6 +22,7 @@ import {vi, describe, it, expect, beforeEach} from 'vitest';
 import {createMockConvexClient} from '@/testing/mock-types';
 import {type EditableEvent} from '@/core/models/event.types';
 import {MAX_EVENT_TITLE_LENGTH} from '@shared/constants';
+import {getTodayInEventTimeZone} from '@/utils/event-date-format';
 
 /** Minimal Convex client mock that satisfies injectConvexQuery + injectConvexMutation. */
 function makeConvexClientMock(
@@ -80,8 +81,7 @@ interface MockRouter {
 type MockActivatedRoute = Pick<ActivatedRoute, 'snapshot'>;
 
 function getStartOfToday(): Date {
-  const today = new Date();
-  return new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  return getTodayInEventTimeZone();
 }
 
 function getFutureDate(daysAhead = 30): Date {
@@ -325,6 +325,28 @@ describe('EventEditorComponent', () => {
     const errorText = await harness.getTitleBlankErrorText();
     expect(errorText).not.toBeNull();
     expect(errorText).toContain('Title is required');
+  });
+
+  it('should reject nonexistent event-local times during spring-forward DST', async () => {
+    component.eventModel.update((m) => ({
+      ...m,
+      date: new Date(2027, 2, 14),
+      time: '02:30',
+    }));
+    component.submitted.set(true);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(component.eventForm.time().errors()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({kind: 'invalidEventTime'}),
+      ]),
+    );
+    expect(component.isFormValid()).toBe(false);
+    expect(await harness.isSaveButtonDisabled()).toBe(true);
+    expect(await harness.getTimeErrorText()).toContain(
+      'Choose a valid time for this date',
+    );
   });
 
   it('should enable save button when a file is selected', async () => {

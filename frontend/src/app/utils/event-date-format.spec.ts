@@ -1,0 +1,49 @@
+import {describe, expect, it} from 'vitest';
+import {
+  dateKeyToLocalDate,
+  formatEventDate,
+  formatEventDateKey,
+  getTodayInEventTimeZone,
+} from './event-date-format';
+
+function normalizeSpaces(value: string | null): string | null {
+  return value?.replace(/\s+/g, ' ') ?? null;
+}
+
+describe('formatEventDate', () => {
+  it('formats event dates in the platform Los Angeles timezone', () => {
+    const eventDate = '2026-02-27T07:30:00.000Z';
+
+    expect(formatEventDate(eventDate, 'mediumDate')).toBe('Feb 26, 2026');
+    expect(normalizeSpaces(formatEventDate(eventDate, 'shortTime'))).toBe(
+      '11:30 PM',
+    );
+    expect(formatEventDate(eventDate, 'fullDate')).toBe(
+      'Thursday, February 26, 2026',
+    );
+  });
+
+  it('returns null for invalid dates', () => {
+    expect(formatEventDate('not-a-date', 'mediumDate')).toBeNull();
+    expect(formatEventDate('2026-02-31', 'mediumDate')).toBeNull();
+    expect(
+      formatEventDate('2026-02-31T08:00:00.000Z', 'mediumDate'),
+    ).toBeNull();
+    expect(formatEventDate('2026-02-26T08:00:00', 'mediumDate')).toBeNull();
+  });
+
+  it('formats calendar date keys in the platform timezone', () => {
+    expect(formatEventDateKey('2026-02-27T07:30:00.000Z')).toBe('2026-02-26');
+  });
+
+  it('returns today as a local Date for the platform timezone calendar day', () => {
+    expect(
+      getTodayInEventTimeZone(new Date('2026-02-27T06:30:00.000Z')),
+    ).toEqual(new Date(2026, 1, 26));
+  });
+
+  it('parses date keys into local calendar dates', () => {
+    expect(dateKeyToLocalDate('2026-02-26')).toEqual(new Date(2026, 1, 26));
+    expect(dateKeyToLocalDate('not-a-date')).toBeNull();
+  });
+});

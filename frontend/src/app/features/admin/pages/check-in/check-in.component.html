@@ -340,7 +340,7 @@
                               >
                             </div>
                             <span class="font-mono text-[8px] opacity-60">{{
-                              ticketCheckedInAt(ticket) | date: 'HH:mm'
+                              ticketCheckedInAt(ticket) | eventDate: 'HH:mm'
                             }}</span>
                           </div>
                         } @else {
@@ -502,7 +502,7 @@
                               >
                             </div>
                             <span class="font-mono text-[8px] opacity-60">{{
-                              guestCheckedInAt(guest) | date: 'HH:mm'
+                              guestCheckedInAt(guest) | eventDate: 'HH:mm'
                             }}</span>
                           </div>
                         }

@@ -13,6 +13,7 @@ import {ActivatedRoute, RouterLink} from '@angular/router';
 import {toSignal} from '@angular/core/rxjs-interop';
 import {ConvexError} from 'convex/values';
 import {PAYOUT_DELAY_DAYS} from '@shared/constants';
+import {eventStartInstantMs} from '@shared/event-time';
 import {
   AdminEventsService,
   type TicketSalesStatus,
@@ -42,6 +43,7 @@ import {EventManagementResaleTabComponent} from './components/event-management-r
 import {logger} from '@/utils/logger';
 import {safeResourceValue} from '@/utils/resource';
 import {toast} from 'ngx-sonner';
+import {EventDatePipe} from '@/utils/event-date.pipe';
 
 const TIER_PRICING_STATS_ERROR_MESSAGE =
   'Pricing cards are temporarily unavailable. Try refreshing the page.';
@@ -72,7 +74,9 @@ export function computePayoutStatus(
     return {state: 'paid', date: new Date(event.paidOutAt)};
   }
 
-  const eventDate = new Date(event.date);
+  const eventDateMs = eventStartInstantMs(event.date);
+  if (eventDateMs === null) return null;
+  const eventDate = new Date(eventDateMs);
 
   if (now < eventDate) {
     return {state: 'pre-event'};
@@ -101,7 +105,7 @@ function getManagementLoadErrorMessage(error: unknown): string | null {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     RouterLink,
-    DatePipe,
+    EventDatePipe,
     ZardAlertComponent,
     ZardButtonComponent,
     ZardCardComponent,

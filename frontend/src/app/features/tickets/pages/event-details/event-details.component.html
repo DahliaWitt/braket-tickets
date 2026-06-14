@@ -192,8 +192,8 @@
               >
                 <span class="flex items-center gap-2">
                   <z-icon zType="calendar" class="text-primary" />
-                  {{ evt.date | date: 'longDate' }},
-                  {{ evt.date | date: 'shortTime' }}
+                  {{ evt.date | eventDate: 'longDate' }},
+                  {{ evt.date | eventDate: 'shortTime' }}
                 </span>
                 <span class="h-1 w-1 rounded-full bg-muted"></span>
                 <span class="flex items-center gap-2 tracking-wider uppercase">

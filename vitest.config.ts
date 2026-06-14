@@ -21,7 +21,11 @@ export default defineConfig({
     experimental: {
       fsModuleCache: true,
     },
-    include: ['scripts/**/*.test.ts', 'ops/**/*.test.ts'],
+    include: [
+      'scripts/**/*.test.ts',
+      'ops/**/*.test.ts',
+      'shared/**/*.test.ts',
+    ],
     exclude: ['backend/**', 'frontend/**', 'node_modules/**'],
     reporters,
     retry: process.env.CI ? 2 : 0,

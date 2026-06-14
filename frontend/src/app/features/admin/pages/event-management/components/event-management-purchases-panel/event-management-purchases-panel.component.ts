@@ -24,6 +24,7 @@ import {ZardCardComponent} from '@ui/components/primitives/card/card.component';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
 import {logger} from '@/utils/logger';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
+import {formatEventDate} from '@/utils/event-date-format';
 
 @Component({
   selector: 'app-event-management-purchases-panel',
@@ -35,14 +36,12 @@ import {BrowserPlatformService} from '@/core/services/browser-platform.service';
     ZardCardComponent,
     ZardIconComponent,
   ],
-  providers: [DatePipe],
   templateUrl: './event-management-purchases-panel.component.html',
 })
 export class EventManagementPurchasesPanelComponent {
   private readonly adminEventsService = inject(AdminEventsService);
   private readonly dialogService = inject(BraDialogService);
   private readonly alertDialog = inject(BraAlertDialogService);
-  private readonly datePipe = inject(DatePipe);
   private readonly browser = inject(BrowserPlatformService);
 
   readonly eventTitle = input.required<string>();
@@ -66,8 +65,7 @@ export class EventManagementPurchasesPanelComponent {
       purchases: this.purchases(),
       guests: this.guests(),
       eventTitle: this.eventTitle(),
-      eventDate:
-        this.datePipe.transform(this.eventDate(), 'fullDate') ?? undefined,
+      eventDate: formatEventDate(this.eventDate(), 'fullDate') ?? undefined,
     };
 
     this.dialogService.create({

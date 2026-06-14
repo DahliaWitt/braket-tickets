@@ -1595,6 +1595,7 @@ export type DataModel = {
     document: {
       authEmailVerified?: boolean;
       betterAuthUserId?: string;
+      defaultCommunityAdminOrganizerId?: Id<"organizers">;
       email?: string;
       emailChangeToken?: string;
       emailChangeTokenExpiry?: number;
@@ -1613,6 +1614,7 @@ export type DataModel = {
       | "_id"
       | "authEmailVerified"
       | "betterAuthUserId"
+      | "defaultCommunityAdminOrganizerId"
       | "email"
       | "emailChangeToken"
       | "emailChangeTokenExpiry"
@@ -1627,6 +1629,10 @@ export type DataModel = {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_betterAuthUserId: ["betterAuthUserId", "_creationTime"];
+      by_defaultCommunityAdminOrganizerId: [
+        "defaultCommunityAdminOrganizerId",
+        "_creationTime",
+      ];
       email: ["email", "_creationTime"];
     };
     searchIndexes: {

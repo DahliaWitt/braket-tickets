@@ -12,6 +12,9 @@ export class CommunitySelectorHarness extends ComponentHarness {
   private getStaticNameEl = this.locatorForOptional(
     '[data-testid="community-name"]',
   );
+  private getSetDefaultButton = this.locatorForOptional(
+    '[data-testid="set-default-community"]',
+  );
 
   /** Returns the dropdown container element, or null if not rendered. */
   getDropdown(): Promise<TestElement | null> {
@@ -77,5 +80,33 @@ export class CommunitySelectorHarness extends ComponentHarness {
         timeoutMs: 10000,
       },
     );
+  }
+
+  /** Returns true when the set-default action is rendered. */
+  async hasSetDefaultButton(): Promise<boolean> {
+    return (await this.getSetDefaultButton()) !== null;
+  }
+
+  /** Returns the set-default button text, or null when absent. */
+  async getSetDefaultButtonText(): Promise<string | null> {
+    const button = await this.getSetDefaultButton();
+    if (!button) return null;
+    return (await button.text()).trim();
+  }
+
+  /** Returns whether the set-default action is disabled. */
+  async isSetDefaultButtonDisabled(): Promise<boolean | null> {
+    const button = await this.getSetDefaultButton();
+    if (!button) return null;
+    return button.getAttribute('disabled').then((value) => value !== null);
+  }
+
+  /** Clicks the set-default action. */
+  async clickSetDefaultButton(): Promise<void> {
+    const button = await this.getSetDefaultButton();
+    if (!button) {
+      throw new Error('Set default community button is not present in the DOM');
+    }
+    await button.click();
   }
 }

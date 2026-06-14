@@ -1,5 +1,5 @@
 import {describe, it, expect} from 'vitest';
-import {createTicketPdf} from './ticket_template';
+import {createTicketPdf, formatTicketDateParts} from './ticket_template';
 import type {TicketPdfData} from './ticket_template';
 
 const baseTicketData: TicketPdfData = {
@@ -13,6 +13,16 @@ const baseTicketData: TicketPdfData = {
 };
 
 describe('ticket_template', () => {
+  it('formats PDF ticket dates in the event timezone', () => {
+    expect(
+      formatTicketDateParts(new Date('2026-02-27T07:30:00.000Z').getTime()),
+    ).toEqual({
+      weekday: 'THU',
+      isoDate: '2026.02.26',
+      time: '11:30 PM',
+    });
+  });
+
   it('createTicketPdf returns a non-empty PDF data URL', async () => {
     const url = await createTicketPdf(baseTicketData);
     expect(url.startsWith('data:application/pdf;base64,')).toBe(true);

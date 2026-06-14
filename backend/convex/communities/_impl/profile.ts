@@ -199,6 +199,16 @@ export async function removeCommunity(
     organizerId: args.id,
   });
 
+  for await (const user of ctx.db
+    .query('users')
+    .withIndex('by_defaultCommunityAdminOrganizerId', (q) =>
+      q.eq('defaultCommunityAdminOrganizerId', args.id),
+    )) {
+    await ctx.db.patch('users', user._id, {
+      defaultCommunityAdminOrganizerId: undefined,
+    });
+  }
+
   await ctx.db.delete('organizers', args.id);
 
   if (organizer.logoStorageId) {

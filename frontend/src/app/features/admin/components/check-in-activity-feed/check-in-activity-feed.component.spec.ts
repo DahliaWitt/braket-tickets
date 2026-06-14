@@ -140,6 +140,23 @@ describe('CheckInActivityFeedComponent', () => {
     expect(await harness.getFeedEntryCount()).toBe(5);
   });
 
+  it('formats check-in timestamps in the platform timezone', async () => {
+    await setup(
+      makeMockConvex([
+        {
+          ticketId: 'ticket-1' as Id<'tickets'>,
+          attendeeName: 'Cheryl Tunt',
+          tierName: 'REGULAR',
+          checkedInAt: Date.parse('2026-02-27T07:30:15.000Z'),
+          checkedInByName: null,
+        },
+      ]),
+    );
+    const harness = await getHarness(fixture);
+
+    expect(await harness.getMostRecentEntryTimestamp()).toBe('23:30:15');
+  });
+
   it('should show null for most recent entry name when empty', async () => {
     await setup(makeMockConvex([]));
     const harness = await getHarness(fixture);

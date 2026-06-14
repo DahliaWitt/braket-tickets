@@ -5,10 +5,11 @@ import {
   effect,
   input,
 } from '@angular/core';
-import { injectQuery, skipToken } from 'convex-angular';
-import { api } from '@convex/_generated/api';
-import { type Id } from '@convex/_generated/dataModel';
-import { logger } from '@/utils/logger';
+import {injectQuery, skipToken} from 'convex-angular';
+import {api} from '@convex/_generated/api';
+import {type Id} from '@convex/_generated/dataModel';
+import {logger} from '@/utils/logger';
+import {EVENT_DATE_TIME_ZONE} from '@/utils/event-date-format';
 
 export type CheckInMode = 'pre-event' | 'door-rush' | 'post-event';
 
@@ -24,12 +25,22 @@ function relativeTime(timestamp: number): string {
 }
 
 function formatHour(timestampMs: number): string {
-  const d = new Date(timestampMs);
-  const h = d.getHours();
-  const start = h % 12 === 0 ? 12 : h % 12;
-  const end = (h + 1) % 12 === 0 ? 12 : (h + 1) % 12;
-  const startSuffix = h < 12 ? 'AM' : 'PM';
-  const endSuffix = h + 1 < 12 ? 'AM' : 'PM';
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: EVENT_DATE_TIME_ZONE,
+    hour: 'numeric',
+    hour12: true,
+  });
+  const partsFor = (value: number) => formatter.formatToParts(new Date(value));
+  const part = (
+    parts: Intl.DateTimeFormatPart[],
+    type: Intl.DateTimeFormatPartTypes,
+  ): string => parts.find((candidate) => candidate.type === type)?.value ?? '';
+  const startParts = partsFor(timestampMs);
+  const endParts = partsFor(timestampMs + 60 * 60 * 1000);
+  const start = part(startParts, 'hour');
+  const end = part(endParts, 'hour');
+  const startSuffix = part(startParts, 'dayPeriod');
+  const endSuffix = part(endParts, 'dayPeriod');
   return `${start}–${end} ${endSuffix !== startSuffix ? startSuffix + '/' : ''}${endSuffix}`;
 }
 
@@ -44,15 +55,18 @@ function formatHour(timestampMs: number): string {
     >
       <!-- Dominant check-in rate numeral -->
       <div
-        class="flex flex-col items-center justify-center pr-6 border-r border-border/40"
+        class="flex flex-col items-center justify-center border-r border-border/40 pr-6"
         data-testid="checkin-rate-block"
       >
         <span
-          class="text-5xl sm:text-6xl font-display font-bold tracking-tight text-foreground leading-none"
+          class="font-display text-5xl leading-none font-bold tracking-tight text-foreground sm:text-6xl"
           data-testid="checkin-rate"
           aria-label="Check-in rate"
-        >{{ rateDisplay() }}</span>
-        <span class="text-2xs font-mono uppercase tracking-widest text-muted-foreground mt-1">
+          >{{ rateDisplay() }}</span
+        >
+        <span
+          class="mt-1 font-mono text-2xs tracking-widest text-muted-foreground uppercase"
+        >
           CHECKED IN
         </span>
       </div>
@@ -62,31 +76,41 @@ function formatHour(timestampMs: number): string {
         <!-- Total scanned / total active -->
         <div class="flex flex-col items-center justify-center px-5 py-2">
           <span
-            class="text-lg font-mono font-semibold text-foreground tabular-nums"
+            class="font-mono text-lg font-semibold text-foreground tabular-nums"
             data-testid="checkin-scanned"
-          >{{ summary()?.checkedIn ?? 0 }}</span>
-          <span class="text-2xs font-mono uppercase tracking-widest text-muted-foreground mt-0.5">
+            >{{ summary()?.checkedIn ?? 0 }}</span
+          >
+          <span
+            class="mt-0.5 font-mono text-2xs tracking-widest text-muted-foreground uppercase"
+          >
             of {{ summary()?.totalActive ?? 0 }}
           </span>
-          <span class="text-2xs font-mono uppercase tracking-widest text-muted-foreground">SCANNED</span>
+          <span
+            class="font-mono text-2xs tracking-widest text-muted-foreground uppercase"
+            >SCANNED</span
+          >
         </div>
 
         <!-- Last scan relative time -->
         <div class="flex flex-col items-center justify-center px-5 py-2">
           @if (summary()?.lastCheckInAt) {
             <span
-              class="text-sm font-mono text-foreground tabular-nums"
+              class="font-mono text-sm text-foreground tabular-nums"
               data-testid="checkin-last-scan"
               aria-label="Last scan time"
-            >{{ lastScanRelative() }}</span>
+              >{{ lastScanRelative() }}</span
+            >
           } @else {
             <span
-              class="text-sm font-mono text-muted-foreground"
+              class="font-mono text-sm text-muted-foreground"
               data-testid="checkin-last-scan"
               aria-label="Last scan time"
-            >—</span>
+              >—</span
+            >
           }
-          <span class="text-2xs font-mono uppercase tracking-widest text-muted-foreground mt-0.5">
+          <span
+            class="mt-0.5 font-mono text-2xs tracking-widest text-muted-foreground uppercase"
+          >
             LAST SCAN
           </span>
         </div>
@@ -96,21 +120,25 @@ function formatHour(timestampMs: number): string {
           <div class="flex flex-col items-center justify-center px-5 py-2">
             @if (postMortem()?.peakHourStartsAt) {
               <span
-                class="text-sm font-mono text-foreground tabular-nums"
+                class="font-mono text-sm text-foreground tabular-nums"
                 data-testid="checkin-peak-hour"
                 aria-label="Peak check-in hour"
-              >{{ formatHour(postMortem()!.peakHourStartsAt!) }}</span>
-              <span class="text-2xs font-mono text-muted-foreground mt-0.5">
+                >{{ formatHour(postMortem()!.peakHourStartsAt!) }}</span
+              >
+              <span class="mt-0.5 font-mono text-2xs text-muted-foreground">
                 {{ postMortem()?.peakHourCount ?? 0 }} scans
               </span>
             } @else {
               <span
-                class="text-sm font-mono text-muted-foreground"
+                class="font-mono text-sm text-muted-foreground"
                 data-testid="checkin-peak-hour"
                 aria-label="Peak check-in hour"
-              >—</span>
+                >—</span
+              >
             }
-            <span class="text-2xs font-mono uppercase tracking-widest text-muted-foreground mt-0.5">
+            <span
+              class="mt-0.5 font-mono text-2xs tracking-widest text-muted-foreground uppercase"
+            >
               PEAK HOUR
             </span>
           </div>
@@ -125,12 +153,13 @@ export class CheckInSummaryStripComponent {
 
   private readonly summaryQuery = injectQuery(
     api.events.analytics.getEventCheckInSummary,
-    () => ({ eventId: this.eventId() }),
+    () => ({eventId: this.eventId()}),
   );
 
   private readonly postMortemQuery = injectQuery(
     api.events.analytics.getEventCheckInPostMortem,
-    () => (this.mode() === 'post-event' ? { eventId: this.eventId() } : skipToken),
+    () =>
+      this.mode() === 'post-event' ? {eventId: this.eventId()} : skipToken,
   );
 
   readonly summary = computed(() => this.summaryQuery.data() ?? null);
@@ -154,7 +183,10 @@ export class CheckInSummaryStripComponent {
     effect(() => {
       const err = this.summaryQuery.error();
       if (err) {
-        logger.error('[CheckInSummaryStrip] Failed to load check-in summary', err);
+        logger.error(
+          '[CheckInSummaryStrip] Failed to load check-in summary',
+          err,
+        );
       }
     });
   }

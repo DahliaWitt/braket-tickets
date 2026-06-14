@@ -5,6 +5,8 @@ import {
   eventBroadcastTemplate,
   payoutSentTemplate,
   purchasedTicketTemplate,
+  resaleAvailableTemplate,
+  ticketPurchaseReminderTemplate,
   vettingDigestTemplate,
   vettingSubmissionTemplate,
 } from './templates';
@@ -222,6 +224,53 @@ describe('eventAnnouncementTemplate', () => {
 });
 
 describe('purchasedTicketTemplate', () => {
+  it('formats event time in the platform Los Angeles timezone', () => {
+    const {html} = purchasedTicketTemplate(
+      {
+        title: 'Late Night Ticket',
+        date: '2026-02-27T07:30:00.000Z',
+        location: 'Afterhours',
+      },
+      'Guest',
+      'https://qr.example/ticket.png',
+      true,
+    );
+
+    expect(html).toContain('Thu, Feb 26, 2026, 11:30 PM PST');
+    expect(html).not.toContain('Fri, Feb 27');
+    expect(html).not.toContain('2026-02-27T07:30:00.000Z');
+  });
+
+  it('formats legacy date-only event rows as platform-local dates', () => {
+    const {html} = purchasedTicketTemplate(
+      {
+        title: 'Legacy Date Ticket',
+        date: '2026-02-27',
+        location: 'Afterhours',
+      },
+      'Guest',
+      'https://qr.example/ticket.png',
+      true,
+    );
+
+    expect(html).toContain('Fri, Feb 27, 2026, 12:00 AM PST');
+    expect(html).not.toContain('Thu, Feb 26');
+  });
+
+  it('leaves invalid legacy event dates unparsed instead of shifting them', () => {
+    const {html} = purchasedTicketTemplate(
+      {
+        title: 'Invalid Date Ticket',
+        date: 'Dec 15, 2030',
+      },
+      'Guest',
+      'https://qr.example/ticket.png',
+      true,
+    );
+
+    expect(html).toContain('Dec 15, 2030');
+  });
+
   it('links guest ticket recipients to the register tab on the real login route', () => {
     process.env.SITE_URL = 'https://community.braket.gay';
 
@@ -296,6 +345,51 @@ describe('purchasedTicketTemplate — code of conduct', () => {
     );
 
     expect(html).not.toContain('code of conduct');
+  });
+});
+
+describe('resaleAvailableTemplate', () => {
+  it('formats event time in the platform Los Angeles timezone', () => {
+    const {html} = resaleAvailableTemplate(
+      {
+        title: 'Late Night Resale',
+        date: '2026-02-27T07:30:00.000Z',
+        location: 'Afterhours',
+      },
+      'evt_late',
+    );
+
+    expect(html).toContain('Thu, Feb 26, 2026, 11:30 PM PST');
+    expect(html).not.toContain('Fri, Feb 27');
+    expect(html).not.toContain('2026-02-27T07:30:00.000Z');
+  });
+});
+
+describe('ticketPurchaseReminderTemplate', () => {
+  it('formats event time in the platform Los Angeles timezone in HTML and text', () => {
+    const {html, text} = ticketPurchaseReminderTemplate({
+      event: {
+        _id: 'evt_late',
+        title: 'Late Night Reminder',
+        date: '2026-02-27T07:30:00.000Z',
+        location: 'Afterhours',
+      },
+      organizer: {
+        id: 'org_late',
+        name: 'Night Shift',
+      },
+      message: 'Tickets are still available.',
+      siteUrl: 'https://braket.gay',
+      unsubToken: 'reminder-unsub-token',
+      preferenceCenterUrl: 'https://braket.gay/account#email-preferences',
+    });
+
+    expect(html).toContain('Thu, Feb 26, 2026, 11:30 PM PST');
+    expect(text).toContain('Thu, Feb 26, 2026, 11:30 PM PST · Afterhours');
+    expect(html).not.toContain('Fri, Feb 27');
+    expect(text).not.toContain('Fri, Feb 27');
+    expect(html).not.toContain('2026-02-27T07:30:00.000Z');
+    expect(text).not.toContain('2026-02-27T07:30:00.000Z');
   });
 });
 describe('applicationApprovedTemplate', () => {

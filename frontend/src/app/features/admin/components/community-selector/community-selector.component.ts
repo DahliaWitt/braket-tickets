@@ -5,6 +5,7 @@ import {
   effect,
   inject,
   resource,
+  signal,
 } from '@angular/core';
 import {ActivatedRoute, Router} from '@angular/router';
 import {CommunityContextService} from '../../services/community-context.service';
@@ -13,6 +14,11 @@ import {AuthService} from '@/core/services/auth.service';
 import type {Id} from '@convex/_generated/dataModel';
 import {readInputValue} from '@ui/utils/dom-event';
 import {safeResourceValue} from '@/utils/resource';
+import {CommunityAdminDefaultService} from '@/features/admin/services/community-admin-default.service';
+import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
+import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
+import {toast} from 'ngx-sonner';
+import {logger} from '@/utils/logger';
 
 interface CommunityOption {
   id: Id<'organizers'>;
@@ -36,12 +42,12 @@ interface CommunityOption {
 @Component({
   selector: 'app-community-selector',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [],
+  imports: [ZardButtonComponent, ZardIconComponent],
   template: `
     @if (ctx.isAdminOverride()) {
       @if (ctx.selectedCommunityName()) {
         <span
-          class="font-mono text-2xs uppercase tracking-widest text-primary block truncate max-w-[200px] sm:max-w-none"
+          class="block max-w-[200px] truncate font-mono text-2xs tracking-widest text-primary uppercase sm:max-w-none"
           data-testid="community-name"
         >
           {{ ctx.selectedCommunityName() }}
@@ -49,20 +55,19 @@ interface CommunityOption {
       }
     } @else if (ctx.hasMultipleCommunities()) {
       <div
-        class="flex min-w-0 items-center justify-end gap-3"
+        class="flex min-w-0 flex-wrap items-center justify-end gap-3"
         data-testid="community-selector-dropdown"
       >
         <label
           for="community-select"
-          class="hidden sm:block mono-label text-2xs text-muted-foreground"
+          class="mono-label hidden text-2xs text-muted-foreground sm:block"
         >
           Community
         </label>
         <select
           id="community-select"
           aria-label="Community"
-          class="native-select w-36 max-w-[50vw] sm:w-auto sm:min-w-44 sm:max-w-xs bg-card border border-border text-foreground text-sm rounded-lg pl-3 py-1.5
-                 focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+          class="native-select w-36 max-w-[50vw] rounded-lg border border-border bg-card py-1.5 pl-3 text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary sm:w-auto sm:max-w-xs sm:min-w-44"
           [value]="ctx.selectedCommunityId()"
           (change)="onSelectionChange($event)"
         >
@@ -75,10 +80,30 @@ interface CommunityOption {
             </option>
           }
         </select>
+        @if (showDefaultPreference()) {
+          <button
+            type="button"
+            z-button
+            zType="outline"
+            data-testid="set-default-community"
+            class="shrink-0 border-border px-3 py-1.5 font-mono text-2xs tracking-widest text-muted-foreground uppercase hover:text-foreground"
+            [disabled]="isSelectedDefault() || isSavingDefault()"
+            [attr.aria-pressed]="isSelectedDefault()"
+            [attr.aria-label]="
+              isSelectedDefault()
+                ? 'Current community is the default community admin landing page'
+                : 'Set current community as default community admin landing page'
+            "
+            (click)="setSelectedAsDefault()"
+          >
+            <z-icon zType="check" class="mr-2 h-3.5 w-3.5" />
+            {{ isSelectedDefault() ? 'Default' : 'Set default' }}
+          </button>
+        }
       </div>
     } @else if (ctx.selectedCommunityName()) {
       <span
-        class="font-mono text-2xs uppercase tracking-widest text-primary block truncate max-w-[200px] sm:max-w-none"
+        class="block max-w-[200px] truncate font-mono text-2xs tracking-widest text-primary uppercase sm:max-w-none"
         data-testid="community-name"
       >
         {{ ctx.selectedCommunityName() }}
@@ -92,6 +117,8 @@ export class CommunitySelectorComponent {
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly defaults = inject(CommunityAdminDefaultService);
+  protected readonly isSavingDefault = signal(false);
 
   /**
    * Fetches the display name for each community ID whenever the community list
@@ -148,6 +175,14 @@ export class CommunitySelectorComponent {
     () => safeResourceValue(this.namesResource) ?? [],
   );
 
+  protected readonly showDefaultPreference = computed(
+    () => !this.ctx.isAdminOverride() && this.ctx.communities().length > 1,
+  );
+
+  protected readonly isSelectedDefault = computed(() =>
+    this.defaults.isDefaultCommunity(this.ctx.selectedCommunityId()),
+  );
+
   private readonly resolvedNamesEffect = effect(() => {
     this.ctx.setResolvedNames(
       new Map(this.options().map((option) => [option.id, option.name])),
@@ -168,5 +203,21 @@ export class CommunitySelectorComponent {
       queryParamsHandling: 'merge',
       replaceUrl: true,
     });
+  }
+
+  async setSelectedAsDefault(): Promise<void> {
+    if (!this.showDefaultPreference() || this.isSavingDefault()) return;
+    const id = this.ctx.selectedCommunityId();
+    if (id === null) return;
+    this.isSavingDefault.set(true);
+    try {
+      await this.defaults.setDefaultCommunity(id);
+      toast.success('Default community saved');
+    } catch (error) {
+      logger.error('Failed to save default community', error);
+      toast.error('Could not save default community');
+    } finally {
+      this.isSavingDefault.set(false);
+    }
   }
 }

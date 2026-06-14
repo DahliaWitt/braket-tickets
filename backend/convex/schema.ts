@@ -167,9 +167,16 @@ const schemaTables = {
      * Takes precedence over per-organizer preferences.
      */
     globalMarketingOptOut: v.optional(v.boolean()),
+    /**
+     * Preferred community-admin landing community.
+     */
+    defaultCommunityAdminOrganizerId: v.optional(v.id('organizers')),
   })
     .index('by_betterAuthUserId', ['betterAuthUserId'])
     .index('email', ['email'])
+    .index('by_defaultCommunityAdminOrganizerId', [
+      'defaultCommunityAdminOrganizerId',
+    ])
     .searchIndex('search_name_email', {
       searchField: 'name',
       filterFields: ['email'],

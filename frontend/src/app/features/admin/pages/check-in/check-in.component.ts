@@ -1,4 +1,3 @@
-import {DatePipe} from '@angular/common';
 import {
   Component,
   inject,
@@ -22,6 +21,7 @@ import {CheckInScannerComponent} from '@/features/admin/components/check-in-scan
 import {ZardInputDirective} from '@ui/components/primitives/input/input.directive';
 import {CheckInService} from '@/features/admin/services/check-in.service';
 import {readInputValue} from '@ui/utils/dom-event';
+import {EventDatePipe} from '@/utils/event-date.pipe';
 
 import {type Id} from '@convex/_generated/dataModel';
 import {type FunctionReturnType} from 'convex/server';
@@ -42,7 +42,7 @@ interface ManualFeedback {
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [CheckInService],
   imports: [
-    DatePipe,
+    EventDatePipe,
     RouterLink,
     FormField,
     ZardButtonComponent,
