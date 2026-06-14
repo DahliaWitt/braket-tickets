@@ -33,20 +33,20 @@ Jump to:
 
 ## Pipeline Map
 
-| Workflow                   | Trigger                                                                                              | Jobs                                                                                                                                 |
-| -------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `CI`                       | Pushes to `main` or `develop`; pull requests targeting `main` or `develop`                           | `lint`, `test`, `stripe-contracts`, `build`, `storybook`, `e2e-check`, conditional `e2e`, branch-gated reusable deploy workflow call |
-| `Prepare Release`          | Manual `workflow_dispatch`                                                                           | Opens or updates a Release Please preparation PR against `develop` with `RELEASE_PLEASE_TOKEN`                                       |
-| `Deploy to Production`     | Reusable workflow called from a successful `CI` push run on `main`, or manual `workflow_dispatch`    | `changes`, `deploy-convex`, `deploy-frontend`, `deploy-observability`, `record-deployment`, `publish-release`                        |
-| `Deploy Preview (develop)` | Reusable workflow called from a successful `CI` push run on `develop`, or manual `workflow_dispatch` | `changes`, `deploy-convex-dev`, `deploy-frontend-preview`, `deploy-observability-dev`, `record-deployment`                           |
+| Workflow                   | Trigger                                                                                    | Jobs                                                                                                                            |
+| -------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `CI`                       | Pushes to `main` or `develop`; pull requests targeting `main` or `develop`                 | `lint`, `test`, `stripe-contracts`, `build`, `storybook`, `e2e-check`, conditional `e2e`                                        |
+| `Prepare Release`          | Manual `workflow_dispatch`                                                                 | Opens or updates a Release Please preparation PR against `develop` with `RELEASE_PLEASE_TOKEN`                                  |
+| `Deploy to Production`     | `workflow_run` after successful `CI` push runs on `main`, or manual `workflow_dispatch`    | `deploy-context`, `changes`, `deploy-convex`, `deploy-frontend`, `deploy-observability`, `record-deployment`, `publish-release` |
+| `Deploy Preview (develop)` | `workflow_run` after successful `CI` push runs on `develop`, or manual `workflow_dispatch` | `deploy-context`, `changes`, `deploy-convex-dev`, `deploy-frontend-preview`, `deploy-observability-dev`, `record-deployment`    |
 
-PRs do not deploy. Automatic deploys are reusable workflow calls from `CI` and only run after a successful branch-push CI run on `main` or `develop`. Pull request CI completions do not call deploy workflows.
+PRs do not deploy. Automatic deploys use `workflow_run` and only pass `deploy-context` after a successful branch-push CI run on `main` or `develop`. Pull request CI completions cannot pass the deploy-context event guard.
 
 The production deploy workflow uses `concurrency.queue: max` so production deploy runs wait behind any active production deploy instead of canceling it. GitHub announced this syntax on May 7, 2026, but `actionlint` v1.7.12 does not recognize it yet. Until `rhysd/actionlint#654` lands in an `actionlint` release, ignore only the `unexpected key "queue" for "concurrency" section` warning for `.github/workflows/deploy.yml`.
 
 GitHub Actions jobs that need environment-scoped secrets use the selected GitHub environment. CI and component deploy jobs set `deployment: false` so they can read those secrets without adding entries to the repository Deployments sidebar. Only the final `record-deployment` job in each deploy workflow creates the GitHub Deployment record. That job runs after backend, frontend, and observability work and exits with the deploy result, so the Deployment record is successful only when the deploy workflow succeeds.
 
-When troubleshooting automatic deploys, start from the parent `CI` run on the branch push, confirm it completed successfully, then open the `Deploy Development` or `Deploy Production` reusable workflow call inside that same CI run.
+When troubleshooting automatic deploys, start from the parent `CI` run on the branch push, confirm it completed successfully, then open the separate `Deploy Preview (develop)` or `Deploy to Production` workflow run for deploy logs.
 
 Branch protection on both `develop` and `main` requires these CI checks before merge:
 
@@ -247,7 +247,7 @@ If an automatic deploy never started or the expected job is marked `skipped`, ch
 1. The parent `CI` run must have succeeded.
 2. The triggering event must be a branch push, not a pull request.
 3. The branch must be `main` for production or `develop` for preview.
-4. The `Deploy Production` or `Deploy Development` reusable workflow call in `CI` must have run.
+4. The separate deploy workflow must have started from `workflow_run`, not `workflow_dispatch`.
 5. The deploy workflow's `deploy-context` job must have resolved the expected branch (`main` for production, `develop` for preview).
 6. The automatic deploy path forces all deploy slices after CI success. Manual deploys can still use `force_all=false` for targeted recovery.
 
