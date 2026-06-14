@@ -1,9 +1,9 @@
 <div
-  class="min-h-screen bg-background text-foreground p-6 md:p-10 space-y-8 font-sans selection:bg-primary/30"
+  class="min-h-screen space-y-8 bg-background p-6 font-sans text-foreground selection:bg-primary/30 md:p-10"
 >
   @if (isLoading()) {
     <div class="space-y-4">
-      <div class="h-8 w-64 rounded-md bg-muted/60 animate-pulse"></div>
+      <div class="h-8 w-64 animate-pulse rounded-md bg-muted/60"></div>
       <z-progress-bar [zIndeterminate]="true" />
     </div>
   } @else if (errorMessage()) {
@@ -17,9 +17,9 @@
       <a
         [routerLink]="backLink()"
         [queryParams]="routeQueryParams() ?? undefined"
-        class="text-muted-foreground hover:text-primary transition-colors text-sm font-medium flex items-center gap-1 group"
+        class="group flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
       >
-        <span class="transform group-hover:-translate-x-1 transition-transform"
+        <span class="transform transition-transform group-hover:-translate-x-1"
           >←</span
         >
         Back to Events
@@ -33,22 +33,22 @@
         <a
           [routerLink]="backLink()"
           [queryParams]="routeQueryParams() ?? undefined"
-          class="text-muted-foreground hover:text-primary transition-colors text-sm font-medium flex items-center gap-1 group"
+          class="group flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
         >
           <span
-            class="transform group-hover:-translate-x-1 transition-transform"
+            class="transform transition-transform group-hover:-translate-x-1"
             >←</span
           >
           Back to Events
         </a>
         <div>
           <h1
-            class="text-2xl sm:text-3xl lg:text-4xl font-bold text-foreground tracking-tight font-display uppercase"
+            class="font-display text-2xl font-bold tracking-tight text-foreground uppercase sm:text-3xl lg:text-4xl"
           >
             {{ data.event.title }}
           </h1>
-          <p class="text-sm text-muted-foreground font-mono">
-            {{ data.event.date | date: 'fullDate' }}
+          <p class="font-mono text-sm text-muted-foreground">
+            {{ data.event.date | eventDate: 'fullDate' }}
             @if (data.event.location) {
               <span class="text-muted-foreground">
                 • {{ data.event.location }}</span
@@ -80,42 +80,42 @@
     <!-- Ticket Sales Status Banner -->
     @if (isSoldOut()) {
       <div
-        class="rounded-xl border border-destructive/40 bg-destructive/10 p-4 flex items-center gap-3"
+        class="flex items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/10 p-4"
       >
         <z-icon zType="circle-alert" class="text-destructive" />
         <div>
-          <p class="text-destructive font-display uppercase tracking-wider">
+          <p class="font-display tracking-wider text-destructive uppercase">
             Sold Out
           </p>
-          <p class="text-destructive/70 text-xs font-mono">
+          <p class="font-mono text-xs text-destructive/70">
             All tickets have been sold for this event.
           </p>
         </div>
       </div>
     } @else if (ticketSalesStatus() === 'paused') {
       <div
-        class="rounded-xl border border-warning/40 bg-warning/10 p-4 flex items-center gap-3"
+        class="flex items-center gap-3 rounded-xl border border-warning/40 bg-warning/10 p-4"
       >
         <z-icon zType="clock" class="text-warning" />
         <div>
-          <p class="text-warning font-display uppercase tracking-wider">
+          <p class="font-display tracking-wider text-warning uppercase">
             Ticket Sales Paused
           </p>
-          <p class="text-warning/70 text-xs font-mono">
+          <p class="font-mono text-xs text-warning/70">
             Users cannot purchase tickets while sales are paused.
           </p>
         </div>
       </div>
     } @else if (ticketSalesStatus() === 'ended') {
       <div
-        class="rounded-xl border border-destructive/40 bg-destructive/10 p-4 flex items-center gap-3"
+        class="flex items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/10 p-4"
       >
         <z-icon zType="circle-alert" class="text-destructive" />
         <div>
-          <p class="text-destructive font-display uppercase tracking-wider">
+          <p class="font-display tracking-wider text-destructive uppercase">
             Ticket Sales Ended
           </p>
-          <p class="text-destructive/70 text-xs font-mono">
+          <p class="font-mono text-xs text-destructive/70">
             Ticket sales have been permanently ended for this event.
           </p>
         </div>
@@ -157,7 +157,7 @@
       <z-card class="border-border bg-card/80">
         <div class="space-y-4">
           <p
-            class="text-xs uppercase font-mono text-muted-foreground tracking-widest"
+            class="font-mono text-xs tracking-widest text-muted-foreground uppercase"
           >
             Ticket Tiers
           </p>
@@ -165,30 +165,30 @@
             <div
               class="flex items-center justify-between rounded-lg border border-border/60 bg-muted/40 px-4 py-3"
             >
-              <span class="font-mono text-muted-foreground uppercase text-xs"
+              <span class="font-mono text-xs text-muted-foreground uppercase"
                 >Regular</span
               >
-              <span class="text-foreground font-display text-lg">{{
+              <span class="font-display text-lg text-foreground">{{
                 data.tierCounts.regular
               }}</span>
             </div>
             <div
               class="flex items-center justify-between rounded-lg border border-border/60 bg-muted/40 px-4 py-3"
             >
-              <span class="font-mono text-muted-foreground uppercase text-xs"
+              <span class="font-mono text-xs text-muted-foreground uppercase"
                 >Notaflof</span
               >
-              <span class="text-foreground font-display text-lg">{{
+              <span class="font-display text-lg text-foreground">{{
                 data.tierCounts.notaflof
               }}</span>
             </div>
             <div
               class="flex items-center justify-between rounded-lg border border-border/60 bg-muted/40 px-4 py-3"
             >
-              <span class="font-mono text-muted-foreground uppercase text-xs"
+              <span class="font-mono text-xs text-muted-foreground uppercase"
                 >Supporter</span
               >
-              <span class="text-foreground font-display text-lg">{{
+              <span class="font-display text-lg text-foreground">{{
                 data.tierCounts.supporter
               }}</span>
             </div>
@@ -199,21 +199,21 @@
       <z-card class="border-border bg-card/80">
         <div class="space-y-4">
           <p
-            class="text-xs uppercase font-mono text-muted-foreground tracking-widest"
+            class="font-mono text-xs tracking-widest text-muted-foreground uppercase"
           >
             Purchases
           </p>
           <div class="flex items-baseline gap-2">
             <span
-              class="text-4xl font-display text-foreground"
+              class="font-display text-4xl text-foreground"
               data-testid="purchase-count"
               >{{ purchaseCount() }}</span
             >
-            <span class="text-xs font-mono text-muted-foreground uppercase"
+            <span class="font-mono text-xs text-muted-foreground uppercase"
               >Completed</span
             >
           </div>
-          <p class="text-xs text-muted-foreground font-mono">
+          <p class="font-mono text-xs text-muted-foreground">
             Includes all completed orders for this event.
           </p>
         </div>
@@ -224,19 +224,19 @@
           <div class="flex items-center justify-between">
             <div>
               <p
-                class="text-xs uppercase font-mono text-muted-foreground tracking-widest"
+                class="font-mono text-xs tracking-widest text-muted-foreground uppercase"
               >
                 Checked In
               </p>
               <p
-                class="text-3xl font-display text-foreground"
+                class="font-display text-3xl text-foreground"
                 data-testid="checked-in-count"
               >
                 {{ data.checkInStats.checkedIn }} / {{ data.soldCount }}
               </p>
             </div>
             <div
-              class="rounded-full border border-primary/30 bg-primary/30 px-3 py-1 text-sm font-mono text-foreground"
+              class="rounded-full border border-primary/30 bg-primary/30 px-3 py-1 font-mono text-sm text-foreground"
               data-testid="check-in-percentage"
             >
               {{ checkInPercentage() }}%
@@ -244,7 +244,7 @@
           </div>
           <z-progress-bar [progress]="checkInPercentage()" />
           <p
-            class="text-xs font-mono text-muted-foreground"
+            class="font-mono text-xs text-muted-foreground"
             data-testid="check-in-not-scanned"
           >
             {{ data.soldCount - data.checkInStats.checkedIn }} not yet scanned
@@ -255,7 +255,7 @@
 
     <!-- Tab Bar -->
     <nav
-      class="flex border-b border-border overflow-x-auto whitespace-nowrap"
+      class="flex overflow-x-auto border-b border-border whitespace-nowrap"
       role="tablist"
       aria-label="Event management sections"
       tabindex="-1"
@@ -272,7 +272,7 @@
         [class.text-foreground]="activeTab() === 'analytics'"
         [class.border-transparent]="activeTab() !== 'analytics'"
         [class.text-muted-foreground]="activeTab() !== 'analytics'"
-        class="shrink-0 px-4 py-3 text-sm font-mono uppercase tracking-widest border-b-2 -mb-px transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        class="-mb-px shrink-0 border-b-2 px-4 py-3 font-mono text-sm tracking-widest uppercase transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         (click)="activeTab.set('analytics')"
         data-testid="tab-analytics"
       >
@@ -289,13 +289,13 @@
         [class.text-foreground]="activeTab() === 'buyers'"
         [class.border-transparent]="activeTab() !== 'buyers'"
         [class.text-muted-foreground]="activeTab() !== 'buyers'"
-        class="shrink-0 px-4 py-3 text-sm font-mono uppercase tracking-widest border-b-2 -mb-px transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring flex items-center gap-2"
+        class="-mb-px flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 font-mono text-sm tracking-widest uppercase transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         (click)="activeTab.set('buyers')"
         data-testid="tab-buyers"
       >
         Buyers
         <span
-          class="rounded-full bg-primary/15 border border-primary/30 px-2 py-0.5 text-2xs font-mono text-primary leading-none"
+          class="rounded-full border border-primary/30 bg-primary/15 px-2 py-0.5 font-mono text-2xs leading-none text-primary"
           data-testid="tab-buyers-count"
         >
           {{ purchaseCount() }}
@@ -312,13 +312,13 @@
         [class.text-foreground]="activeTab() === 'guests'"
         [class.border-transparent]="activeTab() !== 'guests'"
         [class.text-muted-foreground]="activeTab() !== 'guests'"
-        class="shrink-0 px-4 py-3 text-sm font-mono uppercase tracking-widest border-b-2 -mb-px transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring flex items-center gap-2"
+        class="-mb-px flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 font-mono text-sm tracking-widest uppercase transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         (click)="activeTab.set('guests')"
         data-testid="tab-guests"
       >
         Guests
         <span
-          class="rounded-full bg-primary/15 border border-primary/30 px-2 py-0.5 text-2xs font-mono text-primary leading-none"
+          class="rounded-full border border-primary/30 bg-primary/15 px-2 py-0.5 font-mono text-2xs leading-none text-primary"
           data-testid="tab-guests-count"
         >
           {{ guests().length }}
@@ -335,14 +335,14 @@
         [class.text-foreground]="activeTab() === 'resale'"
         [class.border-transparent]="activeTab() !== 'resale'"
         [class.text-muted-foreground]="activeTab() !== 'resale'"
-        class="shrink-0 px-4 py-3 text-sm font-mono uppercase tracking-widest border-b-2 -mb-px transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring flex items-center gap-2"
+        class="-mb-px flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 font-mono text-sm tracking-widest uppercase transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         (click)="activeTab.set('resale')"
         data-testid="tab-resale"
       >
         Resale
-        @if (resaleListingCount() > 0) {
+        @if (0 < resaleListingCount()) {
           <span
-            class="rounded-full bg-primary/15 border border-primary/30 px-2 py-0.5 text-2xs font-mono text-primary leading-none"
+            class="rounded-full border border-primary/30 bg-primary/15 px-2 py-0.5 font-mono text-2xs leading-none text-primary"
             data-testid="tab-resale-count"
           >
             {{ resaleListingCount() }}
@@ -360,7 +360,7 @@
         [class.text-foreground]="activeTab() === 'email'"
         [class.border-transparent]="activeTab() !== 'email'"
         [class.text-muted-foreground]="activeTab() !== 'email'"
-        class="shrink-0 px-4 py-3 text-sm font-mono uppercase tracking-widest border-b-2 -mb-px transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        class="-mb-px shrink-0 border-b-2 px-4 py-3 font-mono text-sm tracking-widest uppercase transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         (click)="activeTab.set('email')"
         data-testid="tab-email"
       >
@@ -480,6 +480,6 @@
       </div>
     }
   } @else {
-    <div class="text-muted-foreground font-mono">No event selected.</div>
+    <div class="font-mono text-muted-foreground">No event selected.</div>
   }
 </div>

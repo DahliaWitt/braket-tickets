@@ -1495,15 +1495,14 @@ describe('computePayoutStatus', () => {
   });
 
   it('returns {state: "pending"} when within 3 days after the event', () => {
-    // Event date: Jan 10 2025 UTC; now: Jan 12 2025 local — 2 days after, within the 3-day window
-    const now = new Date(2025, 0, 12);
+    // Legacy date-only event date resolves to Jan 10 midnight in the event timezone.
+    const now = new Date('2025-01-12T08:00:00.000Z');
     const result = computePayoutStatus({...baseEvent, date: '2025-01-10'}, now);
     expect(result).not.toBeNull();
     expect(result?.state).toBe('pending');
     if (result?.state === 'pending') {
-      // payoutDate = new Date('2025-01-10') + 3 days (UTC-based arithmetic)
       const expectedPayoutDate = new Date(
-        new Date('2025-01-10').getTime() + 3 * 86400000,
+        new Date('2025-01-10T08:00:00.000Z').getTime() + 3 * 86400000,
       );
       expect(result.payoutDate).toEqual(expectedPayoutDate);
     }
@@ -1517,6 +1516,12 @@ describe('computePayoutStatus', () => {
     ).toEqual({
       state: 'processing',
     });
+  });
+
+  it('returns null for invalid event dates', () => {
+    expect(
+      computePayoutStatus({...baseEvent, date: '2025-02-31'}, new Date()),
+    ).toBeNull();
   });
 
   it('returns {state: "pending"} at the boundary (exactly 3 days have not elapsed yet)', () => {

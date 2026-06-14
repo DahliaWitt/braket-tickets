@@ -9,7 +9,7 @@ import {
   Injector,
   runInInjectionContext,
 } from '@angular/core';
-import {DatePipe, UpperCasePipe} from '@angular/common';
+import {UpperCasePipe} from '@angular/common';
 import {AuthService} from '@/core/services/auth.service';
 import {PaymentService} from '@/features/tickets/services/payment.service';
 import {ResaleService} from '@/features/tickets/services/resale.service';
@@ -39,6 +39,7 @@ import {
 import type {ResaleListingStatus} from '@shared/domain/resale-listing-status';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
 import {formatUsdCents} from '@shared/pricing/pricing-summary';
+import {EventDatePipe} from '@/utils/event-date.pipe';
 
 /** Resale listing data mapped to a ticket */
 interface TicketResaleInfo {
@@ -50,7 +51,7 @@ interface TicketResaleInfo {
   selector: 'app-tickets',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    DatePipe,
+    EventDatePipe,
     UpperCasePipe,
     RouterLink,
     ZardCardComponent,
@@ -166,8 +167,8 @@ interface TicketResaleInfo {
                         class="mt-1 font-mono text-2xs text-muted-foreground uppercase"
                       >
                         @if (ticket.resolvedEvent?.date; as eventDate) {
-                          {{ eventDate | date: 'longDate' }},
-                          {{ eventDate | date: 'shortTime' }}
+                          {{ eventDate | eventDate: 'longDate' }},
+                          {{ eventDate | eventDate: 'shortTime' }}
                         }
                       </p>
                       <p

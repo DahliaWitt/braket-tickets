@@ -13,7 +13,7 @@ import {
   type AfterRenderRef,
 } from '@angular/core';
 import {toSignal} from '@angular/core/rxjs-interop';
-import {DatePipe, NgOptimizedImage} from '@angular/common';
+import {NgOptimizedImage} from '@angular/common';
 import {ActivatedRoute, Router, RouterLink} from '@angular/router';
 import {AuthService} from '@/core/services/auth.service';
 import {injectQuery, skipToken} from 'convex-angular';
@@ -50,6 +50,7 @@ import {awaitCheckoutSettlement} from './checkout-settlement';
 import {CheckoutStore} from './checkout-store';
 import {getContactDialogDescription} from './event-details-copy';
 import {getBuyerPricingSummary} from '@shared/pricing/pricing-summary';
+import {EventDatePipe} from '@/utils/event-date.pipe';
 
 type EventOrganizer = NonNullable<EventDetail['organizer']>;
 
@@ -57,7 +58,7 @@ type EventOrganizer = NonNullable<EventDetail['organizer']>;
   selector: 'app-event-details',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    DatePipe,
+    EventDatePipe,
     RouterLink,
     NgOptimizedImage,
     ZardButtonComponent,

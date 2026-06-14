@@ -209,10 +209,20 @@
                 [formField]="eventForm.time"
                 [class]="
                   inputClasses +
-                  (isFieldInvalid(eventForm.time) ? ' ' + errorClasses : '')
+                  (isFieldInvalid(eventForm.time) ||
+                  hasError(eventForm.time, 'invalidEventTime')
+                    ? ' ' + errorClasses
+                    : '')
                 "
               />
-              @if (isFieldInvalid(eventForm.time)) {
+              @if (hasError(eventForm.time, 'invalidEventTime')) {
+                <p
+                  data-testid="time-error"
+                  class="text-xs text-destructive uppercase"
+                >
+                  Choose a valid time for this date
+                </p>
+              } @else if (isFieldInvalid(eventForm.time)) {
                 <p
                   data-testid="time-error"
                   class="text-xs text-destructive uppercase"

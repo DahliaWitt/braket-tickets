@@ -1,16 +1,19 @@
-import { inject, Injectable } from '@angular/core';
-import { type SettlementExportInput } from '../models/event-management.model';
-import type { jsPDF as JsPDF } from 'jspdf';
-import { BRAND_PALETTE } from '../../../utils/brand-palette';
-import { LOAD_PDF_EXPORT_DEPENDENCIES } from './pdf-export-loader.token';
+import {inject, Injectable} from '@angular/core';
+import {type SettlementExportInput} from '../models/event-management.model';
+import type {jsPDF as JsPDF} from 'jspdf';
+import {BRAND_PALETTE} from '../../../utils/brand-palette';
+import {LOAD_PDF_EXPORT_DEPENDENCIES} from './pdf-export-loader.token';
 import {
   completedResaleListings,
-  parseSettlementEventDate,
   summarizeSettlementRefunds,
   type RefundTierStats,
 } from './settlement-export-data';
-import { formatUsdCents, generateDatedExportFilename } from '../utils/export-formatting';
-import { addPdfPageNumbers, getLastAutoTableFinalY } from './pdf-export-document';
+import {
+  formatUsdCents,
+  generateDatedExportFilename,
+} from '../utils/export-formatting';
+import {addPdfPageNumbers, getLastAutoTableFinalY} from './pdf-export-document';
+import {formatEventDate} from '../../../utils/event-date-format';
 
 // Types for dynamic imports - jsPDF loaded only when PDF export is triggered
 
@@ -50,7 +53,9 @@ type RevenueByTierEntry = [
   providedIn: 'root',
 })
 export class SettlementExportService {
-  private readonly loadPdfExportDependencies = inject(LOAD_PDF_EXPORT_DEPENDENCIES);
+  private readonly loadPdfExportDependencies = inject(
+    LOAD_PDF_EXPORT_DEPENDENCIES,
+  );
 
   /**
    * Generates and downloads a settlement report PDF for the given event.
@@ -73,13 +78,20 @@ export class SettlementExportService {
    * Page numbers are added to all pages automatically.
    */
   async export(data: SettlementExportInput): Promise<void> {
-    const { jsPDF, autoTable } = await this.loadPdfExportDependencies();
+    const {jsPDF, autoTable} = await this.loadPdfExportDependencies();
 
     const doc: JsPDF = new jsPDF();
-    const { event, revenue, revenueByTier, purchases, resaleMetrics, resaleListings } = data;
+    const {
+      event,
+      revenue,
+      revenueByTier,
+      purchases,
+      resaleMetrics,
+      resaleListings,
+    } = data;
 
     const refundSummary = summarizeSettlementRefunds(purchases);
-    const { refundsByTier, totalRefundedTickets, hasRefunds } = refundSummary;
+    const {refundsByTier, totalRefundedTickets, hasRefunds} = refundSummary;
 
     // --- PAGE 1: Settlement Summary ---
 
@@ -106,12 +118,7 @@ export class SettlementExportService {
 
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    const dateStr = parseSettlementEventDate(event.date).toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
+    const dateStr = formatEventDate(event.date, 'fullDate') ?? 'Unknown';
     doc.text(`Date: ${dateStr}`, 18, 49);
     doc.text(`Location: ${event.location || 'N/A'}`, 18, 54);
     doc.text(`Report Generated: ${new Date().toLocaleString()}`, 18, 59);
@@ -122,8 +129,12 @@ export class SettlementExportService {
     doc.setFont('helvetica', 'bold');
     doc.text('Sales Breakdown by Tier', 14, 78);
 
-    const salesHeaders = [['Tier', 'Quantity', 'Gross Sales', 'Net Sales (After Fees)']];
-    const salesBody = (Object.entries(revenueByTier) as RevenueByTierEntry[]).map(([tier, stats]) => [
+    const salesHeaders = [
+      ['Tier', 'Quantity', 'Gross Sales', 'Net Sales (After Fees)'],
+    ];
+    const salesBody = (
+      Object.entries(revenueByTier) as RevenueByTierEntry[]
+    ).map(([tier, stats]) => [
       tier.toUpperCase(),
       stats.quantity.toString(),
       formatUsdCents(stats.grossCents),
@@ -135,12 +146,16 @@ export class SettlementExportService {
       body: salesBody,
       startY: 82,
       theme: 'grid',
-      headStyles: { fillColor: BRAND_PALETTE.primary, textColor: BRAND_PALETTE.white, fontStyle: 'bold' },
-      styles: { fontSize: 9, cellPadding: 4 },
+      headStyles: {
+        fillColor: BRAND_PALETTE.primary,
+        textColor: BRAND_PALETTE.white,
+        fontStyle: 'bold',
+      },
+      styles: {fontSize: 9, cellPadding: 4},
       columnStyles: {
-        1: { halign: 'right' },
-        2: { halign: 'right' },
-        3: { halign: 'right' },
+        1: {halign: 'right'},
+        2: {halign: 'right'},
+        3: {halign: 'right'},
       },
     });
 
@@ -155,9 +170,15 @@ export class SettlementExportService {
 
     const feeData: string[][] = [];
     if (revenue.processingFeeCents > 0) {
-      feeData.push(['Processing Fees', `-${formatUsdCents(revenue.processingFeeCents)}`]);
+      feeData.push([
+        'Processing Fees',
+        `-${formatUsdCents(revenue.processingFeeCents)}`,
+      ]);
     }
-    feeData.push(['Braket Platform Fee (2%)', `-${formatUsdCents(revenue.platformFeeCents)}`]);
+    feeData.push([
+      'Braket Platform Fee (2%)',
+      `-${formatUsdCents(revenue.platformFeeCents)}`,
+    ]);
     // Lost processing fees: split into primary refunds vs resale refunds so
     // every visible line item sums exactly to the NET SETTLEMENT total.
     // revenue.lostProcessingFeeCents is the superset (includes resale seller fees).
@@ -181,11 +202,11 @@ export class SettlementExportService {
       body: feeData,
       startY: feesY + 4,
       theme: 'plain',
-      styles: { fontSize: 9, cellPadding: 4 },
+      styles: {fontSize: 9, cellPadding: 4},
       columnStyles: {
-        1: { halign: 'right', fontStyle: 'bold' },
+        1: {halign: 'right', fontStyle: 'bold'},
       },
-      bodyStyles: { textColor: BRAND_PALETTE.tableMutedText },
+      bodyStyles: {textColor: BRAND_PALETTE.tableMutedText},
     });
 
     // Add footnotes if there are lost fees or resale fees
@@ -238,10 +259,14 @@ export class SettlementExportService {
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.text('Net Revenue:', 124, summaryY + 10);
-    doc.text(formatUsdCents(netGrossCents), 192, summaryY + 10, { align: 'right' });
+    doc.text(formatUsdCents(netGrossCents), 192, summaryY + 10, {
+      align: 'right',
+    });
 
     doc.text('Processing Fees:', 124, summaryY + 18);
-    doc.text(`-${formatUsdCents(totalFees)}`, 192, summaryY + 18, { align: 'right' });
+    doc.text(`-${formatUsdCents(totalFees)}`, 192, summaryY + 18, {
+      align: 'right',
+    });
 
     doc.setDrawColor(BRAND_PALETTE.white);
     doc.setLineWidth(0.5);
@@ -250,10 +275,13 @@ export class SettlementExportService {
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
     doc.text('NET SETTLEMENT:', 124, summaryY + 30);
-    doc.text(formatUsdCents(revenue.netCents), 192, summaryY + 30, { align: 'right' });
+    doc.text(formatUsdCents(revenue.netCents), 192, summaryY + 30, {
+      align: 'right',
+    });
 
     // Appendix notes if applicable
-    const hasCompletedResales = resaleMetrics && resaleMetrics.completedResales > 0;
+    const hasCompletedResales =
+      resaleMetrics && resaleMetrics.completedResales > 0;
     let noteY = summaryY + 30;
     if (hasRefunds || hasCompletedResales) {
       doc.setFontSize(9);
@@ -300,22 +328,28 @@ export class SettlementExportService {
       doc.text('Refunds by Tier', 14, 55);
 
       const refundHeaders = [['Tier', 'Tickets Refunded', 'Amount Refunded']];
-      const refundBody = Object.entries(refundsByTier).map(([tier, stats]: [string, RefundTierStats]) => [
-        tier.toUpperCase(),
-        stats.quantity.toString(),
-        formatUsdCents(stats.amountCents),
-      ]);
+      const refundBody = Object.entries(refundsByTier).map(
+        ([tier, stats]: [string, RefundTierStats]) => [
+          tier.toUpperCase(),
+          stats.quantity.toString(),
+          formatUsdCents(stats.amountCents),
+        ],
+      );
 
       autoTable(doc, {
         head: refundHeaders,
         body: refundBody,
         startY: 59,
         theme: 'grid',
-        headStyles: { fillColor: BRAND_PALETTE.primary, textColor: BRAND_PALETTE.white, fontStyle: 'bold' },
-        styles: { fontSize: 9, cellPadding: 4 },
+        headStyles: {
+          fillColor: BRAND_PALETTE.primary,
+          textColor: BRAND_PALETTE.white,
+          fontStyle: 'bold',
+        },
+        styles: {fontSize: 9, cellPadding: 4},
         columnStyles: {
-          1: { halign: 'right' },
-          2: { halign: 'right' },
+          1: {halign: 'right'},
+          2: {halign: 'right'},
         },
       });
 
@@ -331,22 +365,34 @@ export class SettlementExportService {
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
       doc.text('Total Tickets Refunded:', 124, refundSummaryY + 8);
-      doc.text(totalRefundedTickets.toString(), 192, refundSummaryY + 8, { align: 'right' });
+      doc.text(totalRefundedTickets.toString(), 192, refundSummaryY + 8, {
+        align: 'right',
+      });
 
       doc.setFont('helvetica', 'bold');
       doc.text('Total Refunded:', 124, refundSummaryY + 16);
-      doc.text(formatUsdCents(revenue.refundedCents), 192, refundSummaryY + 16, {
-        align: 'right',
-      });
+      doc.text(
+        formatUsdCents(revenue.refundedCents),
+        192,
+        refundSummaryY + 16,
+        {
+          align: 'right',
+        },
+      );
 
       // Show lost processing fees if any
       if (revenue.lostProcessingFeeCents > 0) {
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(BRAND_PALETTE.destructive);
         doc.text('Lost Processing Fees:', 124, refundSummaryY + 26);
-        doc.text(formatUsdCents(revenue.lostProcessingFeeCents), 192, refundSummaryY + 26, {
-          align: 'right',
-        });
+        doc.text(
+          formatUsdCents(revenue.lostProcessingFeeCents),
+          192,
+          refundSummaryY + 26,
+          {
+            align: 'right',
+          },
+        );
       }
     }
 
@@ -377,7 +423,10 @@ export class SettlementExportService {
           'Total Refunded to Sellers',
           formatUsdCents(resaleMetrics.totalRefundedToSellersCents),
         ],
-        ['Resale Fees Collected', formatUsdCents(resaleMetrics.totalResaleFeesCents)],
+        [
+          'Resale Fees Collected',
+          formatUsdCents(resaleMetrics.totalResaleFeesCents),
+        ],
         [
           'Lost Processing Fees',
           `-${formatUsdCents(resaleMetrics.totalLostProcessingFeesCents)}`,
@@ -388,11 +437,11 @@ export class SettlementExportService {
         body: resaleSummaryData,
         startY: 49,
         theme: 'plain',
-        styles: { fontSize: 9, cellPadding: 4 },
+        styles: {fontSize: 9, cellPadding: 4},
         columnStyles: {
-          1: { halign: 'right', fontStyle: 'bold' },
+          1: {halign: 'right', fontStyle: 'bold'},
         },
-        bodyStyles: { textColor: BRAND_PALETTE.tableMutedText },
+        bodyStyles: {textColor: BRAND_PALETTE.tableMutedText},
       });
 
       // Transactions table (only completed listings with financial data)
@@ -405,7 +454,9 @@ export class SettlementExportService {
         doc.setFont('helvetica', 'bold');
         doc.text('Resale Transactions', 14, transactionsY);
 
-        const transactionHeaders = [['#', 'Seller', 'Seller Refund', 'Resale Fee', 'Lost Fee']];
+        const transactionHeaders = [
+          ['#', 'Seller', 'Seller Refund', 'Resale Fee', 'Lost Fee'],
+        ];
         const transactionBody = completedListings.map((listing, index) => [
           (index + 1).toString(),
           listing.sellerName,
@@ -419,13 +470,17 @@ export class SettlementExportService {
           body: transactionBody,
           startY: transactionsY + 4,
           theme: 'grid',
-          headStyles: { fillColor: BRAND_PALETTE.primary, textColor: BRAND_PALETTE.white, fontStyle: 'bold' },
-          styles: { fontSize: 9, cellPadding: 4 },
+          headStyles: {
+            fillColor: BRAND_PALETTE.primary,
+            textColor: BRAND_PALETTE.white,
+            fontStyle: 'bold',
+          },
+          styles: {fontSize: 9, cellPadding: 4},
           columnStyles: {
-            0: { halign: 'center', cellWidth: 15 },
-            2: { halign: 'right' },
-            3: { halign: 'right' },
-            4: { halign: 'right' },
+            0: {halign: 'center', cellWidth: 15},
+            2: {halign: 'right'},
+            3: {halign: 'right'},
+            4: {halign: 'right'},
           },
         });
       }

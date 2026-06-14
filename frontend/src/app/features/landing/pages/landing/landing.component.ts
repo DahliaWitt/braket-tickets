@@ -9,7 +9,7 @@ import {
   signal,
   untracked,
 } from '@angular/core';
-import {DatePipe, NgOptimizedImage} from '@angular/common';
+import {NgOptimizedImage} from '@angular/common';
 import {AuthService} from '@/core/services/auth.service';
 import {PublicCommunitiesService} from '@/core/services/public-communities.service';
 import {PublicEventsService} from '@/core/services/public-events.service';
@@ -20,6 +20,7 @@ import {logger} from '@/utils/logger';
 import {safeResourceValue} from '@/utils/resource';
 import type {PublicEventCard} from '@shared/contracts/public-event';
 import {getBuyerPricingSummary} from '@shared/pricing/pricing-summary';
+import {EventDatePipe} from '@/utils/event-date.pipe';
 
 @Component({
   selector: 'app-landing',
@@ -27,7 +28,7 @@ import {getBuyerPricingSummary} from '@shared/pricing/pricing-summary';
   imports: [
     RouterLink,
     ContentLayoutComponent,
-    DatePipe,
+    EventDatePipe,
     NgOptimizedImage,
     BraCommunityAvatarComponent,
   ],
@@ -130,8 +131,8 @@ import {getBuyerPricingSummary} from '@shared/pricing/pricing-summary';
                       {{ event.title }}
                     </h2>
                     <p class="mono-label text-2xs text-muted-foreground">
-                      {{ event.date | date: 'mediumDate' }},
-                      {{ event.date | date: 'shortTime' }}
+                      {{ event.date | eventDate: 'mediumDate' }},
+                      {{ event.date | eventDate: 'shortTime' }}
                       @if (event.location) {
                         <span> · {{ event.location }}</span>
                       }

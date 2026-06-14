@@ -23,6 +23,7 @@ import {
   sendEmailDeliveryNow,
   type EmailAttachment,
 } from '../lib/email_delivery_wrapper';
+import {eventStartInstantMs} from '@shared/event-time';
 
 type TicketPdfEvent = Pick<Doc<'events'>, 'date' | 'title' | 'location'>;
 type TicketPdfTicket = Pick<Doc<'tickets'>, '_id'>;
@@ -43,12 +44,20 @@ async function buildTicketPdfData(args: {
       eventTitle: args.event.title,
       promoterName: args.promoterName,
       attendeeName: args.attendeeName,
-      eventDate: new Date(args.event.date).getTime(),
+      eventDate: requireEventStartInstantMs(args.event.date),
       ticketId: args.ticket._id,
       qrCodeDataUrl,
       ...(args.event.location ? {location: args.event.location} : {}),
     },
   };
+}
+
+function requireEventStartInstantMs(eventDate: string): number {
+  const startsAtMs = eventStartInstantMs(eventDate);
+  if (startsAtMs === null) {
+    throwAppError('INVALID_EVENT_DATE', 'Event has an invalid date');
+  }
+  return startsAtMs;
 }
 
 export async function buildOrderTicketPdfArtifacts(args: {

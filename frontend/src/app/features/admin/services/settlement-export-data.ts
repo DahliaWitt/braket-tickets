@@ -15,22 +15,6 @@ export interface SettlementRefundSummary {
   hasRefunds: boolean;
 }
 
-/**
- * Matches `YYYY-MM-DD` date-only strings. Date-only values must be constructed
- * as local dates, otherwise `new Date('2026-01-15')` renders as Jan 14 in US
- * timezones.
- */
-const DATE_ONLY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
-
-export function parseSettlementEventDate(value: string): Date {
-  const match = DATE_ONLY_PATTERN.exec(value);
-  if (match) {
-    const [, yearStr, monthStr, dayStr] = match;
-    return new Date(Number(yearStr), Number(monthStr) - 1, Number(dayStr));
-  }
-  return new Date(value);
-}
-
 export function getPurchaseRefundAmountCents(
   purchase: SettlementPurchase,
 ): number {

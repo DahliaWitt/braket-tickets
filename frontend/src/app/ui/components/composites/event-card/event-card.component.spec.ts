@@ -48,6 +48,19 @@ describe('EventCardComponent', () => {
     expect(await harness.getDate()).toBeTruthy();
   });
 
+  it('renders event dates in the platform timezone', async () => {
+    host.event.set({
+      ...host.event(),
+      date: '2026-02-27T07:30:00.000Z',
+    });
+
+    const harness = await loader.getHarness(EventCardHarness);
+
+    const dateText = (await harness.getDate()).replace(/\s+/g, ' ');
+    expect(dateText).toContain('Feb 26, 2026');
+    expect(dateText).toContain('11:30 PM');
+  });
+
   it('renders More Info as a semantic link to the event details route', async () => {
     const harness = await loader.getHarness(EventCardHarness);
 
