@@ -107,7 +107,7 @@ Use `https://dev.community.braket.gay` for preview incidents. Use Cloudflare's d
 
 Then check:
 
-1. the latest `CI` run on `develop`, then the nested `Deploy Development` reusable workflow job
+1. the latest `CI` run on `develop`, then the separate `Deploy Preview (develop)` workflow run
 2. the frontend build output from `deploy-frontend-preview`
 3. the Convex development deployment health
 

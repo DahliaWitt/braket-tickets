@@ -5,23 +5,10 @@ name: Deploy to Production
 # See ops/docker-compose.yml for local development or self-hosting reference.
 
 on:
-  workflow_call:
-    inputs:
-      ref:
-        description: Git SHA to deploy.
-        required: false
-        default: ''
-        type: string
-      branch:
-        description: Branch label for the deploy target.
-        required: false
-        default: ''
-        type: string
-      force_all:
-        description: Force all deploy slices to run.
-        required: false
-        default: true
-        type: boolean
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       ref:
@@ -55,8 +42,13 @@ jobs:
     runs-on: self-hosted
     if: >-
       ${{
-        github.event_name == 'workflow_call' ||
-        github.event_name == 'workflow_dispatch'
+        github.event_name == 'workflow_dispatch' ||
+        (
+          github.event_name == 'workflow_run' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.head_branch == 'main'
+        )
       }}
     outputs:
       ref: ${{ steps.resolve.outputs.ref }}
@@ -76,12 +68,19 @@ jobs:
           INPUT_BRANCH: ${{ inputs.branch }}
           INPUT_FORCE_ALL: ${{ inputs.force_all }}
           INPUT_REF: ${{ inputs.ref }}
+          WORKFLOW_EVENT: ${{ github.event_name }}
+          WORKFLOW_RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
 
-          ref="${INPUT_REF:-${DEFAULT_SHA}}"
-          branch="${INPUT_BRANCH:-${DEFAULT_BRANCH}}"
+          ref="${INPUT_REF:-${WORKFLOW_RUN_SHA:-${DEFAULT_SHA}}}"
+          branch="${INPUT_BRANCH:-${WORKFLOW_RUN_BRANCH:-${DEFAULT_BRANCH}}}"
           force_all="${INPUT_FORCE_ALL:-true}"
+
+          if [ "${WORKFLOW_EVENT}" = "workflow_run" ]; then
+            force_all=true
+          fi
 
           if [ "${branch}" != "main" ]; then
             echo "Production deploys must come from main; got ${branch}."
