@@ -1595,12 +1595,12 @@ export type DataModel = {
     document: {
       authEmailVerified?: boolean;
       betterAuthUserId?: string;
+      defaultCommunityAdminOrganizerId?: Id<"organizers">;
       email?: string;
       emailChangeToken?: string;
       emailChangeTokenExpiry?: number;
       emailVerificationTime?: number;
       globalMarketingOptOut?: boolean;
-      defaultCommunityAdminOrganizerId?: Id<"organizers">;
       image?: string;
       name?: string;
       pendingEmail?: string;
@@ -1614,12 +1614,12 @@ export type DataModel = {
       | "_id"
       | "authEmailVerified"
       | "betterAuthUserId"
+      | "defaultCommunityAdminOrganizerId"
       | "email"
       | "emailChangeToken"
       | "emailChangeTokenExpiry"
       | "emailVerificationTime"
       | "globalMarketingOptOut"
-      | "defaultCommunityAdminOrganizerId"
       | "image"
       | "name"
       | "pendingEmail"

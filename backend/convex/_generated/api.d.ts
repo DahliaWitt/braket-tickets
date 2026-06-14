@@ -3209,10 +3209,10 @@ export declare const api: {
           authEmailVerified?: boolean;
           betterAuthUserId?: string;
           communityAdminOrganizerIds: Array<Id<"organizers">>;
+          defaultCommunityAdminOrganizerId?: Id<"organizers">;
           email?: string;
           emailVerificationTime?: number;
           globalMarketingOptOut?: boolean;
-          defaultCommunityAdminOrganizerId?: Id<"organizers">;
           id: Id<"users">;
           image?: string;
           isRootAdmin: boolean;
@@ -3343,12 +3343,6 @@ export declare const api: {
         { organizerId: Id<"organizers">; userId: Id<"users"> },
         null
       >;
-      setDefaultCommunityAdminOrganizer: FunctionReference<
-        "mutation",
-        "public",
-        { organizerId: Id<"organizers"> },
-        null
-      >;
       search: FunctionReference<
         "query",
         "public",
@@ -3367,6 +3361,12 @@ export declare const api: {
           socialSignupCompletionRequired?: boolean;
           termsAcceptedAt?: number;
         }>
+      >;
+      setDefaultCommunityAdminOrganizer: FunctionReference<
+        "mutation",
+        "public",
+        { organizerId: Id<"organizers"> },
+        null
       >;
       update: FunctionReference<
         "mutation",
