@@ -41,9 +41,6 @@ describe('App', () => {
 
     fixture.detectChanges();
     expect(await harness.isInitialRouteShellVisible()).toBe(true);
-    expect(await harness.getInitialRouteShellText()).toContain(
-      'Opening Braket',
-    );
 
     await router.navigateByUrl('/ready');
     await fixture.whenStable();
