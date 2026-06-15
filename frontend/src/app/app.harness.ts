@@ -10,8 +10,4 @@ export class AppHarness extends ComponentHarness {
   async isInitialRouteShellVisible(): Promise<boolean> {
     return (await this.initialRouteShell()) !== null;
   }
-
-  async getInitialRouteShellText(): Promise<string | null> {
-    return (await this.initialRouteShell())?.text() ?? null;
-  }
 }
