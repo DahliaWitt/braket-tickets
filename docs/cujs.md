@@ -497,6 +497,32 @@ Resale is how buyers get into sold-out events and how sellers recoup costs when 
 - Route: [event-details.component.ts](frontend/src/app/features/tickets/pages/event-details/event-details.component.ts)
 - Backend: [orders/core.ts](backend/convex/orders/core.ts) (`openResale`), [resale/listings.ts](backend/convex/resale/listings.ts)
 
+### 4.3 Transfer a ticket to another vetted member
+
+**Who**: ticket holders who want to give a valid ticket to another vetted member of the event's community or a trusted community.
+**Criticality**: access control. A free transfer moves admission without changing inventory or payment ledger state.
+**Entry points**: `/tickets`.
+**Successful outcome**: the ticket leaves the sender's account, appears in the recipient's account, and the recipient receives the ticket PDF by email.
+
+**Path**
+
+1. Holder opens a valid ticket on `/tickets` and clicks "Transfer ticket."
+2. Holder enters the recipient email.
+3. The system validates that the email belongs to an existing Braket user who is directly or trust-linked vetted for the event's community.
+4. The holder confirms the irreversible transfer.
+5. The ticket owner changes to the recipient, the ticket is removed from the original order link, roster fields are rebuilt for the recipient, and the recipient email is sent.
+
+**Failure modes**
+
+- No user exists for that email, or the user is not vetted: the holder sees the same generic recipient error.
+- The ticket is used, refunded, expired, or listed/pending for resale: transfer is refused.
+- The holder attempts to transfer a ticket they do not own: transfer is refused.
+
+**Code anchors**
+
+- Route: [tickets.component.ts](frontend/src/app/features/tickets/pages/tickets/tickets.component.ts)
+- Backend: [tickets/transfers.ts](backend/convex/tickets/transfers.ts) (`validateRecipient`, `transfer`)
+
 ---
 
 ## 5. Run the door at an event without slowing the line

@@ -31,6 +31,13 @@ export type CheckoutSessionResponse = FunctionReturnType<
 export type CheckoutStatusResponse = FunctionReturnType<
   typeof api.orders.core.syncCheckoutSession
 >;
+export type TicketTransferRecipient = FunctionReturnType<
+  typeof api.tickets.transfers.validateRecipient
+>;
+type ValidateTicketTransferRecipientArgs = FunctionArgs<
+  typeof api.tickets.transfers.validateRecipient
+>;
+type TransferTicketArgs = FunctionArgs<typeof api.tickets.transfers.transfer>;
 
 type TicketQueryResult = FunctionReturnType<
   typeof api.tickets.public.getMyTickets
@@ -188,6 +195,26 @@ export class PaymentService {
 
   async getMyTicketPdf(ticketId: Id<'tickets'>): Promise<string> {
     return this.convex.action(api.tickets.actions.getMyTicketPdf, {ticketId});
+  }
+
+  async validateTicketTransferRecipient(
+    ticketId: ValidateTicketTransferRecipientArgs['ticketId'],
+    recipientEmail: ValidateTicketTransferRecipientArgs['recipientEmail'],
+  ): Promise<TicketTransferRecipient> {
+    return this.convex.mutation(api.tickets.transfers.validateRecipient, {
+      ticketId,
+      recipientEmail,
+    });
+  }
+
+  async transferTicket(
+    ticketId: TransferTicketArgs['ticketId'],
+    recipientEmail: TransferTicketArgs['recipientEmail'],
+  ): Promise<TicketTransferRecipient> {
+    return this.convex.mutation(api.tickets.transfers.transfer, {
+      ticketId,
+      recipientEmail,
+    });
   }
 
   async refundTicket(ticketId: string): Promise<boolean> {

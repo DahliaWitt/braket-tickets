@@ -72,6 +72,13 @@ export const listTicketForResale = mutation({
       throwForbidden('You can only list your own tickets');
     if (!isValidTicketStatus(ticket.status))
       throwInvalidState('Only valid tickets can be listed for resale');
+    // TODO(ticket-transfer-resale-payout): allow transferred tickets to be
+    // listed once proceeds can be paid to the current holder without relying on
+    // the original buyer's order/card.
+    if (!ticket.orderId)
+      throwInvalidState(
+        'Tickets without purchase settlement cannot be listed for resale yet',
+      );
 
     const event = await loadEventOrThrow(ctx, ticket.eventId);
     if (!event.resaleEnabled)

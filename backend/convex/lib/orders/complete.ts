@@ -9,6 +9,7 @@ import {
 } from '../../lib/resale_listing_transitions';
 import {enqueueTicketEmailDelivery} from '../../lib/email_delivery_wrapper';
 import {buildTicketRosterProjection} from '../../lib/ticket_roster_projection';
+import {generateTicketScanCode} from '../../lib/ticket_scan_codes';
 import {finalizeResaleState} from '../resale/settlement';
 import {assertEventStillFulfillable, throwOrderError} from './access';
 import {appendFinancialEvent} from './financial_events';
@@ -113,6 +114,7 @@ export async function completePrimaryOrderState(
       orderId: order._id,
       status: 'valid',
       tier: order.tier,
+      qrCode: generateTicketScanCode(),
     }),
   );
   const ticketIds = await Promise.all(ticketInserts);

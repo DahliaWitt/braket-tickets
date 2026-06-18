@@ -2135,6 +2135,74 @@ describe('orders', () => {
     }
   });
 
+  it('admin order refunds fail closed when order tickets are detached', async () => {
+    const t = convexTest();
+    const originalIsTest = process.env['IS_TEST'];
+    process.env['IS_TEST'] = 'true';
+    const adminId = await createRootAdmin(
+      t,
+      'Admin',
+      'admin-detached-refund@example.com',
+    );
+    const buyerId = await createUser(
+      t,
+      'Detached Buyer',
+      'detached-buyer@example.com',
+    );
+    const {eventId} = await createEventWithInventory(t, {
+      totalTickets: 5,
+    });
+    const asBuyer = t.withIdentity({subject: buyerId});
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    try {
+      const order = await asBuyer.mutation(api.orders.core.open, {
+        eventId,
+        quantity: 2,
+        tier: 'regular',
+        totalAmount: 5000,
+      });
+      await t.action(internal.orders.core.settlePaidOrderFromStripe, {
+        orderId: order.orderId,
+        stripePaymentIntentId: 'pi_detached_refund',
+        stripeChargeId: 'ch_detached_refund',
+        note: 'initial_payment',
+      });
+
+      const tickets = await t.run(async (ctx) =>
+        ctx.db
+          .query('tickets')
+          .withIndex('by_order', (q) => q.eq('orderId', order.orderId))
+          .collect(),
+      );
+      await t.run(async (ctx) => {
+        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- simulates a post-transfer ticket detached from its original order.
+        await ctx.db.patch('tickets', tickets[0]!._id, {orderId: undefined});
+      });
+
+      await expect(
+        asAdmin.action(api.payments.refunds.refund, {
+          orderId: order.orderId,
+        }),
+      ).rejects.toThrow(
+        'order has detached tickets and cannot be refunded automatically',
+      );
+      await expect(
+        asAdmin.action(api.payments.refunds.forceRefundAll, {
+          orderId: order.orderId,
+        }),
+      ).rejects.toThrow(
+        'order has detached tickets and cannot be refunded automatically',
+      );
+    } finally {
+      if (originalIsTest === undefined) {
+        delete process.env['IS_TEST'];
+      } else {
+        process.env['IS_TEST'] = originalIsTest;
+      }
+    }
+  });
+
   it('admin single-ticket refunds append canonical refund events for the exact ticket', async () => {
     const t = convexTest();
     const originalIsTest = process.env['IS_TEST'];

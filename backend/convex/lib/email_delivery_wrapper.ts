@@ -46,6 +46,16 @@ async function captureTestEmail(
     html: payload.html,
     ...(payload.text ? {text: payload.text} : {}),
     ...(payload.headers ? {headers: payload.headers} : {}),
+    ...(payload.attachments
+      ? {
+          attachments: payload.attachments.map((attachment) => ({
+            filename: attachment.filename,
+            contentType: attachment.contentType ?? 'application/octet-stream',
+            ...(attachment.cid ? {cid: attachment.cid} : {}),
+            size: attachment.content.length,
+          })),
+        }
+      : {}),
   });
 }
 

@@ -18,22 +18,26 @@ import {
   throwUnauthorized,
 } from '../lib/errors';
 import {logger} from '../lib/logger';
-import {purchasedTicketTemplate} from '../email/templates';
+import {
+  purchasedTicketTemplate,
+  transferredTicketTemplate,
+} from '../email/templates';
 import {
   sendEmailDeliveryNow,
   type EmailAttachment,
 } from '../lib/email_delivery_wrapper';
 import {eventStartInstantMs} from '@shared/event-time';
+import {ticketQrPayload} from '../lib/ticket_scan_codes';
 
 type TicketPdfEvent = Pick<Doc<'events'>, 'date' | 'title' | 'location'>;
-type TicketPdfTicket = Pick<Doc<'tickets'>, '_id'>;
+type TicketPdfTicket = Pick<Doc<'tickets'>, '_id' | 'qrCode'>;
 async function buildTicketPdfData(args: {
   event: TicketPdfEvent;
   ticket: TicketPdfTicket;
   attendeeName: string;
   promoterName: string;
 }): Promise<{pdfData: TicketPdfData; qrCodeDataUrl: string}> {
-  const qrCodeDataUrl = await QRCode.toDataURL(`TICKET:${args.ticket._id}`, {
+  const qrCodeDataUrl = await QRCode.toDataURL(ticketQrPayload(args.ticket), {
     margin: 1,
     color: {dark: '#000000', light: '#FFFFFF'},
   });
@@ -367,6 +371,96 @@ export const sendTicketsAction = internalAction({
         critical: true,
       },
     );
+
+    return null;
+  },
+});
+
+export const sendTransferredTicketAction = internalAction({
+  args: {
+    ticketId: v.id('tickets'),
+    recipientId: v.id('users'),
+    senderId: v.id('users'),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    try {
+      const context = await ctx.runQuery(
+        internal.tickets.transfers.getTransferEmailContext,
+        args,
+      );
+      if (!context) throwNotFound('Ticket transfer');
+      if (!context.recipient.email) {
+        throwAppError('INVALID_STATE', 'Recipient has no email address');
+      }
+
+      const recipientName =
+        context.recipient.name || context.recipient.email || 'there';
+      const senderName =
+        context.sender.name || context.sender.email || 'another Braket member';
+
+      const {pdfData, qrCodeDataUrl} = await buildTicketPdfData({
+        event: context.event,
+        ticket: context.ticket,
+        attendeeName: recipientName,
+        promoterName: context.organizer?.name ?? 'BRAKET',
+      });
+      const dataUrl = await createTicketPdf(pdfData);
+      const pdfBase64 = dataUrl.split(',')[1];
+      const {subject, html} = transferredTicketTemplate(
+        {
+          title: context.event.title,
+          date: context.event.date,
+          location: context.event.location,
+        },
+        recipientName,
+        senderName,
+        'cid:qrcode',
+        {
+          slug: context.organizer?.slug,
+          hasCodeOfConduct: !!context.organizer?.codeOfConduct,
+        },
+      );
+
+      await sendEmailDeliveryNow(
+        ctx,
+        {
+          to: context.recipient.email,
+          subject,
+          html,
+          attachments: [
+            {
+              filename: ticketPdfFilename(
+                context.event.title,
+                context.ticket._id,
+              ),
+              content: pdfBase64,
+              contentType: 'application/pdf',
+            },
+            {
+              filename: 'qrcode.png',
+              content: qrCodeDataUrl.split(',')[1],
+              contentType: 'image/png',
+              cid: 'qrcode',
+            },
+          ],
+        },
+        {
+          source: 'ticket',
+          sourceId: context.ticket._id,
+          recipient: context.recipient.email,
+          critical: true,
+        },
+      );
+    } finally {
+      await ctx.runMutation(
+        internal.tickets.transfers.clearTransferEmailPending,
+        {
+          ticketId: args.ticketId,
+          recipientId: args.recipientId,
+        },
+      );
+    }
 
     return null;
   },

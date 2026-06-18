@@ -32,6 +32,16 @@ describe('TicketsComponent', () => {
     getMyTicketPdf: vi
       .fn()
       .mockResolvedValue('data:application/pdf;base64,abc123'),
+    validateTicketTransferRecipient: vi.fn().mockResolvedValue({
+      userId: 'U2',
+      email: 'recipient@example.com',
+      name: 'Recipient',
+    }),
+    transferTicket: vi.fn().mockResolvedValue({
+      userId: 'U2',
+      email: 'recipient@example.com',
+      name: 'Recipient',
+    }),
     ticketsResource: {
       value: ticketsValue,
       isLoading: ticketsIsLoading,
@@ -81,6 +91,7 @@ describe('TicketsComponent', () => {
       _creationTime: Date.now(),
       eventId: 'E1',
       userId: 'U1',
+      orderId: 'O1',
       status: 'valid',
       tier: 'regular',
       resolvedEvent: {
@@ -113,6 +124,16 @@ describe('TicketsComponent', () => {
     paymentServiceMock.getMyTicketPdf.mockResolvedValue(
       'data:application/pdf;base64,abc123',
     );
+    paymentServiceMock.validateTicketTransferRecipient.mockResolvedValue({
+      userId: 'U2',
+      email: 'recipient@example.com',
+      name: 'Recipient',
+    });
+    paymentServiceMock.transferTicket.mockResolvedValue({
+      userId: 'U2',
+      email: 'recipient@example.com',
+      name: 'Recipient',
+    });
     vi.spyOn(toast, 'success').mockImplementation(() => '' as string & number);
     vi.spyOn(toast, 'error').mockImplementation(() => '' as string & number);
 
@@ -233,6 +254,146 @@ describe('TicketsComponent', () => {
     expect(toast.success).toHaveBeenCalledWith('Ticket PDF download started.');
   });
 
+  describe('ticket transfer', () => {
+    beforeEach(async () => {
+      ticketsValue.set([makeTicket({_id: 'T1'})]);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+    });
+
+    it('opens the transfer panel for valid tickets', async () => {
+      const card = await harness.getTicketCard(0);
+
+      expect(await card.hasTransferButton()).toBe(true);
+      await card.clickTransferButton();
+      fixture.detectChanges();
+
+      expect(await card.hasTransferPanel()).toBe(true);
+    });
+
+    it('shows an inline error when recipient email is empty', async () => {
+      const card = await harness.getTicketCard(0);
+      await card.clickTransferButton();
+      fixture.detectChanges();
+
+      await card.clickValidateTransferRecipient();
+      fixture.detectChanges();
+
+      expect(await card.getTransferErrorText()).toContain(
+        'Enter a recipient email.',
+      );
+      expect(
+        paymentServiceMock.validateTicketTransferRecipient,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('validates the recipient before showing irreversible confirmation', async () => {
+      const card = await harness.getTicketCard(0);
+      await card.clickTransferButton();
+      fixture.detectChanges();
+
+      await card.enterTransferEmail('recipient@example.com');
+      await card.clickValidateTransferRecipient();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(
+        paymentServiceMock.validateTicketTransferRecipient,
+      ).toHaveBeenCalledWith('T1', 'recipient@example.com');
+      expect(await card.hasTransferConfirmationPanel()).toBe(true);
+      expect(await card.getTransferConfirmationText()).toContain(
+        'This cannot be reversed',
+      );
+      expect(await card.getTransferConfirmationText()).toContain('Recipient');
+      expect(await card.hasValidateTransferRecipientButton()).toBe(false);
+      expect(await card.hasCancelTransferFlowButton()).toBe(false);
+    });
+
+    it('does not recheck the recipient when Enter is pressed after confirmation', async () => {
+      const card = await harness.getTicketCard(0);
+      await card.clickTransferButton();
+      fixture.detectChanges();
+      await card.enterTransferEmail('recipient@example.com');
+      await card.clickValidateTransferRecipient();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      paymentServiceMock.validateTicketTransferRecipient.mockClear();
+
+      await card.pressEnterInTransferEmail();
+      await fixture.whenStable();
+
+      expect(
+        paymentServiceMock.validateTicketTransferRecipient,
+      ).not.toHaveBeenCalled();
+      expect(paymentServiceMock.transferTicket).not.toHaveBeenCalled();
+    });
+
+    it('hides resale entry while transfer flow is open', async () => {
+      const card = await harness.getTicketCard(0);
+
+      expect(await card.hasListForResaleButton()).toBe(true);
+      await card.clickTransferButton();
+      fixture.detectChanges();
+
+      expect(await card.hasTransferPanel()).toBe(true);
+      expect(await card.hasListForResaleButton()).toBe(false);
+    });
+
+    it('transfers after confirmation, refreshes tickets, and shows feedback', async () => {
+      const card = await harness.getTicketCard(0);
+      await card.clickTransferButton();
+      fixture.detectChanges();
+      await card.enterTransferEmail('recipient@example.com');
+      await card.clickValidateTransferRecipient();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      await card.clickConfirmTransfer();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(paymentServiceMock.transferTicket).toHaveBeenCalledWith(
+        'T1',
+        'recipient@example.com',
+      );
+      expect(paymentServiceMock.triggerRefresh).toHaveBeenCalled();
+      expect(toast.success).toHaveBeenCalledWith(
+        'Ticket transferred to Recipient.',
+      );
+      expect(await card.hasTransferPanel()).toBe(false);
+    });
+
+    it('displays backend recipient errors inline', async () => {
+      paymentServiceMock.validateTicketTransferRecipient.mockRejectedValueOnce(
+        new Error('No vetted member was found for that email.'),
+      );
+      const card = await harness.getTicketCard(0);
+      await card.clickTransferButton();
+      fixture.detectChanges();
+      await card.enterTransferEmail('not-vetted@example.com');
+
+      await card.clickValidateTransferRecipient();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(await card.getTransferErrorText()).toContain(
+        'No vetted member was found for that email.',
+      );
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('does not show transfer controls for used tickets', async () => {
+      ticketsValue.set([makeTicket({status: 'used'})]);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      const card = await harness.getTicketCard(0);
+      expect(await card.hasTransferButton()).toBe(false);
+    });
+  });
+
   describe('resale - State B: eligible to list', () => {
     beforeEach(async () => {
       const key = 'E1';
@@ -265,9 +426,24 @@ describe('TicketsComponent', () => {
       fixture.detectChanges();
 
       expect(await card.hasResaleConfirmationPanel()).toBe(true);
+      expect(await card.hasTransferButton()).toBe(false);
       await card.waitForConfirmResaleListingFocus();
       expect(await card.isConfirmResaleListingFocused()).toBe(true);
       expect(resaleServiceMock.listTicketForResale).not.toHaveBeenCalled();
+    });
+
+    it('should close resale confirmation when transfer flow opens', async () => {
+      const card = await harness.getTicketCard(0);
+      await card.clickListForResale();
+      fixture.detectChanges();
+
+      expect(await card.hasResaleConfirmationPanel()).toBe(true);
+
+      component.openTransferFlow('T1');
+      fixture.detectChanges();
+
+      expect(await card.hasResaleConfirmationPanel()).toBe(false);
+      expect(await card.hasTransferPanel()).toBe(true);
     });
 
     it('should disclose seller payout math before listing', async () => {
@@ -418,6 +594,18 @@ describe('TicketsComponent', () => {
   describe('resale - non-valid tickets', () => {
     it('should not show List for Resale for used tickets', async () => {
       ticketsValue.set([makeTicket({status: 'used'})]);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      const card = await harness.getTicketCard(0);
+      expect(await card.hasListForResaleButton()).toBe(false);
+    });
+
+    it('should not show List for Resale for transferred tickets without an order', async () => {
+      ticketsValue.set([
+        makeTicket({orderId: undefined, resaleSellerSettlement: undefined}),
+      ]);
       fixture.detectChanges();
       await fixture.whenStable();
       fixture.detectChanges();

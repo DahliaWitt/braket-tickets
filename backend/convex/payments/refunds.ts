@@ -153,6 +153,21 @@ async function loadCompletedOrderForRefund(
   return order;
 }
 
+function requireCompleteRefundTicketSet(args: {
+  orderQuantity: number;
+  ticketCount: number;
+}): void {
+  // TODO(ticket-transfer-refunds): define policy for refunding orders after one
+  // or more tickets have been transferred away from the original order.
+  if (args.ticketCount !== args.orderQuantity) {
+    throwInvalidState(
+      ErrorMessages.INVALID_STATE(
+        'order has detached tickets and cannot be refunded automatically',
+      ),
+    );
+  }
+}
+
 export const getOrderFinancialInternal = internalQuery({
   args: {orderId: v.id('ticket_orders')},
   returns: v.union(orderFinancialResultValidator, v.null()),
@@ -277,6 +292,10 @@ export const refund = action({
         orderId,
       },
     );
+    requireCompleteRefundTicketSet({
+      orderQuantity: order.quantity,
+      ticketCount: tickets.length,
+    });
     const ticketIdsToRefund = tickets
       .filter((ticket) => isValidTicketStatus(ticket.status))
       .map((ticket) => ticket._id);
@@ -350,6 +369,10 @@ export const forceRefundAll = action({
         orderId,
       },
     );
+    requireCompleteRefundTicketSet({
+      orderQuantity: order.quantity,
+      ticketCount: tickets.length,
+    });
     const ticketIdsToRefund = tickets
       .filter((ticket) => !isRefundedTicketStatus(ticket.status))
       .map((ticket) => ticket._id);

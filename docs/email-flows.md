@@ -163,7 +163,38 @@ All email templates use the distinctive "Pulp" voice: warm, playful, kaomoji-fri
 
 ---
 
-### 6. Application Approved Email
+### 6. Ticket Transfer Email
+
+**Template Function**: `transferredTicketTemplate()` in `backend/convex/email/templates.ts`
+
+**When Triggered**:
+
+- Ticket holder confirms a transfer to another vetted member of the same community
+
+**Subject**: `Ticket transferred: {eventTitle}`
+
+**Content**:
+
+- Event details (title, date, location)
+- QR code for check-in (inline image via CID)
+- PDF attachment with the recipient's rotated ticket QR
+- Notice that the transfer cannot be reversed
+
+**Flow**:
+
+1. Holder confirms the transfer from `/tickets`
+2. `tickets.transfers.transfer` verifies the recipient can receive the ticket, moves ownership, rotates the QR scan token, and queues `tickets.actions.sendTransferredTicketAction`
+3. `tickets.actions.sendTransferredTicketAction` builds the PDF from the current ticket QR token and sends the critical ticket email
+4. Recipient can also view and download the ticket from My Tickets
+
+**Attachments**:
+
+- `ticket-{event-slug}-{ticket-id}.pdf` - Printable ticket PDF
+- `qrcode.png` - Inline QR code image (CID: qrcode)
+
+---
+
+### 7. Application Approved Email
 
 **Template Function**: `applicationApprovedTemplate()` in `backend/convex/email/templates.ts`
 
@@ -184,7 +215,7 @@ All email templates use the distinctive "Pulp" voice: warm, playful, kaomoji-fri
 
 ---
 
-### 7. Application Rejected Email
+### 8. Application Rejected Email
 
 **Template Function**: `applicationRejectedTemplate()` in `backend/convex/email/templates.ts`
 
@@ -203,7 +234,7 @@ All email templates use the distinctive "Pulp" voice: warm, playful, kaomoji-fri
 
 ---
 
-### 8. Event Broadcast Email
+### 9. Event Broadcast Email
 
 **Template Function**: `eventBroadcastTemplate()` in `backend/convex/email/templates.ts`
 
@@ -245,6 +276,7 @@ All email templates use the distinctive "Pulp" voice: warm, playful, kaomoji-fri
 | Auth email logic    | `backend/convex/lib/better_auth.ts`          |
 | Email change logic  | `backend/convex/auth/public.ts`              |
 | Ticket emails       | `backend/convex/tickets/actions.ts`          |
+| Transfer emails     | `backend/convex/tickets/actions.ts`          |
 | Guest ticket emails | `backend/convex/events/guest_actions.ts`     |
 | Application emails  | `backend/convex/communities/applications.ts` |
 
@@ -378,10 +410,9 @@ Keep transactional subjects plain, especially verification, password reset, emai
 1. **Welcome Email** - After successful verification (separate from verification email)
 2. **Purchase Receipt** - Detailed receipt with line items, taxes, etc.
 3. **Event Reminder** - 24h/1h before event starts
-4. **Ticket Transfer Notification** - When ticket is transferred to another user
-5. **Refund Confirmation** - When payment is refunded
-6. **Account Security Alert** - Password changed, new login from new device
-7. **Event Cancellation** - When an event is cancelled
+4. **Refund Confirmation** - When payment is refunded
+5. **Account Security Alert** - Password changed, new login from new device
+6. **Event Cancellation** - When an event is cancelled
 
 ### Recommended Additions
 
@@ -390,7 +421,6 @@ Keep transactional subjects plain, especially verification, password reset, emai
 
 export function welcomeTemplate(userName: string): EmailTemplate { ... }
 export function eventReminderTemplate(event: Event, hoursUntil: number): EmailTemplate { ... }
-export function ticketTransferTemplate(ticket: Ticket, newOwner: string): EmailTemplate { ... }
 export function refundConfirmationTemplate(payment: Payment): EmailTemplate { ... }
 export function securityAlertTemplate(action: string): EmailTemplate { ... }
 ```

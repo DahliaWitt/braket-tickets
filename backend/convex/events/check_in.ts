@@ -2,12 +2,16 @@ import {v} from 'convex/values';
 import {mutation} from '../_generated/server';
 import {guestTypeValidator} from '../lib/validators/guests';
 import {ticketStatusValidator} from '../lib/validators/ticketing';
-import {checkIn as checkInImpl, revertCheckIn as revertCheckInImpl} from './_impl/check_in_handlers';
+import {
+  checkIn as checkInImpl,
+  revertCheckIn as revertCheckInImpl,
+} from './_impl/check_in_handlers';
 
 // LINT.IfChange
 export const checkIn = mutation({
   args: {
     ticketId: v.optional(v.string()),
+    ticketQrCode: v.optional(v.string()),
     guestId: v.optional(v.string()),
   },
   returns: v.object({

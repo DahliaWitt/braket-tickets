@@ -50,6 +50,96 @@ describe('ticketCheckIn.checkIn', () => {
       expect(ticketRes.message).toContain('Invalid Ticket QR Code');
     });
 
+    it('accepts legacy ticket-id QR scans for tickets without scan tokens', async () => {
+      const t = convexTest();
+      const adminId = await createRootAdmin(t, {name: 'Admin User'});
+      const attendeeId = await t.mutation(
+        api.testing.users.createUserDirectly,
+        {
+          name: 'Attendee',
+          email: 'attendee@example.com',
+        },
+      );
+      const orgId = await t.mutation(api.testing.communities.seedOrganizer, {
+        name: 'Test Org',
+      });
+      const eventId = await t.mutation(api.testing.events.seedEvent, {
+        title: 'Test Event',
+        date: '2027-01-01',
+        price: 2500,
+        totalTickets: 100,
+        status: 'published',
+        visibility: 'public',
+        organizerId: orgId,
+      });
+      const ticketId = await t.mutation(api.testing.tickets.seedTicket, {
+        userId: attendeeId,
+        eventId,
+        status: 'valid',
+        tier: 'regular',
+        trustSource: 'open_access',
+      });
+      /* eslint-disable no-raw-db-mutations/no-raw-db-mutation -- Test fixture: simulate a legacy ticket row created before rotating scan tokens existed. */
+      await t.run(async (ctx) => {
+        await ctx.db.patch('tickets', ticketId, {qrCode: undefined});
+      });
+      /* eslint-enable no-raw-db-mutations/no-raw-db-mutation */
+
+      const result = await t
+        .withIdentity({subject: adminId})
+        .mutation(api.events.check_in.checkIn, {ticketQrCode: ticketId});
+
+      expect(result.success).toBe(true);
+      expect(result.ticket?._id).toBe(ticketId);
+    });
+
+    it('rejects stale ticket-id QR scans once a scan token exists but allows manual ID check-in', async () => {
+      const t = convexTest();
+      const adminId = await createRootAdmin(t, {name: 'Admin User'});
+      const attendeeId = await t.mutation(
+        api.testing.users.createUserDirectly,
+        {
+          name: 'Attendee',
+          email: 'attendee@example.com',
+        },
+      );
+      const orgId = await t.mutation(api.testing.communities.seedOrganizer, {
+        name: 'Test Org',
+      });
+      const eventId = await t.mutation(api.testing.events.seedEvent, {
+        title: 'Test Event',
+        date: '2027-01-01',
+        price: 2500,
+        totalTickets: 100,
+        status: 'published',
+        visibility: 'public',
+        organizerId: orgId,
+      });
+      const ticketId = await t.mutation(api.testing.tickets.seedTicket, {
+        userId: attendeeId,
+        eventId,
+        status: 'valid',
+        tier: 'regular',
+        trustSource: 'open_access',
+      });
+      const asAdmin = t.withIdentity({subject: adminId});
+
+      const staleQrResult = await asAdmin.mutation(
+        api.events.check_in.checkIn,
+        {
+          ticketQrCode: ticketId,
+        },
+      );
+      expect(staleQrResult.success).toBe(false);
+      expect(staleQrResult.message).toContain('QR Code has been replaced');
+
+      const manualResult = await asAdmin.mutation(api.events.check_in.checkIn, {
+        ticketId,
+      });
+      expect(manualResult.success).toBe(true);
+      expect(manualResult.ticket?._id).toBe(ticketId);
+    });
+
     it('handles invalid guest QR codes gracefully', async () => {
       const t = convexTest();
 

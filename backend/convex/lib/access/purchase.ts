@@ -2,6 +2,7 @@ import type {Doc, Id} from '../../_generated/dataModel';
 import {EVENT_VISIBILITY} from '@shared/domain/event-visibility';
 import type {CallerIdentity} from '../caller_identity';
 import {
+  authz,
   authzUserId,
   listOneHopSharedAccessOrganizers,
   organizerScope,
@@ -99,6 +100,50 @@ export async function resolvePurchaseAccessForUser(
   for (const trustedOrg of trustedOrganizers) {
     if (
       await canWithFallback(
+        ctx,
+        authzUserId(userId),
+        'event:purchase',
+        organizerScope(trustedOrg._id),
+      )
+    ) {
+      return {allowed: true, source: 'shared', viaOrganizerId: trustedOrg._id};
+    }
+  }
+
+  return {allowed: false};
+}
+
+/**
+ * Resolve whether a user may receive a holder-to-holder ticket transfer for
+ * an event in this organizer. Unlike purchase access, this intentionally does
+ * not grant open-access/public-event or root-admin fallback: recipients must
+ * already be directly or trust-linked vetted for the community.
+ */
+export async function canReceiveTicketTransferForUser(
+  ctx: AccessCtx,
+  userId: Id<'users'>,
+  organizerId: Id<'organizers'>,
+): Promise<
+  Extract<PurchaseAccess, {source: 'direct' | 'shared'}> | {allowed: false}
+> {
+  if (
+    await authz.can(
+      ctx,
+      authzUserId(userId),
+      'event:purchase',
+      organizerScope(organizerId),
+    )
+  ) {
+    return {allowed: true, source: 'direct'};
+  }
+
+  const trustedOrganizers = await listOneHopSharedAccessOrganizers(
+    ctx,
+    organizerId,
+  );
+  for (const trustedOrg of trustedOrganizers) {
+    if (
+      await authz.can(
         ctx,
         authzUserId(userId),
         'event:purchase',

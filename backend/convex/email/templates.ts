@@ -352,6 +352,51 @@ export function purchasedTicketTemplate(
   };
 }
 
+export function transferredTicketTemplate(
+  event: {title: string; date: string; location?: string},
+  recipientName: string,
+  senderName: string,
+  qrCodeSource: string,
+  community?: {slug?: string; hasCodeOfConduct?: boolean},
+): {subject: string; html: string} {
+  const dateStr = formatEventDateTime(event.date);
+  const safeTitle = escapeHtml(event.title);
+  const safeRecipientName = escapeHtml(recipientName);
+  const safeSenderName = escapeHtml(senderName);
+  const safeLocation = event.location ? escapeHtml(event.location) : '';
+  const safeQrSource = escapeHtml(qrCodeSource);
+
+  const content = `
+      <h2 style="margin: 0 0 16px 0; font-family: 'Syne', 'Chakra Petch', system-ui, sans-serif; font-size: 24px; line-height: 1.15; font-weight: 700; color: ${baseStyles.textLight};">
+          a ticket just landed in your account
+      </h2>
+      <p style="margin: 0 0 8px 0; font-size: 16px; line-height: 1.6; color: ${baseStyles.textMuted};">
+          Hi ${safeRecipientName} — ${safeSenderName} transferred you a ticket for <strong style="color: ${baseStyles.textLight};">${safeTitle}</strong>.
+      </p>
+      <div style="margin: 24px 0; padding: 20px 0; border-top: 1px solid ${baseStyles.border}; border-bottom: 1px solid ${baseStyles.border};">
+          <p style="margin: 0 0 8px 0; font-size: 11px; color: ${baseStyles.textDim}; font-family: 'Space Mono', 'Courier New', monospace; text-transform: uppercase; letter-spacing: 1.5px;">EVENT DETAILS</p>
+          <p style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: ${baseStyles.accentPink};">${safeTitle}</p>
+          <p style="margin: 0 0 4px 0; font-size: 16px; color: ${baseStyles.textLight};">${escapeHtml(dateStr)}</p>
+          ${safeLocation ? `<p style="margin: 0; font-size: 16px; color: ${baseStyles.textMuted};">${safeLocation}</p>` : ''}
+      </div>
+      <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 1.6; color: ${baseStyles.textMuted};">
+          We've attached the PDF ticket here, and it is waiting for you under My Tickets.
+      </p>
+      <div style="text-align: center; margin: 32px 0;">
+          <img src="${safeQrSource}" alt="Ticket QR Code" width="200" height="200" style="display: inline-block; border: 4px solid ${baseStyles.textLight}; border-radius: 8px;"/>
+      </div>
+      <p style="margin: 24px 0 0 0; font-size: 14px; line-height: 1.6; color: ${baseStyles.textDim};">
+          This transfer cannot be reversed from the app. If something looks off, reply to this email and we'll help.
+      </p>
+      ${buildCodeOfConductEmailBlock(community)}
+  `;
+
+  return {
+    subject: `Ticket transferred: ${safeTitle}`,
+    html: wrapEmail(content, `Ticket transferred for ${safeTitle}.`),
+  };
+}
+
 export function resaleAvailableTemplate(
   event: {title: string; date: string; location?: string},
   eventId: string,

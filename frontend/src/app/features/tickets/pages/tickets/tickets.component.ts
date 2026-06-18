@@ -40,6 +40,10 @@ import type {ResaleListingStatus} from '@shared/domain/resale-listing-status';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
 import {formatUsdCents} from '@shared/pricing/pricing-summary';
 import {EventDatePipe} from '@/utils/event-date.pipe';
+import {
+  TicketTransferControlsComponent,
+  type TicketTransferConfirmation,
+} from './ticket-transfer-controls.component';
 
 /** Resale listing data mapped to a ticket */
 interface TicketResaleInfo {
@@ -62,508 +66,9 @@ interface TicketResaleInfo {
     ZardTooltipDirective,
     EmptyStateComponent,
     ContentLayoutComponent,
+    TicketTransferControlsComponent,
   ],
-  template: `
-    <app-content-layout>
-      <div class="flex grow flex-col py-8">
-        <div
-          class="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-center"
-        >
-          <h1
-            class="flex items-center font-display text-2xl font-bold tracking-tight text-foreground uppercase sm:text-3xl lg:text-4xl"
-          >
-            MY TICKETS
-            @if (isLoading() && tickets().length > 0) {
-              <span
-                class="animate-in fade-in zoom-in ml-4 inline-flex items-center gap-1.5 rounded-full border border-secondary/20 bg-secondary/10 px-2 py-0.5 duration-300"
-              >
-                <span
-                  class="h-1.5 w-1.5 animate-pulse rounded-full bg-secondary"
-                ></span>
-                <span
-                  class="font-mono text-[8px] tracking-widest text-secondary uppercase"
-                  >Refreshing</span
-                >
-              </span>
-            }
-          </h1>
-        </div>
-
-        @if (hasLoadError()) {
-          <div
-            class="animate-in fade-in zoom-in mx-auto flex w-full max-w-xl flex-col items-center justify-center py-16 text-center duration-500"
-            data-testid="tickets-error-state"
-            role="alert"
-            aria-live="assertive"
-          >
-            <div
-              class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-destructive/20"
-            >
-              <svg
-                class="h-10 w-10 text-destructive"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"
-                />
-              </svg>
-            </div>
-            <h2
-              class="mb-4 font-display text-2xl font-bold tracking-tight text-destructive uppercase md:text-3xl"
-            >
-              hit a snag
-            </h2>
-            <p class="mb-8 font-sans text-lg text-muted-foreground">
-              couldn't load your tickets — try again later
-            </p>
-            <a
-              routerLink="/"
-              class="font-mono text-sm tracking-widest text-muted-foreground uppercase transition-colors hover:text-foreground"
-            >
-              ← Back to Home
-            </a>
-          </div>
-        } @else {
-          <div class="grid gap-6 md:grid-cols-2">
-            @for (ticket of tickets(); track ticket._id; let i = $index) {
-              <z-card
-                [class]="
-                  'ph-no-capture group animate-in fade-in slide-in-from-bottom-8 overflow-hidden border-border bg-card/80 transition-transform duration-300 motion-safe:hover:scale-[1.01] ' +
-                  (i === 0
-                    ? 'delay-75'
-                    : i === 1
-                      ? 'delay-150'
-                      : i === 2
-                        ? 'delay-225'
-                        : 'delay-300')
-                "
-                [zTitle]="ticketTitle"
-                role="article"
-                data-testid="ticket-card"
-                [attr.aria-label]="
-                  'Ticket for ' +
-                  (ticket.resolvedEvent?.title || 'event') +
-                  (getResaleInfo(ticket._id)?.status
-                    ? ', ' + getResaleInfo(ticket._id)?.status
-                    : '')
-                "
-              >
-                <ng-template #ticketTitle>
-                  <div class="flex w-full items-start justify-between">
-                    <div>
-                      <div
-                        class="font-display tracking-wide text-secondary uppercase"
-                        data-testid="ticket-event-title"
-                      >
-                        {{ ticket.resolvedEvent?.title }}
-                      </div>
-                      <p
-                        class="mt-1 font-mono text-2xs text-muted-foreground uppercase"
-                      >
-                        @if (ticket.resolvedEvent?.date; as eventDate) {
-                          {{ eventDate | eventDate: 'longDate' }},
-                          {{ eventDate | eventDate: 'shortTime' }}
-                        }
-                      </p>
-                      <p
-                        class="mono-label mt-0.5 text-2xs text-muted-foreground"
-                        data-testid="ticket-tier"
-                      >
-                        {{ ticket.tier || 'REGULAR' }} ADMISSION
-                      </p>
-                    </div>
-                    <!-- Status badge: shows resale status when listed/pending, otherwise normal ticket status -->
-                    @if (getResaleInfo(ticket._id); as resale) {
-                      @switch (resale.status) {
-                        @case ('listed') {
-                          <span
-                            data-testid="ticket-status-badge"
-                            class="rounded border border-info/30 bg-info/10 px-2 py-0.5 font-mono text-2xs text-info"
-                          >
-                            LISTED
-                          </span>
-                        }
-                        @case ('pending') {
-                          <span
-                            data-testid="ticket-status-badge"
-                            class="rounded border border-warning/30 bg-warning/10 px-2 py-0.5 font-mono text-2xs text-warning"
-                          >
-                            PENDING
-                          </span>
-                        }
-                      }
-                    } @else {
-                      <span
-                        data-testid="ticket-status-badge"
-                        class="rounded border px-2 py-0.5 font-mono text-2xs"
-                        [class.border-success/30]="ticket.status === 'valid'"
-                        [class.text-success]="ticket.status === 'valid'"
-                        [class.border-border]="ticket.status !== 'valid'"
-                        [class.text-muted-foreground]="
-                          ticket.status !== 'valid'
-                        "
-                      >
-                        {{ ticket.status | uppercase }}
-                      </span>
-                    }
-                  </div>
-                </ng-template>
-
-                <div class="flex flex-col items-center py-6">
-                  <div
-                    class="shadow-[0_0_15px_hsl(var(--success)/0.2)]"
-                    [class.opacity-50]="
-                      getResaleInfo(ticket._id)?.status === 'listed' ||
-                      getResaleInfo(ticket._id)?.status === 'pending'
-                    "
-                  >
-                    <app-qr [data]="ticket._id" class="block" />
-                  </div>
-                  <div
-                    class="mt-4 flex min-w-0 items-center gap-2 overflow-hidden text-muted-foreground"
-                  >
-                    <p
-                      class="min-w-0 font-mono text-2xs tracking-tighter break-all uppercase select-all"
-                    >
-                      {{ ticket._id }}
-                    </p>
-                    <button
-                      type="button"
-                      (click)="copyId(ticket._id)"
-                      class="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-sm p-2 transition-colors hover:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                      [attr.aria-label]="'Copy ticket ID ' + ticket._id"
-                      [zTooltip]="
-                        copiedId() === ticket._id ? 'Copied!' : 'Copy ID'
-                      "
-                      zPosition="top"
-                    >
-                      <z-icon
-                        [zType]="copiedId() === ticket._id ? 'check' : 'copy'"
-                        class="h-4 w-4"
-                        [class.text-success]="copiedId() === ticket._id"
-                      />
-                    </button>
-                  </div>
-
-                  @if (ticket.status === 'valid') {
-                    <button
-                      type="button"
-                      z-button
-                      zType="outline"
-                      class="mt-3 min-h-11 w-full border-border/50 font-mono text-xs tracking-widest text-muted-foreground uppercase hover:text-foreground"
-                      data-testid="ticket-download-pdf"
-                      [attr.aria-label]="'Download ticket PDF ' + ticket._id"
-                      [zDisabled]="isDownloadingPdf() === ticket._id"
-                      (click)="downloadTicketPdf(ticket._id)"
-                    >
-                      @if (isDownloadingPdf() === ticket._id) {
-                        <z-icon
-                          zType="loader-circle"
-                          class="mr-2 animate-spin"
-                        />
-                        Generating...
-                      } @else {
-                        <z-icon zType="file-text" class="mr-2 h-4 w-4" />
-                        Download PDF
-                      }
-                    </button>
-                  }
-
-                  <!-- Resale section -->
-                  @if (isResaleEnabled(ticket)) {
-                    @if (getResaleInfo(ticket._id); as resale) {
-                      <!-- State C/D: Listed for resale -->
-                      @if (resale.status === 'listed') {
-                        @if (isEventSoldOut(ticket.eventId)) {
-                          <!-- State D: Listed + Sold Out (active for buyers) -->
-                          <div
-                            data-testid="available-banner"
-                            class="mt-4 w-full space-y-2 rounded-lg border border-primary/20 bg-primary/5 p-3"
-                          >
-                            <div class="flex items-start gap-2">
-                              <z-icon
-                                zType="circle-check"
-                                class="mt-0.5 shrink-0 text-primary"
-                              />
-                              <p
-                                class="font-mono text-xs leading-relaxed text-primary"
-                              >
-                                Your ticket is available for resale. Buyers can
-                                now purchase it.
-                              </p>
-                            </div>
-                            <p
-                              class="ml-6 font-mono text-2xs tracking-widest text-primary/60 uppercase"
-                            >
-                              {{ getResaleQueueCount(ticket.eventId) }}
-                              listing{{
-                                getResaleQueueCount(ticket.eventId) !== 1
-                                  ? 's'
-                                  : ''
-                              }}
-                              in queue
-                            </p>
-                          </div>
-                        } @else {
-                          <!-- State C: Listed + Not Sold Out (queued) -->
-                          <div
-                            data-testid="queued-banner"
-                            class="mt-4 w-full space-y-2 rounded-lg border border-secondary/20 bg-secondary/5 p-3"
-                          >
-                            <div class="flex items-start gap-2">
-                              <z-icon
-                                zType="info"
-                                class="mt-0.5 shrink-0 text-info"
-                              />
-                              <p
-                                class="font-mono text-xs leading-relaxed text-info/80"
-                              >
-                                Your ticket is queued for resale. It becomes
-                                available for purchase when the event sells out.
-                              </p>
-                            </div>
-                            <p
-                              class="ml-6 font-mono text-2xs tracking-widest text-info/60 uppercase"
-                            >
-                              {{ getResaleQueueCount(ticket.eventId) }}
-                              listing{{
-                                getResaleQueueCount(ticket.eventId) !== 1
-                                  ? 's'
-                                  : ''
-                              }}
-                              in queue
-                            </p>
-                          </div>
-                        }
-                        <!-- Cancel button -->
-                        <button
-                          type="button"
-                          z-button
-                          zType="outline"
-                          class="mt-3 min-h-11 w-full border-destructive/30 font-mono text-xs tracking-widest text-destructive uppercase hover:bg-destructive/10"
-                          aria-label="Cancel resale listing"
-                          (click)="
-                            cancelResaleListing(resale.listingId, ticket._id)
-                          "
-                          [zDisabled]="isCancellingListing() === ticket._id"
-                          [attr.aria-busy]="
-                            isCancellingListing() === ticket._id
-                          "
-                        >
-                          @if (isCancellingListing() === ticket._id) {
-                            <z-icon
-                              zType="loader-circle"
-                              class="mr-2 animate-spin"
-                            />
-                            Cancelling...
-                          } @else {
-                            <z-icon zType="x" class="mr-2" />
-                            Cancel Listing
-                          }
-                        </button>
-                      }
-
-                      <!-- State E: Pending (buyer mid-checkout) -->
-                      @if (resale.status === 'pending') {
-                        <div
-                          class="mt-4 w-full rounded-lg border border-warning/20 bg-warning/10 p-3"
-                        >
-                          <div class="flex items-start gap-2">
-                            <z-icon
-                              zType="loader-circle"
-                              class="mt-0.5 shrink-0 animate-spin text-warning"
-                            />
-                            <p
-                              class="font-mono text-xs leading-relaxed text-warning"
-                            >
-                              A buyer is currently checking out with your
-                              ticket. You'll be notified when the sale
-                              completes.
-                            </p>
-                          </div>
-                        </div>
-                      }
-                    } @else if (ticket.status === 'valid') {
-                      <!-- State B: Eligible to list for resale -->
-                      @if (resaleConfirmationTicketId() === ticket._id) {
-                        <div
-                          class="animate-in fade-in slide-in-from-bottom-2 mt-4 w-full rounded-xl border border-primary/30 bg-primary/10 p-4 text-left duration-200"
-                          data-testid="resale-confirmation-panel"
-                          role="region"
-                          aria-label="Confirm resale listing"
-                          aria-live="polite"
-                          aria-atomic="true"
-                        >
-                          <div class="flex items-start gap-3">
-                            <z-icon
-                              zType="repeat"
-                              class="mt-0.5 h-4 w-4 shrink-0 text-primary"
-                            />
-                            <div class="min-w-0">
-                              <p
-                                class="font-mono text-xs tracking-widest text-primary uppercase"
-                              >
-                                Ready to list it?
-                              </p>
-                              <p
-                                class="mt-1 text-xs leading-relaxed text-muted-foreground"
-                              >
-                                We'll queue this ticket for resale. Buyers can
-                                pick it up once the event sells out; you can
-                                cancel before then.
-                              </p>
-                              @if (resaleDisclosure(ticket); as disclosure) {
-                                <dl
-                                  class="mt-3 grid gap-1 rounded border border-border/60 bg-background/50 p-3 font-mono text-2xs"
-                                  data-testid="resale-seller-disclosure"
-                                >
-                                  <div class="flex justify-between gap-3">
-                                    <dt class="text-muted-foreground">
-                                      Original ticket price
-                                    </dt>
-                                    <dd class="text-foreground">
-                                      {{ disclosure.originalPrice }}
-                                    </dd>
-                                  </div>
-                                  <div class="flex justify-between gap-3">
-                                    <dt class="text-muted-foreground">
-                                      Resale fee
-                                    </dt>
-                                    <dd class="text-foreground">
-                                      {{ disclosure.feePercent }}% ({{
-                                        disclosure.feeAmount
-                                      }})
-                                    </dd>
-                                  </div>
-                                  <div class="flex justify-between gap-3">
-                                    <dt class="text-muted-foreground">
-                                      Expected refund
-                                    </dt>
-                                    <dd class="text-foreground">
-                                      {{ disclosure.expectedRefund }}
-                                    </dd>
-                                  </div>
-                                </dl>
-                                <p
-                                  class="pt-2 font-mono text-2xs leading-relaxed text-muted-foreground"
-                                  data-testid="resale-seller-disclosure-note"
-                                >
-                                  Stripe processing fees from the original
-                                  purchase are not returned; estimated lost
-                                  processing fee:
-                                  {{ disclosure.lostProcessingFee }}.
-                                </p>
-                              } @else {
-                                <div
-                                  class="mt-3 rounded border border-warning/30 bg-warning/10 p-3 font-mono text-2xs leading-relaxed text-warning"
-                                  data-testid="resale-seller-disclosure-unavailable"
-                                >
-                                  We can't calculate the resale payout for this
-                                  ticket yet. Contact support before listing it.
-                                </div>
-                              }
-                            </div>
-                          </div>
-                          <div class="mt-4 grid gap-2 sm:grid-cols-2">
-                            <button
-                              type="button"
-                              z-button
-                              zType="default"
-                              class="min-h-11 font-mono text-xs tracking-widest uppercase"
-                              [id]="resaleConfirmButtonId(ticket._id)"
-                              data-testid="ticket-confirm-resale"
-                              aria-label="Confirm resale listing"
-                              (click)="confirmListForResale(ticket._id)"
-                              [zDisabled]="
-                                isListingForResale() === ticket._id ||
-                                !canConfirmResaleListing(ticket)
-                              "
-                              [attr.aria-busy]="
-                                isListingForResale() === ticket._id
-                              "
-                            >
-                              @if (isListingForResale() === ticket._id) {
-                                <z-icon
-                                  zType="loader-circle"
-                                  class="mr-2 animate-spin"
-                                />
-                                Listing...
-                              } @else {
-                                Confirm listing
-                              }
-                            </button>
-                            <button
-                              type="button"
-                              z-button
-                              zType="outline"
-                              class="min-h-11 border-border/60 font-mono text-xs tracking-widest text-muted-foreground uppercase hover:text-foreground"
-                              data-testid="ticket-cancel-resale-flow"
-                              aria-label="Keep this ticket instead of listing it"
-                              (click)="closeResaleListingFlow(ticket._id)"
-                              [zDisabled]="isListingForResale() === ticket._id"
-                            >
-                              Keep ticket
-                            </button>
-                          </div>
-                        </div>
-                      } @else {
-                        <button
-                          type="button"
-                          z-button
-                          zType="outline"
-                          class="mt-4 min-h-11 w-full border-primary/50 font-mono text-xs tracking-widest text-primary uppercase hover:bg-primary/10"
-                          aria-label="List this ticket for resale"
-                          (click)="openResaleListingFlow(ticket._id)"
-                          [zDisabled]="isListingForResale() !== null"
-                        >
-                          <z-icon zType="repeat" class="mr-2" />
-                          List this ticket for resale
-                        </button>
-                      }
-                    }
-                  }
-                </div>
-              </z-card>
-            } @empty {
-              @if (isLoading()) {
-                <div
-                  class="h-64 overflow-hidden rounded-xl border border-border bg-card/80"
-                >
-                  <z-skeleton class="h-full w-full rounded-none opacity-50" />
-                </div>
-                <div
-                  class="hidden h-64 overflow-hidden rounded-xl border border-border bg-card/80 md:block"
-                >
-                  <z-skeleton class="h-full w-full rounded-none opacity-50" />
-                </div>
-              } @else {
-                <div class="md:col-span-2">
-                  <app-empty-state
-                    title="No tickets found"
-                    description="You haven't purchased any tickets yet."
-                  >
-                    <z-button
-                      routerLink="/"
-                      zType="outline"
-                      class="mt-4 border-border text-muted-foreground hover:border-foreground/50 hover:text-foreground"
-                      >BROWSE EVENTS</z-button
-                    >
-                  </app-empty-state>
-                </div>
-              }
-            }
-          </div>
-        }
-        <!-- end @else (no error) -->
-      </div>
-    </app-content-layout>
-  `,
+  templateUrl: './tickets.component.html',
 })
 export class TicketsComponent {
   private auth = inject(AuthService);
@@ -580,6 +85,17 @@ export class TicketsComponent {
   isLoading = this.paymentService.ticketsResource.isLoading;
   readonly copiedId = signal<string | null>(null);
   readonly isDownloadingPdf = signal<string | null>(null);
+  readonly transferFlowTicketId = signal<string | null>(null);
+  readonly isValidatingTransfer = signal<string | null>(null);
+  readonly isTransferringTicket = signal<string | null>(null);
+  readonly transferConfirmation = signal<TicketTransferConfirmation | null>(
+    null,
+  );
+  readonly transferError = signal<string | null>(null);
+  readonly transferErrorTicketId = signal<string | null>(null);
+  private readonly transferEmailByTicketId = signal<
+    ReadonlyMap<string, string>
+  >(new Map());
 
   // Resale state
   readonly isListingForResale = signal<string | null>(null);
@@ -726,9 +242,146 @@ export class TicketsComponent {
     return ticket.resaleSellerSettlement !== undefined;
   }
 
+  canListTicketForResale(ticket: Ticket): boolean {
+    return ticket.status === 'valid' && ticket.orderId !== undefined;
+  }
+
+  canTransferTicket(ticket: Ticket): boolean {
+    return ticket.status === 'valid' && !this.getResaleInfo(ticket._id);
+  }
+
+  ticketQrData(ticket: Ticket): string {
+    return `TICKET:${ticket.qrCode ?? ticket._id}`;
+  }
+
+  isTransferBusy(): boolean {
+    return (
+      this.isValidatingTransfer() !== null ||
+      this.isTransferringTicket() !== null
+    );
+  }
+
+  openTransferFlow(ticketId: string): void {
+    if (this.isTransferBusy()) return;
+    this.resaleConfirmationTicketId.set(null);
+    this.transferFlowTicketId.set(ticketId);
+    this.transferConfirmation.set(null);
+    this.clearTransferError();
+  }
+
+  closeTransferFlow(ticketId: string): void {
+    if (this.isTransferringTicket() === ticketId) return;
+    if (this.transferFlowTicketId() === ticketId) {
+      this.transferFlowTicketId.set(null);
+      this.transferConfirmation.set(null);
+      this.clearTransferError();
+    }
+  }
+
+  transferEmail(ticketId: string): string {
+    return this.transferEmailByTicketId().get(ticketId) ?? '';
+  }
+
+  updateTransferEmail(ticketId: string, email: string): void {
+    this.transferEmailByTicketId.update((current) => {
+      const next = new Map(current);
+      next.set(ticketId, email);
+      return next;
+    });
+    if (this.transferConfirmation()?.ticketId === ticketId) {
+      this.transferConfirmation.set(null);
+    }
+    this.clearTransferError();
+  }
+
+  clearTransferConfirmation(): void {
+    this.transferConfirmation.set(null);
+  }
+
+  private clearTransferError(): void {
+    this.transferError.set(null);
+    this.transferErrorTicketId.set(null);
+  }
+
+  private setTransferError(ticketId: string, message: string): void {
+    this.transferError.set(message);
+    this.transferErrorTicketId.set(ticketId);
+  }
+
+  async validateTransferRecipient(ticket: Ticket): Promise<void> {
+    if (this.isTransferBusy()) return;
+    const email = this.transferEmail(ticket._id).trim();
+    if (!email) {
+      this.setTransferError(ticket._id, 'Enter a recipient email.');
+      return;
+    }
+
+    this.isValidatingTransfer.set(ticket._id);
+    this.transferConfirmation.set(null);
+    this.clearTransferError();
+    try {
+      const recipient =
+        await this.paymentService.validateTicketTransferRecipient(
+          ticket._id as Id<'tickets'>,
+          email,
+        );
+      this.transferConfirmation.set({
+        ticketId: ticket._id,
+        recipientEmail: recipient.email,
+        ...(recipient.name ? {recipientName: recipient.name} : {}),
+      });
+    } catch (err: unknown) {
+      const message = extractErrorMessage(err);
+      this.setTransferError(ticket._id, message);
+      logger.error('Failed to validate ticket transfer recipient', err);
+    } finally {
+      this.isValidatingTransfer.set(null);
+    }
+  }
+
+  async confirmTransferTicket(ticket: Ticket): Promise<void> {
+    const confirmation = this.transferConfirmation();
+    if (
+      !confirmation ||
+      confirmation.ticketId !== ticket._id ||
+      this.isTransferringTicket() !== null
+    ) {
+      return;
+    }
+
+    this.isTransferringTicket.set(ticket._id);
+    this.clearTransferError();
+    try {
+      const recipient = await this.paymentService.transferTicket(
+        ticket._id as Id<'tickets'>,
+        confirmation.recipientEmail,
+      );
+      this.transferConfirmation.set(null);
+      this.transferFlowTicketId.set(null);
+      this.paymentService.triggerRefresh();
+      toast.success(
+        `Ticket transferred to ${recipient.name || recipient.email}.`,
+      );
+    } catch (err: unknown) {
+      const message = extractErrorMessage(err);
+      this.setTransferError(ticket._id, message);
+      toast.error(message);
+      logger.error('Failed to transfer ticket', err);
+    } finally {
+      this.isTransferringTicket.set(null);
+    }
+  }
+
   openResaleListingFlow(ticketId: string) {
     if (this.isListingForResale() !== null || this.getResaleInfo(ticketId))
       return;
+    const ticket = this.tickets().find(
+      (candidate) => candidate._id === ticketId,
+    );
+    if (!ticket || !this.canListTicketForResale(ticket)) return;
+    this.transferFlowTicketId.set(null);
+    this.transferConfirmation.set(null);
+    this.clearTransferError();
     this.resaleConfirmationTicketId.set(ticketId);
     this.focusConfirmResaleButton(ticketId);
   }
@@ -746,7 +399,11 @@ export class TicketsComponent {
     const ticket = this.tickets().find(
       (candidate) => candidate._id === ticketId,
     );
-    if (!ticket || !this.canConfirmResaleListing(ticket)) {
+    if (
+      !ticket ||
+      !this.canListTicketForResale(ticket) ||
+      !this.canConfirmResaleListing(ticket)
+    ) {
       toast.error(
         "We can't calculate the resale payout for this ticket yet. Contact support before listing it.",
       );

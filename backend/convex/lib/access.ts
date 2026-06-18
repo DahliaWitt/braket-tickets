@@ -68,6 +68,7 @@ export {derivePublicationStatus, isPublishedCommunity};
 export {
   canPurchaseEvent,
   canPurchaseEventForUser,
+  canReceiveTicketTransferForUser,
   isOpenAccess,
   requireEventPurchase,
   resolvePurchaseAccessForUser,

@@ -162,6 +162,18 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
     period: MINUTE,
   },
 
+  // Ticket transfer: 5 per holder per minute.
+  // Protects recipient lookup and operational email delivery from abuse.
+  ticketTransfer: {kind: 'fixed window', rate: 5, period: MINUTE},
+
+  // Ticket transfer recipient lookup: 10 per holder per minute.
+  // Limits vetted-member email enumeration through the preflight check.
+  ticketTransferRecipientLookup: {
+    kind: 'fixed window',
+    rate: 10,
+    period: MINUTE,
+  },
+
   // Roster export: 10 per user per event per hour.
   // Prevents accidental hammering and limits data exfiltration from a compromised admin token.
   exportEventRoster: {kind: 'fixed window', rate: 10, period: HOUR},

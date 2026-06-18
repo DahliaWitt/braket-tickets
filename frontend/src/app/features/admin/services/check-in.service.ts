@@ -1,14 +1,16 @@
-import { DOCUMENT } from '@angular/common';
-import { DestroyRef, Injectable, inject, signal } from '@angular/core';
-import { injectConvex } from 'convex-angular';
-import { api } from '@convex/_generated/api';
-import { type Id } from '@convex/_generated/dataModel';
-import { type FunctionReturnType } from 'convex/server';
-import { logger } from '@/utils/logger';
-import { parseQRScanData } from '../pages/check-in/qr-parse';
-import { WEB_HAPTICS_CTOR } from './web-haptics.token';
+import {DOCUMENT} from '@angular/common';
+import {DestroyRef, Injectable, inject, signal} from '@angular/core';
+import {injectConvex} from 'convex-angular';
+import {api} from '@convex/_generated/api';
+import {type FunctionArgs, type FunctionReturnType} from 'convex/server';
+import {logger} from '@/utils/logger';
+import {parseQRScanData} from '../pages/check-in/qr-parse';
+import {WEB_HAPTICS_CTOR} from './web-haptics.token';
 
-type CheckInResult = FunctionReturnType<typeof api.events.check_in.checkIn> & { error?: string };
+type CheckInResult = FunctionReturnType<typeof api.events.check_in.checkIn> & {
+  error?: string;
+};
+type CheckInArgs = FunctionArgs<typeof api.events.check_in.checkIn>;
 
 /**
  * Feature-scoped service for check-in operations.
@@ -41,7 +43,8 @@ export class CheckInService {
   readonly showEnableSoundFallback = signal(false);
 
   initAudio(): void {
-    if (typeof Audio === 'undefined' || this.successAudio || this.failureAudio) return;
+    if (typeof Audio === 'undefined' || this.successAudio || this.failureAudio)
+      return;
 
     this.successAudio = this.createAudio('/yipee.mp3');
     this.failureAudio = this.createAudio('/ticketscanfail.mp3');
@@ -75,16 +78,33 @@ export class CheckInService {
     const parsed = parseQRScanData(scanData);
     if (!parsed) return;
 
-    const { ticketId, guestId } = parsed;
+    const {ticketId, guestId} = parsed;
     if (!ticketId && !guestId) return;
+
+    if (ticketId) {
+      await this.runCheckIn({ticketQrCode: ticketId});
+      return;
+    }
+
+    if (guestId) {
+      await this.runCheckIn({guestId});
+    }
+  }
+
+  /** Check in a ticket directly by ID (from the ticket roster tap). */
+  async checkInTicket(ticketId: string): Promise<void> {
+    if (!ticketId) return;
+    await this.runCheckIn({ticketId});
+  }
+
+  private async runCheckIn(args: CheckInArgs): Promise<void> {
+    if (this.isProcessing()) return;
 
     this.isProcessing.set(true);
     this.lastResult.set(null);
 
     try {
-      const res = await (ticketId
-        ? this.convex.mutation(api.events.check_in.checkIn, { ticketId: ticketId as Id<'tickets'> })
-        : this.convex.mutation(api.events.check_in.checkIn, { guestId: guestId as Id<'guests'> }));
+      const res = await this.convex.mutation(api.events.check_in.checkIn, args);
 
       this.lastResult.set(res);
 
@@ -113,7 +133,7 @@ export class CheckInService {
 
     try {
       const res = await this.convex.mutation(api.events.check_in.checkIn, {
-        guestId: guestId as Id<'guests'>,
+        guestId,
       });
       this.lastResult.set(res);
 
@@ -127,7 +147,8 @@ export class CheckInService {
       logger.error('Operation failed', err);
       this.lastResult.set({
         success: false,
-        message: err instanceof Error ? err.message : 'Failed to check in guest',
+        message:
+          err instanceof Error ? err.message : 'Failed to check in guest',
       });
       this.playFailure();
     } finally {
@@ -184,7 +205,12 @@ export class CheckInService {
       void this.primeAudioOnGesture();
     };
 
-    for (const eventName of ['pointerdown', 'touchend', 'keydown', 'click'] as const) {
+    for (const eventName of [
+      'pointerdown',
+      'touchend',
+      'keydown',
+      'click',
+    ] as const) {
       this.document.addEventListener(eventName, primeAudioOnGesture, true);
       this.audioPrimeCleanup.push(() => {
         this.document.removeEventListener(eventName, primeAudioOnGesture, true);
@@ -247,7 +273,10 @@ export class CheckInService {
     }
   }
 
-  private handlePlaybackFailure(err: unknown, audioType: 'success' | 'failure'): void {
+  private handlePlaybackFailure(
+    err: unknown,
+    audioType: 'success' | 'failure',
+  ): void {
     if (this.shouldShowEnableSoundFallback(err)) {
       this.isAudioPrimed = false;
       this.showEnableSoundFallback.set(true);
@@ -269,7 +298,11 @@ export class CheckInService {
 
     if (err instanceof Error) {
       const message = err.message.toLowerCase();
-      return message.includes('gesture') || message.includes('user') || message.includes('notallowed');
+      return (
+        message.includes('gesture') ||
+        message.includes('user') ||
+        message.includes('notallowed')
+      );
     }
 
     return false;

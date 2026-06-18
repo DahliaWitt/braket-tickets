@@ -1546,6 +1546,7 @@ export type DataModel = {
       rosterStatus?: "valid" | "checked_in" | "refunded" | "cancelled";
       status: "valid" | "used" | "refunded" | "expired";
       tier: "regular" | "notaflof" | "supporter";
+      transferEmailPendingRecipientId?: Id<"users">;
       userId?: Id<"users">;
       _id: Id<"tickets">;
       _creationTime: number;
@@ -1569,6 +1570,7 @@ export type DataModel = {
       | "rosterStatus"
       | "status"
       | "tier"
+      | "transferEmailPendingRecipientId"
       | "userId";
     indexes: {
       by_id: ["_id"];
@@ -1585,6 +1587,7 @@ export type DataModel = {
       by_guestSession: ["guestSessionId", "_creationTime"];
       by_guestSession_event: ["guestSessionId", "eventId", "_creationTime"];
       by_order: ["orderId", "_creationTime"];
+      by_qrCode: ["qrCode", "_creationTime"];
       by_user: ["userId", "_creationTime"];
       by_user_event: ["userId", "eventId", "_creationTime"];
     };

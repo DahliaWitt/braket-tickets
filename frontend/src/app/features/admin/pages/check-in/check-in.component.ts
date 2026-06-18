@@ -271,7 +271,7 @@ export class CheckInComponent implements OnInit {
 
   /** Check in a ticket from the manual list. */
   async checkInTicket(scanData: string): Promise<void> {
-    await this.checkInService.checkIn(scanData);
+    await this.checkInService.checkInTicket(scanData);
     this.applyManualCheckInResult('ticket', scanData, this.lastResult());
   }
 

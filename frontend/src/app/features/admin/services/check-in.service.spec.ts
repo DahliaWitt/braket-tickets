@@ -141,10 +141,24 @@ describe('CheckInService', () => {
 
     expect(convexClientMock.mutation).toHaveBeenCalledWith(
       api.events.check_in.checkIn,
-      {ticketId: 'ticket-123'},
+      {ticketQrCode: 'ticket-123'},
     );
     expect(audioInstances[0].play).toHaveBeenCalledTimes(1);
     expect(audioInstances[1].play).not.toHaveBeenCalled();
+  });
+
+  it('sends manual ticket checks by ticket ID', async () => {
+    convexClientMock.mutation.mockResolvedValue({
+      success: true,
+      message: 'Successfully checked in',
+    });
+
+    await service.checkInTicket('ticket-123');
+
+    expect(convexClientMock.mutation).toHaveBeenCalledWith(
+      api.events.check_in.checkIn,
+      {ticketId: 'ticket-123'},
+    );
   });
 
   it('plays the failure sound after a rejected scan', async () => {

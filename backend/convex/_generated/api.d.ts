@@ -958,7 +958,7 @@ export declare const api: {
       checkIn: FunctionReference<
         "mutation",
         "public",
-        { guestId?: string; ticketId?: string },
+        { guestId?: string; ticketId?: string; ticketQrCode?: string },
         {
           guest?: {
             _creationTime: number;
@@ -3094,6 +3094,7 @@ export declare const api: {
           rosterStatus?: "valid" | "checked_in" | "refunded" | "cancelled";
           status: "valid" | "used" | "refunded" | "expired";
           tier: "regular" | "notaflof" | "supporter";
+          transferEmailPendingRecipientId?: Id<"users">;
           user: {
             _id: Id<"users">;
             email?: string;
@@ -3159,6 +3160,7 @@ export declare const api: {
           rosterStatus?: "valid" | "checked_in" | "refunded" | "cancelled";
           status: "valid" | "used" | "refunded" | "expired";
           tier: "regular" | "notaflof" | "supporter";
+          transferEmailPendingRecipientId?: Id<"users">;
           userId?: Id<"users">;
         }>
       >;
@@ -3186,6 +3188,7 @@ export declare const api: {
           rosterStatus?: "valid" | "checked_in" | "refunded" | "cancelled";
           status: "valid" | "used" | "refunded" | "expired";
           tier: "regular" | "notaflof" | "supporter";
+          transferEmailPendingRecipientId?: Id<"users">;
           user: {
             _id: Id<"users">;
             email?: string;
@@ -3194,6 +3197,20 @@ export declare const api: {
           } | null;
           userId?: Id<"users">;
         }>
+      >;
+    };
+    transfers: {
+      transfer: FunctionReference<
+        "mutation",
+        "public",
+        { recipientEmail: string; ticketId: Id<"tickets"> },
+        { email: string; name?: string; userId: Id<"users"> }
+      >;
+      validateRecipient: FunctionReference<
+        "mutation",
+        "public",
+        { recipientEmail: string; ticketId: Id<"tickets"> },
+        { email: string; name?: string; userId: Id<"users"> }
       >;
     };
   };
@@ -5509,6 +5526,16 @@ export declare const internal: {
         { orderId: Id<"ticket_orders"> },
         null
       >;
+      sendTransferredTicketAction: FunctionReference<
+        "action",
+        "internal",
+        {
+          recipientId: Id<"users">;
+          senderId: Id<"users">;
+          ticketId: Id<"tickets">;
+        },
+        null
+      >;
     };
     public: {
       getByIdInternal: FunctionReference<
@@ -5534,6 +5561,7 @@ export declare const internal: {
           rosterStatus?: "valid" | "checked_in" | "refunded" | "cancelled";
           status: "valid" | "used" | "refunded" | "expired";
           tier: "regular" | "notaflof" | "supporter";
+          transferEmailPendingRecipientId?: Id<"users">;
           userId?: Id<"users">;
         } | null
       >;
@@ -5560,6 +5588,7 @@ export declare const internal: {
           rosterStatus?: "valid" | "checked_in" | "refunded" | "cancelled";
           status: "valid" | "used" | "refunded" | "expired";
           tier: "regular" | "notaflof" | "supporter";
+          transferEmailPendingRecipientId?: Id<"users">;
           userId?: Id<"users">;
         } | null
       >;
@@ -5586,8 +5615,47 @@ export declare const internal: {
           rosterStatus?: "valid" | "checked_in" | "refunded" | "cancelled";
           status: "valid" | "used" | "refunded" | "expired";
           tier: "regular" | "notaflof" | "supporter";
+          transferEmailPendingRecipientId?: Id<"users">;
           userId?: Id<"users">;
         }>
+      >;
+    };
+    transfers: {
+      clearTransferEmailPending: FunctionReference<
+        "mutation",
+        "internal",
+        { recipientId: Id<"users">; ticketId: Id<"tickets"> },
+        null
+      >;
+      getTransferEmailContext: FunctionReference<
+        "query",
+        "internal",
+        {
+          recipientId: Id<"users">;
+          senderId: Id<"users">;
+          ticketId: Id<"tickets">;
+        },
+        {
+          event: {
+            _id: Id<"events">;
+            date: string;
+            location?: string;
+            title: string;
+          };
+          organizer: {
+            codeOfConduct?: string;
+            name: string;
+            slug?: string;
+          } | null;
+          recipient: { _id: Id<"users">; email?: string; name?: string };
+          sender: { _id: Id<"users">; email?: string; name?: string };
+          ticket: {
+            _id: Id<"tickets">;
+            eventId: Id<"events">;
+            qrCode?: string;
+            tier: "regular" | "notaflof" | "supporter";
+          };
+        } | null
       >;
     };
   };

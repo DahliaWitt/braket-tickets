@@ -78,6 +78,15 @@ type CheckInResult =
       guest?: GuestResult;
     };
 
+type TicketScanResolution =
+  | {
+      success: true;
+      ticketId?: Id<'tickets'>;
+      ticket?: Doc<'tickets'>;
+      staleTicketIdQr: boolean;
+    }
+  | {success: false; response: CheckInResult};
+
 type CheckInScanSource = 'admin-ui' | 'door-scanner';
 
 function getScanSource(isEditor: boolean): CheckInScanSource {
@@ -95,6 +104,79 @@ function failCheckIn(args: {
     ...(args.ticket ? {ticket: args.ticket} : {}),
     ...(args.guest ? {guest: args.guest} : {}),
   };
+}
+
+async function resolveTicketScan(
+  ctx: MutationCtx,
+  args: {ticketId?: string; ticketQrCode?: string},
+): Promise<TicketScanResolution> {
+  if (args.ticketQrCode) {
+    const scanCode = args.ticketQrCode.trim();
+    if (!scanCode) {
+      return {
+        success: false,
+        response: failCheckIn({message: 'Invalid Ticket QR Code'}),
+      };
+    }
+
+    const ticketByScanCode = await ctx.db
+      .query('tickets')
+      .withIndex('by_qrCode', (q) => q.eq('qrCode', scanCode))
+      .unique();
+    if (ticketByScanCode) {
+      return {
+        success: true,
+        ticketId: ticketByScanCode._id,
+        ticket: ticketByScanCode,
+        staleTicketIdQr: false,
+      };
+    }
+
+    const legacyTicketId = ctx.db.normalizeId('tickets', scanCode);
+    if (!legacyTicketId) {
+      return {
+        success: false,
+        response: failCheckIn({message: 'Invalid Ticket QR Code'}),
+      };
+    }
+
+    const legacyTicket = await ctx.db.get('tickets', legacyTicketId);
+    if (!legacyTicket) {
+      return {
+        success: false,
+        response: failCheckIn({message: 'Ticket not found'}),
+      };
+    }
+
+    return {
+      success: true,
+      ticketId: legacyTicketId,
+      ticket: legacyTicket,
+      staleTicketIdQr: legacyTicket.qrCode !== undefined,
+    };
+  }
+
+  if (args.ticketId) {
+    const ticketId = ctx.db.normalizeId('tickets', args.ticketId);
+    if (!ticketId) {
+      return {
+        success: false,
+        response: failCheckIn({message: 'Invalid Ticket QR Code'}),
+      };
+    }
+
+    const ticket = await ctx.db.get('tickets', ticketId);
+    if (!ticket) {
+      return {
+        success: false,
+        response: failCheckIn({message: 'Ticket not found'}),
+      };
+    }
+
+    return {success: true, ticketId, ticket, staleTicketIdQr: false};
+  }
+
+  return {success: true, staleTicketIdQr: false};
 }
 
 async function loadCheckInAuthorization(
@@ -154,24 +236,22 @@ export async function checkIn(
   ctx: MutationCtx,
   args: {
     ticketId?: string;
+    ticketQrCode?: string;
     guestId?: string;
   },
 ): Promise<CheckInResult> {
   const user = await requireUser(ctx);
   const userId = user._id;
 
-  const ticketId = args.ticketId
-    ? ctx.db.normalizeId('tickets', args.ticketId)
-    : null;
+  const ticketScan = await resolveTicketScan(ctx, {
+    ticketId: args.ticketId,
+    ticketQrCode: args.ticketQrCode,
+  });
   const guestId = args.guestId
     ? ctx.db.normalizeId('guests', args.guestId)
     : null;
 
-  if (args.ticketId && !ticketId) {
-    return failCheckIn({
-      message: 'Invalid Ticket QR Code',
-    });
-  }
+  if (!ticketScan.success) return ticketScan.response;
 
   if (args.guestId && !guestId) {
     return failCheckIn({
@@ -179,13 +259,8 @@ export async function checkIn(
     });
   }
 
-  if (ticketId) {
-    const ticket = await ctx.db.get('tickets', ticketId);
-    if (!ticket) {
-      return failCheckIn({
-        message: 'Ticket not found',
-      });
-    }
+  if (ticketScan.ticket && ticketScan.ticketId) {
+    const {ticketId, ticket, staleTicketIdQr} = ticketScan;
 
     const authorization = await loadCheckInAuthorization(ctx, {
       userId,
@@ -197,6 +272,13 @@ export async function checkIn(
     if (!authorization.success) return authorization.response;
 
     const {event, auditSource} = authorization;
+
+    if (staleTicketIdQr) {
+      return failCheckIn({
+        message:
+          'Ticket QR Code has been replaced. Ask the attendee to open their latest ticket.',
+      });
+    }
 
     if (!isValidTicketStatus(ticket.status)) {
       return failCheckIn({

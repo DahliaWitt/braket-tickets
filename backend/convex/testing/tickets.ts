@@ -11,6 +11,7 @@ import type {TicketTier} from '@shared/domain/ticket-tier';
 import type {TicketStatus} from '@shared/domain/ticket-status';
 import {testingMutation} from './wrappers';
 import {insertSeedOrder} from './orders';
+import {generateTicketScanCode} from '../lib/ticket_scan_codes';
 
 interface InsertSeedTicketArgs {
   userId?: Id<'users'>;
@@ -36,7 +37,7 @@ export async function insertSeedTicket(
     status: args.status,
     tier: args.tier,
     guestSessionId: args.guestSessionId,
-    qrCode: `demo-qr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    qrCode: generateTicketScanCode(),
     checkedInAt: args.checkedInAt,
     checkedInBy: args.checkedInBy,
   });

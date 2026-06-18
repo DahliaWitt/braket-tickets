@@ -425,7 +425,18 @@ const schemaTables = {
      */
     tier: tierValidator,
 
-    qrCode: v.optional(v.string()), // Data URL or text content
+    /**
+     * Opaque scan token encoded into ticket QR codes. Rotated when a ticket is
+     * transferred so previously downloaded PDFs stop scanning at the door.
+     * Older tickets may not have one; scanners fall back to ticket ID only
+     * until a token is assigned.
+     */
+    qrCode: v.optional(v.string()),
+    /**
+     * Set while the post-transfer ticket email is queued/running. Blocks a
+     * second transfer from racing ahead of the email action.
+     */
+    transferEmailPendingRecipientId: v.optional(v.id('users')),
     checkedInAt: v.optional(v.number()), // Timestamp
     checkedInBy: v.optional(v.id('users')), // Admin who checked in
     rosterAttendeeName: v.optional(v.string()),
@@ -441,6 +452,7 @@ const schemaTables = {
     .index('by_event_status', ['eventId', 'status'])
     .index('by_user_event', ['userId', 'eventId'])
     .index('by_order', ['orderId'])
+    .index('by_qrCode', ['qrCode'])
     .index('by_guestSession', ['guestSessionId'])
     .index('by_guestSession_event', ['guestSessionId', 'eventId'])
     // Used by getRecentCheckIns and getEventCheckInPostMortem.

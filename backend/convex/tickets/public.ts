@@ -26,6 +26,7 @@ const ticketDocFields = {
   status: ticketStatusValidator,
   tier: tierValidator,
   qrCode: v.optional(v.string()),
+  transferEmailPendingRecipientId: v.optional(v.id('users')),
   checkedInAt: v.optional(v.number()),
   checkedInBy: v.optional(v.id('users')),
   rosterAttendeeName: v.optional(v.string()),
