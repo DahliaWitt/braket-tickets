@@ -929,6 +929,7 @@ const schemaTables = {
   })
     .index('by_event_status', ['eventId', 'status'])
     .index('by_ticket', ['ticketId'])
+    .index('by_ticket_and_status', ['ticketId', 'status'])
     .index('by_status', ['status'])
     .index('by_seller_event', ['sellerId', 'eventId']),
 

@@ -392,8 +392,8 @@ export function transferredTicketTemplate(
   `;
 
   return {
-    subject: `Ticket transferred: ${safeTitle}`,
-    html: wrapEmail(content, `Ticket transferred for ${safeTitle}.`),
+    subject: `Ticket transferred: ${event.title}`,
+    html: wrapEmail(content, `Ticket transferred for ${event.title}.`),
   };
 }
 

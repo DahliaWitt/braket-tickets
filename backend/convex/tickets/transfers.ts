@@ -17,14 +17,13 @@ import {
   throwNotFound,
 } from '../lib/errors';
 import {rateLimiter} from '../lib/rate_limits';
-import {findMatchingInQuery} from '../lib/query_scan';
-import {isActiveResaleListingStatus} from '../lib/resale_listing_transitions';
 import {isValidTicketStatus, tierValidator} from '../lib/validators/ticketing';
 import {buildTicketRosterProjection} from '../lib/ticket_roster_projection';
 import {generateTicketScanCode} from '../lib/ticket_scan_codes';
 
 const RECIPIENT_NOT_ELIGIBLE_MESSAGE =
   'No vetted member was found for that email.';
+const ACTIVE_RESALE_LISTING_STATUSES = ['listed', 'pending'] as const;
 
 const transferRecipientValidator = v.object({
   userId: v.id('users'),
@@ -83,14 +82,17 @@ async function requireNoActiveResaleListing(
   ctx: Pick<QueryCtx | MutationCtx, 'db'>,
   ticketId: Id<'tickets'>,
 ): Promise<void> {
-  const listing = await findMatchingInQuery(
-    ctx.db
-      .query('resale_listings')
-      .withIndex('by_ticket', (q) => q.eq('ticketId', ticketId)),
-    (candidate) => isActiveResaleListingStatus(candidate.status),
-    100,
+  const activeListings = await Promise.all(
+    ACTIVE_RESALE_LISTING_STATUSES.map((status) =>
+      ctx.db
+        .query('resale_listings')
+        .withIndex('by_ticket_and_status', (q) =>
+          q.eq('ticketId', ticketId).eq('status', status),
+        )
+        .first(),
+    ),
   );
-  if (listing) {
+  if (activeListings.some((listing) => listing !== null)) {
     throwInvalidState(
       'Cancel the resale listing before transferring this ticket.',
     );

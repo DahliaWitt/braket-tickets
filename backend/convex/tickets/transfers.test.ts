@@ -288,6 +288,16 @@ describe('ticket transfers', () => {
       await seedTransferFixture({resaleEnabled: true});
     /* eslint-disable no-raw-db-mutations/no-raw-db-mutation -- Test fixture: create an active resale listing without invoking the full resale workflow. */
     await t.run(async (ctx) => {
+      for (let index = 0; index < 120; index += 1) {
+        await ctx.db.insert('resale_listings', {
+          ticketId,
+          eventId,
+          sellerId: senderId,
+          status: 'cancelled',
+          cancelledAt: Date.now(),
+        });
+      }
+
       await ctx.db.insert('resale_listings', {
         ticketId,
         eventId,

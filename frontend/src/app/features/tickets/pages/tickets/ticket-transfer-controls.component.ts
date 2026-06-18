@@ -1,9 +1,16 @@
 import {
+  afterNextRender,
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
+  ElementRef,
+  inject,
   input,
+  Injector,
   output,
+  runInInjectionContext,
+  viewChild,
 } from '@angular/core';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
@@ -61,6 +68,7 @@ export interface TicketTransferConfirmation {
               Recipient email
             </label>
             <input
+              #emailInput
               zInput
               type="email"
               autocomplete="email"
@@ -186,6 +194,7 @@ export interface TicketTransferConfirmation {
       </div>
     } @else {
       <button
+        #openButton
         type="button"
         z-button
         zType="outline"
@@ -202,6 +211,14 @@ export interface TicketTransferConfirmation {
   `,
 })
 export class TicketTransferControlsComponent {
+  private readonly injector = inject(Injector);
+  private readonly hostRef = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly emailInputRef =
+    viewChild<ElementRef<HTMLInputElement>>('emailInput');
+  private readonly openButtonRef =
+    viewChild<ElementRef<HTMLButtonElement>>('openButton');
+  private previousIsOpen: boolean | null = null;
+
   readonly ticket = input.required<Ticket>();
   readonly isOpen = input.required<boolean>();
   readonly email = input.required<string>();
@@ -225,6 +242,39 @@ export class TicketTransferControlsComponent {
   readonly errorId = computed(
     () => `ticket-transfer-error-${this.safeTicketId()}`,
   );
+
+  constructor() {
+    effect((onCleanup) => {
+      const isOpen = this.isOpen();
+      if (this.previousIsOpen === null) {
+        this.previousIsOpen = isOpen;
+        return;
+      }
+      if (this.previousIsOpen === isOpen) return;
+
+      this.previousIsOpen = isOpen;
+      runInInjectionContext(this.injector, () => {
+        const focusRenderRef = afterNextRender({
+          write: () => {
+            if (this.isOpen() !== isOpen) return;
+
+            const target = isOpen
+              ? (this.emailInputRef()?.nativeElement ??
+                this.hostRef.nativeElement.querySelector<HTMLInputElement>(
+                  '[data-testid="transfer-email-input"]',
+                ))
+              : (this.openButtonRef()?.nativeElement ??
+                this.hostRef.nativeElement.querySelector<HTMLButtonElement>(
+                  '[data-testid="ticket-transfer-open"]',
+                ));
+            target?.focus();
+          },
+        });
+
+        onCleanup(() => focusRenderRef.destroy());
+      });
+    });
+  }
 
   onEmailInput(event: Event): void {
     const target = event.target;

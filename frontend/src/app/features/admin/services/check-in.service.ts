@@ -97,7 +97,10 @@ export class CheckInService {
     await this.runCheckIn({ticketId});
   }
 
-  private async runCheckIn(args: CheckInArgs): Promise<void> {
+  private async runCheckIn(
+    args: CheckInArgs,
+    options: {triggerHapticOnSuccess?: boolean} = {},
+  ): Promise<void> {
     if (this.isProcessing()) return;
 
     this.isProcessing.set(true);
@@ -109,6 +112,9 @@ export class CheckInService {
       this.lastResult.set(res);
 
       if (res.success) {
+        if (options.triggerHapticOnSuccess) {
+          void this.haptics.trigger('medium');
+        }
         this.playSuccess();
       } else {
         this.playFailure();
@@ -127,33 +133,8 @@ export class CheckInService {
 
   /** Check in a guest directly by ID (from the guest list tap). */
   async checkInGuest(guestId: string): Promise<void> {
-    if (this.isProcessing()) return;
-    this.isProcessing.set(true);
-    this.lastResult.set(null);
-
-    try {
-      const res = await this.convex.mutation(api.events.check_in.checkIn, {
-        guestId,
-      });
-      this.lastResult.set(res);
-
-      if (res.success) {
-        void this.haptics.trigger('medium');
-        this.playSuccess();
-      } else {
-        this.playFailure();
-      }
-    } catch (err) {
-      logger.error('Operation failed', err);
-      this.lastResult.set({
-        success: false,
-        message:
-          err instanceof Error ? err.message : 'Failed to check in guest',
-      });
-      this.playFailure();
-    } finally {
-      this.isProcessing.set(false);
-    }
+    if (!guestId) return;
+    await this.runCheckIn({guestId}, {triggerHapticOnSuccess: true});
   }
 
   triggerHaptic(): void {

@@ -161,6 +161,22 @@ describe('CheckInService', () => {
     );
   });
 
+  it('sends guest list checks through the shared check-in handler', async () => {
+    const hapticsTriggerSpy = vi.spyOn(MockWebHaptics.prototype, 'trigger');
+    convexClientMock.mutation.mockResolvedValue({
+      success: true,
+      message: 'Successfully checked in',
+    });
+
+    await service.checkInGuest('guest-123');
+
+    expect(convexClientMock.mutation).toHaveBeenCalledWith(
+      api.events.check_in.checkIn,
+      {guestId: 'guest-123'},
+    );
+    expect(hapticsTriggerSpy).toHaveBeenCalledWith('medium');
+  });
+
   it('plays the failure sound after a rejected scan', async () => {
     service.initAudio();
     convexClientMock.mutation.mockResolvedValue({

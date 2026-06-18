@@ -169,7 +169,7 @@ All email templates use the distinctive "Pulp" voice: warm, playful, kaomoji-fri
 
 **When Triggered**:
 
-- Ticket holder confirms a transfer to another vetted member of the same community
+- Ticket holder confirms a transfer to another vetted member of the same or a trusted community
 
 **Subject**: `Ticket transferred: {eventTitle}`
 
@@ -412,7 +412,7 @@ Keep transactional subjects plain, especially verification, password reset, emai
 3. **Event Reminder** - 24h/1h before event starts
 4. **Refund Confirmation** - When payment is refunded
 5. **Account Security Alert** - Password changed, new login from new device
-6. **Event Cancellation** - When an event is cancelled
+6. **Event Cancellation** - When an event is canceled
 
 ### Recommended Additions
 

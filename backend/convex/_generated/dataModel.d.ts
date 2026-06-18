@@ -1305,6 +1305,7 @@ export type DataModel = {
       by_seller_event: ["sellerId", "eventId", "_creationTime"];
       by_status: ["status", "_creationTime"];
       by_ticket: ["ticketId", "_creationTime"];
+      by_ticket_and_status: ["ticketId", "status", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};

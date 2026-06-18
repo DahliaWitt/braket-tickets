@@ -1,5 +1,6 @@
-import {ComponentHarness, TestKey} from '@angular/cdk/testing';
+import {ComponentHarness} from '@angular/cdk/testing';
 import {waitForHarnessCondition} from '@/testing/harness-wait';
+import {TicketTransferControlsComponentHarness} from './ticket-transfer-controls.component.harness';
 
 /** Sub-harness for individual ticket cards */
 class TicketCardHarness extends ComponentHarness {
@@ -168,92 +169,90 @@ class TicketCardHarness extends ComponentHarness {
     await btn.click();
   }
 
-  async hasTransferButton(): Promise<boolean> {
-    const btn = await this.locatorForOptional(
-      '[data-testid="ticket-transfer-open"]',
+  private async transferControls(): Promise<TicketTransferControlsComponentHarness> {
+    const controls = await this.locatorForOptional(
+      TicketTransferControlsComponentHarness,
     )();
-    return btn !== null;
+    if (!controls) throw new Error('Transfer controls not found');
+    return controls;
+  }
+
+  async hasTransferButton(): Promise<boolean> {
+    const controls = await this.locatorForOptional(
+      TicketTransferControlsComponentHarness,
+    )();
+    return controls !== null && (await controls.hasTransferButton());
   }
 
   async clickTransferButton(): Promise<void> {
-    const btn = await this.locatorFor('[data-testid="ticket-transfer-open"]')();
-    await btn.click();
+    await (await this.transferControls()).clickTransferButton();
+  }
+
+  async isTransferButtonFocused(): Promise<boolean> {
+    return (await this.transferControls()).isTransferButtonFocused();
+  }
+
+  async waitForTransferButtonFocus(): Promise<void> {
+    await waitForHarnessCondition(async () => this.isTransferButtonFocused(), {
+      description: 'transfer button focus',
+    });
   }
 
   async hasTransferPanel(): Promise<boolean> {
-    const panel = await this.locatorForOptional(
-      '[data-testid="transfer-panel"]',
+    const controls = await this.locatorForOptional(
+      TicketTransferControlsComponentHarness,
     )();
-    return panel !== null;
+    return controls !== null && (await controls.hasTransferPanel());
   }
 
   async enterTransferEmail(email: string): Promise<void> {
-    const input = await this.locatorFor(
-      '[data-testid="transfer-email-input"]',
-    )();
-    await input.clear();
-    await input.sendKeys(email);
+    await (await this.transferControls()).enterTransferEmail(email);
+  }
+
+  async isTransferEmailFocused(): Promise<boolean> {
+    return (await this.transferControls()).isTransferEmailFocused();
+  }
+
+  async waitForTransferEmailFocus(): Promise<void> {
+    await waitForHarnessCondition(async () => this.isTransferEmailFocused(), {
+      description: 'transfer email focus',
+    });
   }
 
   async pressEnterInTransferEmail(): Promise<void> {
-    const input = await this.locatorFor(
-      '[data-testid="transfer-email-input"]',
-    )();
-    await input.sendKeys(TestKey.ENTER);
+    await (await this.transferControls()).pressEnterInTransferEmail();
   }
 
   async clickValidateTransferRecipient(): Promise<void> {
-    const btn = await this.locatorFor(
-      '[data-testid="transfer-validate-button"]',
-    )();
-    await btn.click();
+    await (await this.transferControls()).clickValidateTransferRecipient();
   }
 
   async hasValidateTransferRecipientButton(): Promise<boolean> {
-    const btn = await this.locatorForOptional(
-      '[data-testid="transfer-validate-button"]',
-    )();
-    return btn !== null;
+    return (await this.transferControls()).hasValidateTransferRecipientButton();
   }
 
   async getTransferErrorText(): Promise<string | null> {
-    const error = await this.locatorForOptional(
-      '[data-testid="transfer-error"]',
-    )();
-    return error ? (await error.text()).trim() : null;
+    return (await this.transferControls()).getTransferErrorText();
   }
 
   async hasTransferConfirmationPanel(): Promise<boolean> {
-    const panel = await this.locatorForOptional(
-      '[data-testid="transfer-confirmation-panel"]',
-    )();
-    return panel !== null;
+    return (await this.transferControls()).hasTransferConfirmationPanel();
   }
 
   async getTransferConfirmationText(): Promise<string | null> {
-    const panel = await this.locatorForOptional(
-      '[data-testid="transfer-confirmation-panel"]',
-    )();
-    return panel ? (await panel.text()).trim() : null;
+    return (await this.transferControls()).getTransferConfirmationText();
   }
 
   async clickConfirmTransfer(): Promise<void> {
-    const btn = await this.locatorFor(
-      '[data-testid="transfer-confirm-button"]',
-    )();
-    await btn.click();
+    await (await this.transferControls()).clickConfirmTransfer();
   }
 
   async clickCancelTransferFlow(): Promise<void> {
-    const btn = await this.locatorFor('[data-testid="transfer-cancel-flow"]')();
-    await btn.click();
+    await (await this.transferControls()).clickCancelTransferFlow();
   }
 
   async hasCancelTransferFlowButton(): Promise<boolean> {
-    const btn = await this.locatorForOptional(
-      '[data-testid="transfer-cancel-flow"]',
-    )();
-    return btn !== null;
+    return (await this.transferControls()).hasCancelTransferFlowButton();
   }
 }
 

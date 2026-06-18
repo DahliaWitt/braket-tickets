@@ -500,7 +500,7 @@ Resale is how buyers get into sold-out events and how sellers recoup costs when 
 ### 4.3 Transfer a ticket to another vetted member
 
 **Who**: ticket holders who want to give a valid ticket to another vetted member of the event's community or a trusted community.
-**Criticality**: access control. A free transfer moves admission without changing inventory or payment ledger state.
+**Criticality**: safety. A free transfer moves admission without changing inventory or payment ledger state.
 **Entry points**: `/tickets`.
 **Successful outcome**: the ticket leaves the sender's account, appears in the recipient's account, and the recipient receives the ticket PDF by email.
 

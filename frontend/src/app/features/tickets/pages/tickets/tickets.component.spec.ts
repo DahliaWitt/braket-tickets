@@ -270,6 +270,21 @@ describe('TicketsComponent', () => {
       fixture.detectChanges();
 
       expect(await card.hasTransferPanel()).toBe(true);
+      await card.waitForTransferEmailFocus();
+      expect(await card.isTransferEmailFocused()).toBe(true);
+    });
+
+    it('restores focus to the transfer button when the panel closes', async () => {
+      const card = await harness.getTicketCard(0);
+      await card.clickTransferButton();
+      fixture.detectChanges();
+      await card.waitForTransferEmailFocus();
+
+      await card.clickCancelTransferFlow();
+      fixture.detectChanges();
+
+      await card.waitForTransferButtonFocus();
+      expect(await card.isTransferButtonFocused()).toBe(true);
     });
 
     it('shows an inline error when recipient email is empty', async () => {
