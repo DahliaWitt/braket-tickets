@@ -12,6 +12,7 @@ const {
   stripeCtorMock,
   checkoutSessionsCreateMock,
   checkoutSessionsRetrieveMock,
+  chargesRetrieveMock,
   v2AccountsRetrieveMock,
   balanceSettingsRetrieveMock,
   webhooksConstructEventMock,
@@ -23,6 +24,7 @@ const {
     stripeCtorMock: vi.fn(),
     checkoutSessionsCreateMock: vi.fn(),
     checkoutSessionsRetrieveMock: vi.fn(),
+    chargesRetrieveMock: vi.fn(),
     v2AccountsRetrieveMock: vi.fn(),
     balanceSettingsRetrieveMock: vi.fn(),
     webhooksConstructEventMock: vi.fn(),
@@ -41,6 +43,10 @@ vi.mock('stripe', () => ({
         create: checkoutSessionsCreateMock,
         retrieve: checkoutSessionsRetrieveMock,
       },
+    };
+
+    charges = {
+      retrieve: chargesRetrieveMock,
     };
 
     v2 = {
@@ -278,12 +284,18 @@ describe('startTicketOrderCheckoutSession — safe expiresAt (BRA-315)', () => {
 
 describe('syncTicketOrderCheckoutSession — webhook-first completion', () => {
   const originalIsTest = process.env['IS_TEST'];
+  const originalStripeKey = process.env['STRIPE_SECRET_KEY'];
 
   afterEach(() => {
     if (originalIsTest === undefined) {
       delete process.env['IS_TEST'];
     } else {
       process.env['IS_TEST'] = originalIsTest;
+    }
+    if (originalStripeKey === undefined) {
+      delete process.env['STRIPE_SECRET_KEY'];
+    } else {
+      process.env['STRIPE_SECRET_KEY'] = originalStripeKey;
     }
     vi.clearAllMocks();
   });
@@ -388,6 +400,75 @@ describe('syncTicketOrderCheckoutSession — webhook-first completion', () => {
       }),
     ).rejects.toThrow('Unauthorized');
     expect(checkoutSessionsRetrieveMock).not.toHaveBeenCalled();
+  });
+
+  it('returns completed status when buyer sync settles the order but Stripe has not exposed the charge balance transaction yet', async () => {
+    const t = convexTest();
+    const userId = await createUser(
+      t,
+      'Pending Balance Transaction Buyer',
+      'pending-bt@example.com',
+    );
+    const {eventId} = await createEventForCheckout(t);
+    const asUser = t.withIdentity({subject: userId});
+
+    const order = await asUser.mutation(api.orders.core.open, {
+      eventId,
+      quantity: 1,
+      tier: 'regular',
+      totalAmount: 2500,
+    });
+    await t.mutation(internal.orders.core.bindCheckoutSession, {
+      orderId: order.orderId,
+      stripeCheckoutSessionId: 'cs_pending_bt',
+    });
+
+    process.env['IS_TEST'] = 'false';
+    process.env['STRIPE_SECRET_KEY'] = 'sk_test_fake';
+    checkoutSessionsRetrieveMock.mockResolvedValue({
+      id: 'cs_pending_bt',
+      client_reference_id: order.orderId,
+      metadata: {orderId: order.orderId},
+      payment_status: 'paid',
+      status: 'complete',
+      payment_intent: {
+        id: 'pi_pending_bt',
+        latest_charge: 'ch_pending_bt',
+      },
+    });
+    chargesRetrieveMock.mockResolvedValue({
+      id: 'ch_pending_bt',
+      balance_transaction: null,
+    });
+
+    const status = await asUser.action(api.orders.core.syncCheckoutSession, {
+      checkoutSessionId: 'cs_pending_bt',
+    });
+
+    expect(status.state).toBe('completed');
+    expect(status.orderId).toBe(order.orderId);
+    expect(chargesRetrieveMock).toHaveBeenCalledWith(
+      'ch_pending_bt',
+      {expand: ['balance_transaction']},
+      undefined,
+    );
+
+    await t.run(async (ctx) => {
+      const tickets = await ctx.db
+        .query('tickets')
+        .withIndex('by_order', (q) => q.eq('orderId', order.orderId))
+        .collect();
+      expect(tickets).toHaveLength(1);
+
+      const financialEvent = await ctx.db
+        .query('order_financial_events')
+        .withIndex('by_order_and_kind', (q) =>
+          q.eq('orderId', order.orderId).eq('kind', 'payment_captured'),
+        )
+        .unique();
+      expect(financialEvent?.amountCents).toBe(2500);
+      expect(financialEvent?.connectedAccountNetCents).toBeUndefined();
+    });
   });
 });
 
