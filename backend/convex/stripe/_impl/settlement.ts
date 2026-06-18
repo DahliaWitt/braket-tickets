@@ -52,6 +52,18 @@ type ExpandableBalanceTransaction =
   | null
   | undefined;
 
+const CHARGE_BALANCE_TRANSACTION_UNAVAILABLE =
+  'Charge balance transaction is not available yet';
+
+export function isChargeBalanceTransactionUnavailableError(
+  error: unknown,
+): boolean {
+  return (
+    error instanceof Error &&
+    error.message === CHARGE_BALANCE_TRANSACTION_UNAVAILABLE
+  );
+}
+
 export function resolveExpandedBalanceTransaction(
   balanceTransaction: ExpandableBalanceTransaction,
 ): Stripe.BalanceTransaction | null {
@@ -103,7 +115,7 @@ export async function recordPaymentCaptured(
       orderId: args.orderId,
       chargeId: args.stripeChargeId,
     });
-    throw new Error('Charge balance transaction is not available yet');
+    throw new Error(CHARGE_BALANCE_TRANSACTION_UNAVAILABLE);
   }
 
   const ledgerFields = extractBalanceTransactionLedgerFields(bt);

@@ -216,6 +216,7 @@ export async function createDirectChargeCheckoutSession(
         }),
       ],
       payment_intent_data: {
+        capture_method: 'automatic',
         application_fee_amount: applicationFee,
         ...(descriptorSuffix
           ? {statement_descriptor_suffix: descriptorSuffix}
@@ -269,6 +270,7 @@ export async function createPlatformCheckoutSession(
         }),
       ],
       payment_intent_data: {
+        capture_method: 'automatic',
         ...(descriptorSuffix
           ? {statement_descriptor_suffix: descriptorSuffix}
           : {}),
