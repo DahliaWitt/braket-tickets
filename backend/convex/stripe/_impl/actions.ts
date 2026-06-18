@@ -54,6 +54,7 @@ import {
 import {buildPayoutPlan, computeEventSettlements} from './payouts';
 import {
   extractBalanceTransactionLedgerFields,
+  isChargeBalanceTransactionUnavailableError,
   recordPaymentCaptured,
   resolveExpandedBalanceTransaction,
 } from './settlement';
@@ -678,15 +679,30 @@ export async function syncTicketOrderCheckoutSessionImpl(
         },
       );
       if (settledOrder && settledOrder.state === 'completed') {
-        await recordPaymentCaptured({
-          ctx,
-          stripe,
-          orderId: order._id,
-          eventId: settledOrder.eventId,
-          stripePaymentIntentId: paymentIntent,
-          stripeChargeId: latestCharge,
-          connectedAccountId,
-        });
+        try {
+          await recordPaymentCaptured({
+            ctx,
+            stripe,
+            orderId: order._id,
+            eventId: settledOrder.eventId,
+            stripePaymentIntentId: paymentIntent,
+            stripeChargeId: latestCharge,
+            connectedAccountId,
+          });
+        } catch (error: unknown) {
+          if (!isChargeBalanceTransactionUnavailableError(error)) {
+            throw error;
+          }
+          logger.warn(
+            'stripe',
+            'checkout session sync deferred payment_captured ledger; balance_transaction unavailable',
+            {
+              orderId: order._id,
+              paymentIntentId: paymentIntent,
+              chargeId: latestCharge,
+            },
+          );
+        }
       }
     }
   } else if (session.status === 'expired') {
