@@ -83,25 +83,14 @@ export async function loadAllMagicLinkRedemptionsByMagicLink(
   );
 }
 
-export function magicLinksByOrganizerAndCreatorQuery(
+export async function loadAllMagicLinksByOrganizer(
   db: QueryDb,
   organizerId: Id<'organizers'>,
-  creatorId: Id<'users'>,
-) {
-  return db
-    .query('magic_links')
-    .withIndex('by_organizerId_and_createdBy_and_status', (q) =>
-      q.eq('organizerId', organizerId).eq('createdBy', creatorId),
-    );
-}
-
-export async function loadAllMagicLinksByOrganizerAndCreator(
-  db: QueryDb,
-  organizerId: Id<'organizers'>,
-  creatorId: Id<'users'>,
 ): Promise<Array<Doc<'magic_links'>>> {
   return await collectAllQueryUnsafe(
-    magicLinksByOrganizerAndCreatorQuery(db, organizerId, creatorId),
+    db
+      .query('magic_links')
+      .withIndex('by_organizerId', (q) => q.eq('organizerId', organizerId)),
   );
 }
 

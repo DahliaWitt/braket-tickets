@@ -68,6 +68,8 @@ export async function removeMemberWithAdminCascade(
           organizerId: args.organizerId,
           invitedBy: args.userId,
         }),
+        // TODO: Revisit whether removing one admin should deactivate
+        // community-scoped magic links they originally created.
         deactivateActiveMagicLinksForCreator(ctx, {
           organizerId: args.organizerId,
           creatorId: args.userId,

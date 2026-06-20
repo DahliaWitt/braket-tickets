@@ -95,6 +95,8 @@ export async function redeemMagicLink(
     });
   }
   const organizerId = linkDoc.organizerId;
+  // TODO: Revisit creator-status coupling for community-scoped magic links.
+  // Current behavior blocks redemption when the original creator loses access.
   if (!(await canManageCommunity(ctx, linkDoc.createdBy, organizerId))) {
     logRedemptionFailure(token, 'disabled');
     throwAppError(

@@ -2,7 +2,7 @@ import type {Doc, Id} from '../../_generated/dataModel';
 import type {DatabaseReader, QueryCtx} from '../../_generated/server';
 import {
   loadAllMagicLinkRedemptionsByMagicLink,
-  loadAllMagicLinksByOrganizerAndCreator,
+  loadAllMagicLinksByOrganizer,
   loadFirstMagicLinkByToken,
 } from '../../lib/indexed_loaders';
 import {resolveSiteUrl} from '../../lib/site_url';
@@ -118,20 +118,16 @@ export async function mapMagicLinkForAdmin(
   };
 }
 
-export async function getMagicLinksForCreator(
+export async function getMagicLinksForCommunityAdmin(
   ctx: MagicLinksReadCtx,
-  creatorId: Id<'users'>,
+  adminId: Id<'users'>,
   organizerId: Id<'organizers'>,
 ): Promise<MagicLinksListItem[]> {
-  if (!(await canManageCommunity(ctx, creatorId, organizerId))) {
+  if (!(await canManageCommunity(ctx, adminId, organizerId))) {
     return [];
   }
 
-  const links = await loadAllMagicLinksByOrganizerAndCreator(
-    ctx.db,
-    organizerId,
-    creatorId,
-  );
+  const links = await loadAllMagicLinksByOrganizer(ctx.db, organizerId);
 
   const visibleLinks = links.filter((link) => !link.deletedAt) as Array<
     Doc<'magic_links'> & {status: MagicLinkAdminStatus}
@@ -144,20 +140,16 @@ export async function getMagicLinksForCreator(
   return result;
 }
 
-export async function getPastMagicLinksForCreator(
+export async function getPastMagicLinksForCommunityAdmin(
   ctx: MagicLinksReadCtx,
-  creatorId: Id<'users'>,
+  adminId: Id<'users'>,
   organizerId: Id<'organizers'>,
 ): Promise<PastMagicLinksListItem[]> {
-  if (!(await canManageCommunity(ctx, creatorId, organizerId))) {
+  if (!(await canManageCommunity(ctx, adminId, organizerId))) {
     return [];
   }
 
-  const links = await loadAllMagicLinksByOrganizerAndCreator(
-    ctx.db,
-    organizerId,
-    creatorId,
-  );
+  const links = await loadAllMagicLinksByOrganizer(ctx.db, organizerId);
 
   const deletedLinks = links.filter(
     (link) => link.deletedAt !== undefined,
