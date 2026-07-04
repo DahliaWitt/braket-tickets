@@ -711,11 +711,7 @@ export class VettingComponent {
       } else {
         fieldState.value.set(current.filter((o) => o !== option));
       }
-      // Angular 22: markAsTouched() now recurses into descendants by default.
-      // This checkbox group is a string[] field; only the group-level touched
-      // state drives error display (isFieldInvalid), so keep the pre-v22
-      // leaf-only semantics for per-interaction touches.
-      fieldState.markAsTouched({skipDescendants: true});
+      fieldState.markAsTouched();
     }
   }
 

@@ -28,9 +28,7 @@
         "unusedStandaloneImports": "error",
         "uninvokedFunctionInEventBinding": "error",
         "uninvokedFunctionInTextInterpolation": "error",
-        "uninvokedTrackFunction": "error",
-        "nullishCoalescingNotNullable": "suppress",
-        "optionalChainNotNullable": "suppress"
+        "uninvokedTrackFunction": "error"
       }
     }
   },

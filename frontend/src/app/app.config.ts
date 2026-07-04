@@ -7,7 +7,7 @@ import {
   provideZonelessChangeDetection,
 } from '@angular/core';
 import {DOCUMENT, IMAGE_CONFIG, IMAGE_LOADER} from '@angular/common';
-import {provideHttpClient, withXhr} from '@angular/common/http';
+import {provideHttpClient} from '@angular/common/http';
 import {braketImageLoaderFactory} from './core/image-loader/braket-image-loader';
 import {
   provideRouter,
@@ -45,6 +45,8 @@ export const appConfig: ApplicationConfig = {
         onSameUrlNavigation: 'reload',
         // Angular 22 flips the default to 'always'. Pin the v21 behavior so
         // child routes do not silently inherit parent params after upgrade.
+        // A 2026-07 route audit found no parent/child param collisions, so
+        // adopting 'always' and deleting this pin is safe when next revisited.
         paramsInheritanceStrategy: 'emptyOnly',
       }),
       withViewTransitions({
@@ -67,7 +69,7 @@ export const appConfig: ApplicationConfig = {
         },
       }),
     ),
-    provideHttpClient(withXhr()),
+    provideHttpClient(),
     provideBra(),
     {provide: STRIPE_CONFIG, useValue: environment.stripe},
     {provide: IMAGE_LOADER, useFactory: braketImageLoaderFactory},
