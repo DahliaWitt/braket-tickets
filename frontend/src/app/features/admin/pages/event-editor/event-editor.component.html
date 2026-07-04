@@ -821,7 +821,7 @@
 
 @if (showPublishDialog()) {
   <app-event-publish-dialog
-    [eventId]="$safeNavigationMigration(event()?._id)"
+    [eventId]="event()?._id"
     [communityId]="eventModel().organizerId"
     [(isOpen)]="showPublishDialog"
     (published)="onPublished($event)"
