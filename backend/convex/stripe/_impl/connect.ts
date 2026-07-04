@@ -21,6 +21,7 @@ const MAX_FINANCIAL_EVENTS_PER_MARKER_DERIVATION = 5_000;
 const MAX_SETTLEMENT_EVENTS_PER_ACCOUNT = 500;
 const MAX_SETTLEMENT_FINANCIAL_EVENTS_PER_ACCOUNT = 5_000;
 const MAX_SETTLEMENT_CONFIRMED_ALLOCATIONS_PER_ACCOUNT = 1_000;
+const MAX_SETTLEMENT_SUBMITTED_BATCHES_PER_ACCOUNT = 100;
 
 type ReadCtx = Pick<QueryCtx, 'db'>;
 type WriteCtx = Pick<MutationCtx, 'db' | 'scheduler'>;
@@ -223,42 +224,9 @@ export async function getSettlementDataForAccountImpl(
       events: [],
       financialEvents: [],
       confirmedAllocations: [],
+      inflightSubmittedCents: 0,
     };
   }
-
-  const rawEvents = await ctx.db
-    .query('events')
-    .withIndex('by_organizer_status', (q) =>
-      q.eq('organizerId', organizer._id).eq('status', 'published'),
-    )
-    .take(MAX_SETTLEMENT_EVENTS_PER_ACCOUNT + 1);
-  if (rawEvents.length > MAX_SETTLEMENT_EVENTS_PER_ACCOUNT) {
-    throwAppError(
-      'PAYOUT_SETTLEMENT_OVERFLOW',
-      `Stripe account ${args.stripeConnectedAccountId} has more than ${MAX_SETTLEMENT_EVENTS_PER_ACCOUNT} published events; refusing to compute a partial payout settlement`,
-    );
-  }
-
-  const events = rawEvents.flatMap((event) => {
-    const eventDateMs = eventStartInstantMs(event.date);
-    if (eventDateMs === null) {
-      throwAppError(
-        'PAYOUT_SETTLEMENT_INVALID_EVENT_DATE',
-        `Event ${event._id} has an invalid date; refusing to compute payout settlement for Stripe account ${args.stripeConnectedAccountId}`,
-        {
-          eventId: event._id,
-          organizerId: organizer._id,
-          stripeConnectedAccountId: args.stripeConnectedAccountId,
-        },
-      );
-    }
-    return {
-      _id: event._id,
-      date: eventDateMs,
-      eligible: eventDateMs <= args.eligibleBeforeMs,
-      title: event.title,
-    };
-  });
 
   const rawFinancialEvents = await ctx.db
     .query('order_financial_events')
@@ -280,6 +248,58 @@ export async function getSettlementDataForAccountImpl(
       : {}),
   }));
 
+  // Derive the event set from the ledger itself, not from event status or
+  // current organizer: captured money is owed regardless of whether the
+  // event was later drafted, cancelled, or reassigned. A status- or
+  // organizer-filtered load silently drops those events' captures AND
+  // refunds from settlement (the exact shape of the 2026-07 shortfall).
+  const ledgerEventIds = [
+    ...new Set(rawFinancialEvents.map((row) => row.eventId)),
+  ];
+  if (ledgerEventIds.length > MAX_SETTLEMENT_EVENTS_PER_ACCOUNT) {
+    throwAppError(
+      'PAYOUT_SETTLEMENT_OVERFLOW',
+      `Stripe account ${args.stripeConnectedAccountId} has ledger rows for more than ${MAX_SETTLEMENT_EVENTS_PER_ACCOUNT} events; refusing to compute a partial payout settlement`,
+    );
+  }
+  const ledgerEvents = await Promise.all(
+    ledgerEventIds.map(async (eventId) => ({
+      eventId,
+      event: await ctx.db.get('events', eventId),
+    })),
+  );
+  const events = ledgerEvents.flatMap(({eventId, event}) => {
+    if (!event) {
+      // Hard-deleted event with ledger money. Its rows drop out of the
+      // settlement claim, so the trust gate will hold the account until an
+      // operator resolves where the funds belong.
+      logger.error(
+        'stripe',
+        'Settlement ledger references a deleted event; its funds are excluded from payout until repaired',
+        {eventId, stripeConnectedAccountId: args.stripeConnectedAccountId},
+      );
+      return [];
+    }
+    const eventDateMs = eventStartInstantMs(event.date);
+    if (eventDateMs === null) {
+      throwAppError(
+        'PAYOUT_SETTLEMENT_INVALID_EVENT_DATE',
+        `Event ${event._id} has an invalid date; refusing to compute payout settlement for Stripe account ${args.stripeConnectedAccountId}`,
+        {
+          eventId: event._id,
+          organizerId: organizer._id,
+          stripeConnectedAccountId: args.stripeConnectedAccountId,
+        },
+      );
+    }
+    return {
+      _id: event._id,
+      date: eventDateMs,
+      eligible: eventDateMs <= args.eligibleBeforeMs,
+      title: event.title,
+    };
+  });
+
   const confirmedAllocations = await ctx.db
     .query('payout_allocations')
     .withIndex('by_connectedAccountId_and_status', (q) =>
@@ -298,6 +318,25 @@ export async function getSettlementDataForAccountImpl(
     );
   }
 
+  const submittedBatches = await ctx.db
+    .query('payout_batches')
+    .withIndex('by_connectedAccountId_and_status', (q) =>
+      q
+        .eq('connectedAccountId', args.stripeConnectedAccountId)
+        .eq('status', 'submitted'),
+    )
+    .take(MAX_SETTLEMENT_SUBMITTED_BATCHES_PER_ACCOUNT + 1);
+  if (submittedBatches.length > MAX_SETTLEMENT_SUBMITTED_BATCHES_PER_ACCOUNT) {
+    throwAppError(
+      'PAYOUT_SETTLEMENT_OVERFLOW',
+      `Stripe account ${args.stripeConnectedAccountId} has more than ${MAX_SETTLEMENT_SUBMITTED_BATCHES_PER_ACCOUNT} submitted payout batches; refusing to compute a partial payout settlement`,
+    );
+  }
+  const inflightSubmittedCents = submittedBatches.reduce(
+    (sum, batch) => sum + batch.amountCents,
+    0,
+  );
+
   return {
     organizerId: organizer._id,
     events,
@@ -306,58 +345,44 @@ export async function getSettlementDataForAccountImpl(
       eventId: a.eventId,
       amountCents: a.amountCents,
     })),
+    inflightSubmittedCents,
   };
 }
 
-export async function listConnectedAccountsWithEligibleEventsImpl(
+/**
+ * Discovery iterates organizers, not events: settlement is derived from the
+ * ledger, so event status or date must never decide whether an account gets
+ * examined (a drafted or cancelled event with captured money still settles).
+ * Accounts with nothing payable exit `processAccountPayout` before any
+ * Stripe call, so scanning every payout-ready organizer daily is cheap.
+ */
+export async function listPayoutReadyConnectedAccountsImpl(
   ctx: ReadCtx,
-  args: {eligibleBeforeMs: number; limit: number},
+  args: {limit: number},
 ): Promise<string[]> {
   const limit = Math.max(1, Math.min(args.limit, PAYOUT_BATCH_SIZE));
-  const cutoff = new Date(args.eligibleBeforeMs).toISOString();
-  const accounts = new Set<string>();
+  const accounts: string[] = [];
   let cursor: string | null = null;
 
-  const fetchedOrganizers = new Map<
-    Id<'organizers'>,
-    Doc<'organizers'> | null
-  >();
-  while (accounts.size < limit) {
+  while (accounts.length < limit) {
     const page = await ctx.db
-      .query('events')
-      .withIndex('by_status_date', (q) =>
-        q.eq('status', 'published').lt('date', cutoff),
-      )
+      .query('organizers')
       .paginate({numItems: 100, cursor});
 
-    const uniqueOrganizerIds: Id<'organizers'>[] = [];
-    for (const event of page.page) {
-      if (fetchedOrganizers.has(event.organizerId)) continue;
-      fetchedOrganizers.set(event.organizerId, null);
-      uniqueOrganizerIds.push(event.organizerId);
-    }
-    const freshOrganizers = await Promise.all(
-      uniqueOrganizerIds.map((id) => ctx.db.get('organizers', id)),
-    );
-    uniqueOrganizerIds.forEach((id, idx) => {
-      fetchedOrganizers.set(id, freshOrganizers[idx] ?? null);
-    });
-
-    for (const event of page.page) {
-      const organizer = fetchedOrganizers.get(event.organizerId) ?? null;
-      if (!organizer || organizer.isPlatformOrganizer) continue;
+    for (const organizer of page.page) {
+      if (organizer.isPlatformOrganizer) continue;
       if (!isOrganizerPayoutReady(organizer)) continue;
       const connectedAccountId = organizer.stripeConnectedAccountId;
       if (!connectedAccountId) continue;
-      accounts.add(connectedAccountId);
-      if (accounts.size >= limit) break;
+      accounts.push(connectedAccountId);
+      if (accounts.length >= limit) break;
     }
 
     cursor = page.continueCursor;
     if (page.isDone) break;
   }
 
-  return [...accounts];
+  return accounts;
 }
 
 export async function listPlatformOrganizerEligibleEventIdsImpl(

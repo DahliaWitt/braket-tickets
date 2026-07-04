@@ -51,7 +51,11 @@ import {
   createPlatformCheckoutSession,
   hasCurrentCheckoutBranding,
 } from './checkout';
-import {buildPayoutPlan, computeEventSettlements} from './payouts';
+import {
+  buildPayoutPlan,
+  computeEventSettlements,
+  computeLedgerTrustGate,
+} from './payouts';
 import {
   extractBalanceTransactionLedgerFields,
   isChargeBalanceTransactionUnavailableError,
@@ -1430,7 +1434,7 @@ async function processAccountPayout(
     return;
   }
 
-  const eligibleEventIds = new Set(
+  const eligibleEventIds = new Set<string>(
     bundle.events.filter((e) => e.eligible).map((e) => e._id),
   );
   if (eligibleEventIds.size === 0) {
@@ -1442,6 +1446,15 @@ async function processAccountPayout(
     bundle.events,
     bundle.confirmedAllocations,
   );
+
+  // Fully settled (or nothing eligible yet): skip before any Stripe call so
+  // idle accounts cost nothing in the daily scan.
+  const hasEligiblePayable = settlements.some(
+    (s) => eligibleEventIds.has(s.eventId) && s.payableCents > 0,
+  );
+  if (!hasEligiblePayable) {
+    return;
+  }
 
   const balance: Stripe.Response<Stripe.Balance> = await withRetry(
     () =>
@@ -1462,6 +1475,33 @@ async function processAccountPayout(
     balance.available.find(
       (b: Stripe.Balance.Available) => b.currency === 'usd',
     )?.amount ?? 0;
+  const pendingBalanceCents =
+    balance.pending.find((b: Stripe.Balance.Pending) => b.currency === 'usd')
+      ?.amount ?? 0;
+
+  // Fail-closed reconciliation: refuse to pay when the ledger's remaining
+  // claim disagrees with the money actually in Stripe. Catches net-less
+  // ledger rows, out-of-band dashboard actions, and dropped events before
+  // they can produce a silently-wrong payout. One-off trips are webhook
+  // timing races and self-heal by the next daily run.
+  const trustGate = computeLedgerTrustGate({
+    settlements,
+    inflightSubmittedCents: bundle.inflightSubmittedCents,
+    stripeAvailableCents: availableBalanceCents,
+    stripePendingCents: pendingBalanceCents,
+  });
+  if (!trustGate.ok) {
+    logger.error('stripe', 'payout trust gate mismatch; skipping account', {
+      connectedAccountId: args.connectedAccountId,
+      ledgerClaimCents: trustGate.ledgerClaimCents,
+      stripeTruthCents: trustGate.stripeTruthCents,
+      availableBalanceCents,
+      pendingBalanceCents,
+      inflightSubmittedCents: bundle.inflightSubmittedCents,
+      deltaCents: trustGate.deltaCents,
+    });
+    return;
+  }
 
   const plan = buildPayoutPlan({
     connectedAccountId: args.connectedAccountId,
@@ -1478,6 +1518,24 @@ async function processAccountPayout(
       availableBalanceCents: plan.availableBalanceCents,
     });
     return;
+  }
+
+  logger.info('stripe', 'Submitting payout plan', {
+    connectedAccountId: args.connectedAccountId,
+    payableCents: plan.payableCents,
+    eligibleNetCents: plan.eligibleNetCents,
+    reservedCents: plan.reservedCents,
+    availableBalanceCents,
+    pendingBalanceCents,
+    allocations: plan.allocations,
+  });
+  if (plan.payableCents < plan.eligibleNetCents) {
+    logger.warn('stripe', 'Partial payout: balance below eligible net', {
+      connectedAccountId: args.connectedAccountId,
+      payableCents: plan.payableCents,
+      eligibleNetCents: plan.eligibleNetCents,
+      shortfallCents: plan.eligibleNetCents - plan.payableCents,
+    });
   }
 
   const idempotencyKey = `braket-payout-${args.connectedAccountId}-${args.cronRunDate}`;
@@ -1547,11 +1605,11 @@ export async function processScheduledPayoutsImpl(
   }
 
   const connectedAccountIds = await ctx.runQuery(
-    internal.stripe.connect.listConnectedAccountsWithEligibleEvents,
-    {eligibleBeforeMs, limit: PAYOUT_BATCH_SIZE},
+    internal.stripe.connect.listPayoutReadyConnectedAccounts,
+    {limit: PAYOUT_BATCH_SIZE},
   );
   if (connectedAccountIds.length === 0) {
-    logger.info('stripe', 'No Connect accounts eligible for payout');
+    logger.info('stripe', 'No payout-ready Connect accounts');
     return null;
   }
 

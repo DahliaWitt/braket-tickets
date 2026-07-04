@@ -12,7 +12,7 @@ import {
   getOrderByStripePaymentIntentIdImpl,
   getOrganizerInternalImpl,
   getSettlementDataForAccountImpl,
-  listConnectedAccountsWithEligibleEventsImpl,
+  listPayoutReadyConnectedAccountsImpl,
   listPlatformOrganizerEligibleEventIdsImpl,
   markEventPaidOutImpl,
   markPayoutBatchSubmittedImpl,
@@ -102,20 +102,20 @@ export const getSettlementDataForAccount = internalQuery({
         amountCents: v.number(),
       }),
     ),
+    inflightSubmittedCents: v.number(),
   }),
   handler: async (ctx, args) => {
     return await getSettlementDataForAccountImpl(ctx, args);
   },
 });
 
-export const listConnectedAccountsWithEligibleEvents = internalQuery({
+export const listPayoutReadyConnectedAccounts = internalQuery({
   args: {
-    eligibleBeforeMs: v.number(),
     limit: v.number(),
   },
   returns: v.array(v.string()),
   handler: async (ctx, args) => {
-    return await listConnectedAccountsWithEligibleEventsImpl(ctx, args);
+    return await listPayoutReadyConnectedAccountsImpl(ctx, args);
   },
 });
 

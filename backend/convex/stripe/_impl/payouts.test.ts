@@ -2,6 +2,8 @@ import {describe, expect, it} from 'vitest';
 import {
   buildPayoutPlan,
   computeEventSettlements,
+  computeLedgerTrustGate,
+  PAYOUT_TRUST_EPSILON_CENTS,
   type EventSettlement,
   type FinancialEventRow,
 } from './payouts';
@@ -215,5 +217,105 @@ describe('buildPayoutPlan', () => {
 
     expect(plan.eligibleEvents).toHaveLength(0);
     expect(plan.payableCents).toBe(0);
+  });
+});
+
+describe('computeLedgerTrustGate', () => {
+  function claim(eventId: string, payableCents: number): EventSettlement {
+    return {
+      eventId,
+      eventDate: 0,
+      capturedNetCents: 0,
+      refundNetCents: 0,
+      disputeNetCents: 0,
+      alreadyPaidOutCents: 0,
+      payableCents,
+    };
+  }
+
+  it('passes when the ledger claim matches available + pending', () => {
+    const gate = computeLedgerTrustGate({
+      settlements: [claim(EVENT_A, 5_000), claim(EVENT_B, 2_000)],
+      inflightSubmittedCents: 0,
+      stripeAvailableCents: 4_000,
+      stripePendingCents: 3_000,
+    });
+
+    expect(gate).toMatchObject({
+      ok: true,
+      ledgerClaimCents: 7_000,
+      stripeTruthCents: 7_000,
+      deltaCents: 0,
+    });
+  });
+
+  it('fails when Stripe holds more than the ledger claims (undercount)', () => {
+    const gate = computeLedgerTrustGate({
+      settlements: [claim(EVENT_A, 7_000)],
+      inflightSubmittedCents: 0,
+      stripeAvailableCents: 10_000,
+      stripePendingCents: 0,
+    });
+
+    expect(gate.ok).toBe(false);
+    expect(gate.deltaCents).toBe(-3_000);
+  });
+
+  it('fails when the ledger claims more than Stripe holds (overcount)', () => {
+    const gate = computeLedgerTrustGate({
+      settlements: [claim(EVENT_A, 7_000)],
+      inflightSubmittedCents: 0,
+      stripeAvailableCents: 4_000,
+      stripePendingCents: 0,
+    });
+
+    expect(gate.ok).toBe(false);
+    expect(gate.deltaCents).toBe(3_000);
+  });
+
+  it('nets negative payables into the signed claim', () => {
+    // A refund-heavy event legitimately offsets other events' claims,
+    // exactly as it does in the real balance.
+    const gate = computeLedgerTrustGate({
+      settlements: [claim(EVENT_A, 5_000), claim(EVENT_B, -1_500)],
+      inflightSubmittedCents: 0,
+      stripeAvailableCents: 3_500,
+      stripePendingCents: 0,
+    });
+
+    expect(gate.ok).toBe(true);
+    expect(gate.ledgerClaimCents).toBe(3_500);
+  });
+
+  it('credits submitted-but-unconfirmed batches as in-flight money', () => {
+    // The payout left the balance but its allocations are not yet paid, so
+    // the ledger still claims the amount.
+    const gate = computeLedgerTrustGate({
+      settlements: [claim(EVENT_A, 5_000)],
+      inflightSubmittedCents: 5_000,
+      stripeAvailableCents: 0,
+      stripePendingCents: 0,
+    });
+
+    expect(gate.ok).toBe(true);
+    expect(gate.deltaCents).toBe(0);
+  });
+
+  it('tolerates drift within epsilon and rejects just past it', () => {
+    const within = computeLedgerTrustGate({
+      settlements: [claim(EVENT_A, 5_000)],
+      inflightSubmittedCents: 0,
+      stripeAvailableCents: 5_000 + PAYOUT_TRUST_EPSILON_CENTS,
+      stripePendingCents: 0,
+    });
+    const past = computeLedgerTrustGate({
+      settlements: [claim(EVENT_A, 5_000)],
+      inflightSubmittedCents: 0,
+      stripeAvailableCents: 5_000 + PAYOUT_TRUST_EPSILON_CENTS + 1,
+      stripePendingCents: 0,
+    });
+
+    expect(within.ok).toBe(true);
+    expect(past.ok).toBe(false);
   });
 });

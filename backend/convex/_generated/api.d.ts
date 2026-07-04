@@ -5347,13 +5347,14 @@ export declare const internal: {
             eventId: Id<"events">;
             kind: string;
           }>;
+          inflightSubmittedCents: number;
           organizerId: Id<"organizers"> | null;
         }
       >;
-      listConnectedAccountsWithEligibleEvents: FunctionReference<
+      listPayoutReadyConnectedAccounts: FunctionReference<
         "query",
         "internal",
-        { eligibleBeforeMs: number; limit: number },
+        { limit: number },
         Array<string>
       >;
       listPlatformOrganizerEligibleEventIds: FunctionReference<

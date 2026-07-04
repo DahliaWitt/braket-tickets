@@ -52,6 +52,47 @@ async function seedEvent(
   });
 }
 
+type SeedRunCtx = Parameters<
+  Parameters<ReturnType<typeof convexTest>['run']>[0]
+>[0];
+
+/**
+ * Stand-in for "Stripe confirmed capture and the webhook recorded net
+ * impact" — production capture rows require a live BalanceTransaction.
+ */
+async function seedCapturedLedgerRow(
+  ctx: SeedRunCtx,
+  eventId: Id<'events'>,
+  connectedAccountId: string,
+  netCents: number,
+): Promise<void> {
+  // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test settlement ledger row; production capture rows require Stripe BalanceTransaction data.
+  const orderId = await ctx.db.insert('ticket_orders', {
+    eventId,
+    kind: 'primary',
+    quantity: 1,
+    tier: 'regular',
+    amountCents: netCents,
+    currency: 'USD',
+    state: 'completed',
+    expiresAt: Date.now() + 60_000,
+    completedAt: Date.now(),
+    trustSource: 'open_access',
+    connectedAccountId,
+  });
+  // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test settlement ledger row; production capture rows require Stripe BalanceTransaction data.
+  await ctx.db.insert('order_financial_events', {
+    orderId,
+    eventId,
+    currency: 'USD',
+    kind: 'payment_captured',
+    amountCents: netCents,
+    connectedAccountId,
+    connectedAccountNetCents: netCents,
+    occurredAt: Date.now(),
+  });
+}
+
 describe('createPayoutIntent', () => {
   it('inserts a pending batch plus allocations atomically', async () => {
     const t = convexTest();
@@ -290,6 +331,7 @@ describe('confirmPayout', () => {
     const eventId = await seedEvent(t, organizerId, 'Legacy Paid Event');
 
     await t.run(async (ctx) => {
+      await seedCapturedLedgerRow(ctx, eventId, 'acct_legacy_paid', 2_400);
       // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Legacy Connect state: paidOutAt used to be stamped by confirmPayout before allocation-ledger settlement became authoritative.
       await ctx.db.patch('events', eventId, {paidOutAt: Date.now() - 1_000});
     });
@@ -305,12 +347,76 @@ describe('confirmPayout', () => {
     expect(settlementData.events.map((event) => event._id)).toContain(eventId);
   });
 
+  it('keeps drafted and cancelled events with ledger rows in Connect settlement data', async () => {
+    // The 2026-07 shortfall class: captured money is owed regardless of the
+    // event's current status. Settlement derives its event set from the
+    // ledger, so a status change must never drop an event's captures or
+    // refunds from the math.
+    const t = convexTest();
+    const organizerId = await seedOrganizerWithAccount(t, 'acct_drafted');
+    const draftedEventId = await seedEvent(t, organizerId, 'Drafted Event');
+    const cancelledEventId = await seedEvent(t, organizerId, 'Cancelled Event');
+
+    await t.run(async (ctx) => {
+      await seedCapturedLedgerRow(ctx, draftedEventId, 'acct_drafted', 2_400);
+      await seedCapturedLedgerRow(ctx, cancelledEventId, 'acct_drafted', 1_200);
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Simulates an admin status change after revenue was captured.
+      await ctx.db.patch('events', draftedEventId, {status: 'draft'});
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Simulates an admin status change after revenue was captured.
+      await ctx.db.patch('events', cancelledEventId, {status: 'cancelled'});
+    });
+
+    const settlementData = await t.query(
+      internal.stripe.connect.getSettlementDataForAccount,
+      {
+        stripeConnectedAccountId: 'acct_drafted',
+        eligibleBeforeMs: Date.now(),
+      },
+    );
+
+    const settledIds = settlementData.events.map((event) => event._id);
+    expect(settledIds).toContain(draftedEventId);
+    expect(settledIds).toContain(cancelledEventId);
+  });
+
+  it('reports submitted batches as in-flight cents in Connect settlement data', async () => {
+    const t = convexTest();
+    const organizerId = await seedOrganizerWithAccount(t, 'acct_inflight');
+    const eventId = await seedEvent(t, organizerId, 'Inflight Event');
+
+    await t.run(async (ctx) => {
+      await seedCapturedLedgerRow(ctx, eventId, 'acct_inflight', 2_400);
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Simulates a submitted batch awaiting its payout.paid webhook.
+      await ctx.db.insert('payout_batches', {
+        idempotencyKey: 'braket-payout-acct_inflight-2026-01-01',
+        connectedAccountId: 'acct_inflight',
+        amountCents: 1_500,
+        currency: 'usd',
+        status: 'submitted',
+        stripePayoutId: 'po_inflight',
+        createdAt: Date.now() - 60_000,
+        submittedAt: Date.now() - 60_000,
+      });
+    });
+
+    const settlementData = await t.query(
+      internal.stripe.connect.getSettlementDataForAccount,
+      {
+        stripeConnectedAccountId: 'acct_inflight',
+        eligibleBeforeMs: Date.now(),
+      },
+    );
+
+    expect(settlementData.inflightSubmittedCents).toBe(1_500);
+  });
+
   it('fails closed when a Connect settlement event has an invalid date', async () => {
     const t = convexTest();
     const organizerId = await seedOrganizerWithAccount(t, 'acct_invalid_date');
     const eventId = await seedEvent(t, organizerId, 'Invalid Date Event');
 
     await t.run(async (ctx) => {
+      await seedCapturedLedgerRow(ctx, eventId, 'acct_invalid_date', 2_400);
       // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Corrupt legacy row used to verify settlement projection fails closed.
       await ctx.db.patch(eventId, {date: '2026-02-31T08:00:00.000Z'});
     });

@@ -48,8 +48,11 @@ describe('processScheduledPayouts — Connect account branch', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env['STRIPE_SECRET_KEY'] = 'sk_test_fake';
+    // Balance matches the 2400¢ ledger claim every test seeds — the trust
+    // gate requires ledger and Stripe to agree before any payout submits.
     balanceRetrieveMock.mockResolvedValue({
-      available: [{amount: 10_000, currency: 'usd'}],
+      available: [{amount: 2_400, currency: 'usd'}],
+      pending: [],
     });
     payoutsCreateMock.mockResolvedValue({id: 'po_test_123'});
   });
@@ -334,9 +337,158 @@ describe('processScheduledPayouts — Connect account branch', () => {
       });
     });
 
+    // The submitted payout already drained the balance; its 2400¢ ride as
+    // in-flight cents so the trust gate still balances.
+    balanceRetrieveMock.mockResolvedValue({
+      available: [{amount: 0, currency: 'usd'}],
+      pending: [],
+    });
+
     await t.action(internal.stripe.actions.processScheduledPayouts, {});
 
     expect(payoutsCreateMock).not.toHaveBeenCalled();
+  });
+
+  it('skips the account when the trust gate detects ledger/balance divergence', async () => {
+    // The 2026-07 incident shape: the Stripe balance holds more money than
+    // the ledger claims (e.g. net-less payment_captured rows). Paying the
+    // ledger number would silently short the promoter, so the gate must
+    // refuse to pay at all.
+    const t = convexTest();
+    const organizerId = await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {
+        name: 'Diverged Org',
+        slug: 'diverged-org',
+        stripeConnectedAccountId: 'acct_diverged',
+        stripeOnboardingStatus: 'complete',
+        stripeChargesEnabled: true,
+        stripePayoutsEnabled: true,
+        status: 'published',
+      },
+    );
+    const eventId = await t.mutation(api.testing.events.seedEvent, {
+      title: 'Diverged Event',
+      price: 2500,
+      totalTickets: 100,
+      date: '2020-01-01T00:00:00.000Z',
+      status: 'published',
+      visibility: 'public',
+      organizerId,
+    });
+
+    await t.run(async (ctx) => {
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row.
+      const orderId = await ctx.db.insert('ticket_orders', {
+        eventId,
+        kind: 'primary',
+        quantity: 1,
+        tier: 'regular',
+        amountCents: 2500,
+        currency: 'USD',
+        state: 'completed',
+        expiresAt: Date.now() + 60_000,
+        completedAt: Date.now(),
+        trustSource: 'open_access',
+        connectedAccountId: 'acct_diverged',
+      });
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row.
+      await ctx.db.insert('order_financial_events', {
+        orderId,
+        eventId,
+        currency: 'USD',
+        kind: 'payment_captured',
+        amountCents: 2500,
+        connectedAccountId: 'acct_diverged',
+        connectedAccountNetCents: 2400,
+        occurredAt: Date.now(),
+      });
+    });
+
+    // Stripe holds far more than the 2400¢ the ledger knows about.
+    balanceRetrieveMock.mockResolvedValue({
+      available: [{amount: 10_000, currency: 'usd'}],
+      pending: [],
+    });
+
+    await t.action(internal.stripe.actions.processScheduledPayouts, {});
+
+    expect(payoutsCreateMock).not.toHaveBeenCalled();
+    const batches = await t.run(async (ctx) =>
+      ctx.db
+        .query('payout_batches')
+        .withIndex('by_connectedAccountId_and_status', (q) =>
+          q.eq('connectedAccountId', 'acct_diverged'),
+        )
+        .collect(),
+    );
+    expect(batches).toHaveLength(0);
+  });
+
+  it('pays out a drafted event with captured revenue', async () => {
+    // Regression for the status-driven ledger loss class: an event drafted
+    // after revenue was captured must still settle and pay out.
+    const t = convexTest();
+    const organizerId = await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {
+        name: 'Drafted Revenue Org',
+        slug: 'drafted-revenue-org',
+        stripeConnectedAccountId: 'acct_drafted_rev',
+        stripeOnboardingStatus: 'complete',
+        stripeChargesEnabled: true,
+        stripePayoutsEnabled: true,
+        status: 'published',
+      },
+    );
+    const eventId = await t.mutation(api.testing.events.seedEvent, {
+      title: 'Drafted Revenue Event',
+      price: 2500,
+      totalTickets: 100,
+      date: '2020-01-01T00:00:00.000Z',
+      status: 'published',
+      visibility: 'public',
+      organizerId,
+    });
+
+    await t.run(async (ctx) => {
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row.
+      const orderId = await ctx.db.insert('ticket_orders', {
+        eventId,
+        kind: 'primary',
+        quantity: 1,
+        tier: 'regular',
+        amountCents: 2500,
+        currency: 'USD',
+        state: 'completed',
+        expiresAt: Date.now() + 60_000,
+        completedAt: Date.now(),
+        trustSource: 'open_access',
+        connectedAccountId: 'acct_drafted_rev',
+      });
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row.
+      await ctx.db.insert('order_financial_events', {
+        orderId,
+        eventId,
+        currency: 'USD',
+        kind: 'payment_captured',
+        amountCents: 2500,
+        connectedAccountId: 'acct_drafted_rev',
+        connectedAccountNetCents: 2400,
+        occurredAt: Date.now(),
+      });
+      // Admin drafted the event after sales.
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: simulates a status change after revenue capture.
+      await ctx.db.patch('events', eventId, {status: 'draft'});
+    });
+
+    await t.action(internal.stripe.actions.processScheduledPayouts, {});
+
+    expect(payoutsCreateMock).toHaveBeenCalledTimes(1);
+    const [createParams] = payoutsCreateMock.mock.calls[0] as [
+      Record<string, unknown>,
+    ];
+    expect(createParams).toMatchObject({amount: 2400, currency: 'usd'});
   });
 
   it('fails closed before Stripe when settlement inputs exceed the confirmed-allocation window', async () => {
