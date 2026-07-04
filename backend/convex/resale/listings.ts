@@ -214,6 +214,9 @@ export const processSellerRefund = internalAction({
   },
   returns: v.object({
     stripeRefundId: v.string(),
+    processorFeeCents: v.optional(v.number()),
+    platformFeeCents: v.optional(v.number()),
+    connectedAccountNetCents: v.optional(v.number()),
   }),
   handler: async (ctx, args) => await processSellerRefundState(ctx, args),
 });
@@ -248,7 +251,15 @@ export const onSellerRefundComplete = stripePool.defineOnComplete<
       workId: string;
       context: SellerRefundWorkContext;
       result:
-        | {kind: 'success'; returnValue: {stripeRefundId: string}}
+        | {
+            kind: 'success';
+            returnValue: {
+              stripeRefundId: string;
+              processorFeeCents?: number;
+              platformFeeCents?: number;
+              connectedAccountNetCents?: number;
+            };
+          }
         | {kind: 'failed'; error: string}
         | {kind: 'canceled'};
     },

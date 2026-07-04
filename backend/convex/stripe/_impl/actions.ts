@@ -1715,6 +1715,101 @@ async function recoverStuckPayoutBatches(
   }
 }
 
+/**
+ * Operator repair: register a payout that was made outside the pipeline
+ * (Stripe dashboard) whose `payout.paid` webhook was ignored before
+ * external ingestion existed. Idempotent — the ingestion path dedups on
+ * `external-<payoutId>`.
+ *
+ * Run BEFORE `backfillPaymentCapturedNet` for the same account: recording
+ * the manual payout first keeps the backfilled payable from being
+ * misattributed to newer events' funds.
+ */
+export async function ingestExternalPayoutByIdImpl(
+  ctx: ActionCtx,
+  args: {stripePayoutId: string; connectedAccountId: string},
+): Promise<{status: string; amountCents: number; ingested: boolean}> {
+  const stripe = getStripeClient();
+  const payout: Stripe.Response<Stripe.Payout> = await stripe.payouts.retrieve(
+    args.stripePayoutId,
+    {},
+    {stripeAccount: args.connectedAccountId},
+  );
+  if (payout.status !== 'paid') {
+    logger.warn('stripe', 'ingestExternalPayoutById: payout is not paid', {
+      stripePayoutId: args.stripePayoutId,
+      payoutStatus: payout.status,
+    });
+    return {status: payout.status, amountCents: payout.amount, ingested: false};
+  }
+
+  const metadataBatchId = payout.metadata?.['braketBatchId'];
+  await ctx.runMutation(internal.stripe.connect.confirmPayout, {
+    stripePayoutId: payout.id,
+    amountCents: payout.amount,
+    currency: payout.currency,
+    connectedAccountId: args.connectedAccountId,
+    ...(metadataBatchId !== undefined ? {metadataBatchId} : {}),
+  });
+  return {status: payout.status, amountCents: payout.amount, ingested: true};
+}
+
+/**
+ * Operator repair: enrich `payment_captured` rows that are missing
+ * `connectedAccountNetCents` (pre-e3c02b1 capture race) by re-reading each
+ * charge's BalanceTransaction. `recordPaymentCaptured` patches the existing
+ * row in place, so this is idempotent and safe to re-run.
+ */
+export async function backfillPaymentCapturedNetImpl(
+  ctx: ActionCtx,
+  args: {connectedAccountId: string},
+): Promise<{scanned: number; enriched: number; skipped: number; failed: number}> {
+  const stripe = getStripeClient();
+  const rows = await ctx.runQuery(
+    internal.stripe.connect.listNetlessCapturedRows,
+    {stripeConnectedAccountId: args.connectedAccountId},
+  );
+
+  let enriched = 0;
+  let skipped = 0;
+  let failed = 0;
+  for (const row of rows) {
+    if (!row.stripeChargeId || !row.stripePaymentIntentId) {
+      logger.warn(
+        'stripe',
+        'backfillPaymentCapturedNet: row has no charge/PI to enrich from',
+        {orderId: row.orderId, eventId: row.eventId},
+      );
+      skipped += 1;
+      continue;
+    }
+    try {
+      await recordPaymentCaptured({
+        ctx,
+        stripe,
+        orderId: row.orderId,
+        eventId: row.eventId,
+        stripePaymentIntentId: row.stripePaymentIntentId,
+        stripeChargeId: row.stripeChargeId,
+        connectedAccountId: args.connectedAccountId,
+      });
+      enriched += 1;
+    } catch (err: unknown) {
+      logger.error(
+        'stripe',
+        'backfillPaymentCapturedNet: enrichment failed',
+        summarizeStripeError(err),
+        {orderId: row.orderId},
+      );
+      failed += 1;
+    }
+  }
+
+  const summary = {scanned: rows.length, enriched, skipped, failed};
+  logger.info('stripe', 'backfillPaymentCapturedNet complete', summary);
+  return summary;
+}
+
 export async function processScheduledPayoutsImpl(
   ctx: ActionCtx,
 ): Promise<null> {

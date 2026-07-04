@@ -13,6 +13,7 @@ import {
   getOrderByStripePaymentIntentIdImpl,
   getOrganizerInternalImpl,
   getSettlementDataForAccountImpl,
+  listNetlessCapturedRowsImpl,
   listPayoutBatchesNeedingRecoveryImpl,
   listPayoutReadyConnectedAccountsImpl,
   listPlatformOrganizerEligibleEventIdsImpl,
@@ -202,6 +203,21 @@ export const failPayout = internalMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     return await failPayoutImpl(ctx, args);
+  },
+});
+
+export const listNetlessCapturedRows = internalQuery({
+  args: {stripeConnectedAccountId: v.string()},
+  returns: v.array(
+    v.object({
+      orderId: v.id('ticket_orders'),
+      eventId: v.id('events'),
+      stripeChargeId: v.union(v.string(), v.null()),
+      stripePaymentIntentId: v.union(v.string(), v.null()),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    return await listNetlessCapturedRowsImpl(ctx, args);
   },
 });
 

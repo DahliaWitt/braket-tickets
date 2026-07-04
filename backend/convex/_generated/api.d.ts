@@ -5136,7 +5136,12 @@ export declare const internal: {
           sellerOrderId: Id<"ticket_orders">;
           sellerOrderStripePaymentIntentId?: string;
         },
-        { stripeRefundId: string }
+        {
+          connectedAccountNetCents?: number;
+          platformFeeCents?: number;
+          processorFeeCents?: number;
+          stripeRefundId: string;
+        }
       >;
     };
   };
@@ -5164,6 +5169,18 @@ export declare const internal: {
   };
   stripe: {
     actions: {
+      backfillPaymentCapturedNet: FunctionReference<
+        "action",
+        "internal",
+        { connectedAccountId: string },
+        { enriched: number; failed: number; scanned: number; skipped: number }
+      >;
+      ingestExternalPayoutById: FunctionReference<
+        "action",
+        "internal",
+        { connectedAccountId: string; stripePayoutId: string },
+        { amountCents: number; ingested: boolean; status: string }
+      >;
       processScheduledPayouts: FunctionReference<
         "action",
         "internal",
@@ -5368,6 +5385,17 @@ export declare const internal: {
           inflightSubmittedCents: number;
           organizerId: Id<"organizers"> | null;
         }
+      >;
+      listNetlessCapturedRows: FunctionReference<
+        "query",
+        "internal",
+        { stripeConnectedAccountId: string },
+        Array<{
+          eventId: Id<"events">;
+          orderId: Id<"ticket_orders">;
+          stripeChargeId: string | null;
+          stripePaymentIntentId: string | null;
+        }>
       >;
       listPayoutBatchesNeedingRecovery: FunctionReference<
         "query",

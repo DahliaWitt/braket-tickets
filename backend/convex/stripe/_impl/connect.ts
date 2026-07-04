@@ -549,6 +549,61 @@ export async function createPayoutIntentImpl(
 }
 
 /**
+ * Operator repair support: `payment_captured` rows that never received
+ * their BalanceTransaction net (pre-e3c02b1 capture race) and therefore
+ * contribute nothing to settlement while their money sits in Stripe.
+ * Charge/PI identifiers fall back to the order snapshot so the backfill
+ * action can retrieve the charge.
+ */
+export async function listNetlessCapturedRowsImpl(
+  ctx: ReadCtx,
+  args: {stripeConnectedAccountId: string},
+) {
+  const rows = await ctx.db
+    .query('order_financial_events')
+    .withIndex('by_connectedAccountId', (q) =>
+      q.eq('connectedAccountId', args.stripeConnectedAccountId),
+    )
+    .take(MAX_SETTLEMENT_FINANCIAL_EVENTS_PER_ACCOUNT + 1);
+  if (rows.length > MAX_SETTLEMENT_FINANCIAL_EVENTS_PER_ACCOUNT) {
+    throwAppError(
+      'PAYOUT_SETTLEMENT_OVERFLOW',
+      `Stripe account ${args.stripeConnectedAccountId} has more than ${MAX_SETTLEMENT_FINANCIAL_EVENTS_PER_ACCOUNT} ledger rows; refusing a partial backfill scan`,
+    );
+  }
+
+  const bare = rows.filter(
+    (row) =>
+      row.kind === 'payment_captured' &&
+      row.connectedAccountNetCents === undefined,
+  );
+
+  const results: Array<{
+    orderId: Id<'ticket_orders'>;
+    eventId: Id<'events'>;
+    stripeChargeId: string | null;
+    stripePaymentIntentId: string | null;
+  }> = [];
+  for (const row of bare) {
+    let stripeChargeId = row.stripeChargeId ?? null;
+    let stripePaymentIntentId = row.stripePaymentIntentId ?? null;
+    if (!stripeChargeId || !stripePaymentIntentId) {
+      const order = await ctx.db.get('ticket_orders', row.orderId);
+      stripeChargeId = stripeChargeId ?? order?.stripeChargeId ?? null;
+      stripePaymentIntentId =
+        stripePaymentIntentId ?? order?.stripePaymentIntentId ?? null;
+    }
+    results.push({
+      orderId: row.orderId,
+      eventId: row.eventId,
+      stripeChargeId,
+      stripePaymentIntentId,
+    });
+  }
+  return results;
+}
+
+/**
  * Batches the daily cron must reconcile against Stripe before doing normal
  * payout work: `submitted` batches whose confirming webhook never arrived,
  * and `pending` batches too old to replay under their (expired) Stripe
