@@ -35,7 +35,7 @@ Jump to:
 
 | Workflow                   | Trigger                                                                                    | Jobs                                                                                                                            |
 | -------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| `CI`                       | Pushes to `main` or `develop`; pull requests targeting `main` or `develop`                 | `lint`, `test`, `stripe-contracts`, `build`, `storybook`, `e2e-check`, conditional `e2e`                                        |
+| `CI`                       | Pushes to `main` or `develop`; pull requests targeting `main` or `develop`                 | `lint`, `test`, `stripe-contracts`, `build`, `storybook` (currently disabled, see below), `e2e-check`, conditional `e2e`        |
 | `Prepare Release`          | Manual `workflow_dispatch`                                                                 | Opens or updates a Release Please preparation PR against `develop` with `RELEASE_PLEASE_TOKEN`                                  |
 | `Deploy to Production`     | `workflow_run` after successful `CI` push runs on `main`, or manual `workflow_dispatch`    | `deploy-context`, `changes`, `deploy-convex`, `deploy-frontend`, `deploy-observability`, `record-deployment`, `publish-release` |
 | `Deploy Preview (develop)` | `workflow_run` after successful `CI` push runs on `develop`, or manual `workflow_dispatch` | `deploy-context`, `changes`, `deploy-convex-dev`, `deploy-frontend-preview`, `deploy-observability-dev`, `record-deployment`    |
@@ -54,9 +54,11 @@ Branch protection on both `develop` and `main` requires these CI checks before m
 - `Unit Tests`
 - `Stripe Sandbox Contracts`
 - `Build Frontend`
-- `Build Storybook`
+- `Build Storybook` (currently skipped — see note below)
 - `E2E Gate`
 - `E2E Tests`
+
+**Storybook job disabled (Angular 22):** the `storybook` CI job (`Build Storybook`) is disabled with `if: false` in `.github/workflows/ci.yml`. `pnpm storybook` and `pnpm build-storybook` are non-functional after the Angular 22 upgrade because `@storybook/angular` declares an Angular `<22` peer range and uses the removed `ComponentFactoryResolver`. Re-enable the job (remove `if: false`) once Angular 22 support ships upstream ([storybookjs/storybook#35318](https://github.com/storybookjs/storybook/issues/35318)) and `@storybook/angular` is upgraded. While disabled, the `Build Storybook` required status check does not report; if branch protection blocks merges on it, remove it from the required checks until the job is re-enabled.
 
 Verify the live policy with:
 
