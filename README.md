@@ -173,7 +173,7 @@ Browse the component library and design system:
 pnpm storybook    # port 6006
 ```
 
-> **Currently broken:** `pnpm storybook` and `pnpm build-storybook` are non-functional after the Angular 22 upgrade — `@storybook/angular` declares an Angular `<22` peer range and relies on the removed `ComponentFactoryResolver`. The CI storybook job is disabled (`if: false`) until Angular 22 support ships in [storybookjs/storybook#35318](https://github.com/storybookjs/storybook/issues/35318).
+> **Currently broken:** `pnpm storybook` and `pnpm build-storybook` are non-functional after the Angular 22 upgrade — `@storybook/angular` declares an Angular `<22` peer range. The CI storybook job is disabled (`if: false`) until Angular 22 support ships in [storybookjs/storybook#35318](https://github.com/storybookjs/storybook/issues/35318).
 
 Includes design system docs (palette, typography, spacing, icons), primitive and composite component stories, and a brand pattern showcase. Stories live next to their components as `*.stories.ts` files.
 
