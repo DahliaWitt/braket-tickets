@@ -225,9 +225,8 @@ jobs:
 
   storybook:
     name: Build Storybook
-    # Disabled: broken by Angular 22 (@storybook/angular declares Angular peers <22).
-    # Skipped-via-if reports as successful for required checks, so merges are not
-    # blocked. Re-enable when storybookjs/storybook#35318 ships.
+    # Disabled: broken by Angular 22. See docs/runbooks/deployment-ci.md
+    # (Storybook job disabled) for rationale and re-enable steps.
     if: false
     runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'self-hosted' }}
     timeout-minutes: 10
