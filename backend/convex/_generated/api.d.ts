@@ -5417,8 +5417,8 @@ export declare const internal: {
       listPayoutReadyConnectedAccounts: FunctionReference<
         "query",
         "internal",
-        { limit: number },
-        Array<string>
+        { cursor: string | null; numItems: number },
+        { accounts: Array<string>; continueCursor: string; isDone: boolean }
       >;
       listPlatformOrganizerEligibleEventIds: FunctionReference<
         "query",

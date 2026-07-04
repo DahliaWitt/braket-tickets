@@ -1828,48 +1828,68 @@ export async function processScheduledPayoutsImpl(
     });
   }
 
+  // Lazy client so platform-only deployments (no payout-ready Connect
+  // accounts, no wedged batches) never require STRIPE_SECRET_KEY here.
+  let stripe: Stripe | null = null;
+  const ensureStripe = (): Stripe => (stripe ??= getStripeClient());
+
   const stale = await ctx.runQuery(
     internal.stripe.connect.listPayoutBatchesNeedingRecovery,
     {now: Date.now()},
   );
-  const connectedAccountIds = await ctx.runQuery(
-    internal.stripe.connect.listPayoutReadyConnectedAccounts,
-    {limit: PAYOUT_BATCH_SIZE},
-  );
-  if (
-    stale.submitted.length === 0 &&
-    stale.pending.length === 0 &&
-    connectedAccountIds.length === 0
-  ) {
-    logger.info('stripe', 'No payout-ready Connect accounts');
-    return null;
+  if (stale.submitted.length > 0 || stale.pending.length > 0) {
+    // Reconcile wedged batches against Stripe BEFORE payout work: a stuck
+    // batch otherwise blocks its account's payouts indefinitely, and a stale
+    // pending batch must be superseded before an account run could replay it.
+    await recoverStuckPayoutBatches(ctx, ensureStripe(), stale);
   }
-
-  const stripe = getStripeClient();
-
-  // Reconcile wedged batches against Stripe BEFORE payout work: a stuck
-  // batch otherwise blocks its account's payouts indefinitely, and a stale
-  // pending batch must be superseded before an account run could replay it.
-  await recoverStuckPayoutBatches(ctx, stripe, stale);
 
   const cronRunDate = new Date().toISOString().slice(0, 10);
 
-  for (const connectedAccountId of connectedAccountIds) {
-    try {
-      await processAccountPayout(ctx, {
-        stripe,
-        connectedAccountId,
-        eligibleBeforeMs,
-        cronRunDate,
-      });
-    } catch (err: unknown) {
-      logger.error(
-        'stripe',
-        'processAccountPayout failed',
-        summarizeStripeError(err),
-        {connectedAccountId},
-      );
+  // Page through EVERY payout-ready organizer — no result cap. A capped
+  // discovery starves accounts past the cap on every run (stable table
+  // order), silently leaving their ledger balances unpaid. Per-account work
+  // is cheap: fully-settled accounts exit before any Stripe call.
+  const seenAccounts = new Set<string>();
+  let cursor: string | null = null;
+  let isDone = false;
+  type PayoutReadyAccountsPage = {
+    accounts: string[];
+    continueCursor: string;
+    isDone: boolean;
+  };
+  while (!isDone) {
+    // eslint-disable-next-line no-sequential-db-queries/sequential-db-get -- Cursor pagination is inherently sequential: each page's cursor comes from the previous result. Not an N+1 per-id fetch.
+    const page: PayoutReadyAccountsPage = await ctx.runQuery(
+      internal.stripe.connect.listPayoutReadyConnectedAccounts,
+      {cursor, numItems: 100},
+    );
+    cursor = page.continueCursor;
+    isDone = page.isDone;
+
+    for (const connectedAccountId of page.accounts) {
+      if (seenAccounts.has(connectedAccountId)) continue;
+      seenAccounts.add(connectedAccountId);
+      try {
+        await processAccountPayout(ctx, {
+          stripe: ensureStripe(),
+          connectedAccountId,
+          eligibleBeforeMs,
+          cronRunDate,
+        });
+      } catch (err: unknown) {
+        logger.error(
+          'stripe',
+          'processAccountPayout failed',
+          summarizeStripeError(err),
+          {connectedAccountId},
+        );
+      }
     }
+  }
+
+  if (seenAccounts.size === 0) {
+    logger.info('stripe', 'No payout-ready Connect accounts');
   }
 
   return null;

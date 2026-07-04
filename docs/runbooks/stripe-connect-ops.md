@@ -136,7 +136,7 @@ The daily cron `process scheduled Stripe payouts` runs `stripe/actions.processSc
 
 1. Retires platform-organizer eligible events locally via `stripe/connect.markEventPaidOut` (no Connect round trip).
 2. Runs [stuck-batch recovery](#stuck-batch-recovery) against Stripe.
-3. Lists payout-ready Connect accounts via `stripe/connect.listPayoutReadyConnectedAccounts` (iterates organizers — event status and dates play no role in discovery).
+3. Lists payout-ready Connect accounts via `stripe/connect.listPayoutReadyConnectedAccounts`, cursor-paging through EVERY organizer with no result cap (event status and dates play no role in discovery, and no account can be starved by a fixed batch size).
 4. Per account, calls `stripe/connect.getSettlementDataForAccount` to load `order_financial_events` + confirmed allocations + in-flight submitted batches. The settlement event set is derived from the ledger rows themselves, so an event that was drafted, cancelled, or reassigned after capturing revenue still settles. Accounts with nothing payable exit before any Stripe call.
 5. Checks the [payout trust gate](#payout-trust-gate) against the live Stripe balance, then projects through `computeEventSettlements` + `buildPayoutPlan` to produce one account-scoped payout.
 6. Calls `stripe/connect.createPayoutIntent` — an atomic mutation that returns an existing non-terminal batch or inserts a new `payout_batches` row plus `payout_allocations` children. Every submitted plan is logged (`Submitting payout plan`); balance-capped partial payouts log a `Partial payout` warning.

@@ -367,34 +367,34 @@ export async function getSettlementDataForAccountImpl(
  * examined (a drafted or cancelled event with captured money still settles).
  * Accounts with nothing payable exit `processAccountPayout` before any
  * Stripe call, so scanning every payout-ready organizer daily is cheap.
+ *
+ * Cursor-paged with NO result cap: the caller loops pages until `isDone`.
+ * A capped scan starves every organizer past the cap — table order is
+ * stable, so the same accounts would win the slots on every run.
  */
 export async function listPayoutReadyConnectedAccountsImpl(
   ctx: ReadCtx,
-  args: {limit: number},
-): Promise<string[]> {
-  const limit = Math.max(1, Math.min(args.limit, PAYOUT_BATCH_SIZE));
+  args: {cursor: string | null; numItems: number},
+): Promise<{accounts: string[]; continueCursor: string; isDone: boolean}> {
+  const numItems = Math.max(1, Math.min(args.numItems, 200));
+  const page = await ctx.db
+    .query('organizers')
+    .paginate({numItems, cursor: args.cursor});
+
   const accounts: string[] = [];
-  let cursor: string | null = null;
-
-  while (accounts.length < limit) {
-    const page = await ctx.db
-      .query('organizers')
-      .paginate({numItems: 100, cursor});
-
-    for (const organizer of page.page) {
-      if (organizer.isPlatformOrganizer) continue;
-      if (!isOrganizerPayoutReady(organizer)) continue;
-      const connectedAccountId = organizer.stripeConnectedAccountId;
-      if (!connectedAccountId) continue;
-      accounts.push(connectedAccountId);
-      if (accounts.length >= limit) break;
-    }
-
-    cursor = page.continueCursor;
-    if (page.isDone) break;
+  for (const organizer of page.page) {
+    if (organizer.isPlatformOrganizer) continue;
+    if (!isOrganizerPayoutReady(organizer)) continue;
+    const connectedAccountId = organizer.stripeConnectedAccountId;
+    if (!connectedAccountId) continue;
+    accounts.push(connectedAccountId);
   }
 
-  return accounts;
+  return {
+    accounts,
+    continueCursor: page.continueCursor,
+    isDone: page.isDone,
+  };
 }
 
 export async function listPlatformOrganizerEligibleEventIdsImpl(

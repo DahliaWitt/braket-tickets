@@ -744,6 +744,85 @@ describe('processScheduledPayouts — Connect account branch', () => {
     expect(createParams).toMatchObject({amount: 2400, currency: 'usd'});
   });
 
+  it('processes every payout-ready account in one run — no starvation past a batch cap', async () => {
+    // Regression: discovery used to return at most PAYOUT_BATCH_SIZE (25)
+    // accounts per run with no cursor or rotation. With stable table order,
+    // organizers past the cap were skipped on EVERY run — their eligible
+    // balances silently never paid. Discovery now pages to completion.
+    const t = convexTest();
+    const accountCount = 30;
+    const accountIds: string[] = [];
+
+    for (let index = 0; index < accountCount; index += 1) {
+      const connectedAccountId = `acct_fleet_${String(index).padStart(2, '0')}`;
+      const organizerId = await t.mutation(
+        api.testing.communities.seedOrganizer,
+        {
+          name: `Fleet Org ${index}`,
+          slug: `fleet-org-${index}`,
+          stripeConnectedAccountId: connectedAccountId,
+          stripeOnboardingStatus: 'complete',
+          stripeChargesEnabled: true,
+          stripePayoutsEnabled: true,
+          status: 'published',
+        },
+      );
+      const eventId = await t.mutation(api.testing.events.seedEvent, {
+        title: `Fleet Event ${index}`,
+        price: 2500,
+        totalTickets: 100,
+        date: '2020-01-01T00:00:00.000Z',
+        status: 'published',
+        visibility: 'public',
+        organizerId,
+      });
+      await t.run(async (ctx) => {
+        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row.
+        const orderId = await ctx.db.insert('ticket_orders', {
+          eventId,
+          kind: 'primary',
+          quantity: 1,
+          tier: 'regular',
+          amountCents: 2500,
+          currency: 'USD',
+          state: 'completed',
+          expiresAt: Date.now() + 60_000,
+          completedAt: Date.now(),
+          trustSource: 'open_access',
+          connectedAccountId,
+        });
+        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row.
+        await ctx.db.insert('order_financial_events', {
+          orderId,
+          eventId,
+          currency: 'USD',
+          kind: 'payment_captured',
+          amountCents: 2500,
+          connectedAccountId,
+          connectedAccountNetCents: 2400,
+          occurredAt: Date.now(),
+        });
+      });
+      accountIds.push(connectedAccountId);
+    }
+
+    payoutsCreateMock.mockImplementation(async () => ({
+      id: `po_fleet_${payoutsCreateMock.mock.calls.length}`,
+    }));
+
+    await t.action(internal.stripe.actions.processScheduledPayouts, {});
+
+    expect(payoutsCreateMock).toHaveBeenCalledTimes(accountCount);
+    const submittedAccounts = new Set(
+      payoutsCreateMock.mock.calls.map(
+        (call) => (call[1] as Record<string, unknown>)['stripeAccount'],
+      ),
+    );
+    for (const connectedAccountId of accountIds) {
+      expect(submittedAccounts).toContain(connectedAccountId);
+    }
+  });
+
   it('fails closed before Stripe when settlement inputs exceed the confirmed-allocation window', async () => {
     const t = convexTest();
     const organizerId = await t.mutation(

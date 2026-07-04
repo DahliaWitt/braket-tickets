@@ -114,9 +114,14 @@ export const getSettlementDataForAccount = internalQuery({
 
 export const listPayoutReadyConnectedAccounts = internalQuery({
   args: {
-    limit: v.number(),
+    cursor: v.union(v.string(), v.null()),
+    numItems: v.number(),
   },
-  returns: v.array(v.string()),
+  returns: v.object({
+    accounts: v.array(v.string()),
+    continueCursor: v.string(),
+    isDone: v.boolean(),
+  }),
   handler: async (ctx, args) => {
     return await listPayoutReadyConnectedAccountsImpl(ctx, args);
   },
