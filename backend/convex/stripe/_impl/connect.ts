@@ -578,29 +578,24 @@ export async function listNetlessCapturedRowsImpl(
       row.connectedAccountNetCents === undefined,
   );
 
-  const results: Array<{
-    orderId: Id<'ticket_orders'>;
-    eventId: Id<'events'>;
-    stripeChargeId: string | null;
-    stripePaymentIntentId: string | null;
-  }> = [];
-  for (const row of bare) {
-    let stripeChargeId = row.stripeChargeId ?? null;
-    let stripePaymentIntentId = row.stripePaymentIntentId ?? null;
-    if (!stripeChargeId || !stripePaymentIntentId) {
-      const order = await ctx.db.get('ticket_orders', row.orderId);
-      stripeChargeId = stripeChargeId ?? order?.stripeChargeId ?? null;
-      stripePaymentIntentId =
-        stripePaymentIntentId ?? order?.stripePaymentIntentId ?? null;
-    }
-    results.push({
-      orderId: row.orderId,
-      eventId: row.eventId,
-      stripeChargeId,
-      stripePaymentIntentId,
-    });
-  }
-  return results;
+  return await Promise.all(
+    bare.map(async (row) => {
+      let stripeChargeId = row.stripeChargeId ?? null;
+      let stripePaymentIntentId = row.stripePaymentIntentId ?? null;
+      if (!stripeChargeId || !stripePaymentIntentId) {
+        const order = await ctx.db.get('ticket_orders', row.orderId);
+        stripeChargeId = stripeChargeId ?? order?.stripeChargeId ?? null;
+        stripePaymentIntentId =
+          stripePaymentIntentId ?? order?.stripePaymentIntentId ?? null;
+      }
+      return {
+        orderId: row.orderId,
+        eventId: row.eventId,
+        stripeChargeId,
+        stripePaymentIntentId,
+      };
+    }),
+  );
 }
 
 /**
@@ -903,25 +898,45 @@ async function ingestExternalPaidPayout(
     confirmedAt: now,
   });
 
+  // FIFO amounts are derived synchronously first; inserts and the readback
+  // for `maybeMarkFullySettledEventsPaidOut` then run batched. Captured as
+  // a const so the guard's narrowing survives into the map callbacks.
+  const connectedAccountId = args.connectedAccountId;
   let remaining = args.amountCents;
-  const allocations: Array<Doc<'payout_allocations'>> = [];
+  const fifoAllocations: Array<{eventId: Id<'events'>; amountCents: number}> =
+    [];
   for (const eventSettlement of payables) {
     if (remaining <= 0) break;
     const amountCents = Math.min(eventSettlement.payableCents, remaining);
-    const allocationId = await ctx.db.insert('payout_allocations', {
-      batchId,
-      stripePayoutId: args.stripePayoutId,
-      connectedAccountId: args.connectedAccountId,
+    fifoAllocations.push({
       eventId: eventSettlement.eventId as Id<'events'>,
       amountCents,
-      status: 'paid',
-      createdAt: now,
-      confirmedAt: now,
     });
     remaining -= amountCents;
-    const allocation = await ctx.db.get('payout_allocations', allocationId);
-    if (allocation) allocations.push(allocation);
   }
+  const allocationIds = await Promise.all(
+    fifoAllocations.map((alloc) =>
+      ctx.db.insert('payout_allocations', {
+        batchId,
+        stripePayoutId: args.stripePayoutId,
+        connectedAccountId,
+        eventId: alloc.eventId,
+        amountCents: alloc.amountCents,
+        status: 'paid',
+        createdAt: now,
+        confirmedAt: now,
+      }),
+    ),
+  );
+  const allocations = (
+    await Promise.all(
+      allocationIds.map((allocationId) =>
+        ctx.db.get('payout_allocations', allocationId),
+      ),
+    )
+  ).filter((allocation): allocation is Doc<'payout_allocations'> =>
+    Boolean(allocation),
+  );
 
   logger.info('stripe', 'Ingested external payout as paid batch', {
     stripePayoutId: args.stripePayoutId,
