@@ -17,6 +17,18 @@ import {computeEventSettlements} from './payouts';
 import {eventStartInstantMs} from '@shared/event-time';
 
 export const MAX_ALLOCATIONS_PER_BATCH = 1_000;
+/**
+ * A `submitted` batch older than this without a confirming webhook gets its
+ * payout status polled from Stripe (webhook fallback).
+ */
+export const SUBMITTED_BATCH_RECOVERY_AGE_MS = 48 * 60 * 60 * 1000;
+/**
+ * A `pending` batch older than this can no longer be replayed safely: Stripe
+ * idempotency keys expire after 24h, so re-submitting would create a NEW
+ * payout with the stale frozen amount. It is superseded instead.
+ */
+export const PENDING_BATCH_RECOVERY_AGE_MS = 24 * 60 * 60 * 1000;
+const RECOVERY_BATCH_LIMIT = 50;
 const MAX_FINANCIAL_EVENTS_PER_MARKER_DERIVATION = 5_000;
 const MAX_SETTLEMENT_EVENTS_PER_ACCOUNT = 500;
 const MAX_SETTLEMENT_FINANCIAL_EVENTS_PER_ACCOUNT = 5_000;
@@ -459,6 +471,7 @@ export async function createPayoutIntentImpl(
       amountCents: byKey.amountCents,
       currency: byKey.currency,
       status: byKey.status,
+      createdAt: byKey.createdAt,
       ...(byKey.stripePayoutId !== undefined
         ? {stripePayoutId: byKey.stripePayoutId}
         : {}),
@@ -492,6 +505,7 @@ export async function createPayoutIntentImpl(
       amountCents: existing.amountCents,
       currency: existing.currency,
       status: existing.status,
+      createdAt: existing.createdAt,
       ...(existing.stripePayoutId !== undefined
         ? {stripePayoutId: existing.stripePayoutId}
         : {}),
@@ -506,6 +520,7 @@ export async function createPayoutIntentImpl(
     amountCents: args.amountCents,
     currency: args.currency,
     status: 'pending',
+    origin: 'cron',
     createdAt,
   });
 
@@ -528,8 +543,94 @@ export async function createPayoutIntentImpl(
     amountCents: args.amountCents,
     currency: args.currency,
     status: 'pending' as const,
+    createdAt,
     reused: false,
   };
+}
+
+/**
+ * Batches the daily cron must reconcile against Stripe before doing normal
+ * payout work: `submitted` batches whose confirming webhook never arrived,
+ * and `pending` batches too old to replay under their (expired) Stripe
+ * idempotency key.
+ */
+export async function listPayoutBatchesNeedingRecoveryImpl(
+  ctx: ReadCtx,
+  args: {now: number},
+) {
+  const submitted = await ctx.db
+    .query('payout_batches')
+    .withIndex('by_status_and_createdAt', (q) =>
+      q
+        .eq('status', 'submitted')
+        .lt('createdAt', args.now - SUBMITTED_BATCH_RECOVERY_AGE_MS),
+    )
+    .take(RECOVERY_BATCH_LIMIT);
+  const pending = await ctx.db
+    .query('payout_batches')
+    .withIndex('by_status_and_createdAt', (q) =>
+      q
+        .eq('status', 'pending')
+        .lt('createdAt', args.now - PENDING_BATCH_RECOVERY_AGE_MS),
+    )
+    .take(RECOVERY_BATCH_LIMIT);
+
+  return {
+    submitted: submitted.flatMap((batch) =>
+      batch.stripePayoutId !== undefined
+        ? {
+            batchId: batch._id,
+            connectedAccountId: batch.connectedAccountId,
+            stripePayoutId: batch.stripePayoutId,
+          }
+        : [],
+    ),
+    pending: pending.map((batch) => ({
+      batchId: batch._id,
+      connectedAccountId: batch.connectedAccountId,
+      amountCents: batch.amountCents,
+    })),
+  };
+}
+
+/**
+ * Supersede a `pending` batch that can no longer be replayed (Stripe
+ * idempotency key expired and no matching payout exists on the account).
+ * Failing it re-opens the events' payable balance so the next cron run
+ * recomputes a fresh, correctly-sized batch.
+ */
+export async function failStalePendingBatchImpl(
+  ctx: WriteCtx,
+  args: {batchId: Id<'payout_batches'>; failureReason: string},
+): Promise<null> {
+  const batch = await ctx.db.get('payout_batches', args.batchId);
+  if (!batch || batch.status !== 'pending') {
+    return null;
+  }
+
+  const now = Date.now();
+  await ctx.db.patch('payout_batches', args.batchId, {
+    status: 'failed',
+    confirmedAt: now,
+    failureReason: args.failureReason,
+  });
+  const allocations = await loadBatchAllocations(ctx, args.batchId);
+  for (const allocation of allocations) {
+    if (allocation.status !== 'failed') {
+      await ctx.db.patch('payout_allocations', allocation._id, {
+        status: 'failed',
+        confirmedAt: now,
+        failureReason: args.failureReason,
+      });
+    }
+  }
+  logger.warn('stripe', 'Superseded stale pending payout batch', {
+    batchId: args.batchId,
+    connectedAccountId: batch.connectedAccountId,
+    amountCents: batch.amountCents,
+    failureReason: args.failureReason,
+  });
+  return null;
 }
 
 export async function markPayoutBatchSubmittedImpl(
@@ -567,11 +668,249 @@ export async function markPayoutBatchSubmittedImpl(
   return null;
 }
 
+/**
+ * Optional webhook context threaded through `confirmPayout` / `failPayout`.
+ * `metadataBatchId` heals the payout.paid-before-markSubmitted race by
+ * matching our own payout via the `braketBatchId` metadata stamped on
+ * `payouts.create`; `amountCents`/`currency`/`connectedAccountId` allow a
+ * truly external payout (Stripe dashboard) to be ingested instead of
+ * silently ignored.
+ */
+export interface PayoutWebhookContext {
+  amountCents?: number;
+  currency?: string;
+  metadataBatchId?: string;
+  connectedAccountId?: string;
+}
+
+/**
+ * Resolve a batch by the `braketBatchId` metadata on the Stripe payout and
+ * stamp `stripePayoutId` onto the batch and its allocations. Heals the race
+ * where `payout.paid` arrives before `markPayoutBatchSubmitted` stamped the
+ * id (previously: "unknown payout; ignoring" and a permanently wedged
+ * `submitted` batch).
+ */
+async function resolveBatchByMetadata(
+  ctx: WriteCtx,
+  args: {stripePayoutId: string} & PayoutWebhookContext,
+): Promise<Doc<'payout_batches'> | null> {
+  if (args.metadataBatchId === undefined) return null;
+  const batchId = ctx.db.normalizeId('payout_batches', args.metadataBatchId);
+  if (!batchId) return null;
+  const batch = await ctx.db.get('payout_batches', batchId);
+  if (!batch) return null;
+  if (
+    args.connectedAccountId !== undefined &&
+    batch.connectedAccountId !== args.connectedAccountId
+  ) {
+    logger.error('stripe', 'payout metadata batch/account mismatch; ignoring', {
+      stripePayoutId: args.stripePayoutId,
+      batchId,
+      batchConnectedAccountId: batch.connectedAccountId,
+      webhookConnectedAccountId: args.connectedAccountId,
+    });
+    return null;
+  }
+  if (
+    batch.stripePayoutId !== undefined &&
+    batch.stripePayoutId !== args.stripePayoutId
+  ) {
+    logger.error(
+      'stripe',
+      'payout metadata points at a batch with a different payout id; ignoring',
+      {
+        stripePayoutId: args.stripePayoutId,
+        batchId,
+        batchStripePayoutId: batch.stripePayoutId,
+      },
+    );
+    return null;
+  }
+
+  if (batch.stripePayoutId === undefined) {
+    await ctx.db.patch('payout_batches', batchId, {
+      stripePayoutId: args.stripePayoutId,
+    });
+    const allocations = await loadBatchAllocations(ctx, batchId);
+    await Promise.all(
+      allocations.map((alloc) =>
+        alloc.stripePayoutId === undefined
+          ? ctx.db.patch('payout_allocations', alloc._id, {
+              stripePayoutId: args.stripePayoutId,
+            })
+          : Promise.resolve(),
+      ),
+    );
+    logger.info('stripe', 'Recovered payout batch via metadata match', {
+      stripePayoutId: args.stripePayoutId,
+      batchId,
+    });
+  }
+  return await ctx.db.get('payout_batches', batchId);
+}
+
+async function loadBatchAllocations(
+  ctx: WriteCtx,
+  batchId: Id<'payout_batches'>,
+): Promise<Array<Doc<'payout_allocations'>>> {
+  const allocations = await ctx.db
+    .query('payout_allocations')
+    .withIndex('by_batchId', (q) => q.eq('batchId', batchId))
+    .take(MAX_ALLOCATIONS_PER_BATCH);
+  if (allocations.length >= MAX_ALLOCATIONS_PER_BATCH) {
+    throwAppError(
+      'PAYOUT_BATCH_TOO_LARGE',
+      `payout batch ${batchId} has ${allocations.length}+ allocations; refusing to partially transition`,
+    );
+  }
+  return allocations;
+}
+
+/**
+ * Record a payout that was created outside the pipeline (Stripe dashboard)
+ * as an already-`paid` batch with FIFO allocations, so `alreadyPaidOut`
+ * reflects the real money movement and manual payouts stop corrupting the
+ * settlement math.
+ *
+ * Allocation ignores eligibility on purpose: the money already moved, so
+ * attribution follows every positive payable oldest-event-first. Any
+ * remainder beyond the ledger's total payable cannot be attributed and is
+ * logged as an error for operator follow-up.
+ */
+async function ingestExternalPaidPayout(
+  ctx: WriteCtx,
+  args: {stripePayoutId: string} & PayoutWebhookContext,
+): Promise<null> {
+  if (
+    args.connectedAccountId === undefined ||
+    args.amountCents === undefined ||
+    args.amountCents <= 0 ||
+    args.currency !== 'usd'
+  ) {
+    logger.warn(
+      'stripe',
+      'payout.paid received for unknown payout; not ingestable; ignoring',
+      {
+        stripePayoutId: args.stripePayoutId,
+        hasConnectedAccountId: args.connectedAccountId !== undefined,
+        currency: args.currency,
+      },
+    );
+    return null;
+  }
+
+  const idempotencyKey = `external-${args.stripePayoutId}`;
+  const existing = await ctx.db
+    .query('payout_batches')
+    .withIndex('by_idempotencyKey', (q) =>
+      q.eq('idempotencyKey', idempotencyKey),
+    )
+    .first();
+  if (existing) {
+    return null;
+  }
+
+  const bundle = await getSettlementDataForAccountImpl(ctx, {
+    stripeConnectedAccountId: args.connectedAccountId,
+    eligibleBeforeMs: Date.now(),
+  });
+  if (!bundle.organizerId) {
+    logger.error(
+      'stripe',
+      'External payout on an account with no organizer; cannot ingest',
+      {
+        stripePayoutId: args.stripePayoutId,
+        connectedAccountId: args.connectedAccountId,
+      },
+    );
+    return null;
+  }
+  const settlements = computeEventSettlements(
+    bundle.financialEvents,
+    bundle.events,
+    bundle.confirmedAllocations,
+  );
+  const payables = settlements
+    .filter((s) => s.payableCents > 0)
+    .sort((a, b) => a.eventDate - b.eventDate);
+
+  const now = Date.now();
+  const batchId = await ctx.db.insert('payout_batches', {
+    idempotencyKey,
+    connectedAccountId: args.connectedAccountId,
+    amountCents: args.amountCents,
+    currency: 'usd',
+    status: 'paid',
+    stripePayoutId: args.stripePayoutId,
+    origin: 'external',
+    createdAt: now,
+    submittedAt: now,
+    confirmedAt: now,
+  });
+
+  let remaining = args.amountCents;
+  const allocations: Array<Doc<'payout_allocations'>> = [];
+  for (const eventSettlement of payables) {
+    if (remaining <= 0) break;
+    const amountCents = Math.min(eventSettlement.payableCents, remaining);
+    const allocationId = await ctx.db.insert('payout_allocations', {
+      batchId,
+      stripePayoutId: args.stripePayoutId,
+      connectedAccountId: args.connectedAccountId,
+      eventId: eventSettlement.eventId as Id<'events'>,
+      amountCents,
+      status: 'paid',
+      createdAt: now,
+      confirmedAt: now,
+    });
+    remaining -= amountCents;
+    const allocation = await ctx.db.get('payout_allocations', allocationId);
+    if (allocation) allocations.push(allocation);
+  }
+
+  logger.info('stripe', 'Ingested external payout as paid batch', {
+    stripePayoutId: args.stripePayoutId,
+    connectedAccountId: args.connectedAccountId,
+    amountCents: args.amountCents,
+    allocatedCents: args.amountCents - remaining,
+    allocationCount: allocations.length,
+  });
+  if (remaining > 0) {
+    logger.error(
+      'stripe',
+      'External payout exceeds ledger payable; remainder unattributed',
+      {
+        stripePayoutId: args.stripePayoutId,
+        connectedAccountId: args.connectedAccountId,
+        unattributedCents: remaining,
+      },
+    );
+  }
+
+  try {
+    await maybeMarkFullySettledEventsPaidOut(ctx, {
+      connectedAccountId: args.connectedAccountId,
+      allocations,
+      now,
+    });
+  } catch (error: unknown) {
+    logger.warn(
+      'stripe',
+      'Ingested external payout but could not derive paid-out event markers',
+      {
+        stripePayoutId: args.stripePayoutId,
+        error: getAppErrorMessage(error) ?? String(error),
+      },
+    );
+  }
+  return null;
+}
+
 export async function confirmPayoutImpl(
   ctx: WriteCtx,
-  args: {stripePayoutId: string},
+  args: {stripePayoutId: string} & PayoutWebhookContext,
 ): Promise<null> {
-  const batch = await ctx.db
+  let batch = await ctx.db
     .query('payout_batches')
     .withIndex('by_stripePayoutId', (q) =>
       q.eq('stripePayoutId', args.stripePayoutId),
@@ -579,10 +918,10 @@ export async function confirmPayoutImpl(
     .unique();
 
   if (!batch) {
-    logger.warn('stripe', 'payout.paid received for unknown payout; ignoring', {
-      stripePayoutId: args.stripePayoutId,
-    });
-    return null;
+    batch = await resolveBatchByMetadata(ctx, args);
+  }
+  if (!batch) {
+    return await ingestExternalPaidPayout(ctx, args);
   }
 
   const now = Date.now();
@@ -594,24 +933,16 @@ export async function confirmPayoutImpl(
     });
   }
 
-  const allocations = await ctx.db
-    .query('payout_allocations')
-    .withIndex('by_stripePayoutId', (q) =>
-      q.eq('stripePayoutId', args.stripePayoutId),
-    )
-    .take(MAX_ALLOCATIONS_PER_BATCH);
-  if (allocations.length >= MAX_ALLOCATIONS_PER_BATCH) {
-    throwAppError(
-      'PAYOUT_BATCH_TOO_LARGE',
-      `payout ${args.stripePayoutId} has ${allocations.length}+ allocations; refusing to partially confirm`,
-    );
-  }
+  const allocations = await loadBatchAllocations(ctx, batch._id);
 
   for (const allocation of allocations) {
     if (allocation.status !== 'paid') {
       await ctx.db.patch('payout_allocations', allocation._id, {
         status: 'paid',
         confirmedAt: now,
+        ...(allocation.stripePayoutId === undefined
+          ? {stripePayoutId: args.stripePayoutId}
+          : {}),
       });
     }
   }
@@ -639,15 +970,20 @@ export async function confirmPayoutImpl(
 
 export async function failPayoutImpl(
   ctx: WriteCtx,
-  args: {stripePayoutId: string; failureReason?: string},
+  args: {stripePayoutId: string; failureReason?: string} & PayoutWebhookContext,
 ): Promise<null> {
-  const batch = await ctx.db
+  let batch = await ctx.db
     .query('payout_batches')
     .withIndex('by_stripePayoutId', (q) =>
       q.eq('stripePayoutId', args.stripePayoutId),
     )
     .unique();
   if (!batch) {
+    batch = await resolveBatchByMetadata(ctx, args);
+  }
+  if (!batch) {
+    // A failed external payout returns its funds to the balance — no
+    // ledger impact, so ignoring is correct (unlike payout.paid).
     logger.warn(
       'stripe',
       'payout.failed received for unknown payout; ignoring',
@@ -669,18 +1005,7 @@ export async function failPayoutImpl(
     });
   }
 
-  const allocations = await ctx.db
-    .query('payout_allocations')
-    .withIndex('by_stripePayoutId', (q) =>
-      q.eq('stripePayoutId', args.stripePayoutId),
-    )
-    .take(MAX_ALLOCATIONS_PER_BATCH);
-  if (allocations.length >= MAX_ALLOCATIONS_PER_BATCH) {
-    throwAppError(
-      'PAYOUT_BATCH_TOO_LARGE',
-      `payout ${args.stripePayoutId} has ${allocations.length}+ allocations; refusing to partially fail`,
-    );
-  }
+  const allocations = await loadBatchAllocations(ctx, batch._id);
 
   for (const allocation of allocations) {
     if (allocation.status !== 'failed') {

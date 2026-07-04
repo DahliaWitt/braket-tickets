@@ -5247,7 +5247,13 @@ export declare const internal: {
       confirmPayout: FunctionReference<
         "mutation",
         "internal",
-        { stripePayoutId: string },
+        {
+          amountCents?: number;
+          connectedAccountId?: string;
+          currency?: string;
+          metadataBatchId?: string;
+          stripePayoutId: string;
+        },
         null
       >;
       createPayoutIntent: FunctionReference<
@@ -5263,6 +5269,7 @@ export declare const internal: {
         {
           amountCents: number;
           batchId: Id<"payout_batches">;
+          createdAt: number;
           currency: "usd";
           idempotencyKey: string;
           reused: boolean;
@@ -5273,7 +5280,18 @@ export declare const internal: {
       failPayout: FunctionReference<
         "mutation",
         "internal",
-        { failureReason?: string; stripePayoutId: string },
+        {
+          connectedAccountId?: string;
+          failureReason?: string;
+          metadataBatchId?: string;
+          stripePayoutId: string;
+        },
+        null
+      >;
+      failStalePendingBatch: FunctionReference<
+        "mutation",
+        "internal",
+        { batchId: Id<"payout_batches">; failureReason: string },
         null
       >;
       getOrderByStripePaymentIntentId: FunctionReference<
@@ -5349,6 +5367,23 @@ export declare const internal: {
           }>;
           inflightSubmittedCents: number;
           organizerId: Id<"organizers"> | null;
+        }
+      >;
+      listPayoutBatchesNeedingRecovery: FunctionReference<
+        "query",
+        "internal",
+        { now: number },
+        {
+          pending: Array<{
+            amountCents: number;
+            batchId: Id<"payout_batches">;
+            connectedAccountId: string;
+          }>;
+          submitted: Array<{
+            batchId: Id<"payout_batches">;
+            connectedAccountId: string;
+            stripePayoutId: string;
+          }>;
         }
       >;
       listPayoutReadyConnectedAccounts: FunctionReference<

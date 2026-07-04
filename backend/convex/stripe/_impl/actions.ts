@@ -56,6 +56,7 @@ import {
   computeEventSettlements,
   computeLedgerTrustGate,
 } from './payouts';
+import {PENDING_BATCH_RECOVERY_AGE_MS} from './connect';
 import {
   extractBalanceTransactionLedgerFields,
   isChargeBalanceTransactionUnavailableError,
@@ -1556,11 +1557,29 @@ async function processAccountPayout(
   if (batch.status !== 'pending') {
     return;
   }
+  if (
+    batch.reused &&
+    Date.now() - batch.createdAt > PENDING_BATCH_RECOVERY_AGE_MS
+  ) {
+    // Stripe idempotency keys expire after 24h: replaying this key would
+    // create a NEW payout with the stale frozen amount. The recovery
+    // pre-pass supersedes such batches; never submit one here.
+    logger.warn('stripe', 'Skipping stale pending batch awaiting recovery', {
+      connectedAccountId: args.connectedAccountId,
+      batchId: batch.batchId,
+      batchAgeMs: Date.now() - batch.createdAt,
+    });
+    return;
+  }
 
   const payout: Stripe.Response<Stripe.Payout> = await withRetry(
     () =>
       args.stripe.payouts.create(
-        {amount: batch.amountCents, currency: batch.currency},
+        {
+          amount: batch.amountCents,
+          currency: batch.currency,
+          metadata: {braketBatchId: batch.batchId},
+        },
         {
           stripeAccount: args.connectedAccountId,
           idempotencyKey: batch.idempotencyKey,
@@ -1586,6 +1605,116 @@ async function processAccountPayout(
   });
 }
 
+/**
+ * Webhook-independent liveness for the payout pipeline. A lost `payout.paid`
+ * used to freeze an account's payouts forever (the `submitted` batch blocks
+ * `createPayoutIntent`); a `pending` batch older than Stripe's 24h
+ * idempotency-key window could replay as a NEW stale-amount payout. Both are
+ * reconciled against Stripe here, before any payout work.
+ */
+type StalePayoutBatches = FunctionReturnType<
+  typeof internal.stripe.connect.listPayoutBatchesNeedingRecovery
+>;
+
+async function recoverStuckPayoutBatches(
+  ctx: ActionCtx,
+  stripe: Stripe,
+  stale: StalePayoutBatches,
+): Promise<void> {
+  for (const batch of stale.submitted) {
+    try {
+      const payout: Stripe.Response<Stripe.Payout> =
+        await stripe.payouts.retrieve(
+          batch.stripePayoutId,
+          {},
+          {stripeAccount: batch.connectedAccountId},
+        );
+      if (payout.status === 'paid') {
+        await ctx.runMutation(internal.stripe.connect.confirmPayout, {
+          stripePayoutId: batch.stripePayoutId,
+        });
+        logger.info('stripe', 'Recovered stuck submitted batch as paid', {
+          batchId: batch.batchId,
+          stripePayoutId: batch.stripePayoutId,
+        });
+      } else if (payout.status === 'failed' || payout.status === 'canceled') {
+        await ctx.runMutation(internal.stripe.connect.failPayout, {
+          stripePayoutId: batch.stripePayoutId,
+          failureReason: `recovered_from_stripe:${payout.status}`,
+        });
+        logger.info('stripe', 'Recovered stuck submitted batch as failed', {
+          batchId: batch.batchId,
+          stripePayoutId: batch.stripePayoutId,
+        });
+      } else {
+        // pending / in_transit / anything Stripe adds later: real money may
+        // still move, leave the batch submitted and check again next run.
+        logger.info('stripe', 'Stuck submitted batch still in flight', {
+          batchId: batch.batchId,
+          stripePayoutId: batch.stripePayoutId,
+          payoutStatus: payout.status,
+        });
+      }
+    } catch (err: unknown) {
+      logger.error(
+        'stripe',
+        'Failed to recover stuck submitted batch',
+        summarizeStripeError(err),
+        {batchId: batch.batchId, stripePayoutId: batch.stripePayoutId},
+      );
+    }
+  }
+
+  for (const batch of stale.pending) {
+    try {
+      // The original payouts.create may have succeeded right before a crash.
+      // Look for our payout by the braketBatchId metadata before declaring
+      // the batch dead.
+      const payouts: Stripe.Response<Stripe.ApiList<Stripe.Payout>> =
+        await stripe.payouts.list(
+          {limit: 100},
+          {stripeAccount: batch.connectedAccountId},
+        );
+      const match = payouts.data.find(
+        (payout) => payout.metadata?.['braketBatchId'] === batch.batchId,
+      );
+      if (match) {
+        await ctx.runMutation(internal.stripe.connect.markPayoutBatchSubmitted, {
+          batchId: batch.batchId,
+          stripePayoutId: match.id,
+        });
+        logger.info('stripe', 'Recovered stale pending batch via metadata', {
+          batchId: batch.batchId,
+          stripePayoutId: match.id,
+          payoutStatus: match.status,
+        });
+        if (match.status === 'paid') {
+          await ctx.runMutation(internal.stripe.connect.confirmPayout, {
+            stripePayoutId: match.id,
+          });
+        } else if (match.status === 'failed' || match.status === 'canceled') {
+          await ctx.runMutation(internal.stripe.connect.failPayout, {
+            stripePayoutId: match.id,
+            failureReason: `recovered_from_stripe:${match.status}`,
+          });
+        }
+      } else {
+        await ctx.runMutation(internal.stripe.connect.failStalePendingBatch, {
+          batchId: batch.batchId,
+          failureReason: 'stale_pending_superseded',
+        });
+      }
+    } catch (err: unknown) {
+      logger.error(
+        'stripe',
+        'Failed to recover stale pending batch',
+        summarizeStripeError(err),
+        {batchId: batch.batchId},
+      );
+    }
+  }
+}
+
 export async function processScheduledPayoutsImpl(
   ctx: ActionCtx,
 ): Promise<null> {
@@ -1604,16 +1733,30 @@ export async function processScheduledPayoutsImpl(
     });
   }
 
+  const stale = await ctx.runQuery(
+    internal.stripe.connect.listPayoutBatchesNeedingRecovery,
+    {now: Date.now()},
+  );
   const connectedAccountIds = await ctx.runQuery(
     internal.stripe.connect.listPayoutReadyConnectedAccounts,
     {limit: PAYOUT_BATCH_SIZE},
   );
-  if (connectedAccountIds.length === 0) {
+  if (
+    stale.submitted.length === 0 &&
+    stale.pending.length === 0 &&
+    connectedAccountIds.length === 0
+  ) {
     logger.info('stripe', 'No payout-ready Connect accounts');
     return null;
   }
 
   const stripe = getStripeClient();
+
+  // Reconcile wedged batches against Stripe BEFORE payout work: a stuck
+  // batch otherwise blocks its account's payouts indefinitely, and a stale
+  // pending batch must be superseded before an account run could replay it.
+  await recoverStuckPayoutBatches(ctx, stripe, stale);
+
   const cronRunDate = new Date().toISOString().slice(0, 10);
 
   for (const connectedAccountId of connectedAccountIds) {

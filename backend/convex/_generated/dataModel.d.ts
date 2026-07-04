@@ -1223,6 +1223,7 @@ export type DataModel = {
       currency: "usd";
       failureReason?: string;
       idempotencyKey: string;
+      origin?: "cron" | "external";
       status: "pending" | "submitted" | "paid" | "failed";
       stripePayoutId?: string;
       submittedAt?: number;
@@ -1239,6 +1240,7 @@ export type DataModel = {
       | "currency"
       | "failureReason"
       | "idempotencyKey"
+      | "origin"
       | "status"
       | "stripePayoutId"
       | "submittedAt";
@@ -1251,6 +1253,7 @@ export type DataModel = {
         "_creationTime",
       ];
       by_idempotencyKey: ["idempotencyKey", "_creationTime"];
+      by_status_and_createdAt: ["status", "createdAt", "_creationTime"];
       by_stripePayoutId: ["stripePayoutId", "_creationTime"];
     };
     searchIndexes: {};
