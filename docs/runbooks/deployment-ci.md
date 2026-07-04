@@ -81,6 +81,15 @@ The repository uses five self-hosted GitHub Actions runners on the Whiterose hos
 
 On Whiterose, the runner fleet is managed by the host-local Unraid compose project at `/boot/config/plugins/compose.manager/projects/github-runner/docker-compose.yml`. The containers are named `github-runner-1` through `github-runner-5`, use the `braket-runner:latest` image, and share the Docker socket plus cached `pnpm` and Playwright browser volumes.
 
+**Node.js version (Angular 22):** Angular 22 requires Node `>=22.22.3`, newer than the `braket-runner:latest` image's baked-in Node (`22.22.2` from NodeSource at build time). CI and deploy workflows install the `.nvmrc` version (`22.22.3`) via `actions/setup-node` and prepend it to `PATH`, so jobs are correct regardless of the image. To remove the per-job Node install overhead, rebuild and redeploy the runner image so its baked-in Node matches `.nvmrc`:
+
+```bash
+# On the Whiterose host, from the repo checkout:
+docker build -t braket-runner:latest infra/runner/
+# then recreate the fleet from the compose project directory:
+docker compose -p github-runner up -d --force-recreate
+```
+
 Check GitHub registration state from a local shell with repository access:
 
 ```bash
