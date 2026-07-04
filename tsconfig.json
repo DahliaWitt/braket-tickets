@@ -1,10 +1,9 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
-      "@convex/_generated/*": ["backend/convex/_generated/*"],
-      "@shared/*": ["shared/*"]
+      "@convex/_generated/*": ["./backend/convex/_generated/*"],
+      "@shared/*": ["./shared/*"]
     }
   },
   "files": []

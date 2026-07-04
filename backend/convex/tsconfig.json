@@ -11,7 +11,6 @@
     "jsx": "react-jsx",
     "skipLibCheck": true,
     "allowSyntheticDefaultImports": true,
-    "baseUrl": ".",
     "pretty": true,
     "paths": {
       "@convex/_generated/*": ["./_generated/*"],

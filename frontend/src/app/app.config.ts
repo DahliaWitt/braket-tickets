@@ -7,7 +7,7 @@ import {
   provideZonelessChangeDetection,
 } from '@angular/core';
 import {DOCUMENT, IMAGE_CONFIG, IMAGE_LOADER} from '@angular/common';
-import {provideHttpClient} from '@angular/common/http';
+import {provideHttpClient, withXhr} from '@angular/common/http';
 import {braketImageLoaderFactory} from './core/image-loader/braket-image-loader';
 import {
   provideRouter,
@@ -67,7 +67,7 @@ export const appConfig: ApplicationConfig = {
         },
       }),
     ),
-    provideHttpClient(),
+    provideHttpClient(withXhr()),
     provideBra(),
     {provide: STRIPE_CONFIG, useValue: environment.stripe},
     {provide: IMAGE_LOADER, useFactory: braketImageLoaderFactory},

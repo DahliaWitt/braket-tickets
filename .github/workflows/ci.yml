@@ -225,6 +225,9 @@ jobs:
 
   storybook:
     name: Build Storybook
+    # Disabled: broken by Angular 22 (@storybook/angular peer <22, uses removed
+    # ComponentFactoryResolver). Re-enable when storybookjs/storybook#35318 ships.
+    if: false
     runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'self-hosted' }}
     timeout-minutes: 10
     environment:

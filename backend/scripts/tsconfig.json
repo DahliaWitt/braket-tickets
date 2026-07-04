@@ -2,12 +2,11 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "allowImportingTsExtensions": true,
-    "baseUrl": "../..",
     "lib": ["ES2023", "DOM"],
     "noEmit": true,
     "paths": {
-      "@convex/_generated/*": ["backend/convex/_generated/*"],
-      "@shared/*": ["shared/*"]
+      "@convex/_generated/*": ["../convex/_generated/*"],
+      "@shared/*": ["../../shared/*"]
     },
     "types": ["node", "vitest"]
   },
