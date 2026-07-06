@@ -599,6 +599,32 @@ export async function listNetlessCapturedRowsImpl(
 }
 
 /**
+ * Of the given Stripe payout ids, return those with no `payout_batches`
+ * row — i.e. payouts the ledger has never recorded. Used by the backfill
+ * repair tool to enforce that unrecorded external payouts are ingested
+ * BEFORE capture nets are backfilled.
+ */
+export async function listUnrecordedStripePayoutIdsImpl(
+  ctx: ReadCtx,
+  args: {stripePayoutIds: string[]},
+): Promise<string[]> {
+  const lookups = await Promise.all(
+    args.stripePayoutIds.slice(0, 100).map(async (stripePayoutId) => ({
+      stripePayoutId,
+      batch: await ctx.db
+        .query('payout_batches')
+        .withIndex('by_stripePayoutId', (q) =>
+          q.eq('stripePayoutId', stripePayoutId),
+        )
+        .first(),
+    })),
+  );
+  return lookups
+    .filter((lookup) => lookup.batch === null)
+    .map((lookup) => lookup.stripePayoutId);
+}
+
+/**
  * Batches the daily cron must reconcile against Stripe before doing normal
  * payout work: `submitted` batches whose confirming webhook never arrived,
  * and `pending` batches too old to replay under their (expired) Stripe
@@ -639,6 +665,7 @@ export async function listPayoutBatchesNeedingRecoveryImpl(
       batchId: batch._id,
       connectedAccountId: batch.connectedAccountId,
       amountCents: batch.amountCents,
+      createdAt: batch.createdAt,
     })),
   };
 }
@@ -691,16 +718,7 @@ export async function markPayoutBatchSubmittedImpl(
   if (!batch) return null;
   if (batch.status === 'submitted' || batch.status === 'paid') return null;
 
-  const allocations = await ctx.db
-    .query('payout_allocations')
-    .withIndex('by_batchId', (q) => q.eq('batchId', args.batchId))
-    .take(MAX_ALLOCATIONS_PER_BATCH);
-  if (allocations.length >= MAX_ALLOCATIONS_PER_BATCH) {
-    throwAppError(
-      'PAYOUT_BATCH_TOO_LARGE',
-      `payout batch ${args.batchId} has ${allocations.length}+ allocations; refusing to mark submitted without full confirmation pagination`,
-    );
-  }
+  const allocations = await loadBatchAllocations(ctx, args.batchId);
 
   const submittedAt = Date.now();
   await ctx.db.patch('payout_batches', args.batchId, {
@@ -803,11 +821,13 @@ async function loadBatchAllocations(
   ctx: WriteCtx,
   batchId: Id<'payout_batches'>,
 ): Promise<Array<Doc<'payout_allocations'>>> {
+  // Fetch one extra row so a batch with exactly MAX_ALLOCATIONS_PER_BATCH
+  // allocations processes normally; only a strictly larger batch fails.
   const allocations = await ctx.db
     .query('payout_allocations')
     .withIndex('by_batchId', (q) => q.eq('batchId', batchId))
-    .take(MAX_ALLOCATIONS_PER_BATCH);
-  if (allocations.length >= MAX_ALLOCATIONS_PER_BATCH) {
+    .take(MAX_ALLOCATIONS_PER_BATCH + 1);
+  if (allocations.length > MAX_ALLOCATIONS_PER_BATCH) {
     throwAppError(
       'PAYOUT_BATCH_TOO_LARGE',
       `payout batch ${batchId} has ${allocations.length}+ allocations; refusing to partially transition`,

@@ -15,6 +15,7 @@ import {
   getSettlementDataForAccountImpl,
   listNetlessCapturedRowsImpl,
   listPayoutBatchesNeedingRecoveryImpl,
+  listUnrecordedStripePayoutIdsImpl,
   listPayoutReadyConnectedAccountsImpl,
   listPlatformOrganizerEligibleEventIdsImpl,
   markEventPaidOutImpl,
@@ -226,6 +227,14 @@ export const listNetlessCapturedRows = internalQuery({
   },
 });
 
+export const listUnrecordedStripePayoutIds = internalQuery({
+  args: {stripePayoutIds: v.array(v.string())},
+  returns: v.array(v.string()),
+  handler: async (ctx, args) => {
+    return await listUnrecordedStripePayoutIdsImpl(ctx, args);
+  },
+});
+
 export const listPayoutBatchesNeedingRecovery = internalQuery({
   args: {now: v.number()},
   returns: v.object({
@@ -241,6 +250,7 @@ export const listPayoutBatchesNeedingRecovery = internalQuery({
         batchId: v.id('payout_batches'),
         connectedAccountId: v.string(),
         amountCents: v.number(),
+        createdAt: v.number(),
       }),
     ),
   }),

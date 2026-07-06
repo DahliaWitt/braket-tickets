@@ -5406,6 +5406,7 @@ export declare const internal: {
             amountCents: number;
             batchId: Id<"payout_batches">;
             connectedAccountId: string;
+            createdAt: number;
           }>;
           submitted: Array<{
             batchId: Id<"payout_batches">;
@@ -5425,6 +5426,12 @@ export declare const internal: {
         "internal",
         { eligibleBeforeMs: number; limit: number },
         Array<Id<"events">>
+      >;
+      listUnrecordedStripePayoutIds: FunctionReference<
+        "query",
+        "internal",
+        { stripePayoutIds: Array<string> },
+        Array<string>
       >;
       markEventPaidOut: FunctionReference<
         "mutation",

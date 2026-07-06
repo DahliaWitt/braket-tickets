@@ -160,4 +160,69 @@ describe('resale seller refunds', () => {
     );
     expect(after).toHaveLength(1);
   });
+
+  it('enriches an existing bare payment_refunded row in place', async () => {
+    // Legacy raw-insert rows (and webhook-first orderings) can leave a
+    // payment_refunded row without net/account fields. A later
+    // markSellerOrderRefundedState for the same stripeRefundId must patch
+    // that row in place — never insert a duplicate.
+    const t = convexTest();
+    const sellerId = await seedUser(t, 'seller-refund-enrich@example.com');
+    const eventId = await seedEvent(t);
+    const sellerOrderId = await t.mutation(api.testing.orders.seedPayment, {
+      userId: sellerId,
+      eventId,
+      amount: 5000,
+      quantity: 2,
+      status: 'completed',
+      tier: 'regular',
+      stripePaymentIntentId: 'pi_seller_refund_enrich',
+      trustSource: 'open_access',
+    });
+    await t.run(async (ctx) => {
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: snapshot the connected account onto the order as checkout does.
+      await ctx.db.patch('ticket_orders', sellerOrderId, {
+        connectedAccountId: 'acct_resale_enrich',
+      });
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: legacy bare refund row written by the pre-fix raw insert.
+      await ctx.db.insert('order_financial_events', {
+        orderId: sellerOrderId,
+        eventId,
+        currency: 'USD',
+        kind: 'payment_refunded',
+        amountCents: 2_395,
+        stripeRefundId: 're_enrich_1',
+        occurredAt: Date.now(),
+      });
+    });
+
+    await t.run(async (ctx) =>
+      markSellerOrderRefundedState(ctx, {
+        orderId: sellerOrderId,
+        refundedAmountCents: 2_395,
+        lostProcessingFeeCents: 88,
+        stripeRefundId: 're_enrich_1',
+        processorFeeCents: 30,
+        connectedAccountNetCents: -2_365,
+      }),
+    );
+
+    const rows = await t.run(async (ctx) =>
+      ctx.db
+        .query('order_financial_events')
+        .withIndex('by_order_and_kind', (q) =>
+          q.eq('orderId', sellerOrderId).eq('kind', 'payment_refunded'),
+        )
+        .collect(),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      amountCents: 2_395,
+      stripeRefundId: 're_enrich_1',
+      connectedAccountId: 'acct_resale_enrich',
+      connectedAccountNetCents: -2_365,
+      processorFeeCents: 30,
+      note: 'resale_seller_refund_lost_fee:88',
+    });
+  });
 });

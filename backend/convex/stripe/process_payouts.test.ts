@@ -1,6 +1,7 @@
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 import {convexTest} from '../setup.testing';
 import {api, internal} from '../_generated/api';
+import type {Id} from '../_generated/dataModel';
 
 /**
  * End-to-end coverage for `processScheduledPayouts` — the Connect-account
@@ -65,6 +66,51 @@ describe('processScheduledPayouts — Connect account branch', () => {
     payoutsListMock.mockResolvedValue({data: []});
   });
 
+  type SeedRunCtx = Parameters<
+    Parameters<ReturnType<typeof convexTest>['run']>[0]
+  >[0];
+
+  /**
+   * Stand-in for "Stripe confirmed capture and the webhook recorded net
+   * impact" — production capture rows require a live BalanceTransaction.
+   * Mirrors the helper in payouts_v2.test.ts.
+   */
+  async function seedCapturedLedgerRow(
+    ctx: SeedRunCtx,
+    eventId: Id<'events'>,
+    connectedAccountId: string,
+    options?: {amountCents?: number; netCents?: number; fees?: boolean},
+  ): Promise<void> {
+    const amountCents = options?.amountCents ?? 2500;
+    const netCents = options?.netCents ?? 2400;
+    // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row; no production mutation emits with a custom BalanceTransaction net.
+    const orderId = await ctx.db.insert('ticket_orders', {
+      eventId,
+      kind: 'primary',
+      quantity: 1,
+      tier: 'regular',
+      amountCents,
+      currency: 'USD',
+      state: 'completed',
+      expiresAt: Date.now() + 60_000,
+      completedAt: Date.now(),
+      trustSource: 'open_access',
+      connectedAccountId,
+    });
+    // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row; no production mutation emits with a custom BalanceTransaction net.
+    await ctx.db.insert('order_financial_events', {
+      orderId,
+      eventId,
+      currency: 'USD',
+      kind: 'payment_captured',
+      amountCents,
+      connectedAccountId,
+      connectedAccountNetCents: netCents,
+      ...(options?.fees ? {processorFeeCents: 100, platformFeeCents: 50} : {}),
+      occurredAt: Date.now(),
+    });
+  }
+
   it('runs the full flow: settlement math → createPayoutIntent → payouts.create → markSubmitted', async () => {
     const t = convexTest();
     const organizerId = await t.mutation(
@@ -101,33 +147,7 @@ describe('processScheduledPayouts — Connect account branch', () => {
     // for "Stripe confirmed capture and the webhook recorded net
     // impact."
     await t.run(async (ctx) => {
-      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row; no production mutation emits with a custom BalanceTransaction net.
-      const orderId = await ctx.db.insert('ticket_orders', {
-        eventId,
-        kind: 'primary',
-        quantity: 1,
-        tier: 'regular',
-        amountCents: 2500,
-        currency: 'USD',
-        state: 'completed',
-        expiresAt: Date.now() + 60_000,
-        completedAt: Date.now(),
-        trustSource: 'open_access',
-        connectedAccountId: 'acct_end_to_end',
-      });
-      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row; no production mutation emits with a custom BalanceTransaction net.
-      await ctx.db.insert('order_financial_events', {
-        orderId,
-        eventId,
-        currency: 'USD',
-        kind: 'payment_captured',
-        amountCents: 2500,
-        connectedAccountId: 'acct_end_to_end',
-        connectedAccountNetCents: 2400,
-        processorFeeCents: 100,
-        platformFeeCents: 50,
-        occurredAt: Date.now(),
-      });
+      await seedCapturedLedgerRow(ctx, eventId, 'acct_end_to_end', {fees: true});
     });
 
     await t.action(internal.stripe.actions.processScheduledPayouts, {});
@@ -211,31 +231,7 @@ describe('processScheduledPayouts — Connect account branch', () => {
     });
 
     await t.run(async (ctx) => {
-      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row; no production mutation emits with a custom BalanceTransaction net.
-      const orderId = await ctx.db.insert('ticket_orders', {
-        eventId,
-        kind: 'primary',
-        quantity: 1,
-        tier: 'regular',
-        amountCents: 2500,
-        currency: 'USD',
-        state: 'completed',
-        expiresAt: Date.now() + 60_000,
-        completedAt: Date.now(),
-        trustSource: 'open_access',
-        connectedAccountId: 'acct_recover',
-      });
-      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row; no production mutation emits with a custom BalanceTransaction net.
-      await ctx.db.insert('order_financial_events', {
-        orderId,
-        eventId,
-        currency: 'USD',
-        kind: 'payment_captured',
-        amountCents: 2500,
-        connectedAccountId: 'acct_recover',
-        connectedAccountNetCents: 2400,
-        occurredAt: Date.now(),
-      });
+      await seedCapturedLedgerRow(ctx, eventId, 'acct_recover');
       // Prior cron run left a pending batch with a stale date key.
       // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: simulates a crash-recovery scenario; `createPayoutIntent` is the only production mutation that inserts and it owns the idempotency-key derivation.
       await ctx.db.insert('payout_batches', {
@@ -314,31 +310,7 @@ describe('processScheduledPayouts — Connect account branch', () => {
     });
 
     await t.run(async (ctx) => {
-      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row.
-      const orderId = await ctx.db.insert('ticket_orders', {
-        eventId,
-        kind: 'primary',
-        quantity: 1,
-        tier: 'regular',
-        amountCents: 2500,
-        currency: 'USD',
-        state: 'completed',
-        expiresAt: Date.now() + 60_000,
-        completedAt: Date.now(),
-        trustSource: 'open_access',
-        connectedAccountId: 'acct_lost_webhook',
-      });
-      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row.
-      await ctx.db.insert('order_financial_events', {
-        orderId,
-        eventId,
-        currency: 'USD',
-        kind: 'payment_captured',
-        amountCents: 2500,
-        connectedAccountId: 'acct_lost_webhook',
-        connectedAccountNetCents: 2400,
-        occurredAt: Date.now(),
-      });
+      await seedCapturedLedgerRow(ctx, eventId, 'acct_lost_webhook');
       // Submitted 3 days ago; payout.paid never arrived.
       // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: simulates a lost-webhook submitted batch.
       const batchId = await ctx.db.insert('payout_batches', {
@@ -437,31 +409,7 @@ describe('processScheduledPayouts — Connect account branch', () => {
     });
 
     const batchId = await t.run(async (ctx) => {
-      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row.
-      const orderId = await ctx.db.insert('ticket_orders', {
-        eventId,
-        kind: 'primary',
-        quantity: 1,
-        tier: 'regular',
-        amountCents: 2500,
-        currency: 'USD',
-        state: 'completed',
-        expiresAt: Date.now() + 60_000,
-        completedAt: Date.now(),
-        trustSource: 'open_access',
-        connectedAccountId: 'acct_meta_match',
-      });
-      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row.
-      await ctx.db.insert('order_financial_events', {
-        orderId,
-        eventId,
-        currency: 'USD',
-        kind: 'payment_captured',
-        amountCents: 2500,
-        connectedAccountId: 'acct_meta_match',
-        connectedAccountNetCents: 2400,
-        occurredAt: Date.now(),
-      });
+      await seedCapturedLedgerRow(ctx, eventId, 'acct_meta_match');
       // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: crash between payouts.create and markPayoutBatchSubmitted.
       const staleBatchId = await ctx.db.insert('payout_batches', {
         idempotencyKey: 'braket-payout-acct_meta_match-2019-12-31',
@@ -551,31 +499,7 @@ describe('processScheduledPayouts — Connect account branch', () => {
     });
 
     await t.run(async (ctx) => {
-      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row.
-      const orderId = await ctx.db.insert('ticket_orders', {
-        eventId,
-        kind: 'primary',
-        quantity: 1,
-        tier: 'regular',
-        amountCents: 2500,
-        currency: 'USD',
-        state: 'completed',
-        expiresAt: Date.now() + 60_000,
-        completedAt: Date.now(),
-        trustSource: 'open_access',
-        connectedAccountId: 'acct_dedup',
-      });
-      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row.
-      await ctx.db.insert('order_financial_events', {
-        orderId,
-        eventId,
-        currency: 'USD',
-        kind: 'payment_captured',
-        amountCents: 2500,
-        connectedAccountId: 'acct_dedup',
-        connectedAccountNetCents: 2400,
-        occurredAt: Date.now(),
-      });
+      await seedCapturedLedgerRow(ctx, eventId, 'acct_dedup');
       // Already-submitted batch awaiting `payout.paid`.
       // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: simulates the "submitted, awaiting confirmation" state.
       await ctx.db.insert('payout_batches', {
@@ -631,31 +555,7 @@ describe('processScheduledPayouts — Connect account branch', () => {
     });
 
     await t.run(async (ctx) => {
-      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row.
-      const orderId = await ctx.db.insert('ticket_orders', {
-        eventId,
-        kind: 'primary',
-        quantity: 1,
-        tier: 'regular',
-        amountCents: 2500,
-        currency: 'USD',
-        state: 'completed',
-        expiresAt: Date.now() + 60_000,
-        completedAt: Date.now(),
-        trustSource: 'open_access',
-        connectedAccountId: 'acct_diverged',
-      });
-      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row.
-      await ctx.db.insert('order_financial_events', {
-        orderId,
-        eventId,
-        currency: 'USD',
-        kind: 'payment_captured',
-        amountCents: 2500,
-        connectedAccountId: 'acct_diverged',
-        connectedAccountNetCents: 2400,
-        occurredAt: Date.now(),
-      });
+      await seedCapturedLedgerRow(ctx, eventId, 'acct_diverged');
     });
 
     // Stripe holds far more than the 2400¢ the ledger knows about.
@@ -705,31 +605,7 @@ describe('processScheduledPayouts — Connect account branch', () => {
     });
 
     await t.run(async (ctx) => {
-      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row.
-      const orderId = await ctx.db.insert('ticket_orders', {
-        eventId,
-        kind: 'primary',
-        quantity: 1,
-        tier: 'regular',
-        amountCents: 2500,
-        currency: 'USD',
-        state: 'completed',
-        expiresAt: Date.now() + 60_000,
-        completedAt: Date.now(),
-        trustSource: 'open_access',
-        connectedAccountId: 'acct_drafted_rev',
-      });
-      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row.
-      await ctx.db.insert('order_financial_events', {
-        orderId,
-        eventId,
-        currency: 'USD',
-        kind: 'payment_captured',
-        amountCents: 2500,
-        connectedAccountId: 'acct_drafted_rev',
-        connectedAccountNetCents: 2400,
-        occurredAt: Date.now(),
-      });
+      await seedCapturedLedgerRow(ctx, eventId, 'acct_drafted_rev');
       // Admin drafted the event after sales.
       // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: simulates a status change after revenue capture.
       await ctx.db.patch('events', eventId, {status: 'draft'});
@@ -777,31 +653,7 @@ describe('processScheduledPayouts — Connect account branch', () => {
         organizerId,
       });
       await t.run(async (ctx) => {
-        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row.
-        const orderId = await ctx.db.insert('ticket_orders', {
-          eventId,
-          kind: 'primary',
-          quantity: 1,
-          tier: 'regular',
-          amountCents: 2500,
-          currency: 'USD',
-          state: 'completed',
-          expiresAt: Date.now() + 60_000,
-          completedAt: Date.now(),
-          trustSource: 'open_access',
-          connectedAccountId,
-        });
-        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row.
-        await ctx.db.insert('order_financial_events', {
-          orderId,
-          eventId,
-          currency: 'USD',
-          kind: 'payment_captured',
-          amountCents: 2500,
-          connectedAccountId,
-          connectedAccountNetCents: 2400,
-          occurredAt: Date.now(),
-        });
+        await seedCapturedLedgerRow(ctx, eventId, connectedAccountId);
       });
       accountIds.push(connectedAccountId);
     }
@@ -848,31 +700,7 @@ describe('processScheduledPayouts — Connect account branch', () => {
     });
 
     await t.run(async (ctx) => {
-      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row.
-      const orderId = await ctx.db.insert('ticket_orders', {
-        eventId,
-        kind: 'primary',
-        quantity: 1,
-        tier: 'regular',
-        amountCents: 2500,
-        currency: 'USD',
-        state: 'completed',
-        expiresAt: Date.now() + 60_000,
-        completedAt: Date.now(),
-        trustSource: 'open_access',
-        connectedAccountId: 'acct_overflow',
-      });
-      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: stand in for a post-settlement ledger row.
-      await ctx.db.insert('order_financial_events', {
-        orderId,
-        eventId,
-        currency: 'USD',
-        kind: 'payment_captured',
-        amountCents: 2500,
-        connectedAccountId: 'acct_overflow',
-        connectedAccountNetCents: 2400,
-        occurredAt: Date.now(),
-      });
+      await seedCapturedLedgerRow(ctx, eventId, 'acct_overflow');
       // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed: simulates a historical account with enough paid allocation rows to overflow the settlement guard.
       const batchId = await ctx.db.insert('payout_batches', {
         idempotencyKey: 'braket-payout-acct_overflow-old',

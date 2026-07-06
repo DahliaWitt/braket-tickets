@@ -746,6 +746,67 @@ describe('confirmPayout', () => {
         .collect(),
     );
     expect(batches).toHaveLength(0);
+
+    // Assert by payout id too — the account-less payout can't appear under
+    // any connectedAccountId index, so prove no batch exists for it at all.
+    for (const stripePayoutId of ['po_eur', 'po_no_account']) {
+      const batch = await t.run(async (ctx) =>
+        ctx.db
+          .query('payout_batches')
+          .withIndex('by_stripePayoutId', (q) =>
+            q.eq('stripePayoutId', stripePayoutId),
+          )
+          .unique(),
+      );
+      expect(batch).toBeNull();
+    }
+  });
+
+  it('refuses a metadata match when the webhook account does not own the batch', async () => {
+    // The dispatcher forwards payout webhooks keyed purely by payout id;
+    // account verification lives here in the metadata-resolution path. A
+    // spoofed/mismatched account must neither stamp nor confirm the batch,
+    // and must not fall through to external ingestion on the wrong account.
+    const t = convexTest();
+    const organizerId = await seedOrganizerWithAccount(t, 'acct_owner');
+    const eventId = await seedEvent(t, organizerId, 'Mismatch Event');
+    await t.run(async (ctx) => {
+      await seedCapturedLedgerRow(ctx, eventId, 'acct_owner', 4_800);
+    });
+
+    const batch = await t.mutation(internal.stripe.connect.createPayoutIntent, {
+      idempotencyKey: 'k-mismatch',
+      connectedAccountId: 'acct_owner',
+      amountCents: 4_800,
+      currency: 'usd',
+      allocations: [{eventId, amountCents: 4_800}],
+    });
+
+    await t.mutation(internal.stripe.connect.confirmPayout, {
+      stripePayoutId: 'po_mismatch',
+      amountCents: 4_800,
+      currency: 'usd',
+      metadataBatchId: batch.batchId,
+      connectedAccountId: 'acct_intruder',
+    });
+
+    // Batch untouched: still pending, no payout id stamped.
+    const untouched = await t.run(async (ctx) =>
+      ctx.db.get('payout_batches', batch.batchId),
+    );
+    expect(untouched).toMatchObject({status: 'pending'});
+    expect(untouched?.stripePayoutId).toBeUndefined();
+
+    // And no external batch was ingested for the mismatched payout.
+    const external = await t.run(async (ctx) =>
+      ctx.db
+        .query('payout_batches')
+        .withIndex('by_stripePayoutId', (q) =>
+          q.eq('stripePayoutId', 'po_mismatch'),
+        )
+        .unique(),
+    );
+    expect(external).toBeNull();
   });
 });
 

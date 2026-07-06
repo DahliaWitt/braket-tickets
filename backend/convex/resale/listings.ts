@@ -29,6 +29,7 @@ import {
 import {
   handleSellerRefundCompletionState,
   processSellerRefundState,
+  type SellerRefundResult,
   type SellerRefundWorkContext,
 } from '../lib/resale/settlement';
 import {
@@ -251,15 +252,7 @@ export const onSellerRefundComplete = stripePool.defineOnComplete<
       workId: string;
       context: SellerRefundWorkContext;
       result:
-        | {
-            kind: 'success';
-            returnValue: {
-              stripeRefundId: string;
-              processorFeeCents?: number;
-              platformFeeCents?: number;
-              connectedAccountNetCents?: number;
-            };
-          }
+        | {kind: 'success'; returnValue: SellerRefundResult}
         | {kind: 'failed'; error: string}
         | {kind: 'canceled'};
     },

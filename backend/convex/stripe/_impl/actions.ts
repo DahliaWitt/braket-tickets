@@ -1669,10 +1669,15 @@ async function recoverStuckPayoutBatches(
     try {
       // The original payouts.create may have succeeded right before a crash.
       // Look for our payout by the braketBatchId metadata before declaring
-      // the batch dead.
+      // the batch dead. Any such payout was created AFTER the batch row, so
+      // bounding the list by the batch's creation time (minus one hour of
+      // clock-skew slack) guarantees the match cannot fall off this page —
+      // an unbounded newest-first page could miss it on a busy account and
+      // wrongly supersede a batch whose payout went through.
+      const createdAfterSeconds = Math.floor(batch.createdAt / 1000) - 3600;
       const payouts: Stripe.Response<Stripe.ApiList<Stripe.Payout>> =
         await stripe.payouts.list(
-          {limit: 100},
+          {limit: 100, created: {gte: createdAfterSeconds}},
           {stripeAccount: batch.connectedAccountId},
         );
       const match = payouts.data.find(
@@ -1698,6 +1703,15 @@ async function recoverStuckPayoutBatches(
             failureReason: `recovered_from_stripe:${match.status}`,
           });
         }
+      } else if (payouts.has_more) {
+        // Window truncated — cannot prove the payout doesn't exist. Leave
+        // the batch for the next run rather than risk superseding a batch
+        // whose payout actually went through.
+        logger.warn(
+          'stripe',
+          'Stale pending batch: payout list window truncated; deferring',
+          {batchId: batch.batchId, connectedAccountId: batch.connectedAccountId},
+        );
       } else {
         await ctx.runMutation(internal.stripe.connect.failStalePendingBatch, {
           batchId: batch.batchId,
@@ -1765,6 +1779,46 @@ export async function backfillPaymentCapturedNetImpl(
   args: {connectedAccountId: string},
 ): Promise<{scanned: number; enriched: number; skipped: number; failed: number}> {
   const stripe = getStripeClient();
+
+  // Machine-checked run order: refuse to backfill while the account has
+  // paid payouts the ledger never recorded (manual payouts that predate
+  // external ingestion). Backfilling first would re-open their payable and
+  // let the cron misattribute it. Run ingestExternalPayoutById for the
+  // listed ids, then re-run this tool.
+  const recentPayouts: Stripe.Response<Stripe.ApiList<Stripe.Payout>> =
+    await stripe.payouts.list(
+      {limit: 100},
+      {stripeAccount: args.connectedAccountId},
+    );
+  const externalPaidIds = recentPayouts.data
+    .filter(
+      (payout) =>
+        payout.status === 'paid' &&
+        payout.metadata?.['braketBatchId'] === undefined,
+    )
+    .map((payout) => payout.id);
+  const unrecorded =
+    externalPaidIds.length > 0
+      ? await ctx.runQuery(
+          internal.stripe.connect.listUnrecordedStripePayoutIds,
+          {stripePayoutIds: externalPaidIds},
+        )
+      : [];
+  if (unrecorded.length > 0) {
+    logger.error(
+      'stripe',
+      'backfillPaymentCapturedNet refused: unrecorded external payouts exist; run ingestExternalPayoutById first',
+      {
+        connectedAccountId: args.connectedAccountId,
+        unrecordedStripePayoutIds: unrecorded,
+      },
+    );
+    throwAppError(
+      'EXTERNAL_PAYOUT_UNRECORDED',
+      `Account ${args.connectedAccountId} has ${unrecorded.length} paid payout(s) the ledger never recorded (${unrecorded.join(', ')}). Run stripe/actions.ingestExternalPayoutById for each, then re-run this backfill.`,
+    );
+  }
+
   const rows = await ctx.runQuery(
     internal.stripe.connect.listNetlessCapturedRows,
     {stripeConnectedAccountId: args.connectedAccountId},

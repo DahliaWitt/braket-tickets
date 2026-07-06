@@ -163,13 +163,13 @@ Connect payout eligibility is derived from `payout_allocations`, not from `event
 
 Before submitting any payout, `processAccountPayout` reconciles the ledger against Stripe (`computeLedgerTrustGate` in `backend/convex/stripe/_impl/payouts.ts`):
 
-```
+```text
 ledgerClaim  = signed sum of every settlement's payableCents
 stripeTruth  = balance.available + balance.pending (USD)
 delta        = ledgerClaim − (stripeTruth + submitted-batch in-flight cents)
 ```
 
-If `|delta| > PAYOUT_TRUST_EPSILON_CENTS` (100¢), the account is **skipped for the run** and a `payout trust gate mismatch` error is logged with all the numbers. The gate is fail-closed on purpose: the balance cap means the system can never overpay cash, so holding a payout costs a delay, never money.
+If `|delta| > PAYOUT_TRUST_EPSILON_CENTS` (100¢), the account is **skipped for the run** and a `payout trust gate mismatch` error is logged with all the numbers. The gate is deliberately fail-closed: the balance cap means the system can never overpay cash, so holding a payout costs a delay, never money.
 
 **One-off trips are normal.** Webhook timing races legitimately diverge for minutes-to-hours: a refund or dispute debits the balance before its webhook writes the ledger row, or a fresh capture credits `pending` before its `payment_captured` row lands. These self-heal by the next daily run.
 
@@ -209,7 +209,7 @@ All numbers are sourced from `order_financial_events.connectedAccountNetCents`, 
 Prefer letting the cron pay. If you must pay an organizer by hand (dashboard → connected account → Balances → Pay out funds):
 
 - The resulting `payout.paid` webhook is **auto-ingested**: `confirmPayout` records an already-`paid` `payout_batches` row with `origin: 'external'` and FIFO `payout_allocations` across the account's positive payables (oldest event first, eligibility ignored — the money already moved). Settlement and `paidOutAt` markers stay truthful.
-- Verify afterwards: the account has a batch with `idempotencyKey: external-<payoutId>` and `origin: 'external'`, and the affected events' allocations are `paid`.
+- Verify afterward: the account has a batch with `idempotencyKey: external-<payoutId>` and `origin: 'external'`, and the affected events' allocations are `paid`.
 - If the manual amount exceeded everything the ledger can attribute, the remainder is logged as `External payout exceeds ledger payable; remainder unattributed` — that usually means the ledger is missing capture nets; run [`backfillPaymentCapturedNet`](#repair-tooling) and reconcile.
 - Manual payouts made **before external ingestion shipped** were ignored ("payout.paid received for unknown payout") and must be registered with [`ingestExternalPayoutById`](#repair-tooling).
 
@@ -233,7 +233,7 @@ Internal actions, run from the Convex Dashboard (Functions → `stripe/actions`)
 - `ingestExternalPayoutById({stripePayoutId, connectedAccountId})` — retrieves the payout from Stripe and runs external ingestion (see [manual payouts](#manual-payouts-from-the-stripe-dashboard)). Only `paid` payouts ingest; idempotent via the `external-<payoutId>` key.
 - `backfillPaymentCapturedNet({connectedAccountId})` — finds `payment_captured` rows missing `connectedAccountNetCents` (the pre-capture-race-fix population), re-reads each charge's BalanceTransaction, and enriches the row in place. Idempotent; returns `{scanned, enriched, skipped, failed}`.
 
-**Run order matters when both are needed on one account: ingest the external payout FIRST, then backfill.** Backfilling first inflates payable while the manual payout is still unrecorded; the trust gate blocks payouts either way, but doing it in order keeps allocations attributed to the right events.
+**Run order matters when both are needed on one account: ingest the external payout FIRST, then backfill.** Backfilling first inflates payable while the manual payout is still unrecorded; the trust gate blocks payouts either way, but doing it in order keeps allocations attributed to the right events. The order is machine-checked: `backfillPaymentCapturedNet` refuses with `EXTERNAL_PAYOUT_UNRECORDED` (listing the offending payout ids) while the account has paid payouts the ledger never recorded.
 
 ## Explain a missing payout email
 

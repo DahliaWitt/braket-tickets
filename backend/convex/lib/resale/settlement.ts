@@ -36,7 +36,12 @@ type MarkSellerOrderRefundedArgs = {
   orderId: Id<'ticket_orders'>;
   refundedAmountCents: number;
   lostProcessingFeeCents: number;
-  stripeRefundId?: string;
+  /**
+   * Required: `appendFinancialEvent` dedups `payment_refunded` rows on
+   * (orderId, stripeRefundId); without it a retried completion would
+   * double-insert the refund.
+   */
+  stripeRefundId: string;
   processorFeeCents?: number;
   platformFeeCents?: number;
   /**
@@ -132,10 +137,11 @@ export async function markSellerOrderRefundedState(
     throwInvalidState(ErrorMessages.INVALID_STATE('order cannot be refunded'));
   }
 
-  // `appendFinancialEvent` dedups on (orderId, stripeRefundId), back-fills
-  // `connectedAccountId` from the order snapshot, and lets a later
-  // `charge.refunded` webhook enrich the row in place — the raw insert this
-  // replaces produced rows the payout settlement could never see.
+  // `appendFinancialEvent` dedups on (orderId, stripeRefundId) and lets a
+  // later `charge.refunded` webhook enrich the row in place — the raw insert
+  // this replaces produced rows the payout settlement could never see.
+  // `connectedAccountId` is passed from the already-loaded order so the
+  // helper skips its fallback read.
   await appendFinancialEvent(ctx.db, {
     orderId: order._id,
     eventId: order.eventId,
@@ -144,6 +150,7 @@ export async function markSellerOrderRefundedState(
     stripePaymentIntentId: order.stripePaymentIntentId,
     stripeChargeId: order.stripeChargeId,
     stripeRefundId: args.stripeRefundId,
+    connectedAccountId: order.connectedAccountId,
     processorFeeCents: args.processorFeeCents,
     platformFeeCents: args.platformFeeCents,
     connectedAccountNetCents: args.connectedAccountNetCents,
