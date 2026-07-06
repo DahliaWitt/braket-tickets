@@ -514,9 +514,23 @@
                   <div
                     class="relative h-64 w-full overflow-hidden bg-card md:h-56 md:w-48 lg:w-56"
                   >
+                    <!-- Ambient fill: the poster's own light spills past its edges,
+                         so off-ratio posters never letterbox against flat black -->
+                    <img
+                      [ngSrc]="event.posterUrl"
+                      alt=""
+                      aria-hidden="true"
+                      data-testid="dashboard-poster-backdrop"
+                      fill
+                      ngSrcset="320w"
+                      sizes="64px"
+                      class="scale-125 object-cover opacity-60 blur-xl saturate-150"
+                    />
+                    <div class="absolute inset-0 bg-background/40"></div>
                     <img
                       [ngSrc]="event.posterUrl"
                       [alt]="event.title + ' event poster'"
+                      data-testid="dashboard-poster"
                       fill
                       [priority]="first"
                       ngSrcset="320w, 640w, 1024w"

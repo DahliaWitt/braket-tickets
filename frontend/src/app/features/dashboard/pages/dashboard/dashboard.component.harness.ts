@@ -32,6 +32,36 @@ export class DashboardComponentHarness extends ComponentHarness {
     return !!el;
   }
 
+  /** Get the number of event poster images in the events section. */
+  async getPosterCount(): Promise<number> {
+    const els = await this.locatorForAll('[data-testid="dashboard-poster"]')();
+    return els.length;
+  }
+
+  /** Get the number of ambient-fill poster backdrops in the events section. */
+  async getPosterBackdropCount(): Promise<number> {
+    const els = await this.locatorForAll(
+      '[data-testid="dashboard-poster-backdrop"]',
+    )();
+    return els.length;
+  }
+
+  /**
+   * Check that every poster backdrop is decorative: hidden from assistive
+   * tech (aria-hidden) with an empty alt.
+   */
+  async posterBackdropsAreDecorative(): Promise<boolean> {
+    const els = await this.locatorForAll(
+      '[data-testid="dashboard-poster-backdrop"]',
+    )();
+    for (const el of els) {
+      const ariaHidden = await el.getAttribute('aria-hidden');
+      const alt = await el.getAttribute('alt');
+      if (ariaHidden !== 'true' || alt !== '') return false;
+    }
+    return els.length > 0;
+  }
+
   /** Get all "Get Tickets" CTA hrefs. */
   async getGetTicketsHrefs(): Promise<string[]> {
     const els = await this.locatorForAll(

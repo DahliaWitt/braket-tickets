@@ -14,6 +14,7 @@ import {
 } from '@/features/dashboard/services/dashboard-page-data.service';
 import {provideRouter} from '@angular/router';
 import {provideZonelessChangeDetection, signal} from '@angular/core';
+import {IMAGE_LOADER, type ImageLoaderConfig} from '@angular/common';
 import {type UpcomingEvent} from '@/core/models/event.types';
 import {type Community} from '@/core/services/communities.service';
 import {vi, beforeAll, describe, it, expect, beforeEach} from 'vitest';
@@ -232,6 +233,11 @@ describe('DashboardComponent', () => {
         provideRouter([{path: '**', children: []}]),
         {provide: AuthService, useValue: authServiceMock},
         {provide: DashboardDataService, useValue: dashboardDataMock},
+        // NgOptimizedImage requires a loader when templates use ngSrcset
+        {
+          provide: IMAGE_LOADER,
+          useValue: (config: ImageLoaderConfig) => config.src,
+        },
       ],
     });
     TestBed.overrideComponent(DashboardComponent, {
@@ -581,6 +587,35 @@ describe('DashboardComponent', () => {
       expect(fixture.componentInstance.visibleEvents()[0]?.title).toBe(
         'Earlier Event',
       );
+    });
+
+    it('should render the poster with a decorative ambient-fill backdrop', async () => {
+      const posterEvent: UpcomingEvent = {
+        ...mockEvent,
+        posterUrl: 'https://example.com/poster.jpg',
+      } as never;
+      setup({
+        approvals: mockApprovals,
+        events: [posterEvent],
+        eventAvailability: purchaseAccessFor([posterEvent]),
+      });
+      await createComponent();
+
+      expect(await harness.getPosterCount()).toBe(1);
+      expect(await harness.getPosterBackdropCount()).toBe(1);
+      expect(await harness.posterBackdropsAreDecorative()).toBe(true);
+    });
+
+    it('should render no poster layers when the event has no poster', async () => {
+      setup({
+        approvals: mockApprovals,
+        events: [mockEvent],
+        eventAvailability: purchaseAccessFor([mockEvent]),
+      });
+      await createComponent();
+
+      expect(await harness.getPosterCount()).toBe(0);
+      expect(await harness.getPosterBackdropCount()).toBe(0);
     });
 
     it('should show no events section when backend returns no viewable events', async () => {
