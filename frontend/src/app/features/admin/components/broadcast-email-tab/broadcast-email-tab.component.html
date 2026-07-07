@@ -115,17 +115,14 @@
         zSize="sm"
         type="submit"
         data-testid="send-broadcast"
+        [zLoading]="isSendingBroadcast()"
         [zDisabled]="isSendBroadcastDisabled()"
-        [attr.aria-busy]="isSendingBroadcast()"
         class="w-full border-primary/50 text-primary hover:bg-primary/10 sm:w-auto"
       >
-        @if (isSendingBroadcast()) {
-          <z-icon zType="loader-circle" class="animate-spin" />
-          Sending...
-        } @else {
+        @if (!isSendingBroadcast()) {
           <z-icon zType="mail" />
-          Send Email
         }
+        Send Email
       </button>
 
       @if (sendFeedback(); as feedback) {

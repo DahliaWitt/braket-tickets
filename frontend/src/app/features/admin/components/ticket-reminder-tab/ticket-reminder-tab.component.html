@@ -103,17 +103,14 @@
       zSize="sm"
       type="submit"
       data-testid="send-ticket-reminder"
+      [zLoading]="isSendingTicketReminder()"
       [zDisabled]="isSendReminderDisabled()"
-      [attr.aria-busy]="isSendingTicketReminder()"
       class="w-full border-primary/50 text-primary hover:bg-primary/10 sm:w-auto"
     >
-      @if (isSendingTicketReminder()) {
-        <z-icon zType="loader-circle" class="animate-spin" />
-        Sending...
-      } @else {
+      @if (!isSendingTicketReminder()) {
         <z-icon zType="mail" />
-        Send Reminder
       }
+      Send Reminder
     </button>
   </form>
 </z-card>

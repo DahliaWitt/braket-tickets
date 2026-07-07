@@ -170,6 +170,15 @@ export const GUEST_TICKET_SEND_LOCK_STALE_MS = 5 * 60 * 1000;
 export type BeginGuestTicketSendResult = {
   claimed: boolean;
   reason: 'claimed' | 'already_sent' | 'in_flight' | 'not_found';
+  /**
+   * Ownership token for the claim — the timestamp written to
+   * `emailSendLockedAt`. Only the holder may release the lock, so an older
+   * attempt that resumes after the stale window cannot clear a newer
+   * reclaimed lock. `null` when the claim was not granted. The timestamp is a
+   * sound token because a reclaim only happens once the prior lock is stale
+   * (>5 min old), so the owner's and a reclaimer's tokens can never collide.
+   */
+  lockToken: number | null;
 };
 
 /**
@@ -199,18 +208,18 @@ export async function beginGuestTicketSend(
   },
 ): Promise<BeginGuestTicketSendResult> {
   const guest = await ctx.db.get('guests', args.id);
-  if (!guest) return {claimed: false, reason: 'not_found'};
+  if (!guest) return {claimed: false, reason: 'not_found', lockToken: null};
 
   if (args.requireUnsent) {
     if (guest.emailedAt !== undefined) {
-      return {claimed: false, reason: 'already_sent'};
+      return {claimed: false, reason: 'already_sent', lockToken: null};
     }
     const alreadyDelivered = await ctx.runQuery(
       internal.email.email_delivery.hasDelivery,
       {source: 'ticket', sourceId: args.id},
     );
     if (alreadyDelivered) {
-      return {claimed: false, reason: 'already_sent'};
+      return {claimed: false, reason: 'already_sent', lockToken: null};
     }
   }
 
@@ -220,22 +229,32 @@ export async function beginGuestTicketSend(
     typeof lockedAt === 'number' &&
     now - lockedAt < GUEST_TICKET_SEND_LOCK_STALE_MS
   ) {
-    return {claimed: false, reason: 'in_flight'};
+    return {claimed: false, reason: 'in_flight', lockToken: null};
   }
 
   await ctx.db.patch('guests', args.id, {emailSendLockedAt: now});
-  return {claimed: true, reason: 'claimed'};
+  return {claimed: true, reason: 'claimed', lockToken: now};
 }
 
+/**
+ * Records a successful send. Always sets `emailedAt` (the delivery happened),
+ * but only releases the lock when this attempt still owns it, so a send that
+ * resumed after being stale-reclaimed cannot clear the newer holder's lock.
+ */
 export async function markAsEmailed(
   ctx: MutationCtx,
   args: {
     id: Id<'guests'>;
+    lockToken: number;
   },
 ): Promise<null> {
+  const guest = await ctx.db.get('guests', args.id);
+  if (!guest) return null;
   await ctx.db.patch('guests', args.id, {
     emailedAt: Date.now(),
-    emailSendLockedAt: null,
+    ...(guest.emailSendLockedAt === args.lockToken
+      ? {emailSendLockedAt: null}
+      : {}),
   });
   return null;
 }
@@ -243,15 +262,21 @@ export async function markAsEmailed(
 /**
  * Releases the in-flight send lock without marking the guest emailed. Called on
  * the failure path so a failed send can be retried immediately instead of
- * waiting out the staleness window. `null` (not `undefined`) is used because
+ * waiting out the staleness window. Only clears the lock when this attempt
+ * still owns it (`emailSendLockedAt === lockToken`), so an older attempt cannot
+ * release a newer reclaimed lock. `null` (not `undefined`) is used because
  * `ctx.db.patch` does not clear fields set to `undefined` in this codebase.
  */
 export async function clearGuestTicketSendLock(
   ctx: MutationCtx,
   args: {
     id: Id<'guests'>;
+    lockToken: number;
   },
 ): Promise<null> {
-  await ctx.db.patch('guests', args.id, {emailSendLockedAt: null});
+  const guest = await ctx.db.get('guests', args.id);
+  if (guest && guest.emailSendLockedAt === args.lockToken) {
+    await ctx.db.patch('guests', args.id, {emailSendLockedAt: null});
+  }
   return null;
 }

@@ -4066,13 +4066,14 @@ export declare const internal: {
         { id: Id<"guests">; requireUnsent: boolean },
         {
           claimed: boolean;
+          lockToken: number | null;
           reason: "claimed" | "already_sent" | "in_flight" | "not_found";
         }
       >;
       clearGuestTicketSendLock: FunctionReference<
         "mutation",
         "internal",
-        { id: Id<"guests"> },
+        { id: Id<"guests">; lockToken: number },
         null
       >;
       getInternal: FunctionReference<
@@ -4096,7 +4097,7 @@ export declare const internal: {
       markAsEmailed: FunctionReference<
         "mutation",
         "internal",
-        { id: Id<"guests"> },
+        { id: Id<"guests">; lockToken: number },
         null
       >;
     };

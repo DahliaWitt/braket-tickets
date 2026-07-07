@@ -92,12 +92,13 @@ export const sendTicket = action({
         requireUnsent: args.skipIfAlreadyEmailed === true,
       },
     );
-    if (!claim.claimed) {
+    if (!claim.claimed || claim.lockToken === null) {
       return {status: 'skipped' as const};
     }
+    const lockToken = claim.lockToken;
 
     try {
-      return await deliverGuestTicket(ctx, guest);
+      return await deliverGuestTicket(ctx, guest, lockToken);
     } catch (error) {
       // Release the lock so a retry can proceed immediately. This runs for any
       // failure, including a markAsEmailed failure after the provider already
@@ -106,9 +107,11 @@ export const sendTicket = action({
       // consults the durable emailDeliveries record), but a deliberate single
       // Resend intentionally bypasses that guard and will dispatch a second
       // copy. That is the accepted single-resend contract, now reachable via a
-      // crash and not only a prior confirmed send.
+      // crash and not only a prior confirmed send. The lockToken guards against
+      // releasing a newer attempt's reclaimed lock.
       await ctx.runMutation(internal.events.guests.clearGuestTicketSendLock, {
         id: guest._id,
+        lockToken,
       });
       throw error;
     }
@@ -118,6 +121,7 @@ export const sendTicket = action({
 async function deliverGuestTicket(
   ctx: ActionCtx,
   guest: Awaited<ReturnType<typeof requireGuestTicketSendAccess>>,
+  lockToken: number,
 ): Promise<{status: 'sent'}> {
   const eventP = ctx.runQuery(internal.events.management.getInternal, {
     id: guest.eventId,
@@ -187,6 +191,7 @@ async function deliverGuestTicket(
   // deliberate single resend intentionally bypasses that guard.
   await ctx.runMutation(internal.events.guests.markAsEmailed, {
     id: guest._id,
+    lockToken,
   });
 
   return {status: 'sent'};

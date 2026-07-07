@@ -70,18 +70,19 @@ export const beginGuestTicketSend = internalMutation({
       v.literal('in_flight'),
       v.literal('not_found'),
     ),
+    lockToken: v.union(v.number(), v.null()),
   }),
   handler: beginGuestTicketSendImpl,
 });
 
 export const markAsEmailed = internalMutation({
-  args: {id: v.id('guests')},
+  args: {id: v.id('guests'), lockToken: v.number()},
   returns: v.null(),
   handler: markAsEmailedImpl,
 });
 
 export const clearGuestTicketSendLock = internalMutation({
-  args: {id: v.id('guests')},
+  args: {id: v.id('guests'), lockToken: v.number()},
   returns: v.null(),
   handler: clearGuestTicketSendLockImpl,
 });
