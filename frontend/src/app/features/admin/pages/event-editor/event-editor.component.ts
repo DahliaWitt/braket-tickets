@@ -514,14 +514,15 @@ export class EventEditorComponent implements HasUnsavedChanges {
       if (end.getTime() <= start.getTime()) {
         return {
           kind: 'endBeforeStart',
-          message: 'End must be after the event start',
+          message: 'End date must be after the event start',
         };
       }
-      // Mirror the backend cap so an over-long span is caught before submit.
+      // Mirror the backend cap (and its wording) so an over-long span is caught
+      // before submit.
       if (end.getTime() - start.getTime() > MAX_EVENT_DURATION_MS) {
         return {
           kind: 'endTooFar',
-          message: `End must be within ${MAX_EVENT_DURATION_DAYS} days of the start`,
+          message: `End date must be within ${MAX_EVENT_DURATION_DAYS} days of the event start`,
         };
       }
       return null;

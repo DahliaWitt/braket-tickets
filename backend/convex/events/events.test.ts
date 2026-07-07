@@ -1041,12 +1041,12 @@ describe('Event end date', () => {
   it('create rejects an endDate more than the max duration after the start', async () => {
     const {asAdmin, organizerId} = await setupEndDateContext();
 
-    // baseCreateArgs.date is 2030-12-15T20:00; 45 days later exceeds the cap.
+    // baseCreateArgs.date is 2030-12-15T20:00; ~120 days later exceeds the cap.
     await expect(
       asAdmin.mutation(api.events.management.create, {
         ...baseCreateArgs,
         organizerId,
-        endDate: '2031-01-29T20:00:00.000Z',
+        endDate: '2031-04-14T20:00:00.000Z',
       }),
     ).rejects.toThrow(/within \d+ days of the event start/);
 
@@ -2448,6 +2448,38 @@ describe('Event listing pagination', () => {
       expect(titles).toContain('Running Weekender');
       expect(titles).not.toContain('Ended Weekender');
       expect(titles).not.toContain('Past Single Night');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('upcoming keeps a long running event that started well before any date lookback', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-06-10T20:00:00.000Z'));
+      const t = convexTest();
+      const organizerId = await t.mutation(
+        api.testing.communities.seedOrganizer,
+        {name: 'Long Run Crew', isPublicDirectory: true},
+      );
+
+      // Started 40 days ago, ends tomorrow. A fixed start-date lookback would
+      // miss this; the endDate index catches it purely on `endDate > now`.
+      await t.mutation(api.testing.events.seedEvent, {
+        title: 'Long Running Festival',
+        date: '2026-05-01T20:00:00.000Z',
+        endDate: '2026-06-11T20:00:00.000Z',
+        price: 2000,
+        totalTickets: 50,
+        status: 'published',
+        visibility: 'public',
+        organizerId,
+      });
+
+      const titles = (await t.query(api.events.public.upcoming, {})).map(
+        (event) => event.title,
+      );
+      expect(titles).toContain('Long Running Festival');
     } finally {
       vi.useRealTimers();
     }

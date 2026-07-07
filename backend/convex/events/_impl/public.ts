@@ -1,4 +1,4 @@
-import type {Id} from '../../_generated/dataModel';
+import type {Doc, Id} from '../../_generated/dataModel';
 import type {QueryCtx} from '../../_generated/server';
 import {
   canViewCommunity,
@@ -7,7 +7,8 @@ import {
   isPlatformAdmin,
 } from '../../lib/access';
 import {countMatchingInQuery} from '../../lib/query_scan';
-import {hasEventEnded, ongoingEventStartLowerBound} from '../../lib/timezone';
+import {hasEventEnded, startOfTodayInEventTimeZone} from '../../lib/timezone';
+import {loadRunningPublishedEvents} from './ongoing';
 import {getAuthUserId} from '../../lib/auth_identity';
 import {
   getPosterUrl,
@@ -43,21 +44,26 @@ export async function listVisiblePublishedEvents(ctx: QueryCtx) {
 
 export async function listUpcomingPublishedEvents(ctx: QueryCtx) {
   const userId = await getAuthUserId(ctx);
-  // Look back MAX_EVENT_DURATION so running multi-day events (started before
-  // today, not yet ended) are included, then drop already-ended rows.
-  const minDate = ongoingEventStartLowerBound();
+  const startOfToday = startOfTodayInEventTimeZone();
   // TODO(BRA-410): Replace this all-results read with a real paginated API.
   // eslint-disable-next-line @convex-dev/no-collect-in-query -- Temporary all-results API until pagination is added.
-  const events = await ctx.db
+  const upcoming = await ctx.db
     .query('events')
     .withIndex('by_status_date', (q) =>
-      q.eq('status', 'published').gte('date', minDate),
+      q.eq('status', 'published').gte('date', startOfToday),
     )
     .collect();
+  // Currently-running multi-day events (started before today, endDate still
+  // ahead) come from the endDate index instead of scanning past events.
+  const running = await loadRunningPublishedEvents(ctx.db);
 
-  const ongoingEvents = events.filter((event) => !hasEventEnded(event));
+  const byId = new Map<Id<'events'>, Doc<'events'>>();
+  for (const event of [...running, ...upcoming]) byId.set(event._id, event);
+  const ongoingEvents = [...byId.values()].filter(
+    (event) => !hasEventEnded(event),
+  );
+
   const viewableEvents = await filterViewableEvents(ctx, userId, ongoingEvents);
-
   return await mapEventsWithPosterUrls(ctx, viewableEvents);
 }
 

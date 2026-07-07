@@ -2,8 +2,12 @@ import type {Doc, Id} from '../../_generated/dataModel';
 import type {QueryCtx} from '../../_generated/server';
 import {canViewEvent} from '../../lib/access';
 import {calculateEventInventory} from '../../lib/inventory';
-import {hasEventEnded, ongoingEventStartLowerBound} from '../../lib/timezone';
+import {hasEventEnded, startOfTodayInEventTimeZone} from '../../lib/timezone';
 import {isEligibleForPublicDirectory} from '../../lib/communities/public';
+import {
+  compareEventsByStartAscending,
+  loadRunningPublishedEvents,
+} from './ongoing';
 import {
   mapPublicEventCards,
   type PublicEventAvailabilitySummary,
@@ -68,18 +72,26 @@ async function filterLandingPageEvents(
 }
 
 export async function listPublicUpcomingCards(ctx: QueryCtx) {
-  // Look back MAX_EVENT_DURATION so events that started before today but have
-  // not yet ended (running multi-day events) are fetched, then drop the
-  // already-ended rows with hasEventEnded.
-  const minDate = ongoingEventStartLowerBound();
-  const publicEvents: Doc<'events'>[] = [];
-  let cursor: string | null = null;
+  const startOfToday = startOfTodayInEventTimeZone();
+  const collected = new Map<Id<'events'>, Doc<'events'>>();
 
-  while (publicEvents.length < PUBLIC_UPCOMING_CARD_LIMIT) {
+  // Currently-running multi-day events (rare) come from the endDate index, so
+  // the date-paginated scan below never has to walk past events. These have a
+  // start before today, so they are disjoint from the date >= today pages.
+  const runningCards = await filterLandingPageEvents(
+    ctx,
+    await loadRunningPublishedEvents(ctx.db),
+  );
+  for (const event of runningCards) {
+    collected.set(event._id, event);
+  }
+
+  let cursor: string | null = null;
+  while (collected.size < PUBLIC_UPCOMING_CARD_LIMIT) {
     const result = await ctx.db
       .query('events')
       .withIndex('by_status_date', (q) =>
-        q.eq('status', 'published').gte('date', minDate),
+        q.eq('status', 'published').gte('date', startOfToday),
       )
       .paginate({
         cursor,
@@ -87,13 +99,10 @@ export async function listPublicUpcomingCards(ctx: QueryCtx) {
       });
 
     const ongoingPage = result.page.filter((event) => !hasEventEnded(event));
-    const eligibleEvents = await filterLandingPageEvents(ctx, ongoingPage);
-    publicEvents.push(
-      ...eligibleEvents.slice(
-        0,
-        PUBLIC_UPCOMING_CARD_LIMIT - publicEvents.length,
-      ),
-    );
+    for (const event of await filterLandingPageEvents(ctx, ongoingPage)) {
+      if (collected.size >= PUBLIC_UPCOMING_CARD_LIMIT) break;
+      collected.set(event._id, event);
+    }
 
     if (result.isDone) {
       break;
@@ -101,6 +110,10 @@ export async function listPublicUpcomingCards(ctx: QueryCtx) {
 
     cursor = result.continueCursor;
   }
+
+  const publicEvents = [...collected.values()]
+    .sort(compareEventsByStartAscending)
+    .slice(0, PUBLIC_UPCOMING_CARD_LIMIT);
 
   const availabilityByEventId = await loadCanonicalListAvailability(
     ctx.db,

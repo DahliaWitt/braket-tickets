@@ -124,8 +124,8 @@ export function validateCreateEventInput(args: CreateEventInput) {
 /**
  * Requires the end instant to be strictly after the event start and no more
  * than MAX_EVENT_DURATION_DAYS later. The upper bound is a data-integrity guard
- * and the invariant that keeps "upcoming" discovery queries bounded (see
- * ongoingEventStartLowerBound). Formats are validated separately
+ * (see MAX_EVENT_DURATION_DAYS): a typo'd far-future endDate would otherwise
+ * keep the event flagged "ongoing" forever. Formats are validated separately
  * (validateISODate); legacy date-key starts resolve to event-local midnight
  * via eventStartInstantMs.
  */

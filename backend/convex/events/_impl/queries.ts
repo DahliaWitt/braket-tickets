@@ -4,7 +4,11 @@ import {EVENT_VISIBILITIES} from '@shared/domain/event-visibility';
 import {throwInvalidInput, throwUnauthorized} from '../../lib/errors';
 import {isPlatformAdmin, requireManageCommunity} from '../../lib/access';
 import {getUserCommunities} from '../../lib/authz';
-import {hasEventEnded, ongoingEventStartLowerBound} from '../../lib/timezone';
+import {hasEventEnded, startOfTodayInEventTimeZone} from '../../lib/timezone';
+import {
+  compareEventsByStartAscending,
+  loadRunningPublishedEvents,
+} from './ongoing';
 
 const ORGANIZER_EVENT_LIST_LIMIT = 500;
 
@@ -60,9 +64,7 @@ export async function loadUpcomingPublishedEventsForOrganizer(
   db: Pick<QueryCtx['db'], 'query'>,
   organizerId: Id<'organizers'>,
 ): Promise<Doc<'events'>[]> {
-  // Look back MAX_EVENT_DURATION so running multi-day events (started before
-  // today, not yet ended) are fetched, then drop already-ended rows below.
-  const minDate = ongoingEventStartLowerBound();
+  const startOfToday = startOfTodayInEventTimeZone();
   const eventGroups = await Promise.all(
     EVENT_VISIBILITIES.map((visibility) =>
       db
@@ -72,20 +74,26 @@ export async function loadUpcomingPublishedEventsForOrganizer(
             .eq('organizerId', organizerId)
             .eq('status', 'published')
             .eq('visibility', visibility)
-            .gte('date', minDate),
+            .gte('date', startOfToday),
         )
         .take(ORGANIZER_EVENT_LIST_LIMIT),
     ),
   );
+  // Currently-running multi-day events for this organizer come from the
+  // endDate index (scoped in memory) so a past start never falls outside the
+  // date-indexed window above.
+  const running = (await loadRunningPublishedEvents(db)).filter(
+    (event) => event.organizerId === organizerId,
+  );
 
-  return eventGroups
-    .flat()
+  const byId = new Map<Id<'events'>, Doc<'events'>>();
+  for (const event of [...running, ...eventGroups.flat()]) {
+    byId.set(event._id, event);
+  }
+
+  return [...byId.values()]
     .filter((event) => !hasEventEnded(event))
-    .sort((left, right) =>
-      left.date === right.date
-        ? left._creationTime - right._creationTime
-        : left.date.localeCompare(right.date),
-    )
+    .sort(compareEventsByStartAscending)
     .slice(0, ORGANIZER_EVENT_LIST_LIMIT);
 }
 

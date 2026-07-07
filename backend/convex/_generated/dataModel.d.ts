@@ -613,6 +613,7 @@ export type DataModel = {
       ];
       by_status: ["status", "_creationTime"];
       by_status_date: ["status", "date", "_creationTime"];
+      by_status_endDate: ["status", "endDate", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};

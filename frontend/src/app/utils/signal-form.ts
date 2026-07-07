@@ -10,7 +10,7 @@ interface SignalFormFieldState {
   invalid(): boolean;
   touched(): boolean;
   dirty(): boolean;
-  errors(): readonly {kind: string}[];
+  errors(): readonly {kind: string; message?: string}[];
 }
 
 function isCallableField(field: unknown): field is () => SignalFormFieldState {
@@ -55,10 +55,8 @@ export function signalFormFieldErrorMessage(
   const wanted = new Set(errorKinds.map((kind) => kind.toLowerCase()));
   const match = field()
     .errors()
-    .find((error) => wanted.has(error.kind.toLowerCase())) as
-    | {kind: string; message?: unknown}
-    | undefined;
-  return match && typeof match.message === 'string' ? match.message : null;
+    .find((error) => wanted.has(error.kind.toLowerCase()));
+  return match?.message ?? null;
 }
 
 export function castSignalFormField<T>(
