@@ -152,6 +152,7 @@ export type DataModel = {
       applicationId?: Id<"applications">;
       deletedEventName?: string;
       eventId?: Id<"events">;
+      ipAddress?: string;
       magicLinkId?: Id<"magic_links">;
       organizerId?: Id<"organizers">;
       reason?: string;
@@ -159,6 +160,7 @@ export type DataModel = {
       targetUserId?: Id<"users">;
       trustedOrganizerId?: Id<"organizers">;
       trustingOrganizerId?: Id<"organizers">;
+      userAgent?: string;
       _id: Id<"adminAuditLogs">;
       _creationTime: number;
     };
@@ -171,13 +173,15 @@ export type DataModel = {
       | "applicationId"
       | "deletedEventName"
       | "eventId"
+      | "ipAddress"
       | "magicLinkId"
       | "organizerId"
       | "reason"
       | "source"
       | "targetUserId"
       | "trustedOrganizerId"
-      | "trustingOrganizerId";
+      | "trustingOrganizerId"
+      | "userAgent";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
@@ -696,6 +700,7 @@ export type DataModel = {
       checkedInAt?: number;
       checkedInBy?: Id<"users">;
       email?: string;
+      emailSendLockedAt?: number | null;
       emailedAt?: number;
       eventId: Id<"events">;
       name: string;
@@ -711,6 +716,7 @@ export type DataModel = {
       | "checkedInBy"
       | "email"
       | "emailedAt"
+      | "emailSendLockedAt"
       | "eventId"
       | "name"
       | "notes"

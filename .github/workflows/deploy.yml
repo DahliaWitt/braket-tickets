@@ -240,7 +240,11 @@ jobs:
         run: pnpm sync:env:prod
 
       - name: Deploy to Convex
-        run: pnpm convex deploy
+        env:
+          DEPLOY_REF_NAME: ${{ github.ref_name }}
+          DEPLOY_SHA: ${{ github.sha }}
+          DEPLOY_ACTOR: ${{ github.actor }}
+        run: pnpm convex deploy --message "production deploy ${DEPLOY_REF_NAME} @ ${DEPLOY_SHA} by ${DEPLOY_ACTOR}"
 
   deploy-frontend:
     name: Deploy Frontend to Cloudflare

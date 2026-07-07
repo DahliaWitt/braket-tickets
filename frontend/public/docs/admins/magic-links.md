@@ -27,11 +27,11 @@ If you're not sure whether someone should be vetted, let them go through the nor
 2. Click to create a new link
 3. Share the URL with whoever you want to invite
 
-When someone clicks the link, they'll be prompted to sign in or create an account (if they don't have one), and then they're automatically vetted into your community.
+When someone clicks the link, they'll be prompted to sign in or create an account (if they don't have one), and then they're automatically vetted into the selected community.
 
 ## Managing links
 
-The Magic Links tab shows all your active and expired links. You can see when each was created and how it's been used.
+The Magic Links tab shows active and expired links for the selected community, including links created by other community admins. You can see when each was created and how it's been used.
 
 Links you no longer need can be deactivated. Once deactivated, the URL stops working — anyone who clicks it won't be auto-vetted.
 
