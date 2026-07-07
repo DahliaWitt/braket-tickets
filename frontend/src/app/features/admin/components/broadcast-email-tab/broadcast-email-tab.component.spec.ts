@@ -78,6 +78,12 @@ describe('BroadcastEmailTabComponent', () => {
     expect(await harness.usesEmailCardSpacingContract()).toBe(true);
   });
 
+  it('explains that late ticket buyers automatically receive the broadcast', async () => {
+    expect(await harness.getCatchupNoteText()).toBe(
+      'people who get tickets after you send will automatically receive it too.',
+    );
+  });
+
   it('should make form invalid when subject exceeds max length', async () => {
     const overLength = 'a'.repeat(MAX_TICKET_REMINDER_SUBJECT_LENGTH + 1);
     component.broadcastFormModel.set({

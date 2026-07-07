@@ -82,12 +82,13 @@ Backfills in this repo are not uniform. Before running anything, read the exact 
 
 Verified examples from the current repo:
 
-| Migration                    | Invocation                                                                                          | Notes                                                                         |
-| ---------------------------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| Bearer token digest backfill | `pnpm convex run --prod migrations:runTokenDigestBackfills '{"dryRun":true}'` before the real run   | Uses `@convex-dev/migrations`; requires `TOKEN_DIGEST_SECRET` to be set first |
-| Slug backfill                | `pnpm convex run --prod migrations/slug_backfill:backfillSlugs`                                     | No args; batches 100 organizers; self-schedules when more remain              |
-| Community status backfill    | `pnpm convex run --prod migrations/community_status_backfill:run '{"dryRun":true}'`                 | Supports `dryRun` and `cursor`; returns `processed`, `updated`, `hasMore`     |
-| Discord cleanup backfill     | `pnpm convex run --prod migrations/discord_cleanup_backfill:cleanDiscordFields '{"batchSize":100}'` | Supports `cursor` and `batchSize`; removes fields via `db.replace()`          |
+| Migration                    | Invocation                                                                                                 | Notes                                                                                                                                         |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bearer token digest backfill | `pnpm convex run --prod migrations:runTokenDigestBackfills '{"dryRun":true}'` before the real run          | Uses `@convex-dev/migrations`; requires `TOKEN_DIGEST_SECRET` to be set first                                                                 |
+| Slug backfill                | `pnpm convex run --prod migrations/slug_backfill:backfillSlugs`                                            | No args; batches 100 organizers; self-schedules when more remain                                                                              |
+| Community status backfill    | `pnpm convex run --prod migrations/community_status_backfill:run '{"dryRun":true}'`                        | Supports `dryRun` and `cursor`; returns `processed`, `updated`, `hasMore`                                                                     |
+| Discord cleanup backfill     | `pnpm convex run --prod migrations/discord_cleanup_backfill:cleanDiscordFields '{"batchSize":100}'`        | Supports `cursor` and `batchSize`; removes fields via `db.replace()`                                                                          |
+| Broadcast delivery backfill  | `pnpm convex run --prod migrations:backfillEventBroadcastDeliveries '{"dryRun":true}'` before the real run | Uses `@convex-dev/migrations`; seeds `eventBroadcastDeliveries` from 30-day `emailDeliveries` history (see `docs/runbooks/email-delivery.md`) |
 
 ### Bearer token digest migration
 

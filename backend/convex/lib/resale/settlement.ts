@@ -9,6 +9,7 @@ import {
   throwNotFound,
 } from '../../lib/errors';
 import {logger} from '../../lib/logger';
+import {scheduleBroadcastCatchup} from '../../lib/broadcast_catchup';
 import {enqueueTicketEmailDelivery} from '../../lib/email_delivery_wrapper';
 import {stripePool} from '../../lib/resilience';
 import {buildTicketRosterProjection} from '../../lib/ticket_roster_projection';
@@ -618,6 +619,13 @@ async function applyResaleTicketTransfer(
       email: sellerTicket.rosterEmail ?? null,
       checkedInByName: sellerTicket.rosterCheckedInByName ?? null,
     }),
+  });
+
+  // Catch the resale buyer up on broadcasts sent before they joined.
+  await scheduleBroadcastCatchup(ctx, {
+    eventId: order.eventId,
+    email: buyerUser?.email ?? buyerGuestSession?.email,
+    userId: order.userId,
   });
 }
 

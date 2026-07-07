@@ -1,5 +1,6 @@
 import type {Doc, Id} from '../../_generated/dataModel';
 import type {MutationCtx} from '../../_generated/server';
+import {scheduleBroadcastCatchup} from '../../lib/broadcast_catchup';
 import {isTestEnvironment, isUnitTestRuntime} from '../../lib/environment';
 import {
   assertValidListingTransition,
@@ -142,6 +143,15 @@ export async function completePrimaryOrderState(
     stripeEventId: args.stripeEventId,
     note: args.note,
     occurredAt: now,
+  });
+
+  // Catch the buyer up on broadcasts sent before they joined the audience.
+  // The `state === 'completed'` early-return above prevents double-scheduling
+  // on webhook retries.
+  await scheduleBroadcastCatchup(ctx, {
+    eventId: order.eventId,
+    email: attendeeUser?.email ?? guestSession?.email,
+    userId: order.userId,
   });
 
   const completedOrder = await ctx.db.get('ticket_orders', order._id);
