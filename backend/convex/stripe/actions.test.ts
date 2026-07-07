@@ -156,6 +156,37 @@ describe('processScheduledPayouts', () => {
     expect(running?.paidOutAt).toBeUndefined();
     expect(past?.paidOutAt).toBeTypeOf('number');
   });
+
+  it('does not retire a platform-organizer event with a corrupt endDate', async () => {
+    const t = convexTest();
+    const organizerId = await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {name: 'Platform Organizer Corrupt', isPlatformOrganizer: true},
+    );
+    const DAY_MS = 24 * 60 * 60 * 1000;
+
+    const corruptId = await t.mutation(api.testing.events.seedEvent, {
+      title: 'Platform Corrupt End Event',
+      price: 2500,
+      totalTickets: 100,
+      date: new Date(Date.now() - 30 * DAY_MS).toISOString(),
+      status: 'published',
+      visibility: 'public',
+      organizerId,
+    });
+    // Corrupt the stored endDate after creation (write validation forbids it).
+    // A start-based fallback would wrongly retire this long-past event; the
+    // end-aware, fail-closed path must skip it instead.
+    await t.run(async (ctx) => {
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Corrupt endDate: intentionally-invalid state unreachable via production mutations.
+      await ctx.db.patch(corruptId, {endDate: '2026-02-31T20:00:00.000Z'});
+    });
+
+    await t.action(internal.stripe.actions.processScheduledPayouts, {});
+
+    const corrupt = await t.run(async (ctx) => ctx.db.get(corruptId));
+    expect(corrupt?.paidOutAt).toBeUndefined();
+  });
 });
 
 // =============================================================================

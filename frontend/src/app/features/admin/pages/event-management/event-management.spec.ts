@@ -1524,6 +1524,20 @@ describe('computePayoutStatus', () => {
     ).toBeNull();
   });
 
+  it('returns null (no status) for a corrupt endDate rather than keying off the start', () => {
+    // A valid past start with a malformed end must fail closed — showing no
+    // payout status — not fall back to a start-based "processing".
+    const result = computePayoutStatus(
+      {
+        status: 'published',
+        date: '2025-01-01T20:00:00.000Z',
+        endDate: '2025-02-31T20:00:00.000Z',
+      },
+      new Date('2025-06-01T00:00:00.000Z'),
+    );
+    expect(result).toBeNull();
+  });
+
   it('returns {state: "pending"} at the boundary (exactly 3 days have not elapsed yet)', () => {
     // Event: Jan 10 midnight; payoutDate: Jan 13 midnight; now: just before Jan 13 midnight
     const eventDate = new Date(2025, 0, 10);

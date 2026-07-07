@@ -91,8 +91,10 @@ describe('event-time', () => {
     expect(eventEndInstantMs(start)).toBe(new Date(start).getTime());
     expect(eventEndInstantMs(start, null)).toBe(new Date(start).getTime());
     // Present-but-invalid end -> null (must NOT fall back to the start, so
-    // payout gating cannot release funds early on corrupt data).
+    // payout gating cannot release funds early on corrupt data). Empty string
+    // is present-but-invalid, not absent.
     expect(eventEndInstantMs(start, 'not-a-date')).toBeNull();
+    expect(eventEndInstantMs(start, '')).toBeNull();
     // No valid end and unparseable start -> null.
     expect(eventEndInstantMs('not-a-date')).toBeNull();
   });

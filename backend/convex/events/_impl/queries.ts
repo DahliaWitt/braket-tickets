@@ -5,8 +5,20 @@ import {throwInvalidInput, throwUnauthorized} from '../../lib/errors';
 import {isPlatformAdmin, requireManageCommunity} from '../../lib/access';
 import {getUserCommunities} from '../../lib/authz';
 import {hasEventEnded, ongoingEventStartLowerBound} from '../../lib/timezone';
+import {logger} from '../../lib/logger';
 
 const ORGANIZER_EVENT_LIST_LIMIT = 500;
+
+/**
+ * Safety valve on the organizer discovery scan. Pagination walks past ended
+ * lookback rows to reach live events, so read cost is data-dependent; this
+ * caps rows read per visibility well below the Convex per-query document
+ * budget (leaving room for the 3 visibility scans plus downstream availability
+ * reads). No realistic organizer approaches it — past this many events in the
+ * lookback window the scan degrades (with a logged warning) instead of
+ * throwing at the budget.
+ */
+const ORGANIZER_EVENT_MAX_SCAN_ROWS = 2_000;
 
 type OrganizerLookupArgs = {
   organizerId?: Id<'organizers'>;
@@ -74,6 +86,7 @@ async function collectOngoingEventsForVisibility(
 ): Promise<Doc<'events'>[]> {
   const collected: Doc<'events'>[] = [];
   let cursor: string | null = null;
+  let scanned = 0;
 
   while (collected.length < limit) {
     const page = await db
@@ -93,7 +106,19 @@ async function collectOngoingEventsForVisibility(
       if (collected.length >= limit) break;
     }
 
+    scanned += page.page.length;
     if (page.isDone) break;
+    if (scanned >= ORGANIZER_EVENT_MAX_SCAN_ROWS) {
+      // Degrade instead of risking a per-query document-budget failure. Not
+      // silent: an organizer with this many ended lookback rows is anomalous
+      // and worth investigating.
+      logger.warn(
+        'events',
+        'Organizer discovery scan hit the row cap; result may omit some events',
+        {organizerId, visibility, scanned, collected: collected.length},
+      );
+      break;
+    }
     cursor = page.continueCursor;
   }
 

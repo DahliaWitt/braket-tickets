@@ -211,14 +211,15 @@ export function eventStartInstantMs(
  * multi-day event's funds are not released while it is still running.
  *
  * Fails closed and distinguishes a *missing* end from an *invalid* one:
- * - `endsAtUtc` absent (undefined/null/empty) → the start instant
- *   (eventStartInstantMs), preserving pre-endDate behavior for single-day and
- *   legacy events.
+ * - `endsAtUtc` absent — only `undefined`/`null` (the value Convex stores for a
+ *   missing optional) — → the start instant (eventStartInstantMs), preserving
+ *   pre-endDate behavior for single-day and legacy events.
  * - `endsAtUtc` present and parseable → its instant.
- * - `endsAtUtc` present but unparseable → `null`. A corrupt stored end must not
- *   silently degrade to the *start*, which in payout gating would release funds
- *   as if the multi-day event had no end at all. Callers treat `null` as "date
- *   invalid" (throw / hold / show no status).
+ * - `endsAtUtc` present but unparseable (including `''`) → `null`. A write
+ *   never produces an empty or malformed end, so anything present-but-invalid
+ *   is corruption and must not silently degrade to the *start*, which in payout
+ *   gating would release funds as if the multi-day event had no end at all.
+ *   Callers treat `null` as "date invalid" (throw / hold / show no status).
  * Also `null` when there is no valid end and the start cannot be parsed.
  */
 export function eventEndInstantMs(
@@ -226,8 +227,9 @@ export function eventEndInstantMs(
   endsAtUtc?: string | null,
   options?: EventTimeOptions,
 ): number | null {
-  if (endsAtUtc) {
-    // Present-but-invalid → null (fail closed), never the start fallback.
+  // Only a truly absent value (undefined/null) takes the start fallback; a
+  // present string — even '' — must parse or fail closed to null.
+  if (endsAtUtc != null) {
     return parseUtcInstant(endsAtUtc)?.getTime() ?? null;
   }
   return eventStartInstantMs(startsAtUtc, options);

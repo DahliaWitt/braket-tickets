@@ -442,7 +442,17 @@ export async function listPlatformOrganizerEligibleEventIdsImpl(
       // so re-check against the event END: a multi-day event whose start is
       // payout-delay-old but whose endDate is still ahead must not retire yet.
       const eventEndMs = eventEndInstantMs(event.date, event.endDate);
-      if (eventEndMs === null || eventEndMs > args.eligibleBeforeMs) continue;
+      if (eventEndMs === null) {
+        // Corrupt end instant would otherwise wedge this event's retirement
+        // silently on every run — surface it so an operator can repair.
+        logger.error(
+          'stripe',
+          'Platform-organizer event has an invalid end date; skipping retirement until repaired',
+          {eventId: event._id, organizerId: event.organizerId},
+        );
+        continue;
+      }
+      if (eventEndMs > args.eligibleBeforeMs) continue; // still running
       const organizer = fetchedOrganizers.get(event.organizerId) ?? null;
       if (organizer?.isPlatformOrganizer) {
         eventIds.push(event._id);
