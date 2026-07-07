@@ -284,7 +284,7 @@ import type {
                   [value]="sourceLabel()"
                   (input)="onSourceInput($event)"
                   [attr.maxlength]="sourceLabelMax"
-                  placeholder="External"
+                  placeholder="external"
                   class="w-full max-w-xs"
                   data-testid="import-source-input"
                 />

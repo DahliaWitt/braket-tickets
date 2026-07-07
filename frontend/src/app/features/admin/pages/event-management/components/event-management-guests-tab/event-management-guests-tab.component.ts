@@ -25,12 +25,14 @@ import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton
 import {ZardTooltipDirective} from '@ui/components/primitives/tooltip/tooltip';
 import {logger} from '@/utils/logger';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
-import {
-  GUEST_IMPORT_CONFIG,
-  ImportSurfaceComponent,
-  type ImportConfirmPayload,
-  type ImportReport,
-} from '@/features/admin/import';
+import {GUEST_IMPORT_CONFIG} from '@/features/admin/import/import-config';
+// Import the surface directly (not via the barrel) so @defer can code-split it:
+// a barrel that also exports the eagerly-used config keeps the component eager.
+import {ImportSurfaceComponent} from '@/features/admin/import/import-surface.component';
+import type {
+  ImportConfirmPayload,
+  ImportReport,
+} from '@/features/admin/import/import-surface.types';
 import {buildImportErrorReport, buildImportReport} from '../import-report.util';
 
 function pdfDataUrlToBlob(dataUrl: string): Blob {

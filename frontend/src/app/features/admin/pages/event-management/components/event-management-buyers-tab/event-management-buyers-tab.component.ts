@@ -18,12 +18,14 @@ import {EventManagementPurchasesPanelComponent} from '../event-management-purcha
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
 import {logger} from '@/utils/logger';
-import {
-  BUYER_IMPORT_CONFIG,
-  ImportSurfaceComponent,
-  type ImportConfirmPayload,
-  type ImportReport,
-} from '@/features/admin/import';
+import {BUYER_IMPORT_CONFIG} from '@/features/admin/import/import-config';
+// Import the surface directly (not via the barrel) so @defer can code-split it:
+// a barrel that also exports the eagerly-used config keeps the component eager.
+import {ImportSurfaceComponent} from '@/features/admin/import/import-surface.component';
+import type {
+  ImportConfirmPayload,
+  ImportReport,
+} from '@/features/admin/import/import-surface.types';
 import {buildImportErrorReport, buildImportReport} from '../import-report.util';
 
 @Component({

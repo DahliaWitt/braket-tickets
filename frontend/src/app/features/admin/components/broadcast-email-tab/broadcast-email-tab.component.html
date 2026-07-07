@@ -155,7 +155,7 @@
           class="font-mono text-xs"
           data-testid="broadcast-send-feedback"
           [class.text-destructive]="feedback.kind === 'error'"
-          [class.text-emerald-500]="feedback.kind === 'success'"
+          [class.text-success]="feedback.kind === 'success'"
           [attr.role]="feedback.kind === 'error' ? 'alert' : 'status'"
         >
           {{ feedback.message }}
