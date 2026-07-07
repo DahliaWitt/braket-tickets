@@ -3176,7 +3176,10 @@ export declare const api: {
       resetRateLimit: FunctionReference<
         "mutation",
         "public",
-        { key: string; name: "requestEmailChange" | "cancelEmailChange" },
+        {
+          key: string;
+          name: "requestEmailChange" | "cancelEmailChange" | "broadcastEmail";
+        },
         null
       >;
     };

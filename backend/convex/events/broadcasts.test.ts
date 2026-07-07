@@ -1134,6 +1134,111 @@ describe('eventBroadcasts — external ticket holders', () => {
     expect(capturedOff).toHaveLength(0);
   });
 
+  it('broadening a same-subject retry (external off -> on) reaches only the newly included external holders', async () => {
+    const t = convexTest();
+    const {adminId, eventId, asAdmin} = await seedAdminEventWithOrg(t);
+
+    await seedTicketHolder(t, eventId, 'native@example.com');
+    await asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId,
+      batchKey: 'broaden-1',
+      dedupMode: 'skip',
+      rows: [{name: 'Ext', email: 'external@example.com', externalRef: 'B1'}],
+    });
+
+    // First send excludes external holders: only the native holder is emailed.
+    const first = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Set time',
+      message: 'Set time change',
+      includeExternalTicketHolders: false,
+    });
+    expect(first.success).toBe(true);
+    if (first.success) expect(first.recipientCount).toBe(1);
+    expect(
+      await t.query(api.testing.email.getSentEmails, {
+        to: 'external@example.com',
+      }),
+    ).toHaveLength(0);
+
+    // The broadcast rate limit is 1 per 5 min per (admin, event); reset it to
+    // simulate the elapsed window before the legitimate broadening resend.
+    await t.mutation(api.testing.utilities.resetRateLimit, {
+      name: 'broadcastEmail',
+      key: `${adminId}:${eventId}`,
+    });
+
+    // Retry the SAME subject with external holders included: the external
+    // recipient is reached, and the native holder is NOT re-emailed.
+    const broadened = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Set time',
+      message: 'Set time change',
+      includeExternalTicketHolders: true,
+    });
+    expect(broadened.success).toBe(true);
+    if (broadened.success) expect(broadened.recipientCount).toBe(1);
+    expect(
+      await t.query(api.testing.email.getSentEmails, {
+        to: 'external@example.com',
+      }),
+    ).toHaveLength(1);
+    // Native holder still has exactly one email from the first send.
+    expect(
+      await t.query(api.testing.email.getSentEmails, {
+        to: 'native@example.com',
+      }),
+    ).toHaveLength(1);
+
+    // A third send of the same subject with external on has nothing left.
+    const third = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Set time',
+      message: 'Set time change',
+      includeExternalTicketHolders: true,
+    });
+    expect(third.success).toBe(false);
+    if (!third.success) expect(third.error).toBe('already_sent');
+  });
+
+  it('a full send then a narrowing retry short-circuits as already_sent (no duplicate native email)', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminEventWithOrg(t);
+
+    await seedTicketHolder(t, eventId, 'native2@example.com');
+    await asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId,
+      batchKey: 'narrow-1',
+      dedupMode: 'skip',
+      rows: [{name: 'Ext', email: 'external2@example.com', externalRef: 'N1'}],
+    });
+
+    // First send includes everyone (default toggle on).
+    const first = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'All out',
+      message: 'Goes to everyone',
+    });
+    expect(first.success).toBe(true);
+    if (first.success) expect(first.recipientCount).toBe(2);
+
+    // Retry the same subject with external OFF: the native segment was already
+    // sent, so there is nothing new — never a duplicate to the native holder.
+    const narrowed = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'All out',
+      message: 'Goes to everyone',
+      includeExternalTicketHolders: false,
+    });
+    expect(narrowed.success).toBe(false);
+    if (!narrowed.success) expect(narrowed.error).toBe('already_sent');
+    expect(
+      await t.query(api.testing.email.getSentEmails, {
+        to: 'native2@example.com',
+      }),
+    ).toHaveLength(1);
+  });
+
   it('an email present as both native purchaser and imported entry receives exactly one send', async () => {
     const t = convexTest();
     const {eventId, asAdmin} = await seedAdminEventWithOrg(t);

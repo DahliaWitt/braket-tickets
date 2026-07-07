@@ -10,6 +10,7 @@ import {resolveSiteUrl} from '../../lib/site_url';
 import {
   MAX_TICKET_REMINDER_MESSAGE_LENGTH,
   MAX_TICKET_REMINDER_SUBJECT_LENGTH,
+  normalizeEmailOrNull,
   validateStringLength,
 } from '../../lib/validation';
 import {eventBroadcastTemplate} from '../../email/templates';
@@ -160,27 +161,85 @@ export async function sendBroadcast(
     };
   }
 
-  const dedupKey = `broadcast:${userId}:${args.eventId}:${subject}`;
-  if (await hasEmailDedup(ctx, dedupKey)) {
-    return {success: false as const, error: 'already_sent' as const};
-  }
+  // Per-segment dedup. The base audience (native ticket holders + guests) is
+  // independent of the external-inclusion toggle; the external segment is the
+  // imported ticket holders whose email is NOT already a base recipient. Each
+  // segment is deduped under its own key so a same-subject retry that BROADENS
+  // the audience (external off -> on) reaches the newly included external
+  // holders without re-emailing native recipients — and the reverse (narrowing,
+  // or re-sending) still short-circuits as already_sent.
+  //
+  // Subject is included in full (not truncated) so two subjects that share a
+  // prefix but differ past any slice boundary do not collide. Validation caps
+  // subject at MAX_TICKET_REMINDER_SUBJECT_LENGTH.
+  const wantExternal = args.includeExternalTicketHolders ?? true;
+  const baseDedupKey = `broadcast:${userId}:${args.eventId}:${subject}`;
+  const externalDedupKey = `broadcast:ext:${userId}:${args.eventId}:${subject}`;
 
-  const audience = await loadBroadcastAudienceUpToLimit(
+  // Base audience is toggle-independent; the full audience adds external
+  // holders when the toggle is on. Both are bounded by the send cap probe.
+  const baseAudience = await loadBroadcastAudienceUpToLimit(
     ctx.db,
     args.eventId,
     MAX_BROADCAST_RECIPIENTS + 1,
-    {includeExternalTicketHolders: args.includeExternalTicketHolders ?? true},
+    {includeExternalTicketHolders: false},
   );
+  const fullAudience = wantExternal
+    ? await loadBroadcastAudienceUpToLimit(
+        ctx.db,
+        args.eventId,
+        MAX_BROADCAST_RECIPIENTS + 1,
+        {includeExternalTicketHolders: true},
+      )
+    : baseAudience;
 
-  if (audience.recipientCount === 0) {
+  if (fullAudience.recipientCount === 0) {
     return {success: false as const, error: 'no_recipients' as const};
   }
 
-  if (!audience.isComplete) {
+  // External-only recipients are full-audience emails not covered by the base
+  // (native/guest) audience — an imported email that collides with a native
+  // purchaser is a base recipient, never double-counted here.
+  const baseEmailKeys = new Set(
+    (baseAudience.recipients ?? []).map(
+      (r) => normalizeEmailOrNull(r.email) ?? r.email,
+    ),
+  );
+  const externalOnlyRecipients = (fullAudience.recipients ?? []).filter(
+    (r) => !baseEmailKeys.has(normalizeEmailOrNull(r.email) ?? r.email),
+  );
+
+  const baseRecipients = baseAudience.recipients ?? [];
+
+  // A segment is "fresh" when it has recipients and its dedup key is not yet
+  // committed. Determine freshness before any cap rejection.
+  const baseFresh =
+    baseRecipients.length > 0 && !(await hasEmailDedup(ctx, baseDedupKey));
+  const externalFresh =
+    wantExternal &&
+    externalOnlyRecipients.length > 0 &&
+    !(await hasEmailDedup(ctx, externalDedupKey));
+
+  // Nothing new to send → already_sent. This precedes the cap check so a
+  // legitimately-committed broadcast keeps returning already_sent on retry even
+  // if its audience later grows past the cap.
+  if (!baseFresh && !externalFresh) {
+    return {success: false as const, error: 'already_sent' as const};
+  }
+
+  // Cap applies only to the segment(s) being freshly sent.
+  if (baseFresh && !baseAudience.isComplete) {
     return {
       success: false as const,
       error: 'too_many_recipients' as const,
-      count: audience.recipientCount,
+      count: baseAudience.recipientCount,
+    };
+  }
+  if (externalFresh && !fullAudience.isComplete) {
+    return {
+      success: false as const,
+      error: 'too_many_recipients' as const,
+      count: fullAudience.recipientCount,
     };
   }
 
@@ -209,26 +268,31 @@ export async function sendBroadcast(
     }
   }
 
-  // Dedup guard: server-generated key prevents client-side bypass.
-  // Subject is included in full (not truncated) so two subjects that
-  // share a prefix but differ past any slice boundary do not collide.
-  // Validation caps subject at MAX_TICKET_REMINDER_SUBJECT_LENGTH.
-  const alreadySent = await guardEmailDedup(ctx, dedupKey);
-  if (alreadySent) {
+  // Authoritative guard for each fresh segment. guardEmailDedup inserts the key
+  // and returns true if a concurrent send already claimed it (OCC race) — in
+  // that case the segment is dropped. A guard on an empty segment never fires,
+  // so an empty base send does not block a later native-only broadcast.
+  const sendBase = baseFresh && !(await guardEmailDedup(ctx, baseDedupKey));
+  const sendExternal =
+    externalFresh && !(await guardEmailDedup(ctx, externalDedupKey));
+
+  const recipients = [
+    ...(sendBase ? baseRecipients : []),
+    ...(sendExternal ? externalOnlyRecipients : []),
+  ];
+  if (recipients.length === 0) {
     return {success: false as const, error: 'already_sent' as const};
   }
 
   // Rate-limit AFTER dedup so a retry of an already-committed send
   // surfaces as `already_sent` rather than consuming a rate-limit token
   // and returning `RateLimited`. A rate-limit failure here rolls back
-  // the dedup row (transactional), so transient rate-limit errors do
+  // the dedup rows (transactional), so transient rate-limit errors do
   // not permanently block a legitimate retry.
   await rateLimiter.limit(ctx, 'broadcastEmail', {
     key: `${userId}:${args.eventId}`,
     throws: true,
   });
-
-  const recipients = audience.recipients ?? [];
   const apiSiteUrl = resolveEmailApiBaseUrl(siteUrl);
   const accountPreferenceUrl = `${siteUrl}/account#email-preferences`;
   const organizer = await ctx.db.get('organizers', event.organizerId);
