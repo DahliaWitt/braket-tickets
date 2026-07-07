@@ -72,7 +72,7 @@ export async function createTrustLinkHandler(
   });
   await enqueueOrganizerDirectoryRebuild(ctx, args.trustingOrganizerId);
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: userId,
       action: 'trust_link_created',
@@ -117,7 +117,7 @@ export async function removeTrustLinkHandler(
   );
   await enqueueOrganizerDirectoryRebuild(ctx, args.trustingOrganizerId);
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: userId,
       action: 'trust_link_revoked',

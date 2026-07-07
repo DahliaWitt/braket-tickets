@@ -36,8 +36,10 @@ export type DeliveryMetadata = {
   critical?: boolean;
 };
 
+// Typed against ActionCtx's runMutation (no nested-transaction options) so both
+// MutationCtx and ActionCtx callers satisfy it.
 async function captureTestEmail(
-  ctx: Pick<MutationCtx, 'runMutation'>,
+  ctx: Pick<ActionCtx, 'runMutation'>,
   payload: EmailPayload,
 ): Promise<void> {
   await ctx.runMutation(api.testing.email.logSentEmail, {

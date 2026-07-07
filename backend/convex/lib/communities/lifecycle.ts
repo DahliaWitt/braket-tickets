@@ -1,6 +1,7 @@
 import type {Id} from '../../_generated/dataModel';
 import type {MutationCtx} from '../../_generated/server';
 import {insertAdminAuditLog} from '../../lib/admin_audit_log';
+import {getAuditRequestFields} from '../../lib/request_metadata';
 import {
   listDirectTrustedOrganizers,
   listDirectTrustingOrganizers,
@@ -18,11 +19,20 @@ export async function deleteOrganizerTrustLinks(args: {
   adminId: Id<'users'>;
   organizerId: Id<'organizers'>;
 }): Promise<number> {
-  const outgoing = await listDirectTrustedOrganizers(args.ctx, args.organizerId);
-  const incoming = await listDirectTrustingOrganizers(args.ctx, args.organizerId);
+  const outgoing = await listDirectTrustedOrganizers(
+    args.ctx,
+    args.organizerId,
+  );
+  const incoming = await listDirectTrustingOrganizers(
+    args.ctx,
+    args.organizerId,
+  );
   const uniqueTrustLinks = new Map<
     string,
-    {trustingOrganizerId: Id<'organizers'>; trustedOrganizerId: Id<'organizers'>}
+    {
+      trustingOrganizerId: Id<'organizers'>;
+      trustedOrganizerId: Id<'organizers'>;
+    }
   >();
 
   for (const relation of outgoing) {
@@ -41,6 +51,10 @@ export async function deleteOrganizerTrustLinks(args: {
     });
   }
 
+  // Resolve request metadata once: this cascade writes one audit row per trust
+  // link, so pass the fields explicitly (meta omitted) to keep
+  // insertAdminAuditLog from re-invoking the syscall on every iteration.
+  const auditFields = await getAuditRequestFields(args.ctx);
   for (const trustLink of uniqueTrustLinks.values()) {
     await removeTrustLink(
       args.ctx,
@@ -48,15 +62,22 @@ export async function deleteOrganizerTrustLinks(args: {
       trustLink.trustedOrganizerId,
     );
     if (trustLink.trustingOrganizerId !== args.organizerId) {
-      await enqueueOrganizerDirectoryRebuild(args.ctx, trustLink.trustingOrganizerId);
+      await enqueueOrganizerDirectoryRebuild(
+        args.ctx,
+        trustLink.trustingOrganizerId,
+      );
     }
-    await insertAdminAuditLog({db: args.db}, {
-      adminId: args.adminId,
-      action: 'trust_link_cascade_deleted',
-      trustingOrganizerId: trustLink.trustingOrganizerId,
-      trustedOrganizerId: trustLink.trustedOrganizerId,
-      organizerId: args.organizerId,
-    });
+    await insertAdminAuditLog(
+      {db: args.db},
+      {
+        adminId: args.adminId,
+        action: 'trust_link_cascade_deleted',
+        trustingOrganizerId: trustLink.trustingOrganizerId,
+        trustedOrganizerId: trustLink.trustedOrganizerId,
+        organizerId: args.organizerId,
+        ...auditFields,
+      },
+    );
   }
 
   return uniqueTrustLinks.size;

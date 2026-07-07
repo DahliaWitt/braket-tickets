@@ -109,6 +109,7 @@ export type DataModel = {
         | "event.update"
         | "guest.add"
         | "guest.check-in"
+        | "guest.update"
         | "magic_link.create"
         | "magic_link.delete"
         | "magic_link.disable"
@@ -151,6 +152,7 @@ export type DataModel = {
       applicationId?: Id<"applications">;
       deletedEventName?: string;
       eventId?: Id<"events">;
+      ipAddress?: string;
       magicLinkId?: Id<"magic_links">;
       organizerId?: Id<"organizers">;
       reason?: string;
@@ -158,6 +160,7 @@ export type DataModel = {
       targetUserId?: Id<"users">;
       trustedOrganizerId?: Id<"organizers">;
       trustingOrganizerId?: Id<"organizers">;
+      userAgent?: string;
       _id: Id<"adminAuditLogs">;
       _creationTime: number;
     };
@@ -170,13 +173,15 @@ export type DataModel = {
       | "applicationId"
       | "deletedEventName"
       | "eventId"
+      | "ipAddress"
       | "magicLinkId"
       | "organizerId"
       | "reason"
       | "source"
       | "targetUserId"
       | "trustedOrganizerId"
-      | "trustingOrganizerId";
+      | "trustingOrganizerId"
+      | "userAgent";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
@@ -464,6 +469,34 @@ export type DataModel = {
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  eventBroadcastDeliveries: {
+    document: {
+      broadcastId: Id<"eventBroadcasts">;
+      email: string;
+      eventId: Id<"events">;
+      origin: "send" | "catchup" | "backfill";
+      sentAt: number;
+      _id: Id<"eventBroadcastDeliveries">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "broadcastId"
+      | "email"
+      | "eventId"
+      | "origin"
+      | "sentAt";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_broadcast_and_email: ["broadcastId", "email", "_creationTime"];
+      by_email: ["email", "_creationTime"];
+      by_event_and_email: ["eventId", "email", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};

@@ -2,6 +2,7 @@ import type {Doc, Id} from '../../_generated/dataModel';
 import {adapterFindMany} from '../../lib/better_auth_adapter';
 import type {AdminAuditAction} from '../../lib/admin_audit_actions';
 import {insertAdminAuditLog} from '../../lib/admin_audit_log';
+import {getAuditRequestFields} from '../../lib/request_metadata';
 import {normalizeEmail, sanitizeName} from '../../lib/validation';
 import {
   findConflictingEmailOwner,
@@ -138,7 +139,7 @@ async function insertUserScopedAuditLog(
   reason?: string,
 ): Promise<void> {
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: userId,
       action,
@@ -376,6 +377,10 @@ export async function backfillAuthUserLinksHandler(
   let collisions = 0;
   const collisionSample: string[] = [];
 
+  // Resolve request metadata once for the whole batch: this handler inserts one
+  // audit row per user, so passing the fields explicitly (with meta omitted)
+  // keeps insertAdminAuditLog from re-invoking the syscall on every iteration.
+  const auditFields = args.actorUserId ? await getAuditRequestFields(ctx) : {};
   const recordBackfillAudit = async (
     action: AdminAuditAction,
     reason?: string,
@@ -390,6 +395,7 @@ export async function backfillAuthUserLinksHandler(
         adminId: args.actorUserId,
         action,
         source: 'auth_sync_backfill',
+        ...auditFields,
         ...(reason ? {reason} : {}),
       },
     );

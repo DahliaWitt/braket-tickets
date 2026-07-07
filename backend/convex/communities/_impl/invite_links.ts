@@ -58,7 +58,7 @@ export async function createMagicLinkHandler(
   const result = await createMagicLink(ctx, actor, args);
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: actorId,
       action: ADMIN_AUDIT_ACTIONS.MAGIC_LINK_CREATE,
@@ -122,7 +122,7 @@ export async function updateMagicLinkStatusHandler(
   await ctx.db.patch('magic_links', args.linkId, transition);
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: actorId,
       action: ACTION_TO_AUDIT[args.action],
