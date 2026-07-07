@@ -32,7 +32,6 @@ import {
 } from '@/core/services/auth-navigation';
 import {AuthSessionSync} from './auth-session-sync';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
-import {AuthConvexTokenStorageService} from './auth-convex-token-storage.service';
 import {
   type ConvexActionMethod,
   type ConvexClientWithErrorHandling,
@@ -163,7 +162,6 @@ export class AuthService implements ConvexAuthProvider {
   private readonly userProfileService = inject(UserProfileService);
   private readonly authClient = inject(AUTH_CLIENT);
   private readonly browser = inject(BrowserPlatformService);
-  private readonly tokenStorage = inject(AuthConvexTokenStorageService);
 
   private sessionSync: AuthSessionSync | null = null;
 
@@ -262,7 +260,6 @@ export class AuthService implements ConvexAuthProvider {
 
   constructor() {
     this.installConvexErrorHandling();
-    this.tokenStorage.purgeStaleSession();
 
     // Initialize session on service creation
     void this.initSession();
@@ -360,7 +357,6 @@ export class AuthService implements ConvexAuthProvider {
 
   private triggerRecoveryReload(reason: string, details?: unknown): never {
     logger.error(`[AuthService] Recovery reload triggered: ${reason}`, details);
-    this.tokenStorage.clear();
     this.setSessionState(null);
     this.error.set(undefined);
     this.browser.reload();
