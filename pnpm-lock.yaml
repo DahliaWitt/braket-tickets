@@ -137,8 +137,8 @@ importers:
         specifier: ^6.12.2
         version: 6.12.2
       stripe:
-        specifier: ^22.0.2
-        version: 22.0.2(@types/node@22.19.7)
+        specifier: ^22.2.1
+        version: 22.3.0(@types/node@22.19.7)
     devDependencies:
       '@codecov/vite-plugin':
         specifier: ^2.0.1
@@ -8591,8 +8591,8 @@ packages:
     resolution: {integrity: sha512-1tB5mhVo7U+ETBKNf92xT4hrQa3pm0MZ0PQvuDnWgAAGHDsfp4lPSpiS6psrSiet87wyGPh9ft6wmhOMQ0hDiw==}
     engines: {node: '>=14.16'}
 
-  stripe@22.0.2:
-    resolution: {integrity: sha512-2/BLrQ3oB1zlNfeL/LfHFjTGx6EQn0j+ztrrTJHuDjV5VVIpk92oSDaxyKLUr3pG3dnee2LZqhFUv2Bf0G1/3g==}
+  stripe@22.3.0:
+    resolution: {integrity: sha512-ypO6xjVrMWs9SmIMeHr8naCx3dAQ0clxMdUTxn7Ejd7hmY9meBGfE+N4pVHkf9sUNebAHp6uJo6mV3GxDIc2cA==}
     engines: {node: '>=18'}
     peerDependencies:
       '@types/node': '>=18'
@@ -19430,7 +19430,7 @@ snapshots:
 
   strip-json-comments@5.0.3: {}
 
-  stripe@22.0.2(@types/node@22.19.7):
+  stripe@22.3.0(@types/node@22.19.7):
     optionalDependencies:
       '@types/node': 22.19.7
 
