@@ -30,7 +30,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - name: Setup pnpm
-        uses: pnpm/action-setup@c336a2788d9774dccfdeb4823a5058ccc9f07453 # v4.3.0
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
       - name: Setup Node.js
         # Runs on self-hosted too: Angular 22 requires Node >=22.22.3, newer than
         # the runner image's baked-in Node. setup-node installs the .nvmrc version
@@ -70,7 +70,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - name: Setup pnpm
-        uses: pnpm/action-setup@c336a2788d9774dccfdeb4823a5058ccc9f07453 # v4.3.0
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
       - name: Setup Node.js
         # Runs on self-hosted too: Angular 22 requires Node >=22.22.3, newer than
         # the runner image's baked-in Node. setup-node installs the .nvmrc version
@@ -113,7 +113,7 @@ jobs:
           }
       - name: Upload frontend coverage to Codecov
         if: ${{ always() && env.CODECOV_TOKEN != '' && steps.assert_frontend_coverage.outcome == 'success' && steps.assert_convex_coverage.outcome == 'success' }}
-        uses: codecov/codecov-action@1f60566a86da84c4b4b64c17662a90de97fbb8d7 # v5.4.2
+        uses: codecov/codecov-action@ad3126e916f78f00edff4ed0317cf185271ccc2d # v5.4.2
         with:
           token: ${{ env.CODECOV_TOKEN }}
           files: frontend/coverage/coverage-final.json
@@ -123,7 +123,7 @@ jobs:
           fail_ci_if_error: true
       - name: Upload convex coverage to Codecov
         if: ${{ always() && env.CODECOV_TOKEN != '' && steps.assert_frontend_coverage.outcome == 'success' && steps.assert_convex_coverage.outcome == 'success' }}
-        uses: codecov/codecov-action@1f60566a86da84c4b4b64c17662a90de97fbb8d7 # v5.4.2
+        uses: codecov/codecov-action@ad3126e916f78f00edff4ed0317cf185271ccc2d # v5.4.2
         with:
           token: ${{ env.CODECOV_TOKEN }}
           files: backend/coverage/coverage-final.json
@@ -169,7 +169,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - name: Setup pnpm
-        uses: pnpm/action-setup@c336a2788d9774dccfdeb4823a5058ccc9f07453 # v4.3.0
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
       - name: Setup Node.js
         # Runs on self-hosted too: Angular 22 requires Node >=22.22.3, newer than
         # the runner image's baked-in Node. setup-node installs the .nvmrc version
@@ -200,7 +200,7 @@ jobs:
           PUPPETEER_EXECUTABLE_PATH: ''
       - name: Upload bundle analysis
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: bundle-analysis
           path: |
@@ -240,7 +240,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - name: Setup pnpm
-        uses: pnpm/action-setup@c336a2788d9774dccfdeb4823a5058ccc9f07453 # v4.3.0
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
       - name: Setup Node.js
         # Runs on self-hosted too: Angular 22 requires Node >=22.22.3, newer than
         # the runner image's baked-in Node. setup-node installs the .nvmrc version
@@ -296,7 +296,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@c336a2788d9774dccfdeb4823a5058ccc9f07453 # v4.3.0
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
       - name: Setup Node.js
         # e2e.ts --build compiles the Angular app, which requires Node >=22.22.3
         # (newer than the runner image). Pin via .nvmrc until the image is rebuilt.
@@ -344,7 +344,7 @@ jobs:
 
       - name: Upload E2E logs (failure)
         if: ${{ failure() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: e2e-logs
           path: |
@@ -354,7 +354,7 @@ jobs:
 
       - name: Upload HTML report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-report
           path: frontend/playwright-report

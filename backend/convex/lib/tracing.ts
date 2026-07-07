@@ -23,6 +23,7 @@
 
 import {httpAction} from '../_generated/server';
 import {logger, type ContextualLogger} from './logger';
+import {getRequestMetadataSafe} from './request_metadata';
 
 /**
  * Context object passed to traced HTTP action handlers.
@@ -33,6 +34,12 @@ import {logger, type ContextualLogger} from './logger';
 export interface TracingContext {
   /** Unique identifier for this request, sourced from X-Request-ID or generated. */
   requestId: string;
+  /**
+   * Convex's platform request ID (ctx.meta.getRequestMetadata), matching the
+   * ID shown in the Convex dashboard/logs for this execution. Undefined on
+   * runtimes without request metadata support.
+   */
+  convexRequestId: string | undefined;
   /** Sentry trace ID extracted from the sentry-trace header, if present. */
   sentryTraceId: string | undefined;
   /** Timestamp (ms since epoch) when the request was received. */
@@ -74,14 +81,12 @@ function extractTraceHeaders(request: Request): {
   sentryTraceId: string | null;
 } {
   const incomingRequestId =
-    request.headers.get('x-request-id') ??
-    request.headers.get('X-Request-ID');
+    request.headers.get('x-request-id') ?? request.headers.get('X-Request-ID');
 
   // The sentry-trace header format is: TRACE_ID-SPAN_ID[-SAMPLED]
   // We store the raw header value; consumers can parse it as needed.
   const sentryTraceId =
-    request.headers.get('sentry-trace') ??
-    request.headers.get('Sentry-Trace');
+    request.headers.get('sentry-trace') ?? request.headers.get('Sentry-Trace');
 
   return {incomingRequestId, sentryTraceId};
 }
@@ -120,11 +125,14 @@ type TracedHandler = (
  * });
  * ```
  */
-export function tracedHttpAction(handler: TracedHandler): ReturnType<typeof httpAction> {
+export function tracedHttpAction(
+  handler: TracedHandler,
+): ReturnType<typeof httpAction> {
   return httpAction(async (ctx, request) => {
     const startTime = Date.now();
     const {incomingRequestId, sentryTraceId} = extractTraceHeaders(request);
     const requestId = incomingRequestId ?? generateRequestId();
+    const {requestId: convexRequestId} = await getRequestMetadataSafe(ctx);
 
     const log = logger.withContext({
       requestId,
@@ -132,10 +140,18 @@ export function tracedHttpAction(handler: TracedHandler): ReturnType<typeof http
     });
 
     const url = new URL(request.url);
-    log.info('http', `→ ${request.method} ${url.pathname}`);
+    // One correlation line per request: every later Convex log line for this
+    // execution carries the convex request ID in the dashboard, so this links
+    // app-level request IDs (and Sentry traces) to Convex's own logs.
+    log.info(
+      'http',
+      `→ ${request.method} ${url.pathname}` +
+        (convexRequestId ? ` (convex-req: ${convexRequestId})` : ''),
+    );
 
     const trace: TracingContext = {
       requestId,
+      convexRequestId: convexRequestId ?? undefined,
       sentryTraceId: sentryTraceId ?? undefined,
       startTime,
       log,
@@ -163,6 +179,9 @@ export function tracedHttpAction(handler: TracedHandler): ReturnType<typeof http
     // Clone and augment headers so we don't mutate the original Response.
     const headers = new Headers(response.headers);
     headers.set('X-Request-ID', requestId);
+    if (convexRequestId) {
+      headers.set('X-Convex-Request-Id', convexRequestId);
+    }
     if (sentryTraceId) {
       headers.set('X-Trace-Id', sentryTraceId);
     }

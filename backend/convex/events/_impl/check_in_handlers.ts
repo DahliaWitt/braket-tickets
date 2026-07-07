@@ -2,6 +2,7 @@ import {internal} from '../../_generated/api';
 import type {Doc, Id} from '../../_generated/dataModel';
 import type {MutationCtx} from '../../_generated/server';
 import {requireUser} from '../../lib/auth_identity';
+import {getAuditRequestFields} from '../../lib/request_metadata';
 import {findMatchingInQuery} from '../../lib/query_scan';
 import {buildTicketRosterProjection} from '../../lib/ticket_roster_projection';
 import {canEditEvent, canScanEvent} from '../../lib/access';
@@ -283,12 +284,14 @@ export async function checkIn(
         : Promise.resolve(null),
     ]);
 
+    const auditFields = await getAuditRequestFields(ctx);
     await ctx.scheduler.runAfter(
       0,
       internal.communities.management.audit.recordCheckIn,
       {
         adminId: userId,
         action: 'ticket.check-in',
+        ...auditFields,
         eventId: freshTicket.eventId,
         organizerId: freshEvent.organizerId,
         source: auditSource,
@@ -370,12 +373,14 @@ export async function checkIn(
       checkedInAt,
     });
 
+    const auditFields = await getAuditRequestFields(ctx);
     await ctx.scheduler.runAfter(
       0,
       internal.communities.management.audit.recordCheckIn,
       {
         adminId: userId,
         action: 'guest.check-in',
+        ...auditFields,
         eventId: guest.eventId,
         organizerId: event.organizerId,
         source: auditSource,
@@ -477,12 +482,14 @@ export async function revertCheckIn(
     checkedInCount: Math.max(0, (freshEvent.checkedInCount ?? 0) - 1),
   });
 
+  const auditFields = await getAuditRequestFields(ctx);
   await ctx.scheduler.runAfter(
     0,
     internal.communities.management.audit.logAdminAccess,
     {
       adminId: userId,
       action: ADMIN_AUDIT_ACTIONS.TICKET_CHECK_IN_REVERT,
+      ...auditFields,
       eventId: freshTicket.eventId,
       organizerId: freshEvent.organizerId,
       source: auditSource,
