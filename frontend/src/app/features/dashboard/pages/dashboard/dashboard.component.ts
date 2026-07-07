@@ -144,6 +144,16 @@ export class DashboardComponent {
   /** Default flyer ratio (4:5) used until the poster image has loaded. */
   private static readonly DEFAULT_POSTER_RATIO = 4 / 5;
 
+  /**
+   * Supported poster ratio range: 9:16 story format through 2.5:1 banner.
+   * Poster dimensions are user-uploaded content — without a clamp, a hostile
+   * or malformed image (e.g. 1x10000) would collapse the frame to a sliver
+   * or stretch it to thousands of pixels. Outside the range the frame stays
+   * clamped and object-contain + the ambient-glow backdrop absorb the gap.
+   */
+  private static readonly MIN_POSTER_RATIO = 9 / 16;
+  private static readonly MAX_POSTER_RATIO = 5 / 2;
+
   posterAspectRatio(eventId: string): number {
     return (
       this.posterRatios().get(eventId) ??
@@ -154,7 +164,13 @@ export class DashboardComponent {
   onPosterLoad(eventId: string, event: Event): void {
     const img = event.target as HTMLImageElement;
     if (!img.naturalWidth || !img.naturalHeight) return;
-    const ratio = img.naturalWidth / img.naturalHeight;
+    const ratio = Math.min(
+      DashboardComponent.MAX_POSTER_RATIO,
+      Math.max(
+        DashboardComponent.MIN_POSTER_RATIO,
+        img.naturalWidth / img.naturalHeight,
+      ),
+    );
     if (this.posterRatios().get(eventId) === ratio) return;
     const next = new Map(this.posterRatios());
     next.set(eventId, ratio);

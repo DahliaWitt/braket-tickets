@@ -632,6 +632,32 @@ describe('DashboardComponent', () => {
       );
     });
 
+    it('should clamp hostile poster dimensions to the supported ratio range', async () => {
+      const posterEvent: UpcomingEvent = {
+        ...mockEvent,
+        posterUrl: 'https://example.com/poster.jpg',
+      } as never;
+      setup({
+        approvals: mockApprovals,
+        events: [posterEvent],
+        eventAvailability: purchaseAccessFor([posterEvent]),
+      });
+      await createComponent();
+      const component = fixture.componentInstance;
+
+      // Extreme portrait sliver (1x10000) clamps to the 9:16 floor
+      component.onPosterLoad(posterEvent._id, {
+        target: {naturalWidth: 1, naturalHeight: 10000},
+      } as unknown as Event);
+      expect(component.posterAspectRatio(posterEvent._id)).toBeCloseTo(9 / 16);
+
+      // Extreme landscape strip (10000x1) clamps to the 2.5:1 ceiling
+      component.onPosterLoad(posterEvent._id, {
+        target: {naturalWidth: 10000, naturalHeight: 1},
+      } as unknown as Event);
+      expect(component.posterAspectRatio(posterEvent._id)).toBeCloseTo(5 / 2);
+    });
+
     it('should keep the default ratio when the image reports no size', async () => {
       const posterEvent: UpcomingEvent = {
         ...mockEvent,
