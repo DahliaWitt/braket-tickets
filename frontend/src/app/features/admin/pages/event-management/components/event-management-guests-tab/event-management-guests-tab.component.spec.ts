@@ -273,6 +273,39 @@ describe('EventManagementGuestsTabComponent', () => {
     await Promise.all([firstSend, duplicateSend]);
   });
 
+  it('keeps the send button label stable and marks it busy while a send is in flight', async () => {
+    let resolveSend!: () => void;
+    adminEventsServiceMock.sendGuestTicket.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSend = resolve;
+        }),
+    );
+    fixture.componentRef.setInput('guests', [mockGuest]);
+    fixture.detectChanges();
+
+    const sendPromise = fixture.componentInstance.sendGuestTicket('guest-1');
+    fixture.detectChanges();
+
+    // Desktop and mobile variants both render the button.
+    expect(await harness.getSendButtonAriaBusyStates()).toEqual([
+      'true',
+      'true',
+    ]);
+    // Label must not change while sending — a text swap resizes the button
+    // and makes the spinner drift in the right-aligned actions cell.
+    expect(await harness.getSendButtonTexts()).toEqual(['Send', 'Send']);
+
+    resolveSend();
+    await sendPromise;
+    fixture.detectChanges();
+
+    expect(await harness.getSendButtonAriaBusyStates()).toEqual([
+      'false',
+      'false',
+    ]);
+  });
+
   it('sends tickets to all guests with an email that have not been emailed yet', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     fixture.componentRef.setInput('guests', [

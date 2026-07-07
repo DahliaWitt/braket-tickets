@@ -13,6 +13,11 @@ export class EventManagementGuestsTabHarness extends ComponentHarness {
   private readonly getSendButtons = this.locatorForAll(
     '[data-testid="send-guest-ticket"]',
   );
+  private readonly getSendButtonHarnesses = this.locatorForAll(
+    ZardButtonComponentHarness.with({
+      selector: '[data-testid="send-guest-ticket"]',
+    }),
+  );
   private readonly getSendAllButton = this.locatorFor(
     ZardButtonComponentHarness.with({
       selector: '[data-testid="send-all-tickets"]',
@@ -50,6 +55,16 @@ export class EventManagementGuestsTabHarness extends ComponentHarness {
   async isSendAllButtonDisabled(): Promise<boolean> {
     const button = await this.getSendAllButton();
     return button.isDisabled();
+  }
+
+  async getSendButtonTexts(): Promise<string[]> {
+    const buttons = await this.getSendButtonHarnesses();
+    return Promise.all(buttons.map((button) => button.getText()));
+  }
+
+  async getSendButtonAriaBusyStates(): Promise<(string | null)[]> {
+    const buttons = await this.getSendButtonHarnesses();
+    return Promise.all(buttons.map((button) => button.getAriaBusy()));
   }
 
   async getSendButtonAriaLabels(): Promise<(string | null)[]> {
