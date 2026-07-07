@@ -107,7 +107,7 @@ Static images and audio (`*.png`, `*.svg`, `*.webp`, `*.mp3`) are served with `C
 
 - If waiting up to a day is acceptable, do nothing.
 - To propagate immediately, rename the file (and its references in code) so the URL changes — this is the expected workflow when replacing artwork.
-- Hashed build outputs (`*.js`, `*.css`) are `immutable` and never go stale; `index.html` and `theme-init.js` are `no-store`.
+- Hashed build outputs (`*.js`, `*.css`) are `immutable` and never go stale; `index.html` is `no-store`. The theme-init script is inlined in `index.html`, so it ships with every HTML response.
 
 ## Restore the preview site
 

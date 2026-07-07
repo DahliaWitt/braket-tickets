@@ -7,7 +7,18 @@ import {
   isSentryEnabled,
   scheduleSentryReplayLoad,
 } from './app/core/services/sentry-loader';
+import {addConvexPreconnects} from './app/core/utils/preconnect';
 import {environment} from './environments/environment';
+
+if (typeof document !== 'undefined') {
+  // Warm DNS + TLS to the Convex origins while Angular bootstraps; the first
+  // Better Auth getSession() call gates initial navigation, so every
+  // millisecond of handshake overlap shortens the boot loading screen.
+  addConvexPreconnects(document, [
+    environment.convexUrl,
+    environment.convexSiteUrl,
+  ]);
+}
 
 if (environment.production) {
   // Intentional logger bypass: this is a production easter egg, not an app log.

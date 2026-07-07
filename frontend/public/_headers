@@ -39,8 +39,3 @@
 /index.html
   ! Cache-Control
   Cache-Control: no-cache, no-store, must-revalidate
-
-# Theme init — never cache (not content-hashed)
-/theme-init.js
-  ! Cache-Control
-  Cache-Control: no-cache, no-store, must-revalidate
