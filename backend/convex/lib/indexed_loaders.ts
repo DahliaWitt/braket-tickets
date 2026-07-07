@@ -87,6 +87,13 @@ export async function loadAllMagicLinksByOrganizer(
   db: QueryDb,
   organizerId: Id<'organizers'>,
 ): Promise<Array<Doc<'magic_links'>>> {
+  // Deliberate full scan: the magic_links set per organizer is bounded by the
+  // 20-active-links-per-creator limit (see lib/magic_links/creation.ts) times
+  // the community's admin count, plus soft-deleted history. Both read models
+  // (active and past) need the full set to filter in memory — the
+  // by_organizerId index does not discriminate on status, and splitting into
+  // bounded active/past queries would require a new by_organizerId_and_status
+  // index for no real gain at this scale.
   return await collectAllQueryUnsafe(
     db
       .query('magic_links')

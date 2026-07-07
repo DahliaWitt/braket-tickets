@@ -129,9 +129,9 @@ export async function getMagicLinksForCommunityAdmin(
 
   const links = await loadAllMagicLinksByOrganizer(ctx.db, organizerId);
 
-  const visibleLinks = links.filter((link) => !link.deletedAt) as Array<
-    Doc<'magic_links'> & {status: MagicLinkAdminStatus}
-  >;
+  const visibleLinks = links.filter(
+    (link) => link.deletedAt === undefined,
+  ) as Array<Doc<'magic_links'> & {status: MagicLinkAdminStatus}>;
 
   const result = await Promise.all(
     visibleLinks.map((link) => mapMagicLinkForAdmin(ctx.db, link)),
