@@ -2,10 +2,12 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  computed,
   inject,
   input,
   output,
   signal,
+  type WritableSignal,
 } from '@angular/core';
 import {takeUntilDestroyed} from '@angular/core/rxjs-interop';
 import {toast} from 'ngx-sonner';
@@ -80,8 +82,13 @@ export class EventManagementGuestsTabComponent {
   readonly isLoading = input(false);
   readonly dataChanged = output<void>();
 
-  readonly isGeneratingGuestPdf = signal<string | null>(null);
-  readonly isSendingTicket = signal<string | null>(null);
+  readonly generatingPdfIds = signal<ReadonlySet<string>>(new Set());
+  readonly sendingTicketIds = signal<ReadonlySet<string>>(new Set());
+  readonly isSendingAll = signal(false);
+
+  readonly pendingSendGuests = computed(() =>
+    this.guests().filter((guest) => guest.email && !guest.emailedAt),
+  );
 
   guestActionLabel(guest: Guest): string {
     const name = guest.name || guest.email || 'guest';
@@ -178,25 +185,66 @@ export class EventManagementGuestsTabComponent {
   }
 
   async sendGuestTicket(guestId: string): Promise<void> {
-    if (this.isSendingTicket()) return;
+    if (this.sendingTicketIds().has(guestId)) return;
 
-    this.isSendingTicket.set(guestId);
-    try {
-      await this.adminEventsService.sendGuestTicket(guestId);
+    const sent = await this.dispatchSendTicket(guestId);
+    if (sent) {
       toast.success('Ticket sent successfully');
       this.dataChanged.emit();
+    } else {
+      toast.error('Failed to send guest ticket');
+    }
+  }
+
+  async sendAllTickets(): Promise<void> {
+    if (this.isSendingAll()) return;
+
+    const targets = this.pendingSendGuests().filter(
+      (guest) => !this.sendingTicketIds().has(guest._id),
+    );
+    if (targets.length === 0) return;
+
+    const noun = targets.length === 1 ? 'guest' : 'guests';
+    if (!confirm(`Send tickets to ${targets.length} ${noun}?`)) return;
+
+    this.isSendingAll.set(true);
+    try {
+      const results = await Promise.all(
+        targets.map((guest) => this.dispatchSendTicket(guest._id)),
+      );
+      const sent = results.filter(Boolean).length;
+      const failed = results.length - sent;
+      if (sent > 0) {
+        toast.success(`Sent ${sent} ticket${sent === 1 ? '' : 's'}`);
+        this.dataChanged.emit();
+      }
+      if (failed > 0) {
+        toast.error(
+          `Failed to send ${failed} ticket${failed === 1 ? '' : 's'}`,
+        );
+      }
+    } finally {
+      this.isSendingAll.set(false);
+    }
+  }
+
+  private async dispatchSendTicket(guestId: string): Promise<boolean> {
+    this.updateIdSet(this.sendingTicketIds, guestId, true);
+    try {
+      await this.adminEventsService.sendGuestTicket(guestId);
+      return true;
     } catch (error) {
       logger.error('Failed to send guest ticket', error);
-      toast.error('Failed to send guest ticket');
+      return false;
     } finally {
-      this.isSendingTicket.set(null);
+      this.updateIdSet(this.sendingTicketIds, guestId, false);
     }
   }
 
   async downloadGuestTicket(guestId: string): Promise<void> {
-    if (this.isGeneratingGuestPdf()) return;
+    if (this.generatingPdfIds().has(guestId)) return;
 
-    this.isGeneratingGuestPdf.set(guestId);
+    this.updateIdSet(this.generatingPdfIds, guestId, true);
     try {
       const pdfDataUrl =
         await this.adminEventsService.getGuestTicketPdf(guestId);
@@ -209,8 +257,24 @@ export class EventManagementGuestsTabComponent {
       logger.error('Failed to download guest ticket', error);
       toast.error('Failed to download guest ticket.');
     } finally {
-      this.isGeneratingGuestPdf.set(null);
+      this.updateIdSet(this.generatingPdfIds, guestId, false);
     }
+  }
+
+  private updateIdSet(
+    idSet: WritableSignal<ReadonlySet<string>>,
+    id: string,
+    present: boolean,
+  ): void {
+    idSet.update((ids) => {
+      const next = new Set(ids);
+      if (present) {
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
+      return next;
+    });
   }
 
   private idSuffix(id: string): string {

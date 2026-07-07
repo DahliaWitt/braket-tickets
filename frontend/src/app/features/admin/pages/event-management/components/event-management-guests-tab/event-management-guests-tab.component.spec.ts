@@ -19,7 +19,9 @@ describe('EventManagementGuestsTabComponent', () => {
     addGuest: ReturnType<typeof vi.fn>;
     updateGuest: ReturnType<typeof vi.fn>;
     removeGuest: ReturnType<typeof vi.fn>;
-    sendGuestTicket: ReturnType<typeof vi.fn>;
+    sendGuestTicket: ReturnType<
+      typeof vi.fn<(guestId: string) => Promise<void>>
+    >;
     getGuestTicketPdf: ReturnType<typeof vi.fn>;
   };
   let dialogServiceMock: {
@@ -55,7 +57,9 @@ describe('EventManagementGuestsTabComponent', () => {
       addGuest: vi.fn().mockResolvedValue('guest-1'),
       updateGuest: vi.fn().mockResolvedValue(null),
       removeGuest: vi.fn().mockResolvedValue(undefined),
-      sendGuestTicket: vi.fn().mockResolvedValue(undefined),
+      sendGuestTicket: vi
+        .fn<(guestId: string) => Promise<void>>()
+        .mockResolvedValue(undefined),
       getGuestTicketPdf: vi
         .fn()
         .mockResolvedValue('data:application/pdf;base64,JVBERg=='),
@@ -224,6 +228,120 @@ describe('EventManagementGuestsTabComponent', () => {
         'Remove Riley Staff, riley@example.com, staff, id GUEST-2',
       ]),
     );
+  });
+
+  it('dispatches sends for multiple guests without blocking on an in-flight send', async () => {
+    const resolvers: (() => void)[] = [];
+    adminEventsServiceMock.sendGuestTicket.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+
+    const firstSend = fixture.componentInstance.sendGuestTicket('guest-1');
+    const secondSend = fixture.componentInstance.sendGuestTicket('guest-2');
+
+    expect(adminEventsServiceMock.sendGuestTicket).toHaveBeenCalledTimes(2);
+    expect(adminEventsServiceMock.sendGuestTicket).toHaveBeenCalledWith(
+      'guest-1',
+    );
+    expect(adminEventsServiceMock.sendGuestTicket).toHaveBeenCalledWith(
+      'guest-2',
+    );
+
+    for (const resolve of resolvers) resolve();
+    await Promise.all([firstSend, secondSend]);
+    expect(toast.success).toHaveBeenCalledTimes(2);
+  });
+
+  it('ignores a duplicate send for a guest whose send is already in flight', async () => {
+    let resolveSend!: () => void;
+    adminEventsServiceMock.sendGuestTicket.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSend = resolve;
+        }),
+    );
+
+    const firstSend = fixture.componentInstance.sendGuestTicket('guest-1');
+    const duplicateSend = fixture.componentInstance.sendGuestTicket('guest-1');
+
+    expect(adminEventsServiceMock.sendGuestTicket).toHaveBeenCalledTimes(1);
+
+    resolveSend();
+    await Promise.all([firstSend, duplicateSend]);
+  });
+
+  it('sends tickets to all guests with an email that have not been emailed yet', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    fixture.componentRef.setInput('guests', [
+      mockGuest,
+      {...mockGuest, _id: 'guest-2', name: 'Riley Staff'},
+      {...mockGuest, _id: 'guest-3', name: 'Already Sent', emailedAt: 123},
+      {...mockGuest, _id: 'guest-4', name: 'No Email', email: undefined},
+    ]);
+    fixture.detectChanges();
+    const dataChangedSpy = vi.fn();
+    fixture.componentInstance.dataChanged.subscribe(dataChangedSpy);
+
+    expect(await harness.getSendAllButtonText()).toContain('Send All (2)');
+
+    await harness.clickSendAllButton();
+    await fixture.whenStable();
+
+    expect(adminEventsServiceMock.sendGuestTicket).toHaveBeenCalledTimes(2);
+    expect(adminEventsServiceMock.sendGuestTicket).toHaveBeenCalledWith(
+      'guest-1',
+    );
+    expect(adminEventsServiceMock.sendGuestTicket).toHaveBeenCalledWith(
+      'guest-2',
+    );
+    expect(toast.success).toHaveBeenCalledWith('Sent 2 tickets');
+    expect(dataChangedSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports partial failures when some send-all dispatches fail', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    adminEventsServiceMock.sendGuestTicket.mockImplementation(
+      (guestId: string) =>
+        guestId === 'guest-2'
+          ? Promise.reject(new Error('boom'))
+          : Promise.resolve(),
+    );
+    fixture.componentRef.setInput('guests', [
+      mockGuest,
+      {...mockGuest, _id: 'guest-2', name: 'Riley Staff'},
+    ]);
+    fixture.detectChanges();
+
+    await harness.clickSendAllButton();
+    await fixture.whenStable();
+
+    expect(toast.success).toHaveBeenCalledWith('Sent 1 ticket');
+    expect(toast.error).toHaveBeenCalledWith('Failed to send 1 ticket');
+  });
+
+  it('does not send anything when the send-all confirmation is declined', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    fixture.componentRef.setInput('guests', [mockGuest]);
+    fixture.detectChanges();
+
+    await harness.clickSendAllButton();
+    await fixture.whenStable();
+
+    expect(adminEventsServiceMock.sendGuestTicket).not.toHaveBeenCalled();
+  });
+
+  it('disables the send-all button when no guest needs a ticket email', async () => {
+    fixture.componentRef.setInput('guests', [
+      {...mockGuest, emailedAt: 123},
+      {...mockGuest, _id: 'guest-2', email: undefined},
+    ]);
+    fixture.detectChanges();
+
+    expect(await harness.isSendAllButtonDisabled()).toBe(true);
+    expect(await harness.getSendAllButtonText()).toContain('Send All (0)');
   });
 
   it('shows visible feedback after starting a guest ticket download', async () => {
