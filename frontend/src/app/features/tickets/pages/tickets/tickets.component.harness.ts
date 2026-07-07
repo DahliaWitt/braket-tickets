@@ -189,6 +189,11 @@ export class ZardTicketsHarness extends ComponentHarness {
     return empty !== null;
   }
 
+  async hasLoadingSkeletons(): Promise<boolean> {
+    const skeleton = await this.locatorForOptional('z-skeleton')();
+    return skeleton !== null;
+  }
+
   async hasErrorState(): Promise<boolean> {
     const error = await this._errorState();
     return error !== null;

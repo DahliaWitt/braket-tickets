@@ -753,6 +753,18 @@ export declare const api: {
         { organizerId: Id<"organizers">; userId: Id<"users"> },
         null
       >;
+      searchGrantCandidates: FunctionReference<
+        "query",
+        "public",
+        { organizerId: Id<"organizers">; searchTerm: string },
+        Array<{
+          _id: Id<"users">;
+          displayName: string;
+          email?: string;
+          organizerId: Id<"organizers">;
+          userId: Id<"users">;
+        }>
+      >;
     };
     trust_links: {
       checkUserTrust: FunctionReference<
@@ -1007,8 +1019,8 @@ export declare const api: {
       sendTicket: FunctionReference<
         "action",
         "public",
-        { guestId: Id<"guests"> },
-        null
+        { guestId: Id<"guests">; skipIfAlreadyEmailed?: boolean },
+        { status: "sent" | "skipped" }
       >;
     };
     guests: {
@@ -1034,6 +1046,7 @@ export declare const api: {
           checkedInAt?: number;
           checkedInBy?: Id<"users">;
           email?: string;
+          emailSendLockedAt?: number | null;
           emailedAt?: number;
           eventId: Id<"events">;
           name: string;
@@ -2338,6 +2351,7 @@ export declare const api: {
           applicationId?: Id<"applications">;
           deletedEventName?: string;
           eventId?: Id<"events">;
+          ipAddress?: string;
           magicLinkId?: Id<"magic_links">;
           organizerId?: Id<"organizers">;
           reason?: string;
@@ -2345,6 +2359,7 @@ export declare const api: {
           targetUserId?: Id<"users">;
           trustedOrganizerId?: Id<"organizers">;
           trustingOrganizerId?: Id<"organizers">;
+          userAgent?: string;
         } | null
       >;
       seedAdminInvite: FunctionReference<
@@ -3586,9 +3601,11 @@ export declare const internal: {
             adminId: Id<"users">;
             applicationId?: Id<"applications">;
             eventId?: Id<"events">;
+            ipAddress?: string;
             organizerId?: Id<"organizers">;
             source?: string;
             targetUserId?: Id<"users">;
+            userAgent?: string;
           },
           null
         >;
@@ -3599,8 +3616,10 @@ export declare const internal: {
             action: "ticket.check-in" | "guest.check-in";
             adminId: Id<"users">;
             eventId?: Id<"events">;
+            ipAddress?: string;
             organizerId?: Id<"organizers">;
             source?: string;
+            userAgent?: string;
           },
           null
         >;
@@ -3655,6 +3674,26 @@ export declare const internal: {
         "internal",
         {},
         null
+      >;
+      hasDelivery: FunctionReference<
+        "query",
+        "internal",
+        {
+          source:
+            | "announcement"
+            | "broadcast"
+            | "digest"
+            | "reminder"
+            | "application"
+            | "admin_invite"
+            | "event"
+            | "ticket"
+            | "payout"
+            | "resale_available"
+            | "auth";
+          sourceId: string;
+        },
+        boolean
       >;
       recordDelivery: FunctionReference<
         "mutation",
@@ -4027,6 +4066,22 @@ export declare const internal: {
       >;
     };
     guests: {
+      beginGuestTicketSend: FunctionReference<
+        "mutation",
+        "internal",
+        { id: Id<"guests">; requireUnsent: boolean },
+        {
+          claimed: boolean;
+          lockToken: number | null;
+          reason: "claimed" | "already_sent" | "in_flight" | "not_found";
+        }
+      >;
+      clearGuestTicketSendLock: FunctionReference<
+        "mutation",
+        "internal",
+        { id: Id<"guests">; lockToken: number },
+        null
+      >;
       getInternal: FunctionReference<
         "query",
         "internal",
@@ -4037,6 +4092,7 @@ export declare const internal: {
           checkedInAt?: number;
           checkedInBy?: Id<"users">;
           email?: string;
+          emailSendLockedAt?: number | null;
           emailedAt?: number;
           eventId: Id<"events">;
           name: string;
@@ -4047,7 +4103,7 @@ export declare const internal: {
       markAsEmailed: FunctionReference<
         "mutation",
         "internal",
-        { id: Id<"guests"> },
+        { id: Id<"guests">; lockToken: number },
         null
       >;
     };

@@ -683,7 +683,7 @@ describe('AdminEventsService', () => {
 
   describe('sendGuestTicket', () => {
     it('should send ticket email to guest', async () => {
-      convexMock.client.action.mockResolvedValue(undefined);
+      convexMock.client.action.mockResolvedValue({status: 'sent'});
 
       await service.sendGuestTicket(mockGuestId);
 
@@ -693,6 +693,23 @@ describe('AdminEventsService', () => {
           guestId: mockGuestId,
         },
       );
+    });
+
+    it('should forward skipIfAlreadyEmailed for batch sends', async () => {
+      convexMock.client.action.mockResolvedValue({status: 'skipped'});
+
+      const result = await service.sendGuestTicket(mockGuestId, {
+        skipIfAlreadyEmailed: true,
+      });
+
+      expect(convexMock.client.action).toHaveBeenCalledWith(
+        api.events.guest_actions.sendTicket,
+        {
+          guestId: mockGuestId,
+          skipIfAlreadyEmailed: true,
+        },
+      );
+      expect(result).toEqual({status: 'skipped'});
     });
 
     it('should throw when guest has no email', async () => {

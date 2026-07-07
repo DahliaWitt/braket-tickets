@@ -166,6 +166,16 @@ While `authSyncFailed` is true and no app `users` profile is loaded, protected r
 
 `backend/convex/auth/sync.ts` can link an existing app user by normalized email. `backend/convex/auth/sync.ts` throws if another user already owns that normalized email. Treat that case as a data-repair problem, not as a provider outage.
 
+## Understand optimistic route activation (expected behaviors)
+
+The frontend admits navigations optimistically from the persisted crossDomain credential in localStorage (`braket-tickets_cookie` / `braket-tickets_session_data`) before the Better Auth session settles. See `frontend/src/app/core/guards/auth.guards.ts` and `AuthService.scheduleOptimisticReconciliation` in `frontend/src/app/core/services/auth.service.ts`. Expected symptoms that are NOT bugs:
+
+- A user whose session was revoked server-side (password change elsewhere, admin revocation) briefly sees the dashboard skeleton, then a "session expired. please log in again." toast and a redirect. This is the reconciliation path working as designed.
+- A user with an expired stored credential goes straight to the landing page with no network wait — the guard treats a provably-expired credential as logged out.
+- In E2E/cookie mode the crossDomain plugin is disabled, so none of the optimistic behavior applies; guards always await the settled session.
+
+If users report being stuck on a skeleton dashboard indefinitely, that means auth never settled — check Better Auth endpoint reachability (`*.convex.site`) rather than the guards.
+
 ## Complete social signup onboarding
 
 After a successful sync, the backend can still require a signup-completion step. When that happens:
