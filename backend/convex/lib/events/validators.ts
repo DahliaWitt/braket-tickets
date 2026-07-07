@@ -101,6 +101,7 @@ export const guestFields = {
   type: guestTypeValidator,
   notes: v.optional(v.string()),
   emailedAt: v.optional(v.number()),
+  emailSendLockedAt: v.optional(v.union(v.number(), v.null())),
   checkedInAt: v.optional(v.number()),
   checkedInBy: v.optional(v.id('users')),
 };

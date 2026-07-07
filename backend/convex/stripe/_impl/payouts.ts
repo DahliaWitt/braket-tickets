@@ -167,10 +167,7 @@ export function computeEventSettlements(
 
     const alreadyPaidOutCents = paidOutByEvent.get(eventId) ?? 0;
     const payableCents =
-      sums.capturedNet +
-      sums.refundNet +
-      sums.disputeNet -
-      alreadyPaidOutCents;
+      sums.capturedNet + sums.refundNet + sums.disputeNet - alreadyPaidOutCents;
 
     settlements.push({
       eventId,
@@ -208,16 +205,12 @@ export interface BuildPayoutPlanArgs {
  */
 export function buildPayoutPlan(args: BuildPayoutPlanArgs): AccountPayoutPlan {
   const eligibleEvents = args.settlements
-    .filter(
-      (s) => args.eligibleEventIds.has(s.eventId) && s.payableCents > 0,
-    )
+    .filter((s) => args.eligibleEventIds.has(s.eventId) && s.payableCents > 0)
     .slice()
     .sort((a, b) => a.eventDate - b.eventDate);
 
   const reservedCents = args.settlements
-    .filter(
-      (s) => !args.eligibleEventIds.has(s.eventId) && s.payableCents > 0,
-    )
+    .filter((s) => !args.eligibleEventIds.has(s.eventId) && s.payableCents > 0)
     .reduce((sum, s) => sum + s.payableCents, 0);
 
   const eligibleNetCents = eligibleEvents.reduce(

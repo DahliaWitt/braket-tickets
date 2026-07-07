@@ -414,7 +414,7 @@ export async function cancelEmailChangeHandler(
   });
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: userId,
       action: 'account.email_change.cancelled',
@@ -449,7 +449,7 @@ export async function requestEmailChangeHandler(
   });
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: userId,
       action: 'account.email_change.requested',
@@ -461,7 +461,7 @@ export async function requestEmailChangeHandler(
     message: string,
   ): Promise<{success: false; message: string}> => {
     await insertAdminAuditLog(
-      {db: ctx.db},
+      {db: ctx.db, meta: ctx.meta},
       {
         adminId: userId,
         action: 'account.email_change.failed',
@@ -510,7 +510,7 @@ export async function requestEmailChangeHandler(
     });
 
     await insertAdminAuditLog(
-      {db: ctx.db},
+      {db: ctx.db, meta: ctx.meta},
       {
         adminId: userId,
         action: 'account.email_change.verification_queued',

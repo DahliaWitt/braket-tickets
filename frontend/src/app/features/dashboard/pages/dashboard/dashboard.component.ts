@@ -134,6 +134,51 @@ export class DashboardComponent {
   // Show all communities toggle (for 6+ communities)
   readonly showAllCommunities = signal(false);
 
+  /**
+   * Measured poster aspect ratios by event id. The backend stores only a
+   * storage id (no dimensions), so each poster frame starts at the 4:5
+   * flyer default and settles to the true ratio once the image loads.
+   */
+  private readonly posterRatios = signal<ReadonlyMap<string, number>>(
+    new Map(),
+  );
+
+  /** Default flyer ratio (4:5) used until the poster image has loaded. */
+  private static readonly DEFAULT_POSTER_RATIO = 4 / 5;
+
+  /**
+   * Supported poster ratio range: 9:16 story format through 2.5:1 banner.
+   * Poster dimensions are user-uploaded content — without a clamp, a hostile
+   * or malformed image (e.g. 1x10000) would collapse the frame to a sliver
+   * or stretch it to thousands of pixels. Outside the range the frame stays
+   * clamped and object-contain + the ambient-glow backdrop absorb the gap.
+   */
+  private static readonly MIN_POSTER_RATIO = 9 / 16;
+  private static readonly MAX_POSTER_RATIO = 5 / 2;
+
+  posterAspectRatio(eventId: string): number {
+    return (
+      this.posterRatios().get(eventId) ??
+      DashboardComponent.DEFAULT_POSTER_RATIO
+    );
+  }
+
+  onPosterLoad(eventId: string, event: Event): void {
+    const img = event.target as HTMLImageElement;
+    if (!img.naturalWidth || !img.naturalHeight) return;
+    const ratio = Math.min(
+      DashboardComponent.MAX_POSTER_RATIO,
+      Math.max(
+        DashboardComponent.MIN_POSTER_RATIO,
+        img.naturalWidth / img.naturalHeight,
+      ),
+    );
+    if (this.posterRatios().get(eventId) === ratio) return;
+    const next = new Map(this.posterRatios());
+    next.set(eventId, ratio);
+    this.posterRatios.set(next);
+  }
+
   // Visible communities (capped unless expanded)
   readonly visibleCommunities = computed(() => {
     const all = this.communityGridEntries();

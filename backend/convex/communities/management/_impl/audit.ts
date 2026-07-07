@@ -49,16 +49,20 @@ export async function recordCheckInLog(
     eventId?: Id<'events'>;
     organizerId?: Id<'organizers'>;
     source?: string;
+    ipAddress?: string;
+    userAgent?: string;
   },
 ): Promise<null> {
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: args.adminId,
       action: args.action,
       eventId: args.eventId,
       organizerId: args.organizerId,
       source: args.source,
+      ipAddress: args.ipAddress,
+      userAgent: args.userAgent,
     },
   );
   return null;
@@ -74,6 +78,8 @@ export async function logAdminAccess(
     targetUserId?: Id<'users'>;
     organizerId?: Id<'organizers'>;
     source?: string;
+    ipAddress?: string;
+    userAgent?: string;
   },
 ): Promise<null> {
   let organizerId = args.organizerId;
@@ -87,7 +93,7 @@ export async function logAdminAccess(
   }
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: args.adminId,
       action: args.action,
@@ -96,6 +102,8 @@ export async function logAdminAccess(
       targetUserId: args.targetUserId,
       organizerId,
       source: args.source,
+      ipAddress: args.ipAddress,
+      userAgent: args.userAgent,
     },
   );
   return null;

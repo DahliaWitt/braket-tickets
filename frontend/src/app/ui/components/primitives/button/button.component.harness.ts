@@ -59,6 +59,11 @@ export class ZardButtonComponentHarness extends ComponentHarness {
     return host.getAttribute('aria-busy');
   }
 
+  async getAriaLabel(): Promise<string | null> {
+    const host = await this.host();
+    return host.getAttribute('aria-label');
+  }
+
   async getAriaDisabled(): Promise<string | null> {
     const host = await this.host();
     return host.getAttribute('aria-disabled');

@@ -13,6 +13,29 @@
         z-button
         zType="outline"
         zSize="sm"
+        (click)="sendAllTickets()"
+        [zLoading]="isSendingAll()"
+        [zDisabled]="isLoading() || pendingSendGuests().length === 0"
+        data-testid="send-all-tickets"
+        [class.border-primary/30]="pendingSendGuests().length > 0"
+        [class.text-primary]="pendingSendGuests().length > 0"
+        [class.hover:bg-primary/10]="pendingSendGuests().length > 0"
+        [class.border-border]="pendingSendGuests().length === 0"
+        [class.text-muted-foreground/60]="pendingSendGuests().length === 0"
+        [attr.aria-label]="
+          'Send tickets to all ' + pendingSendGuests().length + ' unsent guests'
+        "
+      >
+        @if (!isSendingAll()) {
+          <z-icon zType="mail" />
+        }
+        Send All ({{ pendingSendGuests().length }})
+      </button>
+      <button
+        type="button"
+        z-button
+        zType="outline"
+        zSize="sm"
         (click)="openAddGuestDialog()"
         data-testid="add-guest-button"
         class="border-success/50 text-success hover:bg-success/10"
@@ -107,16 +130,14 @@
                   zType="ghost"
                   zSize="sm"
                   (click)="downloadGuestTicket(guest._id)"
-                  [zDisabled]="isGeneratingGuestPdf() === guest._id"
+                  [zLoading]="generatingPdfIds().has(guest._id)"
                   class="text-muted-foreground hover:bg-muted/60"
                   [zTooltip]="'Download ticket for ' + guestActionLabel(guest)"
                   [attr.aria-label]="
                     'Download ticket for ' + guestActionLabel(guest)
                   "
                 >
-                  @if (isGeneratingGuestPdf() === guest._id) {
-                    <z-icon zType="loader-circle" class="mr-2 animate-spin" />
-                  } @else {
+                  @if (!generatingPdfIds().has(guest._id)) {
                     <z-icon zType="download" />
                   }
                 </button>
@@ -126,12 +147,8 @@
                   zType="ghost"
                   zSize="sm"
                   (click)="sendGuestTicket(guest._id)"
-                  [zDisabled]="
-                    isLoading() ||
-                    !guest.email ||
-                    isSendingTicket() === guest._id
-                  "
-                  [attr.aria-busy]="isSendingTicket() === guest._id"
+                  [zLoading]="sendingTicketIds().has(guest._id)"
+                  [zDisabled]="isLoading() || !guest.email"
                   data-testid="send-guest-ticket"
                   [attr.aria-label]="
                     'Send ticket to ' + guestActionLabel(guest)
@@ -147,18 +164,23 @@
                         : 'Send Ticket'
                   "
                 >
-                  @if (isSendingTicket() === guest._id) {
-                    <z-icon zType="loader-circle" class="mr-1 animate-spin" />
-                  } @else {
-                    <z-icon zType="mail" class="mr-1" />
+                  @if (!sendingTicketIds().has(guest._id)) {
+                    <z-icon zType="mail" />
                   }
-                  {{
-                    isSendingTicket() === guest._id
-                      ? 'Sending...'
-                      : guest.emailedAt
-                        ? 'Resend'
-                        : 'Send'
-                  }}
+                  {{ guest.emailedAt ? 'Resend' : 'Send' }}
+                </button>
+                <button
+                  type="button"
+                  z-button
+                  zType="ghost"
+                  zSize="sm"
+                  (click)="editGuest(guest)"
+                  data-testid="edit-guest"
+                  class="text-muted-foreground hover:bg-muted/60"
+                  [attr.aria-label]="'Edit ' + guestActionLabel(guest)"
+                  [zTooltip]="'Edit ' + guestActionLabel(guest)"
+                >
+                  <z-icon zType="pencil" />
                 </button>
                 <button
                   type="button"
@@ -236,16 +258,14 @@
                 zType="outline"
                 zSize="sm"
                 (click)="downloadGuestTicket(guest._id)"
-                [zDisabled]="isGeneratingGuestPdf() === guest._id"
+                [zLoading]="generatingPdfIds().has(guest._id)"
                 [attr.aria-label]="
                   'Download ticket for ' + guestActionLabel(guest)
                 "
                 class="flex-1 border-border text-muted-foreground hover:bg-muted/60"
               >
-                @if (isGeneratingGuestPdf() === guest._id) {
-                  <z-icon zType="loader-circle" class="mr-2 animate-spin" />
-                } @else {
-                  <z-icon zType="download" class="mr-2" />
+                @if (!generatingPdfIds().has(guest._id)) {
+                  <z-icon zType="download" />
                 }
                 Download
               </button>
@@ -255,10 +275,8 @@
                 zType="outline"
                 zSize="sm"
                 (click)="sendGuestTicket(guest._id)"
-                [zDisabled]="
-                  isLoading() || !guest.email || isSendingTicket() === guest._id
-                "
-                [attr.aria-busy]="isSendingTicket() === guest._id"
+                [zLoading]="sendingTicketIds().has(guest._id)"
+                [zDisabled]="isLoading() || !guest.email"
                 data-testid="send-guest-ticket"
                 [attr.aria-label]="'Send ticket to ' + guestActionLabel(guest)"
                 class="flex-1"
@@ -268,18 +286,23 @@
                 [class.border-primary/30]="guest.email"
                 [class.hover:bg-primary/10]="guest.email"
               >
-                @if (isSendingTicket() === guest._id) {
-                  <z-icon zType="loader-circle" class="mr-1 animate-spin" />
-                } @else {
-                  <z-icon zType="mail" class="mr-1" />
+                @if (!sendingTicketIds().has(guest._id)) {
+                  <z-icon zType="mail" />
                 }
-                {{
-                  isSendingTicket() === guest._id
-                    ? 'Sending...'
-                    : guest.emailedAt
-                      ? 'Resend'
-                      : 'Send'
-                }}
+                {{ guest.emailedAt ? 'Resend' : 'Send' }}
+              </button>
+              <button
+                type="button"
+                z-button
+                zType="outline"
+                zSize="sm"
+                (click)="editGuest(guest)"
+                data-testid="edit-guest"
+                class="border-border text-muted-foreground hover:bg-muted/60"
+                [attr.aria-label]="'Edit ' + guestActionLabel(guest)"
+                [zTooltip]="'Edit ' + guestActionLabel(guest)"
+              >
+                <z-icon zType="pencil" />
               </button>
               <button
                 type="button"

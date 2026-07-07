@@ -398,7 +398,7 @@ export async function recordRosterExport(
   },
 ): Promise<null> {
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: args.adminId,
       action: ADMIN_AUDIT_ACTIONS.EVENT_ROSTER_EXPORTED,

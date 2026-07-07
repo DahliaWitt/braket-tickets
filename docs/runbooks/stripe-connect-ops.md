@@ -234,15 +234,3 @@ Internal actions, run from the Convex Dashboard (Functions → `stripe/actions`)
 - `backfillPaymentCapturedNet({connectedAccountId})` — finds `payment_captured` rows missing `connectedAccountNetCents` (the pre-capture-race-fix population), re-reads each charge's BalanceTransaction, and enriches the row in place. Idempotent; returns `{scanned, enriched, skipped, failed}`.
 
 **Run order matters when both are needed on one account: ingest the external payout FIRST, then backfill.** Backfilling first inflates payable while the manual payout is still unrecorded; the trust gate blocks payouts either way, but doing it in order keeps allocations attributed to the right events. The order is machine-checked: `backfillPaymentCapturedNet` refuses with `EXTERNAL_PAYOUT_UNRECORDED` (listing the offending payout ids) while the account has paid payouts the ledger never recorded.
-
-## Explain a missing payout email
-
-`stripe.confirmPayout` confirms `payout_allocations` and may stamp `paidOutAt` only when the event has no remaining Connect payable balance. Platform-organizer events use `stripe.markEventPaidOut` directly. The payout email fires from inside `markEventPaidOut` when `payoutAmountCents > 0`, guarded by `guardEmailDedup` to avoid duplicates on retries.
-
-No email is sent when:
-
-- The event was a platform organizer event retired via `markEventPaidOut` without a payout amount.
-- Revenue was zero before the settlement window (rare but possible — `buildPayoutPlan` excludes events with `payableCents <= 0`).
-- The organizer row has no `email`.
-
-If the event was paid out with a positive amount and no email arrived, switch to [Email Delivery](./email-delivery.md).
