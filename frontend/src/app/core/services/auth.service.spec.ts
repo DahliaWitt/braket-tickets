@@ -1501,12 +1501,12 @@ describe('AuthService', () => {
       expect(routerSpy.navigateByUrl).toHaveBeenCalledTimes(1);
     });
 
-    it('bounds the wait and does not redirect when auth never settles', async () => {
+    it('recovers off the optimistic route when auth never settles', async () => {
       vi.useFakeTimers();
       try {
         routerSpy.url = '/tickets';
         // Authenticated, initialized, but the profile query never resolves and
-        // sync never fails: authSettled stays false indefinitely.
+        // sync never fails: authSettled would stay false indefinitely.
         setSession({user: {email: 'buyer@example.com'}});
         userSignal.set(null);
         setAuthInitialized(true);
@@ -1517,10 +1517,15 @@ describe('AuthService', () => {
 
         await vi.advanceTimersByTimeAsync(AUTH_SETTLE_TIMEOUT_MS + 100);
 
-        // Deliberate: a live-but-unconfirmable session is left on its skeleton
-        // rather than bouncing a possibly-authenticated user to login.
-        expect(routerSpy.navigateByUrl).not.toHaveBeenCalled();
-        expect(toastSpy.error).not.toHaveBeenCalled();
+        // The give-up latch forces settle and the guards are re-run, so the user
+        // is recovered off the skeleton rather than stranded on it.
+        expect(service.authSettled()).toBe(true);
+        expect(routerSpy.navigateByUrl).toHaveBeenCalledWith('/tickets', {
+          replaceUrl: true,
+        });
+        expect(toastSpy.error).toHaveBeenCalledWith(
+          'could not confirm your session. please try again.',
+        );
       } finally {
         vi.useRealTimers();
       }

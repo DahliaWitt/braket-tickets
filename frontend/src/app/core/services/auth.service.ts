@@ -1,6 +1,6 @@
 import {DestroyRef, Injectable, computed, inject, signal} from '@angular/core';
 import {toObservable} from '@angular/core/rxjs-interop';
-import {firstValueFrom} from 'rxjs';
+import {firstValueFrom, TimeoutError} from 'rxjs';
 import {filter, timeout} from 'rxjs/operators';
 import {Router} from '@angular/router';
 import {
@@ -198,6 +198,16 @@ export class AuthService implements ConvexAuthProvider {
   readonly authSyncFailed = signal(false);
 
   /**
+   * Terminal give-up latch: set when the auth-settle wait times out (session
+   * reported but profile never resolved, or init itself hung). Forces
+   * `authSettled` true so route guards leave the optimistic path and take their
+   * authoritative failure branch, recovering the user off a stuck skeleton
+   * instead of stranding them. Never reset for the page lifetime — once we have
+   * given up on the initial settle we do not re-enter optimistic mode.
+   */
+  private readonly authSettleTimedOut = signal(false);
+
+  /**
    * Whether auth has reached a decidable state: initialized, and either
    * unauthenticated or user-synced (or sync explicitly gave up). Single source
    * of truth for the settle predicate — `waitForAuthSettled$` (route guards)
@@ -206,6 +216,7 @@ export class AuthService implements ConvexAuthProvider {
    * empty states.
    */
   readonly authSettled = computed(() => {
+    if (this.authSettleTimedOut()) return true;
     if (!this.authInitialized()) return false;
     if (!this.isAuthenticated()) return true;
     if (this.user()) return true;
@@ -356,11 +367,14 @@ export class AuthService implements ConvexAuthProvider {
    * optimistically in one navigation schedule a single reconciliation.
    *
    * Bounded by `AUTH_SETTLE_TIMEOUT_MS` (parity with `waitForAuthSettled$`): if
-   * auth never settles — a live but unconfirmable session whose profile query
-   * hangs — the wait times out, the flag resets so a later navigation can
-   * retry, and the optimistically-rendered page keeps its skeleton. We do NOT
-   * redirect on timeout: the session may well be valid (only the profile is
-   * slow), and bouncing an authenticated user to login would be wrong.
+   * auth never settles — init hung, or a session was reported but its profile
+   * query never resolved — we must not strand the user on the optimistic
+   * page's skeleton (the pages gate on `authSettled`). On timeout we latch
+   * `authSettleTimedOut`, which forces `authSettled` true, then re-run the
+   * guards: they leave the optimistic path and take their authoritative failure
+   * branch (login when unauthenticated, public home when authenticated without a
+   * profile) — the same recovery the non-optimistic guards gave before this
+   * feature.
    */
   scheduleOptimisticReconciliation(): void {
     if (this.optimisticReconciliationScheduled) {
@@ -396,10 +410,21 @@ export class AuthService implements ConvexAuthProvider {
         return this.router.navigateByUrl(this.router.url, {replaceUrl: true});
       })
       .catch((err: unknown) => {
+        if (!(err instanceof TimeoutError)) {
+          logger.error('[AuthService] Optimistic reconciliation failed', err);
+          return;
+        }
+
+        // Auth never reached a decidable state. Latch the give-up so the guards
+        // stop admitting optimistically, then re-run them: authSettled is now
+        // true, so they take the authoritative failure branch instead of
+        // leaving the user on an indefinite skeleton.
         logger.warn(
-          '[AuthService] Optimistic reconciliation did not settle in time',
-          err,
+          '[AuthService] Auth did not settle within the budget; recovering off the optimistic route',
         );
+        this.authSettleTimedOut.set(true);
+        this.toast.error('could not confirm your session. please try again.');
+        return this.router.navigateByUrl(this.router.url, {replaceUrl: true});
       })
       .finally(() => {
         this.optimisticReconciliationScheduled = false;
