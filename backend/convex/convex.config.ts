@@ -51,6 +51,13 @@ const app: ReturnType<typeof defineApp> = defineApp({
     SMTP_REPLY_TO: v.optional(v.string()),
 
     // Test / seed gating (lib/environment.ts enforces the pairing rules).
+    // These booleans are intentionally v.string(), NOT a
+    // v.union(v.literal('true'), v.literal('false')): lib/environment.ts reads
+    // them as `=== 'true'`, so any other value already degrades safely to
+    // "false". A literal union would instead turn an unexpected legacy value
+    // (e.g. '1' or '') on a deployment we can't inspect into a hard deploy
+    // failure — env/deploy changes are high-risk, so we validate presence, not
+    // the exact boolean spelling.
     ALLOW_LOCALHOST_CORS: v.optional(v.string()),
     IS_TEST: v.optional(v.string()),
     DEV_SEED: v.optional(v.string()),

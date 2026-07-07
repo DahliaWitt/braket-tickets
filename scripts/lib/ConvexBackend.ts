@@ -123,11 +123,10 @@ export class ConvexBackend {
 
       // Env vars must be complete BEFORE deploy: convex.config.ts declares
       // required env vars (convex 1.39+), so the deploy itself validates them.
-      console.log(
-        `[${this.instanceId}] Setting minimal env vars before deploy...`,
-      );
+      // IS_TEST is set explicitly because buildEnv('dev') omits it (only e2e
+      // sets it); SITE_URL and everything else come from setAllEnvVars below.
+      console.log(`[${this.instanceId}] Setting env vars before deploy...`);
       await this._setIsTest();
-      await this._setSiteUrl(appPort);
 
       const envEntries = Object.entries(
         buildEnv(this.mode, {
@@ -580,18 +579,6 @@ export class ConvexBackend {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       console.warn(`[${this.instanceId}] Failed to set IS_TEST: ${msg}`);
-    }
-  }
-
-  private async _setSiteUrl(appPort: number): Promise<void> {
-    const url = this.convexUrl;
-    const siteUrl = `http://127.0.0.1:${appPort}`;
-    try {
-      await setOneEnvVar('SITE_URL', siteUrl, url);
-      console.log(`[${this.instanceId}] Set SITE_URL=${siteUrl}`);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`[${this.instanceId}] Failed to set SITE_URL: ${msg}`);
     }
   }
 

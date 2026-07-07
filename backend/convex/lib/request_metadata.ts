@@ -1,18 +1,18 @@
 import type {ActionCtx, MutationCtx} from '../_generated/server';
 
 export type SafeRequestMetadata = {
-  ip: string | null;
-  userAgent: string | null;
-  requestId: string | null;
-  scheduledFunctionId: string | null;
+  readonly ip: string | null;
+  readonly userAgent: string | null;
+  readonly requestId: string | null;
+  readonly scheduledFunctionId: string | null;
 };
 
-const EMPTY_METADATA: SafeRequestMetadata = {
+const EMPTY_METADATA: SafeRequestMetadata = Object.freeze({
   ip: null,
   userAgent: null,
   requestId: null,
   scheduledFunctionId: null,
-};
+});
 
 /**
  * `ctx.meta.getRequestMetadata()` with a safe fallback for runtimes that do
