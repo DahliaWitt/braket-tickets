@@ -57,6 +57,11 @@ export interface ImportCopy {
   readonly emptyState: string;
   readonly confirmLabel: string;
   readonly overCapMessage: (max: number) => string;
+  /** Reason shown when a strong-key duplicate is skipped (references the target's
+   * actual key — barcode for buyers, name+email for guests). */
+  readonly duplicateSkippedReason: string;
+  /** Reason shown when a strong-key duplicate is kept in include mode (buyer). */
+  readonly duplicateIncludedReason: string;
 }
 
 /**
@@ -189,6 +194,9 @@ export const GUEST_IMPORT_CONFIG: ImportTargetConfig = {
     confirmLabel: 'add guests',
     overCapMessage: (max) =>
       `that's more than ${max} rows — split the file and import it in a few passes`,
+    duplicateSkippedReason:
+      'duplicate — same name and email already on the list',
+    duplicateIncludedReason: 'duplicate — same name and email',
   },
   validateRow: (row: ParsedRow): RowValidation => {
     const reasons: string[] = [];
@@ -256,6 +264,8 @@ export const BUYER_IMPORT_CONFIG: ImportTargetConfig = {
     confirmLabel: 'import tickets',
     overCapMessage: (max) =>
       `that's more than ${max} rows — split the file and import it in a few passes`,
+    duplicateSkippedReason: 'duplicate barcode — already imported',
+    duplicateIncludedReason: 'duplicate barcode — imported again',
   },
   validateRow: (row: ParsedRow): RowValidation => {
     const reasons: string[] = [];

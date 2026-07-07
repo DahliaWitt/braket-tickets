@@ -98,7 +98,11 @@
           class="font-mono text-xs text-muted-foreground"
           data-testid="broadcast-recipient-count"
         >
-          {{ broadcastRecipientCount() }} recipients (ticket holders + guests).
+          {{ broadcastRecipientCount() }} recipients (ticket holders + guests
+          @if (includeExternalTicketHolders() && importedReachableCount() > 0) {
+            <span>&nbsp;+ external</span>
+          }
+          ).
         </p>
       }
 
@@ -120,13 +124,22 @@
           class="font-mono text-2xs text-muted-foreground lowercase"
           data-testid="broadcast-include-external-count"
         >
-          @if (importedReachableCount() === 1) {
-            includes 1 external ticket holder
+          @if (includeExternalTicketHolders()) {
+            @if (importedReachableCount() === 1) {
+              including 1 external ticket holder
+            } @else {
+              including {{ importedReachableCount() }} external ticket holders
+            }
+            @if (importedUnreachableCount() > 0) {
+              · {{ importedUnreachableCount() }} without an email can't be
+              reached
+            }
           } @else {
-            includes {{ importedReachableCount() }} external ticket holders
-          }
-          @if (importedUnreachableCount() > 0) {
-            · {{ importedUnreachableCount() }} without an email can't be reached
+            @if (importedReachableCount() === 1) {
+              1 external ticket holder excluded
+            } @else {
+              {{ importedReachableCount() }} external ticket holders excluded
+            }
           }
         </p>
       </div>

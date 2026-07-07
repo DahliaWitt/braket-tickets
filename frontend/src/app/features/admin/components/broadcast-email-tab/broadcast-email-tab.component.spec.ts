@@ -111,7 +111,16 @@ describe('BroadcastEmailTabComponent', () => {
     expect(await harness.isIncludeExternalToggleVisible()).toBe(true);
     expect(await harness.isIncludeExternalToggled()).toBe(true);
     const countText = await harness.getIncludeExternalCountText();
-    expect(countText).toContain('includes 0 external ticket holders');
+    // Toggle defaults ON, so the count reads "including" (present participle).
+    expect(countText).toContain('including 0 external ticket holders');
+  });
+
+  it('reads as excluded when the toggle is off', async () => {
+    await harness.clickIncludeExternalToggle();
+    expect(await harness.isIncludeExternalToggled()).toBe(false);
+    const countText = await harness.getIncludeExternalCountText();
+    expect(countText).toContain('external ticket holders excluded');
+    expect(countText).not.toContain('including');
   });
 
   it('renders reachable and unreachable imported counts', async () => {
@@ -156,7 +165,7 @@ describe('BroadcastEmailTabComponent', () => {
     );
 
     const countText = await harness.getIncludeExternalCountText();
-    expect(countText).toContain('includes 3 external ticket holders');
+    expect(countText).toContain('including 3 external ticket holders');
     expect(countText).toContain("2 without an email can't be reached");
   });
 

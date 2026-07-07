@@ -17,11 +17,11 @@ describe('buildImportReport', () => {
     expect(report.inserted).toBe(2);
     expect(report.skipped).toBe(1);
     expect(report.failed).toBe(1);
-    // rowIndex is 0-based; surface renders 1-based source row numbers.
+    // rowIndex is 0-based; presented 1-based as the submitted-row position.
     expect(report.outcomes).toEqual([
-      {sourceRowNumber: 1, status: 'inserted', reason: undefined},
-      {sourceRowNumber: 2, status: 'skipped', reason: 'duplicate barcode'},
-      {sourceRowNumber: 3, status: 'failed', reason: 'missing name'},
+      {submittedRowNumber: 1, status: 'inserted', reason: undefined},
+      {submittedRowNumber: 2, status: 'skipped', reason: 'duplicate barcode'},
+      {submittedRowNumber: 3, status: 'failed', reason: 'missing name'},
     ]);
   });
 

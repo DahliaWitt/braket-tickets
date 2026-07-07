@@ -556,6 +556,21 @@ export async function resolveAndCheckInByExternalRef(
     return {matched: false};
   }
 
+  // Authorize BEFORE reading the imported set (repo pattern: authz-before-read).
+  // An unauthorized caller never touches the imported table.
+  const event = await ctx.db.get('events', args.eventId);
+  if (!event) {
+    return {matched: false};
+  }
+  const [canScan, isEditor] = await Promise.all([
+    canScanEvent(ctx, args.userId, event),
+    canEditEvent(ctx, args.userId, event),
+  ]);
+  if (!canScan) {
+    // Contained: an unauthorized caller learns nothing about the imported set.
+    return {matched: false};
+  }
+
   // Point lookup scoped to the scanned event only. `by_event_external_ref_key`
   // returns entries in creation order for a shared barcode. Bounded by the
   // per-event import cap: entries sharing one barcode can never exceed the
@@ -568,20 +583,6 @@ export async function resolveAndCheckInByExternalRef(
     .take(MAX_IMPORTED_ENTRIES_PER_EVENT);
 
   if (matches.length === 0) {
-    return {matched: false};
-  }
-
-  const event = await ctx.db.get('events', args.eventId);
-  if (!event) {
-    return {matched: false};
-  }
-
-  const [canScan, isEditor] = await Promise.all([
-    canScanEvent(ctx, args.userId, event),
-    canEditEvent(ctx, args.userId, event),
-  ]);
-  if (!canScan) {
-    // Contained: an unauthorized caller learns nothing about the imported set.
     return {matched: false};
   }
 
@@ -598,7 +599,6 @@ export async function resolveAndCheckInByExternalRef(
   return {matched: true, result};
 }
 
-/**
 /**
  * Page size for the redaction sweep. Bounds the per-transaction read so a large
  * imported-ticket table cannot blow the Convex read budget mid-privacy-request.

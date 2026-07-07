@@ -212,6 +212,43 @@ describe('importedTickets.importBatch', () => {
     expect(result.imported?.name).toBe('Holder');
   });
 
+  it('a scan-unauthorized caller cannot check in an imported entry via the barcode fallback', async () => {
+    const t = convexTest();
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    await asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId,
+      batchKey: 'scan-authz',
+      dedupMode: 'skip',
+      rows: [{name: 'Holder', externalRef: 'AUTHZ-1'}],
+    });
+
+    // A user with no scan/edit access to this event scans the barcode.
+    const outsiderId = await t.mutation(api.testing.users.createUserDirectly, {
+      name: 'Outsider',
+      email: `outsider-${Date.now()}@test.com`,
+    });
+    const asOutsider = t.withIdentity({subject: outsiderId});
+    const result = await asOutsider.mutation(api.events.check_in.checkIn, {
+      eventId,
+      ticketId: 'AUTHZ-1',
+    });
+
+    // Contained: no imported match is surfaced and nothing is checked in.
+    expect(result.imported).toBeUndefined();
+    const entry = await t.run(async (ctx) =>
+      ctx.db
+        .query('importedTicketHolders')
+        .withIndex('by_event_external_ref_key', (q) =>
+          q.eq('eventId', eventId).eq('externalRefKey', 'authz-1'),
+        )
+        .first(),
+    );
+    expect(entry?.checkedInAt).toBeUndefined();
+  });
+
   it('a guest and imported batch may share a batch key without colliding', async () => {
     const t = convexTest();
     const adminId = await setupAdmin(t);

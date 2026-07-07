@@ -381,7 +381,8 @@ export class AdminEventsService {
   }
 
   /**
-   * Lists imported external ticket holders for an event (reactive query).
+   * Lists imported external ticket holders for an event (one-shot `convex.query`
+   * — not a live subscription; callers reload it explicitly).
    *
    * Powers both the buyers-list merge (with source badge) and the preview dedup
    * hints. Roster-view authorized.

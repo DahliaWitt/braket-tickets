@@ -17,9 +17,11 @@ import {
  */
 export function buildImportReport(result: ImportBatchResult): ImportReport {
   const outcomes: ImportReportOutcome[] = result.outcomes.map((outcome) => ({
-    // The backend `rowIndex` is 0-based into the submitted rows; the surface
-    // renders it as the source row number, so present it 1-based for humans.
-    sourceRowNumber: outcome.rowIndex + 1,
+    // The backend `rowIndex` is 0-based into the submitted (valid) rows; present
+    // it 1-based for humans. This is the submitted-row position, not the CSV
+    // source line — the two diverge because invalid/duplicate rows were never
+    // submitted.
+    submittedRowNumber: outcome.rowIndex + 1,
     status: outcome.status === 'invalid' ? 'failed' : outcome.status,
     reason: outcome.reason,
   }));

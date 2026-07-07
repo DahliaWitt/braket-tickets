@@ -21,7 +21,10 @@ export const IMPORT_HEADER_SYNONYMS: Readonly<
   externalRef: ['barcode', 'external reference', 'ticket reference', 'qr'],
   orderRef: ['order number', 'order reference', 'order', 'order id'],
   purchaseDateRaw: ['date purchased', 'purchase date', 'date', 'purchased'],
-  guestType: ['guest type', 'attendee type'],
+  // Bare "type" also lives on ticketTypeLabel; the per-target acceptedFields set
+  // disambiguates (guest target accepts guestType not ticketTypeLabel, and vice
+  // versa), so a guest CSV's "type" column maps to the guest type here.
+  guestType: ['guest type', 'attendee type', 'type'],
   notes: ['notes', 'note', 'comment', 'comments'],
 } as const;
 

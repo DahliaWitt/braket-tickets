@@ -93,6 +93,45 @@ describe('buildPreview partitioning', () => {
       });
       expect(preview.rows[0].values.guestType).toBe('artist guest');
     });
+
+    it('maps a bare "type" header to the guest type (not silently dropped)', () => {
+      // The natural guest-CSV shape uses "type" (the single-add dialog's field
+      // name). It must resolve to guestType, so staff/artist rows are not
+      // silently defaulted to guest.
+      const parsed = parse(GUEST_IMPORT_CONFIG, 'Name,Type\nzoe,staff');
+      const preview = buildPreview(parsed.rows, GUEST_IMPORT_CONFIG, {
+        dedupMode: 'skip',
+      });
+      expect(preview.rows[0].partition).toBe('valid');
+      expect(preview.rows[0].values.guestType).toBe('staff');
+    });
+  });
+
+  describe('duplicate reason copy', () => {
+    it('guest duplicates read as name+email, not barcode', () => {
+      const parsed = parse(
+        GUEST_IMPORT_CONFIG,
+        'Name,Email\nzoe,zoe@example.test\nzoe,zoe@example.test',
+      );
+      const preview = buildPreview(parsed.rows, GUEST_IMPORT_CONFIG, {
+        dedupMode: 'skip',
+      });
+      const dup = preview.rows[1];
+      expect(dup.partition).toBe('duplicate');
+      expect(dup.reasons.join(' ')).toContain('name and email');
+      expect(dup.reasons.join(' ')).not.toContain('barcode');
+    });
+
+    it('buyer duplicates read as barcode', () => {
+      const parsed = parse(
+        BUYER_IMPORT_CONFIG,
+        'Billing name,Barcode\ndoe jane,ABC\ndoe jane,ABC',
+      );
+      const preview = buildPreview(parsed.rows, BUYER_IMPORT_CONFIG, {
+        dedupMode: 'skip',
+      });
+      expect(preview.rows[1].reasons.join(' ')).toContain('barcode');
+    });
   });
 
   describe('buyer dedup by barcode', () => {

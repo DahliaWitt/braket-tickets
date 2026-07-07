@@ -36,7 +36,12 @@ export interface ImportReport {
 }
 
 export interface ImportReportOutcome {
-  readonly sourceRowNumber: number;
+  /**
+   * 1-based position within the SUBMITTED (valid) rows the server processed —
+   * NOT the CSV source line (invalid/duplicate rows were never submitted, so the
+   * two diverge). Named distinctly to avoid implying a source-line number.
+   */
+  readonly submittedRowNumber: number;
   readonly status: 'inserted' | 'skipped' | 'failed';
   readonly reason?: string;
 }

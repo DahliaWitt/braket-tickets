@@ -13,9 +13,9 @@ export class ImportSurfaceComponentHarness extends ComponentHarness {
   private readonly getPasteInput = this.locatorFor(
     '[data-testid="import-paste-input"]',
   );
-  private readonly getFileInput = this.locatorFor(
-    '[data-testid="import-file-input"]',
-  );
+  // The file input is driven by Playwright's setInputFiles on its data-testid
+  // (CDK harnesses cannot perform file uploads), so no CDK locator is exposed
+  // for it here.
   private readonly getParseNext = this.locatorFor(
     '[data-testid="import-parse-next"]',
   );

@@ -83,9 +83,9 @@ export function buildPreview(
       if (isDuplicate) {
         if (skipDuplicates) {
           partition = 'duplicate';
-          reasons.push('duplicate barcode — already imported');
+          reasons.push(config.copy.duplicateSkippedReason);
         } else {
-          reasons.push('duplicate barcode — imported again');
+          reasons.push(config.copy.duplicateIncludedReason);
         }
       }
     }

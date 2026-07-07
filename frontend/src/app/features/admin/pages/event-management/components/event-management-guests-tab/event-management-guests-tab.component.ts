@@ -111,9 +111,13 @@ export class EventManagementGuestsTabComponent {
   readonly existingGuestKeys = computed<ReadonlySet<string>>(() => {
     const keys = new Set<string>();
     for (const guest of this.guests()) {
-      keys.add(
-        `${guest.name.toLowerCase()} ${(guest.email ?? '').toLowerCase()}`,
-      );
+      // Derive the key through the config so the tab's preview hints can never
+      // drift from the surface's within-batch dedup.
+      const key = GUEST_IMPORT_CONFIG.dedupKey({
+        name: guest.name,
+        email: guest.email,
+      });
+      if (key !== null) keys.add(key);
     }
     return keys;
   });

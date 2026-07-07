@@ -12,6 +12,7 @@ import {
 import {GUEST_TYPES, type GuestType} from '../../lib/validators/guests';
 import {
   assertBatchSizeWithinCap,
+  assertEventImportCapNotExceeded,
   findExistingImportBatch,
   insertImportBatch,
   nameEmailDedupKey,
@@ -20,6 +21,8 @@ import type {
   ImportBatchResult,
   ImportRowOutcome,
 } from '../../lib/imports/validators';
+import {MANAGEMENT_DATASET_LIMITS} from '../../lib/management_limits';
+import {takeFromQuery} from '../../lib/query_scan';
 
 /**
  * One raw guest row from the parsed CSV. `type` is a free string here because
@@ -30,6 +33,14 @@ export type GuestImportRow = {
   name: string;
   email?: string;
   type?: string;
+  notes?: string;
+};
+
+/** A validated, normalized guest row ready to insert. */
+type NormalizedGuestRow = {
+  name: string;
+  email?: string;
+  type: GuestType;
   notes?: string;
 };
 
@@ -121,17 +132,23 @@ export async function addMany(
 
   assertBatchSizeWithinCap(args.rows.length);
 
-  // Existing guest dedup keys (name+email, case-insensitive).
-  const existingKeys = new Set<string>();
-  for await (const guest of ctx.db
-    .query('guests')
-    .withIndex('by_event', (q) => q.eq('eventId', args.eventId))) {
-    existingKeys.add(nameEmailDedupKey(guest.name, guest.email));
-  }
+  // Deliberate bounded full read: dedup needs every existing guest, and the
+  // count feeds the per-event cap. Bounded by the guests dataset limit so the
+  // read can never exceed the transaction budget.
+  const guestLimit = MANAGEMENT_DATASET_LIMITS.guests;
+  const existingGuests = await takeFromQuery(
+    ctx.db
+      .query('guests')
+      .withIndex('by_event', (q) => q.eq('eventId', args.eventId)),
+    guestLimit,
+  );
+  const existingKeys = new Set<string>(
+    existingGuests.map((guest) => nameEmailDedupKey(guest.name, guest.email)),
+  );
 
   const seenInBatch = new Set<string>();
   const outcomes: ImportRowOutcome[] = [];
-  let insertedCount = 0;
+  const toInsert: Array<{rowIndex: number; row: NormalizedGuestRow}> = [];
   let skippedCount = 0;
 
   for (let rowIndex = 0; rowIndex < args.rows.length; rowIndex += 1) {
@@ -152,18 +169,30 @@ export async function addMany(
       continue;
     }
     seenInBatch.add(key);
-
-    await ctx.db.insert('guests', {
-      eventId: args.eventId,
-      name: validated.name,
-      ...(validated.email !== undefined ? {email: validated.email} : {}),
-      type: validated.type,
-      ...(validated.notes !== undefined ? {notes: validated.notes} : {}),
-    });
-    insertedCount += 1;
-    outcomes.push({rowIndex, status: 'inserted'});
+    toInsert.push({rowIndex, row: validated});
   }
 
+  // Cumulative per-event cap (counts only rows that will actually be written),
+  // mirroring the imported-ticket target. Guests over the management dataset
+  // limit would otherwise break the guests-tab load.
+  assertEventImportCapNotExceeded(existingGuests.length, toInsert.length, {
+    max: guestLimit,
+    entity: 'guests',
+  });
+
+  for (const {rowIndex, row} of toInsert) {
+    await ctx.db.insert('guests', {
+      eventId: args.eventId,
+      name: row.name,
+      ...(row.email !== undefined ? {email: row.email} : {}),
+      type: row.type,
+      ...(row.notes !== undefined ? {notes: row.notes} : {}),
+    });
+    outcomes.push({rowIndex, status: 'inserted'});
+  }
+  outcomes.sort((a, b) => a.rowIndex - b.rowIndex);
+
+  const insertedCount = toInsert.length;
   const result: ImportBatchResult = {insertedCount, skippedCount, outcomes};
 
   await insertImportBatch(ctx, {

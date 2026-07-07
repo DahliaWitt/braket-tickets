@@ -30,9 +30,6 @@ import {logger} from '@/utils/logger';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
 import {formatEventDate} from '@/utils/event-date-format';
 
-/** Native source label shown on Braket purchase/guest rows in the merged list. */
-const NATIVE_SOURCE_LABEL = 'braket tickets';
-
 /**
  * An import batch grouped for display: its key, the source label (from the
  * first entry — one batch has one source), its entries, and the checked-in
@@ -71,9 +68,6 @@ export class EventManagementPurchasesPanelComponent {
   readonly guests = input<Guest[]>([]);
   readonly importedEntries = input<ImportedTicketHolder[]>([]);
   readonly dataChanged = output<void>();
-
-  /** Source label shown for Braket-native rows. */
-  readonly nativeSourceLabel = NATIVE_SOURCE_LABEL;
 
   /** Entry currently being removed (id) — disables its row affordances. */
   readonly removingEntryId = signal<string | null>(null);

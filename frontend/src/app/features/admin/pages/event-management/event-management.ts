@@ -228,11 +228,12 @@ export class EventManagement {
   });
 
   /**
-   * Imported external ticket-holders — backed by the roster-authorized reactive
-   * `api.events.imported_tickets.listByEvent`. Unlike the purchases surface
-   * (a non-reactive PII-audit-gated action), this query can serve both the live
-   * buyers-list merge and the import preview's dedup hints. Reloaded alongside
-   * the other surfaces after an import commits.
+   * Imported external ticket-holders — fetched (one-shot `convex.query`) from
+   * the roster-authorized `api.events.imported_tickets.listByEvent` and reloaded
+   * via `reloadData()` after an import commits. The backend function is a Convex
+   * query, but this surface consumes it through a `resource()` loader, not a
+   * live subscription. It serves both the buyers-list merge and the import
+   * preview's dedup hints.
    */
   readonly importedTicketsResource = resource({
     params: () => ({eventId: this.eventId()}),
@@ -341,7 +342,7 @@ export class EventManagement {
     () => safeResourceValue(this.guestsResource) ?? [],
   );
 
-  /** Imported external ticket-holders accessor (reactive). */
+  /** Imported external ticket-holders accessor (one-shot fetch, reloadable). */
   readonly importedTickets = computed(
     () => safeResourceValue(this.importedTicketsResource) ?? [],
   );

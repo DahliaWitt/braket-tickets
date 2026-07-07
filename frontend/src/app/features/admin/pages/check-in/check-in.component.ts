@@ -277,10 +277,6 @@ export class CheckInComponent implements OnInit {
     );
   });
 
-  readonly importedCheckedInTotal = computed(() =>
-    this.importedSourceCounts().reduce((sum, s) => sum + s.checkedIn, 0),
-  );
-
   readonly eventTitle = computed(() => {
     const id = this.selectedEventId();
     if (!id) return null;
@@ -382,12 +378,13 @@ export class CheckInComponent implements OnInit {
       ...current,
       [entryId]: timestamp,
     }));
-    this.manualFeedback.set({
-      kind: 'success',
-      message: result.alreadyCheckedIn
-        ? 'Already checked in.'
-        : 'External ticket holder checked in.',
-    });
+    // A re-check of an already-admitted holder signals a duplicate, matching the
+    // native ticket path's failure feedback — not a fresh green success.
+    this.manualFeedback.set(
+      result.alreadyCheckedIn
+        ? {kind: 'error', message: 'Already checked in.'}
+        : {kind: 'success', message: 'External ticket holder checked in.'},
+    );
   }
 
   enableScannerSounds(): void {

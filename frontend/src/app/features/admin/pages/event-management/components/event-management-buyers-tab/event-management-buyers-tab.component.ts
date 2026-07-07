@@ -70,8 +70,13 @@ export class EventManagementBuyersTabComponent {
   readonly existingStrongKeys = computed<ReadonlySet<string>>(() => {
     const keys = new Set<string>();
     for (const entry of this.importedEntries()) {
-      const ref = (entry.externalRef ?? '').trim().toLowerCase();
-      if (ref.length > 0) keys.add(ref);
+      // Derive through the config so preview hints can't drift from the
+      // surface's within-batch dedup.
+      const key = BUYER_IMPORT_CONFIG.dedupKey({
+        name: entry.name,
+        externalRef: entry.externalRef,
+      });
+      if (key !== null) keys.add(key);
     }
     return keys;
   });
@@ -84,10 +89,11 @@ export class EventManagementBuyersTabComponent {
   readonly existingWeakKeys = computed<ReadonlySet<string>>(() => {
     const keys = new Set<string>();
     for (const entry of this.importedEntries()) {
-      const name = entry.name.toLowerCase();
-      const email = (entry.email ?? '').toLowerCase();
-      if (name.length === 0) continue;
-      keys.add(`${name} ${email}`);
+      const key = BUYER_IMPORT_CONFIG.weakDedupKey?.({
+        name: entry.name,
+        email: entry.email,
+      });
+      if (key != null) keys.add(key);
     }
     return keys;
   });

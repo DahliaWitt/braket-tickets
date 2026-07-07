@@ -64,18 +64,17 @@ export function assertBatchSizeWithinCap(rowCount: number): void {
 export function assertEventImportCapNotExceeded(
   existingCount: number,
   insertCount: number,
+  options?: {max?: number; entity?: string},
 ): void {
-  if (existingCount + insertCount > MAX_IMPORTED_ENTRIES_PER_EVENT) {
+  const max = options?.max ?? MAX_IMPORTED_ENTRIES_PER_EVENT;
+  const entity = options?.entity ?? 'imported entries';
+  if (existingCount + insertCount > max) {
     throwAppError(
       IMPORT_ERROR_CODES.IMPORT_CAP_EXCEEDED,
-      `This event already holds ${existingCount} imported entries; importing ` +
-        `${insertCount} more would exceed the per-event limit of ` +
-        `${MAX_IMPORTED_ENTRIES_PER_EVENT}. Remove stale batches and retry.`,
-      {
-        existingCount,
-        insertCount,
-        maxPerEvent: MAX_IMPORTED_ENTRIES_PER_EVENT,
-      },
+      `This event already holds ${existingCount} ${entity}; importing ` +
+        `${insertCount} more would exceed the per-event limit of ${max}. ` +
+        `Remove some and retry.`,
+      {existingCount, insertCount, maxPerEvent: max},
     );
   }
 }
