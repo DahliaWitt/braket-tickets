@@ -107,7 +107,7 @@ production.
 
 | Identifier             | Where to search                                                                                                                                                                                                                                                                                                                                                                                   |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Account email          | `users.email`, Better Auth component user table, `guest_sessions.email`, `emailAddressMarketingPreferences.email`, `resale_notifications.email`, `admin_invites.email`, `emailDeliveries.recipient`, `emailDeliveryFailures.recipient`                                                                                                                                                            |
+| Account email          | `users.email`, Better Auth component user table, `guests.email`, `importedTicketHolders.email`, `guest_sessions.email`, `emailAddressMarketingPreferences.email`, `resale_notifications.email`, `admin_invites.email`, `emailDeliveries.recipient`, `emailDeliveryFailures.recipient`                                                                                                             |
 | Convex user ID         | `applications.userId`, `tickets.userId`, `ticket_orders.userId`, `resale_listings.sellerId`, `resale_listings.buyerId`, `resale_notifications.userId`, `marketingEmailPreferences.userId`, `marketingUnsubscribeTokens.userId`, `marketingEmailDeliveries.userId`, `magic_link_redemption_log.userId`, `adminAuditLogs.adminId`, `adminAuditLogs.targetUserId`, `confirmedUploads.uploaderUserId` |
 | Guest session ID       | `guest_sessions._id`, `tickets.guestSessionId`, `ticket_orders.guestSessionId`, `magic_link_redemption_log.guestSessionId`                                                                                                                                                                                                                                                                        |
 | Stripe identifiers     | `ticket_orders.stripeCheckoutSessionId`, `ticket_orders.stripePaymentIntentId`, `ticket_orders.stripeChargeId`, `order_financial_events.*`, `stripe_webhook_events.stripeEventId`, `organizers.stripeConnectedAccountId`, `payout_batches.stripePayoutId`, `payout_allocations.stripePayoutId`                                                                                                    |
@@ -117,6 +117,14 @@ Current repo limitation: there is no production one-click data subject export or
 deletion mutation. If a request requires broad Convex changes, create a
 reviewed repair/export function or script, test it against a non-production
 copy, and record the exact tables it touches.
+
+Exception — imported ticket holders: `internal.events.imported_tickets.redactByEmail`
+redacts imported entries (external ticket holders from CSV import) whose email
+matches a verified address across all events. It clears the entry's name and
+email to a tombstone while leaving the inert admission record and its
+event-scoped audit trail intact. These entries are never linked to Braket
+accounts, so email is the only identifier; run this mutation for any privacy
+request whose verified email appears in `importedTicketHolders.email`.
 
 ## Prepare An Access Export
 

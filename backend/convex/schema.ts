@@ -970,6 +970,63 @@ const schemaTables = {
   }).index('by_event', ['eventId']),
 
   /**
+   * External ticket holders imported from other platforms (e.g. Resident
+   * Advisor). These are inert admission records — NEVER linked to Braket user
+   * accounts, orders, or the purchase/ticket tables. Every string field is
+   * treated as untrusted input (buyer names are attacker-controllable on the
+   * external platform) and length-capped server-side.
+   *
+   * - `externalRef` is the barcode: the only strong dedup / scan key.
+   * - `orderRef` is metadata only (one order spans many rows), never a dedup key.
+   * - `purchaseDateRaw` is the raw source string, display-only, never parsed.
+   * - `batchKey` ties the entry to the import batch it arrived in.
+   */
+  importedTicketHolders: defineTable({
+    eventId: v.id('events'),
+    name: v.string(),
+    email: v.optional(v.string()),
+    externalRef: v.optional(v.string()),
+    orderRef: v.optional(v.string()),
+    ticketTypeLabel: v.optional(v.string()),
+    purchaseDateRaw: v.optional(v.string()),
+    sourceLabel: v.string(),
+    batchKey: v.string(),
+    checkedInAt: v.optional(v.number()),
+    checkedInBy: v.optional(v.id('users')),
+  })
+    .index('by_event', ['eventId'])
+    .index('by_event_external_ref', ['eventId', 'externalRef'])
+    .index('by_event_batch_key', ['eventId', 'batchKey']),
+
+  /**
+   * One record per committed bulk import (guest bulk-add or external
+   * ticket-holder import). Backs idempotent replay (a repeated batch key is a
+   * no-op returning the original result), batch-level audit, and batch removal.
+   * Skipped-row outcomes cannot be reconstructed from the entries table, so
+   * this is the durable source of the import report.
+   */
+  importBatches: defineTable({
+    eventId: v.id('events'),
+    batchKey: v.string(),
+    target: v.union(v.literal('guests'), v.literal('importedTickets')),
+    result: v.object({
+      insertedCount: v.number(),
+      skippedCount: v.number(),
+      outcomes: v.array(
+        v.object({
+          rowIndex: v.number(),
+          status: v.union(
+            v.literal('inserted'),
+            v.literal('skipped'),
+            v.literal('invalid'),
+          ),
+          reason: v.optional(v.string()),
+        }),
+      ),
+    }),
+  }).index('by_event_batch_key', ['eventId', 'batchKey']),
+
+  /**
    * Temporary table for E2E testing to capture emails.
    * Should not be used in production logic.
    */

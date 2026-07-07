@@ -1,12 +1,7 @@
 import type {Doc, Id} from '../../_generated/dataModel';
 import type {MutationCtx, QueryCtx} from '../../_generated/server';
 import {throwNotFound} from '../../lib/errors';
-import {
-  validateStringLength,
-  MAX_GUEST_NAME_LENGTH,
-  MAX_GUEST_EMAIL_LENGTH,
-  MAX_GUEST_NOTES_LENGTH,
-} from '../../lib/validation';
+import {validateGuestFields} from '../../lib/events/guest_fields';
 import {requireEventForEdit, requireEventForRoster} from '../../lib/access';
 import {ADMIN_AUDIT_ACTIONS} from '../../lib/admin_audit_actions';
 import {insertAdminAuditLog} from '../../lib/admin_audit_log';
@@ -24,9 +19,7 @@ export async function add(
 ): Promise<Id<'guests'>> {
   const {user, event} = await requireEventForEdit(ctx, args.eventId);
 
-  validateStringLength(args.name, 'Name', MAX_GUEST_NAME_LENGTH);
-  validateStringLength(args.email, 'Email', MAX_GUEST_EMAIL_LENGTH);
-  validateStringLength(args.notes, 'Notes', MAX_GUEST_NOTES_LENGTH);
+  validateGuestFields(args);
 
   const guestId = await ctx.db.insert('guests', {
     ...args,

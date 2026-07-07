@@ -455,6 +455,12 @@ export declare const api: {
                 | "event.update"
                 | "guest.add"
                 | "guest.check-in"
+                | "guest.import"
+                | "imported_tickets.import"
+                | "imported_tickets.remove"
+                | "imported_tickets.batch_remove"
+                | "imported_tickets.redact"
+                | "imported_ticket.check-in"
                 | "magic_link.create"
                 | "magic_link.delete"
                 | "magic_link.disable"
@@ -1023,6 +1029,29 @@ export declare const api: {
         },
         Id<"guests">
       >;
+      addMany: FunctionReference<
+        "mutation",
+        "public",
+        {
+          batchKey: string;
+          eventId: Id<"events">;
+          rows: Array<{
+            email?: string;
+            name: string;
+            notes?: string;
+            type?: string;
+          }>;
+        },
+        {
+          insertedCount: number;
+          outcomes: Array<{
+            reason?: string;
+            rowIndex: number;
+            status: "inserted" | "skipped" | "invalid";
+          }>;
+          skippedCount: number;
+        }
+      >;
       listByEvent: FunctionReference<
         "query",
         "public",
@@ -1044,6 +1073,92 @@ export declare const api: {
         "mutation",
         "public",
         { id: Id<"guests"> },
+        null
+      >;
+    };
+    imported_tickets: {
+      checkIn: FunctionReference<
+        "mutation",
+        "public",
+        { id: Id<"importedTicketHolders"> },
+        | {
+            alreadyCheckedIn: boolean;
+            entry: {
+              _creationTime: number;
+              _id: Id<"importedTicketHolders">;
+              batchKey: string;
+              checkedInAt?: number;
+              checkedInBy?: Id<"users">;
+              email?: string;
+              eventId: Id<"events">;
+              externalRef?: string;
+              name: string;
+              orderRef?: string;
+              purchaseDateRaw?: string;
+              sourceLabel: string;
+              ticketTypeLabel?: string;
+            };
+            success: true;
+          }
+        | { message: string; success: false }
+      >;
+      importBatch: FunctionReference<
+        "mutation",
+        "public",
+        {
+          batchKey: string;
+          dedupMode: "skip" | "include";
+          eventId: Id<"events">;
+          rows: Array<{
+            email?: string;
+            externalRef?: string;
+            name: string;
+            orderRef?: string;
+            purchaseDateRaw?: string;
+            ticketTypeLabel?: string;
+          }>;
+          sourceLabel?: string;
+        },
+        {
+          insertedCount: number;
+          outcomes: Array<{
+            reason?: string;
+            rowIndex: number;
+            status: "inserted" | "skipped" | "invalid";
+          }>;
+          skippedCount: number;
+        }
+      >;
+      listByEvent: FunctionReference<
+        "query",
+        "public",
+        { eventId: Id<"events"> },
+        Array<{
+          _creationTime: number;
+          _id: Id<"importedTicketHolders">;
+          batchKey: string;
+          checkedInAt?: number;
+          checkedInBy?: Id<"users">;
+          email?: string;
+          eventId: Id<"events">;
+          externalRef?: string;
+          name: string;
+          orderRef?: string;
+          purchaseDateRaw?: string;
+          sourceLabel: string;
+          ticketTypeLabel?: string;
+        }>
+      >;
+      removeBatch: FunctionReference<
+        "mutation",
+        "public",
+        { batchKey: string; eventId: Id<"events"> },
+        { checkedInCount: number; removedCount: number }
+      >;
+      removeEntry: FunctionReference<
+        "mutation",
+        "public",
+        { id: Id<"importedTicketHolders"> },
         null
       >;
     };
@@ -2282,6 +2397,12 @@ export declare const api: {
             | "event.update"
             | "guest.add"
             | "guest.check-in"
+            | "guest.import"
+            | "imported_tickets.import"
+            | "imported_tickets.remove"
+            | "imported_tickets.batch_remove"
+            | "imported_tickets.redact"
+            | "imported_ticket.check-in"
             | "magic_link.create"
             | "magic_link.delete"
             | "magic_link.disable"
@@ -3540,6 +3661,12 @@ export declare const internal: {
               | "event.update"
               | "guest.add"
               | "guest.check-in"
+              | "guest.import"
+              | "imported_tickets.import"
+              | "imported_tickets.remove"
+              | "imported_tickets.batch_remove"
+              | "imported_tickets.redact"
+              | "imported_ticket.check-in"
               | "magic_link.create"
               | "magic_link.delete"
               | "magic_link.disable"
@@ -3581,7 +3708,10 @@ export declare const internal: {
           "mutation",
           "internal",
           {
-            action: "ticket.check-in" | "guest.check-in";
+            action:
+              | "ticket.check-in"
+              | "guest.check-in"
+              | "imported_ticket.check-in";
             adminId: Id<"users">;
             eventId?: Id<"events">;
             organizerId?: Id<"organizers">;
@@ -4026,6 +4156,14 @@ export declare const internal: {
         "internal",
         { id: Id<"guests"> },
         null
+      >;
+    };
+    imported_tickets: {
+      redactByEmail: FunctionReference<
+        "mutation",
+        "internal",
+        { email: string; operatorUserId: Id<"users"> },
+        { redactedCount: number }
       >;
     };
     management: {

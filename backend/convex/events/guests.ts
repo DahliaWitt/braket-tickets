@@ -7,6 +7,7 @@ import {
 } from '../_generated/server';
 import {guestTypeValidator} from '../lib/validators/guests';
 import {guestValidator} from '../lib/events/validators';
+import {importBatchResultValidator} from '../lib/imports/validators';
 import {
   add as addImpl,
   getInternal as getInternalImpl,
@@ -14,6 +15,7 @@ import {
   markAsEmailed as markAsEmailedImpl,
   remove as removeImpl,
 } from './_impl/guests';
+import {addMany as addManyImpl} from './_impl/guests_import';
 
 export const add = mutation({
   args: {
@@ -25,6 +27,25 @@ export const add = mutation({
   },
   returns: v.id('guests'),
   handler: addImpl,
+});
+
+export const addMany = mutation({
+  args: {
+    eventId: v.id('events'),
+    batchKey: v.string(),
+    rows: v.array(
+      v.object({
+        name: v.string(),
+        email: v.optional(v.string()),
+        // Free string on purpose: an invalid type value must surface as a
+        // per-row `invalid` outcome, not be rejected by the arg validator.
+        type: v.optional(v.string()),
+        notes: v.optional(v.string()),
+      }),
+    ),
+  },
+  returns: importBatchResultValidator,
+  handler: addManyImpl,
 });
 
 export const remove = mutation({
