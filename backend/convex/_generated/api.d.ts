@@ -455,6 +455,7 @@ export declare const api: {
                 | "event.update"
                 | "guest.add"
                 | "guest.check-in"
+                | "guest.update"
                 | "magic_link.create"
                 | "magic_link.delete"
                 | "magic_link.disable"
@@ -752,6 +753,18 @@ export declare const api: {
         { organizerId: Id<"organizers">; userId: Id<"users"> },
         null
       >;
+      searchGrantCandidates: FunctionReference<
+        "query",
+        "public",
+        { organizerId: Id<"organizers">; searchTerm: string },
+        Array<{
+          _id: Id<"users">;
+          displayName: string;
+          email?: string;
+          organizerId: Id<"organizers">;
+          userId: Id<"users">;
+        }>
+      >;
     };
     trust_links: {
       checkUserTrust: FunctionReference<
@@ -1044,6 +1057,18 @@ export declare const api: {
         "mutation",
         "public",
         { id: Id<"guests"> },
+        null
+      >;
+      update: FunctionReference<
+        "mutation",
+        "public",
+        {
+          email?: string;
+          id: Id<"guests">;
+          name: string;
+          notes?: string;
+          type: "guest" | "artist guest" | "staff";
+        },
         null
       >;
     };
@@ -2282,6 +2307,7 @@ export declare const api: {
             | "event.update"
             | "guest.add"
             | "guest.check-in"
+            | "guest.update"
             | "magic_link.create"
             | "magic_link.delete"
             | "magic_link.disable"
@@ -3540,6 +3566,7 @@ export declare const internal: {
               | "event.update"
               | "guest.add"
               | "guest.check-in"
+              | "guest.update"
               | "magic_link.create"
               | "magic_link.delete"
               | "magic_link.disable"
@@ -4000,6 +4027,14 @@ export declare const internal: {
           organizerId: Id<"organizers">;
           rowCount: number;
         },
+        null
+      >;
+    };
+    broadcasts: {
+      deliverMissed: FunctionReference<
+        "mutation",
+        "internal",
+        { email: string; eventId: Id<"events">; userId?: Id<"users"> },
         null
       >;
     };
@@ -4651,6 +4686,20 @@ export declare const internal: {
       },
       any
     >;
+    backfillEventBroadcastDeliveries: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      any
+    >;
     backfillGuestSessionTokenDigests: FunctionReference<
       "mutation",
       "internal",
@@ -5136,7 +5185,12 @@ export declare const internal: {
           sellerOrderId: Id<"ticket_orders">;
           sellerOrderStripePaymentIntentId?: string;
         },
-        { stripeRefundId: string }
+        {
+          connectedAccountNetCents?: number;
+          platformFeeCents?: number;
+          processorFeeCents?: number;
+          stripeRefundId: string;
+        }
       >;
     };
   };
@@ -5164,6 +5218,18 @@ export declare const internal: {
   };
   stripe: {
     actions: {
+      backfillPaymentCapturedNet: FunctionReference<
+        "action",
+        "internal",
+        { connectedAccountId: string },
+        { enriched: number; failed: number; scanned: number; skipped: number }
+      >;
+      ingestExternalPayoutById: FunctionReference<
+        "action",
+        "internal",
+        { connectedAccountId: string; stripePayoutId: string },
+        { amountCents: number; ingested: boolean; status: string }
+      >;
       processScheduledPayouts: FunctionReference<
         "action",
         "internal",
@@ -5247,7 +5313,13 @@ export declare const internal: {
       confirmPayout: FunctionReference<
         "mutation",
         "internal",
-        { stripePayoutId: string },
+        {
+          amountCents?: number;
+          connectedAccountId?: string;
+          currency?: string;
+          metadataBatchId?: string;
+          stripePayoutId: string;
+        },
         null
       >;
       createPayoutIntent: FunctionReference<
@@ -5263,6 +5335,7 @@ export declare const internal: {
         {
           amountCents: number;
           batchId: Id<"payout_batches">;
+          createdAt: number;
           currency: "usd";
           idempotencyKey: string;
           reused: boolean;
@@ -5273,7 +5346,18 @@ export declare const internal: {
       failPayout: FunctionReference<
         "mutation",
         "internal",
-        { failureReason?: string; stripePayoutId: string },
+        {
+          connectedAccountId?: string;
+          failureReason?: string;
+          metadataBatchId?: string;
+          stripePayoutId: string;
+        },
+        null
+      >;
+      failStalePendingBatch: FunctionReference<
+        "mutation",
+        "internal",
+        { batchId: Id<"payout_batches">; failureReason: string },
         null
       >;
       getOrderByStripePaymentIntentId: FunctionReference<
@@ -5347,20 +5431,56 @@ export declare const internal: {
             eventId: Id<"events">;
             kind: string;
           }>;
+          inflightSubmittedCents: number;
           organizerId: Id<"organizers"> | null;
         }
       >;
-      listConnectedAccountsWithEligibleEvents: FunctionReference<
+      listNetlessCapturedRows: FunctionReference<
         "query",
         "internal",
-        { eligibleBeforeMs: number; limit: number },
-        Array<string>
+        { stripeConnectedAccountId: string },
+        Array<{
+          eventId: Id<"events">;
+          orderId: Id<"ticket_orders">;
+          stripeChargeId: string | null;
+          stripePaymentIntentId: string | null;
+        }>
+      >;
+      listPayoutBatchesNeedingRecovery: FunctionReference<
+        "query",
+        "internal",
+        { now: number },
+        {
+          pending: Array<{
+            amountCents: number;
+            batchId: Id<"payout_batches">;
+            connectedAccountId: string;
+            createdAt: number;
+          }>;
+          submitted: Array<{
+            batchId: Id<"payout_batches">;
+            connectedAccountId: string;
+            stripePayoutId: string;
+          }>;
+        }
+      >;
+      listPayoutReadyConnectedAccounts: FunctionReference<
+        "query",
+        "internal",
+        { cursor: string | null; numItems: number },
+        { accounts: Array<string>; continueCursor: string; isDone: boolean }
       >;
       listPlatformOrganizerEligibleEventIds: FunctionReference<
         "query",
         "internal",
         { eligibleBeforeMs: number; limit: number },
         Array<Id<"events">>
+      >;
+      listUnrecordedStripePayoutIds: FunctionReference<
+        "query",
+        "internal",
+        { stripePayoutIds: Array<string> },
+        Array<string>
       >;
       markEventPaidOut: FunctionReference<
         "mutation",

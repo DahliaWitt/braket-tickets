@@ -10,10 +10,12 @@ import {
 } from '../lib/orders/validators';
 import {connectedAccountStatusFields} from '../lib/validators/stripe_connect';
 import {
+  backfillPaymentCapturedNetImpl,
   checkAccountStatusImpl,
   createAccountOnboardingLinkImpl,
   createAccountSessionImpl,
   createConnectedAccountImpl,
+  ingestExternalPayoutByIdImpl,
   processScheduledPayoutsImpl,
   processStripeRefundImpl,
   refreshConnectedAccountStatusImpl,
@@ -167,5 +169,45 @@ export const processScheduledPayouts = internalAction({
   returns: v.null(),
   handler: async (ctx) => {
     return await processScheduledPayoutsImpl(ctx);
+  },
+});
+
+/**
+ * Operator repair tool (run from the Convex dashboard): register a payout
+ * made in the Stripe dashboard whose payout.paid webhook was ignored.
+ * Idempotent. Run BEFORE `backfillPaymentCapturedNet` on the same account.
+ */
+export const ingestExternalPayoutById = internalAction({
+  args: {
+    stripePayoutId: v.string(),
+    connectedAccountId: v.string(),
+  },
+  returns: v.object({
+    status: v.string(),
+    amountCents: v.number(),
+    ingested: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    return await ingestExternalPayoutByIdImpl(ctx, args);
+  },
+});
+
+/**
+ * Operator repair tool (run from the Convex dashboard): re-read charge
+ * BalanceTransactions to enrich `payment_captured` rows missing
+ * `connectedAccountNetCents`. Idempotent; safe to re-run.
+ */
+export const backfillPaymentCapturedNet = internalAction({
+  args: {
+    connectedAccountId: v.string(),
+  },
+  returns: v.object({
+    scanned: v.number(),
+    enriched: v.number(),
+    skipped: v.number(),
+    failed: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    return await backfillPaymentCapturedNetImpl(ctx, args);
   },
 });

@@ -17,6 +17,7 @@ describe('EventManagementGuestsTabComponent', () => {
   let harness: EventManagementGuestsTabHarness;
   let adminEventsServiceMock: {
     addGuest: ReturnType<typeof vi.fn>;
+    updateGuest: ReturnType<typeof vi.fn>;
     removeGuest: ReturnType<typeof vi.fn>;
     sendGuestTicket: ReturnType<typeof vi.fn>;
     getGuestTicketPdf: ReturnType<typeof vi.fn>;
@@ -52,6 +53,7 @@ describe('EventManagementGuestsTabComponent', () => {
 
     adminEventsServiceMock = {
       addGuest: vi.fn().mockResolvedValue('guest-1'),
+      updateGuest: vi.fn().mockResolvedValue(null),
       removeGuest: vi.fn().mockResolvedValue(undefined),
       sendGuestTicket: vi.fn().mockResolvedValue(undefined),
       getGuestTicketPdf: vi
@@ -126,6 +128,65 @@ describe('EventManagementGuestsTabComponent', () => {
     expect(dataChangedSpy).not.toHaveBeenCalled();
   });
 
+  it('shows a success toast and refreshes after editing a guest from the dialog', async () => {
+    fixture.componentRef.setInput('guests', [mockGuest]);
+    fixture.detectChanges();
+
+    const editResult = {
+      name: 'Pat Guest Updated',
+      email: 'pat.updated@example.com',
+      type: 'staff' as const,
+      notes: 'Updated notes',
+    };
+    dialogServiceMock.create.mockReturnValue({
+      afterClosed$: of(editResult),
+    });
+    const dataChangedSpy = vi.fn();
+    fixture.componentInstance.dataChanged.subscribe(dataChangedSpy);
+
+    await harness.clickEditGuestButton(0);
+    await fixture.whenStable();
+
+    expect(dialogServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        zTitle: 'Edit Guest',
+        zData: {
+          eventId: 'event-1',
+          guest: {
+            name: mockGuest.name,
+            email: mockGuest.email,
+            type: mockGuest.type,
+            notes: mockGuest.notes,
+          },
+        },
+      }),
+    );
+    expect(adminEventsServiceMock.updateGuest).toHaveBeenCalledWith(
+      mockGuest._id,
+      editResult,
+    );
+    expect(toast.success).toHaveBeenCalledWith('Guest updated');
+    expect(dataChangedSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows an error toast and does not refresh when editing a guest fails', async () => {
+    fixture.componentRef.setInput('guests', [mockGuest]);
+    fixture.detectChanges();
+
+    adminEventsServiceMock.updateGuest.mockRejectedValue(new Error('boom'));
+    dialogServiceMock.create.mockReturnValue({
+      afterClosed$: of(addGuestResult),
+    });
+    const dataChangedSpy = vi.fn();
+    fixture.componentInstance.dataChanged.subscribe(dataChangedSpy);
+
+    await harness.clickEditGuestButton(0);
+    await fixture.whenStable();
+
+    expect(toast.error).toHaveBeenCalledWith('Failed to update guest');
+    expect(dataChangedSpy).not.toHaveBeenCalled();
+  });
+
   it('uses row-specific accessible names for guest actions', async () => {
     fixture.componentRef.setInput('guests', [
       mockGuest,
@@ -149,6 +210,12 @@ describe('EventManagementGuestsTabComponent', () => {
       new Set([
         'Send ticket to Pat Guest, pat@example.com, guest, id GUEST-1',
         'Send ticket to Riley Staff, riley@example.com, staff, id GUEST-2',
+      ]),
+    );
+    expect(new Set(await harness.getEditButtonAriaLabels())).toEqual(
+      new Set([
+        'Edit Pat Guest, pat@example.com, guest, id GUEST-1',
+        'Edit Riley Staff, riley@example.com, staff, id GUEST-2',
       ]),
     );
     expect(new Set(await harness.getRemoveButtonAriaLabels())).toEqual(

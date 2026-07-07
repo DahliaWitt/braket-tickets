@@ -97,6 +97,7 @@ import {
 import {
   onboardingStatusValidator,
   payoutAllocationStatusValidator,
+  payoutBatchOriginValidator,
   payoutBatchStatusValidator,
 } from './lib/validators/stripe_connect';
 import {
@@ -833,6 +834,13 @@ const schemaTables = {
     status: payoutBatchStatusValidator,
     /** Stripe payout ID, populated only after Stripe returns one. */
     stripePayoutId: v.optional(v.string()),
+    /**
+     * How the batch came to exist. `cron` (or absent, for pre-field rows)
+     * means the scheduled payout pipeline created it; `external` means a
+     * payout was made outside the pipeline (Stripe dashboard) and ingested
+     * from its `payout.paid` webhook so settlement stays truthful.
+     */
+    origin: v.optional(payoutBatchOriginValidator),
     createdAt: v.number(),
     submittedAt: v.optional(v.number()),
     confirmedAt: v.optional(v.number()),
@@ -841,7 +849,8 @@ const schemaTables = {
   })
     .index('by_idempotencyKey', ['idempotencyKey'])
     .index('by_connectedAccountId_and_status', ['connectedAccountId', 'status'])
-    .index('by_stripePayoutId', ['stripePayoutId']),
+    .index('by_stripePayoutId', ['stripePayoutId'])
+    .index('by_status_and_createdAt', ['status', 'createdAt']),
 
   /**
    * Append-only Connect payout allocation ledger.
@@ -1008,6 +1017,31 @@ const schemaTables = {
   })
     .index('by_event', ['eventId'])
     .index('by_event_and_sentAt', ['eventId', 'sentAt']),
+
+  /**
+   * Durable per-recipient broadcast delivery ledger: one row per
+   * (broadcast, recipient email). Unlike `emailDedup` (24h TTL), rows
+   * persist so late ticket buyers can be caught up on missed broadcasts
+   * exactly once (see `events/_impl/broadcasts_handlers.ts`).
+   */
+  eventBroadcastDeliveries: defineTable({
+    broadcastId: v.id('eventBroadcasts'),
+    eventId: v.id('events'),
+    /** Normalized via normalizeEmailOrNull (trim + lowercase). */
+    email: v.string(),
+    sentAt: v.number(),
+    /** How this delivery came about. */
+    origin: v.union(
+      v.literal('send'),
+      v.literal('catchup'),
+      v.literal('backfill'),
+    ),
+  })
+    .index('by_broadcast_and_email', ['broadcastId', 'email'])
+    .index('by_event_and_email', ['eventId', 'email'])
+    // Email-only lookup for privacy export/erasure by recipient, mirroring
+    // the recipient indexes on sibling PII-email tables (e.g. emailDeliveries).
+    .index('by_email', ['email']),
 
   ticketReminderSends: defineTable({
     eventId: v.id('events'),
