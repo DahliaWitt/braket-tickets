@@ -121,6 +121,49 @@ export class EventManagementGuestsTabComponent {
     }
   }
 
+  editGuest(guest: Guest): void {
+    const dialogRef = this.dialogService.create({
+      zTitle: 'Edit Guest',
+      zDescription: "Update this guest's details",
+      zContent: AddGuestDialogComponent,
+      zData: {
+        eventId: this.eventId(),
+        guest: {
+          name: guest.name,
+          email: guest.email,
+          type: guest.type,
+          notes: guest.notes,
+        },
+      },
+      zHideFooter: true,
+      zWidth: '420px',
+    });
+
+    dialogRef.afterClosed$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((result) => {
+        void this.handleEditGuestDialogClose(guest._id, result);
+      });
+  }
+
+  private async handleEditGuestDialogClose(
+    guestId: string,
+    result: unknown,
+  ): Promise<void> {
+    if (!isAddGuestDialogResult(result)) {
+      return;
+    }
+
+    try {
+      await this.adminEventsService.updateGuest(guestId, result);
+      toast.success('Guest updated');
+      this.dataChanged.emit();
+    } catch (error) {
+      logger.error('Failed to update guest', error);
+      toast.error('Failed to update guest');
+    }
+  }
+
   async removeGuest(guestId: string): Promise<void> {
     if (!confirm('Are you sure you want to remove this guest?')) return;
 
