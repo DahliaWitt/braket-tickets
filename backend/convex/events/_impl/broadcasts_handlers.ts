@@ -1,15 +1,17 @@
-import type {Id} from '../../_generated/dataModel';
+import type {Doc, Id} from '../../_generated/dataModel';
 import type {MutationCtx, QueryCtx} from '../../_generated/server';
 import {insertAdminAuditLog} from '../../lib/admin_audit_log';
 import {rateLimiter} from '../../lib/rate_limits';
 import {guardEmailDedup, hasEmailDedup} from '../../lib/email_dedup';
 import {enqueueEmailDelivery} from '../../lib/email_delivery_wrapper';
 import {hasConfiguredEmailDeliveryCredentials} from '../../lib/email_delivery_mode';
+import {logger} from '../../lib/logger';
 import {resolveEmailApiBaseUrl} from '../../lib/public_site_urls';
 import {resolveSiteUrl} from '../../lib/site_url';
 import {
   MAX_TICKET_REMINDER_MESSAGE_LENGTH,
   MAX_TICKET_REMINDER_SUBJECT_LENGTH,
+  normalizeEmailOrNull,
   validateStringLength,
 } from '../../lib/validation';
 import {eventBroadcastTemplate} from '../../email/templates';
@@ -66,6 +68,83 @@ export async function listBroadcastHistory(
         adminName: admin?.name ?? 'Unknown',
       };
     }),
+  );
+}
+
+interface BroadcastEmailRecipient {
+  /** Normalized email (trim + lowercase). */
+  email: string;
+  userId?: Id<'users'>;
+  userGlobalOptOut?: boolean;
+}
+
+/**
+ * Renders and enqueues one broadcast email for one recipient, resolving the
+ * recipient-kind unsubscribe token and preference-center URL. Shared by the
+ * send-time fan-out and the late-buyer catch-up path so template args and
+ * delivery metadata cannot drift between them.
+ */
+async function sendBroadcastEmailToRecipient(
+  ctx: MutationCtx,
+  args: {
+    broadcastId: Id<'eventBroadcasts'>;
+    event: Pick<
+      Doc<'events'>,
+      '_id' | 'title' | 'date' | 'location' | 'organizerId'
+    >;
+    organizerName: string;
+    subject: string;
+    message: string;
+    siteUrl: string;
+    apiSiteUrl: string;
+    recipient: BroadcastEmailRecipient;
+  },
+): Promise<void> {
+  const {event, recipient} = args;
+
+  let unsubToken: string;
+  let preferenceCenterUrl = `${args.siteUrl}/account#email-preferences`;
+
+  if (recipient.userId) {
+    unsubToken = await ensureUserMarketingPreferenceForSend(ctx.db, {
+      userId: recipient.userId,
+      organizerId: event.organizerId,
+      userGlobalOptOut: recipient.userGlobalOptOut === true,
+    });
+  } else {
+    unsubToken = await ensureAddressMarketingPreferenceForSend(ctx.db, {
+      email: recipient.email,
+      organizerId: event.organizerId,
+    });
+    preferenceCenterUrl = `${args.siteUrl}/unsubscribe?token=${encodeURIComponent(unsubToken)}`;
+  }
+
+  const {html, text, headers} = eventBroadcastTemplate({
+    event: {
+      _id: event._id,
+      title: event.title,
+      date: event.date,
+      location: event.location,
+    },
+    organizer: {
+      id: event.organizerId,
+      name: args.organizerName,
+    },
+    message: args.message,
+    siteUrl: args.siteUrl,
+    apiSiteUrl: args.apiSiteUrl,
+    unsubToken,
+    preferenceCenterUrl,
+  });
+
+  await enqueueEmailDelivery(
+    ctx,
+    {to: recipient.email, subject: args.subject, html, text, headers},
+    {
+      source: 'broadcast',
+      sourceId: args.broadcastId as string,
+      recipient: recipient.email,
+    },
   );
 }
 
@@ -220,65 +299,40 @@ export async function sendBroadcast(
 
   const recipients = audience.recipients ?? [];
   const apiSiteUrl = resolveEmailApiBaseUrl(siteUrl);
-  const accountPreferenceUrl = `${siteUrl}/account#email-preferences`;
   const organizer = await ctx.db.get('organizers', event.organizerId);
   const organizerName = organizer?.name ?? 'your community';
 
+  const sentAt = Date.now();
   const broadcastId = await ctx.db.insert('eventBroadcasts', {
     eventId: args.eventId,
     adminId: userId,
     subject,
     message,
     recipientCount: recipients.length,
-    sentAt: Date.now(),
+    sentAt,
   });
 
   await Promise.all(
     recipients.map(async (recipient) => {
-      let unsubToken: string;
-      let preferenceCenterUrl = accountPreferenceUrl;
-
-      if (recipient.userId) {
-        unsubToken = await ensureUserMarketingPreferenceForSend(ctx.db, {
-          userId: recipient.userId,
-          organizerId: event.organizerId,
-          userGlobalOptOut: recipient.userGlobalOptOut === true,
-        });
-      } else {
-        unsubToken = await ensureAddressMarketingPreferenceForSend(ctx.db, {
-          email: recipient.email,
-          organizerId: event.organizerId,
-        });
-        preferenceCenterUrl = `${siteUrl}/unsubscribe?token=${encodeURIComponent(unsubToken)}`;
-      }
-
-      const {html, text, headers} = eventBroadcastTemplate({
-        event: {
-          _id: args.eventId,
-          title: event.title,
-          date: event.date,
-          location: event.location,
-        },
-        organizer: {
-          id: event.organizerId,
-          name: organizerName,
-        },
+      // Same transaction as the broadcast insert and the enqueue: a
+      // rolled-back send leaves no delivery row behind.
+      await ctx.db.insert('eventBroadcastDeliveries', {
+        broadcastId,
+        eventId: args.eventId,
+        email: recipient.email,
+        sentAt,
+        origin: 'send',
+      });
+      await sendBroadcastEmailToRecipient(ctx, {
+        broadcastId,
+        event,
+        organizerName,
+        subject,
         message,
         siteUrl,
         apiSiteUrl,
-        unsubToken,
-        preferenceCenterUrl,
+        recipient,
       });
-
-      return enqueueEmailDelivery(
-        ctx,
-        {to: recipient.email, subject, html, text, headers},
-        {
-          source: 'broadcast',
-          sourceId: broadcastId as string,
-          recipient: recipient.email,
-        },
-      );
     }),
   );
 
@@ -294,4 +348,127 @@ export async function sendBroadcast(
   );
 
   return {success: true as const, recipientCount: recipients.length};
+}
+
+/**
+ * Catch-up path for recipients who join an event's broadcast audience after
+ * a send (late primary purchase, resale purchase, late guest add). Sends
+ * every broadcast the email has no `eventBroadcastDeliveries` row for,
+ * oldest-first, recording a `catchup` row per send in the same transaction.
+ *
+ * Scheduled via `internal.events.broadcasts.deliverMissed`; there is no
+ * user to surface errors to, so skip paths log and return instead of
+ * throwing. Environment-guard skips intentionally do NOT record delivery
+ * rows, so a later qualifying purchase retriggers catch-up.
+ */
+export async function deliverMissedBroadcasts(
+  ctx: MutationCtx,
+  args: {
+    eventId: Id<'events'>;
+    email: string;
+    userId?: Id<'users'>;
+  },
+): Promise<null> {
+  const email = normalizeEmailOrNull(args.email);
+  if (!email) return null;
+
+  // Same bound as listBroadcastHistory; admin sends are rate-limited so
+  // 100 broadcasts is far above any real event.
+  const broadcasts = await ctx.db
+    .query('eventBroadcasts')
+    .withIndex('by_event_and_sentAt', (q) => q.eq('eventId', args.eventId))
+    .order('desc')
+    .take(100);
+  if (broadcasts.length === 0) return null;
+
+  // Check each loaded broadcast individually via `by_broadcast_and_email` so
+  // `missed` is derived from the exact broadcasts loaded above. A capped
+  // `by_event_and_email` scan could return a different 100-row window than the
+  // broadcasts query (deliveries oldest-first, broadcasts newest-first), which
+  // on an event with >100 broadcasts could resend already-delivered ones.
+  const deliveryRows = await Promise.all(
+    broadcasts.map((broadcast) =>
+      ctx.db
+        .query('eventBroadcastDeliveries')
+        .withIndex('by_broadcast_and_email', (q) =>
+          q.eq('broadcastId', broadcast._id).eq('email', email),
+        )
+        .first(),
+    ),
+  );
+  const missed = broadcasts.filter((_, index) => deliveryRows[index] === null);
+  if (missed.length === 0) return null;
+
+  let siteUrl: string;
+  try {
+    siteUrl = resolveSiteUrl();
+  } catch {
+    logger.warn(
+      'broadcasts',
+      'deliverMissed: SITE_URL is not set; skipping catch-up',
+      {eventId: args.eventId},
+    );
+    return null;
+  }
+
+  if (!hasConfiguredEmailDeliveryCredentials()) {
+    const allowMissingEmailConfig = isUnitTestRuntime() || isTestEnvironment();
+    if (!allowMissingEmailConfig) {
+      logger.warn(
+        'broadcasts',
+        'deliverMissed: email delivery is not configured; skipping catch-up',
+        {eventId: args.eventId},
+      );
+      return null;
+    }
+  }
+
+  const event = await ctx.db.get('events', args.eventId);
+  if (!event) {
+    logger.warn('broadcasts', 'deliverMissed: event no longer exists', {
+      eventId: args.eventId,
+    });
+    return null;
+  }
+  const organizer = await ctx.db.get('organizers', event.organizerId);
+  const organizerName = organizer?.name ?? 'your community';
+  const apiSiteUrl = resolveEmailApiBaseUrl(siteUrl);
+
+  let recipient: BroadcastEmailRecipient = {email};
+  if (args.userId) {
+    const user = await ctx.db.get('users', args.userId);
+    recipient = {
+      email,
+      userId: args.userId,
+      userGlobalOptOut: user?.globalMarketingOptOut === true,
+    };
+  }
+
+  // Oldest-first so inbox order matches send order. Sends run sequentially:
+  // a mid-loop throw rolls back the whole transaction, so there is no
+  // partial state to guard against. Concurrent duplicates are prevented by
+  // OCC: each per-broadcast `by_broadcast_and_email` read above conflicts with
+  // a concurrent insert of that same delivery row, so one transaction retries
+  // and re-reads the committed rows.
+  for (const broadcast of [...missed].reverse()) {
+    await ctx.db.insert('eventBroadcastDeliveries', {
+      broadcastId: broadcast._id,
+      eventId: args.eventId,
+      email,
+      sentAt: Date.now(),
+      origin: 'catchup',
+    });
+    await sendBroadcastEmailToRecipient(ctx, {
+      broadcastId: broadcast._id,
+      event,
+      organizerName,
+      subject: broadcast.subject,
+      message: broadcast.message,
+      siteUrl,
+      apiSiteUrl,
+      recipient,
+    });
+  }
+
+  return null;
 }

@@ -4018,6 +4018,14 @@ export declare const internal: {
         null
       >;
     };
+    broadcasts: {
+      deliverMissed: FunctionReference<
+        "mutation",
+        "internal",
+        { email: string; eventId: Id<"events">; userId?: Id<"users"> },
+        null
+      >;
+    };
     guests: {
       getInternal: FunctionReference<
         "query",
@@ -4653,6 +4661,20 @@ export declare const internal: {
       any
     >;
     backfillAdminInviteTokenDigests: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      any
+    >;
+    backfillEventBroadcastDeliveries: FunctionReference<
       "mutation",
       "internal",
       {
