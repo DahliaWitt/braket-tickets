@@ -395,7 +395,7 @@ describe('EventManagementGuestsTabComponent', () => {
     await fixture.whenStable();
 
     expect(toast.success).toHaveBeenCalledWith('Sent 1 ticket');
-    expect(toast.info).toHaveBeenCalledWith('Skipped 1 already sent');
+    expect(toast.info).toHaveBeenCalledWith('Skipped 1 already-sent guest');
     expect(toast.error).not.toHaveBeenCalled();
     // A skip means another admin advanced server state, so the roster still
     // needs reconciling even though this batch sent only one.

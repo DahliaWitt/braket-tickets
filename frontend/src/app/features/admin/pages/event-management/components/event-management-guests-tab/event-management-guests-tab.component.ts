@@ -228,7 +228,9 @@ export class EventManagementGuestsTabComponent {
         toast.success(`Sent ${sent} ticket${sent === 1 ? '' : 's'}`);
       }
       if (skipped > 0) {
-        toast.info(`Skipped ${skipped} already sent`);
+        toast.info(
+          `Skipped ${skipped} already-sent guest${skipped === 1 ? '' : 's'}`,
+        );
       }
       if (failed > 0) {
         toast.error(

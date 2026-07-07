@@ -1096,7 +1096,12 @@ describe('guest ticket send lock', () => {
     expect(typeof guest?.emailSendLockedAt).toBe('number');
   });
 
-  it('rejects a second claim while a send is already in flight', async () => {
+  // convex-test runs mutations sequentially, so this asserts the invariant a
+  // real race relies on — once one claim holds the lock, any later claim is
+  // turned away — rather than driving two genuinely simultaneous transactions.
+  // The simultaneous case is covered by Convex's own OCC serialization of
+  // writes to the same document.
+  it('rejects a later claim while the lock is held', async () => {
     const t = convexTest();
     const guestId = await seedGuestWithEmail(t);
 
@@ -1111,6 +1116,19 @@ describe('guest ticket send lock', () => {
 
     expect(first.claimed).toBe(true);
     expect(second).toEqual({claimed: false, reason: 'in_flight'});
+  });
+
+  it('reports not_found when the guest was deleted before the claim', async () => {
+    const t = convexTest();
+    const guestId = await seedGuestWithEmail(t);
+    await t.run(async (ctx) => ctx.db.delete(guestId));
+
+    const result = await t.mutation(
+      internal.events.guests.beginGuestTicketSend,
+      {id: guestId, requireUnsent: false},
+    );
+
+    expect(result).toEqual({claimed: false, reason: 'not_found'});
   });
 
   it('skips an already-emailed guest in batch mode', async () => {
