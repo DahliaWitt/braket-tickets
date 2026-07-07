@@ -1518,15 +1518,15 @@ describe('computePayoutStatus', () => {
     });
   });
 
-  it('returns null for invalid event dates', () => {
+  it('returns {state: "error"} for invalid event dates', () => {
     expect(
       computePayoutStatus({...baseEvent, date: '2025-02-31'}, new Date()),
-    ).toBeNull();
+    ).toEqual({state: 'error'});
   });
 
-  it('returns null (no status) for a corrupt endDate rather than keying off the start', () => {
-    // A valid past start with a malformed end must fail closed — showing no
-    // payout status — not fall back to a start-based "processing".
+  it('returns {state: "error"} for a corrupt endDate rather than keying off the start', () => {
+    // A valid past start with a malformed end must fail closed — surfacing an
+    // error state, never a start-based "processing" that would release funds.
     const result = computePayoutStatus(
       {
         status: 'published',
@@ -1535,7 +1535,7 @@ describe('computePayoutStatus', () => {
       },
       new Date('2025-06-01T00:00:00.000Z'),
     );
-    expect(result).toBeNull();
+    expect(result).toEqual({state: 'error'});
   });
 
   it('returns {state: "pending"} at the boundary (exactly 3 days have not elapsed yet)', () => {

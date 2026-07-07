@@ -4,8 +4,10 @@ import {
   assertIanaTimeZone,
   dateKeyToLocalDate,
   eventEndInstantMs,
+  eventLocalDayDiff,
   eventStartInstantMs,
   eventLocalDateTimeToUtc,
+  isEventOvernightWrap,
   formatEventDateKey,
   hasEventDatePassed,
   hasEventEnded,
@@ -221,6 +223,29 @@ describe('event-time', () => {
         now: new Date('2026-02-27T08:01:00.000Z'),
       }),
     ).toBe(false); // past event-local midnight fallback cutoff
+  });
+
+  it('counts whole calendar days between instants in the event timezone', () => {
+    const start = parseUtcInstant('2026-02-27T04:00:00.000Z')!.getTime(); // Feb 26 8pm PST
+    const sameDay = parseUtcInstant('2026-02-27T07:00:00.000Z')!.getTime(); // Feb 26 11pm PST
+    const nextDay = parseUtcInstant('2026-02-27T14:00:00.000Z')!.getTime(); // Feb 27 6am PST
+    const twoDays = parseUtcInstant('2026-03-01T04:00:00.000Z')!.getTime(); // Feb 28 8pm PST
+    expect(eventLocalDayDiff(start, sameDay)).toBe(0);
+    expect(eventLocalDayDiff(start, nextDay)).toBe(1);
+    expect(eventLocalDayDiff(start, twoDays)).toBe(2);
+  });
+
+  it('treats only a next-day earlier-clock-time end as an overnight wrap', () => {
+    const start = parseUtcInstant('2026-02-27T04:00:00.000Z')!.getTime(); // Feb 26 8pm PST
+    const overnight = parseUtcInstant('2026-02-27T14:00:00.000Z')!.getTime(); // Feb 27 6am PST
+    const nextDayLater = parseUtcInstant('2026-02-28T05:00:00.000Z')!.getTime(); // Feb 27 9pm PST
+    const sameDay = parseUtcInstant('2026-02-27T07:00:00.000Z')!.getTime(); // Feb 26 11pm PST
+    // Earlier clock time on the next day → genuine overnight wrap.
+    expect(isEventOvernightWrap(start, overnight)).toBe(true);
+    // Later clock time on the next day (a 24h+ span) is NOT an overnight.
+    expect(isEventOvernightWrap(start, nextDayLater)).toBe(false);
+    // Same calendar day is not an overnight wrap.
+    expect(isEventOvernightWrap(start, sameDay)).toBe(false);
   });
 
   it('converts event-local date and time to UTC', () => {

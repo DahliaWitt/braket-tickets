@@ -491,7 +491,7 @@ describe('confirmPayout', () => {
         stripeConnectedAccountId: 'acct_bad_end',
         eligibleBeforeMs: Date.now(),
       }),
-    ).rejects.toThrow('has an invalid date');
+    ).rejects.toThrow('has an invalid endDate');
   });
 
   it('stamps paidOutAt only after confirmed allocations cover the event settlement', async () => {

@@ -1,10 +1,11 @@
 import {
   DEFAULT_EVENT_TIME_ZONE,
   dateKeyToLocalDate as sharedDateKeyToLocalDate,
+  eventLocalDayDiff,
   eventStartInstantMs,
   formatEventDateKey as sharedFormatEventDateKey,
+  isEventOvernightWrap,
   parseUtcInstant,
-  toDateKeyInEventTimeZone,
   todayDateKey,
 } from '@shared/event-time';
 
@@ -79,26 +80,14 @@ export function formatEventDate(
   }
 }
 
-/** Whole calendar days between two instants, counted in the event timezone. */
-function eventLocalDayDiff(startMs: number, endMs: number): number {
-  const [sy, sm, sd] = toDateKeyInEventTimeZone(new Date(startMs))
-    .split('-')
-    .map(Number);
-  const [ey, em, ed] = toDateKeyInEventTimeZone(new Date(endMs))
-    .split('-')
-    .map(Number);
-  return Math.round(
-    (Date.UTC(ey, em - 1, ed) - Date.UTC(sy, sm - 1, sd)) / 86_400_000,
-  );
-}
-
 /**
  * Suffix appended after an event's rendered start time to show its end.
- * Same day or the next calendar day (an overnight like 9pm–3am) shows only
- * the end time — e.g. ' – 3:00 AM'. Multi-day events (2+ calendar days later,
- * e.g. a weekender) include the end date — e.g. ' – Aug 3, 2:00 AM' — so the
- * span is unambiguous. Returns '' when endDate is missing, unparseable, or not
- * after the start, so templates can append it unconditionally.
+ * Same day or a genuine overnight wrap (next calendar day at an earlier clock
+ * time, like 9pm–3am) shows only the end time — e.g. ' – 3:00 AM'. Multi-day
+ * events — including a next-day end at a later clock time (a 24h+ span) —
+ * include the end date — e.g. ' – Aug 3, 2:00 AM' — so the span is
+ * unambiguous. Returns '' when endDate is missing, unparseable, or not after
+ * the start, so templates can append it unconditionally.
  */
 export function formatEventEndTimeSuffix(
   endDate: string | null | undefined,
@@ -123,7 +112,10 @@ export function formatEventEndTimeSuffix(
   const endTime = formatEventDate(endMs, 'shortTime');
   if (!endTime) return '';
 
-  if (eventLocalDayDiff(startMs, endMs) <= 1) {
+  if (
+    eventLocalDayDiff(startMs, endMs) === 0 ||
+    isEventOvernightWrap(startMs, endMs)
+  ) {
     return ` – ${endTime}`;
   }
 

@@ -184,6 +184,47 @@ export function utcToEventLocalParts(
   };
 }
 
+/** Whole calendar days between two instants, counted in the event timezone. */
+export function eventLocalDayDiff(
+  startMs: number,
+  endMs: number,
+  options?: EventTimeOptions,
+): number {
+  const [sy, sm, sd] = toDateKeyInEventTimeZone(new Date(startMs), options)
+    .split('-')
+    .map(Number);
+  const [ey, em, ed] = toDateKeyInEventTimeZone(new Date(endMs), options)
+    .split('-')
+    .map(Number);
+  return Math.round(
+    (Date.UTC(ey, em - 1, ed) - Date.UTC(sy, sm - 1, sd)) / 86_400_000,
+  );
+}
+
+/**
+ * Whether `endMs` is a genuine overnight wrap of `startMs`: it lands on the
+ * next calendar day (event timezone) at an *earlier* wall-clock time than the
+ * start — e.g. 9:00 PM → 3:00 AM. Used to decide when an end can render as a
+ * bare time with no repeated date.
+ *
+ * A next-day end at an equal-or-later wall-clock time is a 24h+ event, not an
+ * overnight, and must keep its end date so "8:00 PM – 9:00 PM" cannot be
+ * mistaken for a one-hour same-evening event.
+ */
+export function isEventOvernightWrap(
+  startMs: number,
+  endMs: number,
+  options?: EventTimeOptions,
+): boolean {
+  if (eventLocalDayDiff(startMs, endMs, options) !== 1) return false;
+  const startParts = utcToEventLocalParts(startMs, options);
+  const endParts = utcToEventLocalParts(endMs, options);
+  if (!startParts || !endParts) return false;
+  const startMinute = Number(startParts.hour) * 60 + Number(startParts.minute);
+  const endMinute = Number(endParts.hour) * 60 + Number(endParts.minute);
+  return endMinute < startMinute;
+}
+
 /**
  * Returns the event start instant in milliseconds.
  *

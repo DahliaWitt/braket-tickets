@@ -74,6 +74,19 @@ describe('formatEventEndTimeSuffix', () => {
     ).toBe(' – 6:00 AM');
   });
 
+  it('includes the end date when the end is the next day at a later clock time (a 24h+ span, not an overnight)', () => {
+    // 8pm Feb 26 – 9pm Feb 27 event-local: next calendar day but a later clock
+    // time, so it must not collapse to a misleading "8:00 PM – 9:00 PM".
+    expect(
+      normalizeSpaces(
+        formatEventEndTimeSuffix(
+          '2026-02-28T05:00:00.000Z',
+          '2026-02-27T04:00:00.000Z',
+        ),
+      ),
+    ).toBe(' – Feb 27, 2026, 9:00 PM');
+  });
+
   it('includes the end date for multi-day events', () => {
     // 10pm Feb 26 – 8pm Feb 28 event-local (a multi-day span)
     expect(

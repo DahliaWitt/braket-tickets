@@ -4,6 +4,7 @@ import {canViewEvent} from '../../lib/access';
 import {calculateEventInventory} from '../../lib/inventory';
 import {hasEventEnded, ongoingEventStartLowerBound} from '../../lib/timezone';
 import {isEligibleForPublicDirectory} from '../../lib/communities/public';
+import {logger} from '../../lib/logger';
 import {
   mapPublicEventCards,
   type PublicEventAvailabilitySummary,
@@ -11,6 +12,16 @@ import {
 
 const PUBLIC_UPCOMING_CARD_LIMIT = 12;
 const PUBLIC_UPCOMING_SCAN_PAGE_SIZE = 60;
+
+/**
+ * Safety valve on the landing-page discovery scan. Pagination walks past ended
+ * lookback rows to reach live events, so read cost is data-dependent; this
+ * caps rows read well below the Convex per-query document budget (leaving room
+ * for the downstream organizer and availability reads). Past this many events
+ * in the lookback window the scan degrades (with a logged warning) instead of
+ * throwing at the budget.
+ */
+const PUBLIC_UPCOMING_MAX_SCAN_ROWS = 2_000;
 
 export async function loadCanonicalListAvailability(
   db: QueryCtx['db'],
@@ -76,6 +87,7 @@ export async function listPublicUpcomingCards(ctx: QueryCtx) {
   const minDate = ongoingEventStartLowerBound();
   const publicEvents: Doc<'events'>[] = [];
   let cursor: string | null = null;
+  let scanned = 0;
 
   while (publicEvents.length < PUBLIC_UPCOMING_CARD_LIMIT) {
     const result = await ctx.db
@@ -97,7 +109,19 @@ export async function listPublicUpcomingCards(ctx: QueryCtx) {
       ),
     );
 
+    scanned += result.page.length;
     if (result.isDone) {
+      break;
+    }
+    if (scanned >= PUBLIC_UPCOMING_MAX_SCAN_ROWS) {
+      // Degrade instead of risking a per-query document-budget failure. Not
+      // silent: this many ended lookback rows platform-wide is anomalous and
+      // worth investigating.
+      logger.warn(
+        'events',
+        'Landing-page discovery scan hit the row cap; result may omit some events',
+        {scanned, collected: publicEvents.length},
+      );
       break;
     }
 

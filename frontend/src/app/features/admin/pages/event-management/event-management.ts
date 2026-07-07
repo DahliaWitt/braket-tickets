@@ -52,13 +52,17 @@ export type PayoutStatusResult =
   | {state: 'pre-event'}
   | {state: 'pending'; payoutDate: Date}
   | {state: 'processing'}
-  | {state: 'paid'; date: Date};
+  | {state: 'paid'; date: Date}
+  | {state: 'error'};
 
 /**
  * Pure function that computes the payout status for an event.
  * Extracted for testability — the component's `payoutStatus` computed signal calls this.
  *
- * Returns `null` when the event is cancelled.
+ * Returns `null` when the event is cancelled (no payout applies). Returns
+ * `{state: 'error'}` when the event's date/endDate cannot be parsed, so
+ * corrupt payout data surfaces to the admin instead of silently reading as
+ * "nothing to pay out."
  */
 export function computePayoutStatus(
   event: {
@@ -79,7 +83,7 @@ export function computePayoutStatus(
   // endDate when set — matching the backend eligibility, so a running
   // multi-day event still reads as pre-payout.
   const eventEndMs = eventEndInstantMs(event.date, event.endDate);
-  if (eventEndMs === null) return null;
+  if (eventEndMs === null) return {state: 'error'};
   const eventEnd = new Date(eventEndMs);
 
   if (now < eventEnd) {
@@ -549,6 +553,8 @@ export class EventManagement {
         return 'Your payout is being processed and should arrive in 1-2 business days.';
       case 'paid':
         return `Revenue was paid out on ${this.datePipe.transform(status.date, 'mediumDate')}.`;
+      case 'error':
+        return 'This event has an unreadable date, so its payout status cannot be determined. Contact support to repair the event before payout.';
     }
   });
 }

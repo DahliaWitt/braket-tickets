@@ -249,6 +249,9 @@
                 [class.!border-destructive/50]="endWindowError()"
                 [class.!text-destructive]="endWindowError()"
                 [attr.aria-invalid]="endWindowError() ? 'true' : null"
+                [attr.aria-describedby]="
+                  endWindowError() ? 'end-window-error' : null
+                "
               />
             </div>
 
@@ -269,6 +272,7 @@
               />
               @if (endWindowError(); as endError) {
                 <p
+                  id="end-window-error"
                   data-testid="end-time-error"
                   class="text-xs text-destructive uppercase"
                 >

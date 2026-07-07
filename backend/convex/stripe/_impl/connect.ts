@@ -298,9 +298,12 @@ export async function getSettlementDataForAccountImpl(
     // actually ends, not PAYOUT_DELAY after it starts.
     const eventEndMs = eventEndInstantMs(event.date, event.endDate);
     if (eventEndMs === null) {
+      // eventEndInstantMs reads endDate when present and otherwise start, so a
+      // null pinpoints the corrupt field for the operator.
+      const invalidField = event.endDate != null ? 'endDate' : 'date';
       throwAppError(
         'PAYOUT_SETTLEMENT_INVALID_EVENT_DATE',
-        `Event ${event._id} has an invalid date; refusing to compute payout settlement for Stripe account ${args.stripeConnectedAccountId}`,
+        `Event ${event._id} has an invalid ${invalidField}; refusing to compute payout settlement for Stripe account ${args.stripeConnectedAccountId}`,
         {
           eventId: event._id,
           organizerId: organizer._id,
@@ -444,10 +447,12 @@ export async function listPlatformOrganizerEligibleEventIdsImpl(
       const eventEndMs = eventEndInstantMs(event.date, event.endDate);
       if (eventEndMs === null) {
         // Corrupt end instant would otherwise wedge this event's retirement
-        // silently on every run — surface it so an operator can repair.
+        // silently on every run — surface it so an operator can repair. The
+        // null pinpoints which field (endDate when present, else start date).
+        const invalidField = event.endDate != null ? 'endDate' : 'date';
         logger.error(
           'stripe',
-          'Platform-organizer event has an invalid end date; skipping retirement until repaired',
+          `Platform-organizer event has an invalid ${invalidField}; skipping retirement until repaired`,
           {eventId: event._id, organizerId: event.organizerId},
         );
         continue;
