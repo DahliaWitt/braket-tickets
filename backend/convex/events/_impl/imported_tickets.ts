@@ -599,25 +599,47 @@ export async function resolveAndCheckInByExternalRef(
 }
 
 /**
+/**
+ * Page size for the redaction sweep. Bounds the per-transaction read so a large
+ * imported-ticket table cannot blow the Convex read budget mid-privacy-request.
+ */
+const REDACT_PAGE_SIZE = 200;
+
+/**
  * Operator privacy redaction: redacts imported entries whose email matches the
  * given address (case-insensitive) across ALL events. Name and email are
  * cleared to a tombstone so the personal data no longer persists while the
  * admission record's check-in state and source attribution remain intact.
- * Internal-only (operator process); audit-logged per affected event.
+ * Internal-only (operator process); audit-logged per affected event per page.
+ *
+ * There is no email index on `importedTicketHolders` (email is optional and
+ * stored verbatim), so matching requires a table walk. The walk is PAGINATED
+ * and self-reschedules across transactions so the read stays bounded — a
+ * privacy request must not fail because the table is large. Redacted rows have
+ * their email cleared, so they no longer match `target` and are never
+ * re-processed on a later page.
  */
 export async function redactByEmail(
   ctx: MutationCtx,
-  args: {email: string; operatorUserId: Id<'users'>},
-): Promise<{redactedCount: number}> {
+  args: {
+    email: string;
+    operatorUserId: Id<'users'>;
+    cursor?: string | null;
+  },
+): Promise<{redactedCount: number; isDone: boolean}> {
   const target = normalizeEmailOrNull(args.email);
   if (target === null) {
-    return {redactedCount: 0};
+    return {redactedCount: 0, isDone: true};
   }
+
+  const {page, isDone, continueCursor} = await ctx.db
+    .query('importedTicketHolders')
+    .paginate({cursor: args.cursor ?? null, numItems: REDACT_PAGE_SIZE});
 
   let redactedCount = 0;
   const affectedEvents = new Set<Id<'events'>>();
 
-  for await (const entry of ctx.db.query('importedTicketHolders')) {
+  for (const entry of page) {
     if (normalizeEmailOrNull(entry.email) !== target) continue;
     await ctx.db.patch('importedTicketHolders', entry._id, {
       name: '[redacted]',
@@ -646,5 +668,17 @@ export async function redactByEmail(
     );
   }
 
-  return {redactedCount};
+  if (!isDone) {
+    await ctx.scheduler.runAfter(
+      0,
+      internal.events.imported_tickets.redactByEmail,
+      {
+        email: args.email,
+        operatorUserId: args.operatorUserId,
+        cursor: continueCursor,
+      },
+    );
+  }
+
+  return {redactedCount, isDone};
 }

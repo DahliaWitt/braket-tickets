@@ -223,8 +223,9 @@ Registered functions in `events/imported_tickets.ts`:
   redaction, cross-referenced below.
 
 The door scanner path is `events/check_in.checkIn`. When native ticket/guest
-resolution fails and the caller passed the scanned `eventId`, the raw payload is
-exact-matched against `importedTicketHolders.externalRef` for THAT event only.
+resolution fails and the caller passed the scanned `eventId`, the payload is
+normalized (trim + lowercase) and matched against
+`importedTicketHolders.externalRefKey` for THAT event only.
 The result carries the `imported` object (name, ticket type label, source
 label) so door staff can see it is an external ticket.
 
@@ -279,11 +280,16 @@ in across events.
 
 Imported names and emails are personal data. There is no account linkage to
 resolve, so email is the only identifier. Use the operator redaction mutation
-`internal.events.imported_tickets.redactByEmail` (args `{email, operatorUserId}`)
-to redact imported entries whose email matches a verified address across all
-events; it clears the name/email to a tombstone while leaving the inert
-admission record and its audit trail intact. Full procedure and the identifier
-table (including `importedTicketHolders.email`) live in
+`internal.events.imported_tickets.redactByEmail` (args
+`{email, operatorUserId}`; `cursor` is internal to the sweep — omit it) to redact
+imported entries whose email matches a verified address across all events; it
+clears the name/email to a tombstone while leaving the inert admission record and
+its audit trail intact. The sweep is paginated and self-reschedules across
+transactions (there is no email index), so the first call returns
+`{redactedCount, isDone}` for the first page and later pages complete in the
+background — confirm completion via the `imported_tickets.redact` audit entries
+rather than the first return value. Full procedure and the identifier table
+(including `importedTicketHolders.email`) live in
 [Privacy Requests](./privacy-requests.md) → "Locate Braket Data".
 
 ### Import and imported-check-in audit actions

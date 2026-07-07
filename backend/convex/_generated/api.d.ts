@@ -4197,8 +4197,8 @@ export declare const internal: {
       redactByEmail: FunctionReference<
         "mutation",
         "internal",
-        { email: string; operatorUserId: Id<"users"> },
-        { redactedCount: number }
+        { cursor?: string | null; email: string; operatorUserId: Id<"users"> },
+        { isDone: boolean; redactedCount: number }
       >;
     };
     management: {

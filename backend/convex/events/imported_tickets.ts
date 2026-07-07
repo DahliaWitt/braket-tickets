@@ -77,7 +77,13 @@ export const checkIn = mutation({
  * whose email matches the given address across all events.
  */
 export const redactByEmail = internalMutation({
-  args: {email: v.string(), operatorUserId: v.id('users')},
-  returns: v.object({redactedCount: v.number()}),
+  args: {
+    email: v.string(),
+    operatorUserId: v.id('users'),
+    // Pagination cursor for the self-rescheduling redaction sweep; omit/null on
+    // the first call.
+    cursor: v.optional(v.union(v.string(), v.null())),
+  },
+  returns: v.object({redactedCount: v.number(), isDone: v.boolean()}),
   handler: redactByEmailImpl,
 });

@@ -704,6 +704,8 @@ describe('importedTickets.redactByEmail', () => {
       {email: targetEmail.toUpperCase(), operatorUserId: adminId},
     );
     expect(result.redactedCount).toBe(1);
+    // Single page (well under REDACT_PAGE_SIZE) completes without rescheduling.
+    expect(result.isDone).toBe(true);
 
     const entries = await asAdmin.query(
       api.events.imported_tickets.listByEvent,
