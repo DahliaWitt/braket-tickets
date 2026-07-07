@@ -3,6 +3,7 @@ import {
   DEFAULT_EVENT_TIME_ZONE,
   assertIanaTimeZone,
   dateKeyToLocalDate,
+  eventEndInstantMs,
   eventStartInstantMs,
   eventLocalDateTimeToUtc,
   formatEventDateKey,
@@ -79,6 +80,21 @@ describe('event-time', () => {
       new Date('2026-02-26T08:00:00.000Z').getTime(),
     );
     expect(eventStartInstantMs('2026-02-31')).toBeNull();
+  });
+
+  it('resolves the event end instant, falling back to the start when no endDate', () => {
+    const start = '2026-02-27T07:30:00.000Z';
+    const end = '2026-03-01T06:00:00.000Z';
+    // Explicit end wins.
+    expect(eventEndInstantMs(start, end)).toBe(new Date(end).getTime());
+    // No end -> start instant (legacy/single-day fallback).
+    expect(eventEndInstantMs(start)).toBe(new Date(start).getTime());
+    expect(eventEndInstantMs(start, null)).toBe(new Date(start).getTime());
+    // Unparseable end -> start fallback; unparseable start -> null.
+    expect(eventEndInstantMs(start, 'not-a-date')).toBe(
+      new Date(start).getTime(),
+    );
+    expect(eventEndInstantMs('not-a-date')).toBeNull();
   });
 
   it('rejects date-only strings as UTC local-part inputs', () => {

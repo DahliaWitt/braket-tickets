@@ -1547,4 +1547,21 @@ describe('computePayoutStatus', () => {
     );
     expect(result?.state).toBe('processing');
   });
+
+  it('keys the payout window off endDate for a running multi-day event', () => {
+    const multiDay = {
+      status: 'published' as const,
+      date: '2025-01-01T20:00:00.000Z',
+      endDate: '2025-01-08T20:00:00.000Z',
+    };
+    // Three days after the start but before the end: still pre-payout, even
+    // though the naive start+delay window would already be "processing".
+    expect(
+      computePayoutStatus(multiDay, new Date('2025-01-04T20:00:00.000Z')),
+    ).toEqual({state: 'pre-event'});
+    // Four days after the end: the window has fully elapsed.
+    expect(
+      computePayoutStatus(multiDay, new Date('2025-01-12T20:00:00.000Z')),
+    ).toEqual({state: 'processing'});
+  });
 });

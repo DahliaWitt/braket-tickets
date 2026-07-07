@@ -13,7 +13,7 @@ import {ActivatedRoute, RouterLink} from '@angular/router';
 import {toSignal} from '@angular/core/rxjs-interop';
 import {ConvexError} from 'convex/values';
 import {PAYOUT_DELAY_DAYS} from '@shared/constants';
-import {eventStartInstantMs} from '@shared/event-time';
+import {eventEndInstantMs} from '@shared/event-time';
 import {
   AdminEventsService,
   type TicketSalesStatus,
@@ -65,6 +65,7 @@ export function computePayoutStatus(
     status?: string;
     paidOutAt?: number;
     date: string;
+    endDate?: string;
   },
   now = new Date(),
 ): PayoutStatusResult | null {
@@ -74,16 +75,19 @@ export function computePayoutStatus(
     return {state: 'paid', date: new Date(event.paidOutAt)};
   }
 
-  const eventDateMs = eventStartInstantMs(event.date);
-  if (eventDateMs === null) return null;
-  const eventDate = new Date(eventDateMs);
+  // The payout window opens PAYOUT_DELAY_DAYS after the event is OVER — its
+  // endDate when set — matching the backend eligibility, so a running
+  // multi-day event still reads as pre-payout.
+  const eventEndMs = eventEndInstantMs(event.date, event.endDate);
+  if (eventEndMs === null) return null;
+  const eventEnd = new Date(eventEndMs);
 
-  if (now < eventDate) {
+  if (now < eventEnd) {
     return {state: 'pre-event'};
   }
 
   const payoutDate = new Date(
-    eventDate.getTime() + PAYOUT_DELAY_DAYS * 86400000,
+    eventEnd.getTime() + PAYOUT_DELAY_DAYS * 86400000,
   );
   if (now < payoutDate) {
     return {state: 'pending', payoutDate};

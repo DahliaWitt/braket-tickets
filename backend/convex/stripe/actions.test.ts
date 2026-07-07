@@ -117,6 +117,45 @@ describe('processScheduledPayouts', () => {
       expect(event?.paidOutAt).toBeTypeOf('number');
     }
   });
+
+  it('does not retire a platform-organizer multi-day event that is still running', async () => {
+    const t = convexTest();
+    const organizerId = await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {name: 'Platform Organizer Running', isPlatformOrganizer: true},
+    );
+    const DAY_MS = 24 * 60 * 60 * 1000;
+
+    // Started 5 days ago (well past the 3-day payout delay) but ends in 5
+    // days — funds must stay held until PAYOUT_DELAY after the end.
+    const runningId = await t.mutation(api.testing.events.seedEvent, {
+      title: 'Platform Running Festival',
+      price: 2500,
+      totalTickets: 100,
+      date: new Date(Date.now() - 5 * DAY_MS).toISOString(),
+      endDate: new Date(Date.now() + 5 * DAY_MS).toISOString(),
+      status: 'published',
+      visibility: 'public',
+      organizerId,
+    });
+    // Control: a fully-past single-day event still retires.
+    const pastId = await t.mutation(api.testing.events.seedEvent, {
+      title: 'Platform Past Event',
+      price: 2500,
+      totalTickets: 100,
+      date: new Date(Date.now() - 30 * DAY_MS).toISOString(),
+      status: 'published',
+      visibility: 'public',
+      organizerId,
+    });
+
+    await t.action(internal.stripe.actions.processScheduledPayouts, {});
+
+    const running = await t.run(async (ctx) => ctx.db.get(runningId));
+    const past = await t.run(async (ctx) => ctx.db.get(pastId));
+    expect(running?.paidOutAt).toBeUndefined();
+    expect(past?.paidOutAt).toBeTypeOf('number');
+  });
 });
 
 // =============================================================================

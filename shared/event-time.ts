@@ -205,6 +205,27 @@ export function eventStartInstantMs(
   return date?.getTime() ?? null;
 }
 
+/**
+ * The instant an event is considered over, in milliseconds: its explicit
+ * `endDate` when set and parseable, otherwise its start instant
+ * (eventStartInstantMs). The start fallback preserves pre-endDate behavior for
+ * single-day and legacy events. Use this — not eventStartInstantMs — for
+ * end-of-event gating such as the payout delay, so a multi-day event's funds
+ * are not released while it is still running. Returns null only when neither
+ * the endDate nor the start can be parsed.
+ */
+export function eventEndInstantMs(
+  startsAtUtc: EventTimeInput,
+  endsAtUtc?: string | null,
+  options?: EventTimeOptions,
+): number | null {
+  if (endsAtUtc) {
+    const endMs = parseUtcInstant(endsAtUtc)?.getTime();
+    if (endMs !== undefined) return endMs;
+  }
+  return eventStartInstantMs(startsAtUtc, options);
+}
+
 export function startOfDateKeyInEventTimeZone(
   dateKey: string,
   options?: EventTimeOptions,
