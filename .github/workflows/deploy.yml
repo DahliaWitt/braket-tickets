@@ -240,7 +240,11 @@ jobs:
         run: pnpm sync:env:prod
 
       - name: Deploy to Convex
-        run: pnpm convex deploy
+        env:
+          DEPLOY_REF_NAME: ${{ github.ref_name }}
+          DEPLOY_SHA: ${{ github.sha }}
+          DEPLOY_ACTOR: ${{ github.actor }}
+        run: pnpm convex deploy --message "production deploy ${DEPLOY_REF_NAME} @ ${DEPLOY_SHA} by ${DEPLOY_ACTOR}"
 
   deploy-frontend:
     name: Deploy Frontend to Cloudflare
@@ -462,7 +466,7 @@ jobs:
           ref: ${{ needs.deploy-context.outputs.ref }}
 
       - name: Publish release from manifest
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           DEPLOY_REF: ${{ needs.deploy-context.outputs.ref }}
         with:

@@ -323,6 +323,29 @@ export class AdminEventsService {
   }
 
   /**
+   * Updates an existing guest's name, email, type, and notes.
+   *
+   * `eventId` is not editable, and check-in/email metadata is preserved
+   * server-side regardless of what is submitted here.
+   *
+   * @param guestId - The ID of the guest record to update.
+   * @param guest - Updated guest details including name, optional email, type, and notes.
+   * @param guest.name - Full name of the guest.
+   * @param guest.email - Optional email for sending guest ticket.
+   * @param guest.type - Guest type (e.g., 'guest', 'artist guest', 'staff').
+   * @param guest.notes - Optional internal notes about the guest.
+   */
+  updateGuest(
+    guestId: string,
+    guest: {name: string; email?: string; type: GuestType; notes?: string},
+  ): Promise<FunctionReturnType<typeof api.events.guests.update>> {
+    return this.convex.mutation(api.events.guests.update, {
+      id: guestId as Id<'guests'>,
+      ...guest,
+    });
+  }
+
+  /**
    * Removes a guest from an event's guest list.
    *
    * @param guestId - The ID of the guest record to remove.
@@ -423,15 +446,27 @@ export class AdminEventsService {
    * Triggers an email with the guest's ticket and QR code to the guest's
    * registered email address. Requires the guest to have an email on file.
    *
+   * The backend atomically claims each send, so concurrent admins/tabs cannot
+   * double-send the same guest. `skipIfAlreadyEmailed` is used by the batch
+   * "send all" path so a stale client cannot re-email guests another admin
+   * already handled; a single resend omits it. The returned status reflects
+   * whether the send actually happened (`sent`) or was skipped because it was
+   * already sent / in flight (`skipped`).
+   *
    * @param guestId - The ID of the guest to send the ticket to.
+   * @param options.skipIfAlreadyEmailed - Skip guests already emailed.
    *
    * @remarks
    * Side effects:
-   * - Sends an email to the guest's email address
+   * - Sends an email to the guest's email address (unless skipped)
    */
-  async sendGuestTicket(guestId: string): Promise<void> {
-    await this.convex.action(api.events.guest_actions.sendTicket, {
+  sendGuestTicket(
+    guestId: string,
+    options?: {skipIfAlreadyEmailed?: boolean},
+  ): Promise<FunctionReturnType<typeof api.events.guest_actions.sendTicket>> {
+    return this.convex.action(api.events.guest_actions.sendTicket, {
       guestId: guestId as Id<'guests'>,
+      ...(options?.skipIfAlreadyEmailed ? {skipIfAlreadyEmailed: true} : {}),
     });
   }
 

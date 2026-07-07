@@ -110,6 +110,7 @@ export type DataModel = {
         | "guest.add"
         | "guest.check-in"
         | "guest.import"
+        | "guest.update"
         | "imported_tickets.import"
         | "imported_tickets.remove"
         | "imported_tickets.batch_remove"
@@ -157,6 +158,7 @@ export type DataModel = {
       applicationId?: Id<"applications">;
       deletedEventName?: string;
       eventId?: Id<"events">;
+      ipAddress?: string;
       magicLinkId?: Id<"magic_links">;
       organizerId?: Id<"organizers">;
       reason?: string;
@@ -164,6 +166,7 @@ export type DataModel = {
       targetUserId?: Id<"users">;
       trustedOrganizerId?: Id<"organizers">;
       trustingOrganizerId?: Id<"organizers">;
+      userAgent?: string;
       _id: Id<"adminAuditLogs">;
       _creationTime: number;
     };
@@ -176,13 +179,15 @@ export type DataModel = {
       | "applicationId"
       | "deletedEventName"
       | "eventId"
+      | "ipAddress"
       | "magicLinkId"
       | "organizerId"
       | "reason"
       | "source"
       | "targetUserId"
       | "trustedOrganizerId"
-      | "trustingOrganizerId";
+      | "trustingOrganizerId"
+      | "userAgent";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
@@ -474,6 +479,34 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  eventBroadcastDeliveries: {
+    document: {
+      broadcastId: Id<"eventBroadcasts">;
+      email: string;
+      eventId: Id<"events">;
+      origin: "send" | "catchup" | "backfill";
+      sentAt: number;
+      _id: Id<"eventBroadcastDeliveries">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "broadcastId"
+      | "email"
+      | "eventId"
+      | "origin"
+      | "sentAt";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_broadcast_and_email: ["broadcastId", "email", "_creationTime"];
+      by_email: ["email", "_creationTime"];
+      by_event_and_email: ["eventId", "email", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   eventBroadcasts: {
     document: {
       adminId: Id<"users">;
@@ -673,6 +706,7 @@ export type DataModel = {
       checkedInAt?: number;
       checkedInBy?: Id<"users">;
       email?: string;
+      emailSendLockedAt?: number | null;
       emailedAt?: number;
       eventId: Id<"events">;
       name: string;
@@ -688,6 +722,7 @@ export type DataModel = {
       | "checkedInBy"
       | "email"
       | "emailedAt"
+      | "emailSendLockedAt"
       | "eventId"
       | "name"
       | "notes"

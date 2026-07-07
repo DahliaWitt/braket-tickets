@@ -1,4 +1,7 @@
 import {DestroyRef, Injectable, computed, inject, signal} from '@angular/core';
+import {toObservable} from '@angular/core/rxjs-interop';
+import {firstValueFrom, TimeoutError} from 'rxjs';
+import {filter, timeout} from 'rxjs/operators';
 import {Router} from '@angular/router';
 import {
   injectConvex,
@@ -32,15 +35,24 @@ import {
 } from '@/core/services/auth-navigation';
 import {AuthSessionSync} from './auth-session-sync';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
-import {AuthConvexTokenStorageService} from './auth-convex-token-storage.service';
 import {
+  AUTH_SETTLE_TIMEOUT_MS,
   type ConvexActionMethod,
   type ConvexClientWithErrorHandling,
   type ConvexMutationMethod,
   type ConvexQueryMethod,
   type SessionChannelMessage,
+  requiresSocialSignupCompletion,
 } from './auth.service.helpers';
+import {BraToastService} from '@ui/components/composites/toast/toast.service';
 import {AUTH_CLIENT} from './auth-client.token';
+import {
+  authCookieStorageKey,
+  authSessionDataStorageKey,
+  interpretAuthStorage,
+  type CachedSessionPeek,
+} from '../../../lib/auth-storage';
+import {environment} from '../../../environments/environment';
 
 /**
  * Error thrown when a user attempts to log in with an unverified email address.
@@ -163,7 +175,7 @@ export class AuthService implements ConvexAuthProvider {
   private readonly userProfileService = inject(UserProfileService);
   private readonly authClient = inject(AUTH_CLIENT);
   private readonly browser = inject(BrowserPlatformService);
-  private readonly tokenStorage = inject(AuthConvexTokenStorageService);
+  private readonly toast = inject(BraToastService);
 
   private sessionSync: AuthSessionSync | null = null;
 
@@ -184,6 +196,37 @@ export class AuthService implements ConvexAuthProvider {
   readonly reauthVersion = signal(0);
   readonly isSyncingUser = signal(false);
   readonly authSyncFailed = signal(false);
+
+  /**
+   * Give-up latch: set when the auth-settle wait times out (session reported
+   * but profile never resolved, or init itself hung). Forces `authSettled` true
+   * so route guards leave the optimistic path and take their authoritative
+   * failure branch, recovering the user off a stuck skeleton instead of
+   * stranding them.
+   *
+   * Scoped to the failed settle attempt: `setSessionState` clears it on any
+   * fresh session transition (login, refresh, logout, or a deferred init that
+   * finally resolves). Otherwise a later valid session would inherit the stale
+   * give-up and be bounced from protected routes while its own profile query is
+   * still in flight.
+   */
+  private readonly authSettleTimedOut = signal(false);
+
+  /**
+   * Whether auth has reached a decidable state: initialized, and either
+   * unauthenticated or user-synced (or sync explicitly gave up). Single source
+   * of truth for the settle predicate — `waitForAuthSettled$` (route guards)
+   * and optimistic reconciliation both derive from it, and guarded pages use
+   * it to keep skeletons up during the optimistic window instead of flashing
+   * empty states.
+   */
+  readonly authSettled = computed(() => {
+    if (this.authSettleTimedOut()) return true;
+    if (!this.authInitialized()) return false;
+    if (!this.isAuthenticated()) return true;
+    if (this.user()) return true;
+    return this.authSyncFailed();
+  });
   private missingUserRepairSessionKey: string | null = null;
   private missingUserRepairQueuedSessionKey: string | null = null;
   private missingUserRepairInFlightSessionKey: string | null = null;
@@ -262,7 +305,6 @@ export class AuthService implements ConvexAuthProvider {
 
   constructor() {
     this.installConvexErrorHandling();
-    this.tokenStorage.purgeStaleSession();
 
     // Initialize session on service creation
     void this.initSession();
@@ -281,6 +323,117 @@ export class AuthService implements ConvexAuthProvider {
     this.destroyRef.onDestroy(() => {
       this.sessionSync?.disconnect();
     });
+  }
+
+  /**
+   * Synchronously peeks at the persisted Better Auth crossDomain state so route
+   * guards can decide the common cases without awaiting the async
+   * `getSession()` round-trip.
+   *
+   * Only meaningful in crossDomain mode, where the localStorage credential is
+   * authoritative: an empty credential provably means logged out (the buyer
+   * default), letting the landing page render with zero network wait. In
+   * cookie/E2E mode the credential is an httpOnly cookie invisible to JS, so
+   * this returns `known: false` and callers must fall back to the async settle.
+   *
+   * This drives routing UX only — never authorization. Every Convex call is
+   * still authorized server-side, so a forged snapshot buys nothing but a
+   * dashboard shell whose queries fail.
+   */
+  peekCachedSession(): CachedSessionPeek {
+    if (environment.isE2E || !this.browser.hasLocalStorage()) {
+      return {known: false, hasCredential: false, session: null};
+    }
+
+    return interpretAuthStorage(
+      this.browser.getLocalStorageItem(authCookieStorageKey()),
+      this.browser.getLocalStorageItem(authSessionDataStorageKey()),
+    );
+  }
+
+  /**
+   * `authSettled` as an observable, created eagerly in the field initializer
+   * so `scheduleOptimisticReconciliation` never depends on the caller's
+   * injection context.
+   */
+  private readonly authSettled$ = toObservable(this.authSettled);
+  private optimisticReconciliationScheduled = false;
+
+  /**
+   * Called by a route guard that admitted a navigation optimistically (cached
+   * credential present, auth not yet settled). When the authoritative session
+   * settles, checks whether the optimistic guess was right; if not, re-runs
+   * the current URL's guards via a same-URL navigation (`onSameUrlNavigation:
+   * 'reload'` is configured app-wide) so the normal guard logic issues the
+   * correct redirect — login, landing, or social-signup completion — without
+   * duplicating any of it here.
+   *
+   * Idempotent per settle window: canMatch and canActivate both firing
+   * optimistically in one navigation schedule a single reconciliation.
+   *
+   * Bounded by `AUTH_SETTLE_TIMEOUT_MS` (parity with `waitForAuthSettled$`): if
+   * auth never settles — init hung, or a session was reported but its profile
+   * query never resolved — we must not strand the user on the optimistic
+   * page's skeleton (the pages gate on `authSettled`). On timeout we latch
+   * `authSettleTimedOut`, which forces `authSettled` true, then re-run the
+   * guards: they leave the optimistic path and take their authoritative failure
+   * branch (login when unauthenticated, public home when authenticated without a
+   * profile) — the same recovery the non-optimistic guards gave before this
+   * feature.
+   */
+  scheduleOptimisticReconciliation(): void {
+    if (this.optimisticReconciliationScheduled) {
+      return;
+    }
+    this.optimisticReconciliationScheduled = true;
+
+    void firstValueFrom(
+      this.authSettled$.pipe(
+        filter(Boolean),
+        timeout({first: AUTH_SETTLE_TIMEOUT_MS}),
+      ),
+    )
+      .then(() => {
+        const user = this.user();
+        const guessWasCorrect =
+          this.isAuthenticated() &&
+          !!user &&
+          !requiresSocialSignupCompletion(user);
+        if (guessWasCorrect) {
+          return;
+        }
+
+        if (!this.isAuthenticated()) {
+          logger.info(
+            '[AuthService] Optimistic session was stale; re-running route guards',
+          );
+          this.toast.error('session expired. please log in again.');
+        }
+
+        // Re-run the current URL's guards; replaceUrl keeps the stale optimistic
+        // entry out of history so Back does not re-trigger the optimistic cycle.
+        return this.router.navigateByUrl(this.router.url, {replaceUrl: true});
+      })
+      .catch((err: unknown) => {
+        if (!(err instanceof TimeoutError)) {
+          logger.error('[AuthService] Optimistic reconciliation failed', err);
+          return;
+        }
+
+        // Auth never reached a decidable state. Latch the give-up so the guards
+        // stop admitting optimistically, then re-run them: authSettled is now
+        // true, so they take the authoritative failure branch instead of
+        // leaving the user on an indefinite skeleton.
+        logger.warn(
+          '[AuthService] Auth did not settle within the budget; recovering off the optimistic route',
+        );
+        this.authSettleTimedOut.set(true);
+        this.toast.error('could not confirm your session. please try again.');
+        return this.router.navigateByUrl(this.router.url, {replaceUrl: true});
+      })
+      .finally(() => {
+        this.optimisticReconciliationScheduled = false;
+      });
   }
 
   private installConvexErrorHandling(): void {
@@ -360,7 +513,6 @@ export class AuthService implements ConvexAuthProvider {
 
   private triggerRecoveryReload(reason: string, details?: unknown): never {
     logger.error(`[AuthService] Recovery reload triggered: ${reason}`, details);
-    this.tokenStorage.clear();
     this.setSessionState(null);
     this.error.set(undefined);
     this.browser.reload();
@@ -370,6 +522,10 @@ export class AuthService implements ConvexAuthProvider {
   private setSessionState(session: BetterAuthSession | null): void {
     this.sessionStateVersion += 1;
     this.session.set(session);
+    // A fresh session transition is new information: drop any prior give-up
+    // latch so guards wait for this session's own profile query (or an explicit
+    // sync failure) instead of inheriting a stale timeout decision.
+    this.authSettleTimedOut.set(false);
     if (!session) {
       this.missingUserRepairSessionKey = null;
       this.missingUserRepairQueuedSessionKey = null;

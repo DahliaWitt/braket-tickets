@@ -10,6 +10,7 @@ import type {
 } from './types';
 import {requireUser} from '../../lib/auth_identity';
 import {insertAdminAuditLog} from '../../lib/admin_audit_log';
+import {getAuditRequestFields} from '../../lib/request_metadata';
 import {pruneNoopEventPatch, resolveEditableEventForCaller} from './editor';
 import {loadCanonicalListAvailability} from './listing';
 import {
@@ -378,7 +379,7 @@ export async function create(
   });
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: userId,
       action: 'event.create',
@@ -489,6 +490,9 @@ export async function update(
     previousStatus: event.status,
   });
 
+  // One update can write up to three audit rows; resolve request metadata once
+  // and pass it explicitly (meta omitted) so each insert reuses it.
+  const auditFields = await getAuditRequestFields(ctx);
   if (organizerChanged) {
     await insertAdminAuditLog(
       {db: ctx.db},
@@ -498,6 +502,7 @@ export async function update(
         eventId: id,
         organizerId: event.organizerId,
         source: 'admin-ui',
+        ...auditFields,
       },
     );
     await insertAdminAuditLog(
@@ -508,6 +513,7 @@ export async function update(
         eventId: id,
         organizerId: nextOrganizerId,
         source: 'admin-ui',
+        ...auditFields,
       },
     );
   }
@@ -520,6 +526,7 @@ export async function update(
       eventId: id,
       organizerId: nextOrganizerId,
       source: 'admin-ui',
+      ...auditFields,
     },
   );
   return null;
@@ -572,7 +579,7 @@ export async function remove(
   }
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: userId,
       action: 'event.delete',
@@ -647,7 +654,7 @@ export async function continueEventRemovalCleanup(
   }
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: args.adminId,
       action: 'event.delete',

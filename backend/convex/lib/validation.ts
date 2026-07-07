@@ -89,6 +89,17 @@ export function validateStringLength(
 }
 
 /**
+ * Validates that a required string field is present and not blank
+ * (whitespace-only values are rejected).
+ * @throws Error if the value is empty or only whitespace.
+ */
+export function validateRequiredString(value: string, fieldName: string): void {
+  if (value.trim().length === 0) {
+    throwInvalidInput(`${fieldName} is required`, {fieldName});
+  }
+}
+
+/**
  * Validates an array field against maximum item count and item length.
  * @throws Error if validation fails
  */

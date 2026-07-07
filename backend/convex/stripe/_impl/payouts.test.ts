@@ -42,7 +42,11 @@ describe('computeEventSettlements', () => {
   it('skips rows without connectedAccountNetCents — no estimation', () => {
     const settlements = computeEventSettlements(
       [
-        {eventId: EVENT_A, kind: 'payment_captured', connectedAccountNetCents: 1_000},
+        {
+          eventId: EVENT_A,
+          kind: 'payment_captured',
+          connectedAccountNetCents: 1_000,
+        },
         {eventId: EVENT_A, kind: 'payment_captured'},
       ],
       EVENTS,

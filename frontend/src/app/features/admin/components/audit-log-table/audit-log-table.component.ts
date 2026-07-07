@@ -108,6 +108,7 @@ export const ACTION_DISPLAY: Record<
   'guest.add': {icon: 'user-plus', label: 'ADDED GUEST'},
   'guest.check-in': {icon: 'scan-line', label: 'CHECKED IN GUEST'},
   'guest.import': {icon: 'user-plus', label: 'IMPORTED GUESTS'},
+  'guest.update': {icon: 'pencil', label: 'UPDATED GUEST'},
   'imported_ticket.check-in': {
     icon: 'scan-line',
     label: 'CHECKED IN EXTERNAL TICKET',

@@ -11,12 +11,14 @@ import {
   MAX_GUEST_NAME_LENGTH,
   MAX_GUEST_NOTES_LENGTH,
   validateOptionalEmailWithAt,
+  validateRequiredString,
   validateStringLength,
 } from '../validation';
 
 /**
- * Validates a guest's name, email, and notes against the shared length caps
- * and the `@`-presence email rule.
+ * Validates a guest's name, email, and notes against the shared rules: name is
+ * required and length-capped, email is optional with an `@`-presence + length
+ * check, notes are length-capped.
  * @throws ConvexError on the first field that fails.
  */
 export function validateGuestFields(args: {
@@ -24,6 +26,7 @@ export function validateGuestFields(args: {
   email?: string;
   notes?: string;
 }): void {
+  validateRequiredString(args.name, 'Name');
   validateStringLength(args.name, 'Name', MAX_GUEST_NAME_LENGTH);
   validateOptionalEmailWithAt(args.email, MAX_GUEST_EMAIL_LENGTH, 'Email');
   validateStringLength(args.notes, 'Notes', MAX_GUEST_NOTES_LENGTH);

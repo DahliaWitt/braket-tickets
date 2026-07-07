@@ -129,6 +129,23 @@ The current audit entrypoints are:
 
 Check-in writes the ticket or guest update first. The code schedules the audit insert afterward with `ctx.scheduler.runAfter`. That means a check-in can succeed before the audit row appears.
 
+### Request metadata on audit rows (`ipAddress` / `userAgent`)
+
+Audit rows capture the platform-provided client IP and User-Agent from
+`ctx.meta.getRequestMetadata()` (see `backend/convex/lib/admin_audit_log.ts` and
+`backend/convex/lib/request_metadata.ts`). These come from the Convex platform,
+not from spoofable `x-forwarded-for`/`x-real-ip` headers. Expectations when
+reading rows:
+
+- Rows written directly by a user-triggered mutation carry the caller's
+  IP/User-Agent automatically.
+- Scheduler-deferred writes (check-in audit rows) carry the values captured by
+  the scheduling mutation and passed through args — request metadata does not
+  survive `ctx.scheduler`.
+- Rows written by crons, system flows (`source: "system"`), or runtimes without
+  metadata support have both fields absent. Absent fields on those rows are
+  expected, not a regression.
+
 Community scanners are intentionally limited to scanner-originated check-in audit writes:
 
 - `ticket.check-in`

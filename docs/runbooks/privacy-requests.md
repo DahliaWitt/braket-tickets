@@ -107,7 +107,7 @@ production.
 
 | Identifier             | Where to search                                                                                                                                                                                                                                                                                                                                                                                   |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Account email          | `users.email`, Better Auth component user table, `guests.email`, `importedTicketHolders.email`, `guest_sessions.email`, `emailAddressMarketingPreferences.email`, `resale_notifications.email`, `admin_invites.email`, `emailDeliveries.recipient`, `emailDeliveryFailures.recipient`                                                                                                             |
+| Account email          | `users.email`, Better Auth component user table, `guests.email`, `importedTicketHolders.email`, `guest_sessions.email`, `emailAddressMarketingPreferences.email`, `resale_notifications.email`, `admin_invites.email`, `emailDeliveries.recipient`, `emailDeliveryFailures.recipient`, `eventBroadcastDeliveries.email`                                                                           |
 | Convex user ID         | `applications.userId`, `tickets.userId`, `ticket_orders.userId`, `resale_listings.sellerId`, `resale_listings.buyerId`, `resale_notifications.userId`, `marketingEmailPreferences.userId`, `marketingUnsubscribeTokens.userId`, `marketingEmailDeliveries.userId`, `magic_link_redemption_log.userId`, `adminAuditLogs.adminId`, `adminAuditLogs.targetUserId`, `confirmedUploads.uploaderUserId` |
 | Guest session ID       | `guest_sessions._id`, `tickets.guestSessionId`, `ticket_orders.guestSessionId`, `magic_link_redemption_log.guestSessionId`                                                                                                                                                                                                                                                                        |
 | Stripe identifiers     | `ticket_orders.stripeCheckoutSessionId`, `ticket_orders.stripePaymentIntentId`, `ticket_orders.stripeChargeId`, `order_financial_events.*`, `stripe_webhook_events.stripeEventId`, `organizers.stripeConnectedAccountId`, `payout_batches.stripePayoutId`, `payout_allocations.stripePayoutId`                                                                                                    |
@@ -263,6 +263,7 @@ Search app-owned email records by recipient:
 - `emailDeliveryFailures`
 - `emailDedup`
 - `eventBroadcasts`
+- `eventBroadcastDeliveries` (durable per-recipient broadcast ledger; no TTL cleanup)
 - `ticketReminderSends`
 - marketing preference and delivery tables
 

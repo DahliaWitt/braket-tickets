@@ -3,6 +3,47 @@ import {describe, it, expect} from 'vitest';
 import {internal} from '../_generated/api';
 
 describe('email_delivery', () => {
+  describe('hasDelivery', () => {
+    it('returns false when no delivery exists for the source/sourceId', async () => {
+      const t = convexTest();
+
+      const result = await t.query(internal.email.email_delivery.hasDelivery, {
+        source: 'ticket',
+        sourceId: 'guest-missing',
+      });
+
+      expect(result).toBe(false);
+    });
+
+    it('returns true once a delivery has been recorded, scoped to the pair', async () => {
+      const t = convexTest();
+
+      await t.mutation(internal.email.email_delivery.recordDelivery, {
+        emailId: 'email-1',
+        source: 'ticket',
+        sourceId: 'guest-1',
+        recipient: 'guest@example.com',
+        critical: true,
+        manual: false,
+        fallback: false,
+        provider: 'resend',
+      });
+
+      expect(
+        await t.query(internal.email.email_delivery.hasDelivery, {
+          source: 'ticket',
+          sourceId: 'guest-1',
+        }),
+      ).toBe(true);
+      expect(
+        await t.query(internal.email.email_delivery.hasDelivery, {
+          source: 'ticket',
+          sourceId: 'guest-2',
+        }),
+      ).toBe(false);
+    });
+  });
+
   describe('recordFailure', () => {
     it('inserts a failure record', async () => {
       const t = convexTest();

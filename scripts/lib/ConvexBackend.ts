@@ -121,21 +121,13 @@ export class ConvexBackend {
         `[${this.instanceId}] Backend running on port ${this._convexPort!}. Logs: ${this._logFile()}`,
       );
 
-      // Set minimal env vars before first deploy
-      console.log(
-        `[${this.instanceId}] Setting minimal env vars before deploy...`,
-      );
+      // Env vars must be complete BEFORE deploy: convex.config.ts declares
+      // required env vars (convex 1.39+), so the deploy itself validates them.
+      // IS_TEST is set explicitly because buildEnv('dev') omits it (only e2e
+      // sets it); SITE_URL and everything else come from setAllEnvVars below.
+      console.log(`[${this.instanceId}] Setting env vars before deploy...`);
       await this._setIsTest();
-      await this._setSiteUrl(appPort);
 
-      await this._deployWithRetry();
-
-      console.log(
-        `[${this.instanceId}] Waiting for backend to accept mutations...`,
-      );
-      await this._waitForMutationReady(appPort);
-
-      // Set all env vars
       const envEntries = Object.entries(
         buildEnv(this.mode, {
           convex: this._convexPort!,
@@ -144,6 +136,13 @@ export class ConvexBackend {
         }),
       ) as [string, string][];
       await setAllEnvVars(envEntries, url, this.instanceId);
+
+      await this._deployWithRetry();
+
+      console.log(
+        `[${this.instanceId}] Waiting for backend to accept mutations...`,
+      );
+      await this._waitForMutationReady(appPort);
 
       if (this.mode === 'e2e') {
         console.log(`[${this.instanceId}] Clearing stale test data...`);
@@ -166,9 +165,7 @@ export class ConvexBackend {
         if (this.mode === 'dev') {
           await this._guardIsTestFalse();
         }
-        await this._deployWithRetry();
-        await this._waitForMutationReady(appPort);
-
+        // Env vars before deploy: required-var validation runs at deploy time.
         const envEntries = Object.entries(
           buildEnv(this.mode, {
             convex: this._convexPort!,
@@ -177,6 +174,9 @@ export class ConvexBackend {
           }),
         ) as [string, string][];
         await setAllEnvVars(envEntries, url, this.instanceId);
+
+        await this._deployWithRetry();
+        await this._waitForMutationReady(appPort);
 
         if (this.mode === 'e2e') {
           console.log(`[${this.instanceId}] Resetting backend data...`);
@@ -579,18 +579,6 @@ export class ConvexBackend {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       console.warn(`[${this.instanceId}] Failed to set IS_TEST: ${msg}`);
-    }
-  }
-
-  private async _setSiteUrl(appPort: number): Promise<void> {
-    const url = this.convexUrl;
-    const siteUrl = `http://127.0.0.1:${appPort}`;
-    try {
-      await setOneEnvVar('SITE_URL', siteUrl, url);
-      console.log(`[${this.instanceId}] Set SITE_URL=${siteUrl}`);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`[${this.instanceId}] Failed to set SITE_URL: ${msg}`);
     }
   }
 

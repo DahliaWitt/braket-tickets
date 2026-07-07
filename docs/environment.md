@@ -279,6 +279,25 @@ Convex environment variables are derived from Doppler-managed values:
 - **Staging:** `DOPPLER_CONFIG=stg pnpm sync:env:dev`
 - **Prod:** `DOPPLER_CONFIG=prd pnpm sync:env:prod`
 - **List Vars:** `pnpm convex env list`
+- **List Var Names only (safe to share with agents):** `pnpm convex env list --names-only`
+
+### Deploy-Time Env Validation
+
+`backend/convex/convex.config.ts` declares the app's environment variables
+(convex 1.39+ `defineApp({env})`). Consequences:
+
+- **Required vars** (`SITE_URL`, `TOKEN_DIGEST_SECRET`) must be set on a
+  deployment **before** `convex deploy` runs against it. The env sync commands
+  above run before deploy in CI; the local harness
+  (`scripts/lib/ConvexBackend.ts`) sets env vars before its deploy step.
+- Convex refuses to delete a required var
+  (`RequiredEnvironmentVariable` error from `convex env remove`).
+- Adding a new required var is a two-step rollout: set it on every deployment
+  (local Doppler, `stg`, `prd`) first, then declare it required in
+  `convex.config.ts`. Declaring first bricks deploys for any deployment that
+  lacks the var.
+- Optional vars are declared for typing/documentation; runtime fallback chains
+  (e.g. `EMAIL_FROM` → `SMTP_FROM` → `SMTP_USER`) stay in code.
 
 ### Verification
 

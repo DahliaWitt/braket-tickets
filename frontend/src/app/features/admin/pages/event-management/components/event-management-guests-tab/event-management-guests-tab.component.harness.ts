@@ -26,14 +26,24 @@ export class EventManagementGuestsTabHarness extends ComponentHarness {
   private readonly getDownloadButtons = this.locatorForAll(
     'button[aria-label^="Download ticket for "]',
   );
-  private readonly getSendButtons = this.locatorForAll(
-    '[data-testid="send-guest-ticket"]',
+  private readonly getSendButtonHarnesses = this.locatorForAll(
+    ZardButtonComponentHarness.with({
+      selector: '[data-testid="send-guest-ticket"]',
+    }),
+  );
+  private readonly getSendAllButton = this.locatorFor(
+    ZardButtonComponentHarness.with({
+      selector: '[data-testid="send-all-tickets"]',
+    }),
   );
   private readonly getRemoveButtons = this.locatorForAll(
     '[data-testid="remove-guest"]',
   );
   private readonly getGuestRows = this.locatorForAll(
     '[data-testid="guest-row"]',
+  );
+  private readonly getEditButtons = this.locatorForAll(
+    '[data-testid="edit-guest"]',
   );
 
   async clickAddGuestButton(): Promise<void> {
@@ -66,11 +76,39 @@ export class EventManagementGuestsTabHarness extends ComponentHarness {
     );
   }
 
+  async clickSendAllButton(): Promise<void> {
+    const button = await this.getSendAllButton();
+    await button.click();
+  }
+
+  async getSendAllButtonText(): Promise<string> {
+    const button = await this.getSendAllButton();
+    return button.getText();
+  }
+
+  async isSendAllButtonDisabled(): Promise<boolean> {
+    const button = await this.getSendAllButton();
+    return button.isDisabled();
+  }
+
+  async isSendAllButtonMuted(): Promise<boolean> {
+    const button = await this.getSendAllButton();
+    return button.hasClass('text-muted-foreground/60');
+  }
+
+  async getSendButtonTexts(): Promise<string[]> {
+    const buttons = await this.getSendButtonHarnesses();
+    return Promise.all(buttons.map((button) => button.getText()));
+  }
+
+  async getSendButtonAriaBusyStates(): Promise<(string | null)[]> {
+    const buttons = await this.getSendButtonHarnesses();
+    return Promise.all(buttons.map((button) => button.getAriaBusy()));
+  }
+
   async getSendButtonAriaLabels(): Promise<(string | null)[]> {
-    const buttons = await this.getSendButtons();
-    return Promise.all(
-      buttons.map((button) => button.getAttribute('aria-label')),
-    );
+    const buttons = await this.getSendButtonHarnesses();
+    return Promise.all(buttons.map((button) => button.getAriaLabel()));
   }
 
   async getRemoveButtonAriaLabels(): Promise<(string | null)[]> {
@@ -92,5 +130,21 @@ export class EventManagementGuestsTabHarness extends ComponentHarness {
 
   async hasGuestRowWithText(text: string): Promise<boolean> {
     return (await this.getGuestRowTexts()).some((t) => t.includes(text));
+  }
+
+  async getEditButtonAriaLabels(): Promise<(string | null)[]> {
+    const buttons = await this.getEditButtons();
+    return Promise.all(
+      buttons.map((button) => button.getAttribute('aria-label')),
+    );
+  }
+
+  async clickEditGuestButton(index: number): Promise<void> {
+    const buttons = await this.getEditButtons();
+    const button = buttons[index];
+    if (!button) {
+      throw new Error(`No edit-guest button found at index ${index}`);
+    }
+    await button.click();
   }
 }

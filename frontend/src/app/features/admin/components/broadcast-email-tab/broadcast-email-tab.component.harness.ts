@@ -49,6 +49,9 @@ export class BroadcastEmailTabComponentHarness extends ComponentHarness {
   private getHistoryErrorEl = this.locatorForOptional(
     '[data-testid="broadcast-history-error-state"]',
   );
+  private getCatchupNoteEl = this.locatorForOptional(
+    '[data-testid="broadcast-catchup-note"]',
+  );
 
   async setSubject(value: string): Promise<void> {
     const input = await this.getSubjectInput();
@@ -133,6 +136,11 @@ export class BroadcastEmailTabComponentHarness extends ComponentHarness {
 
   async hasHistoryError(): Promise<boolean> {
     return (await this.getHistoryErrorEl()) !== null;
+  }
+
+  async getCatchupNoteText(): Promise<string | null> {
+    const el = await this.getCatchupNoteEl();
+    return el ? el.text() : null;
   }
 
   async isHistoryCardPresent(): Promise<boolean> {

@@ -965,6 +965,15 @@ const schemaTables = {
     type: guestTypeValidator,
     notes: v.optional(v.string()),
     emailedAt: v.optional(v.number()),
+    /**
+     * In-flight lock for guest ticket-email sends. Holds the claim timestamp
+     * while a send action is running, `null` once released, absent if never
+     * claimed. Prevents concurrent admins/tabs from double-sending the same
+     * guest's ticket. A claim older than the staleness window is treated as
+     * abandoned (crashed action) and is reclaimable. See
+     * `events/_impl/guests.ts` `beginGuestTicketSend`.
+     */
+    emailSendLockedAt: v.optional(v.union(v.number(), v.null())),
     checkedInAt: v.optional(v.number()),
     checkedInBy: v.optional(v.id('users')),
   }).index('by_event', ['eventId']),
@@ -1079,6 +1088,31 @@ const schemaTables = {
   })
     .index('by_event', ['eventId'])
     .index('by_event_and_sentAt', ['eventId', 'sentAt']),
+
+  /**
+   * Durable per-recipient broadcast delivery ledger: one row per
+   * (broadcast, recipient email). Unlike `emailDedup` (24h TTL), rows
+   * persist so late ticket buyers can be caught up on missed broadcasts
+   * exactly once (see `events/_impl/broadcasts_handlers.ts`).
+   */
+  eventBroadcastDeliveries: defineTable({
+    broadcastId: v.id('eventBroadcasts'),
+    eventId: v.id('events'),
+    /** Normalized via normalizeEmailOrNull (trim + lowercase). */
+    email: v.string(),
+    sentAt: v.number(),
+    /** How this delivery came about. */
+    origin: v.union(
+      v.literal('send'),
+      v.literal('catchup'),
+      v.literal('backfill'),
+    ),
+  })
+    .index('by_broadcast_and_email', ['broadcastId', 'email'])
+    .index('by_event_and_email', ['eventId', 'email'])
+    // Email-only lookup for privacy export/erasure by recipient, mirroring
+    // the recipient indexes on sibling PII-email tables (e.g. emailDeliveries).
+    .index('by_email', ['email']),
 
   ticketReminderSends: defineTable({
     eventId: v.id('events'),

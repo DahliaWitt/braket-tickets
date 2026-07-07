@@ -40,9 +40,11 @@ describe('TicketsComponent', () => {
     triggerRefresh: vi.fn(),
   };
 
+  const authSettledSignal = signal(true);
   const authServiceMock = {
     user: signal({_id: 'U1', name: 'Test User'}),
     userRole: signal('user' as string | null),
+    authSettled: authSettledSignal,
     isScannerStaff: signal(false),
     isCommunityAdmin: signal(false),
     logout: vi.fn(),
@@ -106,6 +108,7 @@ describe('TicketsComponent', () => {
     ticketsValue.set([]);
     ticketsIsLoading.set(false);
     ticketsError.set(undefined);
+    authSettledSignal.set(true);
     availabilityByKey = {};
     resaleListingsByKey = {};
     vi.clearAllMocks();
@@ -165,6 +168,17 @@ describe('TicketsComponent', () => {
   it('should show empty state when no tickets are found', async () => {
     expect(await harness.getTicketCount()).toBe(0);
     expect(await harness.hasEmptyState()).toBe(true);
+  });
+
+  it('should show skeletons, not the empty state, during the optimistic activation window', async () => {
+    // Route admitted on a cached credential: the tickets query has not
+    // started (isLoading false, zero tickets) but auth has not settled.
+    // Flashing "No tickets found" here would mislead a signed-in buyer.
+    authSettledSignal.set(false);
+    fixture.detectChanges();
+
+    expect(await harness.hasEmptyState()).toBe(false);
+    expect(await harness.hasLoadingSkeletons()).toBe(true);
   });
 
   it('should render ticket list when tickets are available', async () => {

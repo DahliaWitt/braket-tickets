@@ -1684,10 +1684,13 @@ async function recoverStuckPayoutBatches(
         (payout) => payout.metadata?.['braketBatchId'] === batch.batchId,
       );
       if (match) {
-        await ctx.runMutation(internal.stripe.connect.markPayoutBatchSubmitted, {
-          batchId: batch.batchId,
-          stripePayoutId: match.id,
-        });
+        await ctx.runMutation(
+          internal.stripe.connect.markPayoutBatchSubmitted,
+          {
+            batchId: batch.batchId,
+            stripePayoutId: match.id,
+          },
+        );
         logger.info('stripe', 'Recovered stale pending batch via metadata', {
           batchId: batch.batchId,
           stripePayoutId: match.id,
@@ -1710,7 +1713,10 @@ async function recoverStuckPayoutBatches(
         logger.warn(
           'stripe',
           'Stale pending batch: payout list window truncated; deferring',
-          {batchId: batch.batchId, connectedAccountId: batch.connectedAccountId},
+          {
+            batchId: batch.batchId,
+            connectedAccountId: batch.connectedAccountId,
+          },
         );
       } else {
         await ctx.runMutation(internal.stripe.connect.failStalePendingBatch, {
@@ -1777,7 +1783,12 @@ export async function ingestExternalPayoutByIdImpl(
 export async function backfillPaymentCapturedNetImpl(
   ctx: ActionCtx,
   args: {connectedAccountId: string},
-): Promise<{scanned: number; enriched: number; skipped: number; failed: number}> {
+): Promise<{
+  scanned: number;
+  enriched: number;
+  skipped: number;
+  failed: number;
+}> {
   const stripe = getStripeClient();
 
   // Machine-checked run order: refuse to backfill while the account has

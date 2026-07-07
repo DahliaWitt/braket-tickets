@@ -115,10 +115,10 @@ export interface ExportDialogData {
           (click)="exportData()"
         >
           @if (isExporting()) {
-            <z-icon zType="loader-circle" class="mr-2 animate-spin" />
+            <z-icon zType="loader-circle" class="animate-spin" />
             Exporting...
           } @else {
-            <z-icon zType="download" class="mr-2" />
+            <z-icon zType="download" />
             Export {{ format().toUpperCase() }}
           }
         </button>

@@ -68,6 +68,8 @@ export const updateStatus = mutation({
   handler: updateMagicLinkStatusHandler,
 });
 
+// TODO: Rename listMyLinks/listPastMyLinks to community-scoped names.
+// These queries now return links for the selected community, not just the caller.
 export const listMyLinks = query({
   args: {
     organizerId: v.id('organizers'),
