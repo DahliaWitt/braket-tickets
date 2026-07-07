@@ -26,6 +26,7 @@ import {
   type EventManagementSummary,
   type EventTierPricingStats,
   type Guest,
+  type ImportedTicketHolder,
   type SettlementExportInput,
 } from '../../models/event-management.model';
 import {ZardAlertComponent} from '@ui/components/primitives/alert/alert.component';
@@ -226,6 +227,21 @@ export class EventManagement {
     },
   });
 
+  /**
+   * Imported external ticket-holders — backed by the roster-authorized reactive
+   * `api.events.imported_tickets.listByEvent`. Unlike the purchases surface
+   * (a non-reactive PII-audit-gated action), this query can serve both the live
+   * buyers-list merge and the import preview's dedup hints. Reloaded alongside
+   * the other surfaces after an import commits.
+   */
+  readonly importedTicketsResource = resource({
+    params: () => ({eventId: this.eventId()}),
+    loader: ({params}): Promise<ImportedTicketHolder[]> => {
+      if (!params.eventId) return Promise.resolve([]);
+      return this.adminEventsService.listImportedTickets(params.eventId);
+    },
+  });
+
   readonly tierPricingStatsResource = resource({
     params: () => {
       const summary = this.summary();
@@ -265,6 +281,7 @@ export class EventManagement {
         purchases: this.purchasesResource.error(),
         resale: this.resaleResource.error(),
         guests: this.guestsResource.error(),
+        importedTickets: this.importedTicketsResource.error(),
       };
       for (const [label, error] of Object.entries(surfaces)) {
         if (!error) continue;
@@ -322,6 +339,11 @@ export class EventManagement {
   /** Guests accessor */
   readonly guests = computed(
     () => safeResourceValue(this.guestsResource) ?? [],
+  );
+
+  /** Imported external ticket-holders accessor (reactive). */
+  readonly importedTickets = computed(
+    () => safeResourceValue(this.importedTicketsResource) ?? [],
   );
 
   /** Loading state for the primary dashboard (summary). */
@@ -454,6 +476,7 @@ export class EventManagement {
     this.purchasesResource.reload();
     this.resaleResource.reload();
     this.guestsResource.reload();
+    this.importedTicketsResource.reload();
     this.reloadToken.update((n) => n + 1);
   }
 

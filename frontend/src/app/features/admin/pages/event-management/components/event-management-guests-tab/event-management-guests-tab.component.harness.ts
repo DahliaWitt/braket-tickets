@@ -1,11 +1,24 @@
 import {ComponentHarness} from '@angular/cdk/testing';
 import {ZardButtonComponentHarness} from '@ui/components/primitives/button/button.component.harness';
+import {ImportSurfaceComponentHarness} from '@/features/admin/import';
 
 export class EventManagementGuestsTabHarness extends ComponentHarness {
   static hostSelector = 'app-event-management-guests-tab';
 
   private readonly getAddGuestButton = this.locatorFor(
     ZardButtonComponentHarness.with({text: /Add Guest/}),
+  );
+  private readonly getImportButton = this.locatorFor(
+    '[data-testid="import-guests-button"]',
+  );
+  private readonly getImportPanel = this.locatorForOptional(
+    '[data-testid="guest-import-panel"]',
+  );
+  private readonly getImportClose = this.locatorForOptional(
+    '[data-testid="guest-import-close"]',
+  );
+  private readonly getImportSurface = this.locatorForOptional(
+    ImportSurfaceComponentHarness,
   );
   private readonly getDownloadButtons = this.locatorForAll(
     'button[aria-label^="Download ticket for "]',
@@ -20,6 +33,24 @@ export class EventManagementGuestsTabHarness extends ComponentHarness {
   async clickAddGuestButton(): Promise<void> {
     const button = await this.getAddGuestButton();
     await button.click();
+  }
+
+  async clickImportButton(): Promise<void> {
+    await (await this.getImportButton()).click();
+  }
+
+  async isImportPanelOpen(): Promise<boolean> {
+    return (await this.getImportPanel()) !== null;
+  }
+
+  async clickImportClose(): Promise<void> {
+    const button = await this.getImportClose();
+    if (button) await button.click();
+  }
+
+  /** The lazily-rendered import surface harness (null until the panel opens). */
+  async getImportSurfaceHarness(): Promise<ImportSurfaceComponentHarness | null> {
+    return this.getImportSurface();
   }
 
   async getDownloadButtonAriaLabels(): Promise<(string | null)[]> {

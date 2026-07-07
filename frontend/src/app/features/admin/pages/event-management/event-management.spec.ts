@@ -72,6 +72,7 @@ function summaryOf(data: FullMockData): EventManagementSummary {
     remainingCount: data.remainingCount,
     isSoldOut: data.isSoldOut,
     totalTickets: data.totalTickets,
+    imported: {total: 0, checkedIn: 0, bySource: []},
     tierCounts: data.tierCounts,
     salesByDay: data.salesByDay,
     revenue: data.revenue,

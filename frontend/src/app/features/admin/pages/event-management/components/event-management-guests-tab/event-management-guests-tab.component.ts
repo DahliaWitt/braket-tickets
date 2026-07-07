@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   DestroyRef,
   inject,
   input,
@@ -24,6 +25,13 @@ import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton
 import {ZardTooltipDirective} from '@ui/components/primitives/tooltip/tooltip';
 import {logger} from '@/utils/logger';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
+import {
+  GUEST_IMPORT_CONFIG,
+  ImportSurfaceComponent,
+  type ImportConfirmPayload,
+  type ImportReport,
+} from '@/features/admin/import';
+import {buildImportErrorReport, buildImportReport} from '../import-report.util';
 
 function pdfDataUrlToBlob(dataUrl: string): Blob {
   const [metadata, base64] = dataUrl.split(',');
@@ -61,6 +69,7 @@ function isAddGuestDialogResult(value: unknown): value is AddGuestDialogResult {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     BraStatusBadgeComponent,
+    ImportSurfaceComponent,
     ZardButtonComponent,
     ZardCardComponent,
     ZardIconComponent,
@@ -82,6 +91,68 @@ export class EventManagementGuestsTabComponent {
 
   readonly isGeneratingGuestPdf = signal<string | null>(null);
   readonly isSendingTicket = signal<string | null>(null);
+
+  /** Config for the shared import surface (guest target). */
+  readonly guestImportConfig = GUEST_IMPORT_CONFIG;
+
+  /** Whether the bulk-import surface is open (lazily rendered via @defer). */
+  readonly isImporting = signal(false);
+
+  /** Server report fed back to the surface after the bulk mutation returns. */
+  readonly importReport = signal<ImportReport | null>(null);
+
+  /**
+   * Strong dedup keys (name+email, lowercased) for the current guest list,
+   * matching `GUEST_IMPORT_CONFIG.dedupKey`. Feeds the preview's duplicate
+   * hints from the live guest subscription. The server re-checks at commit.
+   */
+  readonly existingGuestKeys = computed<ReadonlySet<string>>(() => {
+    const keys = new Set<string>();
+    for (const guest of this.guests()) {
+      keys.add(
+        `${guest.name.toLowerCase()} ${(guest.email ?? '').toLowerCase()}`,
+      );
+    }
+    return keys;
+  });
+
+  openImportSurface(): void {
+    this.importReport.set(null);
+    this.isImporting.set(true);
+  }
+
+  closeImportSurface(): void {
+    this.isImporting.set(false);
+    this.importReport.set(null);
+  }
+
+  async onGuestImportConfirmed(payload: ImportConfirmPayload): Promise<void> {
+    try {
+      const result = await this.adminEventsService.bulkAddGuests(
+        this.eventId(),
+        payload.batchKey,
+        payload.rows.map((row) => ({
+          name: row.name,
+          email: row.email,
+          type: row.guestType,
+          notes: row.notes,
+        })),
+      );
+      this.importReport.set(buildImportReport(result));
+      if (result.insertedCount > 0) {
+        this.dataChanged.emit();
+      }
+    } catch (error) {
+      // Route through the central PII-scrubbing logger — never log row values.
+      logger.error('Failed to bulk add guests', error);
+      this.importReport.set(
+        buildImportErrorReport(
+          error,
+          "couldn't add those guests — try again in a bit",
+        ),
+      );
+    }
+  }
 
   guestActionLabel(guest: Guest): string {
     const name = guest.name || guest.email || 'guest';

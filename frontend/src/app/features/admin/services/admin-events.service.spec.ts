@@ -53,6 +53,7 @@ describe('AdminEventsService', () => {
     remainingCount: 50,
     isSoldOut: false,
     totalTickets: 100,
+    imported: {total: 0, checkedIn: 0, bySource: []},
     tierCounts: {regular: 40, notaflof: 5, supporter: 5},
     salesByDay: [{date: '2024-01-01', quantity: 10}],
     revenue: {

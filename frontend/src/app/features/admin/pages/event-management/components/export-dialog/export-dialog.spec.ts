@@ -109,6 +109,7 @@ describe('ExportDialogComponent', () => {
         eventDate: 'June 15, 2024',
       }),
       mockDialogData.guests,
+      mockDialogData.importedEntries,
     );
     expect(dialogRefMock.close).toHaveBeenCalledWith({exported: true});
   });
@@ -125,6 +126,7 @@ describe('ExportDialogComponent', () => {
         format: 'pdf',
       }),
       mockDialogData.guests,
+      mockDialogData.importedEntries,
     );
   });
 

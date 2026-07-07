@@ -1,7 +1,39 @@
 import {ComponentHarness} from '@angular/cdk/testing';
+import {ImportSurfaceComponentHarness} from '@/features/admin/import';
 
 export class EventManagementBuyersTabHarness extends ComponentHarness {
   static hostSelector = 'app-event-management-buyers-tab';
+
+  private readonly getImportButton = this.locatorFor(
+    '[data-testid="import-tickets-button"]',
+  );
+  private readonly getImportPanel = this.locatorForOptional(
+    '[data-testid="ticket-import-panel"]',
+  );
+  private readonly getImportClose = this.locatorForOptional(
+    '[data-testid="ticket-import-close"]',
+  );
+  private readonly getImportSurface = this.locatorForOptional(
+    ImportSurfaceComponentHarness,
+  );
+
+  async clickImportButton(): Promise<void> {
+    await (await this.getImportButton()).click();
+  }
+
+  async isImportPanelOpen(): Promise<boolean> {
+    return (await this.getImportPanel()) !== null;
+  }
+
+  async clickImportClose(): Promise<void> {
+    const button = await this.getImportClose();
+    if (button) await button.click();
+  }
+
+  /** The lazily-rendered import surface harness (null until the panel opens). */
+  async getImportSurfaceHarness(): Promise<ImportSurfaceComponentHarness | null> {
+    return this.getImportSurface();
+  }
 
   async clickPurchaseTicketsToggle(purchaseId: string): Promise<void> {
     const toggle = await this.locatorFor(
