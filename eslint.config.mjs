@@ -4,6 +4,7 @@ import globals from 'globals';
 import convexPlugin from '@convex-dev/eslint-plugin';
 import angular from 'angular-eslint';
 import noRawDbMutations from './eslint-rules/no-raw-db-mutations.js';
+import noSequentialDbQueries from './eslint-rules/no-sequential-db-queries.js';
 import noVAny from './eslint-rules/no-v-any.js';
 
 const FRONTEND_DIR = `${import.meta.dirname}/frontend`;
@@ -248,6 +249,9 @@ export default tseslint.config(
       '@convex-dev': convexPlugin,
       'braket-convex': noVAny,
       'no-raw-db-mutations': noRawDbMutations,
+      // Registered (not enabled) so eslint-disable directives for its rules
+      // resolve here too — enforcement lives in eslint.convex.config.mjs.
+      'no-sequential-db-queries': noSequentialDbQueries,
     },
     rules: {
       'max-lines': 'off',

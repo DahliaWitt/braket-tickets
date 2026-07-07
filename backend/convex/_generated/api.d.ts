@@ -5136,7 +5136,12 @@ export declare const internal: {
           sellerOrderId: Id<"ticket_orders">;
           sellerOrderStripePaymentIntentId?: string;
         },
-        { stripeRefundId: string }
+        {
+          connectedAccountNetCents?: number;
+          platformFeeCents?: number;
+          processorFeeCents?: number;
+          stripeRefundId: string;
+        }
       >;
     };
   };
@@ -5164,6 +5169,18 @@ export declare const internal: {
   };
   stripe: {
     actions: {
+      backfillPaymentCapturedNet: FunctionReference<
+        "action",
+        "internal",
+        { connectedAccountId: string },
+        { enriched: number; failed: number; scanned: number; skipped: number }
+      >;
+      ingestExternalPayoutById: FunctionReference<
+        "action",
+        "internal",
+        { connectedAccountId: string; stripePayoutId: string },
+        { amountCents: number; ingested: boolean; status: string }
+      >;
       processScheduledPayouts: FunctionReference<
         "action",
         "internal",
@@ -5247,7 +5264,13 @@ export declare const internal: {
       confirmPayout: FunctionReference<
         "mutation",
         "internal",
-        { stripePayoutId: string },
+        {
+          amountCents?: number;
+          connectedAccountId?: string;
+          currency?: string;
+          metadataBatchId?: string;
+          stripePayoutId: string;
+        },
         null
       >;
       createPayoutIntent: FunctionReference<
@@ -5263,6 +5286,7 @@ export declare const internal: {
         {
           amountCents: number;
           batchId: Id<"payout_batches">;
+          createdAt: number;
           currency: "usd";
           idempotencyKey: string;
           reused: boolean;
@@ -5273,7 +5297,18 @@ export declare const internal: {
       failPayout: FunctionReference<
         "mutation",
         "internal",
-        { failureReason?: string; stripePayoutId: string },
+        {
+          connectedAccountId?: string;
+          failureReason?: string;
+          metadataBatchId?: string;
+          stripePayoutId: string;
+        },
+        null
+      >;
+      failStalePendingBatch: FunctionReference<
+        "mutation",
+        "internal",
+        { batchId: Id<"payout_batches">; failureReason: string },
         null
       >;
       getOrderByStripePaymentIntentId: FunctionReference<
@@ -5347,20 +5382,56 @@ export declare const internal: {
             eventId: Id<"events">;
             kind: string;
           }>;
+          inflightSubmittedCents: number;
           organizerId: Id<"organizers"> | null;
         }
       >;
-      listConnectedAccountsWithEligibleEvents: FunctionReference<
+      listNetlessCapturedRows: FunctionReference<
         "query",
         "internal",
-        { eligibleBeforeMs: number; limit: number },
-        Array<string>
+        { stripeConnectedAccountId: string },
+        Array<{
+          eventId: Id<"events">;
+          orderId: Id<"ticket_orders">;
+          stripeChargeId: string | null;
+          stripePaymentIntentId: string | null;
+        }>
+      >;
+      listPayoutBatchesNeedingRecovery: FunctionReference<
+        "query",
+        "internal",
+        { now: number },
+        {
+          pending: Array<{
+            amountCents: number;
+            batchId: Id<"payout_batches">;
+            connectedAccountId: string;
+            createdAt: number;
+          }>;
+          submitted: Array<{
+            batchId: Id<"payout_batches">;
+            connectedAccountId: string;
+            stripePayoutId: string;
+          }>;
+        }
+      >;
+      listPayoutReadyConnectedAccounts: FunctionReference<
+        "query",
+        "internal",
+        { cursor: string | null; numItems: number },
+        { accounts: Array<string>; continueCursor: string; isDone: boolean }
       >;
       listPlatformOrganizerEligibleEventIds: FunctionReference<
         "query",
         "internal",
         { eligibleBeforeMs: number; limit: number },
         Array<Id<"events">>
+      >;
+      listUnrecordedStripePayoutIds: FunctionReference<
+        "query",
+        "internal",
+        { stripePayoutIds: Array<string> },
+        Array<string>
       >;
       markEventPaidOut: FunctionReference<
         "mutation",

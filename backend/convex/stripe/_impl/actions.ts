@@ -51,7 +51,12 @@ import {
   createPlatformCheckoutSession,
   hasCurrentCheckoutBranding,
 } from './checkout';
-import {buildPayoutPlan, computeEventSettlements} from './payouts';
+import {
+  buildPayoutPlan,
+  computeEventSettlements,
+  computeLedgerTrustGate,
+} from './payouts';
+import {PENDING_BATCH_RECOVERY_AGE_MS} from './connect';
 import {
   extractBalanceTransactionLedgerFields,
   isChargeBalanceTransactionUnavailableError,
@@ -1430,7 +1435,7 @@ async function processAccountPayout(
     return;
   }
 
-  const eligibleEventIds = new Set(
+  const eligibleEventIds = new Set<string>(
     bundle.events.filter((e) => e.eligible).map((e) => e._id),
   );
   if (eligibleEventIds.size === 0) {
@@ -1442,6 +1447,15 @@ async function processAccountPayout(
     bundle.events,
     bundle.confirmedAllocations,
   );
+
+  // Fully settled (or nothing eligible yet): skip before any Stripe call so
+  // idle accounts cost nothing in the daily scan.
+  const hasEligiblePayable = settlements.some(
+    (s) => eligibleEventIds.has(s.eventId) && s.payableCents > 0,
+  );
+  if (!hasEligiblePayable) {
+    return;
+  }
 
   const balance: Stripe.Response<Stripe.Balance> = await withRetry(
     () =>
@@ -1462,6 +1476,33 @@ async function processAccountPayout(
     balance.available.find(
       (b: Stripe.Balance.Available) => b.currency === 'usd',
     )?.amount ?? 0;
+  const pendingBalanceCents =
+    balance.pending.find((b: Stripe.Balance.Pending) => b.currency === 'usd')
+      ?.amount ?? 0;
+
+  // Fail-closed reconciliation: refuse to pay when the ledger's remaining
+  // claim disagrees with the money actually in Stripe. Catches net-less
+  // ledger rows, out-of-band dashboard actions, and dropped events before
+  // they can produce a silently-wrong payout. One-off trips are webhook
+  // timing races and self-heal by the next daily run.
+  const trustGate = computeLedgerTrustGate({
+    settlements,
+    inflightSubmittedCents: bundle.inflightSubmittedCents,
+    stripeAvailableCents: availableBalanceCents,
+    stripePendingCents: pendingBalanceCents,
+  });
+  if (!trustGate.ok) {
+    logger.error('stripe', 'payout trust gate mismatch; skipping account', {
+      connectedAccountId: args.connectedAccountId,
+      ledgerClaimCents: trustGate.ledgerClaimCents,
+      stripeTruthCents: trustGate.stripeTruthCents,
+      availableBalanceCents,
+      pendingBalanceCents,
+      inflightSubmittedCents: bundle.inflightSubmittedCents,
+      deltaCents: trustGate.deltaCents,
+    });
+    return;
+  }
 
   const plan = buildPayoutPlan({
     connectedAccountId: args.connectedAccountId,
@@ -1478,6 +1519,24 @@ async function processAccountPayout(
       availableBalanceCents: plan.availableBalanceCents,
     });
     return;
+  }
+
+  logger.info('stripe', 'Submitting payout plan', {
+    connectedAccountId: args.connectedAccountId,
+    payableCents: plan.payableCents,
+    eligibleNetCents: plan.eligibleNetCents,
+    reservedCents: plan.reservedCents,
+    availableBalanceCents,
+    pendingBalanceCents,
+    allocations: plan.allocations,
+  });
+  if (plan.payableCents < plan.eligibleNetCents) {
+    logger.warn('stripe', 'Partial payout: balance below eligible net', {
+      connectedAccountId: args.connectedAccountId,
+      payableCents: plan.payableCents,
+      eligibleNetCents: plan.eligibleNetCents,
+      shortfallCents: plan.eligibleNetCents - plan.payableCents,
+    });
   }
 
   const idempotencyKey = `braket-payout-${args.connectedAccountId}-${args.cronRunDate}`;
@@ -1498,11 +1557,29 @@ async function processAccountPayout(
   if (batch.status !== 'pending') {
     return;
   }
+  if (
+    batch.reused &&
+    Date.now() - batch.createdAt > PENDING_BATCH_RECOVERY_AGE_MS
+  ) {
+    // Stripe idempotency keys expire after 24h: replaying this key would
+    // create a NEW payout with the stale frozen amount. The recovery
+    // pre-pass supersedes such batches; never submit one here.
+    logger.warn('stripe', 'Skipping stale pending batch awaiting recovery', {
+      connectedAccountId: args.connectedAccountId,
+      batchId: batch.batchId,
+      batchAgeMs: Date.now() - batch.createdAt,
+    });
+    return;
+  }
 
   const payout: Stripe.Response<Stripe.Payout> = await withRetry(
     () =>
       args.stripe.payouts.create(
-        {amount: batch.amountCents, currency: batch.currency},
+        {
+          amount: batch.amountCents,
+          currency: batch.currency,
+          metadata: {braketBatchId: batch.batchId},
+        },
         {
           stripeAccount: args.connectedAccountId,
           idempotencyKey: batch.idempotencyKey,
@@ -1528,6 +1605,265 @@ async function processAccountPayout(
   });
 }
 
+/**
+ * Webhook-independent liveness for the payout pipeline. A lost `payout.paid`
+ * used to freeze an account's payouts forever (the `submitted` batch blocks
+ * `createPayoutIntent`); a `pending` batch older than Stripe's 24h
+ * idempotency-key window could replay as a NEW stale-amount payout. Both are
+ * reconciled against Stripe here, before any payout work.
+ */
+type StalePayoutBatches = FunctionReturnType<
+  typeof internal.stripe.connect.listPayoutBatchesNeedingRecovery
+>;
+
+async function recoverStuckPayoutBatches(
+  ctx: ActionCtx,
+  stripe: Stripe,
+  stale: StalePayoutBatches,
+): Promise<void> {
+  for (const batch of stale.submitted) {
+    try {
+      const payout: Stripe.Response<Stripe.Payout> =
+        await stripe.payouts.retrieve(
+          batch.stripePayoutId,
+          {},
+          {stripeAccount: batch.connectedAccountId},
+        );
+      if (payout.status === 'paid') {
+        await ctx.runMutation(internal.stripe.connect.confirmPayout, {
+          stripePayoutId: batch.stripePayoutId,
+        });
+        logger.info('stripe', 'Recovered stuck submitted batch as paid', {
+          batchId: batch.batchId,
+          stripePayoutId: batch.stripePayoutId,
+        });
+      } else if (payout.status === 'failed' || payout.status === 'canceled') {
+        await ctx.runMutation(internal.stripe.connect.failPayout, {
+          stripePayoutId: batch.stripePayoutId,
+          failureReason: `recovered_from_stripe:${payout.status}`,
+        });
+        logger.info('stripe', 'Recovered stuck submitted batch as failed', {
+          batchId: batch.batchId,
+          stripePayoutId: batch.stripePayoutId,
+        });
+      } else {
+        // pending / in_transit / anything Stripe adds later: real money may
+        // still move, leave the batch submitted and check again next run.
+        logger.info('stripe', 'Stuck submitted batch still in flight', {
+          batchId: batch.batchId,
+          stripePayoutId: batch.stripePayoutId,
+          payoutStatus: payout.status,
+        });
+      }
+    } catch (err: unknown) {
+      logger.error(
+        'stripe',
+        'Failed to recover stuck submitted batch',
+        summarizeStripeError(err),
+        {batchId: batch.batchId, stripePayoutId: batch.stripePayoutId},
+      );
+    }
+  }
+
+  for (const batch of stale.pending) {
+    try {
+      // The original payouts.create may have succeeded right before a crash.
+      // Look for our payout by the braketBatchId metadata before declaring
+      // the batch dead. Any such payout was created AFTER the batch row, so
+      // bounding the list by the batch's creation time (minus one hour of
+      // clock-skew slack) guarantees the match cannot fall off this page —
+      // an unbounded newest-first page could miss it on a busy account and
+      // wrongly supersede a batch whose payout went through.
+      const createdAfterSeconds = Math.floor(batch.createdAt / 1000) - 3600;
+      const payouts: Stripe.Response<Stripe.ApiList<Stripe.Payout>> =
+        await stripe.payouts.list(
+          {limit: 100, created: {gte: createdAfterSeconds}},
+          {stripeAccount: batch.connectedAccountId},
+        );
+      const match = payouts.data.find(
+        (payout) => payout.metadata?.['braketBatchId'] === batch.batchId,
+      );
+      if (match) {
+        await ctx.runMutation(internal.stripe.connect.markPayoutBatchSubmitted, {
+          batchId: batch.batchId,
+          stripePayoutId: match.id,
+        });
+        logger.info('stripe', 'Recovered stale pending batch via metadata', {
+          batchId: batch.batchId,
+          stripePayoutId: match.id,
+          payoutStatus: match.status,
+        });
+        if (match.status === 'paid') {
+          await ctx.runMutation(internal.stripe.connect.confirmPayout, {
+            stripePayoutId: match.id,
+          });
+        } else if (match.status === 'failed' || match.status === 'canceled') {
+          await ctx.runMutation(internal.stripe.connect.failPayout, {
+            stripePayoutId: match.id,
+            failureReason: `recovered_from_stripe:${match.status}`,
+          });
+        }
+      } else if (payouts.has_more) {
+        // Window truncated — cannot prove the payout doesn't exist. Leave
+        // the batch for the next run rather than risk superseding a batch
+        // whose payout actually went through.
+        logger.warn(
+          'stripe',
+          'Stale pending batch: payout list window truncated; deferring',
+          {batchId: batch.batchId, connectedAccountId: batch.connectedAccountId},
+        );
+      } else {
+        await ctx.runMutation(internal.stripe.connect.failStalePendingBatch, {
+          batchId: batch.batchId,
+          failureReason: 'stale_pending_superseded',
+        });
+      }
+    } catch (err: unknown) {
+      logger.error(
+        'stripe',
+        'Failed to recover stale pending batch',
+        summarizeStripeError(err),
+        {batchId: batch.batchId},
+      );
+    }
+  }
+}
+
+/**
+ * Operator repair: register a payout that was made outside the pipeline
+ * (Stripe dashboard) whose `payout.paid` webhook was ignored before
+ * external ingestion existed. Idempotent — the ingestion path dedups on
+ * `external-<payoutId>`.
+ *
+ * Run BEFORE `backfillPaymentCapturedNet` for the same account: recording
+ * the manual payout first keeps the backfilled payable from being
+ * misattributed to newer events' funds.
+ */
+export async function ingestExternalPayoutByIdImpl(
+  ctx: ActionCtx,
+  args: {stripePayoutId: string; connectedAccountId: string},
+): Promise<{status: string; amountCents: number; ingested: boolean}> {
+  const stripe = getStripeClient();
+  const payout: Stripe.Response<Stripe.Payout> = await stripe.payouts.retrieve(
+    args.stripePayoutId,
+    {},
+    {stripeAccount: args.connectedAccountId},
+  );
+  if (payout.status !== 'paid') {
+    logger.warn('stripe', 'ingestExternalPayoutById: payout is not paid', {
+      stripePayoutId: args.stripePayoutId,
+      payoutStatus: payout.status,
+    });
+    return {status: payout.status, amountCents: payout.amount, ingested: false};
+  }
+
+  const metadataBatchId = payout.metadata?.['braketBatchId'];
+  await ctx.runMutation(internal.stripe.connect.confirmPayout, {
+    stripePayoutId: payout.id,
+    amountCents: payout.amount,
+    currency: payout.currency,
+    connectedAccountId: args.connectedAccountId,
+    ...(metadataBatchId !== undefined ? {metadataBatchId} : {}),
+  });
+  return {status: payout.status, amountCents: payout.amount, ingested: true};
+}
+
+/**
+ * Operator repair: enrich `payment_captured` rows that are missing
+ * `connectedAccountNetCents` (pre-e3c02b1 capture race) by re-reading each
+ * charge's BalanceTransaction. `recordPaymentCaptured` patches the existing
+ * row in place, so this is idempotent and safe to re-run.
+ */
+export async function backfillPaymentCapturedNetImpl(
+  ctx: ActionCtx,
+  args: {connectedAccountId: string},
+): Promise<{scanned: number; enriched: number; skipped: number; failed: number}> {
+  const stripe = getStripeClient();
+
+  // Machine-checked run order: refuse to backfill while the account has
+  // paid payouts the ledger never recorded (manual payouts that predate
+  // external ingestion). Backfilling first would re-open their payable and
+  // let the cron misattribute it. Run ingestExternalPayoutById for the
+  // listed ids, then re-run this tool.
+  const recentPayouts: Stripe.Response<Stripe.ApiList<Stripe.Payout>> =
+    await stripe.payouts.list(
+      {limit: 100},
+      {stripeAccount: args.connectedAccountId},
+    );
+  const externalPaidIds = recentPayouts.data
+    .filter(
+      (payout) =>
+        payout.status === 'paid' &&
+        payout.metadata?.['braketBatchId'] === undefined,
+    )
+    .map((payout) => payout.id);
+  const unrecorded =
+    externalPaidIds.length > 0
+      ? await ctx.runQuery(
+          internal.stripe.connect.listUnrecordedStripePayoutIds,
+          {stripePayoutIds: externalPaidIds},
+        )
+      : [];
+  if (unrecorded.length > 0) {
+    logger.error(
+      'stripe',
+      'backfillPaymentCapturedNet refused: unrecorded external payouts exist; run ingestExternalPayoutById first',
+      {
+        connectedAccountId: args.connectedAccountId,
+        unrecordedStripePayoutIds: unrecorded,
+      },
+    );
+    throwAppError(
+      'EXTERNAL_PAYOUT_UNRECORDED',
+      `Account ${args.connectedAccountId} has ${unrecorded.length} paid payout(s) the ledger never recorded (${unrecorded.join(', ')}). Run stripe/actions.ingestExternalPayoutById for each, then re-run this backfill.`,
+    );
+  }
+
+  const rows = await ctx.runQuery(
+    internal.stripe.connect.listNetlessCapturedRows,
+    {stripeConnectedAccountId: args.connectedAccountId},
+  );
+
+  let enriched = 0;
+  let skipped = 0;
+  let failed = 0;
+  for (const row of rows) {
+    if (!row.stripeChargeId || !row.stripePaymentIntentId) {
+      logger.warn(
+        'stripe',
+        'backfillPaymentCapturedNet: row has no charge/PI to enrich from',
+        {orderId: row.orderId, eventId: row.eventId},
+      );
+      skipped += 1;
+      continue;
+    }
+    try {
+      await recordPaymentCaptured({
+        ctx,
+        stripe,
+        orderId: row.orderId,
+        eventId: row.eventId,
+        stripePaymentIntentId: row.stripePaymentIntentId,
+        stripeChargeId: row.stripeChargeId,
+        connectedAccountId: args.connectedAccountId,
+      });
+      enriched += 1;
+    } catch (err: unknown) {
+      logger.error(
+        'stripe',
+        'backfillPaymentCapturedNet: enrichment failed',
+        summarizeStripeError(err),
+        {orderId: row.orderId},
+      );
+      failed += 1;
+    }
+  }
+
+  const summary = {scanned: rows.length, enriched, skipped, failed};
+  logger.info('stripe', 'backfillPaymentCapturedNet complete', summary);
+  return summary;
+}
+
 export async function processScheduledPayoutsImpl(
   ctx: ActionCtx,
 ): Promise<null> {
@@ -1546,34 +1882,68 @@ export async function processScheduledPayoutsImpl(
     });
   }
 
-  const connectedAccountIds = await ctx.runQuery(
-    internal.stripe.connect.listConnectedAccountsWithEligibleEvents,
-    {eligibleBeforeMs, limit: PAYOUT_BATCH_SIZE},
+  // Lazy client so platform-only deployments (no payout-ready Connect
+  // accounts, no wedged batches) never require STRIPE_SECRET_KEY here.
+  let stripe: Stripe | null = null;
+  const ensureStripe = (): Stripe => (stripe ??= getStripeClient());
+
+  const stale = await ctx.runQuery(
+    internal.stripe.connect.listPayoutBatchesNeedingRecovery,
+    {now: Date.now()},
   );
-  if (connectedAccountIds.length === 0) {
-    logger.info('stripe', 'No Connect accounts eligible for payout');
-    return null;
+  if (stale.submitted.length > 0 || stale.pending.length > 0) {
+    // Reconcile wedged batches against Stripe BEFORE payout work: a stuck
+    // batch otherwise blocks its account's payouts indefinitely, and a stale
+    // pending batch must be superseded before an account run could replay it.
+    await recoverStuckPayoutBatches(ctx, ensureStripe(), stale);
   }
 
-  const stripe = getStripeClient();
   const cronRunDate = new Date().toISOString().slice(0, 10);
 
-  for (const connectedAccountId of connectedAccountIds) {
-    try {
-      await processAccountPayout(ctx, {
-        stripe,
-        connectedAccountId,
-        eligibleBeforeMs,
-        cronRunDate,
-      });
-    } catch (err: unknown) {
-      logger.error(
-        'stripe',
-        'processAccountPayout failed',
-        summarizeStripeError(err),
-        {connectedAccountId},
-      );
+  // Page through EVERY payout-ready organizer — no result cap. A capped
+  // discovery starves accounts past the cap on every run (stable table
+  // order), silently leaving their ledger balances unpaid. Per-account work
+  // is cheap: fully-settled accounts exit before any Stripe call.
+  const seenAccounts = new Set<string>();
+  let cursor: string | null = null;
+  let isDone = false;
+  type PayoutReadyAccountsPage = {
+    accounts: string[];
+    continueCursor: string;
+    isDone: boolean;
+  };
+  while (!isDone) {
+    // eslint-disable-next-line no-sequential-db-queries/sequential-db-get -- Cursor pagination is inherently sequential: each page's cursor comes from the previous result. Not an N+1 per-id fetch.
+    const page: PayoutReadyAccountsPage = await ctx.runQuery(
+      internal.stripe.connect.listPayoutReadyConnectedAccounts,
+      {cursor, numItems: 100},
+    );
+    cursor = page.continueCursor;
+    isDone = page.isDone;
+
+    for (const connectedAccountId of page.accounts) {
+      if (seenAccounts.has(connectedAccountId)) continue;
+      seenAccounts.add(connectedAccountId);
+      try {
+        await processAccountPayout(ctx, {
+          stripe: ensureStripe(),
+          connectedAccountId,
+          eligibleBeforeMs,
+          cronRunDate,
+        });
+      } catch (err: unknown) {
+        logger.error(
+          'stripe',
+          'processAccountPayout failed',
+          summarizeStripeError(err),
+          {connectedAccountId},
+        );
+      }
     }
+  }
+
+  if (seenAccounts.size === 0) {
+    logger.info('stripe', 'No payout-ready Connect accounts');
   }
 
   return null;
