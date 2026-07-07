@@ -1,7 +1,9 @@
 import type {Doc, Id} from '../../_generated/dataModel';
 import type {MutationCtx, QueryCtx} from '../../_generated/server';
+import {scheduleBroadcastCatchup} from '../../lib/broadcast_catchup';
 import {throwNotFound} from '../../lib/errors';
 import {
+  validateEmail,
   validateRequiredString,
   validateStringLength,
   MAX_GUEST_NAME_LENGTH,
@@ -30,8 +32,19 @@ export async function add(
   validateStringLength(args.email, 'Email', MAX_GUEST_EMAIL_LENGTH);
   validateStringLength(args.notes, 'Notes', MAX_GUEST_NOTES_LENGTH);
 
+  // The admin UI trims and requires a plausible address before submitting;
+  // enforce the same here so direct API calls cannot enqueue broadcast
+  // sends (immediate or catch-up) to non-address strings.
+  const trimmedEmail = args.email?.trim();
+  if (trimmedEmail) {
+    validateEmail(trimmedEmail, 'Email');
+  }
+
+  // Persist the trimmed, validated email so the stored record matches the
+  // value used by scheduling and the broadcast audience lookups downstream.
   const guestId = await ctx.db.insert('guests', {
     ...args,
+    email: trimmedEmail || undefined,
   });
 
   await insertAdminAuditLog(
@@ -45,6 +58,13 @@ export async function add(
       source: 'admin-ui',
     },
   );
+
+  // A late-added guest joins the broadcast audience after any prior sends;
+  // catch them up on anything already sent.
+  await scheduleBroadcastCatchup(ctx, {
+    eventId: args.eventId,
+    email: trimmedEmail,
+  });
 
   return guestId;
 }
