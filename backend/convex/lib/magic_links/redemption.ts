@@ -8,7 +8,6 @@ import {ensureApprovedMarketingPreference} from '../marketing_emails/preferences
 import {evaluateMagicLinkState} from './validation';
 import {refreshOrganizerDirectoryForMembershipChange} from '../users/organizer_directory';
 import {throwAppError} from '../errors';
-import {canManageCommunity} from '../access';
 import {digestBearerToken, tokenPrefix} from '../token_digests';
 
 type RedemptionCtx = MutationCtx;
@@ -95,16 +94,6 @@ export async function redeemMagicLink(
     });
   }
   const organizerId = linkDoc.organizerId;
-  if (!(await canManageCommunity(ctx, linkDoc.createdBy, organizerId))) {
-    logRedemptionFailure(token, 'disabled');
-    throwAppError(
-      'MAGIC_LINK_DISABLED',
-      getRedemptionErrorMessage('disabled'),
-      {
-        reason: 'disabled',
-      },
-    );
-  }
 
   const existing = await getExistingRedemption(ctx, linkDoc._id, userId);
   if (existing) {

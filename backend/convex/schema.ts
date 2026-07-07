@@ -965,6 +965,15 @@ const schemaTables = {
     type: guestTypeValidator,
     notes: v.optional(v.string()),
     emailedAt: v.optional(v.number()),
+    /**
+     * In-flight lock for guest ticket-email sends. Holds the claim timestamp
+     * while a send action is running, `null` once released, absent if never
+     * claimed. Prevents concurrent admins/tabs from double-sending the same
+     * guest's ticket. A claim older than the staleness window is treated as
+     * abandoned (crashed action) and is reclaimable. See
+     * `events/_impl/guests.ts` `beginGuestTicketSend`.
+     */
+    emailSendLockedAt: v.optional(v.union(v.number(), v.null())),
     checkedInAt: v.optional(v.number()),
     checkedInBy: v.optional(v.id('users')),
   }).index('by_event', ['eventId']),

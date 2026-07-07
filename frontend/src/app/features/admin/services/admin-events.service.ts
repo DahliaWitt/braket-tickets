@@ -350,15 +350,27 @@ export class AdminEventsService {
    * Triggers an email with the guest's ticket and QR code to the guest's
    * registered email address. Requires the guest to have an email on file.
    *
+   * The backend atomically claims each send, so concurrent admins/tabs cannot
+   * double-send the same guest. `skipIfAlreadyEmailed` is used by the batch
+   * "send all" path so a stale client cannot re-email guests another admin
+   * already handled; a single resend omits it. The returned status reflects
+   * whether the send actually happened (`sent`) or was skipped because it was
+   * already sent / in flight (`skipped`).
+   *
    * @param guestId - The ID of the guest to send the ticket to.
+   * @param options.skipIfAlreadyEmailed - Skip guests already emailed.
    *
    * @remarks
    * Side effects:
-   * - Sends an email to the guest's email address
+   * - Sends an email to the guest's email address (unless skipped)
    */
-  async sendGuestTicket(guestId: string): Promise<void> {
-    await this.convex.action(api.events.guest_actions.sendTicket, {
+  sendGuestTicket(
+    guestId: string,
+    options?: {skipIfAlreadyEmailed?: boolean},
+  ): Promise<FunctionReturnType<typeof api.events.guest_actions.sendTicket>> {
+    return this.convex.action(api.events.guest_actions.sendTicket, {
       guestId: guestId as Id<'guests'>,
+      ...(options?.skipIfAlreadyEmailed ? {skipIfAlreadyEmailed: true} : {}),
     });
   }
 
