@@ -606,6 +606,52 @@ describe('DashboardComponent', () => {
       expect(await harness.posterBackdropsAreDecorative()).toBe(true);
     });
 
+    it('should size the poster frame from the measured image ratio', async () => {
+      const posterEvent: UpcomingEvent = {
+        ...mockEvent,
+        posterUrl: 'https://example.com/poster.jpg',
+      } as never;
+      setup({
+        approvals: mockApprovals,
+        events: [posterEvent],
+        eventAvailability: purchaseAccessFor([posterEvent]),
+      });
+      await createComponent();
+      const component = fixture.componentInstance;
+
+      expect(await harness.getPosterFrameCount()).toBe(1);
+      // 4:5 flyer default until the image reports its natural size
+      expect(component.posterAspectRatio(posterEvent._id)).toBeCloseTo(4 / 5);
+
+      const loadEvent = {
+        target: {naturalWidth: 1600, naturalHeight: 900},
+      } as unknown as Event;
+      component.onPosterLoad(posterEvent._id, loadEvent);
+      expect(component.posterAspectRatio(posterEvent._id)).toBeCloseTo(
+        1600 / 900,
+      );
+    });
+
+    it('should keep the default ratio when the image reports no size', async () => {
+      const posterEvent: UpcomingEvent = {
+        ...mockEvent,
+        posterUrl: 'https://example.com/poster.jpg',
+      } as never;
+      setup({
+        approvals: mockApprovals,
+        events: [posterEvent],
+        eventAvailability: purchaseAccessFor([posterEvent]),
+      });
+      await createComponent();
+      const component = fixture.componentInstance;
+
+      const loadEvent = {
+        target: {naturalWidth: 0, naturalHeight: 0},
+      } as unknown as Event;
+      component.onPosterLoad(posterEvent._id, loadEvent);
+      expect(component.posterAspectRatio(posterEvent._id)).toBeCloseTo(4 / 5);
+    });
+
     it('should render no poster layers when the event has no poster', async () => {
       setup({
         approvals: mockApprovals,

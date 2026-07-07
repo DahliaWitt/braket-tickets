@@ -32,6 +32,14 @@ export class DashboardComponentHarness extends ComponentHarness {
     return !!el;
   }
 
+  /** Get the number of aspect-ratio poster frames in the events section. */
+  async getPosterFrameCount(): Promise<number> {
+    const els = await this.locatorForAll(
+      '[data-testid="dashboard-poster-frame"]',
+    )();
+    return els.length;
+  }
+
   /** Get the number of event poster images in the events section. */
   async getPosterCount(): Promise<number> {
     const els = await this.locatorForAll('[data-testid="dashboard-poster"]')();

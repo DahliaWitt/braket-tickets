@@ -511,11 +511,16 @@
                 class="relative grid grid-cols-1 border-b border-border transition-colors last:border-b-0 hover:bg-foreground/[0.02] md:grid-cols-[auto_1fr]"
               >
                 @if (event.posterUrl) {
+                  <!-- Flyer-wall frame: sized by the poster's own aspect ratio
+                       (measured on load; 4:5 flyer default until then), so the
+                       full poster shows with no crop and no letterbox. Desktop
+                       clamps extreme landscape ratios at max-w-sm — only then
+                       does the ambient-glow backdrop become visible. -->
                   <div
-                    class="relative h-64 w-full overflow-hidden bg-card md:h-56 md:w-48 lg:w-56"
+                    data-testid="dashboard-poster-frame"
+                    class="relative w-full overflow-hidden bg-card md:h-56 md:w-auto md:max-w-sm"
+                    [style.aspect-ratio]="posterAspectRatio(event._id)"
                   >
-                    <!-- Ambient fill: the poster's own light spills past its edges,
-                         so off-ratio posters never letterbox against flat black -->
                     <img
                       [ngSrc]="event.posterUrl"
                       alt=""
@@ -536,6 +541,7 @@
                       ngSrcset="320w, 640w, 1024w"
                       sizes="(min-width: 1024px) 224px, (min-width: 768px) 192px, 100vw"
                       class="object-contain"
+                      (load)="onPosterLoad(event._id, $event)"
                     />
                   </div>
                 }
