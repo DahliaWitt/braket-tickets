@@ -311,6 +311,29 @@ export class AdminEventsService {
   }
 
   /**
+   * Updates an existing guest's name, email, type, and notes.
+   *
+   * `eventId` is not editable, and check-in/email metadata is preserved
+   * server-side regardless of what is submitted here.
+   *
+   * @param guestId - The ID of the guest record to update.
+   * @param guest - Updated guest details including name, optional email, type, and notes.
+   * @param guest.name - Full name of the guest.
+   * @param guest.email - Optional email for sending guest ticket.
+   * @param guest.type - Guest type (e.g., 'guest', 'artist guest', 'staff').
+   * @param guest.notes - Optional internal notes about the guest.
+   */
+  updateGuest(
+    guestId: string,
+    guest: {name: string; email?: string; type: GuestType; notes?: string},
+  ): Promise<FunctionReturnType<typeof api.events.guests.update>> {
+    return this.convex.mutation(api.events.guests.update, {
+      id: guestId as Id<'guests'>,
+      ...guest,
+    });
+  }
+
+  /**
    * Removes a guest from an event's guest list.
    *
    * @param guestId - The ID of the guest record to remove.
