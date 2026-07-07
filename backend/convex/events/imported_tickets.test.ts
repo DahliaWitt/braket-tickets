@@ -145,6 +145,123 @@ describe('importedTickets.importBatch', () => {
     expect(includeResult.skippedCount).toBe(0);
   });
 
+  it('case-variant barcodes dedup in skip mode (within batch and across imports)', async () => {
+    const t = convexTest();
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    // Within one batch: ABC123 and abc123 are the same barcode.
+    const first = await asAdmin.mutation(
+      api.events.imported_tickets.importBatch,
+      {
+        eventId,
+        batchKey: 'case-batch-1',
+        dedupMode: 'skip',
+        rows: [
+          {name: 'Upper', externalRef: 'ABC123'},
+          {name: 'Lower', externalRef: 'abc123'},
+        ],
+      },
+    );
+    expect(first.insertedCount).toBe(1);
+    expect(first.skippedCount).toBe(1);
+
+    // Across imports: a differently-cased variant of an already-imported
+    // barcode is skipped, not inserted as a duplicate admission record.
+    const second = await asAdmin.mutation(
+      api.events.imported_tickets.importBatch,
+      {
+        eventId,
+        batchKey: 'case-batch-2',
+        dedupMode: 'skip',
+        rows: [{name: 'Mixed', externalRef: 'AbC123'}],
+      },
+    );
+    expect(second.insertedCount).toBe(0);
+    expect(second.skippedCount).toBe(1);
+
+    const total = await t.run(async (ctx) => {
+      return ctx.db
+        .query('importedTicketHolders')
+        .withIndex('by_event', (q) => q.eq('eventId', eventId))
+        .collect();
+    });
+    expect(total).toHaveLength(1);
+  });
+
+  it('the scanner matches an imported barcode case-insensitively', async () => {
+    const t = convexTest();
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    await asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId,
+      batchKey: 'scan-case',
+      dedupMode: 'skip',
+      rows: [{name: 'Holder', externalRef: 'XyZ-789'}],
+    });
+
+    // Scanned payload arrives in a different case than the stored barcode.
+    const result = await asAdmin.mutation(api.events.check_in.checkIn, {
+      eventId,
+      ticketId: 'xyz-789',
+    });
+    expect(result.imported).toBeDefined();
+    expect(result.imported?.name).toBe('Holder');
+  });
+
+  it('a guest and imported batch may share a batch key without colliding', async () => {
+    const t = convexTest();
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    const sharedKey = 'shared-batch-key';
+
+    const guestResult = await asAdmin.mutation(api.events.guests.addMany, {
+      eventId,
+      batchKey: sharedKey,
+      rows: [{name: 'Guest One'}, {name: 'Guest Two'}],
+    });
+    expect(guestResult.insertedCount).toBe(2);
+
+    // Same event + same batch key on the imported-tickets target must NOT
+    // replay the guest batch's result; it commits its own rows.
+    const importedResult = await asAdmin.mutation(
+      api.events.imported_tickets.importBatch,
+      {
+        eventId,
+        batchKey: sharedKey,
+        dedupMode: 'skip',
+        rows: [{name: 'External One', externalRef: 'EXT-1'}],
+      },
+    );
+    expect(importedResult.insertedCount).toBe(1);
+
+    // Removing the imported batch must not touch the guest batch record, and a
+    // guest replay must still return the guest result.
+    await asAdmin.mutation(api.events.imported_tickets.removeBatch, {
+      eventId,
+      batchKey: sharedKey,
+    });
+    const guestReplay = await asAdmin.mutation(api.events.guests.addMany, {
+      eventId,
+      batchKey: sharedKey,
+      rows: [{name: 'Guest One'}, {name: 'Guest Two'}],
+    });
+    expect(guestReplay.insertedCount).toBe(2);
+
+    const guests = await t.run(async (ctx) => {
+      return ctx.db
+        .query('guests')
+        .withIndex('by_event', (q) => q.eq('eventId', eventId))
+        .collect();
+    });
+    expect(guests).toHaveLength(2);
+  });
+
   it('three rows sharing an order number import as three; re-import skips on barcode', async () => {
     const t = convexTest();
     const adminId = await setupAdmin(t);
@@ -525,8 +642,8 @@ describe('importedTickets removal', () => {
     const checkedId = await t.run(async (ctx) => {
       const e = await ctx.db
         .query('importedTicketHolders')
-        .withIndex('by_event_external_ref', (q) =>
-          q.eq('eventId', eventId).eq('externalRef', 'RB-1'),
+        .withIndex('by_event_external_ref_key', (q) =>
+          q.eq('eventId', eventId).eq('externalRefKey', 'rb-1'),
         )
         .first();
       return e!._id;
@@ -629,7 +746,7 @@ describe('event deletion cascade', () => {
         .collect();
       const batches = await ctx.db
         .query('importBatches')
-        .withIndex('by_event_batch_key', (q) => q.eq('eventId', eventId))
+        .withIndex('by_event_batch_key_target', (q) => q.eq('eventId', eventId))
         .collect();
       return {entries, batches};
     });

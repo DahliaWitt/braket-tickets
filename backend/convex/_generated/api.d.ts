@@ -1113,6 +1113,7 @@ export declare const api: {
               email?: string;
               eventId: Id<"events">;
               externalRef?: string;
+              externalRefKey?: string;
               name: string;
               orderRef?: string;
               purchaseDateRaw?: string;
@@ -1163,6 +1164,7 @@ export declare const api: {
           email?: string;
           eventId: Id<"events">;
           externalRef?: string;
+          externalRefKey?: string;
           name: string;
           orderRef?: string;
           purchaseDateRaw?: string;

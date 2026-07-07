@@ -113,6 +113,7 @@ export async function addMany(
     ctx,
     args.eventId,
     args.batchKey,
+    'guests',
   );
   if (existingBatch) {
     return existingBatch.result;

@@ -730,7 +730,12 @@ export type DataModel = {
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
-      by_event_batch_key: ["eventId", "batchKey", "_creationTime"];
+      by_event_batch_key_target: [
+        "eventId",
+        "batchKey",
+        "target",
+        "_creationTime",
+      ];
     };
     searchIndexes: {};
     vectorIndexes: {};
@@ -743,6 +748,7 @@ export type DataModel = {
       email?: string;
       eventId: Id<"events">;
       externalRef?: string;
+      externalRefKey?: string;
       name: string;
       orderRef?: string;
       purchaseDateRaw?: string;
@@ -760,6 +766,7 @@ export type DataModel = {
       | "email"
       | "eventId"
       | "externalRef"
+      | "externalRefKey"
       | "name"
       | "orderRef"
       | "purchaseDateRaw"
@@ -770,7 +777,7 @@ export type DataModel = {
       by_creation_time: ["_creationTime"];
       by_event: ["eventId", "_creationTime"];
       by_event_batch_key: ["eventId", "batchKey", "_creationTime"];
-      by_event_external_ref: ["eventId", "externalRef", "_creationTime"];
+      by_event_external_ref_key: ["eventId", "externalRefKey", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};

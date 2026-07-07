@@ -168,7 +168,7 @@ async function deleteImportedEntriesForEvent(
 
   const batches = await db
     .query('importBatches')
-    .withIndex('by_event_batch_key', (q) => q.eq('eventId', eventId))
+    .withIndex('by_event_batch_key_target', (q) => q.eq('eventId', eventId))
     .take(EVENT_CLEANUP_BATCH_SIZE);
   for (const batch of batches) {
     await db.delete('importBatches', batch._id);

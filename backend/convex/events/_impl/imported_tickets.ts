@@ -27,6 +27,7 @@ import {
   assertEventImportCapNotExceeded,
   findExistingImportBatch,
   insertImportBatch,
+  normalizeExternalRefKey,
 } from '../../lib/imports/bulk';
 import type {
   ImportBatchResult,
@@ -179,6 +180,7 @@ export async function importBatch(
     ctx,
     args.eventId,
     args.batchKey,
+    'importedTickets',
   );
   if (existingBatch) {
     return existingBatch.result;
@@ -217,8 +219,13 @@ export async function importBatch(
     }
 
     const barcode = entry.row.externalRef;
-    if (args.dedupMode === 'skip' && barcode !== undefined) {
-      if (seenBarcodesInBatch.has(barcode)) {
+    // Dedup on the normalized (case-insensitive) barcode key so `ABC123` and
+    // `abc123` never produce two admission records — matching the UI's strong
+    // duplicate key and the scanner's lookup.
+    const barcodeKey =
+      barcode !== undefined ? normalizeExternalRefKey(barcode) : undefined;
+    if (args.dedupMode === 'skip' && barcodeKey !== undefined) {
+      if (seenBarcodesInBatch.has(barcodeKey)) {
         outcomes.push({
           rowIndex: entry.rowIndex,
           status: 'skipped',
@@ -228,8 +235,8 @@ export async function importBatch(
       }
       const existing = await ctx.db
         .query('importedTicketHolders')
-        .withIndex('by_event_external_ref', (q) =>
-          q.eq('eventId', args.eventId).eq('externalRef', barcode),
+        .withIndex('by_event_external_ref_key', (q) =>
+          q.eq('eventId', args.eventId).eq('externalRefKey', barcodeKey),
         )
         .first();
       if (existing) {
@@ -242,8 +249,8 @@ export async function importBatch(
       }
     }
 
-    if (barcode !== undefined) {
-      seenBarcodesInBatch.add(barcode);
+    if (barcodeKey !== undefined) {
+      seenBarcodesInBatch.add(barcodeKey);
     }
     toInsert.push({rowIndex: entry.rowIndex, row: entry.row});
   }
@@ -257,7 +264,12 @@ export async function importBatch(
       eventId: args.eventId,
       name: row.name,
       ...(row.email !== undefined ? {email: row.email} : {}),
-      ...(row.externalRef !== undefined ? {externalRef: row.externalRef} : {}),
+      ...(row.externalRef !== undefined
+        ? {
+            externalRef: row.externalRef,
+            externalRefKey: normalizeExternalRefKey(row.externalRef),
+          }
+        : {}),
       ...(row.orderRef !== undefined ? {orderRef: row.orderRef} : {}),
       ...(row.ticketTypeLabel !== undefined
         ? {ticketTypeLabel: row.ticketTypeLabel}
@@ -370,8 +382,15 @@ export async function removeBatch(
     removedCount += 1;
   }
 
-  // Also drop the batch record so the batch key can no longer replay.
-  const batch = await findExistingImportBatch(ctx, args.eventId, args.batchKey);
+  // Also drop the batch record so the batch key can no longer replay. Scoped to
+  // the imported-tickets target so removal never deletes a guest batch record
+  // that happens to share the batch key.
+  const batch = await findExistingImportBatch(
+    ctx,
+    args.eventId,
+    args.batchKey,
+    'importedTickets',
+  );
   if (batch) {
     await ctx.db.delete('importBatches', batch._id);
   }
@@ -530,19 +549,21 @@ export async function resolveAndCheckInByExternalRef(
     userId: Id<'users'>;
   },
 ): Promise<ResolveImportedByRefResult> {
-  const externalRef = args.externalRef.trim();
-  if (externalRef.length === 0) {
+  // Normalize the scanned payload the same way imports do, so a barcode's case
+  // never causes a miss at the door.
+  const externalRefKey = normalizeExternalRefKey(args.externalRef);
+  if (externalRefKey.length === 0) {
     return {matched: false};
   }
 
-  // Point lookup scoped to the scanned event only. `by_event_external_ref`
+  // Point lookup scoped to the scanned event only. `by_event_external_ref_key`
   // returns entries in creation order for a shared barcode. Bounded by the
   // per-event import cap: entries sharing one barcode can never exceed the
   // total imported entries for the event.
   const matches = await ctx.db
     .query('importedTicketHolders')
-    .withIndex('by_event_external_ref', (q) =>
-      q.eq('eventId', args.eventId).eq('externalRef', externalRef),
+    .withIndex('by_event_external_ref_key', (q) =>
+      q.eq('eventId', args.eventId).eq('externalRefKey', externalRefKey),
     )
     .take(MAX_IMPORTED_ENTRIES_PER_EVENT);
 

@@ -986,6 +986,11 @@ const schemaTables = {
     name: v.string(),
     email: v.optional(v.string()),
     externalRef: v.optional(v.string()),
+    // Normalized (trim + lowercase) form of externalRef used for dedup and
+    // scanner matching, so a barcode's case can never split it into duplicate
+    // admission records or miss at the door. externalRef stays verbatim for
+    // display. Set iff externalRef is present.
+    externalRefKey: v.optional(v.string()),
     orderRef: v.optional(v.string()),
     ticketTypeLabel: v.optional(v.string()),
     purchaseDateRaw: v.optional(v.string()),
@@ -995,7 +1000,7 @@ const schemaTables = {
     checkedInBy: v.optional(v.id('users')),
   })
     .index('by_event', ['eventId'])
-    .index('by_event_external_ref', ['eventId', 'externalRef'])
+    .index('by_event_external_ref_key', ['eventId', 'externalRefKey'])
     .index('by_event_batch_key', ['eventId', 'batchKey']),
 
   /**
@@ -1024,7 +1029,7 @@ const schemaTables = {
         }),
       ),
     }),
-  }).index('by_event_batch_key', ['eventId', 'batchKey']),
+  }).index('by_event_batch_key_target', ['eventId', 'batchKey', 'target']),
 
   /**
    * Temporary table for E2E testing to capture emails.
