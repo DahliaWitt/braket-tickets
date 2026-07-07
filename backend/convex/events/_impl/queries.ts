@@ -68,14 +68,20 @@ export async function resolveOrganizerIdFromEventListArgs(
   return args.organizerId;
 }
 
-const ORGANIZER_EVENT_SCAN_PAGE_SIZE = 100;
-
 /**
  * Collect up to `limit` not-yet-ended published events for one visibility,
- * paginating past already-ended lookback rows. A fixed `.take()` from the
+ * scanning past already-ended lookback rows. A fixed `.take()` from the
  * lookback boundary could be entirely consumed by a burst of recently-ended
- * events, hiding later running/upcoming ones — pagination keeps scanning until
- * `limit` live events are found or the query is exhausted.
+ * events, hiding later running/upcoming ones — async iteration keeps scanning
+ * until `limit` live events are found, the scan cap is hit, or the query is
+ * exhausted.
+ *
+ * Uses async iteration rather than `.paginate()` on purpose: this helper runs
+ * once per visibility, and Convex allows only ONE `.paginate()` call per
+ * function invocation ("ran multiple paginated queries"). Async iteration has
+ * no such limit and streams the same index range lazily. (convex-test does not
+ * enforce the paginate limit, so a paginate-based loop here passes unit tests
+ * but throws on the real backend — see the community-filter E2E specs.)
  */
 async function collectOngoingEventsForVisibility(
   db: Pick<QueryCtx['db'], 'query'>,
@@ -85,29 +91,22 @@ async function collectOngoingEventsForVisibility(
   limit: number,
 ): Promise<Doc<'events'>[]> {
   const collected: Doc<'events'>[] = [];
-  let cursor: string | null = null;
   let scanned = 0;
 
-  while (collected.length < limit) {
-    const page = await db
-      .query('events')
-      .withIndex('by_organizer_status_visibility_date', (q) =>
-        q
-          .eq('organizerId', organizerId)
-          .eq('status', 'published')
-          .eq('visibility', visibility)
-          .gte('date', minDate),
-      )
-      .paginate({cursor, numItems: ORGANIZER_EVENT_SCAN_PAGE_SIZE});
-
-    for (const event of page.page) {
-      if (hasEventEnded(event)) continue;
+  for await (const event of db
+    .query('events')
+    .withIndex('by_organizer_status_visibility_date', (q) =>
+      q
+        .eq('organizerId', organizerId)
+        .eq('status', 'published')
+        .eq('visibility', visibility)
+        .gte('date', minDate),
+    )) {
+    scanned += 1;
+    if (!hasEventEnded(event)) {
       collected.push(event);
       if (collected.length >= limit) break;
     }
-
-    scanned += page.page.length;
-    if (page.isDone) break;
     if (scanned >= ORGANIZER_EVENT_MAX_SCAN_ROWS) {
       // Degrade instead of risking a per-query document-budget failure. Not
       // silent: an organizer with this many ended lookback rows is anomalous
@@ -119,7 +118,6 @@ async function collectOngoingEventsForVisibility(
       );
       break;
     }
-    cursor = page.continueCursor;
   }
 
   return collected;
@@ -131,7 +129,7 @@ export async function loadUpcomingPublishedEventsForOrganizer(
 ): Promise<Doc<'events'>[]> {
   // Look back MAX_EVENT_DURATION on the organizer-scoped date index so running
   // multi-day events (started before today, not yet ended) are reached in
-  // start-date order; each visibility paginates past ended rows so they cannot
+  // start-date order; each visibility scans past ended rows so they cannot
   // consume the cap.
   const minDate = ongoingEventStartLowerBound();
   const eventGroups = await Promise.all(

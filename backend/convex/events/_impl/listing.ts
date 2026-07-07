@@ -84,34 +84,42 @@ export async function listPublicUpcomingCards(ctx: QueryCtx) {
   // reached in start-date order; ended rows are dropped with hasEventEnded.
   // The bounded window keeps the scan complete — no running event can be
   // crowded out of a fixed take.
+  //
+  // Uses async iteration rather than `.paginate()`: Convex allows only ONE
+  // `.paginate()` call per function invocation, and this scan can need several
+  // batches. convex-test does not enforce that limit, so a paginate-based loop
+  // passes unit tests but throws on the real backend.
   const minDate = ongoingEventStartLowerBound();
   const publicEvents: Doc<'events'>[] = [];
-  let cursor: string | null = null;
+  const pendingBatch: Doc<'events'>[] = [];
   let scanned = 0;
 
-  while (publicEvents.length < PUBLIC_UPCOMING_CARD_LIMIT) {
-    const result = await ctx.db
-      .query('events')
-      .withIndex('by_status_date', (q) =>
-        q.eq('status', 'published').gte('date', minDate),
-      )
-      .paginate({
-        cursor,
-        numItems: PUBLIC_UPCOMING_SCAN_PAGE_SIZE,
-      });
-
-    const ongoingPage = result.page.filter((event) => !hasEventEnded(event));
-    const eligibleEvents = await filterLandingPageEvents(ctx, ongoingPage);
+  // Filter accumulated ongoing candidates (organizer lookups happen in a batch)
+  // and append eligible cards, capped at the card limit.
+  const flushPendingBatch = async () => {
+    if (pendingBatch.length === 0) return;
+    const eligibleEvents = await filterLandingPageEvents(ctx, pendingBatch);
     publicEvents.push(
       ...eligibleEvents.slice(
         0,
         PUBLIC_UPCOMING_CARD_LIMIT - publicEvents.length,
       ),
     );
+    pendingBatch.length = 0;
+  };
 
-    scanned += result.page.length;
-    if (result.isDone) {
-      break;
+  for await (const event of ctx.db
+    .query('events')
+    .withIndex('by_status_date', (q) =>
+      q.eq('status', 'published').gte('date', minDate),
+    )) {
+    scanned += 1;
+    if (!hasEventEnded(event)) {
+      pendingBatch.push(event);
+      if (pendingBatch.length >= PUBLIC_UPCOMING_SCAN_PAGE_SIZE) {
+        await flushPendingBatch();
+        if (publicEvents.length >= PUBLIC_UPCOMING_CARD_LIMIT) break;
+      }
     }
     if (scanned >= PUBLIC_UPCOMING_MAX_SCAN_ROWS) {
       // Degrade instead of risking a per-query document-budget failure. Not
@@ -124,8 +132,10 @@ export async function listPublicUpcomingCards(ctx: QueryCtx) {
       );
       break;
     }
+  }
 
-    cursor = result.continueCursor;
+  if (publicEvents.length < PUBLIC_UPCOMING_CARD_LIMIT) {
+    await flushPendingBatch();
   }
 
   const availabilityByEventId = await loadCanonicalListAvailability(
