@@ -4,44 +4,39 @@ import {
   Router,
   type RouterStateSnapshot,
 } from '@angular/router';
-import { inject } from '@angular/core';
-import { toObservable } from '@angular/core/rxjs-interop';
-import { combineLatest, of, type Observable } from 'rxjs';
-import { catchError, filter, map, take, timeout } from 'rxjs/operators';
-import { AuthService } from '@/core/services/auth.service';
-import type { BraToastService } from '@ui/components/composites/toast/toast.service';
-import { logger } from '@/utils/logger';
+import {inject} from '@angular/core';
+import {toObservable} from '@angular/core/rxjs-interop';
+import {of, type Observable} from 'rxjs';
+import {catchError, filter, map, take, timeout} from 'rxjs/operators';
+import {AuthService} from '@/core/services/auth.service';
+import {
+  AUTH_SETTLE_TIMEOUT_MS,
+  requiresSocialSignupCompletion,
+  type SettledUser,
+} from '@/core/services/auth.service.helpers';
+import type {BraToastService} from '@ui/components/composites/toast/toast.service';
+import {logger} from '@/utils/logger';
 
-/**
- * Hard upper bound for the auth-settled race. If `authInitialized` never
- * fires (Convex WebSocket died mid-handshake, browser went offline during
- * cold load, etc.) the guard would otherwise hang the route forever with no
- * error UI. We surface a TimeoutError instead so `catchError` branches in
- * each guard can redirect sensibly. 15s is comfortably above the normal
- * cold-connect budget for Convex + Better Auth + user profile sync.
- */
-export const AUTH_SETTLE_TIMEOUT_MS = 15_000;
-
-/**
- * Minimal shape every guard needs from the authenticated user. Kept loose so
- * individual callers can read other fields without a new cast.
- */
-type SettledUser = { socialSignupCompletionRequired?: boolean; _id?: string } | null | undefined;
-
-export function requiresSocialSignupCompletion(user: SettledUser): boolean {
-  return user?.socialSignupCompletionRequired === true;
-}
+// Re-exported for the admin/scanner route guards that import these from here.
+export {
+  AUTH_SETTLE_TIMEOUT_MS,
+  requiresSocialSignupCompletion,
+  type SettledUser,
+};
 
 export function createSocialSignupCompletionUrlTree(
   router: Router,
   state: RouterStateSnapshot,
 ) {
   return router.createUrlTree(['/confirm/social-signup-complete'], {
-    queryParams: { returnUrl: state.url },
+    queryParams: {returnUrl: state.url},
   });
 }
 
-export function createAccessDeniedRedirect(router: Router, toast: BraToastService) {
+export function createAccessDeniedRedirect(
+  router: Router,
+  toast: BraToastService,
+) {
   toast.error('Access denied');
   return router.createUrlTree(['/']);
 }
@@ -55,21 +50,14 @@ export function createAccessDeniedRedirect(router: Router, toast: BraToastServic
  * Throws `TimeoutError` after `AUTH_SETTLE_TIMEOUT_MS` if the auth stream
  * never reaches a decidable state — callers handle this in `catchError`.
  */
-export function waitForAuthSettled$(auth: AuthService): Observable<SettledUser> {
-  return combineLatest([
-    toObservable(auth.authInitialized),
-    toObservable(auth.user),
-    toObservable(auth.authSyncFailed),
-  ]).pipe(
-    filter(([initialized, user, syncFailed]) => {
-      if (!initialized) return false;
-      if (!auth.isAuthenticated()) return true;
-      if (user) return true;
-      return syncFailed;
-    }),
+export function waitForAuthSettled$(
+  auth: AuthService,
+): Observable<SettledUser> {
+  return toObservable(auth.authSettled).pipe(
+    filter(Boolean),
     take(1),
-    timeout({ first: AUTH_SETTLE_TIMEOUT_MS }),
-    map(([, user]) => user as SettledUser),
+    timeout({first: AUTH_SETTLE_TIMEOUT_MS}),
+    map(() => auth.user() as SettledUser),
   );
 }
 
@@ -92,9 +80,27 @@ export const authGuard: CanActivateFn = (route, state: RouterStateSnapshot) => {
 
   const redirectToLogin = () =>
     router.createUrlTree(['/login'], {
-      queryParams: { ...route.queryParams, returnUrl: state.url },
+      queryParams: {...route.queryParams, returnUrl: state.url},
     });
   const redirectToPublicHome = () => router.createUrlTree(['/']);
+
+  // Synchronous fast paths, only while auth has not settled — once live state
+  // exists it is authoritative and the async path below emits immediately.
+  // In crossDomain mode the localStorage credential IS the credential:
+  //   - empty/expired → provably logged out → redirect to login now
+  //   - present       → optimistically allow; reconciliation re-runs these
+  //                      guards after settle if the guess was wrong
+  // Cookie/E2E mode (peek.known === false) always defers to the settle.
+  if (!auth.authSettled()) {
+    const peek = auth.peekCachedSession();
+    if (peek.known && !peek.hasCredential) {
+      return redirectToLogin();
+    }
+    if (peek.known && peek.hasCredential) {
+      auth.scheduleOptimisticReconciliation();
+      return true;
+    }
+  }
 
   return waitForAuthSettled$(auth).pipe(
     map((user) => {
@@ -105,7 +111,9 @@ export const authGuard: CanActivateFn = (route, state: RouterStateSnapshot) => {
       if (!user) {
         // authenticated + sync-failed: the session is live, but protected
         // routes cannot safely render without the user profile.
-        logger.warn('[AuthGuard] authenticated session with no user profile (sync failed)');
+        logger.warn(
+          '[AuthGuard] authenticated session with no user profile (sync failed)',
+        );
         return redirectToPublicHome();
       }
       return true;
@@ -126,6 +134,25 @@ export const authGuard: CanActivateFn = (route, state: RouterStateSnapshot) => {
  */
 export const authenticatedMatch: CanMatchFn = () => {
   const auth = inject(AuthService);
+
+  // Synchronous fast paths, only while auth has not settled — once live state
+  // exists it is authoritative and the async path below emits immediately.
+  //   - empty/expired credential → provably logged out → landing matches with
+  //     zero network wait (the buyer default, and the main win)
+  //   - credential present → optimistically match the dashboard; if the
+  //     session turns out stale, reconciliation re-runs these guards and the
+  //     user is redirected with a toast
+  // Cookie/E2E mode (peek.known === false) always defers to the settle.
+  if (!auth.authSettled()) {
+    const peek = auth.peekCachedSession();
+    if (peek.known && !peek.hasCredential) {
+      return false;
+    }
+    if (peek.known && peek.hasCredential) {
+      auth.scheduleOptimisticReconciliation();
+      return true;
+    }
+  }
 
   return waitForAuthSettled$(auth).pipe(
     map((user) => auth.isAuthenticated() && !!user),

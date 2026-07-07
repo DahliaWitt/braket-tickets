@@ -22,6 +22,43 @@ import {
 import type { DataModel } from "./dataModel.js";
 
 /**
+ * Typesafe environment variables declared in `convex.config.ts`.
+ */
+type Env = {
+  readonly ALLOW_LOCALHOST_CORS: string | undefined;
+  readonly AUTH_BASE_URL: string | undefined;
+  readonly BETTER_AUTH_SECRET: string | undefined;
+  readonly DEV_SEED: string | undefined;
+  readonly DEV_SEED_EXPIRES_AT: string | undefined;
+  readonly DEV_SEED_TOKEN: string | undefined;
+  readonly DISCORD_CLIENT_ID: string | undefined;
+  readonly DISCORD_CLIENT_SECRET: string | undefined;
+  readonly E2E_CONVEX_SITE_URL: string | undefined;
+  readonly EMAIL_FROM: string | undefined;
+  readonly EMAIL_REPLY_TO: string | undefined;
+  readonly GOOGLE_CLIENT_ID: string | undefined;
+  readonly GOOGLE_CLIENT_SECRET: string | undefined;
+  readonly IS_TEST: string | undefined;
+  readonly JWKS: string | undefined;
+  readonly JWT_PRIVATE_KEY: string | undefined;
+  readonly RESEND_API_KEY: string | undefined;
+  readonly RESEND_TEST_MODE: string | undefined;
+  readonly RESEND_WEBHOOK_SECRET: string | undefined;
+  readonly SITE_URL: string;
+  readonly SMTP_FROM: string | undefined;
+  readonly SMTP_HOST: string | undefined;
+  readonly SMTP_PASS: string | undefined;
+  readonly SMTP_PORT: string | undefined;
+  readonly SMTP_REPLY_TO: string | undefined;
+  readonly SMTP_USER: string | undefined;
+  readonly STRIPE_SECRET_KEY: string | undefined;
+  readonly STRIPE_WEBHOOK_SECRET: string | undefined;
+  readonly STRIPE_WEBHOOK_SECRET_CONNECT: string | undefined;
+  readonly STRIPE_WEBHOOK_SECRET_V2_EVENTS: string | undefined;
+  readonly TOKEN_DIGEST_SECRET: string;
+};
+
+/**
  * Define a query in this Convex app's public API.
  *
  * This function will be allowed to read your Convex database and will be accessible from the client.
@@ -94,6 +131,11 @@ export declare const internalAction: ActionBuilder<DataModel, "internal">;
  * @returns The wrapped function. Import this function from `convex/http.js` and route it to hook it up.
  */
 export declare const httpAction: HttpActionBuilder;
+
+/**
+ * Typesafe environment variables declared in `convex.config.ts`.
+ */
+export declare const env: Env;
 
 /**
  * A set of services for use within Convex query functions.

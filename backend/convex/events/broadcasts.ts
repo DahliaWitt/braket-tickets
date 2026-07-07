@@ -1,7 +1,8 @@
 import {v} from 'convex/values';
 
-import {mutation, query} from '../_generated/server';
+import {internalMutation, mutation, query} from '../_generated/server';
 import {
+  deliverMissedBroadcasts,
   getBroadcastAudience,
   listBroadcastHistory,
   sendBroadcast,
@@ -54,4 +55,18 @@ export const send = mutation({
   },
   returns: sendResultValidator,
   handler: async (ctx, args) => await sendBroadcast(ctx, args),
+});
+
+/**
+ * Scheduled by ticket-acquisition mutations (primary completion, resale
+ * settlement, guest add) to deliver broadcasts the recipient missed.
+ */
+export const deliverMissed = internalMutation({
+  args: {
+    eventId: v.id('events'),
+    email: v.string(),
+    userId: v.optional(v.id('users')),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => await deliverMissedBroadcasts(ctx, args),
 });

@@ -84,6 +84,12 @@ describe('BrowserPlatformService', () => {
     );
   });
 
+  it('reports local storage availability', () => {
+    const {service} = setup();
+
+    expect(service.hasLocalStorage()).toBe(true);
+  });
+
   it('wraps local storage access behind a safe API', () => {
     const {service, documentStub} = setup();
 

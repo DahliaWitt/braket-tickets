@@ -14,7 +14,7 @@ canonical references below as authoritative when they conflict with this file.
   read before reviewing Convex changes
 - `backend/convex/AGENTS.md` - Convex structure, authz, logging, testing, and
   query-scan rules
-- `frontend/AGENTS.md` - Angular v21 zoneless, shared component, harness, and
+- `frontend/AGENTS.md` - Angular v22 zoneless, shared component, harness, and
   Storybook rules
 - `.impeccable.md` - design system tokens and component patterns
 - `docs/runbooks/` - operator-facing behavior, deploy, config, cron, env, and
@@ -171,7 +171,7 @@ await requireManageEvent(ctx, callerId, eventId);
 
 ## Angular Frontend
 
-The frontend uses Angular v21+ with zoneless change detection. Review changes
+The frontend uses Angular v22+ with zoneless change detection. Review changes
 for current Angular APIs, signal/resource usage, accessibility, and project UI
 contracts.
 
