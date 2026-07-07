@@ -40,12 +40,25 @@ For manual dev deploy commands, including the destructive dev-data reset path fo
 
 The table below lists the common deploy failures:
 
-| Cause              | Fix                                                                                               |
-| ------------------ | ------------------------------------------------------------------------------------------------- |
-| Schema validation  | See [Run a safe schema migration](#run-a-safe-schema-migration)                                   |
-| Bundle error       | Fix the code error, push again                                                                    |
-| Deploy key invalid | Regenerate in Convex Dashboard → Settings → Deploy Keys, update `CONVEX_DEPLOY_KEY` GitHub secret |
-| Rate limit         | Wait 5 minutes, re-run the GitHub Action                                                          |
+| Cause                         | Fix                                                                                                                       |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Schema validation             | See [Run a safe schema migration](#run-a-safe-schema-migration)                                                           |
+| Bundle error                  | Fix the code error, push again                                                                                            |
+| Deploy key invalid            | Regenerate in Convex Dashboard → Settings → Deploy Keys, update `CONVEX_DEPLOY_KEY` GitHub secret                         |
+| Rate limit                    | Wait 5 minutes, re-run the GitHub Action                                                                                  |
+| `RequiredEnvironmentVariable` | A required env var declared in `backend/convex/convex.config.ts` is missing — run the matching `sync:env:*` before deploy |
+
+### Inspect data with an inline query
+
+For ad-hoc read-only inspection, prefer `--inline-query` (convex 1.36+) over
+writing throwaway named query functions:
+
+```bash
+pnpm convex run --inline-query 'await ctx.db.query("adminAuditLogs").order("desc").take(5)'
+```
+
+Inline queries are read-only; anything that writes still needs a real
+(reviewed, committed) mutation.
 
 ### Roll back with a revert commit
 

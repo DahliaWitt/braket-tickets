@@ -359,7 +359,7 @@ export const authComponent = createClient<DataModel>(components.betterAuth, {
           });
 
           await insertAdminAuditLog(
-            {db: ctx.db},
+            {db: ctx.db, meta: ctx.meta},
             {
               adminId: appUser._id,
               action: 'account.email_change.completed',
@@ -413,7 +413,7 @@ export const authComponent = createClient<DataModel>(components.betterAuth, {
         }
 
         await insertAdminAuditLog(
-          {db: ctx.db},
+          {db: ctx.db, meta: ctx.meta},
           {
             adminId: appUser._id,
             action: 'account.provider.linked',
