@@ -1,7 +1,7 @@
 import {DestroyRef, Injectable, computed, inject, signal} from '@angular/core';
 import {toObservable} from '@angular/core/rxjs-interop';
 import {firstValueFrom} from 'rxjs';
-import {filter} from 'rxjs/operators';
+import {filter, timeout} from 'rxjs/operators';
 import {Router} from '@angular/router';
 import {
   injectConvex,
@@ -36,6 +36,7 @@ import {
 import {AuthSessionSync} from './auth-session-sync';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
 import {
+  AUTH_SETTLE_TIMEOUT_MS,
   type ConvexActionMethod,
   type ConvexClientWithErrorHandling,
   type ConvexMutationMethod,
@@ -352,9 +353,14 @@ export class AuthService implements ConvexAuthProvider {
    * duplicating any of it here.
    *
    * Idempotent per settle window: canMatch and canActivate both firing
-   * optimistically in one navigation schedule a single reconciliation. Settle
-   * always terminates (initSession sets `authInitialized` even on failure), so
-   * this cannot leak a pending promise indefinitely.
+   * optimistically in one navigation schedule a single reconciliation.
+   *
+   * Bounded by `AUTH_SETTLE_TIMEOUT_MS` (parity with `waitForAuthSettled$`): if
+   * auth never settles — a live but unconfirmable session whose profile query
+   * hangs — the wait times out, the flag resets so a later navigation can
+   * retry, and the optimistically-rendered page keeps its skeleton. We do NOT
+   * redirect on timeout: the session may well be valid (only the profile is
+   * slow), and bouncing an authenticated user to login would be wrong.
    */
   scheduleOptimisticReconciliation(): void {
     if (this.optimisticReconciliationScheduled) {
@@ -362,7 +368,12 @@ export class AuthService implements ConvexAuthProvider {
     }
     this.optimisticReconciliationScheduled = true;
 
-    void firstValueFrom(this.authSettled$.pipe(filter(Boolean)))
+    void firstValueFrom(
+      this.authSettled$.pipe(
+        filter(Boolean),
+        timeout({first: AUTH_SETTLE_TIMEOUT_MS}),
+      ),
+    )
       .then(() => {
         const user = this.user();
         const guessWasCorrect =
@@ -380,10 +391,15 @@ export class AuthService implements ConvexAuthProvider {
           this.toast.error('session expired. please log in again.');
         }
 
-        return this.router.navigateByUrl(this.router.url);
+        // Re-run the current URL's guards; replaceUrl keeps the stale optimistic
+        // entry out of history so Back does not re-trigger the optimistic cycle.
+        return this.router.navigateByUrl(this.router.url, {replaceUrl: true});
       })
       .catch((err: unknown) => {
-        logger.error('[AuthService] Optimistic reconciliation failed', err);
+        logger.warn(
+          '[AuthService] Optimistic reconciliation did not settle in time',
+          err,
+        );
       })
       .finally(() => {
         this.optimisticReconciliationScheduled = false;

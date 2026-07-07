@@ -10,6 +10,7 @@ import {of, type Observable} from 'rxjs';
 import {catchError, filter, map, take, timeout} from 'rxjs/operators';
 import {AuthService} from '@/core/services/auth.service';
 import {
+  AUTH_SETTLE_TIMEOUT_MS,
   requiresSocialSignupCompletion,
   type SettledUser,
 } from '@/core/services/auth.service.helpers';
@@ -17,17 +18,11 @@ import type {BraToastService} from '@ui/components/composites/toast/toast.servic
 import {logger} from '@/utils/logger';
 
 // Re-exported for the admin/scanner route guards that import these from here.
-export {requiresSocialSignupCompletion, type SettledUser};
-
-/**
- * Hard upper bound for the auth-settled race. If `authInitialized` never
- * fires (Convex WebSocket died mid-handshake, browser went offline during
- * cold load, etc.) the guard would otherwise hang the route forever with no
- * error UI. We surface a TimeoutError instead so `catchError` branches in
- * each guard can redirect sensibly. 15s is comfortably above the normal
- * cold-connect budget for Convex + Better Auth + user profile sync.
- */
-export const AUTH_SETTLE_TIMEOUT_MS = 15_000;
+export {
+  AUTH_SETTLE_TIMEOUT_MS,
+  requiresSocialSignupCompletion,
+  type SettledUser,
+};
 
 export function createSocialSignupCompletionUrlTree(
   router: Router,

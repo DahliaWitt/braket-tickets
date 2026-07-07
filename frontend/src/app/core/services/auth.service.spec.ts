@@ -15,6 +15,7 @@ import {
   type MockConvexClient,
 } from '../../../testing/mock-types';
 import {AUTH_CLIENT, type AuthClient} from './auth-client.token';
+import {AUTH_SETTLE_TIMEOUT_MS} from './auth.service.helpers';
 import {BraToastService} from '@ui/components/composites/toast/toast.service';
 
 const authClient = {
@@ -1457,7 +1458,9 @@ describe('AuthService', () => {
       await settleAndFlush();
 
       await vi.waitFor(() => {
-        expect(routerSpy.navigateByUrl).toHaveBeenCalledWith('/tickets');
+        expect(routerSpy.navigateByUrl).toHaveBeenCalledWith('/tickets', {
+          replaceUrl: true,
+        });
       });
       expect(toastSpy.error).toHaveBeenCalledWith(
         'session expired. please log in again.',
@@ -1496,6 +1499,31 @@ describe('AuthService', () => {
         expect(routerSpy.navigateByUrl).toHaveBeenCalled();
       });
       expect(routerSpy.navigateByUrl).toHaveBeenCalledTimes(1);
+    });
+
+    it('bounds the wait and does not redirect when auth never settles', async () => {
+      vi.useFakeTimers();
+      try {
+        routerSpy.url = '/tickets';
+        // Authenticated, initialized, but the profile query never resolves and
+        // sync never fails: authSettled stays false indefinitely.
+        setSession({user: {email: 'buyer@example.com'}});
+        userSignal.set(null);
+        setAuthInitialized(true);
+        expect(service.authSettled()).toBe(false);
+
+        service.scheduleOptimisticReconciliation();
+        TestBed.tick(); // flush the (filtered-out) false emission
+
+        await vi.advanceTimersByTimeAsync(AUTH_SETTLE_TIMEOUT_MS + 100);
+
+        // Deliberate: a live-but-unconfirmable session is left on its skeleton
+        // rather than bouncing a possibly-authenticated user to login.
+        expect(routerSpy.navigateByUrl).not.toHaveBeenCalled();
+        expect(toastSpy.error).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

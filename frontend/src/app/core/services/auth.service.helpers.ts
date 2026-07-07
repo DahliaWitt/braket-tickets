@@ -9,6 +9,17 @@ import {type MutationOptions} from 'convex/browser';
 export type SessionChannelMessage = {type: 'LOGIN'} | {type: 'LOGOUT'};
 
 /**
+ * Hard upper bound for the auth-settled wait. If auth never reaches a decidable
+ * state (Convex WebSocket died mid-handshake, browser offline during cold load,
+ * profile query hung with a live session) the route guards would otherwise wait
+ * forever. Shared by `waitForAuthSettled$` (guards) and the optimistic
+ * reconciliation (AuthService) so both bail on the same budget. 15s is
+ * comfortably above the normal cold-connect budget for Convex + Better Auth +
+ * user profile sync.
+ */
+export const AUTH_SETTLE_TIMEOUT_MS = 15_000;
+
+/**
  * Minimal shape auth guards and reconciliation need from the authenticated
  * user. Kept loose so individual callers can read other fields without a new
  * cast. Lives here (not auth.guards.ts) so AuthService can share the predicate
