@@ -147,7 +147,9 @@ describe('processScheduledPayouts — Connect account branch', () => {
     // for "Stripe confirmed capture and the webhook recorded net
     // impact."
     await t.run(async (ctx) => {
-      await seedCapturedLedgerRow(ctx, eventId, 'acct_end_to_end', {fees: true});
+      await seedCapturedLedgerRow(ctx, eventId, 'acct_end_to_end', {
+        fees: true,
+      });
     });
 
     await t.action(internal.stripe.actions.processScheduledPayouts, {});
@@ -272,7 +274,8 @@ describe('processScheduledPayouts — Connect account branch', () => {
     );
     expect(batches).toHaveLength(2);
     const superseded = batches.find(
-      (batch) => batch.idempotencyKey === 'braket-payout-acct_recover-2019-12-31',
+      (batch) =>
+        batch.idempotencyKey === 'braket-payout-acct_recover-2019-12-31',
     );
     expect(superseded).toMatchObject({
       status: 'failed',

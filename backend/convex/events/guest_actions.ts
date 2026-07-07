@@ -1,7 +1,7 @@
 'use node';
 
 import {v} from 'convex/values';
-import {action} from '../_generated/server';
+import {action, type ActionCtx} from '../_generated/server';
 import {internal} from '../_generated/api';
 import * as QRCode from 'qrcode';
 import {purchasedTicketTemplate} from '../email/templates';
@@ -69,77 +69,133 @@ function requireEventStartInstantMs(eventDate: string): number {
 }
 
 export const sendTicket = action({
-  args: {guestId: v.id('guests')},
-  returns: v.null(),
+  args: {
+    guestId: v.id('guests'),
+    /**
+     * When true (batch "send all"), the guest is skipped if already emailed so
+     * a stale client cannot re-email the roster. Omitted/false for a deliberate
+     * single resend, which is still deduped against concurrent in-flight sends.
+     */
+    skipIfAlreadyEmailed: v.optional(v.boolean()),
+  },
+  returns: v.object({
+    status: v.union(v.literal('sent'), v.literal('skipped')),
+  }),
   handler: async (ctx, args) => {
     const guest = await requireGuestTicketSendAccess(ctx, args.guestId);
 
-    const eventP = ctx.runQuery(internal.events.management.getInternal, {
-      id: guest.eventId,
-    });
-    const [event, organizer] = await Promise.all([
-      eventP,
-      eventP.then((e) =>
-        e
-          ? ctx.runQuery(internal.communities.profile.getInternal, {
-              id: e.organizerId,
-            })
-          : null,
-      ),
-    ]);
-    if (!event) throwNotFound('Event');
-
-    const {pdfDataUrl, qrCodeDataUrl} = await buildGuestTicketPdf({
-      guest,
-      event,
-      promoterName: organizer?.name ?? 'BRAKET',
-    });
-
-    const pdfBase64 = pdfDataUrl.split(',')[1];
-    const {subject, html} = purchasedTicketTemplate(
-      {title: event.title, date: event.date, location: event.location},
-      guest.name,
-      'cid:qrcode',
-      true,
+    // Atomically claim the send so concurrent admins/tabs cannot double-send.
+    const claim = await ctx.runMutation(
+      internal.events.guests.beginGuestTicketSend,
       {
-        slug: organizer?.slug,
-        hasCodeOfConduct: !!organizer?.codeOfConduct,
+        id: args.guestId,
+        requireUnsent: args.skipIfAlreadyEmailed === true,
       },
     );
+    if (!claim.claimed || claim.lockToken === null) {
+      return {status: 'skipped' as const};
+    }
+    const lockToken = claim.lockToken;
 
-    await sendEmailDeliveryNow(
-      ctx,
-      {
-        to: guest.email,
-        subject,
-        html,
-        attachments: [
-          {
-            filename: `ticket-${guest.name.replace(/\s+/g, '-').toLowerCase()}.pdf`,
-            content: pdfBase64,
-            contentType: 'application/pdf',
-          },
-          {
-            filename: 'qrcode.png',
-            content: qrCodeDataUrl.split(',')[1],
-            contentType: 'image/png',
-            cid: 'qrcode',
-          },
-        ],
-      },
-      {
-        source: 'ticket',
-        sourceId: guest._id as string,
-        recipient: guest.email,
-        critical: true,
-      },
-    );
-
-    await ctx.runMutation(internal.events.guests.markAsEmailed, {
-      id: guest._id,
-    });
+    try {
+      return await deliverGuestTicket(ctx, guest, lockToken);
+    } catch (error) {
+      // Release the lock so a retry can proceed immediately. This runs for any
+      // failure, including a markAsEmailed failure after the provider already
+      // accepted the email — so the caller sees an error while a message may in
+      // fact be in flight. Batch "send all" is still safe (beginGuestTicketSend
+      // consults the durable emailDeliveries record), but a deliberate single
+      // Resend intentionally bypasses that guard and will dispatch a second
+      // copy. That is the accepted single-resend contract, now reachable via a
+      // crash and not only a prior confirmed send. The lockToken guards against
+      // releasing a newer attempt's reclaimed lock.
+      await ctx.runMutation(internal.events.guests.clearGuestTicketSendLock, {
+        id: guest._id,
+        lockToken,
+      });
+      throw error;
+    }
   },
 });
+
+async function deliverGuestTicket(
+  ctx: ActionCtx,
+  guest: Awaited<ReturnType<typeof requireGuestTicketSendAccess>>,
+  lockToken: number,
+): Promise<{status: 'sent'}> {
+  const eventP = ctx.runQuery(internal.events.management.getInternal, {
+    id: guest.eventId,
+  });
+  const [event, organizer] = await Promise.all([
+    eventP,
+    eventP.then((e) =>
+      e
+        ? ctx.runQuery(internal.communities.profile.getInternal, {
+            id: e.organizerId,
+          })
+        : null,
+    ),
+  ]);
+  if (!event) throwNotFound('Event');
+
+  const {pdfDataUrl, qrCodeDataUrl} = await buildGuestTicketPdf({
+    guest,
+    event,
+    promoterName: organizer?.name ?? 'BRAKET',
+  });
+
+  const pdfBase64 = pdfDataUrl.split(',')[1];
+  const {subject, html} = purchasedTicketTemplate(
+    {title: event.title, date: event.date, location: event.location},
+    guest.name,
+    'cid:qrcode',
+    true,
+    {
+      slug: organizer?.slug,
+      hasCodeOfConduct: !!organizer?.codeOfConduct,
+    },
+  );
+
+  await sendEmailDeliveryNow(
+    ctx,
+    {
+      to: guest.email,
+      subject,
+      html,
+      attachments: [
+        {
+          filename: `ticket-${guest.name.replace(/\s+/g, '-').toLowerCase()}.pdf`,
+          content: pdfBase64,
+          contentType: 'application/pdf',
+        },
+        {
+          filename: 'qrcode.png',
+          content: qrCodeDataUrl.split(',')[1],
+          contentType: 'image/png',
+          cid: 'qrcode',
+        },
+      ],
+    },
+    {
+      source: 'ticket',
+      sourceId: guest._id as string,
+      recipient: guest.email,
+      critical: true,
+    },
+  );
+
+  // emailedAt is recorded after dispatch as the UI "sent" marker. If this write
+  // fails (or the action crashes) after the provider accepted the email, batch
+  // "send all" still will not re-send: beginGuestTicketSend consults the durable
+  // emailDeliveries record, which the send above wrote on acceptance. A
+  // deliberate single resend intentionally bypasses that guard.
+  await ctx.runMutation(internal.events.guests.markAsEmailed, {
+    id: guest._id,
+    lockToken,
+  });
+
+  return {status: 'sent'};
+}
 
 /**
  * Generates a PDF guest ticket for download by event admins (root admin or

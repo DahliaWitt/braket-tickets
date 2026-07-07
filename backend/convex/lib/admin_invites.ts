@@ -86,7 +86,7 @@ export async function createAndSendAdminInvite(
   );
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: args.invitedBy,
       action: 'admin_invite.create',

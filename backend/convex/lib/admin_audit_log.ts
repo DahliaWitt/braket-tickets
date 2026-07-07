@@ -4,6 +4,7 @@ import {
   getAdminAuditCategoryForAction,
   type AdminAuditAction,
 } from './admin_audit_actions';
+import {getRequestMetadataSafe} from './request_metadata';
 
 export type AdminAuditLogInsert = Omit<
   Doc<'adminAuditLogs'>,
@@ -13,7 +14,14 @@ export type AdminAuditLogInsert = Omit<
 };
 
 type AdminAuditLogDb = Pick<MutationCtx['db'], 'insert'>;
-type AdminAuditLogWriteCtx = {db: AdminAuditLogDb};
+type AdminAuditLogWriteCtx = {
+  db: AdminAuditLogDb;
+  // When present, platform request metadata (client IP / User-Agent) is
+  // captured onto the audit row unless the entry already provides it.
+  // Scheduler-deferred writers lose request metadata at execution time —
+  // they must capture before scheduling and pass ipAddress/userAgent in args.
+  meta?: MutationCtx['meta'];
+};
 
 /**
  * Inserts an admin audit log entry with normalized optional fields.
@@ -26,6 +34,13 @@ export async function insertAdminAuditLog(
   entry: AdminAuditLogInsert,
 ): Promise<Id<'adminAuditLogs'>> {
   const actionCategory = getAdminAuditCategoryForAction(entry.action);
+  const requestMetadata =
+    ctx.meta !== undefined &&
+    (entry.ipAddress === undefined || entry.userAgent === undefined)
+      ? await getRequestMetadataSafe({meta: ctx.meta})
+      : null;
+  const ipAddress = entry.ipAddress ?? requestMetadata?.ip ?? undefined;
+  const userAgent = entry.userAgent ?? requestMetadata?.userAgent ?? undefined;
   const document: AdminAuditLogInsert = {
     adminId: entry.adminId,
     action: entry.action,
@@ -54,6 +69,8 @@ export async function insertAdminAuditLog(
     ...(entry.deletedEventName !== undefined
       ? {deletedEventName: entry.deletedEventName}
       : {}),
+    ...(ipAddress !== undefined ? {ipAddress} : {}),
+    ...(userAgent !== undefined ? {userAgent} : {}),
   };
 
   return await ctx.db.insert('adminAuditLogs', document);

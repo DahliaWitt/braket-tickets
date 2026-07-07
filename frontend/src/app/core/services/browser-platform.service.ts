@@ -42,6 +42,16 @@ export class BrowserPlatformService {
     return this.windowRef?.location.origin;
   }
 
+  /**
+   * Whether a usable `localStorage` reference exists. Mirrors the condition
+   * `auth.client.ts` uses to decide whether the Better Auth crossDomain plugin
+   * (localStorage-backed credential) is active, so callers can tell "storage
+   * present, key absent" apart from "storage unavailable".
+   */
+  hasLocalStorage(): boolean {
+    return this.localStorageRef !== null;
+  }
+
   getLocalStorageItem(key: string): string | null {
     try {
       return this.localStorageRef?.getItem(key) ?? null;
