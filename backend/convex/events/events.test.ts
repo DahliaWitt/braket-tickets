@@ -1330,6 +1330,57 @@ describe('events.listByOrganizer', () => {
     }
   });
 
+  it('does not let a burst of ended lookback events hide upcoming ones', async () => {
+    const t = convexTest();
+    const userId = await t.mutation(api.testing.users.createUserDirectly, {
+      name: 'Pagination User',
+      email: 'pagination-lbo@test-events.com',
+    });
+    const asUser = t.withIdentity({subject: userId});
+    const organizerId = await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {name: 'High Volume Organizer'},
+    );
+    const DAY_MS = 24 * 60 * 60 * 1000;
+
+    await t.run(async (ctx) => {
+      // More ended events inside the lookback window than the per-visibility
+      // cap (500). Ordered before the upcoming event by start date, they would
+      // fill a fixed `.take()` and hide the headliner without pagination. They
+      // are filtered out before availability, so no inventory row is needed.
+      for (let i = 0; i < 520; i += 1) {
+        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- bulk insert of 520 ended events; seedEvent per row would be prohibitively slow
+        await ctx.db.insert('events', {
+          title: `Ended ${i + 1}`,
+          date: new Date(Date.now() - (1 + (i % 28)) * DAY_MS).toISOString(),
+          price: 1000,
+          totalTickets: 50,
+          status: 'published',
+          visibility: 'public',
+          organizerId,
+        });
+      }
+    });
+    // The surviving upcoming event needs a full inventory row for availability.
+    await t.mutation(api.testing.events.seedEvent, {
+      title: 'Future Headliner',
+      date: new Date(Date.now() + 5 * DAY_MS).toISOString(),
+      price: 1000,
+      totalTickets: 50,
+      status: 'published',
+      visibility: 'public',
+      organizerId,
+    });
+
+    const result = await asUser.query(api.events.public.listByOrganizer, {
+      organizerId,
+    });
+    assert(result);
+    const titles = result.events.map((event) => event.title);
+    expect(titles).toContain('Future Headliner');
+    expect(titles.some((title) => title.startsWith('Ended '))).toBe(false);
+  });
+
   it('returns organizerDescription when organizer has a description', async () => {
     const t = convexTest();
 

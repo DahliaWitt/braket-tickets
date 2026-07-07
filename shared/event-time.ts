@@ -206,13 +206,20 @@ export function eventStartInstantMs(
 }
 
 /**
- * The instant an event is considered over, in milliseconds: its explicit
- * `endDate` when set and parseable, otherwise its start instant
- * (eventStartInstantMs). The start fallback preserves pre-endDate behavior for
- * single-day and legacy events. Use this — not eventStartInstantMs — for
- * end-of-event gating such as the payout delay, so a multi-day event's funds
- * are not released while it is still running. Returns null only when neither
- * the endDate nor the start can be parsed.
+ * The instant an event is considered over, in milliseconds. Use this — not
+ * eventStartInstantMs — for end-of-event gating such as the payout delay, so a
+ * multi-day event's funds are not released while it is still running.
+ *
+ * Fails closed and distinguishes a *missing* end from an *invalid* one:
+ * - `endsAtUtc` absent (undefined/null/empty) → the start instant
+ *   (eventStartInstantMs), preserving pre-endDate behavior for single-day and
+ *   legacy events.
+ * - `endsAtUtc` present and parseable → its instant.
+ * - `endsAtUtc` present but unparseable → `null`. A corrupt stored end must not
+ *   silently degrade to the *start*, which in payout gating would release funds
+ *   as if the multi-day event had no end at all. Callers treat `null` as "date
+ *   invalid" (throw / hold / show no status).
+ * Also `null` when there is no valid end and the start cannot be parsed.
  */
 export function eventEndInstantMs(
   startsAtUtc: EventTimeInput,
@@ -220,8 +227,8 @@ export function eventEndInstantMs(
   options?: EventTimeOptions,
 ): number | null {
   if (endsAtUtc) {
-    const endMs = parseUtcInstant(endsAtUtc)?.getTime();
-    if (endMs !== undefined) return endMs;
+    // Present-but-invalid → null (fail closed), never the start fallback.
+    return parseUtcInstant(endsAtUtc)?.getTime() ?? null;
   }
   return eventStartInstantMs(startsAtUtc, options);
 }

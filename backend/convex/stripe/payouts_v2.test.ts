@@ -473,6 +473,27 @@ describe('confirmPayout', () => {
     ).rejects.toThrow('has an invalid date');
   });
 
+  it('fails closed when a Connect settlement event has a malformed endDate', async () => {
+    const t = convexTest();
+    const organizerId = await seedOrganizerWithAccount(t, 'acct_bad_end');
+    const eventId = await seedEvent(t, organizerId, 'Bad End Event');
+
+    await t.run(async (ctx) => {
+      await seedCapturedLedgerRow(ctx, eventId, 'acct_bad_end', 2_400);
+      // Valid start, corrupt end — must not silently fall back to the start
+      // and release funds as if the event had no end.
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Corrupt endDate used to verify end-aware settlement fails closed.
+      await ctx.db.patch(eventId, {endDate: '2026-02-31T08:00:00.000Z'});
+    });
+
+    await expect(
+      t.query(internal.stripe.connect.getSettlementDataForAccount, {
+        stripeConnectedAccountId: 'acct_bad_end',
+        eligibleBeforeMs: Date.now(),
+      }),
+    ).rejects.toThrow('has an invalid date');
+  });
+
   it('stamps paidOutAt only after confirmed allocations cover the event settlement', async () => {
     const t = convexTest();
     const organizerId = await seedOrganizerWithAccount(t, 'acct_full_paid');

@@ -82,7 +82,7 @@ describe('event-time', () => {
     expect(eventStartInstantMs('2026-02-31')).toBeNull();
   });
 
-  it('resolves the event end instant, falling back to the start when no endDate', () => {
+  it('resolves the event end instant and fails closed on an invalid endDate', () => {
     const start = '2026-02-27T07:30:00.000Z';
     const end = '2026-03-01T06:00:00.000Z';
     // Explicit end wins.
@@ -90,10 +90,10 @@ describe('event-time', () => {
     // No end -> start instant (legacy/single-day fallback).
     expect(eventEndInstantMs(start)).toBe(new Date(start).getTime());
     expect(eventEndInstantMs(start, null)).toBe(new Date(start).getTime());
-    // Unparseable end -> start fallback; unparseable start -> null.
-    expect(eventEndInstantMs(start, 'not-a-date')).toBe(
-      new Date(start).getTime(),
-    );
+    // Present-but-invalid end -> null (must NOT fall back to the start, so
+    // payout gating cannot release funds early on corrupt data).
+    expect(eventEndInstantMs(start, 'not-a-date')).toBeNull();
+    // No valid end and unparseable start -> null.
     expect(eventEndInstantMs('not-a-date')).toBeNull();
   });
 
