@@ -238,7 +238,7 @@ jobs:
         run: pnpm sync:env:dev
 
       - name: Deploy to Convex (Dev)
-        run: pnpm convex deploy
+        run: pnpm convex deploy --message "dev deploy ${{ github.ref_name }} @ ${{ github.sha }} by ${{ github.actor }}"
 
   deploy-frontend-preview:
     name: Deploy Frontend to Cloudflare (Preview)
