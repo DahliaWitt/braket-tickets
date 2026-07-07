@@ -67,6 +67,11 @@ function wrapEmail(
   options?: {includeLegacyFooter?: boolean},
 ): string {
   const APP_NAME = 'Braket Tickets';
+  // Use the accent-colored mark, not the white one. Gmail (iOS/Android) dark mode
+  // inverts the dark email background to light but never recolors images, so a white
+  // logo vanishes on the flipped-light background. Gmail ignores prefers-color-scheme,
+  // so a media-query logo swap cannot target it; the purple mark keeps contrast on both.
+  const logoSrc = `${resolveSiteUrl()}/braket_purple.png`;
   const safePreheader = escapeHtml(preheader).replaceAll('—', '&mdash;');
   const includeLegacyFooter = options?.includeLegacyFooter ?? true;
   const footerHtml = includeLegacyFooter
@@ -124,11 +129,7 @@ function wrapEmail(
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width: 560px;">
                   <tr>
                       <td align="center" style="padding-bottom: 32px;">
-                          <!-- Accent-colored mark, not white: Gmail (iOS/Android) dark mode inverts the dark email
-                               background to light but never recolors images, so a white logo vanishes on the
-                               flipped-light background. Gmail ignores prefers-color-scheme, so a media-query
-                               logo swap cannot target it. The purple mark keeps contrast on both backgrounds. -->
-                          <img src="${resolveSiteUrl()}/braket_purple.png" alt="${APP_NAME}" width="64" height="64" style="display: block; margin: 0 auto 16px auto;"/>
+                          <img src="${logoSrc}" alt="${APP_NAME}" width="64" height="64" style="display: block; margin: 0 auto 16px auto;"/>
                       </td>
                   </tr>
               </table>
