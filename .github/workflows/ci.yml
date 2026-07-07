@@ -30,7 +30,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - name: Setup pnpm
-        uses: pnpm/action-setup@c336a2788d9774dccfdeb4823a5058ccc9f07453 # v4.3.0
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
       - name: Setup Node.js
         # Runs on self-hosted too: Angular 22 requires Node >=22.22.3, newer than
         # the runner image's baked-in Node. setup-node installs the .nvmrc version
@@ -70,7 +70,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - name: Setup pnpm
-        uses: pnpm/action-setup@c336a2788d9774dccfdeb4823a5058ccc9f07453 # v4.3.0
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
       - name: Setup Node.js
         # Runs on self-hosted too: Angular 22 requires Node >=22.22.3, newer than
         # the runner image's baked-in Node. setup-node installs the .nvmrc version
@@ -169,7 +169,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - name: Setup pnpm
-        uses: pnpm/action-setup@c336a2788d9774dccfdeb4823a5058ccc9f07453 # v4.3.0
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
       - name: Setup Node.js
         # Runs on self-hosted too: Angular 22 requires Node >=22.22.3, newer than
         # the runner image's baked-in Node. setup-node installs the .nvmrc version
@@ -240,7 +240,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - name: Setup pnpm
-        uses: pnpm/action-setup@c336a2788d9774dccfdeb4823a5058ccc9f07453 # v4.3.0
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
       - name: Setup Node.js
         # Runs on self-hosted too: Angular 22 requires Node >=22.22.3, newer than
         # the runner image's baked-in Node. setup-node installs the .nvmrc version
@@ -296,7 +296,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@c336a2788d9774dccfdeb4823a5058ccc9f07453 # v4.3.0
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
       - name: Setup Node.js
         # e2e.ts --build compiles the Angular app, which requires Node >=22.22.3
         # (newer than the runner image). Pin via .nvmrc until the image is rebuilt.
