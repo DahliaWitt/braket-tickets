@@ -6,6 +6,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["storybook"],
       "port": 6006
+    },
+    {
+      "name": "frontend-prod-static",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--dir", "frontend", "serve:prod"],
+      "port": 4201
     }
   ]
 }

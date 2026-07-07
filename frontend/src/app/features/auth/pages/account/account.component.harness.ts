@@ -542,4 +542,18 @@ export class AccountComponentHarness extends ComponentHarness {
     const host = await this.host();
     return host !== null;
   }
+
+  /** True while the optimistic-activation loading skeleton is shown. */
+  async hasLoadingSkeleton(): Promise<boolean> {
+    const el = await this.locatorForOptional(
+      '[data-testid="account-loading-skeleton"]',
+    )();
+    return el !== null;
+  }
+
+  /** True when the editable profile name input is rendered. */
+  async hasProfileNameInput(): Promise<boolean> {
+    const el = await this.locatorForOptional('input[id="profile-name"]')();
+    return el !== null;
+  }
 }
