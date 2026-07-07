@@ -455,6 +455,7 @@ export declare const api: {
                 | "event.update"
                 | "guest.add"
                 | "guest.check-in"
+                | "guest.update"
                 | "magic_link.create"
                 | "magic_link.delete"
                 | "magic_link.disable"
@@ -1056,6 +1057,18 @@ export declare const api: {
         "mutation",
         "public",
         { id: Id<"guests"> },
+        null
+      >;
+      update: FunctionReference<
+        "mutation",
+        "public",
+        {
+          email?: string;
+          id: Id<"guests">;
+          name: string;
+          notes?: string;
+          type: "guest" | "artist guest" | "staff";
+        },
         null
       >;
     };
@@ -2294,6 +2307,7 @@ export declare const api: {
             | "event.update"
             | "guest.add"
             | "guest.check-in"
+            | "guest.update"
             | "magic_link.create"
             | "magic_link.delete"
             | "magic_link.disable"
@@ -3552,6 +3566,7 @@ export declare const internal: {
               | "event.update"
               | "guest.add"
               | "guest.check-in"
+              | "guest.update"
               | "magic_link.create"
               | "magic_link.delete"
               | "magic_link.disable"

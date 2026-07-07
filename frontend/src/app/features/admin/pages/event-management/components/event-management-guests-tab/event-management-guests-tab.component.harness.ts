@@ -16,6 +16,9 @@ export class EventManagementGuestsTabHarness extends ComponentHarness {
   private readonly getRemoveButtons = this.locatorForAll(
     '[data-testid="remove-guest"]',
   );
+  private readonly getEditButtons = this.locatorForAll(
+    '[data-testid="edit-guest"]',
+  );
 
   async clickAddGuestButton(): Promise<void> {
     const button = await this.getAddGuestButton();
@@ -41,5 +44,21 @@ export class EventManagementGuestsTabHarness extends ComponentHarness {
     return Promise.all(
       buttons.map((button) => button.getAttribute('aria-label')),
     );
+  }
+
+  async getEditButtonAriaLabels(): Promise<(string | null)[]> {
+    const buttons = await this.getEditButtons();
+    return Promise.all(
+      buttons.map((button) => button.getAttribute('aria-label')),
+    );
+  }
+
+  async clickEditGuestButton(index: number): Promise<void> {
+    const buttons = await this.getEditButtons();
+    const button = buttons[index];
+    if (!button) {
+      throw new Error(`No edit-guest button found at index ${index}`);
+    }
+    await button.click();
   }
 }

@@ -2,6 +2,7 @@ import type {Doc, Id} from '../../_generated/dataModel';
 import type {MutationCtx, QueryCtx} from '../../_generated/server';
 import {throwNotFound} from '../../lib/errors';
 import {
+  validateRequiredString,
   validateStringLength,
   MAX_GUEST_NAME_LENGTH,
   MAX_GUEST_EMAIL_LENGTH,
@@ -24,6 +25,7 @@ export async function add(
 ): Promise<Id<'guests'>> {
   const {user, event} = await requireEventForEdit(ctx, args.eventId);
 
+  validateRequiredString(args.name, 'Name');
   validateStringLength(args.name, 'Name', MAX_GUEST_NAME_LENGTH);
   validateStringLength(args.email, 'Email', MAX_GUEST_EMAIL_LENGTH);
   validateStringLength(args.notes, 'Notes', MAX_GUEST_NOTES_LENGTH);
@@ -45,6 +47,52 @@ export async function add(
   );
 
   return guestId;
+}
+
+export async function update(
+  ctx: MutationCtx,
+  args: {
+    id: Id<'guests'>;
+    name: string;
+    email?: string;
+    type: Doc<'guests'>['type'];
+    notes?: string;
+  },
+): Promise<null> {
+  const guest = await ctx.db.get('guests', args.id);
+  if (!guest) throwNotFound('Guest');
+
+  const {user, event} = await requireEventForEdit(ctx, guest.eventId);
+
+  validateRequiredString(args.name, 'Name');
+  validateStringLength(args.name, 'Name', MAX_GUEST_NAME_LENGTH);
+  validateStringLength(args.email, 'Email', MAX_GUEST_EMAIL_LENGTH);
+  validateStringLength(args.notes, 'Notes', MAX_GUEST_NOTES_LENGTH);
+
+  await ctx.db.replace('guests', args.id, {
+    eventId: guest.eventId,
+    name: args.name,
+    email: args.email,
+    type: args.type,
+    notes: args.notes,
+    emailedAt: guest.emailedAt,
+    checkedInAt: guest.checkedInAt,
+    checkedInBy: guest.checkedInBy,
+  });
+
+  await insertAdminAuditLog(
+    {db: ctx.db},
+    {
+      adminId: user._id,
+      action: ADMIN_AUDIT_ACTIONS.GUEST_UPDATE,
+      eventId: guest.eventId,
+      organizerId: event.organizerId,
+      reason: args.name,
+      source: 'admin-ui',
+    },
+  );
+
+  return null;
 }
 
 export async function remove(

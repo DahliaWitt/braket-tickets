@@ -109,6 +109,7 @@ export type DataModel = {
         | "event.update"
         | "guest.add"
         | "guest.check-in"
+        | "guest.update"
         | "magic_link.create"
         | "magic_link.delete"
         | "magic_link.disable"
