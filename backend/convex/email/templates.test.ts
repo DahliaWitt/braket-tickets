@@ -241,6 +241,42 @@ describe('purchasedTicketTemplate', () => {
     expect(html).not.toContain('2026-02-27T07:30:00.000Z');
   });
 
+  it('renders an overnight end date as a full range in the platform timezone', () => {
+    const {html} = purchasedTicketTemplate(
+      {
+        title: 'Overnight Ticket',
+        date: '2026-02-27T06:00:00.000Z', // 10pm Feb 26 event-local
+        endDate: '2026-02-27T14:00:00.000Z', // 6am Feb 27 event-local
+        location: 'Afterhours',
+      },
+      'Guest',
+      'https://qr.example/ticket.png',
+      true,
+    );
+
+    const normalized = html.replace(/\s+/g, ' ');
+    expect(normalized).toContain('Thu, Feb 26, 2026, 10:00 PM PST');
+    expect(normalized).toContain('Fri, Feb 27, 2026, 6:00 AM PST');
+    expect(normalized).toContain(' – ');
+  });
+
+  it('ignores an end date that is not after the start', () => {
+    const {html} = purchasedTicketTemplate(
+      {
+        title: 'Zero-Length Ticket',
+        date: '2026-02-27T07:30:00.000Z',
+        endDate: '2026-02-27T07:30:00.000Z',
+        location: 'Afterhours',
+      },
+      'Guest',
+      'https://qr.example/ticket.png',
+      true,
+    );
+
+    expect(html).toContain('Thu, Feb 26, 2026, 11:30 PM PST');
+    expect(html.replace(/\s+/g, ' ')).not.toContain('PST – ');
+  });
+
   it('formats legacy date-only event rows as platform-local dates', () => {
     const {html} = purchasedTicketTemplate(
       {

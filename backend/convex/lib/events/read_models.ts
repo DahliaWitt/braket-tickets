@@ -86,6 +86,7 @@ export function toPublicEventCard(
     title: event.title,
     description: event.description,
     date: event.date,
+    endDate: event.endDate,
     location: event.location,
     price: event.price,
     slidingScaleEnabled: event.slidingScaleEnabled,

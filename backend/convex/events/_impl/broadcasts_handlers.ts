@@ -257,6 +257,7 @@ export async function sendBroadcast(
           _id: args.eventId,
           title: event.title,
           date: event.date,
+          endDate: event.endDate,
           location: event.location,
         },
         organizer: {

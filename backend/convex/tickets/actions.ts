@@ -334,7 +334,12 @@ export const sendTicketsAction = internalAction({
 
     const isGuest = !!order.guestSessionId && !order.userId;
     const {subject, html} = purchasedTicketTemplate(
-      {title: event.title, date: event.date, location: event.location},
+      {
+        title: event.title,
+        date: event.date,
+        endDate: event.endDate,
+        location: event.location,
+      },
       buyerName || 'Attendee',
       'cid:qrcode',
       isGuest,

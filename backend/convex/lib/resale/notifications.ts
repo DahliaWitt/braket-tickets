@@ -61,7 +61,12 @@ export async function notifySubscribersForListedTicketState(
   if (eligibleSubscribers.length === 0) return 0;
 
   const {subject, html} = resaleAvailableTemplate(
-    {title: event.title, date: event.date, location: event.location},
+    {
+      title: event.title,
+      date: event.date,
+      endDate: event.endDate,
+      location: event.location,
+    },
     args.eventId,
   );
 

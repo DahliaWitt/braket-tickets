@@ -163,7 +163,8 @@
                   </h3>
                   <p class="mono-label text-2xs text-muted-foreground/60">
                     {{ event.date | eventDate: 'mediumDate' }},
-                    {{ event.date | eventDate: 'shortTime' }}
+                    {{ event.date | eventDate: 'shortTime'
+                    }}{{ event.endDate | eventEndTime: event.date }}
                     &middot;
                     {{ priceSummary(event).primaryText }}
                   </p>
@@ -223,7 +224,8 @@
                   </h3>
                   <p class="mono-label text-2xs text-muted-foreground/60">
                     {{ event.date | eventDate: 'mediumDate' }},
-                    {{ event.date | eventDate: 'shortTime' }}
+                    {{ event.date | eventDate: 'shortTime'
+                    }}{{ event.endDate | eventEndTime: event.date }}
                   </p>
                   <bra-status-badge status="accent"
                     >Vetting Required</bra-status-badge
@@ -334,7 +336,9 @@
                     class="truncate font-mono text-2xs text-muted-foreground/50"
                   >
                     {{ nextEvt.date | eventDate: 'mediumDate' }},
-                    {{ nextEvt.date | eventDate: 'shortTime' }} &mdash;
+                    {{ nextEvt.date | eventDate: 'shortTime'
+                    }}{{ nextEvt.endDate | eventEndTime: nextEvt.date }}
+                    &mdash;
                     {{ nextEvt.title }}
                   </p>
                 }
@@ -544,7 +548,8 @@
                   </h3>
                   <p class="mono-label text-2xs text-muted-foreground">
                     {{ event.date | eventDate: 'mediumDate' }},
-                    {{ event.date | eventDate: 'shortTime' }}
+                    {{ event.date | eventDate: 'shortTime'
+                    }}{{ event.endDate | eventEndTime: event.date }}
                     @if (event.location) {
                       <span> &middot; {{ event.location }}</span>
                     }

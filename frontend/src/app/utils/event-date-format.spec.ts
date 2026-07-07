@@ -3,6 +3,7 @@ import {
   dateKeyToLocalDate,
   formatEventDate,
   formatEventDateKey,
+  formatEventEndTimeSuffix,
   getTodayInEventTimeZone,
 } from './event-date-format';
 
@@ -45,5 +46,55 @@ describe('formatEventDate', () => {
   it('parses date keys into local calendar dates', () => {
     expect(dateKeyToLocalDate('2026-02-26')).toEqual(new Date(2026, 1, 26));
     expect(dateKeyToLocalDate('not-a-date')).toBeNull();
+  });
+});
+
+describe('formatEventEndTimeSuffix', () => {
+  it('renders a same-day end as a bare time suffix', () => {
+    // 8pm – 11pm Feb 26 event-local
+    expect(
+      normalizeSpaces(
+        formatEventEndTimeSuffix(
+          '2026-02-27T07:00:00.000Z',
+          '2026-02-27T04:00:00.000Z',
+        ),
+      ),
+    ).toBe(' – 11:00 PM');
+  });
+
+  it('includes the end day for overnight events', () => {
+    // 10pm Feb 26 – 6am Feb 27 event-local
+    expect(
+      normalizeSpaces(
+        formatEventEndTimeSuffix(
+          '2026-02-27T14:00:00.000Z',
+          '2026-02-27T06:00:00.000Z',
+        ),
+      ),
+    ).toBe(' – Feb 27, 2026, 6:00 AM');
+  });
+
+  it('returns an empty suffix for missing, invalid, or non-positive windows', () => {
+    expect(
+      formatEventEndTimeSuffix(undefined, '2026-02-27T04:00:00.000Z'),
+    ).toBe('');
+    expect(formatEventEndTimeSuffix(null, '2026-02-27T04:00:00.000Z')).toBe('');
+    expect(
+      formatEventEndTimeSuffix('not-a-date', '2026-02-27T04:00:00.000Z'),
+    ).toBe('');
+    expect(formatEventEndTimeSuffix('2026-02-27T07:00:00.000Z', null)).toBe('');
+    // End at or before the start renders nothing.
+    expect(
+      formatEventEndTimeSuffix(
+        '2026-02-27T04:00:00.000Z',
+        '2026-02-27T04:00:00.000Z',
+      ),
+    ).toBe('');
+    expect(
+      formatEventEndTimeSuffix(
+        '2026-02-27T02:00:00.000Z',
+        '2026-02-27T04:00:00.000Z',
+      ),
+    ).toBe('');
   });
 });

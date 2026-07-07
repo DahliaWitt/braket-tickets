@@ -6,7 +6,7 @@
 
 import {resolveSiteUrl} from '../lib/site_url';
 import {EVENT_DATE_TIME_ZONE} from '../lib/timezone';
-import {eventStartInstantMs} from '@shared/event-time';
+import {eventStartInstantMs, parseUtcInstant} from '@shared/event-time';
 
 /** Escapes HTML special characters to prevent XSS in email templates. */
 function escapeHtml(unsafe: string): string {
@@ -30,20 +30,38 @@ const baseStyles = {
   border: '#332A33',
 };
 
-function formatEventDateTime(value: string): string {
-  const startsAtMs = eventStartInstantMs(value);
-  if (startsAtMs === null) return value;
+const eventDateTimeFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: EVENT_DATE_TIME_ZONE,
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  timeZoneName: 'short',
+});
 
-  return new Intl.DateTimeFormat('en-US', {
-    timeZone: EVENT_DATE_TIME_ZONE,
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZoneName: 'short',
-  }).format(new Date(startsAtMs));
+/**
+ * Formats the event's start — and, when a valid endDate is set, the full
+ * start–end range — in the event timezone. formatRange handles same-day
+ * ("Mon, Dec 15, 2026, 8:00 – 11:00 PM PST") vs overnight
+ * ("… 10:00 PM PST – Tue, Dec 16, 2026, 6:00 AM PST") rendering.
+ */
+function formatEventDateTime(event: {date: string; endDate?: string}): string {
+  const startsAtMs = eventStartInstantMs(event.date);
+  if (startsAtMs === null) return event.date;
+
+  const endsAtMs = event.endDate
+    ? (parseUtcInstant(event.endDate)?.getTime() ?? null)
+    : null;
+  if (endsAtMs !== null && endsAtMs > startsAtMs) {
+    return eventDateTimeFormatter.formatRange(
+      new Date(startsAtMs),
+      new Date(endsAtMs),
+    );
+  }
+
+  return eventDateTimeFormatter.format(new Date(startsAtMs));
 }
 
 const vettingSubmissionTimeFormatter = new Intl.DateTimeFormat('en-US', {
@@ -292,13 +310,13 @@ export function emailChangeConfirmationTemplate(
 }
 
 export function purchasedTicketTemplate(
-  event: {title: string; date: string; location?: string},
+  event: {title: string; date: string; endDate?: string; location?: string},
   buyerName: string,
   qrCodeSource: string,
   isGuest = false,
   community?: {slug?: string; hasCodeOfConduct?: boolean},
 ): {subject: string; html: string} {
-  const dateStr = formatEventDateTime(event.date);
+  const dateStr = formatEventDateTime(event);
 
   // Escape user-controlled data to prevent XSS
   const safeTitle = escapeHtml(event.title);
@@ -353,12 +371,12 @@ export function purchasedTicketTemplate(
 }
 
 export function resaleAvailableTemplate(
-  event: {title: string; date: string; location?: string},
+  event: {title: string; date: string; endDate?: string; location?: string},
   eventId: string,
 ): {subject: string; html: string} {
   const safeTitle = escapeHtml(event.title);
   const safeLocation = event.location ? escapeHtml(event.location) : '';
-  const dateStr = formatEventDateTime(event.date);
+  const dateStr = formatEventDateTime(event);
   const siteUrl = resolveSiteUrl();
   const eventUrl = `${siteUrl}/events/${eventId}`;
 
@@ -389,7 +407,13 @@ function escapeAndFormatMultiline(text: string): string {
 }
 
 export function ticketPurchaseReminderTemplate(args: {
-  event: {_id: string; title: string; date: string; location?: string};
+  event: {
+    _id: string;
+    title: string;
+    date: string;
+    endDate?: string;
+    location?: string;
+  };
   organizer: {id: string; name: string};
   message: string;
   siteUrl: string;
@@ -414,7 +438,7 @@ export function ticketPurchaseReminderTemplate(args: {
   const unsubUrl = `${apiSiteUrl}/api/unsubscribe?token=${encodeURIComponent(unsubToken)}`;
   const oneClickUnsubUrl = `${apiSiteUrl}/api/unsubscribe/one-click?token=${encodeURIComponent(unsubToken)}`;
   const listId = `Braket Tickets ${organizer.id} <reminders.${organizer.id}.braket.gay>`;
-  const dateStr = formatEventDateTime(event.date);
+  const dateStr = formatEventDateTime(event);
 
   const content = `
       <h2 style="margin: 0 0 16px 0; font-family: 'Syne', 'Chakra Petch', system-ui, sans-serif; font-size: 24px; line-height: 1.15; font-weight: 700; color: ${baseStyles.textLight};">
@@ -580,7 +604,13 @@ export function applicationRejectedTemplate(
  * with a "View Event" CTA.
  */
 export function eventBroadcastTemplate(args: {
-  event: {_id: string; title: string; date: string; location?: string};
+  event: {
+    _id: string;
+    title: string;
+    date: string;
+    endDate?: string;
+    location?: string;
+  };
   organizer: {id: string; name: string};
   message: string;
   siteUrl: string;
@@ -601,7 +631,7 @@ export function eventBroadcastTemplate(args: {
   const safeOrganizerName = escapeHtml(organizer.name);
   const safeLocation = event.location ? escapeHtml(event.location) : null;
   const safeMessage = escapeAndFormatMultiline(message);
-  const eventDate = formatEventDateTime(event.date);
+  const eventDate = formatEventDateTime(event);
   const eventUrl = `${siteUrl}/events/${event._id}`;
   const unsubUrl = `${apiSiteUrl}/api/unsubscribe?token=${encodeURIComponent(unsubToken)}`;
   const oneClickUnsubUrl = `${apiSiteUrl}/api/unsubscribe/one-click?token=${encodeURIComponent(unsubToken)}`;
@@ -815,6 +845,7 @@ export function eventAnnouncementTemplate(args: {
     _id: string;
     title: string;
     date: string;
+    endDate?: string;
     location?: string;
     description?: string;
   };
@@ -841,7 +872,7 @@ export function eventAnnouncementTemplate(args: {
   const safeTitle = escapeHtml(event.title);
   const safeOrgName = escapeHtml(organizer.name);
   const safeLocation = event.location ? escapeHtml(event.location) : null;
-  const eventDate = formatEventDateTime(event.date);
+  const eventDate = formatEventDateTime(event);
   const safeDesc = event.description
     ? escapeHtml(event.description.slice(0, 300)) +
       (event.description.length > 300 ? '…' : '')

@@ -4287,6 +4287,7 @@ export declare const internal: {
           _id: Id<"events">;
           date: string;
           description?: string;
+          endDate?: string;
           isSoldOut: boolean;
           location?: string;
           organizerId?: Id<"organizers"> | null;

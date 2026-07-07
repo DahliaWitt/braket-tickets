@@ -3,6 +3,8 @@ import {
   dateKeyToLocalDate as sharedDateKeyToLocalDate,
   eventStartInstantMs,
   formatEventDateKey as sharedFormatEventDateKey,
+  parseUtcInstant,
+  toDateKeyInEventTimeZone,
   todayDateKey,
 } from '@shared/event-time';
 
@@ -75,6 +77,46 @@ export function formatEventDate(
   } catch {
     return null;
   }
+}
+
+/**
+ * Suffix appended after an event's rendered start time to show its end,
+ * e.g. ' – 11:00 PM' (same event-local day) or ' – Dec 16, 6:00 AM'
+ * (overnight). Returns '' when endDate is missing, unparseable, or not
+ * after the start, so templates can append it unconditionally.
+ */
+export function formatEventEndTimeSuffix(
+  endDate: string | null | undefined,
+  startDate: string | number | Date | null | undefined,
+): string {
+  if (!endDate || startDate === null || startDate === undefined) return '';
+
+  const startMs =
+    typeof startDate === 'string'
+      ? eventStartInstantMs(startDate)
+      : new Date(startDate).getTime();
+  const endMs = parseUtcInstant(endDate)?.getTime() ?? null;
+  if (
+    startMs === null ||
+    Number.isNaN(startMs) ||
+    endMs === null ||
+    endMs <= startMs
+  ) {
+    return '';
+  }
+
+  const endTime = formatEventDate(endMs, 'shortTime');
+  if (!endTime) return '';
+
+  const sameEventLocalDay =
+    toDateKeyInEventTimeZone(new Date(startMs)) ===
+    toDateKeyInEventTimeZone(new Date(endMs));
+  if (sameEventLocalDay) {
+    return ` – ${endTime}`;
+  }
+
+  const endDay = formatEventDate(endMs, 'mediumDate');
+  return endDay ? ` – ${endDay}, ${endTime}` : ` – ${endTime}`;
 }
 
 export function formatEventDateKey(
