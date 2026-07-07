@@ -375,6 +375,17 @@ describe('EventManagementGuestsTabComponent', () => {
 
     expect(await harness.isSendAllButtonDisabled()).toBe(true);
     expect(await harness.getSendAllButtonText()).toContain('Send All (0)');
+    // Disabled outline buttons get no visual treatment from the variants, so
+    // the count-0 state must carry an explicit muted affordance.
+    expect(await harness.isSendAllButtonMuted()).toBe(true);
+  });
+
+  it('shows the send-all button in an active (non-muted) state when guests are pending', async () => {
+    fixture.componentRef.setInput('guests', [mockGuest]);
+    fixture.detectChanges();
+
+    expect(await harness.isSendAllButtonDisabled()).toBe(false);
+    expect(await harness.isSendAllButtonMuted()).toBe(false);
   });
 
   it('shows visible feedback after starting a guest ticket download', async () => {

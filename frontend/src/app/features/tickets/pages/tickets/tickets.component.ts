@@ -266,7 +266,7 @@ interface TicketResaleInfo {
                         <z-icon zType="loader-circle" class="animate-spin" />
                         Generating...
                       } @else {
-                        <z-icon zType="file-text" class="mr-2 h-4 w-4" />
+                        <z-icon zType="file-text" class="h-4 w-4" />
                         Download PDF
                       }
                     </button>
@@ -360,7 +360,7 @@ interface TicketResaleInfo {
                             />
                             Cancelling...
                           } @else {
-                            <z-icon zType="x" class="mr-2" />
+                            <z-icon zType="x" />
                             Cancel Listing
                           }
                         </button>

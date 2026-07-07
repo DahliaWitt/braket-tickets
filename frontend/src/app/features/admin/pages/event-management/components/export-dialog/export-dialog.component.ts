@@ -116,7 +116,7 @@ export interface ExportDialogData {
             <z-icon zType="loader-circle" class="animate-spin" />
             Exporting...
           } @else {
-            <z-icon zType="download" class="mr-2" />
+            <z-icon zType="download" />
             Export {{ format().toUpperCase() }}
           }
         </button>

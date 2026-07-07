@@ -17,7 +17,11 @@
         [zLoading]="isSendingAll()"
         [zDisabled]="isLoading() || pendingSendGuests().length === 0"
         data-testid="send-all-tickets"
-        class="border-primary/30 text-primary hover:bg-primary/10"
+        [class.border-primary/30]="pendingSendGuests().length > 0"
+        [class.text-primary]="pendingSendGuests().length > 0"
+        [class.hover:bg-primary/10]="pendingSendGuests().length > 0"
+        [class.border-border]="pendingSendGuests().length === 0"
+        [class.text-muted-foreground/60]="pendingSendGuests().length === 0"
         [attr.aria-label]="
           'Send tickets to all ' + pendingSendGuests().length + ' unsent guests'
         "
