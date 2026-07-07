@@ -2,6 +2,7 @@ import type {Doc, Id} from '../../_generated/dataModel';
 import type {MutationCtx, QueryCtx} from '../../_generated/server';
 import {throwNotFound} from '../../lib/errors';
 import {
+  validateRequiredString,
   validateStringLength,
   MAX_GUEST_NAME_LENGTH,
   MAX_GUEST_EMAIL_LENGTH,
@@ -24,6 +25,7 @@ export async function add(
 ): Promise<Id<'guests'>> {
   const {user, event} = await requireEventForEdit(ctx, args.eventId);
 
+  validateRequiredString(args.name, 'Name');
   validateStringLength(args.name, 'Name', MAX_GUEST_NAME_LENGTH);
   validateStringLength(args.email, 'Email', MAX_GUEST_EMAIL_LENGTH);
   validateStringLength(args.notes, 'Notes', MAX_GUEST_NOTES_LENGTH);
@@ -62,6 +64,7 @@ export async function update(
 
   const {user, event} = await requireEventForEdit(ctx, guest.eventId);
 
+  validateRequiredString(args.name, 'Name');
   validateStringLength(args.name, 'Name', MAX_GUEST_NAME_LENGTH);
   validateStringLength(args.email, 'Email', MAX_GUEST_EMAIL_LENGTH);
   validateStringLength(args.notes, 'Notes', MAX_GUEST_NOTES_LENGTH);

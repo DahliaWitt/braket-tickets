@@ -119,7 +119,7 @@ export interface AddGuestDialogResult {
           (click)="submit()"
           data-testid="add-guest-submit"
         >
-          {{ isEditMode() ? 'Save Changes' : 'Add Guest' }}
+          {{ isEditMode ? 'Save Changes' : 'Add Guest' }}
         </button>
       </div>
     </div>
@@ -141,7 +141,8 @@ export class AddGuestDialogComponent {
     >(BraDialogRef);
   private readonly data = inject<AddGuestDialogData>(BRA_MODAL_DATA);
 
-  readonly isEditMode = () => this.data.guest != null;
+  // `data` is injected once and never mutates, so edit-mode is a static value.
+  readonly isEditMode = this.data.guest != null;
 
   readonly name = signal(this.data.guest?.name ?? '');
   readonly email = signal(this.data.guest?.email ?? '');

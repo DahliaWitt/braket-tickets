@@ -82,7 +82,8 @@ describe('AddGuestDialogComponent', () => {
       expect(await harness.getNameValue()).toBe(guest.name);
       expect(await harness.getEmailValue()).toBe(guest.email);
       expect(await harness.getNotesValue()).toBe(guest.notes);
-      expect(fixture.componentInstance.type()).toBe(guest.type);
+      // guest.type 'staff' renders as the "Staff" option label in the select.
+      expect(await harness.getSelectedTypeLabel()).toBe('Staff');
     });
 
     it('shows the Save Changes submit label', async () => {

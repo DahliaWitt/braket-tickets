@@ -6,6 +6,7 @@ export class AddGuestDialogComponentHarness extends ComponentHarness {
   private getNameInput = this.locatorFor('#guest-name');
   private getEmailInput = this.locatorFor('#guest-email');
   private getNotesTextarea = this.locatorFor('#guest-notes');
+  private getTypeTrigger = this.locatorFor('#guest-type button');
   private getSubmitButton = this.locatorFor('[data-testid="add-guest-submit"]');
 
   async setName(value: string): Promise<void> {
@@ -54,5 +55,11 @@ export class AddGuestDialogComponentHarness extends ComponentHarness {
   async getSubmitButtonLabel(): Promise<string> {
     const button = await this.getSubmitButton();
     return (await button.text()).trim();
+  }
+
+  /** Returns the visible label of the currently selected guest type (e.g. "Staff"). */
+  async getSelectedTypeLabel(): Promise<string> {
+    const trigger = await this.getTypeTrigger();
+    return (await trigger.text()).trim();
   }
 }

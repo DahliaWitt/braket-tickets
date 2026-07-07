@@ -296,6 +296,23 @@ describe('guests.add', () => {
       }),
     ).rejects.toThrow('Notes exceeds maximum length');
   });
+
+  it('rejects a blank name', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    await expect(
+      asAdmin.mutation(api.events.guests.add, {
+        eventId,
+        name: '   ',
+        type: 'guest',
+      }),
+    ).rejects.toThrow(/name is required/i);
+  });
 });
 
 describe('guests.remove', () => {
@@ -493,6 +510,46 @@ describe('guests.update', () => {
     ).rejects.toThrow('Unauthorized');
   });
 
+  it('rejects a community admin from a different organizer', async () => {
+    const t = convexTest();
+
+    const rootAdminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asRootAdmin = t.withIdentity({subject: rootAdminId});
+    const guestId = await asRootAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Org A Guest',
+      type: 'guest',
+    });
+
+    // A community admin scoped to a different organizer must not be able to
+    // edit a guest that belongs to another organizer's event.
+    const otherOrganizerId = await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {name: 'Other Org', slug: `other-org-guests-${Date.now()}`},
+    );
+    const otherAdminId = await t.mutation(
+      api.testing.users.createUserDirectly,
+      {name: 'Other Admin', email: `other-admin-${Date.now()}@test.com`},
+    );
+    await t.mutation(api.testing.communities.seedCommunityAdmin, {
+      userId: otherAdminId,
+      organizerId: otherOrganizerId,
+      grantedBy: rootAdminId,
+    });
+
+    const asOtherAdmin = t.withIdentity({subject: otherAdminId});
+
+    await expect(
+      asOtherAdmin.mutation(api.events.guests.update, {
+        id: guestId,
+        name: 'Cross-Org Edit',
+        type: 'guest',
+      }),
+    ).rejects.toThrow('Unauthorized');
+  });
+
   it('rejects unauthenticated users', async () => {
     const t = convexTest();
 
@@ -579,6 +636,28 @@ describe('guests.update', () => {
         type: 'guest',
       }),
     ).rejects.toThrow(/exceeds maximum length/);
+  });
+
+  it('rejects a blank name', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Original Name',
+      type: 'guest',
+    });
+
+    await expect(
+      asAdmin.mutation(api.events.guests.update, {
+        id: guestId,
+        name: '   ',
+        type: 'guest',
+      }),
+    ).rejects.toThrow(/name is required/i);
   });
 
   it('writes an audit log entry on guest update', async () => {
