@@ -2,7 +2,7 @@
 
 [![License: ACSL v1.4](https://img.shields.io/badge/license-ACSL%20v1.4-a855f7)](LICENSE)
 [![CI](https://github.com/DahliaWitt/braket-tickets/actions/workflows/ci.yml/badge.svg)](https://github.com/DahliaWitt/braket-tickets/actions/workflows/ci.yml)
-[![Angular](https://img.shields.io/badge/Angular-v21-dd0031?logo=angular&logoColor=white)](https://angular.dev)
+[![Angular](https://img.shields.io/badge/Angular-v22-dd0031?logo=angular&logoColor=white)](https://angular.dev)
 [![Convex](https://img.shields.io/badge/Convex-v1.34-f97316?logo=convex&logoColor=white)](https://convex.dev)
 ![works on my machine](https://img.shields.io/badge/works%20on-my%20machine-22c55e)
 ![trans rights are human rights](https://img.shields.io/badge/trans%20rights-are%20human%20rights-5bcefa)
@@ -52,7 +52,7 @@ How the pieces fit together:
 
 ```mermaid
 flowchart TD
-  App["Angular v21+<br/>Zoneless · Signals"]
+  App["Angular v22+<br/>Zoneless · Signals"]
 
   App <-->|"Real-time subscriptions"| Functions
 
@@ -172,6 +172,8 @@ Browse the component library and design system:
 ```bash
 pnpm storybook    # port 6006
 ```
+
+> **Currently broken** after the Angular 22 upgrade — see [docs/runbooks/deployment-ci.md](docs/runbooks/deployment-ci.md) (Storybook job disabled) for details and re-enable steps.
 
 Includes design system docs (palette, typography, spacing, icons), primitive and composite component stories, and a brand pattern showcase. Stories live next to their components as `*.stories.ts` files.
 

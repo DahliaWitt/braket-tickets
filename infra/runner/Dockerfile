@@ -7,8 +7,13 @@
 #
 # Rebuild when:
 #   - Playwright version bumps (check pnpm-lock.yaml)
-#   - Node.js major version changes
+#   - Node.js version changes (keep in sync with .nvmrc)
 #   - pnpm major version changes
+#
+# Node.js floor: Angular 22 requires Node >=22.22.3 (see .nvmrc). CI/deploy
+# workflows install the .nvmrc version via actions/setup-node and prepend it to
+# PATH, so a lagging pre-baked Node here is non-blocking — but rebuild this image
+# so the baked-in Node matches .nvmrc and avoids the per-job install overhead.
 #
 # Tag convention: braket-runner:<playwright-version>
 #   docker build -t braket-runner:1.59.1 --build-arg PLAYWRIGHT_VERSION=1.59.1 infra/runner/
