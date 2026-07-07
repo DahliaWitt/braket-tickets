@@ -99,6 +99,16 @@ If a third-party service is blocked:
 2. Add it to the appropriate CSP directive in `frontend/public/_headers`
 3. Redeploy the frontend
 
+## Fix a stale static asset
+
+**Symptom:** An image or audio file under `frontend/public/` was updated and deployed, but users still see the old version.
+
+Static images and audio (`*.png`, `*.svg`, `*.webp`, `*.mp3`) are served with `Cache-Control: public, max-age=86400, stale-while-revalidate=604800` (see `frontend/public/_headers`). They are not content-hashed, so browsers and the Cloudflare edge may serve a cached copy for up to 24 hours after a deploy, then revalidate in the background.
+
+- If waiting up to a day is acceptable, do nothing.
+- To propagate immediately, rename the file (and its references in code) so the URL changes — this is the expected workflow when replacing artwork.
+- Hashed build outputs (`*.js`, `*.css`) are `immutable` and never go stale; `index.html` and `theme-init.js` are `no-store`.
+
 ## Restore the preview site
 
 **Symptom:** The current `develop` deployment is stale or broken.
