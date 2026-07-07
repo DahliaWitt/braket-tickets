@@ -696,6 +696,7 @@ export type DataModel = {
       checkedInAt?: number;
       checkedInBy?: Id<"users">;
       email?: string;
+      emailSendLockedAt?: number | null;
       emailedAt?: number;
       eventId: Id<"events">;
       name: string;
@@ -711,6 +712,7 @@ export type DataModel = {
       | "checkedInBy"
       | "email"
       | "emailedAt"
+      | "emailSendLockedAt"
       | "eventId"
       | "name"
       | "notes"

@@ -12,6 +12,11 @@ import {BraDialogService} from '@ui/components/composites/dialog/dialog.service'
 import {EventManagementGuestsTabComponent} from './event-management-guests-tab.component';
 import {EventManagementGuestsTabHarness} from './event-management-guests-tab.component.harness';
 
+type SendGuestTicketFn = (
+  guestId: string,
+  options?: {skipIfAlreadyEmailed?: boolean},
+) => Promise<{status: 'sent' | 'skipped'}>;
+
 describe('EventManagementGuestsTabComponent', () => {
   let fixture: ComponentFixture<EventManagementGuestsTabComponent>;
   let harness: EventManagementGuestsTabHarness;
@@ -19,9 +24,7 @@ describe('EventManagementGuestsTabComponent', () => {
     addGuest: ReturnType<typeof vi.fn>;
     updateGuest: ReturnType<typeof vi.fn>;
     removeGuest: ReturnType<typeof vi.fn>;
-    sendGuestTicket: ReturnType<
-      typeof vi.fn<(guestId: string) => Promise<void>>
-    >;
+    sendGuestTicket: ReturnType<typeof vi.fn<SendGuestTicketFn>>;
     getGuestTicketPdf: ReturnType<typeof vi.fn>;
   };
   let dialogServiceMock: {
@@ -51,6 +54,7 @@ describe('EventManagementGuestsTabComponent', () => {
     vi.restoreAllMocks();
     vi.spyOn(toast, 'success').mockImplementation(() => '' as string & number);
     vi.spyOn(toast, 'error').mockImplementation(() => '' as string & number);
+    vi.spyOn(toast, 'info').mockImplementation(() => '' as string & number);
     vi.spyOn(logger, 'error').mockImplementation(() => undefined);
 
     adminEventsServiceMock = {
@@ -58,8 +62,8 @@ describe('EventManagementGuestsTabComponent', () => {
       updateGuest: vi.fn().mockResolvedValue(null),
       removeGuest: vi.fn().mockResolvedValue(undefined),
       sendGuestTicket: vi
-        .fn<(guestId: string) => Promise<void>>()
-        .mockResolvedValue(undefined),
+        .fn<SendGuestTicketFn>()
+        .mockResolvedValue({status: 'sent'}),
       getGuestTicketPdf: vi
         .fn()
         .mockResolvedValue('data:application/pdf;base64,JVBERg=='),
@@ -234,8 +238,8 @@ describe('EventManagementGuestsTabComponent', () => {
     const resolvers: (() => void)[] = [];
     adminEventsServiceMock.sendGuestTicket.mockImplementation(
       () =>
-        new Promise<void>((resolve) => {
-          resolvers.push(resolve);
+        new Promise((resolve) => {
+          resolvers.push(() => resolve({status: 'sent'}));
         }),
     );
 
@@ -245,9 +249,11 @@ describe('EventManagementGuestsTabComponent', () => {
     expect(adminEventsServiceMock.sendGuestTicket).toHaveBeenCalledTimes(2);
     expect(adminEventsServiceMock.sendGuestTicket).toHaveBeenCalledWith(
       'guest-1',
+      {skipIfAlreadyEmailed: false},
     );
     expect(adminEventsServiceMock.sendGuestTicket).toHaveBeenCalledWith(
       'guest-2',
+      {skipIfAlreadyEmailed: false},
     );
 
     for (const resolve of resolvers) resolve();
@@ -259,8 +265,8 @@ describe('EventManagementGuestsTabComponent', () => {
     let resolveSend!: () => void;
     adminEventsServiceMock.sendGuestTicket.mockImplementation(
       () =>
-        new Promise<void>((resolve) => {
-          resolveSend = resolve;
+        new Promise((resolve) => {
+          resolveSend = () => resolve({status: 'sent'});
         }),
     );
 
@@ -273,12 +279,28 @@ describe('EventManagementGuestsTabComponent', () => {
     await Promise.all([firstSend, duplicateSend]);
   });
 
+  it('surfaces a neutral notice when a single send is skipped as already in flight', async () => {
+    adminEventsServiceMock.sendGuestTicket.mockResolvedValue({
+      status: 'skipped',
+    });
+    const dataChangedSpy = vi.fn();
+    fixture.componentInstance.dataChanged.subscribe(dataChangedSpy);
+
+    await fixture.componentInstance.sendGuestTicket('guest-1');
+
+    expect(toast.info).toHaveBeenCalledWith(
+      'This ticket is already being sent',
+    );
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(dataChangedSpy).not.toHaveBeenCalled();
+  });
+
   it('keeps the send button label stable and marks it busy while a send is in flight', async () => {
     let resolveSend!: () => void;
     adminEventsServiceMock.sendGuestTicket.mockImplementation(
       () =>
-        new Promise<void>((resolve) => {
-          resolveSend = resolve;
+        new Promise((resolve) => {
+          resolveSend = () => resolve({status: 'sent'});
         }),
     );
     fixture.componentRef.setInput('guests', [mockGuest]);
@@ -326,9 +348,11 @@ describe('EventManagementGuestsTabComponent', () => {
     expect(adminEventsServiceMock.sendGuestTicket).toHaveBeenCalledTimes(2);
     expect(adminEventsServiceMock.sendGuestTicket).toHaveBeenCalledWith(
       'guest-1',
+      {skipIfAlreadyEmailed: true},
     );
     expect(adminEventsServiceMock.sendGuestTicket).toHaveBeenCalledWith(
       'guest-2',
+      {skipIfAlreadyEmailed: true},
     );
     expect(toast.success).toHaveBeenCalledWith('Sent 2 tickets');
     expect(dataChangedSpy).toHaveBeenCalledTimes(1);
@@ -336,11 +360,10 @@ describe('EventManagementGuestsTabComponent', () => {
 
   it('reports partial failures when some send-all dispatches fail', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
-    adminEventsServiceMock.sendGuestTicket.mockImplementation(
-      (guestId: string) =>
-        guestId === 'guest-2'
-          ? Promise.reject(new Error('boom'))
-          : Promise.resolve(),
+    adminEventsServiceMock.sendGuestTicket.mockImplementation((guestId) =>
+      guestId === 'guest-2'
+        ? Promise.reject(new Error('boom'))
+        : Promise.resolve({status: 'sent'}),
     );
     fixture.componentRef.setInput('guests', [
       mockGuest,
@@ -353,6 +376,30 @@ describe('EventManagementGuestsTabComponent', () => {
 
     expect(toast.success).toHaveBeenCalledWith('Sent 1 ticket');
     expect(toast.error).toHaveBeenCalledWith('Failed to send 1 ticket');
+  });
+
+  it('reports skips from a concurrent admin and reconciles the roster', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    adminEventsServiceMock.sendGuestTicket.mockImplementation((guestId) =>
+      Promise.resolve({status: guestId === 'guest-2' ? 'skipped' : 'sent'}),
+    );
+    fixture.componentRef.setInput('guests', [
+      mockGuest,
+      {...mockGuest, _id: 'guest-2', name: 'Riley Staff'},
+    ]);
+    fixture.detectChanges();
+    const dataChangedSpy = vi.fn();
+    fixture.componentInstance.dataChanged.subscribe(dataChangedSpy);
+
+    await harness.clickSendAllButton();
+    await fixture.whenStable();
+
+    expect(toast.success).toHaveBeenCalledWith('Sent 1 ticket');
+    expect(toast.info).toHaveBeenCalledWith('Skipped 1 already sent');
+    expect(toast.error).not.toHaveBeenCalled();
+    // A skip means another admin advanced server state, so the roster still
+    // needs reconciling even though this batch sent only one.
+    expect(dataChangedSpy).toHaveBeenCalledTimes(1);
   });
 
   it('does not send anything when the send-all confirmation is declined', async () => {

@@ -1007,8 +1007,8 @@ export declare const api: {
       sendTicket: FunctionReference<
         "action",
         "public",
-        { guestId: Id<"guests"> },
-        null
+        { guestId: Id<"guests">; skipIfAlreadyEmailed?: boolean },
+        { status: "sent" | "skipped" }
       >;
     };
     guests: {
@@ -1034,6 +1034,7 @@ export declare const api: {
           checkedInAt?: number;
           checkedInBy?: Id<"users">;
           email?: string;
+          emailSendLockedAt?: number | null;
           emailedAt?: number;
           eventId: Id<"events">;
           name: string;
@@ -4027,6 +4028,21 @@ export declare const internal: {
       >;
     };
     guests: {
+      beginGuestTicketSend: FunctionReference<
+        "mutation",
+        "internal",
+        { id: Id<"guests">; requireUnsent: boolean },
+        {
+          claimed: boolean;
+          reason: "claimed" | "already_sent" | "in_flight" | "not_found";
+        }
+      >;
+      clearGuestTicketSendLock: FunctionReference<
+        "mutation",
+        "internal",
+        { id: Id<"guests"> },
+        null
+      >;
       getInternal: FunctionReference<
         "query",
         "internal",
@@ -4037,6 +4053,7 @@ export declare const internal: {
           checkedInAt?: number;
           checkedInBy?: Id<"users">;
           email?: string;
+          emailSendLockedAt?: number | null;
           emailedAt?: number;
           eventId: Id<"events">;
           name: string;

@@ -187,10 +187,15 @@ export class EventManagementGuestsTabComponent {
   async sendGuestTicket(guestId: string): Promise<void> {
     if (this.sendingTicketIds().has(guestId)) return;
 
-    const sent = await this.dispatchSendTicket(guestId);
-    if (sent) {
+    // Single send is a deliberate (re)send, so it does not skip already-emailed
+    // guests — but the backend still dedupes it against concurrent in-flight
+    // sends, which surfaces here as 'skipped'.
+    const outcome = await this.dispatchSendTicket(guestId, false);
+    if (outcome === 'sent') {
       toast.success('Ticket sent successfully');
       this.dataChanged.emit();
+    } else if (outcome === 'skipped') {
+      toast.info('This ticket is already being sent');
     } else {
       toast.error('Failed to send guest ticket');
     }
@@ -209,33 +214,50 @@ export class EventManagementGuestsTabComponent {
 
     this.isSendingAll.set(true);
     try {
-      const results = await Promise.all(
-        targets.map((guest) => this.dispatchSendTicket(guest._id)),
+      // Batch mode skips guests already emailed, enforced atomically on the
+      // backend so a stale roster cannot re-email guests another admin handled.
+      const outcomes = await Promise.all(
+        targets.map((guest) => this.dispatchSendTicket(guest._id, true)),
       );
-      const sent = results.filter(Boolean).length;
-      const failed = results.length - sent;
+      const sent = outcomes.filter((outcome) => outcome === 'sent').length;
+      const skipped = outcomes.filter(
+        (outcome) => outcome === 'skipped',
+      ).length;
+      const failed = outcomes.filter((outcome) => outcome === 'failed').length;
       if (sent > 0) {
         toast.success(`Sent ${sent} ticket${sent === 1 ? '' : 's'}`);
-        this.dataChanged.emit();
+      }
+      if (skipped > 0) {
+        toast.info(`Skipped ${skipped} already sent`);
       }
       if (failed > 0) {
         toast.error(
           `Failed to send ${failed} ticket${failed === 1 ? '' : 's'}`,
         );
       }
+      // Reconcile the roster whenever server state advanced — sends we made or
+      // sends a concurrent admin already made (surfaced as skips).
+      if (sent > 0 || skipped > 0) {
+        this.dataChanged.emit();
+      }
     } finally {
       this.isSendingAll.set(false);
     }
   }
 
-  private async dispatchSendTicket(guestId: string): Promise<boolean> {
+  private async dispatchSendTicket(
+    guestId: string,
+    skipIfAlreadyEmailed: boolean,
+  ): Promise<'sent' | 'skipped' | 'failed'> {
     this.updateIdSet(this.sendingTicketIds, guestId, true);
     try {
-      await this.adminEventsService.sendGuestTicket(guestId);
-      return true;
+      const result = await this.adminEventsService.sendGuestTicket(guestId, {
+        skipIfAlreadyEmailed,
+      });
+      return result.status;
     } catch (error) {
       logger.error('Failed to send guest ticket', error);
-      return false;
+      return 'failed';
     } finally {
       this.updateIdSet(this.sendingTicketIds, guestId, false);
     }

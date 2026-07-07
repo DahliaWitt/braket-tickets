@@ -157,12 +157,80 @@ export async function getInternal(
   return await ctx.db.get('guests', args.id);
 }
 
+/**
+ * How long a guest ticket-email send lock is honored before it is treated as
+ * abandoned. A normal send (PDF build + email dispatch) completes in seconds; a
+ * lock older than this only survives when the send action crashed between
+ * claiming and releasing, so reclaiming it lets a retry proceed. Kept well above
+ * realistic send latency so a genuinely in-flight send is never stolen.
+ */
+export const GUEST_TICKET_SEND_LOCK_STALE_MS = 5 * 60 * 1000;
+
+export type BeginGuestTicketSendResult = {
+  claimed: boolean;
+  reason: 'claimed' | 'already_sent' | 'in_flight' | 'not_found';
+};
+
+/**
+ * Atomically claims the right to send a guest's ticket email so concurrent
+ * admins/tabs cannot double-send. Because mutations are transactional, only one
+ * of any set of racing claims wins; the losers observe the lock and are turned
+ * away. When `requireUnsent` is set (batch "send all"), an already-emailed guest
+ * is skipped so a stale client cannot re-email the whole roster. Single resends
+ * pass `requireUnsent: false` and are gated only by the in-flight lock.
+ */
+export async function beginGuestTicketSend(
+  ctx: MutationCtx,
+  args: {
+    id: Id<'guests'>;
+    requireUnsent: boolean;
+  },
+): Promise<BeginGuestTicketSendResult> {
+  const guest = await ctx.db.get('guests', args.id);
+  if (!guest) return {claimed: false, reason: 'not_found'};
+
+  if (args.requireUnsent && guest.emailedAt !== undefined) {
+    return {claimed: false, reason: 'already_sent'};
+  }
+
+  const now = Date.now();
+  const lockedAt = guest.emailSendLockedAt;
+  if (
+    typeof lockedAt === 'number' &&
+    now - lockedAt < GUEST_TICKET_SEND_LOCK_STALE_MS
+  ) {
+    return {claimed: false, reason: 'in_flight'};
+  }
+
+  await ctx.db.patch('guests', args.id, {emailSendLockedAt: now});
+  return {claimed: true, reason: 'claimed'};
+}
+
 export async function markAsEmailed(
   ctx: MutationCtx,
   args: {
     id: Id<'guests'>;
   },
 ): Promise<null> {
-  await ctx.db.patch('guests', args.id, {emailedAt: Date.now()});
+  await ctx.db.patch('guests', args.id, {
+    emailedAt: Date.now(),
+    emailSendLockedAt: null,
+  });
+  return null;
+}
+
+/**
+ * Releases the in-flight send lock without marking the guest emailed. Called on
+ * the failure path so a failed send can be retried immediately instead of
+ * waiting out the staleness window. `null` (not `undefined`) is used because
+ * `ctx.db.patch` does not clear fields set to `undefined` in this codebase.
+ */
+export async function clearGuestTicketSendLock(
+  ctx: MutationCtx,
+  args: {
+    id: Id<'guests'>;
+  },
+): Promise<null> {
+  await ctx.db.patch('guests', args.id, {emailSendLockedAt: null});
   return null;
 }

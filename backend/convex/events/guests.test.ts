@@ -3,6 +3,7 @@ import {convexTest} from '../setup.testing';
 import {describe, it, expect} from 'vitest';
 import {api, internal} from '../_generated/api';
 import type {Id} from '../_generated/dataModel';
+import {GUEST_TICKET_SEND_LOCK_STALE_MS} from './_impl/guests';
 import {addMember, authz} from '../lib/authz';
 import {ADMIN_AUDIT_ACTIONS} from '../lib/admin_audit_actions';
 
@@ -1063,5 +1064,134 @@ describe('guests.listByEvent', () => {
       expect(guests.length).toBe(1);
       expect(guests[0].name).toBe('RBAC Admin Guest');
     });
+  });
+});
+
+describe('guest ticket send lock', () => {
+  async function seedGuestWithEmail(
+    t: ReturnType<typeof convexTest>,
+  ): Promise<Id<'guests'>> {
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+    const asAdmin = t.withIdentity({subject: adminId});
+    return asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Lock Guest',
+      email: 'lock-guest@example.com',
+      type: 'guest',
+    });
+  }
+
+  it('claims an unclaimed guest and records the lock timestamp', async () => {
+    const t = convexTest();
+    const guestId = await seedGuestWithEmail(t);
+
+    const result = await t.mutation(
+      internal.events.guests.beginGuestTicketSend,
+      {id: guestId, requireUnsent: true},
+    );
+
+    expect(result).toEqual({claimed: true, reason: 'claimed'});
+    const guest = await t.run(async (ctx) => ctx.db.get(guestId));
+    expect(typeof guest?.emailSendLockedAt).toBe('number');
+  });
+
+  it('rejects a second claim while a send is already in flight', async () => {
+    const t = convexTest();
+    const guestId = await seedGuestWithEmail(t);
+
+    const first = await t.mutation(
+      internal.events.guests.beginGuestTicketSend,
+      {id: guestId, requireUnsent: true},
+    );
+    const second = await t.mutation(
+      internal.events.guests.beginGuestTicketSend,
+      {id: guestId, requireUnsent: true},
+    );
+
+    expect(first.claimed).toBe(true);
+    expect(second).toEqual({claimed: false, reason: 'in_flight'});
+  });
+
+  it('skips an already-emailed guest in batch mode', async () => {
+    const t = convexTest();
+    const guestId = await seedGuestWithEmail(t);
+    await t.mutation(internal.events.guests.markAsEmailed, {id: guestId});
+
+    const result = await t.mutation(
+      internal.events.guests.beginGuestTicketSend,
+      {id: guestId, requireUnsent: true},
+    );
+
+    expect(result).toEqual({claimed: false, reason: 'already_sent'});
+  });
+
+  it('allows a deliberate single resend of an already-emailed guest', async () => {
+    const t = convexTest();
+    const guestId = await seedGuestWithEmail(t);
+    await t.mutation(internal.events.guests.markAsEmailed, {id: guestId});
+
+    const result = await t.mutation(
+      internal.events.guests.beginGuestTicketSend,
+      {id: guestId, requireUnsent: false},
+    );
+
+    expect(result).toEqual({claimed: true, reason: 'claimed'});
+  });
+
+  it('marks the guest emailed and releases the lock on success', async () => {
+    const t = convexTest();
+    const guestId = await seedGuestWithEmail(t);
+    await t.mutation(internal.events.guests.beginGuestTicketSend, {
+      id: guestId,
+      requireUnsent: true,
+    });
+
+    await t.mutation(internal.events.guests.markAsEmailed, {id: guestId});
+
+    const guest = await t.run(async (ctx) => ctx.db.get(guestId));
+    expect(typeof guest?.emailedAt).toBe('number');
+    expect(guest?.emailSendLockedAt).toBeNull();
+  });
+
+  it('releases the lock without emailing on the failure path', async () => {
+    const t = convexTest();
+    const guestId = await seedGuestWithEmail(t);
+    await t.mutation(internal.events.guests.beginGuestTicketSend, {
+      id: guestId,
+      requireUnsent: true,
+    });
+
+    await t.mutation(internal.events.guests.clearGuestTicketSendLock, {
+      id: guestId,
+    });
+
+    const guest = await t.run(async (ctx) => ctx.db.get(guestId));
+    expect(guest?.emailedAt).toBeUndefined();
+    expect(guest?.emailSendLockedAt).toBeNull();
+
+    // The freed lock lets a retry claim the guest again immediately.
+    const reclaim = await t.mutation(
+      internal.events.guests.beginGuestTicketSend,
+      {id: guestId, requireUnsent: false},
+    );
+    expect(reclaim.claimed).toBe(true);
+  });
+
+  it('reclaims a stale lock left behind by a crashed send', async () => {
+    const t = convexTest();
+    const guestId = await seedGuestWithEmail(t);
+    await t.run(async (ctx) =>
+      ctx.db.patch(guestId, {
+        emailSendLockedAt: Date.now() - GUEST_TICKET_SEND_LOCK_STALE_MS - 1000,
+      }),
+    );
+
+    const result = await t.mutation(
+      internal.events.guests.beginGuestTicketSend,
+      {id: guestId, requireUnsent: false},
+    );
+
+    expect(result).toEqual({claimed: true, reason: 'claimed'});
   });
 });
