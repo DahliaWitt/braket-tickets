@@ -114,11 +114,6 @@ export async function updateMagicLinkStatusHandler(
   if (!isAdmin) {
     throwForbidden('Not authorized to modify this link');
   }
-  // TODO: Revisit creator-status coupling for community-scoped magic links.
-  // Current behavior disables management when the original creator loses access.
-  if (!(await canManageCommunity(ctx, link.createdBy, link.organizerId))) {
-    throwForbidden('The link creator no longer manages this community');
-  }
 
   const transition = resolveMagicLinkTransition(link.status, args.action);
   await ctx.db.patch('magic_links', args.linkId, transition);

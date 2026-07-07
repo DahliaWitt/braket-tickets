@@ -68,8 +68,10 @@ export async function removeMemberWithAdminCascade(
           organizerId: args.organizerId,
           invitedBy: args.userId,
         }),
-        // TODO: Revisit whether removing one admin should deactivate
-        // community-scoped magic links they originally created.
+        // Deactivates the removed admin's active magic links so they stop
+        // vetting members into a community they no longer manage. This is the
+        // safety net that lets redemption gate on link status instead of the
+        // creator's current access (see lib/magic_links/redemption.ts).
         deactivateActiveMagicLinksForCreator(ctx, {
           organizerId: args.organizerId,
           creatorId: args.userId,
