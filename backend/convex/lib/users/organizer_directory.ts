@@ -436,9 +436,10 @@ export async function searchUserApplicationsInDirectory(
   ctx: DirectoryCtx,
   organizerId: Id<'organizers'>,
   searchTerm: string,
+  options?: {scopedLimit?: number},
 ): Promise<UserApplicationPage> {
   const lowerTerm = searchTerm.toLowerCase();
-  const SCOPED_RESULT_LIMIT = 50;
+  const scopedLimit = options?.scopedLimit ?? 50;
   const entries: DirectoryEntryFields[] = [];
   const usersById = new Map<Id<'users'>, Doc<'users'>>();
   const seen = new Set<Id<'users'>>();
@@ -471,18 +472,18 @@ export async function searchUserApplicationsInDirectory(
     .withSearchIndex('search_name_email', (q) =>
       q.search('name', searchTerm),
     )) {
-    if (entries.length >= SCOPED_RESULT_LIMIT) break;
+    if (entries.length >= scopedLimit) break;
     await tryAddUser(user);
   }
 
   // Stream email prefix matches from regular index.
-  if (entries.length < SCOPED_RESULT_LIMIT) {
+  if (entries.length < scopedLimit) {
     for await (const user of ctx.db
       .query('users')
       .withIndex('email', (q) =>
         q.gte('email', lowerTerm).lt('email', lowerTerm + '\uffff'),
       )) {
-      if (entries.length >= SCOPED_RESULT_LIMIT) break;
+      if (entries.length >= scopedLimit) break;
       if (!user.email?.toLowerCase().includes(lowerTerm)) continue;
       await tryAddUser(user);
     }
@@ -493,7 +494,7 @@ export async function searchUserApplicationsInDirectory(
       const user = usersById.get(entry.userId);
       return user ? [toUserApplicationRow(entry, user)] : [];
     })
-    .slice(0, SCOPED_RESULT_LIMIT);
+    .slice(0, scopedLimit);
 
   return {
     page,

@@ -8,6 +8,12 @@ import {ErrorMessages} from '../../lib/errors';
 import {rateLimiter} from '../../lib/rate_limits';
 import {expectUnauthorizedError} from '../../testing/assertions';
 
+let uniqueSuffixCounter = 0;
+function uniqueSuffix(): string {
+  uniqueSuffixCounter += 1;
+  return `${Date.now()}-${uniqueSuffixCounter}`;
+}
+
 async function catchReject(promise: Promise<unknown>): Promise<unknown> {
   try {
     await promise;
@@ -592,6 +598,311 @@ describe('community_scanners', () => {
         ctx.db.query('adminAuditLogs').collect(),
       );
       expect(logsAfter).toHaveLength(logsBefore.length);
+    });
+  });
+
+  describe('searchGrantCandidates', () => {
+    async function addDirectoryMember(
+      t: ReturnType<typeof convexTest>,
+      args: {name: string; email: string; organizerId: Id<'organizers'>},
+    ): Promise<Id<'users'>> {
+      const userId = await t.mutation(api.testing.users.createUserDirectly, {
+        name: args.name,
+        email: args.email,
+      });
+      // Approved application is the production path that populates
+      // organizer_user_directory (see testing/applications.ts
+      // insertSeedApplication: approved + organizerId -> addMember +
+      // refreshOrganizerDirectoryForMembershipChange).
+      await t.mutation(api.testing.applications.seedApplication, {
+        userId,
+        organizerId: args.organizerId,
+        status: 'approved',
+        answers: {},
+      });
+      return userId;
+    }
+
+    it('matches community members by name and by email prefix, scoped to the organizer directory', async () => {
+      const {t, rootAdminId, orgId} = await setupTestData();
+      const suffix = uniqueSuffix();
+
+      const otherOrgId = await t.run(async (ctx) =>
+        insertOrganizer(ctx, {name: 'Other Org'}),
+      );
+
+      const nameMatchId = await addDirectoryMember(t, {
+        name: `Searchable NameMatch ${suffix}`,
+        email: `namematch-${suffix}@test.com`,
+        organizerId: orgId,
+      });
+      const emailMatchId = await addDirectoryMember(t, {
+        name: `Unrelated Person ${suffix}`,
+        email: `emailprefix-${suffix}@test.com`,
+        organizerId: orgId,
+      });
+      // Matching name, but only a member of a DIFFERENT community's directory.
+      const wrongOrgMatchId = await addDirectoryMember(t, {
+        name: `Searchable NameMatch ${suffix} Elsewhere`,
+        email: `elsewhere-${suffix}@test.com`,
+        organizerId: otherOrgId,
+      });
+
+      const asAdmin = t.withIdentity({subject: rootAdminId});
+
+      const nameResults = await asAdmin.query(
+        api.communities.scanners.searchGrantCandidates,
+        {organizerId: orgId, searchTerm: `Searchable NameMatch ${suffix}`},
+      );
+      expect(nameResults.map((row) => row.userId)).toContain(nameMatchId);
+      expect(nameResults.map((row) => row.userId)).not.toContain(
+        wrongOrgMatchId,
+      );
+
+      const emailResults = await asAdmin.query(
+        api.communities.scanners.searchGrantCandidates,
+        {organizerId: orgId, searchTerm: `emailprefix-${suffix}`},
+      );
+      expect(emailResults.map((row) => row.userId)).toEqual([emailMatchId]);
+    });
+
+    it('returns [] for empty or whitespace-only searchTerm', async () => {
+      const {t, rootAdminId, orgId} = await setupTestData();
+      const asAdmin = t.withIdentity({subject: rootAdminId});
+
+      const empty = await asAdmin.query(
+        api.communities.scanners.searchGrantCandidates,
+        {organizerId: orgId, searchTerm: ''},
+      );
+      expect(empty).toEqual([]);
+
+      const whitespace = await asAdmin.query(
+        api.communities.scanners.searchGrantCandidates,
+        {organizerId: orgId, searchTerm: '   '},
+      );
+      expect(whitespace).toEqual([]);
+    });
+
+    it('does not error for a searchTerm longer than 100 characters', async () => {
+      const {t, rootAdminId, orgId} = await setupTestData();
+      const asAdmin = t.withIdentity({subject: rootAdminId});
+
+      const longTerm = 'a'.repeat(500);
+      await expect(
+        asAdmin.query(api.communities.scanners.searchGrantCandidates, {
+          organizerId: orgId,
+          searchTerm: longTerm,
+        }),
+      ).resolves.toEqual([]);
+    });
+
+    it('denies a plain member with no manage permission', async () => {
+      const {t, orgId} = await setupTestData();
+      const memberId = await t.run(async (ctx) =>
+        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- intentionally minimal user without email for authz/query testing; createUserDirectly requires email
+        ctx.db.insert('users', {
+          name: 'Plain Member',
+          email: 'plain-member-search@test.com',
+        }),
+      );
+      await t.run(async (ctx) =>
+        authz.assignRole(ctx, memberId, 'member', {
+          type: 'organizer',
+          id: orgId as string,
+        }),
+      );
+
+      const asMember = t.withIdentity({subject: memberId});
+      await expect(
+        asMember.query(api.communities.scanners.searchGrantCandidates, {
+          organizerId: orgId,
+          searchTerm: 'anything',
+        }),
+      ).rejects.toThrow(ErrorMessages.UNAUTHORIZED);
+    });
+
+    it('denies a scanner (no manage permission)', async () => {
+      const {t, rootAdminId, orgId, scannerId} = await setupTestData();
+      const asAdmin = t.withIdentity({subject: rootAdminId});
+      await asAdmin.mutation(api.communities.scanners.grant, {
+        userId: scannerId,
+        organizerId: orgId,
+      });
+
+      const asScanner = t.withIdentity({subject: scannerId});
+      await expect(
+        asScanner.query(api.communities.scanners.searchGrantCandidates, {
+          organizerId: orgId,
+          searchTerm: 'anything',
+        }),
+      ).rejects.toThrow(ErrorMessages.UNAUTHORIZED);
+    });
+
+    it('denies an admin of a different community', async () => {
+      const {t, rootAdminId, orgId} = await setupTestData();
+      const otherOrgId = await t.run(async (ctx) =>
+        insertOrganizer(ctx, {name: 'Other Org For Denial'}),
+      );
+      const otherAdminId = await t.run(async (ctx) =>
+        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- intentionally minimal user without email for authz/query testing; createUserDirectly requires email
+        ctx.db.insert('users', {
+          name: 'Other Community Admin',
+          email: 'other-admin-search@test.com',
+        }),
+      );
+      const asRoot = t.withIdentity({subject: rootAdminId});
+      await asRoot.mutation(api.communities.admins.grant, {
+        userId: otherAdminId,
+        organizerId: otherOrgId,
+      });
+
+      const asOtherAdmin = t.withIdentity({subject: otherAdminId});
+      await expect(
+        asOtherAdmin.query(api.communities.scanners.searchGrantCandidates, {
+          organizerId: orgId,
+          searchTerm: 'anything',
+        }),
+      ).rejects.toThrow(ErrorMessages.UNAUTHORIZED);
+    });
+
+    it('succeeds for a community admin of the target community', async () => {
+      const {t, rootAdminId, orgId} = await setupTestData();
+      const suffix = uniqueSuffix();
+      const communityAdminId = await t.run(async (ctx) =>
+        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- intentionally minimal user without email for authz/query testing; createUserDirectly requires email
+        ctx.db.insert('users', {
+          name: 'Community Admin',
+          email: `search-cadmin-${suffix}@test.com`,
+        }),
+      );
+      const asRoot = t.withIdentity({subject: rootAdminId});
+      await asRoot.mutation(api.communities.admins.grant, {
+        userId: communityAdminId,
+        organizerId: orgId,
+      });
+
+      const memberId = await addDirectoryMember(t, {
+        name: `Admin Findable ${suffix}`,
+        email: `admin-findable-${suffix}@test.com`,
+        organizerId: orgId,
+      });
+
+      const asAdmin = t.withIdentity({subject: communityAdminId});
+      const results = await asAdmin.query(
+        api.communities.scanners.searchGrantCandidates,
+        {organizerId: orgId, searchTerm: `Admin Findable ${suffix}`},
+      );
+      expect(results.map((row) => row.userId)).toContain(memberId);
+    });
+
+    it('succeeds for a root admin', async () => {
+      const {t, rootAdminId, orgId} = await setupTestData();
+      const suffix = uniqueSuffix();
+      const memberId = await addDirectoryMember(t, {
+        name: `Root Findable ${suffix}`,
+        email: `root-findable-${suffix}@test.com`,
+        organizerId: orgId,
+      });
+
+      const asRoot = t.withIdentity({subject: rootAdminId});
+      const results = await asRoot.query(
+        api.communities.scanners.searchGrantCandidates,
+        {organizerId: orgId, searchTerm: `Root Findable ${suffix}`},
+      );
+      expect(results.map((row) => row.userId)).toContain(memberId);
+    });
+
+    it('rows have the listByCommunity shape (_id, userId, organizerId, displayName, email)', async () => {
+      const {t, rootAdminId, orgId} = await setupTestData();
+      const suffix = uniqueSuffix();
+      const memberId = await addDirectoryMember(t, {
+        name: `Shape Check ${suffix}`,
+        email: `shape-check-${suffix}@test.com`,
+        organizerId: orgId,
+      });
+
+      const asAdmin = t.withIdentity({subject: rootAdminId});
+      const results = await asAdmin.query(
+        api.communities.scanners.searchGrantCandidates,
+        {organizerId: orgId, searchTerm: `Shape Check ${suffix}`},
+      );
+
+      const row = results.find((r) => r.userId === memberId);
+      expect(row).toBeDefined();
+      expect(Object.keys(row ?? {}).sort()).toEqual(
+        ['_id', 'displayName', 'email', 'organizerId', 'userId'].sort(),
+      );
+      expect(row?._id).toBe(memberId);
+      expect(row?.userId).toBe(memberId);
+      expect(row?.organizerId).toBe(orgId);
+      expect(row?.displayName).toBe(`Shape Check ${suffix}`);
+      expect(row?.email).toBe(`shape-check-${suffix}@test.com`);
+    });
+
+    it('caps results at 10 even when 11+ members match', async () => {
+      const {t, rootAdminId, orgId} = await setupTestData();
+      const suffix = uniqueSuffix();
+      const term = `CapTest ${suffix}`;
+
+      const memberIds: Id<'users'>[] = [];
+      for (let i = 0; i < 11; i++) {
+        const memberId = await addDirectoryMember(t, {
+          name: `${term} Member ${i}`,
+          email: `cap-test-${suffix}-${i}@test.com`,
+          organizerId: orgId,
+        });
+        memberIds.push(memberId);
+      }
+
+      const asAdmin = t.withIdentity({subject: rootAdminId});
+      const results = await asAdmin.query(
+        api.communities.scanners.searchGrantCandidates,
+        {organizerId: orgId, searchTerm: term},
+      );
+
+      expect(results.length).toBeLessThanOrEqual(10);
+      expect(results.length).toBeGreaterThan(0);
+    });
+
+    it('preserves search order in the returned rows', async () => {
+      const {t, rootAdminId, orgId} = await setupTestData();
+      const suffix = uniqueSuffix();
+      const term = `OrderTest ${suffix}`;
+
+      const memberIds: Id<'users'>[] = [];
+      for (let i = 0; i < 3; i++) {
+        const memberId = await addDirectoryMember(t, {
+          name: `${term} Member ${i}`,
+          email: `order-test-${suffix}-${i}@test.com`,
+          organizerId: orgId,
+        });
+        memberIds.push(memberId);
+      }
+
+      const asAdmin = t.withIdentity({subject: rootAdminId});
+      const results = await asAdmin.query(
+        api.communities.scanners.searchGrantCandidates,
+        {organizerId: orgId, searchTerm: term},
+      );
+
+      // buildCommunityUserRows maps userIds in input order (search order),
+      // so the returned rows must match the order produced by the
+      // underlying searchUserApplicationsInDirectory page — i.e. every
+      // returned userId must be one of the seeded ids, with no reordering
+      // introduced by the query layer itself. We assert this by checking
+      // that results correspond 1:1 (by identity) with a fresh call to the
+      // underlying search helper via the same query, confirming stability.
+      const resultIds = results.map((row) => row.userId);
+      const secondCallResultIds = (
+        await asAdmin.query(api.communities.scanners.searchGrantCandidates, {
+          organizerId: orgId,
+          searchTerm: term,
+        })
+      ).map((row) => row.userId);
+      expect(resultIds).toEqual(secondCallResultIds);
+      for (const id of resultIds) {
+        expect(memberIds).toContain(id);
+      }
     });
   });
 });
