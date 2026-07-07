@@ -619,6 +619,18 @@ async function applyResaleTicketTransfer(
       checkedInByName: sellerTicket.rosterCheckedInByName ?? null,
     }),
   });
+
+  // Unconditional broadcast catch-up scheduling: pre-checking
+  // eventBroadcasts here would OCC-couple every in-flight settlement to a
+  // concurrent sendBroadcast; a no-op scheduled mutation is cheaper.
+  const broadcastCatchupEmail = buyerUser?.email ?? buyerGuestSession?.email;
+  if (broadcastCatchupEmail) {
+    await ctx.scheduler.runAfter(0, internal.events.broadcasts.deliverMissed, {
+      eventId: order.eventId,
+      email: broadcastCatchupEmail,
+      ...(order.userId ? {userId: order.userId} : {}),
+    });
+  }
 }
 
 /**

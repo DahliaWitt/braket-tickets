@@ -1,5 +1,6 @@
 import type {Doc, Id} from '../../_generated/dataModel';
 import type {MutationCtx} from '../../_generated/server';
+import {internal} from '../../_generated/api';
 import {isTestEnvironment, isUnitTestRuntime} from '../../lib/environment';
 import {
   assertValidListingTransition,
@@ -143,6 +144,20 @@ export async function completePrimaryOrderState(
     note: args.note,
     occurredAt: now,
   });
+
+  // Unconditional catch-up scheduling: do NOT pre-check eventBroadcasts
+  // here — reading that index inside the hot purchase transaction would
+  // OCC-couple every in-flight completion to a concurrent sendBroadcast.
+  // A no-op scheduled mutation is cheaper. The `state === 'completed'`
+  // early-return above prevents double-scheduling on webhook retries.
+  const broadcastCatchupEmail = attendeeUser?.email ?? guestSession?.email;
+  if (broadcastCatchupEmail) {
+    await ctx.scheduler.runAfter(0, internal.events.broadcasts.deliverMissed, {
+      eventId: order.eventId,
+      email: broadcastCatchupEmail,
+      ...(order.userId ? {userId: order.userId} : {}),
+    });
+  }
 
   const completedOrder = await ctx.db.get('ticket_orders', order._id);
   if (!completedOrder) {

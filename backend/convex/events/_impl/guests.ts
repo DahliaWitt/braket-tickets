@@ -1,5 +1,6 @@
 import type {Doc, Id} from '../../_generated/dataModel';
 import type {MutationCtx, QueryCtx} from '../../_generated/server';
+import {internal} from '../../_generated/api';
 import {throwNotFound} from '../../lib/errors';
 import {
   validateStringLength,
@@ -43,6 +44,16 @@ export async function add(
       source: 'admin-ui',
     },
   );
+
+  // A late-added guest joins the broadcast audience after any prior sends;
+  // catch them up. Unconditional w.r.t. broadcast existence — see
+  // completePrimaryOrderState for the OCC rationale.
+  if (args.email) {
+    await ctx.scheduler.runAfter(0, internal.events.broadcasts.deliverMissed, {
+      eventId: args.eventId,
+      email: args.email,
+    });
+  }
 
   return guestId;
 }
