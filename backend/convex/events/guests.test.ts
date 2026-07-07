@@ -277,6 +277,25 @@ describe('guests.add', () => {
     ).rejects.toThrow('Email exceeds maximum length');
   });
 
+  it('validates email format when an email is provided', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    await expect(
+      asAdmin.mutation(api.events.guests.add, {
+        eventId,
+        name: 'Guest',
+        email: 'not-an-email',
+        type: 'guest',
+      }),
+    ).rejects.toThrow('Email is invalid');
+  });
+
   it('validates notes length', async () => {
     const t = convexTest();
 

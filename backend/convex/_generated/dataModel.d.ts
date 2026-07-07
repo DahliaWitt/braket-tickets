@@ -469,6 +469,34 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  eventBroadcastDeliveries: {
+    document: {
+      broadcastId: Id<"eventBroadcasts">;
+      email: string;
+      eventId: Id<"events">;
+      origin: "send" | "catchup" | "backfill";
+      sentAt: number;
+      _id: Id<"eventBroadcastDeliveries">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "broadcastId"
+      | "email"
+      | "eventId"
+      | "origin"
+      | "sentAt";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_broadcast_and_email: ["broadcastId", "email", "_creationTime"];
+      by_email: ["email", "_creationTime"];
+      by_event_and_email: ["eventId", "email", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   eventBroadcasts: {
     document: {
       adminId: Id<"users">;

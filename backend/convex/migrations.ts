@@ -2,6 +2,7 @@ import {Migrations} from '@convex-dev/migrations';
 import {components, internal} from './_generated/api';
 import type {DataModel} from './_generated/dataModel';
 import {digestBearerToken, tokenPrefix} from './lib/token_digests';
+import {normalizeEmailOrNull} from './lib/validation';
 
 export const migrations = new Migrations<DataModel>(components.migrations);
 
@@ -126,6 +127,49 @@ export const clearLegacyUserEmailChangeTokens = migrations.define({
       emailChangeToken: undefined,
       emailChangeTokenExpiry: undefined,
     };
+  },
+});
+
+/**
+ * Seeds `eventBroadcastDeliveries` from historical `emailDeliveries` rows so
+ * pre-feature broadcasts are not re-sent to existing holders by the catch-up
+ * path. `emailDeliveries` is pruned after 30 days (see
+ * `email/email_delivery.ts` cleanupOldDeliveries), so only broadcasts sent
+ * within that window are covered — run promptly after deploy. Inserts into a
+ * sibling table; never patches the `emailDeliveries` row itself.
+ */
+export const backfillEventBroadcastDeliveries = migrations.define({
+  table: 'emailDeliveries',
+  migrateOne: async (ctx, delivery) => {
+    if (delivery.source !== 'broadcast') return {};
+
+    const broadcastId = ctx.db.normalizeId(
+      'eventBroadcasts',
+      delivery.sourceId,
+    );
+    if (!broadcastId) return {};
+    const broadcast = await ctx.db.get('eventBroadcasts', broadcastId);
+    if (!broadcast) return {};
+
+    const email = normalizeEmailOrNull(delivery.recipient);
+    if (!email) return {};
+
+    const existing = await ctx.db
+      .query('eventBroadcastDeliveries')
+      .withIndex('by_broadcast_and_email', (q) =>
+        q.eq('broadcastId', broadcastId).eq('email', email),
+      )
+      .first();
+    if (existing) return {};
+
+    await ctx.db.insert('eventBroadcastDeliveries', {
+      broadcastId,
+      eventId: broadcast.eventId,
+      email,
+      sentAt: delivery.sentAt,
+      origin: 'backfill',
+    });
+    return {};
   },
 });
 
