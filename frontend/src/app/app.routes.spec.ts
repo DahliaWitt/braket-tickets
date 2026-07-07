@@ -16,7 +16,7 @@ import {
   afterEach,
   type Mock,
 } from 'vitest';
-import {signal} from '@angular/core';
+import {computed, signal, type Signal} from '@angular/core';
 import {firstValueFrom, type Observable} from 'rxjs';
 
 describe('app.routes', () => {
@@ -38,6 +38,9 @@ describe('app.routes', () => {
     user: ReturnType<typeof signal<object | null>>;
     isSyncingUser: ReturnType<typeof signal<boolean>>;
     authSyncFailed: ReturnType<typeof signal<boolean>>;
+    authSettled: Signal<boolean>;
+    peekCachedSession: Mock;
+    scheduleOptimisticReconciliation: Mock;
   };
   let mockToastService: {
     error: Mock;
@@ -59,6 +62,20 @@ describe('app.routes', () => {
       user: signal<object | null>(null),
       isSyncingUser: signal(false),
       authSyncFailed: signal(false),
+      // crossDomain/E2E-off shape: guards always defer to the async settle.
+      peekCachedSession: vi.fn(() => ({
+        known: false,
+        hasCredential: false,
+        session: null,
+      })),
+      scheduleOptimisticReconciliation: vi.fn(),
+      // Mirrors the real settle predicate; lazy so it can close over the mock.
+      authSettled: computed(() => {
+        if (!mockAuthService.authInitialized()) return false;
+        if (!mockAuthService.isAuthenticated()) return true;
+        if (mockAuthService.user()) return true;
+        return mockAuthService.authSyncFailed();
+      }),
     };
 
     mockToastService = {

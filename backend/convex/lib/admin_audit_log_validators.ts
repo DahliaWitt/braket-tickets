@@ -18,6 +18,10 @@ export const adminAuditLogFields = {
   source: v.optional(v.string()),
   reason: v.optional(v.string()),
   deletedEventName: v.optional(v.string()),
+  // Platform-provided request metadata (ctx.meta.getRequestMetadata()).
+  // Absent for scheduled/cron executions and runtimes without meta support.
+  ipAddress: v.optional(v.string()),
+  userAgent: v.optional(v.string()),
 };
 
 export const adminAuditLogValidator = v.object({

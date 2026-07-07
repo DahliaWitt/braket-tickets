@@ -49,7 +49,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "convex": "^1.42.1",
-    "convex-angular": "1.8.0",
+    "convex-angular": "^1.8.0",
     "flexsearch": "^0.8.212",
     "highlight.js": "^11.11.1",
     "jspdf": "^4.2.1",
