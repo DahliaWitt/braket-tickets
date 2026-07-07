@@ -1,11 +1,16 @@
-import { validate, requiredError } from '@angular/forms/signals';
-import type { MaybeFieldTree, PathKind, SchemaPath, SchemaPathRules } from '@angular/forms/signals';
+import {validate, requiredError} from '@angular/forms/signals';
+import type {
+  MaybeFieldTree,
+  PathKind,
+  SchemaPath,
+  SchemaPathRules,
+} from '@angular/forms/signals';
 
 interface SignalFormFieldState {
   invalid(): boolean;
   touched(): boolean;
   dirty(): boolean;
-  errors(): readonly { kind: string }[];
+  errors(): readonly {kind: string}[];
 }
 
 function isCallableField(field: unknown): field is () => SignalFormFieldState {
@@ -15,7 +20,7 @@ function isCallableField(field: unknown): field is () => SignalFormFieldState {
 export function isSignalFormFieldInvalid(
   field: unknown,
   submitted = false,
-  options: { includeDirty?: boolean } = {},
+  options: {includeDirty?: boolean} = {},
 ): boolean {
   if (!isCallableField(field)) return false;
 
@@ -24,13 +29,36 @@ export function isSignalFormFieldInvalid(
   return state.invalid() && (state.touched() || isDirty || submitted);
 }
 
-export function signalFormFieldHasError(field: unknown, errorKind: string): boolean {
+export function signalFormFieldHasError(
+  field: unknown,
+  errorKind: string,
+): boolean {
   if (!isCallableField(field)) return false;
 
   const expected = errorKind.toLowerCase();
   return field()
     .errors()
     .some((error) => error.kind.toLowerCase() === expected);
+}
+
+/**
+ * Returns the `message` of the first error on `field` whose kind is in
+ * `errorKinds`, or null. Lets a template surface a validator's own message
+ * without re-declaring it, keeping the message a single source of truth.
+ */
+export function signalFormFieldErrorMessage(
+  field: unknown,
+  errorKinds: readonly string[],
+): string | null {
+  if (!isCallableField(field)) return null;
+
+  const wanted = new Set(errorKinds.map((kind) => kind.toLowerCase()));
+  const match = field()
+    .errors()
+    .find((error) => wanted.has(error.kind.toLowerCase())) as
+    | {kind: string; message?: unknown}
+    | undefined;
+  return match && typeof match.message === 'string' ? match.message : null;
 }
 
 export function castSignalFormField<T>(
@@ -49,7 +77,11 @@ export function notBlank<TPathKind extends PathKind>(
 ): void {
   validate(path, (ctx) => {
     const value = ctx.value();
-    if (typeof value === 'string' && value.length > 0 && value.trim().length === 0) {
+    if (
+      typeof value === 'string' &&
+      value.length > 0 &&
+      value.trim().length === 0
+    ) {
       return requiredError();
     }
     return undefined;

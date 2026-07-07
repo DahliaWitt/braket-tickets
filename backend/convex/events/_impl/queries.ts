@@ -4,7 +4,7 @@ import {EVENT_VISIBILITIES} from '@shared/domain/event-visibility';
 import {throwInvalidInput, throwUnauthorized} from '../../lib/errors';
 import {isPlatformAdmin, requireManageCommunity} from '../../lib/access';
 import {getUserCommunities} from '../../lib/authz';
-import {startOfTodayInEventTimeZone} from '../../lib/timezone';
+import {hasEventEnded, ongoingEventStartLowerBound} from '../../lib/timezone';
 
 const ORGANIZER_EVENT_LIST_LIMIT = 500;
 
@@ -60,7 +60,9 @@ export async function loadUpcomingPublishedEventsForOrganizer(
   db: Pick<QueryCtx['db'], 'query'>,
   organizerId: Id<'organizers'>,
 ): Promise<Doc<'events'>[]> {
-  const minDate = startOfTodayInEventTimeZone();
+  // Look back MAX_EVENT_DURATION so running multi-day events (started before
+  // today, not yet ended) are fetched, then drop already-ended rows below.
+  const minDate = ongoingEventStartLowerBound();
   const eventGroups = await Promise.all(
     EVENT_VISIBILITIES.map((visibility) =>
       db
@@ -78,6 +80,7 @@ export async function loadUpcomingPublishedEventsForOrganizer(
 
   return eventGroups
     .flat()
+    .filter((event) => !hasEventEnded(event))
     .sort((left, right) =>
       left.date === right.date
         ? left._creationTime - right._creationTime

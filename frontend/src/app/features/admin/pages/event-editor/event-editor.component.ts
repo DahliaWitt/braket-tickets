@@ -48,7 +48,11 @@ import {
   EVENT_VISIBILITY,
   type EventVisibility,
 } from '@shared/domain/event-visibility';
-import {MAX_EVENT_TITLE_LENGTH} from '@shared/constants';
+import {
+  MAX_EVENT_TITLE_LENGTH,
+  MAX_EVENT_DURATION_DAYS,
+  MAX_EVENT_DURATION_MS,
+} from '@shared/constants';
 import {extractConvexErrorMessage} from '@/core/utils/error-message.utils';
 import {toast} from 'ngx-sonner';
 import {logger} from '@/utils/logger';
@@ -57,6 +61,7 @@ import {getTodayInEventTimeZone} from '@/utils/event-date-format';
 import {
   isSignalFormFieldInvalid,
   signalFormFieldHasError,
+  signalFormFieldErrorMessage,
   notBlank,
 } from '@/utils/signal-form';
 
@@ -506,12 +511,20 @@ export class EventEditorComponent implements HasUnsavedChanges {
 
       const start = combineLocalEventDateTime(startDate, startTime);
       const end = combineLocalEventDateTime(endDate, endTime);
-      return end.getTime() > start.getTime()
-        ? null
-        : {
-            kind: 'endBeforeStart',
-            message: 'End must be after the event start',
-          };
+      if (end.getTime() <= start.getTime()) {
+        return {
+          kind: 'endBeforeStart',
+          message: 'End must be after the event start',
+        };
+      }
+      // Mirror the backend cap so an over-long span is caught before submit.
+      if (end.getTime() - start.getTime() > MAX_EVENT_DURATION_MS) {
+        return {
+          kind: 'endTooFar',
+          message: `End must be within ${MAX_EVENT_DURATION_DAYS} days of the start`,
+        };
+      }
+      return null;
     });
 
     required(f.price);
@@ -718,20 +731,12 @@ export class EventEditorComponent implements HasUnsavedChanges {
 
   /** First end-window validation message, or null when the end fields are valid. */
   protected endWindowError(): string | null {
-    const endErrors: readonly {kind: string; message: string}[] = [
-      {
-        kind: 'endDateTimePair',
-        message: 'Set both end date and time, or clear both',
-      },
-      {kind: 'invalidEventTime', message: 'Choose a valid time for this date'},
-      {kind: 'endBeforeStart', message: 'End must be after the event start'},
-    ];
-    for (const {kind, message} of endErrors) {
-      if (this.hasError(this.eventForm.endTime, kind)) {
-        return message;
-      }
-    }
-    return null;
+    return signalFormFieldErrorMessage(this.eventForm.endTime, [
+      'endDateTimePair',
+      'invalidEventTime',
+      'endBeforeStart',
+      'endTooFar',
+    ]);
   }
 
   toggleSlidingScale(event: Event) {

@@ -8,6 +8,7 @@ import {
   todayDateKey as todayDateKeyShared,
   toDateKeyInEventTimeZone as toDateKeyInEventTimeZoneShared,
 } from '@shared/event-time';
+import {MAX_EVENT_DURATION_MS} from '@shared/constants';
 
 /**
  * Platform-wide timezone constants and date utilities.
@@ -66,6 +67,20 @@ export function startOfDateKeyInEventTimeZone(dateKey: string): string {
 /** Returns today's midnight boundary as a full UTC ISO timestamp in the platform timezone. */
 export function startOfTodayInEventTimeZone(): string {
   return startOfTodayInEventTimeZoneShared();
+}
+
+/**
+ * Lower bound (ISO UTC) on an event's start `date` for "upcoming" discovery
+ * queries. Set to `MAX_EVENT_DURATION_MS` before the start of today so that
+ * events which started before today but have not yet ended (running multi-day
+ * events) are still fetched; callers then drop the truly-ended rows with
+ * hasEventEnded. Because endDate is capped to `date + MAX_EVENT_DURATION_MS` at
+ * write time, no not-yet-ended event can have a start earlier than this bound.
+ */
+export function ongoingEventStartLowerBound(): string {
+  return new Date(
+    Date.parse(startOfTodayInEventTimeZoneShared()) - MAX_EVENT_DURATION_MS,
+  ).toISOString();
 }
 
 /**

@@ -7,7 +7,7 @@ import {
   isPlatformAdmin,
 } from '../../lib/access';
 import {countMatchingInQuery} from '../../lib/query_scan';
-import {startOfTodayInEventTimeZone} from '../../lib/timezone';
+import {hasEventEnded, ongoingEventStartLowerBound} from '../../lib/timezone';
 import {getAuthUserId} from '../../lib/auth_identity';
 import {
   getPosterUrl,
@@ -43,7 +43,9 @@ export async function listVisiblePublishedEvents(ctx: QueryCtx) {
 
 export async function listUpcomingPublishedEvents(ctx: QueryCtx) {
   const userId = await getAuthUserId(ctx);
-  const minDate = startOfTodayInEventTimeZone();
+  // Look back MAX_EVENT_DURATION so running multi-day events (started before
+  // today, not yet ended) are included, then drop already-ended rows.
+  const minDate = ongoingEventStartLowerBound();
   // TODO(BRA-410): Replace this all-results read with a real paginated API.
   // eslint-disable-next-line @convex-dev/no-collect-in-query -- Temporary all-results API until pagination is added.
   const events = await ctx.db
@@ -53,7 +55,8 @@ export async function listUpcomingPublishedEvents(ctx: QueryCtx) {
     )
     .collect();
 
-  const viewableEvents = await filterViewableEvents(ctx, userId, events);
+  const ongoingEvents = events.filter((event) => !hasEventEnded(event));
+  const viewableEvents = await filterViewableEvents(ctx, userId, ongoingEvents);
 
   return await mapEventsWithPosterUrls(ctx, viewableEvents);
 }

@@ -1038,6 +1038,28 @@ describe('Event end date', () => {
     ).rejects.toThrow();
   });
 
+  it('create rejects an endDate more than the max duration after the start', async () => {
+    const {asAdmin, organizerId} = await setupEndDateContext();
+
+    // baseCreateArgs.date is 2030-12-15T20:00; 45 days later exceeds the cap.
+    await expect(
+      asAdmin.mutation(api.events.management.create, {
+        ...baseCreateArgs,
+        organizerId,
+        endDate: '2031-01-29T20:00:00.000Z',
+      }),
+    ).rejects.toThrow(/within \d+ days of the event start/);
+
+    // A span within the cap is accepted.
+    await expect(
+      asAdmin.mutation(api.events.management.create, {
+        ...baseCreateArgs,
+        organizerId,
+        endDate: '2030-12-18T06:00:00.000Z',
+      }),
+    ).resolves.toBeDefined();
+  });
+
   it('update sets, revalidates, and clears endDate', async () => {
     const {t, asAdmin, organizerId} = await setupEndDateContext();
     const eventId = await asAdmin.mutation(api.events.management.create, {
@@ -1240,6 +1262,54 @@ describe('events.listByOrganizer', () => {
     expect(result.events[0].posterUrl).toBeNull();
     expect(result.events[0].soldCount).toBe(4);
     expect(result.events[0]).toMatchObject({isSoldOut: true});
+  });
+
+  it('keeps a running multi-day event whose start is past but end is future', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-06-10T20:00:00.000Z'));
+      const t = convexTest();
+      const userId = await t.mutation(api.testing.users.createUserDirectly, {
+        name: 'Test User',
+        email: 'test-user-lbo-running@test-events.com',
+      });
+      const asUser = t.withIdentity({subject: userId});
+      const organizerId = await t.mutation(
+        api.testing.communities.seedOrganizer,
+        {name: 'Weekender Organizer'},
+      );
+
+      await t.mutation(api.testing.events.seedEvent, {
+        title: 'Organizer Running Weekender',
+        date: '2026-06-08T20:00:00.000Z',
+        endDate: '2026-06-11T20:00:00.000Z',
+        price: 2000,
+        totalTickets: 50,
+        status: 'published',
+        visibility: 'public',
+        organizerId,
+      });
+      await t.mutation(api.testing.events.seedEvent, {
+        title: 'Organizer Ended Weekender',
+        date: '2026-06-01T20:00:00.000Z',
+        endDate: '2026-06-05T20:00:00.000Z',
+        price: 2000,
+        totalTickets: 50,
+        status: 'published',
+        visibility: 'public',
+        organizerId,
+      });
+
+      const result = await asUser.query(api.events.public.listByOrganizer, {
+        organizerId,
+      });
+      assert(result);
+      const titles = result.events.map((event) => event.title);
+      expect(titles).toContain('Organizer Running Weekender');
+      expect(titles).not.toContain('Organizer Ended Weekender');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('returns organizerDescription when organizer has a description', async () => {
@@ -2327,9 +2397,105 @@ describe('Event listing pagination', () => {
       vi.useRealTimers();
     }
   });
+
+  it('upcoming keeps a running multi-day event whose start is past but end is future', async () => {
+    vi.useFakeTimers();
+    try {
+      // "Now" is mid-event: 2026-06-10 13:00 in Los Angeles.
+      vi.setSystemTime(new Date('2026-06-10T20:00:00.000Z'));
+      const t = convexTest();
+      const organizerId = await t.mutation(
+        api.testing.communities.seedOrganizer,
+        {name: 'Weekender Crew', isPublicDirectory: true},
+      );
+
+      // Started 2 days ago, ends tomorrow -> still ongoing, must appear.
+      await t.mutation(api.testing.events.seedEvent, {
+        title: 'Running Weekender',
+        date: '2026-06-08T20:00:00.000Z',
+        endDate: '2026-06-11T20:00:00.000Z',
+        price: 2000,
+        totalTickets: 50,
+        status: 'published',
+        visibility: 'public',
+        organizerId,
+      });
+      // Multi-day that already ended -> must be excluded by the filter.
+      await t.mutation(api.testing.events.seedEvent, {
+        title: 'Ended Weekender',
+        date: '2026-06-01T20:00:00.000Z',
+        endDate: '2026-06-05T20:00:00.000Z',
+        price: 2000,
+        totalTickets: 50,
+        status: 'published',
+        visibility: 'public',
+        organizerId,
+      });
+      // Single-night event 2 days ago (no endDate) -> ended, excluded.
+      await t.mutation(api.testing.events.seedEvent, {
+        title: 'Past Single Night',
+        date: '2026-06-08T20:00:00.000Z',
+        price: 2000,
+        totalTickets: 50,
+        status: 'published',
+        visibility: 'public',
+        organizerId,
+      });
+
+      const titles = (await t.query(api.events.public.upcoming, {})).map(
+        (event) => event.title,
+      );
+      expect(titles).toContain('Running Weekender');
+      expect(titles).not.toContain('Ended Weekender');
+      expect(titles).not.toContain('Past Single Night');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('listPublicUpcomingInternal', () => {
+  it('keeps a running multi-day event whose start is past but end is future', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-06-10T20:00:00.000Z'));
+      const t = convexTest();
+      const organizerId = await t.mutation(
+        api.testing.communities.seedOrganizer,
+        {name: 'Weekender Cards Crew', isPublicDirectory: true},
+      );
+
+      await t.mutation(api.testing.events.seedEvent, {
+        title: 'Running Weekender Card',
+        date: '2026-06-08T20:00:00.000Z',
+        endDate: '2026-06-11T20:00:00.000Z',
+        price: 2000,
+        totalTickets: 50,
+        status: 'published',
+        visibility: 'public',
+        organizerId,
+      });
+      await t.mutation(api.testing.events.seedEvent, {
+        title: 'Ended Weekender Card',
+        date: '2026-06-01T20:00:00.000Z',
+        endDate: '2026-06-05T20:00:00.000Z',
+        price: 2000,
+        totalTickets: 50,
+        status: 'published',
+        visibility: 'public',
+        organizerId,
+      });
+
+      const titles = (
+        await t.query(internal.events.public.listPublicUpcomingInternal, {})
+      ).map((event) => event.title);
+      expect(titles).toContain('Running Weekender Card');
+      expect(titles).not.toContain('Ended Weekender Card');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('returns only publicly visible upcoming published events', async () => {
     const t = convexTest();
 

@@ -6,6 +6,7 @@ import {
   todayDateKey,
   startOfDateKeyInEventTimeZone,
   startOfTodayInEventTimeZone,
+  ongoingEventStartLowerBound,
   hasEventEnded,
 } from './timezone';
 
@@ -106,6 +107,15 @@ describe('timezone utilities', () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2026-06-01T20:00:00.000Z'));
       expect(startOfTodayInEventTimeZone()).toBe('2026-06-01T07:00:00.000Z');
+    });
+  });
+
+  describe('ongoingEventStartLowerBound', () => {
+    it('is MAX_EVENT_DURATION before the start of today (LA)', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-06-01T20:00:00.000Z'));
+      // startOfToday (LA) is 2026-06-01T07:00:00Z; minus 30 days.
+      expect(ongoingEventStartLowerBound()).toBe('2026-05-02T07:00:00.000Z');
     });
   });
 

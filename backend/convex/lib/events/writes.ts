@@ -17,6 +17,10 @@ import {
 } from '../../lib/validation';
 import {throwInvalidInput} from '../../lib/errors';
 import {eventStartInstantMs, parseUtcInstant} from '@shared/event-time';
+import {
+  MAX_EVENT_DURATION_DAYS,
+  MAX_EVENT_DURATION_MS,
+} from '@shared/constants';
 
 export interface SliderConfigInput {
   enabled: boolean;
@@ -118,9 +122,12 @@ export function validateCreateEventInput(args: CreateEventInput) {
 }
 
 /**
- * Requires the end instant to be strictly after the event start.
- * Formats are validated separately (validateISODate); legacy date-key starts
- * resolve to event-local midnight via eventStartInstantMs.
+ * Requires the end instant to be strictly after the event start and no more
+ * than MAX_EVENT_DURATION_DAYS later. The upper bound is a data-integrity guard
+ * and the invariant that keeps "upcoming" discovery queries bounded (see
+ * ongoingEventStartLowerBound). Formats are validated separately
+ * (validateISODate); legacy date-key starts resolve to event-local midnight
+ * via eventStartInstantMs.
  */
 export function assertEventEndAfterStart(
   startsAtUtc: string,
@@ -135,6 +142,12 @@ export function assertEventEndAfterStart(
     throwInvalidInput('End date must be after the event start', {
       field: 'endDate',
     });
+  }
+  if (endMs - startMs > MAX_EVENT_DURATION_MS) {
+    throwInvalidInput(
+      `End date must be within ${MAX_EVENT_DURATION_DAYS} days of the event start`,
+      {field: 'endDate'},
+    );
   }
 }
 

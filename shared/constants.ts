@@ -3,6 +3,19 @@ export const MAX_TICKET_REMINDER_SUBJECT_LENGTH = 200;
 export const MAX_TICKET_REMINDER_MESSAGE_LENGTH = 5000;
 
 /**
+ * Maximum span between an event's start (`date`) and its optional `endDate`.
+ *
+ * This is both a data-integrity guard (rejects typo'd end dates, e.g. a wrong
+ * year) and the invariant that keeps "upcoming" discovery queries bounded: a
+ * running multi-day event's start can be at most this far in the past, so the
+ * listing loaders only need to look back this window to include every event
+ * that has started but not yet ended (see hasEventEnded).
+ */
+export const MAX_EVENT_DURATION_DAYS = 30;
+export const MAX_EVENT_DURATION_MS =
+  MAX_EVENT_DURATION_DAYS * 24 * 60 * 60 * 1000;
+
+/**
  * Number of days after an event before revenue is automatically paid out
  * to the organizer's Stripe Connect account.
  *

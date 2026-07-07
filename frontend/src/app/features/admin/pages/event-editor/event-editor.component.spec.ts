@@ -394,6 +394,27 @@ describe('EventEditorComponent', () => {
     );
   });
 
+  it('should reject an end more than the max duration after the start', async () => {
+    component.eventModel.update((m) => ({
+      ...m,
+      date: getFutureDate(31),
+      time: '20:00',
+      endDate: getFutureDate(31 + 45), // 45 days > 30-day cap
+      endTime: '20:00',
+    }));
+    component.submitted.set(true);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(component.eventForm.endTime().errors()).toEqual(
+      expect.arrayContaining([expect.objectContaining({kind: 'endTooFar'})]),
+    );
+    expect(await harness.isSaveButtonDisabled()).toBe(true);
+    expect(await harness.getEndTimeErrorText()).toContain(
+      'within 30 days of the start',
+    );
+  });
+
   it('should submit an overnight end window as an ISO endDate after the start', async () => {
     const eventDate = getFutureDate(31);
     const endDate = getFutureDate(32);

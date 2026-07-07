@@ -2,7 +2,7 @@ import type {Doc, Id} from '../../_generated/dataModel';
 import type {QueryCtx} from '../../_generated/server';
 import {canViewEvent} from '../../lib/access';
 import {calculateEventInventory} from '../../lib/inventory';
-import {startOfTodayInEventTimeZone} from '../../lib/timezone';
+import {hasEventEnded, ongoingEventStartLowerBound} from '../../lib/timezone';
 import {isEligibleForPublicDirectory} from '../../lib/communities/public';
 import {
   mapPublicEventCards,
@@ -68,7 +68,10 @@ async function filterLandingPageEvents(
 }
 
 export async function listPublicUpcomingCards(ctx: QueryCtx) {
-  const minDate = startOfTodayInEventTimeZone();
+  // Look back MAX_EVENT_DURATION so events that started before today but have
+  // not yet ended (running multi-day events) are fetched, then drop the
+  // already-ended rows with hasEventEnded.
+  const minDate = ongoingEventStartLowerBound();
   const publicEvents: Doc<'events'>[] = [];
   let cursor: string | null = null;
 
@@ -83,7 +86,8 @@ export async function listPublicUpcomingCards(ctx: QueryCtx) {
         numItems: PUBLIC_UPCOMING_SCAN_PAGE_SIZE,
       });
 
-    const eligibleEvents = await filterLandingPageEvents(ctx, result.page);
+    const ongoingPage = result.page.filter((event) => !hasEventEnded(event));
+    const eligibleEvents = await filterLandingPageEvents(ctx, ongoingPage);
     publicEvents.push(
       ...eligibleEvents.slice(
         0,
