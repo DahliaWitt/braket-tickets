@@ -1,6 +1,9 @@
 <app-content-layout>
   <div class="flex grow flex-col">
-    @if (approvalsLoading() || isLoading()) {
+    <!-- !auth.authSettled() covers the optimistic activation window: the route
+         was admitted on a cached credential, so keep the skeleton up until the
+         profile-keyed resources start instead of flashing an empty dashboard. -->
+    @if (!auth.authSettled() || approvalsLoading() || isLoading()) {
       <!-- Loading skeleton -->
       <div class="fade-in space-y-6 py-6">
         <z-skeleton class="h-3 w-40" />
@@ -511,17 +514,38 @@
                 class="relative grid grid-cols-1 border-b border-border transition-colors last:border-b-0 hover:bg-foreground/[0.02] md:grid-cols-[auto_1fr]"
               >
                 @if (event.posterUrl) {
+                  <!-- Flyer-wall frame: sized by the poster's own aspect ratio
+                       (measured on load, clamped to the supported range; 4:5
+                       flyer default until then), so the full poster shows with
+                       no crop and no letterbox. When a constraint binds
+                       (max-w-sm / max-h on extreme ratios), object-contain +
+                       the ambient-glow backdrop absorb the gap. -->
                   <div
-                    class="relative h-64 w-full overflow-hidden bg-card md:h-56 md:w-48 lg:w-56"
+                    data-testid="dashboard-poster-frame"
+                    class="relative max-h-[48rem] w-full overflow-hidden bg-card md:h-56 md:w-auto md:max-w-sm"
+                    [style.aspect-ratio]="posterAspectRatio(event._id)"
                   >
                     <img
                       [ngSrc]="event.posterUrl"
+                      alt=""
+                      aria-hidden="true"
+                      data-testid="dashboard-poster-backdrop"
+                      fill
+                      ngSrcset="320w"
+                      sizes="64px"
+                      class="scale-125 object-cover opacity-60 blur-xl saturate-150"
+                    />
+                    <div class="absolute inset-0 bg-background/40"></div>
+                    <img
+                      [ngSrc]="event.posterUrl"
                       [alt]="event.title + ' event poster'"
+                      data-testid="dashboard-poster"
                       fill
                       [priority]="first"
                       ngSrcset="320w, 640w, 1024w"
                       sizes="(min-width: 1024px) 224px, (min-width: 768px) 192px, 100vw"
                       class="object-contain"
+                      (load)="onPosterLoad(event._id, $event)"
                     />
                   </div>
                 }

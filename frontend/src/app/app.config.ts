@@ -41,7 +41,14 @@ export const appConfig: ApplicationConfig = {
         anchorScrolling: 'enabled',
         scrollPositionRestoration: 'enabled',
       }),
-      withRouterConfig({onSameUrlNavigation: 'reload'}),
+      withRouterConfig({
+        onSameUrlNavigation: 'reload',
+        // Angular 22 flips the default to 'always'. Pin the v21 behavior so
+        // child routes do not silently inherit parent params after upgrade.
+        // A 2026-07 route audit found no parent/child param collisions, so
+        // adopting 'always' and deleting this pin is safe when next revisited.
+        paramsInheritanceStrategy: 'emptyOnly',
+      }),
       withViewTransitions({
         onViewTransitionCreated: ({transition}) => {
           const router = inject(Router);

@@ -19,6 +19,7 @@ import {AuthService} from '@/core/services/auth.service';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 import {ZardCardComponent} from '@ui/components/primitives/card/card.component';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
+import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton.component';
 
 import {type MaybeFieldTree} from '@angular/forms/signals';
 import {ZardInputDirective} from '@ui/components/primitives/input/input.directive';
@@ -76,6 +77,7 @@ interface EmailPreferenceRollback {
     ZardCardComponent,
     ZardIconComponent,
     ZardInputDirective,
+    ZardSkeletonComponent,
   ],
   templateUrl: './account.component.html',
 })

@@ -81,3 +81,11 @@ export const userApplicationPageValidator = v.object({
   isDone: v.boolean(),
   continueCursor: v.string(),
 });
+
+export const communityUserRowValidator = v.object({
+  _id: v.id('users'),
+  userId: v.id('users'),
+  organizerId: v.id('organizers'),
+  displayName: v.string(),
+  email: v.optional(v.string()),
+});
