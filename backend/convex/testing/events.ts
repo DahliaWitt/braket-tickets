@@ -112,6 +112,14 @@ export async function insertSeedEvent(
   const normalizedDate = args.date.includes('T')
     ? args.date
     : `${args.date}T12:00:00.000Z`;
+  // Same short-date normalization for the optional end instant so seeds may
+  // pass a bare 'YYYY-MM-DD' end and still satisfy validateCreateEventInput.
+  const normalizedEndDate =
+    args.endDate === undefined
+      ? undefined
+      : args.endDate.includes('T')
+        ? args.endDate
+        : `${args.endDate}T12:00:00.000Z`;
 
   const sliderConfig = args.slidingScaleEnabled
     ? {
@@ -132,7 +140,7 @@ export async function insertSeedEvent(
     title: args.title,
     description: args.description,
     date: normalizedDate,
-    endDate: args.endDate,
+    endDate: normalizedEndDate,
     location: args.location,
     price: args.price,
     totalTickets: args.totalTickets ?? 100,
@@ -148,7 +156,7 @@ export async function insertSeedEvent(
     title: args.title,
     description: args.description,
     date: normalizedDate,
-    endDate: args.endDate,
+    endDate: normalizedEndDate,
     location: args.location,
     price: args.price,
     totalTickets: args.totalTickets ?? 100,

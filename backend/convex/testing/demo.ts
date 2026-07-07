@@ -26,6 +26,7 @@ import {
 } from './admin';
 import {connectedAccountStatusValidator} from '../lib/validators/stripe_connect';
 import {toDateKeyInEventTimeZone} from '../lib/timezone';
+import {eventLocalDateTimeToUtc} from '@shared/event-time';
 
 type ConnectedAccountStatus = Infer<typeof connectedAccountStatusValidator>;
 
@@ -315,11 +316,24 @@ export async function insertSeedDemoData(
   const futureDate = demoFutureEventDateKey();
   const pastDate = '2026-02-20';
 
+  // Concrete & Wax runs late: 10pm doors, 6am close the next morning. Seeding a
+  // real overnight window exercises the endDate range rendering across midnight
+  // (event timezone) on public pages, emails, and the admin "happening now"
+  // badge. Calendar day stays `futureDate`, so listing sort order is unchanged.
+  const concreteWaxStart = eventLocalDateTimeToUtc(futureDate, '22:00');
+  const concreteWaxEnd = eventLocalDateTimeToUtc(
+    toDateKeyInEventTimeZone(
+      new Date(Date.now() + (DEMO_FUTURE_EVENT_OFFSET_DAYS + 1) * DAY_MS),
+    ),
+    '06:00',
+  );
+
   const concreteWaxId = await insertSeedEvent(ctx, {
     title: 'Concrete & Wax',
     description:
       'Lorem ipsum but on vinyl. No one has ever described an event this poorly, and yet here we are. The vibe is whatever you want it to be. We are not responsible for the vibe.\n\nThis is placeholder text. If this copy ships to production, fuck...',
-    date: futureDate,
+    date: concreteWaxStart,
+    endDate: concreteWaxEnd,
     location: 'A location, probably. Do not actually go here.',
     price: 2500,
     totalTickets: 100,

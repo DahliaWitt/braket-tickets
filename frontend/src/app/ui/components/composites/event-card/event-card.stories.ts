@@ -68,6 +68,28 @@ export const Default: Story = {
   },
 };
 
+export const OvernightWithEndTime: Story = {
+  args: {
+    event: {
+      ...BASE_EVENT,
+      _id: 'evt_overnight',
+      title: 'Nocturne',
+      // 10pm doors, 6am close the next morning (event timezone). Exercises the
+      // eventEndTime suffix rendering the end day for a cross-midnight window.
+      date: '2026-06-21T05:00:00.000Z',
+      endDate: '2026-06-21T13:00:00.000Z',
+    },
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Event with an explicit end that crosses midnight. The date line renders the full window ("… 10:00 PM – Jun 21, 6:00 AM"), formatted in the platform event timezone.',
+      },
+    },
+  },
+};
+
 export const WithoutPoster: Story = {
   args: {
     event: {

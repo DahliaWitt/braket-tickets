@@ -6,7 +6,7 @@ import {
   todayDateKey,
   startOfDateKeyInEventTimeZone,
   startOfTodayInEventTimeZone,
-  hasEventDatePassed,
+  hasEventEnded,
 } from './timezone';
 
 describe('timezone utilities', () => {
@@ -109,39 +109,44 @@ describe('timezone utilities', () => {
     });
   });
 
-  describe('hasEventDatePassed', () => {
+  // hasEventEnded with no endDate is the platform-timezone day cutoff (the
+  // fallback that replaced hasEventDatePassed). These cases pin that
+  // day-granularity behavior, including the DST edges and the original
+  // UTC-crossed-midnight-but-LA-has-not bug.
+  describe('hasEventEnded (day-granularity fallback, no endDate)', () => {
     // Event rows store full ISO timestamps; use noon UTC so the LA calendar
     // day matches the intended event date across DST.
     const iso = (dateKey: string) => `${dateKey}T12:00:00.000Z`;
+    const ended = (date: string) => hasEventEnded({date});
 
     it('should return false on event day', () => {
       vi.useFakeTimers();
       // 2026-06-15T20:00:00Z => 2026-06-15 13:00 in LA (PDT)
       vi.setSystemTime(new Date('2026-06-15T20:00:00Z'));
-      expect(hasEventDatePassed(iso('2026-06-15'))).toBe(false);
+      expect(ended(iso('2026-06-15'))).toBe(false);
     });
 
     it('should return false on day before event', () => {
       vi.useFakeTimers();
       // 2026-06-14T20:00:00Z => 2026-06-14 13:00 in LA
       vi.setSystemTime(new Date('2026-06-14T20:00:00Z'));
-      expect(hasEventDatePassed(iso('2026-06-15'))).toBe(false);
+      expect(ended(iso('2026-06-15'))).toBe(false);
     });
 
     it('should return true on day after event', () => {
       vi.useFakeTimers();
       // 2026-06-16T20:00:00Z => 2026-06-16 13:00 in LA
       vi.setSystemTime(new Date('2026-06-16T20:00:00Z'));
-      expect(hasEventDatePassed(iso('2026-06-15'))).toBe(true);
+      expect(ended(iso('2026-06-15'))).toBe(true);
     });
 
     it('should support legacy date-only rows for runtime event gates', () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2026-06-15T20:00:00Z'));
-      expect(hasEventDatePassed('2026-06-15')).toBe(false);
+      expect(ended('2026-06-15')).toBe(false);
 
       vi.setSystemTime(new Date('2026-06-16T20:00:00Z'));
-      expect(hasEventDatePassed('2026-06-15')).toBe(true);
+      expect(ended('2026-06-15')).toBe(true);
     });
 
     it('should return false when UTC crossed midnight but LA has not (the original bug)', () => {
@@ -149,7 +154,7 @@ describe('timezone utilities', () => {
       // 2026-02-27T07:30:00Z => 2026-02-26 23:30 in LA (PST, UTC-8)
       // Event date is 2026-02-27 => event is "tomorrow" in LA, should NOT be past
       vi.setSystemTime(new Date('2026-02-27T07:30:00Z'));
-      expect(hasEventDatePassed(iso('2026-02-27'))).toBe(false);
+      expect(ended(iso('2026-02-27'))).toBe(false);
     });
 
     it('should return true when LA has also crossed midnight past event day', () => {
@@ -157,7 +162,7 @@ describe('timezone utilities', () => {
       // 2026-02-28T08:01:00Z => 2026-02-28 00:01 in LA (PST)
       // Event date was 2026-02-27 => event is yesterday in LA
       vi.setSystemTime(new Date('2026-02-28T08:01:00Z'));
-      expect(hasEventDatePassed(iso('2026-02-27'))).toBe(true);
+      expect(ended(iso('2026-02-27'))).toBe(true);
     });
 
     it('should handle DST transition (spring forward)', () => {
@@ -165,8 +170,8 @@ describe('timezone utilities', () => {
       // Spring forward 2026: Mar 8, 2:00 AM -> 3:00 AM
       // 2026-03-08T10:00:00Z => 2026-03-08 03:00 in LA (PDT, UTC-7)
       vi.setSystemTime(new Date('2026-03-08T10:00:00Z'));
-      expect(hasEventDatePassed(iso('2026-03-08'))).toBe(false);
-      expect(hasEventDatePassed(iso('2026-03-07'))).toBe(true);
+      expect(ended(iso('2026-03-08'))).toBe(false);
+      expect(ended(iso('2026-03-07'))).toBe(true);
     });
 
     it('should handle DST transition (fall back)', () => {
@@ -174,8 +179,8 @@ describe('timezone utilities', () => {
       // Fall back 2026: Nov 1, 2:00 AM -> 1:00 AM
       // 2026-11-01T09:00:00Z => 2026-11-01 01:00 in LA (PST, UTC-8)
       vi.setSystemTime(new Date('2026-11-01T09:00:00Z'));
-      expect(hasEventDatePassed(iso('2026-11-01'))).toBe(false);
-      expect(hasEventDatePassed(iso('2026-10-31'))).toBe(true);
+      expect(ended(iso('2026-11-01'))).toBe(false);
+      expect(ended(iso('2026-10-31'))).toBe(true);
     });
   });
 });
