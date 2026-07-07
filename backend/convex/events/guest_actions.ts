@@ -99,7 +99,14 @@ export const sendTicket = action({
     try {
       return await deliverGuestTicket(ctx, guest);
     } catch (error) {
-      // Release the lock so the failed send can be retried immediately.
+      // Release the lock so a retry can proceed immediately. This runs for any
+      // failure, including a markAsEmailed failure after the provider already
+      // accepted the email — so the caller sees an error while a message may in
+      // fact be in flight. Batch "send all" is still safe (beginGuestTicketSend
+      // consults the durable emailDeliveries record), but a deliberate single
+      // Resend intentionally bypasses that guard and will dispatch a second
+      // copy. That is the accepted single-resend contract, now reachable via a
+      // crash and not only a prior confirmed send.
       await ctx.runMutation(internal.events.guests.clearGuestTicketSendLock, {
         id: guest._id,
       });

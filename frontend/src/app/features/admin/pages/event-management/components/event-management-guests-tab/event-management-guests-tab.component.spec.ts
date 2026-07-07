@@ -402,6 +402,33 @@ describe('EventManagementGuestsTabComponent', () => {
     expect(dataChangedSpy).toHaveBeenCalledTimes(1);
   });
 
+  it('caps how many send-all dispatches run at once', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    let inFlight = 0;
+    let peakInFlight = 0;
+    adminEventsServiceMock.sendGuestTicket.mockImplementation(async () => {
+      inFlight += 1;
+      peakInFlight = Math.max(peakInFlight, inFlight);
+      // Yield so overlapping dispatches accumulate before any completes.
+      await Promise.resolve();
+      await Promise.resolve();
+      inFlight -= 1;
+      return {status: 'sent'};
+    });
+    const manyGuests = Array.from({length: 20}, (_, index) => ({
+      ...mockGuest,
+      _id: `guest-${index}`,
+    }));
+    fixture.componentRef.setInput('guests', manyGuests);
+    fixture.detectChanges();
+
+    await fixture.componentInstance.sendAllTickets();
+
+    // All 20 are dispatched, but never more than the cap concurrently.
+    expect(adminEventsServiceMock.sendGuestTicket).toHaveBeenCalledTimes(20);
+    expect(peakInFlight).toBe(8);
+  });
+
   it('does not send anything when the send-all confirmation is declined', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(false);
     fixture.componentRef.setInput('guests', [mockGuest]);

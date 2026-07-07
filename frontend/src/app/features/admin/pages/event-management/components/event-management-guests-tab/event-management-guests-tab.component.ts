@@ -27,6 +27,35 @@ import {ZardTooltipDirective} from '@ui/components/primitives/tooltip/tooltip';
 import {logger} from '@/utils/logger';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
 
+/** Max guest ticket sends dispatched at once by "Send All". */
+const SEND_ALL_CONCURRENCY = 8;
+
+/**
+ * Runs `worker` over `items` with at most `limit` in flight at a time, returning
+ * results in input order. `worker` is expected to swallow its own errors (this
+ * pool does not) so one failure never rejects the whole batch.
+ */
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  limit: number,
+  worker: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  const runners = Array.from(
+    {length: Math.min(limit, items.length)},
+    async () => {
+      while (cursor < items.length) {
+        const index = cursor;
+        cursor += 1;
+        results[index] = await worker(items[index]);
+      }
+    },
+  );
+  await Promise.all(runners);
+  return results;
+}
+
 function pdfDataUrlToBlob(dataUrl: string): Blob {
   const [metadata, base64] = dataUrl.split(',');
   if (!metadata?.startsWith('data:application/pdf;base64') || !base64) {
@@ -216,8 +245,13 @@ export class EventManagementGuestsTabComponent {
     try {
       // Batch mode skips guests already emailed, enforced atomically on the
       // backend so a stale roster cannot re-email guests another admin handled.
-      const outcomes = await Promise.all(
-        targets.map((guest) => this.dispatchSendTicket(guest._id, true)),
+      // Cap in-flight sends: each is a Convex action that generates a PDF and
+      // hits Resend, so an unbounded fan-out over a large roster would pile up
+      // action concurrency and provider rate limits.
+      const outcomes = await mapWithConcurrency(
+        targets,
+        SEND_ALL_CONCURRENCY,
+        (guest) => this.dispatchSendTicket(guest._id, true),
       );
       const sent = outcomes.filter((outcome) => outcome === 'sent').length;
       const skipped = outcomes.filter(
