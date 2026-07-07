@@ -1,7 +1,7 @@
 import type {EventStatus} from '@shared/domain/event-status';
 import {convexTest} from '../setup.testing';
 import {describe, it, expect} from 'vitest';
-import {api} from '../_generated/api';
+import {api, internal} from '../_generated/api';
 import type {Id} from '../_generated/dataModel';
 import {addMember, authz} from '../lib/authz';
 import {ADMIN_AUDIT_ACTIONS} from '../lib/admin_audit_actions';
@@ -11,7 +11,13 @@ let _guestTestOrgCounter = 0;
 /** Seed a minimal event with an organizer. Returns the eventId. */
 async function seedEvent(
   t: ReturnType<typeof convexTest>,
-  overrides?: {title?: string; date?: string; price?: number; totalTickets?: number; status?: EventStatus},
+  overrides?: {
+    title?: string;
+    date?: string;
+    price?: number;
+    totalTickets?: number;
+    status?: EventStatus;
+  },
 ): Promise<Id<'events'>> {
   _guestTestOrgCounter += 1;
   const organizerId = await t.mutation(api.testing.communities.seedOrganizer, {
@@ -29,7 +35,9 @@ async function seedEvent(
   });
 }
 
-async function setupAdmin(t: ReturnType<typeof convexTest>): Promise<Id<'users'>> {
+async function setupAdmin(
+  t: ReturnType<typeof convexTest>,
+): Promise<Id<'users'>> {
   return t.mutation(api.testing.users.createUserDirectly, {
     name: 'Admin',
     email: `admin-guests-${Date.now()}@test.com`,
@@ -43,7 +51,10 @@ async function setupScanner(
   name = 'Door Person',
   email = 'door@test.com',
 ): Promise<Id<'users'>> {
-  const userId = await t.mutation(api.testing.users.createUserDirectly, {name, email});
+  const userId = await t.mutation(api.testing.users.createUserDirectly, {
+    name,
+    email,
+  });
   await t.run(async (ctx) => {
     await authz.assignRole(ctx, userId, 'community_scanner', {
       type: 'organizer',
@@ -175,10 +186,13 @@ describe('guests.add', () => {
       type: 'guest',
     });
 
-    const result = await asAdmin.query(api.communities.management.audit.listAuditLogs, {
-      organizerId,
-      paginationOpts: {numItems: 25, cursor: null},
-    });
+    const result = await asAdmin.query(
+      api.communities.management.audit.listAuditLogs,
+      {
+        organizerId,
+        paginationOpts: {numItems: 25, cursor: null},
+      },
+    );
 
     const guestAddEntry = result.page.find(
       (entry) => entry.action === ADMIN_AUDIT_ACTIONS.GUEST_ADD,
@@ -349,6 +363,280 @@ describe('guests.remove', () => {
   });
 });
 
+describe('guests.update', () => {
+  it('updates name, email, type, and notes', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Original Name',
+      email: 'original@example.com',
+      type: 'guest',
+      notes: 'Original notes',
+    });
+
+    await asAdmin.mutation(api.events.guests.update, {
+      id: guestId,
+      name: 'Updated Name',
+      email: 'updated@example.com',
+      type: 'artist guest',
+      notes: 'Updated notes',
+    });
+
+    const guests = await asAdmin.query(api.events.guests.listByEvent, {
+      eventId,
+    });
+    const updated = guests.find((g) => g._id === guestId);
+    expect(updated?.name).toBe('Updated Name');
+    expect(updated?.email).toBe('updated@example.com');
+    expect(updated?.type).toBe('artist guest');
+    expect(updated?.notes).toBe('Updated notes');
+  });
+
+  it('clears optional fields omitted from the update', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Has Optional Fields',
+      email: 'has-email@example.com',
+      type: 'guest',
+      notes: 'Has notes',
+    });
+
+    await asAdmin.mutation(api.events.guests.update, {
+      id: guestId,
+      name: 'No Optional Fields',
+      type: 'guest',
+    });
+
+    const guest = await t.run(async (ctx) => ctx.db.get(guestId));
+    expect(guest?.name).toBe('No Optional Fields');
+    expect(guest?.email).toBeUndefined();
+    expect(guest?.notes).toBeUndefined();
+  });
+
+  it('preserves eventId, emailedAt, checkedInAt, and checkedInBy', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Metadata Guest',
+      type: 'guest',
+    });
+
+    await t.mutation(internal.events.guests.markAsEmailed, {id: guestId});
+
+    /* eslint-disable no-raw-db-mutations/no-raw-db-mutation -- guests.update must preserve check-in state set by ticket_check_in.checkIn, which requires full event/ticket setup; pre-setting checkedInAt/checkedInBy directly for this preservation test, matching the precedent at guests.test.ts (see "includes check-in status") */
+    await t.run(async (ctx) => {
+      await ctx.db.patch('guests', guestId, {
+        checkedInAt: Date.now(),
+        checkedInBy: adminId,
+      });
+    });
+    /* eslint-enable no-raw-db-mutations/no-raw-db-mutation */
+
+    const beforeUpdate = await t.run(async (ctx) => ctx.db.get(guestId));
+
+    await asAdmin.mutation(api.events.guests.update, {
+      id: guestId,
+      name: 'Metadata Guest Updated',
+      type: 'guest',
+    });
+
+    const afterUpdate = await t.run(async (ctx) => ctx.db.get(guestId));
+    expect(afterUpdate?.eventId).toBe(eventId);
+    expect(afterUpdate?.emailedAt).toBe(beforeUpdate?.emailedAt);
+    expect(afterUpdate?.emailedAt).toBeDefined();
+    expect(afterUpdate?.checkedInAt).toBe(beforeUpdate?.checkedInAt);
+    expect(afterUpdate?.checkedInBy).toBe(adminId);
+  });
+
+  it('rejects non-admin users', async () => {
+    const t = convexTest();
+
+    const userId = await t.mutation(api.testing.users.createUserDirectly, {
+      name: 'Regular User',
+      email: 'regular-update@test.com',
+    });
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Guest',
+      type: 'guest',
+    });
+
+    const asUser = t.withIdentity({subject: userId});
+
+    await expect(
+      asUser.mutation(api.events.guests.update, {
+        id: guestId,
+        name: 'Hacked Name',
+        type: 'guest',
+      }),
+    ).rejects.toThrow('Unauthorized');
+  });
+
+  it('rejects unauthenticated users', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Guest',
+      type: 'guest',
+    });
+
+    await expect(
+      t.mutation(api.events.guests.update, {
+        id: guestId,
+        name: 'Guest',
+        type: 'guest',
+      }),
+    ).rejects.toThrow('Unauthenticated');
+  });
+
+  it('throws not-found for an unknown guest id', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Temporary Guest',
+      type: 'guest',
+    });
+    await asAdmin.mutation(api.events.guests.remove, {id: guestId});
+
+    await expect(
+      asAdmin.mutation(api.events.guests.update, {
+        id: guestId,
+        name: 'Ghost Guest',
+        type: 'guest',
+      }),
+    ).rejects.toThrow(/not found/i);
+  });
+
+  it('validates name, email, and notes length', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Guest',
+      type: 'guest',
+    });
+
+    const longName = 'x'.repeat(201); // MAX_GUEST_NAME_LENGTH is 200
+    await expect(
+      asAdmin.mutation(api.events.guests.update, {
+        id: guestId,
+        name: longName,
+        type: 'guest',
+      }),
+    ).rejects.toThrow(/exceeds maximum length/);
+
+    const longEmail = 'x'.repeat(255) + '@example.com'; // Exceeds MAX_GUEST_EMAIL_LENGTH (254)
+    await expect(
+      asAdmin.mutation(api.events.guests.update, {
+        id: guestId,
+        name: 'Guest',
+        email: longEmail,
+        type: 'guest',
+      }),
+    ).rejects.toThrow(/exceeds maximum length/);
+
+    const longNotes = 'x'.repeat(1001); // MAX_GUEST_NOTES_LENGTH is 1000
+    await expect(
+      asAdmin.mutation(api.events.guests.update, {
+        id: guestId,
+        name: 'Guest',
+        notes: longNotes,
+        type: 'guest',
+      }),
+    ).rejects.toThrow(/exceeds maximum length/);
+  });
+
+  it('writes an audit log entry on guest update', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Pre-Update Name',
+      type: 'guest',
+    });
+
+    await asAdmin.mutation(api.events.guests.update, {
+      id: guestId,
+      name: 'Audited Update Name',
+      type: 'guest',
+    });
+
+    const organizerId = await t.run(async (ctx) => {
+      const event = await ctx.db.get(eventId);
+      return event!.organizerId;
+    });
+
+    const auditLogs = await t.run(async (ctx) => {
+      return await ctx.db
+        .query('adminAuditLogs')
+        .withIndex('by_eventId', (q) => q.eq('eventId', eventId))
+        .collect();
+    });
+
+    const guestUpdateLog = auditLogs.find(
+      (log) => log.action === ADMIN_AUDIT_ACTIONS.GUEST_UPDATE,
+    );
+    expect(guestUpdateLog).toBeDefined();
+    expect(guestUpdateLog?.adminId).toBe(adminId);
+    expect(guestUpdateLog?.eventId).toBe(eventId);
+    expect(guestUpdateLog?.organizerId).toBe(organizerId);
+    expect(guestUpdateLog?.source).toBe('admin-ui');
+    expect(guestUpdateLog?.reason).toBe('Audited Update Name');
+
+    const result = await asAdmin.query(
+      api.communities.management.audit.listAuditLogs,
+      {
+        organizerId,
+        paginationOpts: {numItems: 25, cursor: null},
+      },
+    );
+    const guestUpdateEntry = result.page.find(
+      (entry) => entry.action === ADMIN_AUDIT_ACTIONS.GUEST_UPDATE,
+    );
+    expect(guestUpdateEntry).toBeDefined();
+    expect(guestUpdateEntry?.reason).toBe('Audited Update Name');
+  });
+});
+
 // Note: Guest check-in is tested via ticketCheckIn.checkIn which handles both
 // tickets and guests in a unified flow with duplicate check validation.
 
@@ -362,14 +650,32 @@ describe('guests.listByEvent', () => {
     const eventId = await seedEvent(t);
 
     // Create multiple guests using the production mutation
-    await asAdmin.mutation(api.events.guests.add, {eventId, name: 'VIP 1', type: 'guest'});
-    await asAdmin.mutation(api.events.guests.add, {eventId, name: 'Artist', type: 'artist guest'});
-    await asAdmin.mutation(api.events.guests.add, {eventId, name: 'Security', type: 'staff'});
+    await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'VIP 1',
+      type: 'guest',
+    });
+    await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Artist',
+      type: 'artist guest',
+    });
+    await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Security',
+      type: 'staff',
+    });
 
-    const guests = await asAdmin.query(api.events.guests.listByEvent, {eventId});
+    const guests = await asAdmin.query(api.events.guests.listByEvent, {
+      eventId,
+    });
 
     expect(guests.length).toBe(3);
-    expect(guests.map((g) => g.name).sort()).toEqual(['Artist', 'Security', 'VIP 1']);
+    expect(guests.map((g) => g.name).sort()).toEqual([
+      'Artist',
+      'Security',
+      'VIP 1',
+    ]);
   });
 
   it('returns only guests for the specified event', async () => {
@@ -382,14 +688,26 @@ describe('guests.listByEvent', () => {
 
     const asAdmin = t.withIdentity({subject: adminId});
 
-    await asAdmin.mutation(api.events.guests.add, {eventId: event1Id, name: 'Guest for Event 1', type: 'guest'});
-    await asAdmin.mutation(api.events.guests.add, {eventId: event2Id, name: 'Guest for Event 2', type: 'guest'});
+    await asAdmin.mutation(api.events.guests.add, {
+      eventId: event1Id,
+      name: 'Guest for Event 1',
+      type: 'guest',
+    });
+    await asAdmin.mutation(api.events.guests.add, {
+      eventId: event2Id,
+      name: 'Guest for Event 2',
+      type: 'guest',
+    });
 
-    const event1Guests = await asAdmin.query(api.events.guests.listByEvent, {eventId: event1Id});
+    const event1Guests = await asAdmin.query(api.events.guests.listByEvent, {
+      eventId: event1Id,
+    });
     expect(event1Guests.length).toBe(1);
     expect(event1Guests[0].name).toBe('Guest for Event 1');
 
-    const event2Guests = await asAdmin.query(api.events.guests.listByEvent, {eventId: event2Id});
+    const event2Guests = await asAdmin.query(api.events.guests.listByEvent, {
+      eventId: event2Id,
+    });
     expect(event2Guests.length).toBe(1);
     expect(event2Guests[0].name).toBe('Guest for Event 2');
   });
@@ -402,7 +720,9 @@ describe('guests.listByEvent', () => {
     const eventId = await seedEvent(t, {title: 'Empty Event'});
 
     const asAdmin = t.withIdentity({subject: adminId});
-    const guests = await asAdmin.query(api.events.guests.listByEvent, {eventId});
+    const guests = await asAdmin.query(api.events.guests.listByEvent, {
+      eventId,
+    });
 
     expect(guests).toEqual([]);
   });
@@ -415,7 +735,11 @@ describe('guests.listByEvent', () => {
     const eventId = await seedEvent(t);
 
     const asAdmin = t.withIdentity({subject: adminId});
-    await asAdmin.mutation(api.events.guests.add, {eventId, name: 'Not Checked In', type: 'guest'});
+    await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Not Checked In',
+      type: 'guest',
+    });
     /* eslint-disable no-raw-db-mutations/no-raw-db-mutation -- guests.add does not set checkedIn state; ticket_check_in.checkIn does but requires full event setup; pre-setting for assertion test */
     await t.run(async (ctx) => {
       await ctx.db.insert('guests', {
@@ -428,7 +752,9 @@ describe('guests.listByEvent', () => {
     });
     /* eslint-enable no-raw-db-mutations/no-raw-db-mutation */
 
-    const guests = await asAdmin.query(api.events.guests.listByEvent, {eventId});
+    const guests = await asAdmin.query(api.events.guests.listByEvent, {
+      eventId,
+    });
 
     const checkedIn = guests.find((g) => g.name === 'Checked In');
     const notCheckedIn = guests.find((g) => g.name === 'Not Checked In');
@@ -470,7 +796,11 @@ describe('guests.listByEvent', () => {
     it('allows door staff to list guests for assigned event', async () => {
       const t = convexTest();
 
-      const eventId = await seedEvent(t, {title: 'Staff Event', date: '2026-03-01', price: 1000});
+      const eventId = await seedEvent(t, {
+        title: 'Staff Event',
+        date: '2026-03-01',
+        price: 1000,
+      });
 
       const organizerId = await t.run(async (ctx) => {
         const event = await ctx.db.get(eventId);
@@ -492,7 +822,9 @@ describe('guests.listByEvent', () => {
       });
 
       const asDoor = t.withIdentity({subject: doorId});
-      const guests = await asDoor.query(api.events.guests.listByEvent, {eventId});
+      const guests = await asDoor.query(api.events.guests.listByEvent, {
+        eventId,
+      });
 
       expect(guests.length).toBe(2);
       expect(guests.map((g) => g.name).sort()).toEqual(['Artist', 'VIP Guest']);
@@ -506,8 +838,16 @@ describe('guests.listByEvent', () => {
         email: 'door@test.com',
       });
 
-      const event1Id = await seedEvent(t, {title: 'Event 1', date: '2026-03-01', price: 1000});
-      const event2Id = await seedEvent(t, {title: 'Event 2', date: '2026-03-01', price: 1000});
+      const event1Id = await seedEvent(t, {
+        title: 'Event 1',
+        date: '2026-03-01',
+        price: 1000,
+      });
+      const event2Id = await seedEvent(t, {
+        title: 'Event 2',
+        date: '2026-03-01',
+        price: 1000,
+      });
 
       const organizer1Id = await t.run(async (ctx) => {
         const event = await ctx.db.get(event1Id);
@@ -539,7 +879,12 @@ describe('guests.listByEvent', () => {
         email: 'door@test.com',
       });
 
-      const draftEventId = await seedEvent(t, {title: 'Draft Event', date: '2026-03-01', price: 1000, status: 'draft'});
+      const draftEventId = await seedEvent(t, {
+        title: 'Draft Event',
+        date: '2026-03-01',
+        price: 1000,
+        status: 'draft',
+      });
 
       const draftOrganizerId = await t.run(async (ctx) => {
         const event = await ctx.db.get(draftEventId);
@@ -574,11 +919,22 @@ describe('guests.listByEvent', () => {
 
       const adminId = await setupAdmin(t);
 
-      const draftEventId = await seedEvent(t, {title: 'Draft Event', date: '2026-03-01', price: 1000, status: 'draft'});
+      const draftEventId = await seedEvent(t, {
+        title: 'Draft Event',
+        date: '2026-03-01',
+        price: 1000,
+        status: 'draft',
+      });
 
       const asAdmin = t.withIdentity({subject: adminId});
-      await asAdmin.mutation(api.events.guests.add, {eventId: draftEventId, name: 'Admin Visible Guest', type: 'guest'});
-      const guests = await asAdmin.query(api.events.guests.listByEvent, {eventId: draftEventId});
+      await asAdmin.mutation(api.events.guests.add, {
+        eventId: draftEventId,
+        name: 'Admin Visible Guest',
+        type: 'guest',
+      });
+      const guests = await asAdmin.query(api.events.guests.listByEvent, {
+        eventId: draftEventId,
+      });
 
       expect(guests.length).toBe(1);
       expect(guests[0].name).toBe('Admin Visible Guest');
@@ -589,11 +945,22 @@ describe('guests.listByEvent', () => {
 
       const adminId = await setupAdmin(t);
 
-      const draftEventId = await seedEvent(t, {title: 'Draft Event', date: '2026-03-01', price: 1000, status: 'draft'});
+      const draftEventId = await seedEvent(t, {
+        title: 'Draft Event',
+        date: '2026-03-01',
+        price: 1000,
+        status: 'draft',
+      });
 
       const asAdmin = t.withIdentity({subject: adminId});
-      await asAdmin.mutation(api.events.guests.add, {eventId: draftEventId, name: 'RBAC Admin Guest', type: 'guest'});
-      const guests = await asAdmin.query(api.events.guests.listByEvent, {eventId: draftEventId});
+      await asAdmin.mutation(api.events.guests.add, {
+        eventId: draftEventId,
+        name: 'RBAC Admin Guest',
+        type: 'guest',
+      });
+      const guests = await asAdmin.query(api.events.guests.listByEvent, {
+        eventId: draftEventId,
+      });
 
       expect(guests.length).toBe(1);
       expect(guests[0].name).toBe('RBAC Admin Guest');

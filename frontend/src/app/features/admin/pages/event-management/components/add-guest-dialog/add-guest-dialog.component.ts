@@ -5,6 +5,7 @@ import {
   signal,
 } from '@angular/core';
 import {BraDialogRef} from '@ui/components/composites/dialog/dialog-ref';
+import {BRA_MODAL_DATA} from '@ui/components/composites/dialog/dialog.service';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 import {ZardInputDirective} from '@ui/components/primitives/input/input.directive';
 import {ZardSelectComponent} from '@ui/components/primitives/select/select.component';
@@ -14,6 +15,12 @@ import {type GuestType} from '../../../../models/event-management.model';
 
 export interface AddGuestDialogData {
   eventId: string;
+  guest?: {
+    name: string;
+    email?: string;
+    type: GuestType;
+    notes?: string;
+  };
 }
 
 export interface AddGuestDialogResult {
@@ -112,7 +119,7 @@ export interface AddGuestDialogResult {
           (click)="submit()"
           data-testid="add-guest-submit"
         >
-          Add Guest
+          {{ isEditMode() ? 'Save Changes' : 'Add Guest' }}
         </button>
       </div>
     </div>
@@ -132,11 +139,14 @@ export class AddGuestDialogComponent {
         AddGuestDialogData
       >
     >(BraDialogRef);
+  private readonly data = inject<AddGuestDialogData>(BRA_MODAL_DATA);
 
-  readonly name = signal('');
-  readonly email = signal('');
-  readonly type = signal<GuestType>('guest');
-  readonly notes = signal('');
+  readonly isEditMode = () => this.data.guest != null;
+
+  readonly name = signal(this.data.guest?.name ?? '');
+  readonly email = signal(this.data.guest?.email ?? '');
+  readonly type = signal<GuestType>(this.data.guest?.type ?? 'guest');
+  readonly notes = signal(this.data.guest?.notes ?? '');
 
   updateName(event: Event): void {
     const value = readInputValue(event.target);

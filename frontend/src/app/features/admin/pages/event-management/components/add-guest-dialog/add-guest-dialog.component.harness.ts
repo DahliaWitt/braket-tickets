@@ -1,4 +1,4 @@
-import { ComponentHarness } from '@angular/cdk/testing';
+import {ComponentHarness} from '@angular/cdk/testing';
 
 export class AddGuestDialogComponentHarness extends ComponentHarness {
   static hostSelector = 'app-add-guest-dialog';
@@ -49,5 +49,10 @@ export class AddGuestDialogComponentHarness extends ComponentHarness {
   async clickSubmit(): Promise<void> {
     const button = await this.getSubmitButton();
     await button.click();
+  }
+
+  async getSubmitButtonLabel(): Promise<string> {
+    const button = await this.getSubmitButton();
+    return (await button.text()).trim();
   }
 }
