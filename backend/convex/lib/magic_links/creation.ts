@@ -85,6 +85,8 @@ async function assertActiveMagicLinkLimit(
   userId: Id<'users'>,
   organizerId: Id<'organizers'>,
 ): Promise<void> {
+  // TODO: Revisit and likely remove this per-creator active-link limit.
+  // Magic links are community-scoped, so this cap may no longer match the model.
   const nonDeletedActiveCount = await countMatchingInQuery(
     ctx.db
       .query('magic_links')

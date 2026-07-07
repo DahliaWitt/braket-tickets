@@ -86,7 +86,7 @@ export const cancel = mutation({
     });
 
     await insertAdminAuditLog(
-      {db: ctx.db},
+      {db: ctx.db, meta: ctx.meta},
       {
         adminId: userId,
         action: 'admin_invite.cancel',

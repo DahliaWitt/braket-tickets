@@ -6,7 +6,9 @@ import {
   effect,
   inject,
   signal,
+  untracked,
 } from '@angular/core';
+import {type FunctionReturnType} from 'convex/server';
 import {toSignal} from '@angular/core/rxjs-interop';
 import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton.component';
 import {toast} from 'ngx-sonner';
@@ -54,6 +56,7 @@ import {
   addVettingQuestion,
   buildDigestHourOptions,
   type CommunityProfileFormValue,
+  DebounceTimer,
   isProfileDirty,
   moveVettingQuestion,
   needsVettingOptions,
@@ -62,11 +65,13 @@ import {
   onVettingQuestionRequiredChange,
   onVettingQuestionTypeChange,
   removeVettingQuestion,
+  ScannerSearchState,
   type VettingQuestionFormValue,
 } from './community-admin-settings.helpers';
 import {
   grantCommunityAdmin,
   grantCommunityScanner,
+  grantCommunityScannerById,
   revokeCommunityAdmin,
   revokeCommunityScanner,
   saveCommunityAdminNotificationPreference,
@@ -86,6 +91,12 @@ function getOrganizerStatus(
 type StripeOnboardingStatus = NonNullable<
   Doc<'organizers'>['stripeOnboardingStatus']
 >;
+
+type ScannerGrantCandidate = FunctionReturnType<
+  typeof api.communities.scanners.searchGrantCandidates
+>[number];
+
+const SCANNER_SEARCH_DEBOUNCE_MS = 300;
 
 @Component({
   selector: 'app-community-admin-settings',
@@ -220,6 +231,90 @@ export class CommunityAdminSettingsComponent {
     },
   );
 
+  readonly isLoading = computed(() => this.organizerQuery.isLoading());
+  readonly organizer = computed(() => this.organizerQuery.data() ?? null);
+  readonly adminList = computed(() => this.adminsQuery.data() ?? []);
+  readonly scannerList = computed(() => this.scannersQuery.data() ?? []);
+  readonly isLastAdmin = computed(() => this.adminList().length <= 1);
+
+  readonly newAdminEmail = signal('');
+  readonly isGrantingAdmin = signal(false);
+  readonly isGrantingScanner = signal(false);
+
+  /** Immediate + debounced search state, resolved before the query below
+   * closes over it — breaks a circular type-inference cycle between the
+   * query (needs the debounced term) and `scanner` (needs the query data). */
+  private readonly scannerDebounce = new DebounceTimer(
+    SCANNER_SEARCH_DEBOUNCE_MS,
+  );
+  readonly scannerSearchInputValue = signal('');
+  private readonly debouncedScannerSearchTerm = signal('');
+
+  private readonly scannerSearchQuery = injectQuery(
+    api.communities.scanners.searchGrantCandidates,
+    () => {
+      const organizerId = this.communityCtx.selectedCommunityId();
+      const searchTerm = this.debouncedScannerSearchTerm();
+      return organizerId && searchTerm ? {organizerId, searchTerm} : skipToken;
+    },
+  );
+
+  /**
+   * The (term, organizer) pair that produced the current `scannerSearchQuery`
+   * data. Stamped from the live subscription args when data emits — Convex
+   * only pushes data for the active subscription args, so at emit time the
+   * untracked debounced term / selected organizer ARE the args that produced
+   * that payload. `injectQuery` retains prior `.data()` across an args change,
+   * so this stamp is what lets us tell current data from stale/in-flight data.
+   */
+  private readonly loadedScannerSearchTerm = signal<string | null>(null);
+  private readonly loadedScannerOrganizerId = signal<Id<'organizers'> | null>(
+    null,
+  );
+
+  /** True only when the query data matches the visible term AND selected org. */
+  private readonly scannerResultsAreCurrent = computed(() => {
+    const term = this.debouncedScannerSearchTerm().trim();
+    const organizerId = this.communityCtx.selectedCommunityId();
+    // Belt-and-suspenders gate; each conjunct closes a distinct stale window:
+    //   - term non-empty: an empty/skip-token query is never "current"
+    //     (skipToken also sets isLoading false, so this must come first).
+    //   - term === visible input: closes the keystroke → debounce gap
+    //     (immediate input changed but the debounced query hasn't fired).
+    //   - !isLoading(): `injectQuery` sets isLoading TRUE synchronously on an
+    //     args change and back to false only when the NEW args' data lands
+    //     (convex-angular fesm2022 lines 1165, 1176-1183), so `!isLoading()`
+    //     deterministically means `.data()` is for the current args, not an
+    //     in-flight refetch that still holds the previous payload.
+    //   - loadedTerm/loadedOrganizerId stamp: independent confirmation that
+    //     the delivered data was produced by exactly this term + organizer.
+    return (
+      term.length > 0 &&
+      term === this.scannerSearchInputValue().trim() &&
+      !this.scannerSearchQuery.isLoading() &&
+      this.loadedScannerSearchTerm() === term &&
+      this.loadedScannerOrganizerId() === organizerId
+    );
+  });
+
+  /** Owns all pure UI state for the door staff search combobox. */
+  readonly scanner = new ScannerSearchState<ScannerGrantCandidate, Id<'users'>>(
+    {
+      searchInput: this.scannerSearchInputValue,
+      debouncedTerm: this.debouncedScannerSearchTerm,
+      debounce: this.scannerDebounce,
+      results: computed(() => this.scannerSearchQuery.data() ?? []),
+      resultsAreCurrent: this.scannerResultsAreCurrent,
+      resultUserId: (candidate) => candidate.userId,
+      adminUserIds: computed(
+        () => new Set(this.adminList().map((admin) => admin.userId)),
+      ),
+      scannerUserIds: computed(
+        () => new Set(this.scannerList().map((scanner) => scanner.userId)),
+      ),
+    },
+  );
+
   private readonly notificationPrefQuery = injectQuery(
     api.communities.management.notification_preferences
       .getMyNotificationPreference,
@@ -228,17 +323,6 @@ export class CommunityAdminSettingsComponent {
       return id ? {organizerId: id} : skipToken;
     },
   );
-
-  readonly isLoading = computed(() => this.organizerQuery.isLoading());
-  readonly organizer = computed(() => this.organizerQuery.data() ?? null);
-  readonly adminList = computed(() => this.adminsQuery.data() ?? []);
-  readonly scannerList = computed(() => this.scannersQuery.data() ?? []);
-  readonly isLastAdmin = computed(() => this.adminList().length <= 1);
-
-  readonly newAdminEmail = signal('');
-  readonly newScannerEmail = signal('');
-  readonly isGrantingAdmin = signal(false);
-  readonly isGrantingScanner = signal(false);
 
   protected readonly notifMode = signal<'off' | 'all' | 'digest'>('off');
   protected readonly notifDigestHour = signal<number>(9);
@@ -267,6 +351,24 @@ export class CommunityAdminSettingsComponent {
 
   constructor() {
     this.destroyRef.onDestroy(() => this.revokeLogoBlobUrl());
+    this.destroyRef.onDestroy(() => this.scannerDebounce.cancel());
+
+    // Stamp the (term, organizer) that produced the current scanner-search
+    // data. Convex pushes data only for the active subscription args, so when
+    // `.data()` emits the untracked debounced term / selected organizer are
+    // exactly the args that produced it. `injectQuery` keeps prior `.data()`
+    // during a refetch, so without this stamp a stale row could be rendered
+    // or granted for a term the user has already moved past.
+    effect(() => {
+      const data = this.scannerSearchQuery.data();
+      if (data === undefined) return; // no payload yet
+      this.loadedScannerSearchTerm.set(
+        untracked(this.debouncedScannerSearchTerm).trim(),
+      );
+      this.loadedScannerOrganizerId.set(
+        untracked(() => this.communityCtx.selectedCommunityId()),
+      );
+    });
 
     effect(() => {
       const org = this.organizer();
@@ -625,42 +727,64 @@ export class CommunityAdminSettingsComponent {
     }
   }
 
-  async grantScanner(): Promise<void> {
-    const emailInput = this.newScannerEmail().trim();
-    const organizerId = this.communityCtx.selectedCommunityId();
-    if (!emailInput || !organizerId) return;
+  onScannerSearchInput(event: Event): void {
+    const value = readInputValue(event.target);
+    if (value === null) return;
+    this.scanner.onInput(value);
+  }
 
-    const normalizedEmail = emailInput.toLowerCase();
-    if (
-      this.adminList().some(
-        (admin) => admin.email?.toLowerCase() === normalizedEmail,
-      )
-    ) {
-      toast.error(
-        'This user is already an admin. Admins can already check in guests.',
-      );
-      return;
-    }
-    if (
-      this.scannerList().some(
-        (scanner) => scanner.email?.toLowerCase() === normalizedEmail,
-      )
-    ) {
-      toast.error('This user is already door staff.');
-      return;
-    }
-
+  private async runGrantScanner(grant: () => Promise<void>): Promise<void> {
     this.isGrantingScanner.set(true);
     try {
-      await grantCommunityScanner(this.convex, emailInput, organizerId);
-      this.newScannerEmail.set('');
+      await grant();
+      this.scanner.clear();
       toast.success('Scanner granted');
     } catch (e) {
       logger.error('Failed to grant scanner', e);
-      const message = extractErrorMessage(e) || 'Failed to grant scanner';
-      toast.error(message);
+      toast.error(extractErrorMessage(e) || 'Failed to grant scanner');
     } finally {
       this.isGrantingScanner.set(false);
+    }
+  }
+
+  async grantScannerByRow(candidate: ScannerGrantCandidate): Promise<void> {
+    const organizerId = this.communityCtx.selectedCommunityId();
+    // Hard guard, path-independent: never grant a stale/in-flight row.
+    // `canGrantResult` requires results to be current (matching the visible
+    // term + selected organizer) and the row not already an admin/scanner —
+    // defends against clicking a row rendered from the previous query.
+    if (!organizerId || !this.scanner.canGrantResult(candidate)) return;
+    await this.runGrantScanner(() =>
+      grantCommunityScannerById(this.convex, candidate.userId, organizerId),
+    );
+  }
+
+  async grantScannerByExactEmail(): Promise<void> {
+    const emailInput = this.scanner.trimmedSearch();
+    const organizerId = this.communityCtx.selectedCommunityId();
+    if (!emailInput || !organizerId) return;
+    await this.runGrantScanner(() =>
+      grantCommunityScanner(this.convex, emailInput, organizerId),
+    );
+  }
+
+  onScannerSearchKeydown(event: KeyboardEvent): void {
+    if (event.key === 'ArrowDown') {
+      if (this.scanner.onArrowDown()) event.preventDefault();
+    } else if (event.key === 'ArrowUp') {
+      if (this.scanner.onArrowUp()) event.preventDefault();
+    } else if (event.key === 'Enter') {
+      const target = this.scanner.onEnter();
+      if (target === null) return;
+      event.preventDefault();
+      if (target === 'email-fallback') {
+        void this.grantScannerByExactEmail();
+      } else {
+        void this.grantScannerByRow(target);
+      }
+    } else if (event.key === 'Escape' && this.scanner.search()) {
+      event.preventDefault();
+      this.scanner.clear();
     }
   }
 

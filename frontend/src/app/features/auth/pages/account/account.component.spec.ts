@@ -143,6 +143,7 @@ describe('AccountComponent', () => {
         linkSocial?: ReturnType<typeof vi.fn>;
         unlinkAccount?: ReturnType<typeof vi.fn>;
         setPassword?: ReturnType<typeof vi.fn>;
+        authSettled: ReturnType<typeof signal<boolean>>;
       }
     | undefined;
 
@@ -160,6 +161,7 @@ describe('AccountComponent', () => {
       unlinkAccount?: ReturnType<typeof vi.fn>;
       setPassword?: ReturnType<typeof vi.fn>;
       cancelEmailChange?: ReturnType<typeof vi.fn>;
+      authSettled?: boolean;
     } = {},
   ) {
     const mock: {
@@ -183,6 +185,7 @@ describe('AccountComponent', () => {
       linkSocial?: ReturnType<typeof vi.fn>;
       unlinkAccount?: ReturnType<typeof vi.fn>;
       setPassword?: ReturnType<typeof vi.fn>;
+      authSettled: ReturnType<typeof signal<boolean>>;
     } = {
       user: signal({
         _id: '123',
@@ -197,6 +200,7 @@ describe('AccountComponent', () => {
         ...(overrides.user || {}),
       }),
       userRole: signal('user'),
+      authSettled: signal(overrides.authSettled ?? true),
       requestEmailChange: vi.fn().mockResolvedValue({}),
       cancelEmailChange:
         overrides.cancelEmailChange ?? vi.fn().mockResolvedValue({}),
@@ -887,6 +891,24 @@ describe('AccountComponent', () => {
       fixture.detectChanges();
 
       expect(component.profileError()).toBe('Failed to update profile');
+    });
+  });
+
+  describe('Optimistic activation window', () => {
+    it('shows a skeleton and no editable profile form while auth is unsettled', async () => {
+      await setupAccountComponent({authSettled: false});
+
+      expect(await harness.hasLoadingSkeleton()).toBe(true);
+      // The profile form must not render editable, or its populate-on-profile
+      // effect would clobber any input typed during the optimistic window.
+      expect(await harness.hasProfileNameInput()).toBe(false);
+    });
+
+    it('renders the editable profile form once auth has settled', async () => {
+      await setupAccountComponent({authSettled: true});
+
+      expect(await harness.hasLoadingSkeleton()).toBe(false);
+      expect(await harness.hasProfileNameInput()).toBe(true);
     });
   });
 

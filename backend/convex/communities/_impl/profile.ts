@@ -120,7 +120,7 @@ export async function updateCommunity(
       });
       if (unpublishedCount > 0) {
         await insertAdminAuditLog(
-          {db: ctx.db},
+          {db: ctx.db, meta: ctx.meta},
           {
             adminId: userId,
             action: 'organizer.cascadeUnpublishEvents',
@@ -147,7 +147,7 @@ export async function updateCommunity(
 
       if (cleanedCount > 0) {
         await insertAdminAuditLog(
-          {db: ctx.db},
+          {db: ctx.db, meta: ctx.meta},
           {
             adminId: userId,
             action: 'organizer.cleanupOrphanedAnswers',
@@ -160,7 +160,7 @@ export async function updateCommunity(
   }
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: userId,
       action: 'organizer.update',
