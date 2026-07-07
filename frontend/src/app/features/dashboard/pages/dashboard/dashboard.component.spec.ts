@@ -14,7 +14,8 @@ import {
 } from '@/features/dashboard/services/dashboard-page-data.service';
 import {provideRouter} from '@angular/router';
 import {provideZonelessChangeDetection, signal} from '@angular/core';
-import {IMAGE_LOADER, type ImageLoaderConfig} from '@angular/common';
+import {IMAGE_LOADER} from '@angular/common';
+import {createBraketImageLoader} from '@/core/image-loader/braket-image-loader';
 import {type UpcomingEvent} from '@/core/models/event.types';
 import {type Community} from '@/core/services/communities.service';
 import {vi, beforeAll, describe, it, expect, beforeEach} from 'vitest';
@@ -233,10 +234,12 @@ describe('DashboardComponent', () => {
         provideRouter([{path: '**', children: []}]),
         {provide: AuthService, useValue: authServiceMock},
         {provide: DashboardDataService, useValue: dashboardDataMock},
-        // NgOptimizedImage requires a loader when templates use ngSrcset
+        // NgOptimizedImage requires a loader when templates use ngSrcset.
+        // Use the real loader (passthrough on non-Cloudflare origins) so the
+        // spec stays locked to production behavior.
         {
           provide: IMAGE_LOADER,
-          useValue: (config: ImageLoaderConfig) => config.src,
+          useFactory: () => createBraketImageLoader('http://localhost'),
         },
       ],
     });

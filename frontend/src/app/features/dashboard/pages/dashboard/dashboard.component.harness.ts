@@ -7,12 +7,15 @@ export class DashboardComponentHarness extends ComponentHarness {
     '[data-testid="dashboard-event-title"]',
   );
 
+  /** Count elements carrying the given data-testid. */
+  private async countByTestId(testId: string): Promise<number> {
+    const els = await this.locatorForAll(`[data-testid="${testId}"]`)();
+    return els.length;
+  }
+
   /** Get all community cell elements from the community grid. */
   async getCommunityCells(): Promise<number> {
-    const cells = await this.locatorForAll(
-      '[data-testid="dashboard-community-cell"]',
-    )();
-    return cells.length;
+    return this.countByTestId('dashboard-community-cell');
   }
 
   /** Get community cell text by index. */
@@ -34,29 +37,23 @@ export class DashboardComponentHarness extends ComponentHarness {
 
   /** Get the number of aspect-ratio poster frames in the events section. */
   async getPosterFrameCount(): Promise<number> {
-    const els = await this.locatorForAll(
-      '[data-testid="dashboard-poster-frame"]',
-    )();
-    return els.length;
+    return this.countByTestId('dashboard-poster-frame');
   }
 
   /** Get the number of event poster images in the events section. */
   async getPosterCount(): Promise<number> {
-    const els = await this.locatorForAll('[data-testid="dashboard-poster"]')();
-    return els.length;
+    return this.countByTestId('dashboard-poster');
   }
 
   /** Get the number of ambient-fill poster backdrops in the events section. */
   async getPosterBackdropCount(): Promise<number> {
-    const els = await this.locatorForAll(
-      '[data-testid="dashboard-poster-backdrop"]',
-    )();
-    return els.length;
+    return this.countByTestId('dashboard-poster-backdrop');
   }
 
   /**
    * Check that every poster backdrop is decorative: hidden from assistive
-   * tech (aria-hidden) with an empty alt.
+   * tech (aria-hidden) with an empty alt. Vacuously true when no backdrops
+   * exist — assert presence separately via getPosterBackdropCount().
    */
   async posterBackdropsAreDecorative(): Promise<boolean> {
     const els = await this.locatorForAll(
@@ -67,7 +64,7 @@ export class DashboardComponentHarness extends ComponentHarness {
       const alt = await el.getAttribute('alt');
       if (ariaHidden !== 'true' || alt !== '') return false;
     }
-    return els.length > 0;
+    return true;
   }
 
   /** Get all "Get Tickets" CTA hrefs. */
