@@ -608,6 +608,56 @@ describe('AdminEventsService', () => {
     });
   });
 
+  describe('updateGuest', () => {
+    it('should update a guest with all fields', async () => {
+      const guestData = {
+        name: 'Updated Guest',
+        email: 'updated@example.com',
+        type: 'staff' as GuestType,
+        notes: 'Updated notes',
+      };
+      convexMock.mutation.mockResolvedValue(null);
+
+      const result = await service.updateGuest(mockGuestId, guestData);
+
+      expect(convexMock.mutation).toHaveBeenCalledWith(
+        api.events.guests.update,
+        {
+          id: mockGuestId,
+          ...guestData,
+        },
+      );
+      expect(result).toBeNull();
+    });
+
+    it('should update a guest with minimal fields', async () => {
+      const guestData = {
+        name: 'Minimal Guest',
+        type: 'guest' as GuestType,
+      };
+      convexMock.mutation.mockResolvedValue(null);
+
+      await service.updateGuest(mockGuestId, guestData);
+
+      expect(convexMock.mutation).toHaveBeenCalledWith(
+        api.events.guests.update,
+        {
+          id: mockGuestId,
+          name: 'Minimal Guest',
+          type: 'guest',
+        },
+      );
+    });
+
+    it('should throw when mutation fails', async () => {
+      convexMock.mutation.mockRejectedValue(new Error('Guest not found'));
+
+      await expect(
+        service.updateGuest(mockGuestId, {name: 'Test', type: 'guest'}),
+      ).rejects.toThrow('Guest not found');
+    });
+  });
+
   describe('removeGuest', () => {
     it('should remove a guest by ID', async () => {
       convexMock.mutation.mockResolvedValue(undefined);
