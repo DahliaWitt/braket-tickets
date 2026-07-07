@@ -173,11 +173,11 @@ async function deliverGuestTicket(
     },
   );
 
-  // The email is dispatched before emailedAt is recorded, so delivery is
-  // at-least-once: if this mark fails non-retryably after a successful send,
-  // the guest can be re-sent. The lock prevents the concurrent-duplicate case;
-  // this narrow post-send window is inherent to sending before recording and is
-  // backstopped by the emailDeliveries audit trail rather than a second lock.
+  // emailedAt is recorded after dispatch as the UI "sent" marker. If this write
+  // fails (or the action crashes) after the provider accepted the email, batch
+  // "send all" still will not re-send: beginGuestTicketSend consults the durable
+  // emailDeliveries record, which the send above wrote on acceptance. A
+  // deliberate single resend intentionally bypasses that guard.
   await ctx.runMutation(internal.events.guests.markAsEmailed, {
     id: guest._id,
   });

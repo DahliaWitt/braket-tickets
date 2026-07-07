@@ -1,6 +1,7 @@
 import type {Doc, Id} from '../../_generated/dataModel';
 import type {MutationCtx, QueryCtx} from '../../_generated/server';
 import {scheduleBroadcastCatchup} from '../../lib/broadcast_catchup';
+import {internal} from '../../_generated/api';
 import {throwNotFound} from '../../lib/errors';
 import {
   validateEmail,
@@ -173,11 +174,22 @@ export type BeginGuestTicketSendResult = {
 
 /**
  * Atomically claims the right to send a guest's ticket email so concurrent
- * admins/tabs cannot double-send. Because mutations are transactional, only one
- * of any set of racing claims wins; the losers observe the lock and are turned
- * away. When `requireUnsent` is set (batch "send all"), an already-emailed guest
- * is skipped so a stale client cannot re-email the whole roster. Single resends
- * pass `requireUnsent: false` and are gated only by the in-flight lock.
+ * admins/tabs cannot double-send.
+ *
+ * Two guards, because they cover different windows:
+ * - The in-flight lock (`emailSendLockedAt`) serializes racing claims; since
+ *   mutations are transactional, only one of any set wins and the losers are
+ *   turned away `in_flight`. It expires (staleness) so a crashed send self-heals.
+ * - For batch "send all" (`requireUnsent`), the guest is also skipped if a
+ *   durable delivery record already exists OR `emailedAt` is set. The delivery
+ *   record is written inside the send action the moment the provider accepts
+ *   the email, so it closes the window where delivery succeeded but the
+ *   post-send `emailedAt` write failed or the action crashed — the lock alone
+ *   cannot, because it expires. A genuinely failed delivery records no delivery
+ *   row, so it stays retryable (at-least-once for failures, no duplicates).
+ *
+ * Single resends pass `requireUnsent: false`: a deliberate resend bypasses both
+ * the delivery-record and `emailedAt` checks and is gated only by the lock.
  */
 export async function beginGuestTicketSend(
   ctx: MutationCtx,
@@ -189,8 +201,17 @@ export async function beginGuestTicketSend(
   const guest = await ctx.db.get('guests', args.id);
   if (!guest) return {claimed: false, reason: 'not_found'};
 
-  if (args.requireUnsent && guest.emailedAt !== undefined) {
-    return {claimed: false, reason: 'already_sent'};
+  if (args.requireUnsent) {
+    if (guest.emailedAt !== undefined) {
+      return {claimed: false, reason: 'already_sent'};
+    }
+    const alreadyDelivered = await ctx.runQuery(
+      internal.email.email_delivery.hasDelivery,
+      {source: 'ticket', sourceId: args.id},
+    );
+    if (alreadyDelivered) {
+      return {claimed: false, reason: 'already_sent'};
+    }
   }
 
   const now = Date.now();

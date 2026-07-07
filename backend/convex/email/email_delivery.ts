@@ -1,7 +1,33 @@
 import {v} from 'convex/values';
-import {internalMutation} from '../_generated/server';
+import {internalMutation, internalQuery} from '../_generated/server';
 import {emailDeliverySourceValidator} from '../lib/validators/email_delivery';
 import {components} from '../_generated/api';
+
+/**
+ * Returns true if any successful delivery has been recorded for the given
+ * source/sourceId pair. This is the durable, non-expiring record of "an email
+ * for this entity went out" — written inside the send action before any
+ * caller-side bookkeeping — so it survives a downstream failure (a marker write
+ * or action crash after the provider accepted the email) that would otherwise
+ * let a retry re-send. Failed sends record via `recordFailure`, not here, so a
+ * genuine failure leaves no delivery row and remains retryable.
+ */
+export const hasDelivery = internalQuery({
+  args: {
+    source: emailDeliverySourceValidator,
+    sourceId: v.string(),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query('emailDeliveries')
+      .withIndex('by_source', (q) =>
+        q.eq('source', args.source).eq('sourceId', args.sourceId),
+      )
+      .first();
+    return existing !== null;
+  },
+});
 
 export const recordDelivery = internalMutation({
   args: {

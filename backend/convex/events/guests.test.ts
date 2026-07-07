@@ -1144,6 +1144,55 @@ describe('guest ticket send lock', () => {
     expect(result).toEqual({claimed: false, reason: 'already_sent'});
   });
 
+  it('skips a batch send when a delivery record exists but emailedAt was never written', async () => {
+    const t = convexTest();
+    const guestId = await seedGuestWithEmail(t);
+    // Simulate the failure window: the provider accepted the email (delivery
+    // recorded) but the follow-up emailedAt write never landed.
+    await t.mutation(internal.email.email_delivery.recordDelivery, {
+      emailId: 'email-guest-1',
+      source: 'ticket',
+      sourceId: guestId,
+      recipient: 'lock-guest@example.com',
+      critical: true,
+      manual: false,
+      fallback: false,
+      provider: 'resend',
+    });
+
+    const guest = await t.run(async (ctx) => ctx.db.get(guestId));
+    expect(guest?.emailedAt).toBeUndefined();
+
+    const result = await t.mutation(
+      internal.events.guests.beginGuestTicketSend,
+      {id: guestId, requireUnsent: true},
+    );
+
+    expect(result).toEqual({claimed: false, reason: 'already_sent'});
+  });
+
+  it('still allows a deliberate single resend when a delivery record exists', async () => {
+    const t = convexTest();
+    const guestId = await seedGuestWithEmail(t);
+    await t.mutation(internal.email.email_delivery.recordDelivery, {
+      emailId: 'email-guest-1',
+      source: 'ticket',
+      sourceId: guestId,
+      recipient: 'lock-guest@example.com',
+      critical: true,
+      manual: false,
+      fallback: false,
+      provider: 'resend',
+    });
+
+    const result = await t.mutation(
+      internal.events.guests.beginGuestTicketSend,
+      {id: guestId, requireUnsent: false},
+    );
+
+    expect(result).toEqual({claimed: true, reason: 'claimed'});
+  });
+
   it('allows a deliberate single resend of an already-emailed guest', async () => {
     const t = convexTest();
     const guestId = await seedGuestWithEmail(t);

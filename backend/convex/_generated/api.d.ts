@@ -3657,6 +3657,26 @@ export declare const internal: {
         {},
         null
       >;
+      hasDelivery: FunctionReference<
+        "query",
+        "internal",
+        {
+          source:
+            | "announcement"
+            | "broadcast"
+            | "digest"
+            | "reminder"
+            | "application"
+            | "admin_invite"
+            | "event"
+            | "ticket"
+            | "payout"
+            | "resale_available"
+            | "auth";
+          sourceId: string;
+        },
+        boolean
+      >;
       recordDelivery: FunctionReference<
         "mutation",
         "internal",
