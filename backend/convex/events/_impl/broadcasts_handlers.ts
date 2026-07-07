@@ -337,7 +337,7 @@ export async function sendBroadcast(
   );
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: userId,
       action: 'event.broadcast-email.send.all_holders',

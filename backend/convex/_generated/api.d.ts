@@ -2351,6 +2351,7 @@ export declare const api: {
           applicationId?: Id<"applications">;
           deletedEventName?: string;
           eventId?: Id<"events">;
+          ipAddress?: string;
           magicLinkId?: Id<"magic_links">;
           organizerId?: Id<"organizers">;
           reason?: string;
@@ -2358,6 +2359,7 @@ export declare const api: {
           targetUserId?: Id<"users">;
           trustedOrganizerId?: Id<"organizers">;
           trustingOrganizerId?: Id<"organizers">;
+          userAgent?: string;
         } | null
       >;
       seedAdminInvite: FunctionReference<
@@ -3599,9 +3601,11 @@ export declare const internal: {
             adminId: Id<"users">;
             applicationId?: Id<"applications">;
             eventId?: Id<"events">;
+            ipAddress?: string;
             organizerId?: Id<"organizers">;
             source?: string;
             targetUserId?: Id<"users">;
+            userAgent?: string;
           },
           null
         >;
@@ -3612,8 +3616,10 @@ export declare const internal: {
             action: "ticket.check-in" | "guest.check-in";
             adminId: Id<"users">;
             eventId?: Id<"events">;
+            ipAddress?: string;
             organizerId?: Id<"organizers">;
             source?: string;
+            userAgent?: string;
           },
           null
         >;

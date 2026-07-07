@@ -56,7 +56,7 @@ export async function grantCommunityScanner(
   });
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: callerId,
       action: 'community_scanner.grant',
@@ -96,7 +96,7 @@ export async function revokeCommunityScanner(
   });
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: callerId,
       action: 'community_scanner.revoke',

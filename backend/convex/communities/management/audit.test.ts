@@ -908,3 +908,57 @@ describe('admin_audit.listAuditLogs', () => {
     expect(result.page[0].targetUserName).toBeUndefined();
   });
 });
+
+describe('Audit log request metadata capture', () => {
+  it('persists explicit ipAddress/userAgent passed by scheduler-deferred writers', async () => {
+    const t = convexTest();
+    const adminId = await createRootAdmin(t, {
+      email: 'admin-meta-explicit@example.com',
+    });
+    const orgId = await t.mutation(api.testing.communities.seedOrganizer, {
+      name: 'Meta Org',
+    });
+
+    await t.mutation(internal.communities.management.audit.recordCheckIn, {
+      adminId,
+      action: ADMIN_AUDIT_ACTIONS.TICKET_CHECK_IN,
+      organizerId: orgId,
+      ipAddress: '203.0.113.7',
+      userAgent: 'ScannerApp/1.0',
+    });
+
+    const row = await t.run(async (ctx) => {
+      return await ctx.db.query('adminAuditLogs').first();
+    });
+    expect(row?.ipAddress).toBe('203.0.113.7');
+    expect(row?.userAgent).toBe('ScannerApp/1.0');
+  });
+
+  it('leaves ipAddress/userAgent absent when the runtime provides no request metadata', async () => {
+    // convex-test does not implement ctx.meta.getRequestMetadata() (as of
+    // 0.0.54), so auto-capture must degrade to absent fields instead of
+    // failing the write. The real capture path is exercised against the local
+    // backend, which does populate metadata.
+    const t = convexTest();
+    const adminId = await createRootAdmin(t, {
+      email: 'admin-meta-fallback@example.com',
+    });
+    const orgId = await t.mutation(api.testing.communities.seedOrganizer, {
+      name: 'Meta Fallback Org',
+    });
+
+    await t.mutation(internal.communities.management.audit.logAdminAccess, {
+      adminId,
+      action: ADMIN_AUDIT_ACTIONS.EVENT_CREATE,
+      organizerId: orgId,
+      source: 'test',
+    });
+
+    const row = await t.run(async (ctx) => {
+      return await ctx.db.query('adminAuditLogs').first();
+    });
+    expect(row).not.toBeNull();
+    expect(row?.ipAddress).toBeUndefined();
+    expect(row?.userAgent).toBeUndefined();
+  });
+});
