@@ -7,7 +7,9 @@ import {
   eventLocalDateTimeToUtc,
   formatEventDateKey,
   hasEventDatePassed,
+  hasEventEnded,
   isDateKey,
+  isEventHappeningNow,
   parseUtcInstant,
   startOfDateKeyInEventTimeZone,
   todayDateKey,
@@ -127,6 +129,80 @@ describe('event-time', () => {
         now: new Date('2026-02-28T08:01:00.000Z'),
       }),
     ).toBe(true);
+  });
+
+  it('ends events exactly at their explicit end instant', () => {
+    const startsAt = '2026-02-27T06:00:00.000Z'; // 10pm Feb 26 event-local
+    const endsAt = '2026-02-27T14:00:00.000Z'; // 6am Feb 27 event-local
+
+    expect(
+      hasEventEnded(startsAt, endsAt, {
+        now: new Date('2026-02-27T13:59:00.000Z'),
+      }),
+    ).toBe(false);
+    expect(
+      hasEventEnded(startsAt, endsAt, {
+        now: new Date('2026-02-27T14:00:00.000Z'),
+      }),
+    ).toBe(true);
+  });
+
+  it('falls back to event-local day granularity without an end instant', () => {
+    const startsAt = '2026-02-27T06:00:00.000Z'; // 10pm Feb 26 event-local
+    // Still Feb 26 event-local → not ended
+    expect(
+      hasEventEnded(startsAt, undefined, {
+        now: new Date('2026-02-27T07:59:00.000Z'),
+      }),
+    ).toBe(false);
+    // Past event-local midnight → ended
+    expect(
+      hasEventEnded(startsAt, null, {
+        now: new Date('2026-02-27T08:01:00.000Z'),
+      }),
+    ).toBe(true);
+    // Unparseable end instant also falls back
+    expect(
+      hasEventEnded(startsAt, 'not-a-date', {
+        now: new Date('2026-02-27T07:59:00.000Z'),
+      }),
+    ).toBe(false);
+  });
+
+  it('reports happening-now inside the start/end window', () => {
+    const startsAt = '2026-02-27T06:00:00.000Z'; // 10pm Feb 26 event-local
+    const endsAt = '2026-02-27T14:00:00.000Z'; // 6am Feb 27 event-local
+
+    expect(
+      isEventHappeningNow(startsAt, endsAt, {
+        now: new Date('2026-02-27T05:59:00.000Z'),
+      }),
+    ).toBe(false); // before doors
+    expect(
+      isEventHappeningNow(startsAt, endsAt, {
+        now: new Date('2026-02-27T10:00:00.000Z'),
+      }),
+    ).toBe(true); // 2am event-local, mid-event past midnight
+    expect(
+      isEventHappeningNow(startsAt, endsAt, {
+        now: new Date('2026-02-27T14:00:00.000Z'),
+      }),
+    ).toBe(false); // ended
+  });
+
+  it('reports happening-now for the rest of the start day without an end instant', () => {
+    const startsAt = '2026-02-27T06:00:00.000Z'; // 10pm Feb 26 event-local
+
+    expect(
+      isEventHappeningNow(startsAt, undefined, {
+        now: new Date('2026-02-27T07:00:00.000Z'),
+      }),
+    ).toBe(true); // 11pm event-local, same calendar day
+    expect(
+      isEventHappeningNow(startsAt, undefined, {
+        now: new Date('2026-02-27T08:01:00.000Z'),
+      }),
+    ).toBe(false); // past event-local midnight fallback cutoff
   });
 
   it('converts event-local date and time to UTC', () => {

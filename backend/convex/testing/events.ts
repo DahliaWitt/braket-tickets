@@ -19,6 +19,7 @@ import {testingMutation, testingQuery} from './wrappers';
 const seedEventArgsValidator = {
   title: v.string(),
   date: v.string(),
+  endDate: v.optional(v.string()),
   price: v.number(),
   organizerId: v.id('organizers'),
   description: v.optional(v.string()),
@@ -75,6 +76,7 @@ export function distributePhantomTiers(
 interface InsertSeedEventArgs {
   title: string;
   date: string;
+  endDate?: string;
   price: number;
   organizerId: Id<'organizers'>;
   description?: string;
@@ -130,6 +132,7 @@ export async function insertSeedEvent(
     title: args.title,
     description: args.description,
     date: normalizedDate,
+    endDate: args.endDate,
     location: args.location,
     price: args.price,
     totalTickets: args.totalTickets ?? 100,
@@ -145,6 +148,7 @@ export async function insertSeedEvent(
     title: args.title,
     description: args.description,
     date: normalizedDate,
+    endDate: args.endDate,
     location: args.location,
     price: args.price,
     totalTickets: args.totalTickets ?? 100,

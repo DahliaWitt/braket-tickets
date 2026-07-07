@@ -3,7 +3,8 @@ import {
   combineLocalEventDateTime,
   compareEventDatesDescending,
   formatEventTimeInput,
-  isEventDatePast,
+  isEventEnded,
+  isEventHappeningNow,
   isLocalEventDateTimeValid,
   parseEventDate,
   parseEventDateInEventTimeZone,
@@ -55,26 +56,58 @@ describe('event date utilities', () => {
     ).toBe('2026-02-27T07:30:00.000Z');
   });
 
-  it('treats events before today (event timezone) as past', () => {
+  it('treats events before today (event timezone) as ended without an endDate', () => {
     expect(
-      isEventDatePast(new Date(Date.now() - 2 * 86_400_000).toISOString()),
+      isEventEnded(new Date(Date.now() - 2 * 86_400_000).toISOString()),
     ).toBe(true);
-    expect(isEventDatePast('2023-01-01')).toBe(true);
+    expect(isEventEnded('2023-01-01')).toBe(true);
   });
 
-  it('does not treat today or future events as past', () => {
-    expect(isEventDatePast(new Date().toISOString())).toBe(false);
+  it('does not treat today or future events as ended', () => {
+    expect(isEventEnded(new Date().toISOString())).toBe(false);
     expect(
-      isEventDatePast(new Date(Date.now() + 2 * 86_400_000).toISOString()),
+      isEventEnded(new Date(Date.now() + 2 * 86_400_000).toISOString()),
     ).toBe(false);
   });
 
-  it('treats missing or invalid dates as not past', () => {
-    expect(isEventDatePast(null)).toBe(false);
-    expect(isEventDatePast(undefined)).toBe(false);
-    expect(isEventDatePast('')).toBe(false);
-    expect(isEventDatePast('2026-02-31')).toBe(false);
-    expect(isEventDatePast('Dec 15, 2030')).toBe(false);
+  it('honors an explicit endDate over the day-granularity fallback', () => {
+    const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000).toISOString();
+    // Overnight-style window still in progress: old start, future end.
+    expect(
+      isEventEnded(twoDaysAgo, new Date(Date.now() + 3_600_000).toISOString()),
+    ).toBe(false);
+    expect(
+      isEventEnded(twoDaysAgo, new Date(Date.now() - 3_600_000).toISOString()),
+    ).toBe(true);
+  });
+
+  it('treats missing or invalid dates as not ended', () => {
+    expect(isEventEnded(null)).toBe(false);
+    expect(isEventEnded(undefined)).toBe(false);
+    expect(isEventEnded('')).toBe(false);
+    expect(isEventEnded('2026-02-31')).toBe(false);
+    expect(isEventEnded('Dec 15, 2030')).toBe(false);
+  });
+
+  it('reports happening-now only inside the event window', () => {
+    const fourHoursAgo = new Date(Date.now() - 4 * 3_600_000).toISOString();
+    const inFourHours = new Date(Date.now() + 4 * 3_600_000).toISOString();
+
+    expect(isEventHappeningNow(fourHoursAgo, inFourHours)).toBe(true);
+    expect(
+      isEventHappeningNow(
+        new Date(Date.now() + 2 * 86_400_000).toISOString(),
+        new Date(Date.now() + 3 * 86_400_000).toISOString(),
+      ),
+    ).toBe(false);
+    expect(
+      isEventHappeningNow(
+        new Date(Date.now() - 2 * 86_400_000).toISOString(),
+        new Date(Date.now() - 1 * 86_400_000).toISOString(),
+      ),
+    ).toBe(false);
+    expect(isEventHappeningNow(null)).toBe(false);
+    expect(isEventHappeningNow('Dec 15, 2030')).toBe(false);
   });
 
   it('rejects nonexistent event-local times during spring-forward DST', () => {

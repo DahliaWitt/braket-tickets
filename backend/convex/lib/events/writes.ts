@@ -16,6 +16,7 @@ import {
   MAX_EVENT_LOCATION_LENGTH,
 } from '../../lib/validation';
 import {throwInvalidInput} from '../../lib/errors';
+import {eventStartInstantMs, parseUtcInstant} from '@shared/event-time';
 
 export interface SliderConfigInput {
   enabled: boolean;
@@ -36,6 +37,8 @@ interface EventWriteValidationInput {
   title?: string;
   description?: string;
   date?: string;
+  /** ISO UTC end instant; `null` (update only) clears the stored value. */
+  endDate?: string | null;
   location?: string;
   price?: number;
   totalTickets?: number;
@@ -45,6 +48,7 @@ interface EventWriteValidationInput {
 export interface CreateEventInput extends EventWriteValidationInput {
   title: string;
   date: string;
+  endDate?: string;
   price: number;
   totalTickets: number;
   status: EventStatus;
@@ -61,6 +65,7 @@ export interface UpdateEventInput extends EventWriteValidationInput {
   title?: string;
   description?: string;
   date?: string;
+  endDate?: string | null;
   status?: EventStatus;
   totalTickets?: number;
   price?: number;
@@ -94,6 +99,9 @@ function validateBaseEventWriteInput(args: EventWriteValidationInput) {
   if (args.date !== undefined) {
     validateISODate(args.date);
   }
+  if (typeof args.endDate === 'string') {
+    validateISODate(args.endDate, 'endDate');
+  }
 
   validateNonNegative(args.price, 'Price', true);
   validateNonNegative(args.totalTickets, 'Total tickets', false);
@@ -104,6 +112,30 @@ function validateBaseEventWriteInput(args: EventWriteValidationInput) {
 
 export function validateCreateEventInput(args: CreateEventInput) {
   validateBaseEventWriteInput(args);
+  if (args.endDate !== undefined) {
+    assertEventEndAfterStart(args.date, args.endDate);
+  }
+}
+
+/**
+ * Requires the end instant to be strictly after the event start.
+ * Formats are validated separately (validateISODate); legacy date-key starts
+ * resolve to event-local midnight via eventStartInstantMs.
+ */
+export function assertEventEndAfterStart(
+  startsAtUtc: string,
+  endsAtUtc: string,
+): void {
+  const startMs = eventStartInstantMs(startsAtUtc);
+  const endMs = parseUtcInstant(endsAtUtc)?.getTime() ?? null;
+  if (startMs === null || endMs === null) {
+    return;
+  }
+  if (endMs <= startMs) {
+    throwInvalidInput('End date must be after the event start', {
+      field: 'endDate',
+    });
+  }
 }
 
 export function validateUpdateEventInput(args: UpdateEventInput) {
@@ -142,10 +174,17 @@ export function toEventUpdatePatch(args: UpdateEventInput): EventUpdatePatch {
     sliderConfig,
     organizerId,
     ticketSalesStatus,
+    endDate,
     announcement: _announcement,
     ...rest
   } = args;
   const updates: Partial<Doc<'events'>> = {...rest};
+
+  // `null` (clear) is handled by the update handler as an explicit field
+  // removal; the generic patch only carries new values.
+  if (typeof endDate === 'string') {
+    updates.endDate = endDate;
+  }
 
   if (sliderConfig !== undefined) {
     updates.slidingScaleEnabled = sliderConfig.enabled;

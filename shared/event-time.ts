@@ -268,6 +268,44 @@ export function hasEventDatePassed(
   return eventDateKey < todayDateKey(options);
 }
 
+/**
+ * Whether the event is over.
+ *
+ * With a valid explicit end instant, the event ends exactly at that instant.
+ * Without one (or with an unparseable one), falls back to day granularity:
+ * the event is over once its start date's calendar day in the event timezone
+ * has passed (see hasEventDatePassed).
+ */
+export function hasEventEnded(
+  startsAtUtc: string,
+  endsAtUtc?: string | null,
+  options?: EventTimeOptions,
+): boolean {
+  if (endsAtUtc) {
+    const endMs = parseUtcInstant(endsAtUtc)?.getTime();
+    if (endMs !== undefined) {
+      return (options?.now ?? new Date()).getTime() >= endMs;
+    }
+  }
+  return hasEventDatePassed(startsAtUtc, options);
+}
+
+/**
+ * Whether the event is in progress: the start instant has been reached and
+ * the event has not ended per hasEventEnded (including the day-granularity
+ * fallback when no end instant is set).
+ */
+export function isEventHappeningNow(
+  startsAtUtc: string,
+  endsAtUtc?: string | null,
+  options?: EventTimeOptions,
+): boolean {
+  const startMs = eventStartInstantMs(startsAtUtc, options);
+  if (startMs === null) return false;
+  const nowMs = (options?.now ?? new Date()).getTime();
+  return nowMs >= startMs && !hasEventEnded(startsAtUtc, endsAtUtc, options);
+}
+
 export function eventLocalDateTimeToUtc(
   dateKey: string,
   time: string,

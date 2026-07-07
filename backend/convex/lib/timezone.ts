@@ -2,6 +2,7 @@ import {
   DEFAULT_EVENT_TIME_ZONE,
   formatEventDateKey,
   hasEventDatePassed as hasEventDatePassedShared,
+  hasEventEnded as hasEventEndedShared,
   isDateKey,
   startOfDateKeyInEventTimeZone as startOfDateKeyInEventTimeZoneShared,
   startOfTodayInEventTimeZone as startOfTodayInEventTimeZoneShared,
@@ -71,4 +72,17 @@ export function startOfTodayInEventTimeZone(): string {
 /** Returns true if the given event date is strictly before today in the platform timezone. */
 export function hasEventDatePassed(eventDate: string): boolean {
   return hasEventDatePassedShared(eventDate);
+}
+
+/**
+ * Returns true once the event is over: past its explicit end instant when
+ * `endDate` is set, otherwise past midnight (platform timezone) after its
+ * start date. Prefer this over hasEventDatePassed for purchase/resale gating
+ * so overnight events stay open through their actual end time.
+ */
+export function hasEventEnded(event: {
+  date: string;
+  endDate?: string;
+}): boolean {
+  return hasEventEndedShared(event.date, event.endDate);
 }

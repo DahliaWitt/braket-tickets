@@ -64,6 +64,8 @@ interface EventFormModel {
   title: string;
   date: Date | null;
   time: string;
+  endDate: Date | null;
+  endTime: string;
   location: string;
   description: string;
   price: string; // String for input compatibility
@@ -111,6 +113,8 @@ function createEmptyEventFormModel(organizerId = ''): EventFormModel {
     title: '',
     date: null,
     time: '20:00',
+    endDate: null,
+    endTime: '',
     location: '',
     description: '',
     price: '0',
@@ -210,6 +214,8 @@ function buildEventFormModel(evt: EditableEvent): EventFormModel {
     title: evt.title,
     date: parsedDate,
     time: formatEventTimeInput(evt.date),
+    endDate: evt.endDate ? parseEventDateInEventTimeZone(evt.endDate) : null,
+    endTime: evt.endDate ? formatEventTimeInput(evt.endDate) : '',
     location: evt.location || '',
     description: evt.description || '',
     price: String((evt.price || 0) / 100),
@@ -471,6 +477,43 @@ export class EventEditorComponent implements HasUnsavedChanges {
         : null;
     });
 
+    validate(f.endTime, (ctx) => {
+      const endDate = ctx.valueOf(f.endDate);
+      const endTime = ctx.value();
+      if (!endDate && !endTime) return null;
+      if (!endDate || !endTime) {
+        return {
+          kind: 'endDateTimePair',
+          message: 'Set both end date and time, or clear both',
+        };
+      }
+      if (!isLocalEventDateTimeValid(endDate, endTime)) {
+        return {
+          kind: 'invalidEventTime',
+          message: 'Choose a valid time for this date',
+        };
+      }
+
+      const startDate = ctx.valueOf(f.date);
+      const startTime = ctx.valueOf(f.time);
+      if (
+        !startDate ||
+        !startTime ||
+        !isLocalEventDateTimeValid(startDate, startTime)
+      ) {
+        return null;
+      }
+
+      const start = combineLocalEventDateTime(startDate, startTime);
+      const end = combineLocalEventDateTime(endDate, endTime);
+      return end.getTime() > start.getTime()
+        ? null
+        : {
+            kind: 'endBeforeStart',
+            message: 'End must be after the event start',
+          };
+    });
+
     required(f.price);
     validate(f.price, ({value}) => {
       return invalidUsdAmountError(value());
@@ -600,7 +643,9 @@ export class EventEditorComponent implements HasUnsavedChanges {
       current.organizerId !== pristine.organizerId ||
       current.visibility !== pristine.visibility ||
       this.hasPosterChange() ||
-      isDateDirty(current.date, pristine.date)
+      isDateDirty(current.date, pristine.date) ||
+      current.endTime !== pristine.endTime ||
+      isDateDirty(current.endDate, pristine.endDate)
     );
   });
 
@@ -669,6 +714,24 @@ export class EventEditorComponent implements HasUnsavedChanges {
 
   hasError<T>(field: MaybeFieldTree<T>, errorKind: string): boolean {
     return signalFormFieldHasError(field, errorKind);
+  }
+
+  /** First end-window validation message, or null when the end fields are valid. */
+  protected endWindowError(): string | null {
+    const endErrors: readonly {kind: string; message: string}[] = [
+      {
+        kind: 'endDateTimePair',
+        message: 'Set both end date and time, or clear both',
+      },
+      {kind: 'invalidEventTime', message: 'Choose a valid time for this date'},
+      {kind: 'endBeforeStart', message: 'End must be after the event start'},
+    ];
+    for (const {kind, message} of endErrors) {
+      if (this.hasError(this.eventForm.endTime, kind)) {
+        return message;
+      }
+    }
+    return null;
   }
 
   toggleSlidingScale(event: Event) {
@@ -796,9 +859,17 @@ export class EventEditorComponent implements HasUnsavedChanges {
           }
         : undefined;
 
+      const endDateArg =
+        formValue.endDate && formValue.endTime
+          ? formatDateYmd(
+              combineLocalEventDateTime(formValue.endDate, formValue.endTime),
+            )
+          : undefined;
+
       const baseArgs = {
         title: formValue.title,
         date: formatDateYmd(combineLocalEventDateTime(date, formValue.time)),
+        ...(endDateArg !== undefined ? {endDate: endDateArg} : {}),
         location: formValue.location.trim() || undefined,
         description: formValue.description.trim() || undefined,
         price: priceCents,
@@ -832,6 +903,8 @@ export class EventEditorComponent implements HasUnsavedChanges {
           {
             id: this.event()!._id,
             ...baseArgs,
+            // Explicit null clears a previously stored end date.
+            ...(endDateArg === undefined ? {endDate: null} : {}),
             organizerId: (formValue.organizerId || undefined) as
               | Id<'organizers'>
               | undefined,

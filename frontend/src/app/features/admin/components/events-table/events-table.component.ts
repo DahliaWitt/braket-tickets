@@ -20,13 +20,19 @@ import {type Id} from '@convex/_generated/dataModel';
 import {logger} from '@/utils/logger';
 import {
   compareEventDatesDescending,
-  isEventDatePast,
+  isEventEnded,
+  isEventHappeningNow,
 } from '@/features/admin/utils/event-date.utils';
 import {BraStatusBadgeComponent} from '@ui/components/primitives/status-badge/status-badge.component';
 import {type BraStatusBadgeVariants} from '@ui/components/primitives/status-badge/status-badge.variants';
 import {EventDatePipe} from '@/utils/event-date.pipe';
 
-type EventDisplayStatus = 'draft' | 'published' | 'cancelled' | 'past';
+type EventDisplayStatus =
+  | 'draft'
+  | 'published'
+  | 'cancelled'
+  | 'past'
+  | 'happening now';
 
 type RouteQueryParams = Readonly<
   Record<string, string | number | boolean | null | undefined>
@@ -357,10 +363,16 @@ export class AdminEventsTableComponent {
 
   protected eventDisplayStatus(event: AdminEventListItem): EventDisplayStatus {
     const status = event.status || 'draft';
-    if (status === 'published' && isEventDatePast(event.date)) {
+    if (status !== 'published') {
+      return status;
+    }
+    if (isEventHappeningNow(event.date, event.endDate)) {
+      return 'happening now';
+    }
+    if (isEventEnded(event.date, event.endDate)) {
       return 'past';
     }
-    return status;
+    return 'published';
   }
 
   protected eventStatusVariant(
@@ -369,6 +381,8 @@ export class AdminEventsTableComponent {
     switch (this.eventDisplayStatus(event)) {
       case 'published':
         return 'success';
+      case 'happening now':
+        return 'info';
       case 'cancelled':
         return 'destructive';
       case 'past':

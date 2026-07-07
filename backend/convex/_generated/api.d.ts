@@ -722,6 +722,7 @@ export declare const api: {
           checkedInCount?: number;
           date: string;
           description?: string;
+          endDate?: string;
           inventoryId?: Id<"event_inventory">;
           isSoldOut?: boolean;
           lastCheckInAt?: number | null;
@@ -1058,6 +1059,7 @@ export declare const api: {
           checkedInCount?: number;
           date: string;
           description?: string;
+          endDate?: string;
           hasAnyTickets?: boolean;
           hasCompletedOrders?: boolean;
           inventoryId?: Id<"event_inventory">;
@@ -1094,6 +1096,7 @@ export declare const api: {
             | { mode: "scheduled"; scheduledFor: number };
           date: string;
           description?: string;
+          endDate?: string;
           location?: string;
           maxTicketsPerUser?: number;
           organizerId: Id<"organizers">;
@@ -1118,6 +1121,7 @@ export declare const api: {
           checkedInCount?: number;
           date: string;
           description?: string;
+          endDate?: string;
           inventoryId?: Id<"event_inventory">;
           isPlatformOrganizer: boolean;
           lastCheckInAt?: number | null;
@@ -1153,6 +1157,7 @@ export declare const api: {
             checkedInCount?: number;
             date: string;
             description?: string;
+            endDate?: string;
             inventoryId?: Id<"event_inventory">;
             lastCheckInAt?: number | null;
             location?: string;
@@ -1203,6 +1208,7 @@ export declare const api: {
             checkedInCount?: number;
             date: string;
             description?: string;
+            endDate?: string;
             inventoryId?: Id<"event_inventory">;
             lastCheckInAt?: number | null;
             location?: string;
@@ -1276,6 +1282,7 @@ export declare const api: {
             checkedInCount?: number;
             date: string;
             description?: string;
+            endDate?: string;
             inventoryId?: Id<"event_inventory">;
             lastCheckInAt?: number | null;
             location?: string;
@@ -1342,6 +1349,7 @@ export declare const api: {
             | { mode: "scheduled"; scheduledFor: number };
           date?: string;
           description?: string;
+          endDate?: string | null;
           id: Id<"events">;
           location?: string;
           maxTicketsPerUser?: number;
@@ -1393,6 +1401,7 @@ export declare const api: {
           checkedInCount?: number;
           date: string;
           description?: string;
+          endDate?: string;
           guestCount: number;
           inventoryId?: Id<"event_inventory">;
           isPlatformOrganizer: boolean;
@@ -1532,6 +1541,7 @@ export declare const api: {
           checkedInCount?: number;
           date: string;
           description?: string;
+          endDate?: string;
           inventoryId?: Id<"event_inventory">;
           isSoldOut?: boolean;
           lastCheckInAt?: number | null;
@@ -1571,6 +1581,7 @@ export declare const api: {
             checkedInCount?: number;
             date: string;
             description?: string;
+            endDate?: string;
             inventoryId?: Id<"event_inventory">;
             isSoldOut?: boolean;
             lastCheckInAt?: number | null;
@@ -1610,6 +1621,7 @@ export declare const api: {
           checkedInCount?: number;
           date: string;
           description?: string;
+          endDate?: string;
           inventoryId?: Id<"event_inventory">;
           isSoldOut?: boolean;
           lastCheckInAt?: number | null;
@@ -2565,6 +2577,7 @@ export declare const api: {
           checkedInCount?: number;
           date: string;
           description?: string;
+          endDate?: string;
           inventoryId?: Id<"event_inventory">;
           lastCheckInAt?: number | null;
           location?: string;
@@ -2592,6 +2605,7 @@ export declare const api: {
         {
           date: string;
           description?: string;
+          endDate?: string;
           location?: string;
           maxTicketsPerUser?: number;
           organizerId: Id<"organizers">;
@@ -2620,6 +2634,7 @@ export declare const api: {
           events: Array<{
             date: string;
             description?: string;
+            endDate?: string;
             location?: string;
             maxTicketsPerUser?: number;
             organizerId: Id<"organizers">;
@@ -3059,6 +3074,7 @@ export declare const api: {
             checkedInCount?: number;
             date: string;
             description?: string;
+            endDate?: string;
             inventoryId?: Id<"event_inventory">;
             lastCheckInAt?: number | null;
             location?: string;
@@ -3118,6 +3134,7 @@ export declare const api: {
             checkedInCount?: number;
             date: string;
             description?: string;
+            endDate?: string;
             inventoryId?: Id<"event_inventory">;
             lastCheckInAt?: number | null;
             location?: string;
@@ -4051,6 +4068,7 @@ export declare const internal: {
           checkedInCount?: number;
           date: string;
           description?: string;
+          endDate?: string;
           inventoryId?: Id<"event_inventory">;
           lastCheckInAt?: number | null;
           location?: string;
@@ -4083,6 +4101,7 @@ export declare const internal: {
             checkedInCount?: number;
             date: string;
             description?: string;
+            endDate?: string;
             inventoryId?: Id<"event_inventory">;
             lastCheckInAt?: number | null;
             location?: string;
@@ -4133,6 +4152,7 @@ export declare const internal: {
             checkedInCount?: number;
             date: string;
             description?: string;
+            endDate?: string;
             inventoryId?: Id<"event_inventory">;
             lastCheckInAt?: number | null;
             location?: string;
@@ -4206,6 +4226,7 @@ export declare const internal: {
             checkedInCount?: number;
             date: string;
             description?: string;
+            endDate?: string;
             inventoryId?: Id<"event_inventory">;
             lastCheckInAt?: number | null;
             location?: string;

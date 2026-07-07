@@ -232,6 +232,51 @@
               }
             </div>
 
+            <!-- End date (optional) -->
+            <div class="space-y-2">
+              <span
+                class="block font-mono text-xs tracking-wider text-muted-foreground uppercase"
+                >End Date</span
+              >
+              <bra-date-picker
+                [formField]="eventForm.endDate"
+                [minDate]="eventModel().date ?? minimumEventDate()"
+                placeholder="Same night (optional)"
+                zFormat="yyyy-MM-dd"
+                zSize="sm"
+                data-testid="end-date-picker"
+                class="!rounded-sm !border !border-b-0 !border-border !bg-background !py-2 !font-sans !text-sm"
+                [class.!border-destructive/50]="endWindowError()"
+                [class.!text-destructive]="endWindowError()"
+                [attr.aria-invalid]="endWindowError() ? 'true' : null"
+              />
+            </div>
+
+            <!-- End time (optional) -->
+            <div class="space-y-2">
+              <label
+                for="endTime"
+                class="block font-mono text-xs tracking-wider text-muted-foreground uppercase"
+                >End Time</label
+              >
+              <input
+                type="time"
+                id="endTime"
+                [formField]="eventForm.endTime"
+                [class]="
+                  inputClasses + (endWindowError() ? ' ' + errorClasses : '')
+                "
+              />
+              @if (endWindowError(); as endError) {
+                <p
+                  data-testid="end-time-error"
+                  class="text-xs text-destructive uppercase"
+                >
+                  {{ endError }}
+                </p>
+              }
+            </div>
+
             <!-- Location -->
             <div class="space-y-2 md:col-span-2">
               <label

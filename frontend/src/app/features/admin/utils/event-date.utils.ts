@@ -2,8 +2,10 @@ import {
   dateKeyToLocalDate,
   eventLocalDateTimeToUtc,
   formatEventDateKey,
+  hasEventEnded,
   isDateKey,
-  todayDateKey,
+  isEventHappeningNow as isEventHappeningNowShared,
+  parseUtcInstant,
   utcToEventLocalParts,
 } from '@shared/event-time';
 
@@ -43,15 +45,31 @@ export function compareEventDatesDescending(a: string, b: string): number {
 }
 
 /**
- * Whether the event's calendar day (platform event timezone) is before today.
- * Same cutoff as the backend's `hasEventDatePassed`, but null-safe: missing or
- * unparseable dates are treated as not past.
+ * Whether the event is over — past its explicit end instant when endDate is
+ * set, otherwise past midnight (event timezone) after its start date. Same
+ * cutoff as the backend's `hasEventEnded`, but null-safe: missing or
+ * unparseable dates are treated as not ended.
  */
-export function isEventDatePast(value: string | null | undefined): boolean {
-  if (!value) return false;
-  const eventDateKey = formatEventDateKey(value);
-  if (!eventDateKey) return false;
-  return eventDateKey < todayDateKey();
+export function isEventEnded(
+  date: string | null | undefined,
+  endDate?: string | null,
+): boolean {
+  if (!date) return false;
+  const hasValidEnd = Boolean(endDate && parseUtcInstant(endDate));
+  if (!hasValidEnd && !formatEventDateKey(date)) return false;
+  return hasEventEnded(date, endDate);
+}
+
+/**
+ * Whether the event is in progress (start instant reached, not yet ended).
+ * Null-safe wrapper around the shared helper.
+ */
+export function isEventHappeningNow(
+  date: string | null | undefined,
+  endDate?: string | null,
+): boolean {
+  if (!date) return false;
+  return isEventHappeningNowShared(date, endDate);
 }
 
 /** Formats a Date to ISO string for the API. */

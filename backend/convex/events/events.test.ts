@@ -958,6 +958,138 @@ describe('Event date validation', () => {
   });
 });
 
+describe('Event end date', () => {
+  async function setupEndDateContext() {
+    const t = convexTest();
+    const adminId = await createRootAdmin(t, 'Admin');
+    const organizerId = await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {
+        name: 'End Date Org',
+      },
+    );
+    return {t, asAdmin: t.withIdentity({subject: adminId}), organizerId};
+  }
+
+  const baseCreateArgs = {
+    title: 'Overnight Event',
+    date: '2030-12-15T20:00:00.000Z',
+    price: 1000,
+    totalTickets: 50,
+    status: 'draft',
+    visibility: 'private',
+  } as const;
+
+  it('create stores a valid endDate after the start', async () => {
+    const {t, asAdmin, organizerId} = await setupEndDateContext();
+
+    const eventId = await asAdmin.mutation(api.events.management.create, {
+      ...baseCreateArgs,
+      organizerId,
+      endDate: '2030-12-16T06:00:00.000Z',
+    });
+
+    const event = await t.run(async (ctx) => ctx.db.get('events', eventId));
+    expect(event?.endDate).toBe('2030-12-16T06:00:00.000Z');
+
+    // Read models must project endDate through, or the editor would render
+    // empty end fields and clear the stored value on the next save.
+    const editable = await asAdmin.query(api.events.management.getForEdit, {
+      id: eventId,
+    });
+    expect(editable.endDate).toBe('2030-12-16T06:00:00.000Z');
+
+    const adminList = await asAdmin.query(api.events.management.adminList, {
+      organizerId,
+    });
+    expect(adminList.find((e) => e._id === eventId)?.endDate).toBe(
+      '2030-12-16T06:00:00.000Z',
+    );
+  });
+
+  it('create rejects an endDate at or before the start', async () => {
+    const {asAdmin, organizerId} = await setupEndDateContext();
+
+    await expect(
+      asAdmin.mutation(api.events.management.create, {
+        ...baseCreateArgs,
+        organizerId,
+        endDate: '2030-12-15T20:00:00.000Z',
+      }),
+    ).rejects.toThrow(/after the event start/);
+    await expect(
+      asAdmin.mutation(api.events.management.create, {
+        ...baseCreateArgs,
+        organizerId,
+        endDate: '2030-12-15T18:00:00.000Z',
+      }),
+    ).rejects.toThrow(/after the event start/);
+  });
+
+  it('create rejects an invalid endDate format', async () => {
+    const {asAdmin, organizerId} = await setupEndDateContext();
+
+    await expect(
+      asAdmin.mutation(api.events.management.create, {
+        ...baseCreateArgs,
+        organizerId,
+        endDate: 'Dec 16, 2030',
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('update sets, revalidates, and clears endDate', async () => {
+    const {t, asAdmin, organizerId} = await setupEndDateContext();
+    const eventId = await asAdmin.mutation(api.events.management.create, {
+      ...baseCreateArgs,
+      organizerId,
+    });
+
+    // Set an end date.
+    await asAdmin.mutation(api.events.management.update, {
+      id: eventId,
+      endDate: '2030-12-16T06:00:00.000Z',
+    });
+    let event = await t.run(async (ctx) => ctx.db.get('events', eventId));
+    expect(event?.endDate).toBe('2030-12-16T06:00:00.000Z');
+
+    // Reject an end date before the stored start.
+    await expect(
+      asAdmin.mutation(api.events.management.update, {
+        id: eventId,
+        endDate: '2030-12-15T10:00:00.000Z',
+      }),
+    ).rejects.toThrow(/after the event start/);
+
+    // Reject moving the start past the stored end date.
+    await expect(
+      asAdmin.mutation(api.events.management.update, {
+        id: eventId,
+        date: '2030-12-17T20:00:00.000Z',
+      }),
+    ).rejects.toThrow(/after the event start/);
+
+    // Moving the start together with a matching later end date is allowed.
+    await asAdmin.mutation(api.events.management.update, {
+      id: eventId,
+      date: '2030-12-17T20:00:00.000Z',
+      endDate: '2030-12-18T06:00:00.000Z',
+    });
+    event = await t.run(async (ctx) => ctx.db.get('events', eventId));
+    expect(event?.date).toBe('2030-12-17T20:00:00.000Z');
+    expect(event?.endDate).toBe('2030-12-18T06:00:00.000Z');
+
+    // Clearing with null removes the stored field entirely.
+    await asAdmin.mutation(api.events.management.update, {
+      id: eventId,
+      endDate: null,
+    });
+    event = await t.run(async (ctx) => ctx.db.get('events', eventId));
+    expect(event?.endDate).toBeUndefined();
+    expect(event ? 'endDate' in event : true).toBe(false);
+  });
+});
+
 describe('Event write validation', () => {
   async function setupEventWriteValidation() {
     const t = convexTest();

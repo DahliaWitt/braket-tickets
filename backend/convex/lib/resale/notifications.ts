@@ -4,7 +4,7 @@ import {resaleAvailableTemplate} from '../../email/templates';
 import {canPurchaseEventForUser} from '../../lib/access/purchase';
 import {calculateEventInventory} from '../../lib/inventory';
 import {enqueueEmailDelivery} from '../../lib/email_delivery_wrapper';
-import {hasEventDatePassed} from '../../lib/timezone';
+import {hasEventEnded} from '../../lib/timezone';
 import {
   throwForbidden,
   throwInvalidState,
@@ -29,7 +29,7 @@ export async function notifySubscribersForListedTicketState(
   if (!event) return 0;
 
   const salesStatus = event.ticketSalesStatus ?? 'active';
-  if (salesStatus !== 'active' || hasEventDatePassed(event.date)) return 0;
+  if (salesStatus !== 'active' || hasEventEnded(event)) return 0;
 
   const {remaining: remainingTickets} = await calculateEventInventory(
     ctx.db,

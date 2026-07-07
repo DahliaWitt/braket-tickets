@@ -180,8 +180,22 @@ describe('AdminEventsTableComponent', () => {
   });
 
   describe('status badges', () => {
-    const pastDate = new Date(Date.now() - 2 * 86_400_000).toISOString();
-    const futureDate = new Date(Date.now() + 2 * 86_400_000).toISOString();
+    // Pin the clock (Date only — real timers stay active for change
+    // detection) so day-boundary logic can't flake near midnight.
+    // 2026-07-06T19:00Z is noon PDT, mid-day in the platform event timezone.
+    beforeEach(() => {
+      vi.useFakeTimers({toFake: ['Date']});
+      vi.setSystemTime(new Date('2026-07-06T19:00:00.000Z'));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    const hoursFromNow = (hours: number) =>
+      new Date(Date.now() + hours * 3_600_000).toISOString();
+    const daysFromNow = (days: number) =>
+      new Date(Date.now() + days * 86_400_000).toISOString();
 
     async function renderEventsTable(
       events: AdminEventDoc[],
@@ -205,7 +219,7 @@ describe('AdminEventsTableComponent', () => {
 
     it('shows "past" for a published event whose date has passed', async () => {
       const harness = await renderEventsTable([
-        {...mockEventDoc, status: 'published', date: pastDate},
+        {...mockEventDoc, status: 'published', date: daysFromNow(-2)},
       ]);
 
       // Desktop and mobile badges render for the same row.
@@ -213,18 +227,67 @@ describe('AdminEventsTableComponent', () => {
       expect(await harness.getStatusVariantAtIndex(0)).toBe('muted');
     });
 
-    it('keeps "published" for an event happening today', async () => {
+    it('shows "happening now" while inside the event window', async () => {
       const harness = await renderEventsTable([
-        {...mockEventDoc, status: 'published', date: new Date().toISOString()},
+        {
+          ...mockEventDoc,
+          status: 'published',
+          date: hoursFromNow(-4),
+          endDate: hoursFromNow(4),
+        },
+      ]);
+
+      expect(await harness.getStatusTexts()).toEqual([
+        'happening now',
+        'happening now',
+      ]);
+      expect(await harness.getStatusVariantAtIndex(0)).toBe('info');
+    });
+
+    it('shows "past" once the explicit endDate has passed', async () => {
+      const harness = await renderEventsTable([
+        {
+          ...mockEventDoc,
+          status: 'published',
+          date: daysFromNow(-2),
+          endDate: daysFromNow(-1),
+        },
+      ]);
+
+      expect(await harness.getStatusTextAtIndex(0)).toBe('past');
+      expect(await harness.getStatusVariantAtIndex(0)).toBe('muted');
+    });
+
+    it('keeps "published" before the start time on the event day', async () => {
+      const harness = await renderEventsTable([
+        {
+          ...mockEventDoc,
+          status: 'published',
+          date: hoursFromNow(2),
+        },
       ]);
 
       expect(await harness.getStatusTextAtIndex(0)).toBe('published');
       expect(await harness.getStatusVariantAtIndex(0)).toBe('success');
     });
 
+    it('shows "happening now" after the start time without an endDate', async () => {
+      // Started an hour ago — still on the start day's calendar date.
+      const harness = await renderEventsTable([
+        {
+          ...mockEventDoc,
+          status: 'published',
+          date: hoursFromNow(-1),
+        },
+      ]);
+
+      expect(await harness.getStatusTextAtIndex(0)).toBe('happening now');
+      expect(await harness.getStatusVariantAtIndex(0)).toBe('info');
+    });
+
     it('keeps "published" for a future event', async () => {
       const harness = await renderEventsTable([
-        {...mockEventDoc, status: 'published', date: futureDate},
+        {...mockEventDoc, status: 'published', date: daysFromNow(2)},
       ]);
 
       expect(await harness.getStatusTextAtIndex(0)).toBe('published');
@@ -237,13 +300,13 @@ describe('AdminEventsTableComponent', () => {
           ...mockEventDoc,
           _id: 'draft-past' as Id<'events'>,
           status: 'draft',
-          date: pastDate,
+          date: daysFromNow(-2),
         },
         {
           ...mockEventDoc,
           _id: 'cancelled-past' as Id<'events'>,
           status: 'cancelled',
-          date: pastDate,
+          date: daysFromNow(-2),
         },
       ]);
 

@@ -20,6 +20,7 @@ export function toEventDocShape(event: EventDoc) {
     title: event.title,
     description: event.description,
     date: event.date,
+    endDate: event.endDate,
     location: event.location,
     poster: event.poster,
     price: event.price,
