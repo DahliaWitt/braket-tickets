@@ -22,6 +22,7 @@ import {
 } from '../../lib/validation';
 import {
   MAX_IMPORT_BATCH_SIZE,
+  MAX_IMPORTED_ENTRIES_PER_EVENT,
   assertBatchSizeWithinCap,
   assertEventImportCapNotExceeded,
   findExistingImportBatch,
@@ -418,12 +419,58 @@ export type ImportedCheckInResult =
   | {success: false; message: string};
 
 /**
- * Checks in an imported entry. Uses the same door-staff / scan authorization as
- * native ticket check-in (via lib/access). Idempotent: an already-checked-in
- * entry returns its existing state (feeding the duplicate-scan warning) rather
- * than erroring or re-patching. Shared-barcode entries created by
- * include-duplicates check in in creation order — the caller resolves the first
- * not-yet-checked-in entry; direct-by-id checkin here just handles the one entry.
+ * Applies the check-in state transition to a single already-authorized entry.
+ * The SINGLE source of truth for imported check-in state — both the by-id
+ * mutation and the scanner's by-externalRef fallback call this so the
+ * idempotency / audit / patch logic never diverges. Idempotent: an
+ * already-checked-in entry returns its existing state (feeding the
+ * duplicate-scan warning) without re-patching or re-auditing.
+ */
+async function applyImportedCheckIn(
+  ctx: MutationCtx,
+  args: {
+    entry: Doc<'importedTicketHolders'>;
+    event: Doc<'events'>;
+    userId: Id<'users'>;
+    isEditor: boolean;
+  },
+): Promise<ImportedCheckInResult> {
+  const {entry, event, userId, isEditor} = args;
+
+  if (entry.checkedInAt) {
+    // Idempotent: return existing state without re-patching.
+    return {success: true, alreadyCheckedIn: true, entry};
+  }
+
+  const checkedInAt = Date.now();
+  await ctx.db.patch('importedTicketHolders', entry._id, {
+    checkedInAt,
+    checkedInBy: userId,
+  });
+
+  await ctx.scheduler.runAfter(
+    0,
+    internal.communities.management.audit.recordCheckIn,
+    {
+      adminId: userId,
+      action: ADMIN_AUDIT_ACTIONS.IMPORTED_TICKET_CHECK_IN,
+      eventId: entry.eventId,
+      organizerId: event.organizerId,
+      source: isEditor ? 'admin-ui' : 'door-scanner',
+    },
+  );
+
+  return {
+    success: true,
+    alreadyCheckedIn: false,
+    entry: {...entry, checkedInAt, checkedInBy: userId},
+  };
+}
+
+/**
+ * Checks in an imported entry by id. Uses the same door-staff / scan
+ * authorization as native ticket check-in (via lib/access). Idempotent via
+ * {@link applyImportedCheckIn}.
  */
 export async function checkIn(
   ctx: MutationCtx,
@@ -450,34 +497,84 @@ export async function checkIn(
     return {success: false, message: 'Imported ticket not found'};
   }
 
-  if (entry.checkedInAt) {
-    // Idempotent: return existing state without re-patching.
-    return {success: true, alreadyCheckedIn: true, entry};
+  return applyImportedCheckIn(ctx, {entry, event, userId, isEditor});
+}
+
+export type ResolveImportedByRefResult =
+  | {matched: false}
+  | {matched: true; result: ImportedCheckInResult};
+
+/**
+ * Scanner external fallback. Exact-matches the trimmed payload against
+ * importedTicketHolders.externalRef for a SINGLE event (point lookup on
+ * by_event_external_ref). External references never resolve across events —
+ * acceptance is limited to the scanned event's imported set, so a forged code
+ * is contained by duplicate-scan protection.
+ *
+ * When "include duplicates" imports created multiple entries sharing one
+ * barcode, the first NOT-yet-checked-in entry in creation order (ascending
+ * _creationTime, the index's natural order) is checked in; once all are checked
+ * in, the earliest entry is returned so the caller warns as already-checked-in.
+ *
+ * Authorization mirrors native check-in (scan capability via lib/access); the
+ * caller (native scan-resolution path) has already resolved the event and its
+ * scan authorization, but this helper re-verifies so it is safe to call
+ * standalone. Returns `{matched: false}` when no entry matches so the caller
+ * keeps the existing invalid-ticket behavior.
+ */
+export async function resolveAndCheckInByExternalRef(
+  ctx: MutationCtx,
+  args: {
+    eventId: Id<'events'>;
+    externalRef: string;
+    userId: Id<'users'>;
+  },
+): Promise<ResolveImportedByRefResult> {
+  const externalRef = args.externalRef.trim();
+  if (externalRef.length === 0) {
+    return {matched: false};
   }
 
-  const checkedInAt = Date.now();
-  await ctx.db.patch('importedTicketHolders', args.id, {
-    checkedInAt,
-    checkedInBy: userId,
+  // Point lookup scoped to the scanned event only. `by_event_external_ref`
+  // returns entries in creation order for a shared barcode. Bounded by the
+  // per-event import cap: entries sharing one barcode can never exceed the
+  // total imported entries for the event.
+  const matches = await ctx.db
+    .query('importedTicketHolders')
+    .withIndex('by_event_external_ref', (q) =>
+      q.eq('eventId', args.eventId).eq('externalRef', externalRef),
+    )
+    .take(MAX_IMPORTED_ENTRIES_PER_EVENT);
+
+  if (matches.length === 0) {
+    return {matched: false};
+  }
+
+  const event = await ctx.db.get('events', args.eventId);
+  if (!event) {
+    return {matched: false};
+  }
+
+  const [canScan, isEditor] = await Promise.all([
+    canScanEvent(ctx, args.userId, event),
+    canEditEvent(ctx, args.userId, event),
+  ]);
+  if (!canScan) {
+    // Contained: an unauthorized caller learns nothing about the imported set.
+    return {matched: false};
+  }
+
+  // Check in the first not-yet-checked-in entry in creation order; if all are
+  // checked in, return the earliest so the caller warns as already-checked-in.
+  const target = matches.find((m) => m.checkedInAt === undefined) ?? matches[0];
+
+  const result = await applyImportedCheckIn(ctx, {
+    entry: target,
+    event,
+    userId: args.userId,
+    isEditor,
   });
-
-  await ctx.scheduler.runAfter(
-    0,
-    internal.communities.management.audit.recordCheckIn,
-    {
-      adminId: userId,
-      action: ADMIN_AUDIT_ACTIONS.IMPORTED_TICKET_CHECK_IN,
-      eventId: entry.eventId,
-      organizerId: event.organizerId,
-      source: isEditor ? 'admin-ui' : 'door-scanner',
-    },
-  );
-
-  return {
-    success: true,
-    alreadyCheckedIn: false,
-    entry: {...entry, checkedInAt, checkedInBy: userId},
-  };
+  return {matched: true, result};
 }
 
 /**

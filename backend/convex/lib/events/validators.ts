@@ -164,6 +164,26 @@ const purchaseObject = v.object({
   ),
 });
 
+/**
+ * Imported (external) ticket-holder counts for the management summary. These
+ * are NEW, SEPARATE fields — they never move a sales/financial number.
+ * `total` = all imported entries for the event; `checkedIn` = those with a
+ * check-in timestamp; `bySource` = per-source breakdown (RA, External, ...).
+ * Native sales metrics (soldCount, tierCounts, revenue, sell-through) remain
+ * computed over native purchases ONLY.
+ */
+const importedSummaryObject = v.object({
+  total: v.number(),
+  checkedIn: v.number(),
+  bySource: v.array(
+    v.object({
+      sourceLabel: v.string(),
+      total: v.number(),
+      checkedIn: v.number(),
+    }),
+  ),
+});
+
 export const managementSummaryValidator = v.object({
   event: canonicalEventDocValidator,
   soldCount: v.number(),
@@ -185,6 +205,7 @@ export const managementSummaryValidator = v.object({
     }),
   ),
   checkInStats: checkInStatsObject,
+  imported: importedSummaryObject,
 });
 
 export const managementPurchasesValidator = v.object({

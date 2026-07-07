@@ -30,16 +30,24 @@ export const MAX_BROADCAST_RECIPIENTS = 500;
 
 export async function getBroadcastAudience(
   ctx: QueryCtx,
-  args: {eventId: Id<'events'>},
+  args: {eventId: Id<'events'>; includeExternalTicketHolders?: boolean},
 ) {
   await requireEventForEdit(ctx, args.eventId);
 
+  // Default ON, matching the send toggle: the previewed recipient count
+  // reflects the same audience a send with the default toggle would target.
+  const includeExternal = args.includeExternalTicketHolders ?? true;
   const audience = await loadExactBroadcastAudience(ctx.db, args.eventId, {
     includeRecipients: false,
+    includeExternalTicketHolders: includeExternal,
   });
   return {
     recipientCount: audience.recipientCount,
     exceedsCap: audience.recipientCount > MAX_BROADCAST_RECIPIENTS,
+    // Reachability split so the compose UI can render "includes N external
+    // ticket holders" (and how many carry no email and thus cannot be reached).
+    importedReachableCount: audience.importedReachableCount,
+    importedUnreachableCount: audience.importedUnreachableCount,
   };
 }
 
@@ -75,6 +83,7 @@ export async function sendBroadcast(
     eventId: Id<'events'>;
     subject: string;
     message: string;
+    includeExternalTicketHolders?: boolean;
   },
 ) {
   const {_id: userId} = await requireUser(ctx);
@@ -160,6 +169,7 @@ export async function sendBroadcast(
     ctx.db,
     args.eventId,
     MAX_BROADCAST_RECIPIENTS + 1,
+    {includeExternalTicketHolders: args.includeExternalTicketHolders ?? true},
   );
 
   if (audience.recipientCount === 0) {

@@ -35,6 +35,17 @@ export interface BroadcastAudience {
   recipientCount: number;
   isComplete: boolean;
   recipients?: BroadcastRecipient[];
+  /**
+   * Reachability split for imported (external) ticket holders, so the compose
+   * flow can render "includes N external ticket holders". Counts every imported
+   * entry for the event regardless of the include toggle: `reachable` are those
+   * WITH an email (join the audience when included), `unreachable` are those
+   * without. Independent of the dedup Map — an imported email that collides with
+   * a native purchaser still counts as reachable here even though it yields no
+   * additional send.
+   */
+  importedReachableCount: number;
+  importedUnreachableCount: number;
 }
 
 interface BroadcastTicketLike {
@@ -43,6 +54,10 @@ interface BroadcastTicketLike {
 }
 
 interface BroadcastGuestLike {
+  email?: string;
+}
+
+interface BroadcastImportedLike {
   email?: string;
 }
 
@@ -62,14 +77,22 @@ type BroadcastUserInfo = Pick<Doc<'users'>, 'email' | 'globalMarketingOptOut'>;
 export async function buildBroadcastAudienceFromSources(args: {
   tickets: AsyncIterable<BroadcastTicketLike>;
   guests: AsyncIterable<BroadcastGuestLike>;
+  imported?: AsyncIterable<BroadcastImportedLike>;
   getUser: (userId: Id<'users'>) => Promise<BroadcastUserInfo | undefined>;
   getGuestSessionEmail?: (
     guestSessionId: Id<'guest_sessions'>,
   ) => Promise<string | undefined>;
+  /**
+   * Whether imported entries WITH an email join the audience (default true).
+   * When false, imported entries are excluded from the send entirely; the
+   * reachable/unreachable split is still reported for the compose UI.
+   */
+  includeExternalTicketHolders?: boolean;
   includeRecipients?: boolean;
   stopAfterRecipientCount?: number;
 }): Promise<BroadcastAudience> {
   const includeRecipients = args.includeRecipients ?? true;
+  const includeExternal = args.includeExternalTicketHolders ?? true;
   const userCache = new Map<Id<'users'>, BroadcastUserInfo | undefined>();
 
   const loadUser = async (
@@ -80,6 +103,26 @@ export async function buildBroadcastAudienceFromSources(args: {
     userCache.set(userId, user);
     return user;
   };
+
+  // Count the imported reachability split before dedup so the compose flow can
+  // always show "includes N external ticket holders". This iterates the imported
+  // source once regardless of the toggle; when the toggle is on, reachable
+  // (with-email) entries are ALSO fed into the candidate stream and deduped by
+  // normalized email across native purchasers, guests, and imported entries.
+  let importedReachableCount = 0;
+  let importedUnreachableCount = 0;
+  const importedEmails: (string | undefined)[] = [];
+  if (args.imported) {
+    for await (const entry of args.imported) {
+      const email = entry.email?.trim();
+      if (email && email.length > 0) {
+        importedReachableCount += 1;
+        if (includeExternal) importedEmails.push(email);
+      } else {
+        importedUnreachableCount += 1;
+      }
+    }
+  }
 
   const candidates = (async function* (): AsyncIterable<RecipientCandidate> {
     for await (const ticket of args.tickets) {
@@ -99,6 +142,12 @@ export async function buildBroadcastAudienceFromSources(args: {
     }
     for await (const guest of args.guests) {
       yield {kind: 'address', email: guest.email};
+    }
+    // Imported entries are inert address-kind recipients — never linked to a
+    // user account (no account linkage by email, per spec). The shared builder
+    // dedups them by normalized email against native purchasers and guests.
+    for (const email of importedEmails) {
+      yield {kind: 'address', email};
     }
   })();
 
@@ -122,6 +171,8 @@ export async function buildBroadcastAudienceFromSources(args: {
   return {
     recipientCount: enrichedRecipients.length,
     isComplete,
+    importedReachableCount,
+    importedUnreachableCount,
     ...(includeRecipients ? {recipients: enrichedRecipients} : {}),
   };
 }
@@ -129,7 +180,10 @@ export async function buildBroadcastAudienceFromSources(args: {
 export async function loadExactBroadcastAudience(
   db: DatabaseReader,
   eventId: Id<'events'>,
-  options?: {includeRecipients?: boolean},
+  options?: {
+    includeRecipients?: boolean;
+    includeExternalTicketHolders?: boolean;
+  },
 ): Promise<BroadcastAudience> {
   // Exact audiences need every valid ticket so the recipient builder can
   // dedupe against guest rows and apply the operational send cap correctly.
@@ -137,9 +191,11 @@ export async function loadExactBroadcastAudience(
   // then stream them through the shared builder to keep the dedup / stop-after
   // semantics consistent with the bounded loader.
   const validTickets = await collectAllQueryUnsafe(
-    db.query('tickets').withIndex('by_event_status', (q) =>
-      q.eq('eventId', eventId).eq('status', 'valid'),
-    ),
+    db
+      .query('tickets')
+      .withIndex('by_event_status', (q) =>
+        q.eq('eventId', eventId).eq('status', 'valid'),
+      ),
   );
   const userIds = [
     ...new Set(
@@ -172,13 +228,21 @@ export async function loadExactBroadcastAudience(
       .withIndex('by_event', (q) => q.eq('eventId', eventId));
     for await (const guest of guests) yield guest;
   }
+  async function* importedIterable(): AsyncIterable<BroadcastImportedLike> {
+    const imported = db
+      .query('importedTicketHolders')
+      .withIndex('by_event', (q) => q.eq('eventId', eventId));
+    for await (const entry of imported) yield {email: entry.email};
+  }
 
   return buildBroadcastAudienceFromSources({
     tickets: ticketsIterable(),
     guests: guestsIterable(),
+    imported: importedIterable(),
     getUser: async (userId) => usersMap.get(userId),
     getGuestSessionEmail: async (guestSessionId) =>
       guestSessionsMap.get(guestSessionId)?.email,
+    includeExternalTicketHolders: options?.includeExternalTicketHolders ?? true,
     includeRecipients: options?.includeRecipients ?? true,
   });
 }
@@ -187,17 +251,29 @@ export async function loadBroadcastAudienceUpToLimit(
   db: DatabaseReader,
   eventId: Id<'events'>,
   stopAfterRecipientCount: number,
+  options?: {includeExternalTicketHolders?: boolean},
 ): Promise<BroadcastAudience> {
+  async function* importedIterable(): AsyncIterable<BroadcastImportedLike> {
+    const imported = db
+      .query('importedTicketHolders')
+      .withIndex('by_event', (q) => q.eq('eventId', eventId));
+    for await (const entry of imported) yield {email: entry.email};
+  }
+
   return buildBroadcastAudienceFromSources({
-    tickets: db.query('tickets').withIndex('by_event_status', (q) =>
-      q.eq('eventId', eventId).eq('status', 'valid'),
-    ),
-    guests: db.query('guests').withIndex('by_event', (q) =>
-      q.eq('eventId', eventId),
-    ),
+    tickets: db
+      .query('tickets')
+      .withIndex('by_event_status', (q) =>
+        q.eq('eventId', eventId).eq('status', 'valid'),
+      ),
+    guests: db
+      .query('guests')
+      .withIndex('by_event', (q) => q.eq('eventId', eventId)),
+    imported: importedIterable(),
     getUser: async (userId) => (await db.get('users', userId)) ?? undefined,
     getGuestSessionEmail: async (guestSessionId) =>
       (await db.get('guest_sessions', guestSessionId))?.email,
+    includeExternalTicketHolders: options?.includeExternalTicketHolders ?? true,
     includeRecipients: true,
     stopAfterRecipientCount,
   });

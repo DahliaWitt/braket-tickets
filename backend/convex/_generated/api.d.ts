@@ -927,8 +927,13 @@ export declare const api: {
       getAudience: FunctionReference<
         "query",
         "public",
-        { eventId: Id<"events"> },
-        { exceedsCap: boolean; recipientCount: number }
+        { eventId: Id<"events">; includeExternalTicketHolders?: boolean },
+        {
+          exceedsCap: boolean;
+          importedReachableCount: number;
+          importedUnreachableCount: number;
+          recipientCount: number;
+        }
       >;
       listHistory: FunctionReference<
         "query",
@@ -945,7 +950,12 @@ export declare const api: {
       send: FunctionReference<
         "mutation",
         "public",
-        { eventId: Id<"events">; message: string; subject: string },
+        {
+          eventId: Id<"events">;
+          includeExternalTicketHolders?: boolean;
+          message: string;
+          subject: string;
+        },
         | { recipientCount: number; success: true }
         | {
             count?: number;
@@ -964,7 +974,7 @@ export declare const api: {
       checkIn: FunctionReference<
         "mutation",
         "public",
-        { guestId?: string; ticketId?: string },
+        { eventId?: string; guestId?: string; ticketId?: string },
         {
           guest?: {
             _creationTime: number;
@@ -977,6 +987,17 @@ export declare const api: {
             name: string;
             notes?: string;
             type: "guest" | "artist guest" | "staff";
+          };
+          imported?: {
+            _creationTime: number;
+            _id: Id<"importedTicketHolders">;
+            checkedInAt?: number;
+            checkedInBy?: Id<"users">;
+            event?: { date: string; location?: string; title: string };
+            eventId: Id<"events">;
+            name: string;
+            sourceLabel: string;
+            ticketTypeLabel?: string;
           };
           message: string;
           success: boolean;
@@ -1412,6 +1433,15 @@ export declare const api: {
             visibility: "private" | "public_viewable" | "public";
           };
           heldCount: number;
+          imported: {
+            bySource: Array<{
+              checkedIn: number;
+              sourceLabel: string;
+              total: number;
+            }>;
+            checkedIn: number;
+            total: number;
+          };
           isSoldOut: boolean;
           remainingCount: number;
           revenue: {
@@ -4365,6 +4395,15 @@ export declare const internal: {
             visibility: "private" | "public_viewable" | "public";
           };
           heldCount: number;
+          imported: {
+            bySource: Array<{
+              checkedIn: number;
+              sourceLabel: string;
+              total: number;
+            }>;
+            checkedIn: number;
+            total: number;
+          };
           isSoldOut: boolean;
           remainingCount: number;
           revenue: {

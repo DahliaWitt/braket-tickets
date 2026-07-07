@@ -994,3 +994,191 @@ describe('eventBroadcasts.send dedup', () => {
     expect(broadcasts).toHaveLength(1);
   });
 });
+
+// ── external ticket-holder inclusion ─────────────────────────────────
+
+describe('eventBroadcasts — external ticket holders', () => {
+  async function seedAdminEventWithOrg(t: TestHarness) {
+    const adminId = await t.mutation(api.testing.users.createUserDirectly, {
+      name: 'Admin',
+      email: `ext-broadcast-admin-${Date.now()}-${Math.random()}@braket.gay`,
+      isRootAdmin: true,
+    });
+    const organizerId = await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {name: 'Ext Broadcast Org', slug: `ext-bc-${Date.now()}`},
+    );
+    const eventId = await t.mutation(api.testing.events.seedEvent, {
+      ...EVENT_SEED_BASE,
+      organizerId,
+    });
+    return {
+      adminId,
+      organizerId,
+      eventId,
+      asAdmin: t.withIdentity({subject: adminId}),
+    };
+  }
+
+  it('getAudience reports the reachable/unreachable split for imported entries', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminEventWithOrg(t);
+
+    await asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId,
+      batchKey: 'bc-split-1',
+      dedupMode: 'skip',
+      rows: [
+        {name: 'Reachable One', email: 'ext1@example.com', externalRef: 'X1'},
+        {name: 'Reachable Two', email: 'ext2@example.com', externalRef: 'X2'},
+        {name: 'No Email', externalRef: 'X3'},
+      ],
+    });
+
+    const result = await asAdmin.query(api.events.broadcasts.getAudience, {
+      eventId,
+    });
+    expect(result.importedReachableCount).toBe(2);
+    expect(result.importedUnreachableCount).toBe(1);
+    // Default ON: the 2 reachable imported entries join the audience.
+    expect(result.recipientCount).toBe(2);
+  });
+
+  it('toggle ON includes imported entries with email; OFF excludes them', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminEventWithOrg(t);
+
+    await seedTicketHolder(t, eventId, 'native@example.com');
+    await asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId,
+      batchKey: 'bc-toggle-1',
+      dedupMode: 'skip',
+      rows: [
+        {name: 'Imported Emailed', email: 'imp@example.com', externalRef: 'T1'},
+        {name: 'Imported NoEmail', externalRef: 'T2'},
+      ],
+    });
+
+    const on = await asAdmin.query(api.events.broadcasts.getAudience, {
+      eventId,
+      includeExternalTicketHolders: true,
+    });
+    // native + 1 reachable imported.
+    expect(on.recipientCount).toBe(2);
+
+    const off = await asAdmin.query(api.events.broadcasts.getAudience, {
+      eventId,
+      includeExternalTicketHolders: false,
+    });
+    // native only.
+    expect(off.recipientCount).toBe(1);
+    // The split is reported regardless of the toggle.
+    expect(off.importedReachableCount).toBe(1);
+    expect(off.importedUnreachableCount).toBe(1);
+  });
+
+  it('send with toggle ON delivers to imported-with-email; OFF delivers to none of them', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminEventWithOrg(t);
+
+    await asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId,
+      batchKey: 'bc-send-on',
+      dedupMode: 'skip',
+      rows: [
+        {
+          name: 'Ext Recipient',
+          email: 'extsend@example.com',
+          externalRef: 'S1',
+        },
+      ],
+    });
+
+    const on = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Doors',
+      message: 'Doors open at 9pm',
+      includeExternalTicketHolders: true,
+    });
+    expect(on.success).toBe(true);
+    if (on.success) expect(on.recipientCount).toBe(1);
+
+    const captured = await t.query(api.testing.email.getSentEmails, {
+      to: 'extsend@example.com',
+    });
+    expect(captured).toHaveLength(1);
+
+    // A second event: same import, toggle OFF → no recipients at all.
+    const second = await seedAdminEventWithOrg(t);
+    await second.asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId: second.eventId,
+      batchKey: 'bc-send-off',
+      dedupMode: 'skip',
+      rows: [
+        {name: 'Ext Only', email: 'extoff@example.com', externalRef: 'S2'},
+      ],
+    });
+    const off = await second.asAdmin.mutation(api.events.broadcasts.send, {
+      eventId: second.eventId,
+      subject: 'Doors',
+      message: 'Doors open at 9pm',
+      includeExternalTicketHolders: false,
+    });
+    // Only imported entries exist and they are excluded → no_recipients.
+    expect(off.success).toBe(false);
+    if (!off.success) expect(off.error).toBe('no_recipients');
+
+    const capturedOff = await t.query(api.testing.email.getSentEmails, {
+      to: 'extoff@example.com',
+    });
+    expect(capturedOff).toHaveLength(0);
+  });
+
+  it('an email present as both native purchaser and imported entry receives exactly one send', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminEventWithOrg(t);
+
+    const sharedEmail = 'shared@example.com';
+    await seedTicketHolder(t, eventId, sharedEmail);
+    await asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId,
+      batchKey: 'bc-dedup-1',
+      dedupMode: 'skip',
+      rows: [
+        // Same email as the native purchaser (different case to prove
+        // normalized-email dedup), plus a distinct imported recipient.
+        {name: 'Dup', email: sharedEmail.toUpperCase(), externalRef: 'D1'},
+        {name: 'Distinct', email: 'distinct@example.com', externalRef: 'D2'},
+      ],
+    });
+
+    const result = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Once',
+      message: 'You should see this once',
+    });
+    expect(result.success).toBe(true);
+    // native(shared) + distinct = 2 unique; the imported shared collides.
+    if (result.success) expect(result.recipientCount).toBe(2);
+
+    const capturedShared = await t.query(api.testing.email.getSentEmails, {
+      to: sharedEmail,
+    });
+    expect(capturedShared).toHaveLength(1);
+  });
+
+  it('leaves native + guest recipients unaffected by imported inclusion', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminEventWithOrg(t);
+
+    await seedTicketHolder(t, eventId, 'nativeholder@example.com');
+    await seedGuest(t, eventId, {name: 'A Guest', email: 'guest@example.com'});
+    // No imported entries at all — the toggle path must not disturb the base.
+    const result = await asAdmin.query(api.events.broadcasts.getAudience, {
+      eventId,
+    });
+    expect(result.recipientCount).toBe(2);
+    expect(result.importedReachableCount).toBe(0);
+    expect(result.importedUnreachableCount).toBe(0);
+  });
+});
