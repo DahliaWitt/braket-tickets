@@ -1530,5 +1530,35 @@ describe('AuthService', () => {
         vi.useRealTimers();
       }
     });
+
+    it('clears the give-up latch on a fresh session so a later login is not bounced', async () => {
+      // 1) A stall trips the timeout latch.
+      vi.useFakeTimers();
+      try {
+        setSession({user: {email: 'buyer@example.com'}});
+        userSignal.set(null);
+        setAuthInitialized(true);
+        service.scheduleOptimisticReconciliation();
+        TestBed.tick();
+        await vi.advanceTimersByTimeAsync(AUTH_SETTLE_TIMEOUT_MS + 100);
+        expect(service.authSettled()).toBe(true); // latched
+      } finally {
+        vi.useRealTimers();
+      }
+
+      // 2) A fresh session (re-login / refresh) arrives; its profile query is
+      //    still pending. The latch must clear so guards wait rather than treat
+      //    authenticated-without-profile as a failure and bounce the user.
+      setSession({user: {email: 'buyer@example.com'}});
+      userSignal.set(null);
+      expect(service.authSettled()).toBe(false);
+
+      // 3) Profile resolves → settles true, so protected routes are admitted.
+      userSignal.set({
+        _id: 'u1' as unknown,
+        _creationTime: 1,
+      } as unknown as UserModel);
+      expect(service.authSettled()).toBe(true);
+    });
   });
 });

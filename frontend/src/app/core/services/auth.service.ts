@@ -198,12 +198,17 @@ export class AuthService implements ConvexAuthProvider {
   readonly authSyncFailed = signal(false);
 
   /**
-   * Terminal give-up latch: set when the auth-settle wait times out (session
-   * reported but profile never resolved, or init itself hung). Forces
-   * `authSettled` true so route guards leave the optimistic path and take their
-   * authoritative failure branch, recovering the user off a stuck skeleton
-   * instead of stranding them. Never reset for the page lifetime — once we have
-   * given up on the initial settle we do not re-enter optimistic mode.
+   * Give-up latch: set when the auth-settle wait times out (session reported
+   * but profile never resolved, or init itself hung). Forces `authSettled` true
+   * so route guards leave the optimistic path and take their authoritative
+   * failure branch, recovering the user off a stuck skeleton instead of
+   * stranding them.
+   *
+   * Scoped to the failed settle attempt: `setSessionState` clears it on any
+   * fresh session transition (login, refresh, logout, or a deferred init that
+   * finally resolves). Otherwise a later valid session would inherit the stale
+   * give-up and be bounced from protected routes while its own profile query is
+   * still in flight.
    */
   private readonly authSettleTimedOut = signal(false);
 
@@ -517,6 +522,10 @@ export class AuthService implements ConvexAuthProvider {
   private setSessionState(session: BetterAuthSession | null): void {
     this.sessionStateVersion += 1;
     this.session.set(session);
+    // A fresh session transition is new information: drop any prior give-up
+    // latch so guards wait for this session's own profile query (or an explicit
+    // sync failure) instead of inheriting a stale timeout decision.
+    this.authSettleTimedOut.set(false);
     if (!session) {
       this.missingUserRepairSessionKey = null;
       this.missingUserRepairQueuedSessionKey = null;
