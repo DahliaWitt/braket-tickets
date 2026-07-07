@@ -20,9 +20,18 @@ export class EventManagementPurchasesPanelHarness extends ComponentHarness {
   private readonly getImportedRows = this.locatorForAll(
     '[data-testid="imported-entry-row"]',
   );
+  private readonly getImportedCount = this.locatorForOptional(
+    '[data-testid="imported-count"]',
+  );
 
   async isImportedSectionVisible(): Promise<boolean> {
     return (await this.getImportedSection()) !== null;
+  }
+
+  /** The imported-entry count label shown on the section header. */
+  async getImportedCountText(): Promise<string | null> {
+    const el = await this.getImportedCount();
+    return el ? (await el.text()).trim() : null;
   }
 
   async getImportedBatchCount(): Promise<number> {
@@ -36,6 +45,27 @@ export class EventManagementPurchasesPanelHarness extends ComponentHarness {
   async getSourceBadgeTexts(): Promise<string[]> {
     const badges = await this.getSourceBadges();
     return Promise.all(badges.map(async (b) => (await b.text()).trim()));
+  }
+
+  async getImportedRowTexts(): Promise<string[]> {
+    const rows = await this.getImportedRows();
+    return Promise.all(rows.map(async (r) => (await r.text()).trim()));
+  }
+
+  async hasImportedRowWithText(text: string): Promise<boolean> {
+    return (await this.getImportedRowTexts()).some((t) => t.includes(text));
+  }
+
+  /**
+   * Whitespace-collapsed text of every imported batch container (source badge +
+   * its entry rows). Lets a caller assert that the badge and a given entry live
+   * in the SAME batch without a raw scoped locator.
+   */
+  async getImportedBatchTexts(): Promise<string[]> {
+    const batches = await this.getImportedBatches();
+    return Promise.all(
+      batches.map(async (b) => (await b.text()).replace(/\s+/g, ' ').trim()),
+    );
   }
 
   async clickRemoveImportedEntry(entryId: string): Promise<void> {

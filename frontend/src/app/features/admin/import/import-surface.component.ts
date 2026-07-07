@@ -81,7 +81,7 @@ import type {
       @switch (step()) {
         <!-- STEP 1: input -->
         @case ('input') {
-          <div class="flex flex-col gap-4" data-testid="import-step-input">
+          <div class="flex flex-col gap-4">
             <label
               for="import-paste"
               class="mono-label text-xs text-muted-foreground"
@@ -163,7 +163,7 @@ import type {
 
         <!-- STEP 2: mapping (only when ambiguous) -->
         @case ('mapping') {
-          <div class="flex flex-col gap-4" data-testid="import-step-mapping">
+          <div class="flex flex-col gap-4">
             <p class="text-sm text-muted-foreground">
               we couldn't line up your columns automatically — match them here,
               then continue.
@@ -233,7 +233,7 @@ import type {
 
         <!-- STEP 3: preview -->
         @case ('preview') {
-          <div class="flex flex-col gap-4" data-testid="import-step-preview">
+          <div class="flex flex-col gap-4">
             <div class="flex flex-wrap gap-4" data-testid="import-counts">
               <span
                 class="mono-label text-2xs text-success"
@@ -397,7 +397,7 @@ import type {
 
         <!-- STEP 4: report -->
         @case ('report') {
-          <div class="flex flex-col gap-4" data-testid="import-step-report">
+          <div class="flex flex-col gap-4">
             @if (report(); as result) {
               @if (result.errorMessage) {
                 <p

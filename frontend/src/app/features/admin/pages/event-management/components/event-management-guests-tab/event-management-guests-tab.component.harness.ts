@@ -32,6 +32,9 @@ export class EventManagementGuestsTabHarness extends ComponentHarness {
   private readonly getRemoveButtons = this.locatorForAll(
     '[data-testid="remove-guest"]',
   );
+  private readonly getGuestRows = this.locatorForAll(
+    '[data-testid="guest-row"]',
+  );
 
   async clickAddGuestButton(): Promise<void> {
     const button = await this.getAddGuestButton();
@@ -75,5 +78,19 @@ export class EventManagementGuestsTabHarness extends ComponentHarness {
     return Promise.all(
       buttons.map((button) => button.getAttribute('aria-label')),
     );
+  }
+
+  /**
+   * Text of every guest row. Returns both the desktop and mobile responsive
+   * variants, so callers assert with `.some(...)` rather than a single-match
+   * locator (which would trip strict mode across the split).
+   */
+  async getGuestRowTexts(): Promise<string[]> {
+    const rows = await this.getGuestRows();
+    return Promise.all(rows.map(async (row) => (await row.text()).trim()));
+  }
+
+  async hasGuestRowWithText(text: string): Promise<boolean> {
+    return (await this.getGuestRowTexts()).some((t) => t.includes(text));
   }
 }

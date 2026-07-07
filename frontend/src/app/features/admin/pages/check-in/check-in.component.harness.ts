@@ -52,6 +52,9 @@ export class CheckInComponentHarness extends ComponentHarness {
   protected getImportedSourceCounts = this.locatorForOptional(
     '[data-testid="imported-source-counts"]',
   );
+  protected getImportedSourceCountItems = this.locatorForAll(
+    '[data-testid="imported-source-count"]',
+  );
   protected getImportedCheckInButtons = this.locatorForAll(
     '[data-testid="imported-entry"] button[aria-label^="Check in external"]',
   );
@@ -272,6 +275,16 @@ export class CheckInComponentHarness extends ComponentHarness {
   async getImportedSourceCountsText(): Promise<string | null> {
     const el = await this.getImportedSourceCounts();
     return el ? (await el.text()).replace(/\s+/g, ' ').trim() : null;
+  }
+
+  /** Per-source door count chips (one per distinct imported source label). */
+  async getImportedSourceCountTexts(): Promise<string[]> {
+    const items = await this.getImportedSourceCountItems();
+    return Promise.all(
+      items.map(async (item) =>
+        (await item.text()).replace(/\s+/g, ' ').trim(),
+      ),
+    );
   }
 
   async clickImportedCheckInByName(name: string): Promise<void> {

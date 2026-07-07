@@ -9,6 +9,9 @@ import type {Page} from '@playwright/test';
 import {api} from '@convex/_generated/api';
 import {Id} from '@convex/_generated/dataModel';
 import {EventManagementHarness} from '../../src/app/features/admin/pages/event-management/event-management.harness';
+import {EventManagementGuestsTabHarness} from '../../src/app/features/admin/pages/event-management/components/event-management-guests-tab/event-management-guests-tab.component.harness';
+import {EventManagementBuyersTabHarness} from '../../src/app/features/admin/pages/event-management/components/event-management-buyers-tab/event-management-buyers-tab.component.harness';
+import {EventManagementPurchasesPanelHarness} from '../../src/app/features/admin/pages/event-management/components/event-management-purchases-panel/event-management-purchases-panel.component.harness';
 import {ImportSurfaceComponentHarness} from '../../src/app/features/admin/import/import-surface.component.harness';
 import {CheckInComponentHarness} from '../../src/app/features/admin/pages/check-in/check-in.component.harness';
 
@@ -88,11 +91,14 @@ test.describe('CSV import — external tickets & guest bulk add', () => {
     );
     await mgmtHarness.clickTab('guests');
 
-    // Open the deferred import surface via the guests-tab button.
-    await adminPage.getByTestId('import-guests-button').click();
-    await expect(adminPage.locator('app-import-surface')).toBeVisible({
-      timeout: 15000,
-    });
+    // Open the deferred import surface via the guests-tab harness.
+    const guestsTab = await createEnvironment(adminPage).getHarness(
+      EventManagementGuestsTabHarness,
+    );
+    await guestsTab.clickImportButton();
+    await expect
+      .poll(() => guestsTab.isImportPanelOpen(), {timeout: 15000})
+      .toBe(true);
 
     const guestName = uniqueName('Bulk Guest');
     const importHarness = await createEnvironment(adminPage).getHarness(
@@ -116,13 +122,28 @@ test.describe('CSV import — external tickets & guest bulk add', () => {
 
     // End-to-end proof: after confirm commits the batch, the guest appears in
     // the reactive roster (Convex mutation → subscription → signal → DOM). The
-    // guests-tab collapses the importer on its data-changed refresh, so the
-    // roster row — not the transient report step — is the durable assertion.
-    const guestRow = adminPage
-      .locator('[data-testid="guest-row"]')
-      .filter({hasText: guestName})
-      .first();
-    await expect(guestRow).toBeVisible({timeout: 15000});
+    // guest list renders alongside the importer, so the roster row — not the
+    // transient report step — is the durable assertion; the harness reads both
+    // responsive row variants, staying stable across the desktop/mobile split.
+    // The confirm handler reloads the tab data, which re-renders the guests-tab
+    // host — a harness captured earlier would hold a detached root, and during
+    // the reload getHarness transiently throws. Re-resolve on every poll and
+    // tolerate absence so the assertion tracks the live host.
+    await expect
+      .poll(
+        async () => {
+          try {
+            const tab = await createEnvironment(adminPage).getHarness(
+              EventManagementGuestsTabHarness,
+            );
+            return await tab.hasGuestRowWithText(guestName);
+          } catch {
+            return false;
+          }
+        },
+        {timeout: 15000},
+      )
+      .toBe(true);
   });
 
   test('imports RA-style external tickets, shows the source badge, and checks one in at the door', async ({
@@ -143,11 +164,14 @@ test.describe('CSV import — external tickets & guest bulk add', () => {
     );
     await mgmtHarness.clickTab('buyers');
 
-    // Open the deferred external-ticket import surface.
-    await adminPage.getByTestId('import-tickets-button').click();
-    await expect(adminPage.locator('app-import-surface')).toBeVisible({
-      timeout: 15000,
-    });
+    // Open the deferred external-ticket import surface via the buyers-tab harness.
+    const buyersTab = await createEnvironment(adminPage).getHarness(
+      EventManagementBuyersTabHarness,
+    );
+    await buyersTab.clickImportButton();
+    await expect
+      .poll(() => buyersTab.isImportPanelOpen(), {timeout: 15000})
+      .toBe(true);
 
     // A small RA-style CSV: one row per ticket, with a barcode we later scan.
     const holderName = uniqueName('RA Holder');
@@ -178,65 +202,104 @@ test.describe('CSV import — external tickets & guest bulk add', () => {
 
     // The imported entry appears with its external source badge in the buyers
     // view once the batch commits (reactive imported-entries query → DOM). The
-    // buyers-tab collapses the importer on its data-changed refresh, so assert
-    // on the durable roster rather than the transient report step. The source
-    // badge is rendered at the batch container level, so scope to the batch
-    // that holds this entry.
-    const importedBatch = adminPage
-      .locator('[data-testid="imported-batch"]')
-      .filter({hasText: holderName})
-      .first();
-    await expect(importedBatch).toBeVisible({timeout: 15000});
-    await expect(
-      importedBatch.locator('[data-testid="imported-source-badge"]'),
-    ).toContainText(sourceLabel);
-    await expect(
-      importedBatch
-        .locator('[data-testid="imported-entry-row"]')
-        .filter({hasText: holderName}),
-    ).toBeVisible();
+    // confirm handler reloads the tab data and re-renders the purchases-panel
+    // host, so re-resolve the harness on every poll rather than caching a
+    // detached root. Until the panel host mounts (the import surface is still
+    // up), getHarness throws — swallow that so the poll keeps retrying.
+    const tryPurchasesPanel =
+      async (): Promise<EventManagementPurchasesPanelHarness | null> => {
+        try {
+          return await createEnvironment(adminPage).getHarness(
+            EventManagementPurchasesPanelHarness,
+          );
+        } catch {
+          return null;
+        }
+      };
+    await expect
+      .poll(
+        async () => {
+          const panel = await tryPurchasesPanel();
+          return panel ? panel.hasImportedRowWithText(holderName) : false;
+        },
+        {timeout: 15000},
+      )
+      .toBe(true);
+    // The source badge and this entry share the same batch container.
+    await expect
+      .poll(
+        async () => {
+          const panel = await tryPurchasesPanel();
+          if (!panel) return false;
+          const texts = await panel.getImportedBatchTexts();
+          return texts.some(
+            (t) => t.includes(holderName) && t.includes(sourceLabel),
+          );
+        },
+        {timeout: 15000},
+      )
+      .toBe(true);
 
     // Door flow: navigate to the scanner, select the event, and use the manual
     // barcode-search fallback to find and check in the external entry.
     await adminPage.goto('/scanner');
     await expect(adminPage).toHaveURL(/\/scanner/);
-    await expect(adminPage.locator('app-check-in')).toBeVisible({
-      timeout: 15000,
-    });
 
-    const checkInHarness = await createEnvironment(adminPage).getHarness(
-      CheckInComponentHarness,
-    );
-    await expect(
-      adminPage.locator('select[aria-label="Select event"] option', {
-        hasText: eventTitle,
-      }),
-    ).toBeAttached({timeout: 15000});
-    await checkInHarness.selectEventByLabel(eventTitle);
+    // The scanner view mounts asynchronously and reactive imported-list updates
+    // can detach a cached harness root, so resolve the check-in harness fresh on
+    // every access and tolerate transient absence.
+    const tryCheckIn = async (): Promise<CheckInComponentHarness | null> => {
+      try {
+        return await createEnvironment(adminPage).getHarness(
+          CheckInComponentHarness,
+        );
+      } catch {
+        return null;
+      }
+    };
+    await expect
+      .poll(async () => (await tryCheckIn()) !== null, {timeout: 15000})
+      .toBe(true);
+
+    // selectEventByLabel polls for the option internally before selecting.
+    await (await tryCheckIn())!.selectEventByLabel(eventTitle);
 
     // The imported section renders the entry with its source badge at the door.
     await expect
-      .poll(() => checkInHarness.getImportedEntryCount(), {timeout: 15000})
+      .poll(async () => (await tryCheckIn())?.getImportedEntryCount() ?? 0, {
+        timeout: 15000,
+      })
       .toBeGreaterThan(0);
-    await expect(
-      adminPage
-        .locator('[data-testid="imported-entry"]')
-        .filter({hasText: holderName})
-        .first(),
-    ).toBeVisible({timeout: 15000});
+    await expect
+      .poll(
+        async () =>
+          (await tryCheckIn())?.getImportedEntryTextByName(holderName) ?? null,
+        {timeout: 15000},
+      )
+      .not.toBeNull();
 
     // Manual fallback: search by the barcode digits printed under the QR.
-    await checkInHarness.enterSearchTerm(barcode);
-    const doorRow = adminPage
-      .locator('[data-testid="imported-entry"]')
-      .filter({hasText: holderName})
-      .first();
-    await expect(doorRow).toBeVisible({timeout: 15000});
+    await (await tryCheckIn())!.enterSearchTerm(barcode);
+    await expect
+      .poll(
+        async () =>
+          (await tryCheckIn())?.getImportedEntryTextByName(holderName) ?? null,
+        {timeout: 15000},
+      )
+      .not.toBeNull();
 
     // Check the entry in and assert the reactive checked-in state through the DOM.
-    await checkInHarness.clickImportedCheckInByName(holderName);
-    await expect(doorRow.getByText(/checked in/i)).toBeVisible({
-      timeout: 15000,
-    });
+    await (await tryCheckIn())!.clickImportedCheckInByName(holderName);
+    await expect
+      .poll(
+        async () => {
+          const text = await ((
+            await tryCheckIn()
+          )?.getImportedEntryTextByName(holderName) ?? null);
+          return text?.toLowerCase().includes('checked in') ?? false;
+        },
+        {timeout: 15000},
+      )
+      .toBe(true);
   });
 });

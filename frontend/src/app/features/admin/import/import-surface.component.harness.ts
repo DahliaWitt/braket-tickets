@@ -76,8 +76,29 @@ export class ImportSurfaceComponentHarness extends ComponentHarness {
   private readonly getReportSkipped = this.locatorForOptional(
     '[data-testid="import-report-skipped"]',
   );
+  private readonly getReportFailed = this.locatorForOptional(
+    '[data-testid="import-report-failed"]',
+  );
+  private readonly getReportPending = this.locatorForOptional(
+    '[data-testid="import-report-pending"]',
+  );
   private readonly getReportError = this.locatorForOptional(
     '[data-testid="import-report-error"]',
+  );
+  private readonly getReportDone = this.locatorForOptional(
+    '[data-testid="import-report-done"]',
+  );
+  private readonly getMappingBack = this.locatorForOptional(
+    '[data-testid="import-mapping-back"]',
+  );
+  private readonly getPreviewBack = this.locatorForOptional(
+    '[data-testid="import-preview-back"]',
+  );
+  private readonly getCounts = this.locatorForOptional(
+    '[data-testid="import-counts"]',
+  );
+  private readonly getFileLabel = this.locatorForOptional(
+    '[data-testid="import-file-label"]',
   );
 
   async getTitleText(): Promise<string> {
@@ -238,6 +259,42 @@ export class ImportSurfaceComponentHarness extends ComponentHarness {
 
   async getReportErrorText(): Promise<string | null> {
     const el = await this.getReportError();
+    return el ? (await el.text()).trim() : null;
+  }
+
+  async getReportFailedText(): Promise<string | null> {
+    const el = await this.getReportFailed();
+    return el ? (await el.text()).trim() : null;
+  }
+
+  async getReportPendingText(): Promise<string | null> {
+    const el = await this.getReportPending();
+    return el ? (await el.text()).trim() : null;
+  }
+
+  async clickReportDone(): Promise<void> {
+    const button = await this.getReportDone();
+    if (button) await button.click();
+  }
+
+  async clickMappingBack(): Promise<void> {
+    const button = await this.getMappingBack();
+    if (button) await button.click();
+  }
+
+  async clickPreviewBack(): Promise<void> {
+    const button = await this.getPreviewBack();
+    if (button) await button.click();
+  }
+
+  /** Full text of the counts summary row (valid / invalid / duplicate). */
+  async getCountsText(): Promise<string | null> {
+    const el = await this.getCounts();
+    return el ? (await el.text()).trim() : null;
+  }
+
+  async getFileLabelText(): Promise<string | null> {
+    const el = await this.getFileLabel();
     return el ? (await el.text()).trim() : null;
   }
 }
