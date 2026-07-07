@@ -10,6 +10,7 @@ import type {
 } from './types';
 import {requireUser} from '../../lib/auth_identity';
 import {insertAdminAuditLog} from '../../lib/admin_audit_log';
+import {getAuditRequestFields} from '../../lib/request_metadata';
 import {pruneNoopEventPatch, resolveEditableEventForCaller} from './editor';
 import {loadCanonicalListAvailability} from './listing';
 import {
@@ -454,37 +455,43 @@ export async function update(
     previousStatus: event.status,
   });
 
+  // One update can write up to three audit rows; resolve request metadata once
+  // and pass it explicitly (meta omitted) so each insert reuses it.
+  const auditFields = await getAuditRequestFields(ctx);
   if (organizerChanged) {
     await insertAdminAuditLog(
-      {db: ctx.db, meta: ctx.meta},
+      {db: ctx.db},
       {
         adminId: userId,
         action: 'event.organizer_reassign.from',
         eventId: id,
         organizerId: event.organizerId,
         source: 'admin-ui',
+        ...auditFields,
       },
     );
     await insertAdminAuditLog(
-      {db: ctx.db, meta: ctx.meta},
+      {db: ctx.db},
       {
         adminId: userId,
         action: 'event.organizer_reassign.to',
         eventId: id,
         organizerId: nextOrganizerId,
         source: 'admin-ui',
+        ...auditFields,
       },
     );
   }
 
   await insertAdminAuditLog(
-    {db: ctx.db, meta: ctx.meta},
+    {db: ctx.db},
     {
       adminId: userId,
       action: 'event.update',
       eventId: id,
       organizerId: nextOrganizerId,
       source: 'admin-ui',
+      ...auditFields,
     },
   );
   return null;
