@@ -3,6 +3,7 @@ import type {MutationCtx, QueryCtx} from '../../_generated/server';
 import {internal} from '../../_generated/api';
 import {throwNotFound} from '../../lib/errors';
 import {
+  validateEmail,
   validateStringLength,
   MAX_GUEST_NAME_LENGTH,
   MAX_GUEST_EMAIL_LENGTH,
@@ -29,6 +30,14 @@ export async function add(
   validateStringLength(args.email, 'Email', MAX_GUEST_EMAIL_LENGTH);
   validateStringLength(args.notes, 'Notes', MAX_GUEST_NOTES_LENGTH);
 
+  // The admin UI trims and requires a plausible address before submitting;
+  // enforce the same here so direct API calls cannot enqueue broadcast
+  // sends (immediate or catch-up) to non-address strings.
+  const trimmedEmail = args.email?.trim();
+  if (trimmedEmail) {
+    validateEmail(trimmedEmail, 'Email');
+  }
+
   const guestId = await ctx.db.insert('guests', {
     ...args,
   });
@@ -48,10 +57,10 @@ export async function add(
   // A late-added guest joins the broadcast audience after any prior sends;
   // catch them up. Unconditional w.r.t. broadcast existence — see
   // completePrimaryOrderState for the OCC rationale.
-  if (args.email) {
+  if (trimmedEmail) {
     await ctx.scheduler.runAfter(0, internal.events.broadcasts.deliverMissed, {
       eventId: args.eventId,
-      email: args.email,
+      email: trimmedEmail,
     });
   }
 

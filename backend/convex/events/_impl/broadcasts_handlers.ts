@@ -443,18 +443,11 @@ export async function deliverMissedBroadcasts(
 
   // Oldest-first so inbox order matches send order. Sends run sequentially:
   // a mid-loop throw rolls back the whole transaction, so there is no
-  // partial state to guard against.
+  // partial state to guard against. Concurrent duplicates are prevented by
+  // OCC: the `by_event_and_email` read above conflicts with any concurrent
+  // insert of a delivery row for this email, so one transaction retries
+  // and re-reads the committed rows.
   for (const broadcast of [...missed].reverse()) {
-    // Check-then-insert inside one transaction: concurrent duplicates
-    // serialize via OCC, and a re-scheduled catch-up sees committed rows.
-    const existing = await ctx.db
-      .query('eventBroadcastDeliveries')
-      .withIndex('by_broadcast_and_email', (q) =>
-        q.eq('broadcastId', broadcast._id).eq('email', email),
-      )
-      .first();
-    if (existing) continue;
-
     await ctx.db.insert('eventBroadcastDeliveries', {
       broadcastId: broadcast._id,
       eventId: args.eventId,
