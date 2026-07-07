@@ -1,6 +1,8 @@
 name: Prepare Release
 
 on:
+  push:
+    branches: [develop]
   workflow_dispatch:
 
 permissions:

@@ -491,7 +491,13 @@ jobs:
                 repo: context.repo.repo,
                 tag,
               });
-              core.info(`GitHub Release ${tag} already exists; leaving it unchanged.`);
+              core.warning(
+                `GitHub Release ${tag} already exists; leaving it unchanged. ` +
+                  `This prod deploy did not publish a new release — the manifest version ` +
+                  `(${version}) was not bumped since the last release. If you expected a new ` +
+                  `release, merge the release-please "release" PR into develop before promoting ` +
+                  `develop to main.`,
+              );
               return;
             } catch (error) {
               if (error.status !== 404) {
