@@ -1,6 +1,9 @@
 <app-content-layout>
   <div class="flex grow flex-col">
-    @if (approvalsLoading() || isLoading()) {
+    <!-- !auth.authSettled() covers the optimistic activation window: the route
+         was admitted on a cached credential, so keep the skeleton up until the
+         profile-keyed resources start instead of flashing an empty dashboard. -->
+    @if (!auth.authSettled() || approvalsLoading() || isLoading()) {
       <!-- Loading skeleton -->
       <div class="fade-in space-y-6 py-6">
         <z-skeleton class="h-3 w-40" />

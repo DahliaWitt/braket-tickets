@@ -173,4 +173,10 @@ export class DashboardComponentHarness extends ComponentHarness {
     )();
     return el ? (await el.text()).trim() : null;
   }
+
+  /** Check whether the page-level loading skeleton is rendered. */
+  async hasLoadingSkeleton(): Promise<boolean> {
+    const el = await this.locatorForOptional('z-skeleton')();
+    return el !== null;
+  }
 }

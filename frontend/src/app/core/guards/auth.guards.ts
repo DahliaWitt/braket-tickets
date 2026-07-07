@@ -6,11 +6,18 @@ import {
 } from '@angular/router';
 import {inject} from '@angular/core';
 import {toObservable} from '@angular/core/rxjs-interop';
-import {combineLatest, of, type Observable} from 'rxjs';
+import {of, type Observable} from 'rxjs';
 import {catchError, filter, map, take, timeout} from 'rxjs/operators';
 import {AuthService} from '@/core/services/auth.service';
+import {
+  requiresSocialSignupCompletion,
+  type SettledUser,
+} from '@/core/services/auth.service.helpers';
 import type {BraToastService} from '@ui/components/composites/toast/toast.service';
 import {logger} from '@/utils/logger';
+
+// Re-exported for the admin/scanner route guards that import these from here.
+export {requiresSocialSignupCompletion, type SettledUser};
 
 /**
  * Hard upper bound for the auth-settled race. If `authInitialized` never
@@ -21,19 +28,6 @@ import {logger} from '@/utils/logger';
  * cold-connect budget for Convex + Better Auth + user profile sync.
  */
 export const AUTH_SETTLE_TIMEOUT_MS = 15_000;
-
-/**
- * Minimal shape every guard needs from the authenticated user. Kept loose so
- * individual callers can read other fields without a new cast.
- */
-type SettledUser =
-  | {socialSignupCompletionRequired?: boolean; _id?: string}
-  | null
-  | undefined;
-
-export function requiresSocialSignupCompletion(user: SettledUser): boolean {
-  return user?.socialSignupCompletionRequired === true;
-}
 
 export function createSocialSignupCompletionUrlTree(
   router: Router,
@@ -64,20 +58,11 @@ export function createAccessDeniedRedirect(
 export function waitForAuthSettled$(
   auth: AuthService,
 ): Observable<SettledUser> {
-  return combineLatest([
-    toObservable(auth.authInitialized),
-    toObservable(auth.user),
-    toObservable(auth.authSyncFailed),
-  ]).pipe(
-    filter(([initialized, user, syncFailed]) => {
-      if (!initialized) return false;
-      if (!auth.isAuthenticated()) return true;
-      if (user) return true;
-      return syncFailed;
-    }),
+  return toObservable(auth.authSettled).pipe(
+    filter(Boolean),
     take(1),
     timeout({first: AUTH_SETTLE_TIMEOUT_MS}),
-    map(([, user]) => user as SettledUser),
+    map(() => auth.user() as SettledUser),
   );
 }
 
@@ -104,13 +89,22 @@ export const authGuard: CanActivateFn = (route, state: RouterStateSnapshot) => {
     });
   const redirectToPublicHome = () => router.createUrlTree(['/']);
 
-  // Fast path: in crossDomain mode an empty credential provably means logged
-  // out, so redirect to login immediately instead of awaiting the async
-  // settle. Anything else (cached session present, or cookie/E2E mode where
-  // state is unknowable synchronously) defers to the authoritative settle.
-  const peek = auth.peekCachedSession();
-  if (peek.known && !peek.hasCredential) {
-    return redirectToLogin();
+  // Synchronous fast paths, only while auth has not settled — once live state
+  // exists it is authoritative and the async path below emits immediately.
+  // In crossDomain mode the localStorage credential IS the credential:
+  //   - empty/expired → provably logged out → redirect to login now
+  //   - present       → optimistically allow; reconciliation re-runs these
+  //                      guards after settle if the guess was wrong
+  // Cookie/E2E mode (peek.known === false) always defers to the settle.
+  if (!auth.authSettled()) {
+    const peek = auth.peekCachedSession();
+    if (peek.known && !peek.hasCredential) {
+      return redirectToLogin();
+    }
+    if (peek.known && peek.hasCredential) {
+      auth.scheduleOptimisticReconciliation();
+      return true;
+    }
   }
 
   return waitForAuthSettled$(auth).pipe(
@@ -146,18 +140,23 @@ export const authGuard: CanActivateFn = (route, state: RouterStateSnapshot) => {
 export const authenticatedMatch: CanMatchFn = () => {
   const auth = inject(AuthService);
 
-  // Fast path: an empty crossDomain credential provably means logged out, so
-  // resolve synchronously and let the landing route match without awaiting the
-  // async getSession() round-trip. This is the buyer default and the main win —
-  // logged-out visitors never see the boot loading screen wait on auth.
-  //
-  // The authenticated case is intentionally NOT optimized here: a cached
-  // session still defers to the async settle so a stale snapshot cannot
-  // mis-route a genuinely logged-out user (empty credential is trustworthy;
-  // a present one is not, until the server confirms it).
-  const peek = auth.peekCachedSession();
-  if (peek.known && !peek.hasCredential) {
-    return false;
+  // Synchronous fast paths, only while auth has not settled — once live state
+  // exists it is authoritative and the async path below emits immediately.
+  //   - empty/expired credential → provably logged out → landing matches with
+  //     zero network wait (the buyer default, and the main win)
+  //   - credential present → optimistically match the dashboard; if the
+  //     session turns out stale, reconciliation re-runs these guards and the
+  //     user is redirected with a toast
+  // Cookie/E2E mode (peek.known === false) always defers to the settle.
+  if (!auth.authSettled()) {
+    const peek = auth.peekCachedSession();
+    if (peek.known && !peek.hasCredential) {
+      return false;
+    }
+    if (peek.known && peek.hasCredential) {
+      auth.scheduleOptimisticReconciliation();
+      return true;
+    }
   }
 
   return waitForAuthSettled$(auth).pipe(

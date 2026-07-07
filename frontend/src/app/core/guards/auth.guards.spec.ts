@@ -1,4 +1,4 @@
-import {describe, expect, it, beforeEach} from 'vitest';
+import {describe, expect, it, beforeEach, vi} from 'vitest';
 import {signal} from '@angular/core';
 import {TestBed} from '@angular/core/testing';
 import {
@@ -16,19 +16,17 @@ import {authGuard, authenticatedMatch} from './auth.guards';
 import {AuthService} from '@/core/services/auth.service';
 import type {CachedSessionPeek} from '../../../lib/auth-storage';
 
-interface AuthStub {
-  peek: CachedSessionPeek;
-}
-
-function createAuthStub(peek: CachedSessionPeek) {
-  return {
+function createAuthStub(peek: CachedSessionPeek, settled = false) {
+  const scheduleOptimisticReconciliation = vi.fn();
+  const stub = {
     peekCachedSession: () => peek,
-    // Signals/accessors used only by the async settle fall-through path.
-    authInitialized: signal(false),
+    scheduleOptimisticReconciliation,
+    // Settle state consumed by the fast-path gate and by waitForAuthSettled$.
+    authSettled: signal(settled),
     user: signal(undefined),
-    authSyncFailed: signal(false),
     isAuthenticated: () => false,
-  } as unknown as AuthService & AuthStub;
+  } as unknown as AuthService;
+  return {stub, scheduleOptimisticReconciliation};
 }
 
 const LOGGED_OUT: CachedSessionPeek = {
@@ -47,13 +45,15 @@ const UNKNOWN: CachedSessionPeek = {
   session: null,
 };
 
-function configure(peek: CachedSessionPeek) {
+function configure(peek: CachedSessionPeek, settled = false) {
+  const {stub, scheduleOptimisticReconciliation} = createAuthStub(
+    peek,
+    settled,
+  );
   TestBed.configureTestingModule({
-    providers: [
-      provideRouter([]),
-      {provide: AuthService, useValue: createAuthStub(peek)},
-    ],
+    providers: [provideRouter([]), {provide: AuthService, useValue: stub}],
   });
+  return {scheduleOptimisticReconciliation};
 }
 
 // CanMatchFn takes (route, segments, currentSnapshot); the guard reads none of
@@ -80,20 +80,31 @@ describe('authenticatedMatch', () => {
     expect(result).toBe(false);
   });
 
-  it('defers to the async settle when a cached session is present', () => {
-    configure(HAS_SESSION);
+  it('optimistically matches and schedules reconciliation when a credential is present', () => {
+    const {scheduleOptimisticReconciliation} = configure(HAS_SESSION);
     const result = TestBed.runInInjectionContext(() =>
       authenticatedMatch(...matchArgs),
     );
-    expect(isObservable(result)).toBe(true);
+    expect(result).toBe(true);
+    expect(scheduleOptimisticReconciliation).toHaveBeenCalledTimes(1);
   });
 
   it('defers to the async settle when state is not synchronously known', () => {
-    configure(UNKNOWN);
+    const {scheduleOptimisticReconciliation} = configure(UNKNOWN);
     const result = TestBed.runInInjectionContext(() =>
       authenticatedMatch(...matchArgs),
     );
     expect(isObservable(result)).toBe(true);
+    expect(scheduleOptimisticReconciliation).not.toHaveBeenCalled();
+  });
+
+  it('ignores the peek once auth has settled — live state is authoritative', () => {
+    const {scheduleOptimisticReconciliation} = configure(HAS_SESSION, true);
+    const result = TestBed.runInInjectionContext(() =>
+      authenticatedMatch(...matchArgs),
+    );
+    expect(isObservable(result)).toBe(true);
+    expect(scheduleOptimisticReconciliation).not.toHaveBeenCalled();
   });
 });
 
@@ -112,19 +123,30 @@ describe('authGuard', () => {
     expect(url).toContain('returnUrl');
   });
 
-  it('defers to the async settle when a cached session is present', () => {
-    configure(HAS_SESSION);
+  it('optimistically allows and schedules reconciliation when a credential is present', () => {
+    const {scheduleOptimisticReconciliation} = configure(HAS_SESSION);
     const result = TestBed.runInInjectionContext(() =>
       authGuard(...activateArgs),
     );
-    expect(isObservable(result)).toBe(true);
+    expect(result).toBe(true);
+    expect(scheduleOptimisticReconciliation).toHaveBeenCalledTimes(1);
   });
 
   it('defers to the async settle when state is not synchronously known', () => {
-    configure(UNKNOWN);
+    const {scheduleOptimisticReconciliation} = configure(UNKNOWN);
     const result = TestBed.runInInjectionContext(() =>
       authGuard(...activateArgs),
     );
     expect(isObservable(result)).toBe(true);
+    expect(scheduleOptimisticReconciliation).not.toHaveBeenCalled();
+  });
+
+  it('ignores the peek once auth has settled — live state is authoritative', () => {
+    const {scheduleOptimisticReconciliation} = configure(LOGGED_OUT, true);
+    const result = TestBed.runInInjectionContext(() =>
+      authGuard(...activateArgs),
+    );
+    expect(isObservable(result)).toBe(true);
+    expect(scheduleOptimisticReconciliation).not.toHaveBeenCalled();
   });
 });

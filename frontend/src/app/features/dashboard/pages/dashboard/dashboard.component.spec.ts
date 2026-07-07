@@ -158,9 +158,11 @@ const dashboardPageDataMock = {
 const userSignal = signal({_id: '123', name: 'testuser'});
 const userRoleSignal = signal('user');
 
+const authSettledSignal = signal(true);
 const authServiceMock = {
   user: userSignal,
   userRole: userRoleSignal,
+  authSettled: authSettledSignal,
   isCommunityAdmin: signal(false),
   isScannerStaff: signal(false),
   isScannerStaffLoading: signal(false),
@@ -215,6 +217,7 @@ describe('DashboardComponent', () => {
     communitiesSignal.set([]);
     eventAvailabilitySignal.set(options?.eventAvailability ?? {});
     isLoadingSignal.set(false);
+    authSettledSignal.set(true);
     hasLoadErrorSignal.set(options?.hasLoadError ?? false);
     approvalsSignal.set(approvalsData);
     approvalsLoadingSignal.set(false);
@@ -1002,6 +1005,17 @@ describe('DashboardComponent', () => {
 
       const el = fixture.nativeElement as HTMLElement;
       expect(el.querySelector('z-skeleton')).toBeTruthy();
+    });
+
+    it('should show skeleton during the optimistic activation window (auth not settled)', async () => {
+      // Route admitted on a cached credential: resources idle (isLoading
+      // false, empty data), auth not yet settled. Must render the skeleton,
+      // never an empty dashboard.
+      setup();
+      authSettledSignal.set(false);
+      await createComponent();
+
+      expect(await harness.hasLoadingSkeleton()).toBe(true);
     });
   });
 

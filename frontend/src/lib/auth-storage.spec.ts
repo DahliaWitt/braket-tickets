@@ -56,6 +56,68 @@ describe('interpretAuthStorage', () => {
     });
   });
 
+  describe('expiry filtering (mirrors plugin getCookie)', () => {
+    const NOW = Date.parse('2026-07-07T00:00:00Z');
+    const PAST = '2026-07-01T00:00:00Z';
+    const FUTURE = '2026-07-14T00:00:00Z';
+    const entry = (value: string, expires: string | null) =>
+      ({value, expires}) as const;
+
+    it('treats an all-expired credential as provably logged out (lapsed user)', () => {
+      const cookie = JSON.stringify({
+        'braket-tickets.session_token': entry('abc', PAST),
+      });
+      expect(interpretAuthStorage(cookie, null, NOW)).toEqual({
+        known: true,
+        hasCredential: false,
+        session: null,
+      });
+    });
+
+    it('counts an unexpired entry as a credential', () => {
+      const cookie = JSON.stringify({
+        'braket-tickets.session_token': entry('abc', FUTURE),
+      });
+      expect(interpretAuthStorage(cookie, null, NOW).hasCredential).toBe(true);
+    });
+
+    it('counts a null-expiry entry as a credential', () => {
+      const cookie = JSON.stringify({
+        'braket-tickets.session_token': entry('abc', null),
+      });
+      expect(interpretAuthStorage(cookie, null, NOW).hasCredential).toBe(true);
+    });
+
+    it('one valid entry among expired ones is enough', () => {
+      const cookie = JSON.stringify({
+        stale: entry('old', PAST),
+        'braket-tickets.session_token': entry('abc', FUTURE),
+      });
+      expect(interpretAuthStorage(cookie, null, NOW).hasCredential).toBe(true);
+    });
+
+    it('treats an empty-string value as no credential', () => {
+      const cookie = JSON.stringify({
+        'braket-tickets.session_token': entry('', FUTURE),
+      });
+      expect(interpretAuthStorage(cookie, null, NOW).hasCredential).toBe(false);
+    });
+
+    it('treats non-record entries as no credential', () => {
+      const cookie = JSON.stringify({
+        'braket-tickets.session_token': 'just-a-string',
+      });
+      expect(interpretAuthStorage(cookie, null, NOW).hasCredential).toBe(false);
+    });
+
+    it('an unparseable expires string does not disqualify the entry', () => {
+      const cookie = JSON.stringify({
+        'braket-tickets.session_token': entry('abc', 'not-a-date'),
+      });
+      expect(interpretAuthStorage(cookie, null, NOW).hasCredential).toBe(true);
+    });
+  });
+
   it('returns not-known on a corrupted credential rather than guessing', () => {
     expect(interpretAuthStorage('{not json', null)).toEqual({
       known: false,

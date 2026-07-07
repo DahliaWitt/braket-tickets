@@ -1,4 +1,7 @@
 import {DestroyRef, Injectable, computed, inject, signal} from '@angular/core';
+import {toObservable} from '@angular/core/rxjs-interop';
+import {firstValueFrom} from 'rxjs';
+import {filter} from 'rxjs/operators';
 import {Router} from '@angular/router';
 import {
   injectConvex,
@@ -38,7 +41,9 @@ import {
   type ConvexMutationMethod,
   type ConvexQueryMethod,
   type SessionChannelMessage,
+  requiresSocialSignupCompletion,
 } from './auth.service.helpers';
+import {BraToastService} from '@ui/components/composites/toast/toast.service';
 import {AUTH_CLIENT} from './auth-client.token';
 import {
   authCookieStorageKey,
@@ -169,6 +174,7 @@ export class AuthService implements ConvexAuthProvider {
   private readonly userProfileService = inject(UserProfileService);
   private readonly authClient = inject(AUTH_CLIENT);
   private readonly browser = inject(BrowserPlatformService);
+  private readonly toast = inject(BraToastService);
 
   private sessionSync: AuthSessionSync | null = null;
 
@@ -189,6 +195,21 @@ export class AuthService implements ConvexAuthProvider {
   readonly reauthVersion = signal(0);
   readonly isSyncingUser = signal(false);
   readonly authSyncFailed = signal(false);
+
+  /**
+   * Whether auth has reached a decidable state: initialized, and either
+   * unauthenticated or user-synced (or sync explicitly gave up). Single source
+   * of truth for the settle predicate — `waitForAuthSettled$` (route guards)
+   * and optimistic reconciliation both derive from it, and guarded pages use
+   * it to keep skeletons up during the optimistic window instead of flashing
+   * empty states.
+   */
+  readonly authSettled = computed(() => {
+    if (!this.authInitialized()) return false;
+    if (!this.isAuthenticated()) return true;
+    if (this.user()) return true;
+    return this.authSyncFailed();
+  });
   private missingUserRepairSessionKey: string | null = null;
   private missingUserRepairQueuedSessionKey: string | null = null;
   private missingUserRepairInFlightSessionKey: string | null = null;
@@ -311,6 +332,62 @@ export class AuthService implements ConvexAuthProvider {
       this.browser.getLocalStorageItem(authCookieStorageKey()),
       this.browser.getLocalStorageItem(authSessionDataStorageKey()),
     );
+  }
+
+  /**
+   * `authSettled` as an observable, created eagerly in the field initializer
+   * so `scheduleOptimisticReconciliation` never depends on the caller's
+   * injection context.
+   */
+  private readonly authSettled$ = toObservable(this.authSettled);
+  private optimisticReconciliationScheduled = false;
+
+  /**
+   * Called by a route guard that admitted a navigation optimistically (cached
+   * credential present, auth not yet settled). When the authoritative session
+   * settles, checks whether the optimistic guess was right; if not, re-runs
+   * the current URL's guards via a same-URL navigation (`onSameUrlNavigation:
+   * 'reload'` is configured app-wide) so the normal guard logic issues the
+   * correct redirect — login, landing, or social-signup completion — without
+   * duplicating any of it here.
+   *
+   * Idempotent per settle window: canMatch and canActivate both firing
+   * optimistically in one navigation schedule a single reconciliation. Settle
+   * always terminates (initSession sets `authInitialized` even on failure), so
+   * this cannot leak a pending promise indefinitely.
+   */
+  scheduleOptimisticReconciliation(): void {
+    if (this.optimisticReconciliationScheduled) {
+      return;
+    }
+    this.optimisticReconciliationScheduled = true;
+
+    void firstValueFrom(this.authSettled$.pipe(filter(Boolean)))
+      .then(() => {
+        const user = this.user();
+        const guessWasCorrect =
+          this.isAuthenticated() &&
+          !!user &&
+          !requiresSocialSignupCompletion(user);
+        if (guessWasCorrect) {
+          return;
+        }
+
+        if (!this.isAuthenticated()) {
+          logger.info(
+            '[AuthService] Optimistic session was stale; re-running route guards',
+          );
+          this.toast.error('session expired. please log in again.');
+        }
+
+        return this.router.navigateByUrl(this.router.url);
+      })
+      .catch((err: unknown) => {
+        logger.error('[AuthService] Optimistic reconciliation failed', err);
+      })
+      .finally(() => {
+        this.optimisticReconciliationScheduled = false;
+      });
   }
 
   private installConvexErrorHandling(): void {

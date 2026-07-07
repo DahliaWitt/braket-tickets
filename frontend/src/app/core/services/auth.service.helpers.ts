@@ -8,6 +8,21 @@ import {type MutationOptions} from 'convex/browser';
 
 export type SessionChannelMessage = {type: 'LOGIN'} | {type: 'LOGOUT'};
 
+/**
+ * Minimal shape auth guards and reconciliation need from the authenticated
+ * user. Kept loose so individual callers can read other fields without a new
+ * cast. Lives here (not auth.guards.ts) so AuthService can share the predicate
+ * without a service→guards→service import cycle.
+ */
+export type SettledUser =
+  | {socialSignupCompletionRequired?: boolean; _id?: string}
+  | null
+  | undefined;
+
+export function requiresSocialSignupCompletion(user: SettledUser): boolean {
+  return user?.socialSignupCompletionRequired === true;
+}
+
 export type ConvexClientWithErrorHandling = ReturnType<typeof injectConvex> & {
   __braketAuthWrapped?: boolean;
 };

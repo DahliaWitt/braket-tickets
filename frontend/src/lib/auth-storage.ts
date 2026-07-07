@@ -61,19 +61,25 @@ const UNKNOWN: CachedSessionPeek = {
 /**
  * Interprets the raw persisted crossDomain values into a synchronous peek.
  *
- * The logged-out fast path is deliberately conservative: it fires only when the
- * credential is provably empty (absent, or the plugin's `{}` logout sentinel).
- * Any present-but-nontrivial credential — including expired tokens — yields
- * `hasCredential: true`, deferring to the async settle rather than guessing.
- * Corrupted credential JSON yields `known: false` so callers never fast-path on
- * an unreadable state.
+ * `hasCredential` is true only when at least one stored cookie entry could
+ * actually authenticate: a record with a non-empty string `value` that is not
+ * expired. This mirrors the plugin's own `getCookie()`, which drops expired
+ * entries before sending the `Better-Auth-Cookie` header — so an all-expired
+ * credential (the lapsed-user case) provably behaves as logged out: the plugin
+ * itself would send nothing usable. Both checks use the same client clock, so
+ * clock skew cannot make the peek disagree with what the plugin would send.
+ *
+ * Corrupted credential JSON (not parseable as an object) yields `known: false`
+ * so callers never fast-path on an unreadable state.
  *
  * @param cookieRaw - Raw `${prefix}_cookie` value, or null when absent.
  * @param sessionRaw - Raw `${prefix}_session_data` value, or null when absent.
+ * @param nowMs - Clock for expiry checks; defaults to `Date.now()`.
  */
 export function interpretAuthStorage(
   cookieRaw: string | null,
   sessionRaw: string | null,
+  nowMs: number = Date.now(),
 ): CachedSessionPeek {
   let hasCredential: boolean;
 
@@ -89,7 +95,9 @@ export function interpretAuthStorage(
     if (!isRecord(cookieParsed)) {
       return UNKNOWN;
     }
-    hasCredential = Object.keys(cookieParsed).length > 0;
+    hasCredential = Object.values(cookieParsed).some((entry) =>
+      isUsableCredentialEntry(entry, nowMs),
+    );
   }
 
   return {
@@ -97,6 +105,34 @@ export function interpretAuthStorage(
     hasCredential,
     session: parseCachedSession(sessionRaw),
   };
+}
+
+/**
+ * Whether a stored cookie entry could authenticate a request. Mirrors the
+ * plugin's `getCookie()` filter (expired entries are dropped) plus a non-empty
+ * string `value` requirement — an entry the plugin would serialize as
+ * `key=`/`key=undefined` cannot validate server-side, so treating it as
+ * no-credential is still provable, never optimistic.
+ */
+function isUsableCredentialEntry(entry: unknown, nowMs: number): boolean {
+  if (!isRecord(entry)) {
+    return false;
+  }
+
+  const value = entry['value'];
+  if (typeof value !== 'string' || value.length === 0) {
+    return false;
+  }
+
+  const expires = entry['expires'];
+  if (typeof expires === 'string') {
+    const expiresMs = Date.parse(expires);
+    if (!Number.isNaN(expiresMs) && expiresMs < nowMs) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function parseCachedSession(

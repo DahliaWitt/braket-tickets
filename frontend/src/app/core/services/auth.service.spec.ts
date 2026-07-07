@@ -15,6 +15,7 @@ import {
   type MockConvexClient,
 } from '../../../testing/mock-types';
 import {AUTH_CLIENT, type AuthClient} from './auth-client.token';
+import {BraToastService} from '@ui/components/composites/toast/toast.service';
 
 const authClient = {
   signIn: {
@@ -67,7 +68,8 @@ vi.mock('convex-angular', async () => {
 
 describe('AuthService', () => {
   let service: AuthService;
-  let routerSpy: {navigate: Mock; navigateByUrl: Mock};
+  let routerSpy: {navigate: Mock; navigateByUrl: Mock; url: string};
+  let toastSpy: {error: Mock; success: Mock};
   let convexClientMock: MockConvexClient;
   let mutationMock: ReturnType<typeof vi.fn>;
   const userSignal = signal<UserModel | null>(null);
@@ -173,7 +175,9 @@ describe('AuthService', () => {
     routerSpy = {
       navigate: vi.fn().mockResolvedValue(true),
       navigateByUrl: vi.fn().mockResolvedValue(true),
+      url: '/',
     };
+    toastSpy = {error: vi.fn(), success: vi.fn()};
 
     convexClientMock = createMockConvexClient();
     mutationMock = vi.fn().mockResolvedValue({
@@ -188,6 +192,7 @@ describe('AuthService', () => {
         {provide: Router, useValue: routerSpy},
         {provide: CONVEX, useValue: convexClientMock},
         {provide: AUTH_CLIENT, useValue: authClient as unknown as AuthClient},
+        {provide: BraToastService, useValue: toastSpy},
       ],
     });
 
@@ -1378,6 +1383,119 @@ describe('AuthService', () => {
         'number',
       );
       expect(routerSpy.navigate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('authSettled', () => {
+    it('is false before initialization completes', () => {
+      setAuthInitialized(false);
+      expect(service.authSettled()).toBe(false);
+    });
+
+    it('is true when initialized and unauthenticated', () => {
+      setSession(null);
+      setAuthInitialized(true);
+      expect(service.authSettled()).toBe(true);
+    });
+
+    it('is false when authenticated but the profile has not synced', () => {
+      setSession({user: {email: 'buyer@example.com'}});
+      userSignal.set(null);
+      setAuthInitialized(true);
+      expect(service.authSettled()).toBe(false);
+    });
+
+    it('is true once the profile arrives', () => {
+      setSession({user: {email: 'buyer@example.com'}});
+      userSignal.set({_id: 'u1' as unknown, _creationTime: 1} as UserModel);
+      setAuthInitialized(true);
+      expect(service.authSettled()).toBe(true);
+    });
+
+    it('is true when sync explicitly gave up', () => {
+      setSession({user: {email: 'buyer@example.com'}});
+      userSignal.set(null);
+      service.authSyncFailed.set(true);
+      setAuthInitialized(true);
+      expect(service.authSettled()).toBe(true);
+    });
+  });
+
+  describe('scheduleOptimisticReconciliation', () => {
+    async function settleAndFlush(): Promise<void> {
+      // toObservable emissions ride on effect flushes; tick then drain the
+      // promise chain inside the reconciliation.
+      TestBed.tick();
+      await vi.waitFor(() => {
+        TestBed.tick();
+        expect(service.authSettled()).toBe(true);
+      });
+      // Drain the .then chain.
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    }
+
+    it('does nothing when the optimistic guess was correct', async () => {
+      service.scheduleOptimisticReconciliation();
+
+      setSession({user: {email: 'buyer@example.com'}});
+      userSignal.set({_id: 'u1' as unknown, _creationTime: 1} as UserModel);
+      setAuthInitialized(true);
+      await settleAndFlush();
+
+      expect(routerSpy.navigateByUrl).not.toHaveBeenCalled();
+      expect(toastSpy.error).not.toHaveBeenCalled();
+    });
+
+    it('re-runs guards and toasts when the session turned out stale', async () => {
+      routerSpy.url = '/tickets';
+      service.scheduleOptimisticReconciliation();
+
+      setSession(null);
+      setAuthInitialized(true);
+      await settleAndFlush();
+
+      await vi.waitFor(() => {
+        expect(routerSpy.navigateByUrl).toHaveBeenCalledWith('/tickets');
+      });
+      expect(toastSpy.error).toHaveBeenCalledWith(
+        'session expired. please log in again.',
+      );
+    });
+
+    it('re-runs guards without a toast when social signup completion is required', async () => {
+      service.scheduleOptimisticReconciliation();
+
+      setSession({user: {email: 'buyer@example.com'}});
+      userSignal.set({
+        _id: 'u1' as unknown,
+        _creationTime: 1,
+        socialSignupCompletionRequired: true,
+      } as unknown as UserModel);
+      setAuthInitialized(true);
+      await settleAndFlush();
+
+      await vi.waitFor(() => {
+        expect(routerSpy.navigateByUrl).toHaveBeenCalledTimes(1);
+      });
+      expect(toastSpy.error).not.toHaveBeenCalled();
+    });
+
+    it('is idempotent within one settle window', async () => {
+      routerSpy.url = '/tickets';
+      service.scheduleOptimisticReconciliation();
+      service.scheduleOptimisticReconciliation();
+      service.scheduleOptimisticReconciliation();
+
+      setSession(null);
+      setAuthInitialized(true);
+      await settleAndFlush();
+
+      await vi.waitFor(() => {
+        expect(routerSpy.navigateByUrl).toHaveBeenCalled();
+      });
+      expect(routerSpy.navigateByUrl).toHaveBeenCalledTimes(1);
     });
   });
 });
