@@ -1,6 +1,6 @@
 import '../../../../../test-setup';
 import {type ComponentFixture, TestBed} from '@angular/core/testing';
-import {provideZonelessChangeDetection} from '@angular/core';
+import {provideZonelessChangeDetection, signal} from '@angular/core';
 import {
   ActivatedRoute,
   convertToParamMap,
@@ -8,7 +8,8 @@ import {
   Router,
 } from '@angular/router';
 import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
-import {describe, it, expect, vi} from 'vitest';
+import {getFunctionName} from 'convex/server';
+import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest';
 import {of} from 'rxjs';
 import {CommunityAdminSettingsComponent} from './community-admin-settings.component';
 import {CONVEX} from 'convex-angular';
@@ -30,9 +31,15 @@ const FAKE_ORG_ID = 'org-abc' as Id<'organizers'>;
 function makeCommunityContextMock(options: {
   selectedId?: Id<'organizers'> | null;
 }) {
+  // Backed by a real signal so components' computeds that read
+  // `selectedCommunityId()` recompute when a test changes the selected
+  // community (mirrors production, where this is a `computed` signal).
+  const selectedCommunityId = signal<Id<'organizers'> | null>(
+    options.selectedId ?? FAKE_ORG_ID,
+  );
   return {
     isLoading: vi.fn(() => false),
-    selectedCommunityId: vi.fn(() => options.selectedId ?? FAKE_ORG_ID),
+    selectedCommunityId,
     selectedCommunityName: vi.fn(() => 'Test Community'),
     hasMultipleCommunities: vi.fn(() => false),
     communities: vi.fn(() => [FAKE_ORG_ID]),
@@ -47,6 +54,8 @@ async function setup(options?: {
   organizerData?: Record<string, unknown>;
   adminData?: unknown[];
   scannerData?: unknown[];
+  searchResultsData?: unknown[];
+  deferSearch?: boolean;
   notifPrefData?: {mode: 'all' | 'digest'; digestHour: number} | null;
   queryParams?: Record<string, string | null>;
 }) {
@@ -69,32 +78,61 @@ async function setup(options?: {
     options?.notifPrefData !== undefined ? options.notifPrefData : null;
   let organizerQueryOnData: ((data: unknown) => void) | null = null;
 
+  const searchResultsData = options?.searchResultsData ?? [];
+  // When set, the search query does NOT auto-resolve. Instead every
+  // subscription is recorded so a test can resolve a specific in-flight
+  // request by hand and assert the stale-data window.
+  const deferSearch = options?.deferSearch ?? false;
+  const searchSubscriptions: {
+    args: {organizerId: string; searchTerm: string};
+    onData: (data: unknown) => void;
+  }[] = [];
   const convexMock = createMockConvexClient();
   const query = vi.fn().mockResolvedValue(null);
   const mutation = vi.fn().mockResolvedValue(null);
   const onUpdate = vi
     .fn()
     .mockImplementation(
-      (_query: unknown, _args: unknown, onData: (data: unknown) => void) => {
-        const argsObj = _args as Record<string, unknown> | undefined;
-        if (argsObj && 'id' in argsObj) {
+      (queryRef: unknown, _args: unknown, onData: (data: unknown) => void) => {
+        // Discriminate by the query's stable function name rather than args
+        // shape + call order — args-shape routing silently misroutes any new
+        // query that also carries `organizerId` (e.g. searchGrantCandidates).
+        // Note: `api.x.y` (Convex's `anyApi` proxy) returns a NEW proxy object
+        // on every property access, so `===` between two separate accesses is
+        // always false — `getFunctionName` is the stable identity to compare.
+        const name = getFunctionName(
+          queryRef as Parameters<typeof getFunctionName>[0],
+        );
+        if (name === getFunctionName(api.communities.profile.getAdmin)) {
           organizerQueryOnData = onData;
           onData(orgData);
-        } else if (argsObj && 'organizerId' in argsObj) {
-          // Distinguish admin vs scanner vs notif-pref queries by call order:
-          //   call 1 → adminData, call 2 → scannerData, call 3+ → notifPrefData
-          const orgIdCalls = convexMock.client.onUpdate.mock.calls.filter(
-            (c: unknown[]) => {
-              const a = c[1] as Record<string, unknown> | undefined;
-              return a && 'organizerId' in a;
-            },
-          );
-          if (orgIdCalls.length <= 1) {
-            onData(adminData);
-          } else if (orgIdCalls.length === 2) {
-            onData(scannerData);
+        } else if (
+          name === getFunctionName(api.communities.admins.listByCommunity)
+        ) {
+          onData(adminData);
+        } else if (
+          name === getFunctionName(api.communities.scanners.listByCommunity)
+        ) {
+          onData(scannerData);
+        } else if (
+          name ===
+          getFunctionName(
+            api.communities.management.notification_preferences
+              .getMyNotificationPreference,
+          )
+        ) {
+          onData(notifPrefData);
+        } else if (
+          name ===
+          getFunctionName(api.communities.scanners.searchGrantCandidates)
+        ) {
+          if (deferSearch) {
+            searchSubscriptions.push({
+              args: _args as {organizerId: string; searchTerm: string},
+              onData,
+            });
           } else {
-            onData(notifPrefData);
+            onData(searchResultsData);
           }
         } else {
           onData([]);
@@ -155,6 +193,30 @@ async function setup(options?: {
     CommunityAdminSettingsHarness,
   );
 
+  /**
+   * Resolves the most recent in-flight `searchGrantCandidates` subscription
+   * whose args match `searchTerm` (and optionally `organizerId`), pushing
+   * `data` through its `onData`. Use with `deferSearch: true` to control the
+   * in-flight window and assert stale-data handling.
+   */
+  const resolveSearch = (
+    searchTerm: string,
+    data: unknown[],
+    organizerId?: string,
+  ): boolean => {
+    for (let i = searchSubscriptions.length - 1; i >= 0; i--) {
+      const sub = searchSubscriptions[i];
+      if (
+        sub.args.searchTerm === searchTerm &&
+        (organizerId === undefined || sub.args.organizerId === organizerId)
+      ) {
+        sub.onData(data);
+        return true;
+      }
+    }
+    return false;
+  };
+
   return {
     fixture,
     harness,
@@ -164,6 +226,8 @@ async function setup(options?: {
     routerNavigateSpy: routerMock.navigate,
     routeMock,
     refreshOrganizerQuery,
+    resolveSearch,
+    searchSubscriptions,
   };
 }
 
@@ -1109,10 +1173,10 @@ describe('CommunityAdminSettingsComponent', () => {
       );
     });
 
-    it('scanner email input has an aria-label', async () => {
+    it('scanner search input has an aria-label', async () => {
       const {harness} = await setup();
-      expect(await harness.getInputAriaLabel('scanner-email-input')).toBe(
-        'Scanner email address',
+      expect(await harness.getInputAriaLabel('scanner-search-input')).toBe(
+        'Search door staff members',
       );
     });
 
@@ -1789,70 +1853,424 @@ describe('CommunityAdminSettingsComponent', () => {
       );
     });
 
-    it('grantScanner calls communities.scanners.grant when a platform user exists', async () => {
-      const {fixture, harness, convexMock} = await setup();
+    // -----------------------------------------------------------------------
+    // Door staff member search (BRA — "search for members under door staff")
+    // -----------------------------------------------------------------------
 
-      convexMock.client.query.mockResolvedValue({
-        _id: 'scanner-existing' as Id<'users'>,
-        email: 'scanner@example.com',
+    describe('door staff member search', () => {
+      beforeEach(() => {
+        vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout']});
       });
 
-      await harness.setScannerEmail('scanner@example.com');
-      fixture.detectChanges();
-      await fixture.whenStable();
-      await harness.clickGrantScanner();
-      await fixture.whenStable();
+      afterEach(() => {
+        vi.useRealTimers();
+      });
 
-      expect(convexMock.mutation).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({
-          userId: 'scanner-existing',
-          organizerId: FAKE_ORG_ID,
-        }),
-      );
-    });
+      async function searchAndWait(
+        fixture: ComponentFixture<CommunityAdminSettingsComponent>,
+        harness: CommunityAdminSettingsHarness,
+        term: string,
+      ) {
+        await harness.setScannerSearch(term);
+        await vi.advanceTimersByTimeAsync(300);
+        fixture.detectChanges();
+        await fixture.whenStable();
+      }
 
-    it('grantScanner does not invite when no platform user exists', async () => {
-      const {fixture, harness, convexMock} = await setup();
+      it('renders no search panel when the term is empty', async () => {
+        const {harness} = await setup();
+        expect(await harness.hasScannerSearchResultsPanel()).toBe(false);
+      });
 
-      convexMock.client.query.mockResolvedValue(null);
+      it('renders results from the search query for a non-email term', async () => {
+        const {fixture, harness} = await setup({
+          searchResultsData: [
+            {
+              _id: 'user-1' as Id<'users'>,
+              userId: 'user-1' as Id<'users'>,
+              organizerId: FAKE_ORG_ID,
+              displayName: 'Ada Lovelace',
+              email: 'ada@example.com',
+            },
+          ],
+        });
 
-      await harness.setScannerEmail('missing@example.com');
-      fixture.detectChanges();
-      await fixture.whenStable();
-      await harness.clickGrantScanner();
-      await fixture.whenStable();
+        await searchAndWait(fixture, harness, 'ada');
 
-      expect(convexMock.mutation).not.toHaveBeenCalled();
-      expect(fixture.componentInstance.newScannerEmail()).toBe(
-        'missing@example.com',
-      );
-    });
+        expect(await harness.hasScannerSearchResultsPanel()).toBe(true);
+        expect(await harness.getScannerSearchResultCount()).toBe(1);
+        const text = await harness.getScannerSearchResultText(0);
+        expect(text).toContain('Ada Lovelace');
+        expect(text).toContain('ada@example.com');
+      });
 
-    it('grantScanner does not grant explicit scanner access to an admin', async () => {
-      const {fixture, harness, convexMock} = await setup({
-        adminData: [
+      it('add-by-row calls communities.scanners.grant with the row userId', async () => {
+        const {fixture, harness, convexMock} = await setup({
+          searchResultsData: [
+            {
+              _id: 'user-1' as Id<'users'>,
+              userId: 'user-1' as Id<'users'>,
+              organizerId: FAKE_ORG_ID,
+              displayName: 'Ada Lovelace',
+              email: 'ada@example.com',
+            },
+          ],
+        });
+
+        await searchAndWait(fixture, harness, 'ada');
+        await harness.clickScannerSearchResult(0);
+        await fixture.whenStable();
+
+        expect(convexMock.mutation).toHaveBeenCalledWith(
+          api.communities.scanners.grant,
           {
-            _id: 'admin-1' as Id<'users'>,
-            userId: 'admin-1' as Id<'users'>,
+            userId: 'user-1',
             organizerId: FAKE_ORG_ID,
-            displayName: 'Existing Admin',
-            email: 'admin@example.com',
           },
-        ],
+        );
       });
 
-      await harness.setScannerEmail('admin@example.com');
-      fixture.detectChanges();
-      await fixture.whenStable();
-      await harness.clickGrantScanner();
-      await fixture.whenStable();
+      it('clears the search term after a successful row grant', async () => {
+        const {fixture, harness} = await setup({
+          searchResultsData: [
+            {
+              _id: 'user-1' as Id<'users'>,
+              userId: 'user-1' as Id<'users'>,
+              organizerId: FAKE_ORG_ID,
+              displayName: 'Ada Lovelace',
+              email: 'ada@example.com',
+            },
+          ],
+        });
 
-      expect(convexMock.client.query).not.toHaveBeenCalled();
-      expect(convexMock.mutation).not.toHaveBeenCalled();
-      expect(fixture.componentInstance.newScannerEmail()).toBe(
-        'admin@example.com',
-      );
+        await searchAndWait(fixture, harness, 'ada');
+        await harness.clickScannerSearchResult(0);
+        await fixture.whenStable();
+
+        expect(fixture.componentInstance.scanner.search()).toBe('');
+      });
+
+      it('disables a result row and labels it "admin" when the user is already an admin', async () => {
+        const {fixture, harness} = await setup({
+          adminData: [
+            {
+              _id: 'admin-1' as Id<'organizer_user_directory'>,
+              userId: 'user-1' as Id<'users'>,
+              organizerId: FAKE_ORG_ID,
+              displayName: 'Ada Lovelace',
+              email: 'ada@example.com',
+            },
+          ],
+          searchResultsData: [
+            {
+              _id: 'user-1' as Id<'users'>,
+              userId: 'user-1' as Id<'users'>,
+              organizerId: FAKE_ORG_ID,
+              displayName: 'Ada Lovelace',
+              email: 'ada@example.com',
+            },
+          ],
+        });
+
+        await searchAndWait(fixture, harness, 'ada');
+
+        expect(await harness.isScannerResultDisabled(0)).toBe(true);
+        const text = await harness.getScannerSearchResultText(0);
+        expect(text).toContain('admin');
+      });
+
+      it('disables a result row and labels it "added" when the user is already door staff', async () => {
+        const {fixture, harness} = await setup({
+          scannerData: [
+            {
+              _id: 'scanner-1' as Id<'users'>,
+              userId: 'user-1' as Id<'users'>,
+              organizerId: FAKE_ORG_ID,
+              displayName: 'Ada Lovelace',
+              email: 'ada@example.com',
+            },
+          ],
+          searchResultsData: [
+            {
+              _id: 'user-1' as Id<'users'>,
+              userId: 'user-1' as Id<'users'>,
+              organizerId: FAKE_ORG_ID,
+              displayName: 'Ada Lovelace',
+              email: 'ada@example.com',
+            },
+          ],
+        });
+
+        await searchAndWait(fixture, harness, 'ada');
+
+        expect(await harness.isScannerResultDisabled(0)).toBe(true);
+        const text = await harness.getScannerSearchResultText(0);
+        expect(text).toContain('added');
+      });
+
+      it('clicking a disabled result row is not possible via the harness', async () => {
+        const {fixture, harness} = await setup({
+          scannerData: [
+            {
+              _id: 'scanner-1' as Id<'users'>,
+              userId: 'user-1' as Id<'users'>,
+              organizerId: FAKE_ORG_ID,
+              displayName: 'Ada Lovelace',
+              email: 'ada@example.com',
+            },
+          ],
+          searchResultsData: [
+            {
+              _id: 'user-1' as Id<'users'>,
+              userId: 'user-1' as Id<'users'>,
+              organizerId: FAKE_ORG_ID,
+              displayName: 'Ada Lovelace',
+              email: 'ada@example.com',
+            },
+          ],
+        });
+
+        await searchAndWait(fixture, harness, 'ada');
+
+        await expect(harness.clickScannerSearchResult(0)).rejects.toThrow();
+      });
+
+      it('shows an "add by exact email" fallback when the term contains @ and no members match', async () => {
+        const {fixture, harness} = await setup({searchResultsData: []});
+
+        await searchAndWait(fixture, harness, 'nobody@example.com');
+
+        expect(await harness.hasScannerEmailFallback()).toBe(true);
+        expect(await harness.hasScannerSearchEmptyState()).toBe(false);
+      });
+
+      it('email fallback calls findByExactEmailForAdmin then grant', async () => {
+        const {fixture, harness, convexMock} = await setup({
+          searchResultsData: [],
+        });
+
+        convexMock.client.query.mockResolvedValue({
+          _id: 'scanner-existing' as Id<'users'>,
+          email: 'scanner@example.com',
+        });
+
+        await searchAndWait(fixture, harness, 'scanner@example.com');
+        await harness.clickScannerEmailFallback();
+        await fixture.whenStable();
+
+        expect(convexMock.client.query).toHaveBeenCalledWith(
+          api.users.profile.findByExactEmailForAdmin,
+          expect.objectContaining({
+            email: 'scanner@example.com',
+            organizerId: FAKE_ORG_ID,
+          }),
+        );
+        expect(convexMock.mutation).toHaveBeenCalledWith(
+          api.communities.scanners.grant,
+          {
+            userId: 'scanner-existing',
+            organizerId: FAKE_ORG_ID,
+          },
+        );
+      });
+
+      it('email fallback surfaces the unknown-email error and keeps the search term', async () => {
+        const {fixture, harness, convexMock} = await setup({
+          searchResultsData: [],
+        });
+        const toastSpy = vi.spyOn(toast, 'error').mockImplementation(() => '');
+
+        convexMock.client.query.mockResolvedValue(null);
+
+        await searchAndWait(fixture, harness, 'missing@example.com');
+        await harness.clickScannerEmailFallback();
+        await fixture.whenStable();
+
+        expect(convexMock.mutation).not.toHaveBeenCalled();
+        expect(toastSpy).toHaveBeenCalledWith(
+          'No Braket account exists for that email yet.',
+        );
+        expect(fixture.componentInstance.scanner.search()).toBe(
+          'missing@example.com',
+        );
+        toastSpy.mockRestore();
+      });
+
+      it('shows a "no members match" empty state for a non-email term with no results', async () => {
+        const {fixture, harness} = await setup({searchResultsData: []});
+
+        await searchAndWait(fixture, harness, 'nobody');
+
+        expect(await harness.hasScannerSearchEmptyState()).toBe(true);
+        expect(await harness.hasScannerEmailFallback()).toBe(false);
+      });
+
+      // ---------------------------------------------------------------------
+      // Stale-results guard (wrong-user grant defense)
+      // ---------------------------------------------------------------------
+
+      const aliceRow = {
+        _id: 'user-alice' as Id<'users'>,
+        userId: 'user-alice' as Id<'users'>,
+        organizerId: FAKE_ORG_ID,
+        displayName: 'Alice',
+        email: 'alice@example.com',
+      };
+
+      it('does not render stale rows or grant the wrong user during the in-flight window', async () => {
+        const {fixture, harness, convexMock, resolveSearch} = await setup({
+          deferSearch: true,
+        });
+
+        // Search "alice" and resolve it — Alice's row is current. The
+        // detectChanges/whenStable after advancing the debounce lets the
+        // injectQuery effect re-run and register the subscription for "alice".
+        await harness.setScannerSearch('alice');
+        await vi.advanceTimersByTimeAsync(300);
+        fixture.detectChanges();
+        await fixture.whenStable();
+        expect(resolveSearch('alice', [aliceRow])).toBe(true);
+        fixture.detectChanges();
+        await fixture.whenStable();
+
+        expect(await harness.getScannerSearchResultCount()).toBe(1);
+        expect(await harness.getScannerSearchResultText(0)).toContain('Alice');
+
+        // Edit to "bob" and fire the debounced query for "bob" — but DO NOT
+        // resolve it. `injectQuery` keeps Alice's `.data()` during the refetch.
+        await harness.setScannerSearch('bob');
+        await vi.advanceTimersByTimeAsync(300);
+        fixture.detectChanges();
+        await fixture.whenStable();
+
+        // (a) Alice's row must NOT be rendered as a grantable/current result;
+        // the neutral loading state shows instead of the stale row.
+        expect(await harness.getScannerSearchResultCount()).toBe(0);
+        expect(await harness.hasScannerSearchLoading()).toBe(true);
+        expect(await harness.hasScannerSearchEmptyState()).toBe(false);
+        expect(await harness.hasScannerEmailFallback()).toBe(false);
+
+        // (b) The grant path for Alice is a hard no-op — the mutation is never
+        // called with Alice's userId even though her data is still in .data().
+        await fixture.componentInstance.grantScannerByRow(aliceRow);
+        await fixture.whenStable();
+
+        const grantedAlice = (
+          convexMock.mutation.mock.calls as unknown[][]
+        ).some((args) => {
+          const callArgs = args[1] as Record<string, unknown> | undefined;
+          return callArgs?.['userId'] === 'user-alice';
+        });
+        expect(grantedAlice).toBe(false);
+      });
+
+      it('isLoading gate alone forces non-current during an in-flight refetch', async () => {
+        const {fixture, harness, resolveSearch} = await setup({
+          deferSearch: true,
+        });
+
+        // Resolve "alice" so there is retained data and a stamp for "alice".
+        await harness.setScannerSearch('alice');
+        await vi.advanceTimersByTimeAsync(300);
+        fixture.detectChanges();
+        await fixture.whenStable();
+        expect(resolveSearch('alice', [aliceRow])).toBe(true);
+        fixture.detectChanges();
+        await fixture.whenStable();
+
+        // Fire the debounced query for "bob" but leave it unresolved. Per
+        // convex-angular, an args change flips isLoading TRUE and keeps the
+        // previous `.data()` — so this is exactly the in-flight window.
+        await harness.setScannerSearch('bob');
+        await vi.advanceTimersByTimeAsync(300);
+        fixture.detectChanges();
+        await fixture.whenStable();
+
+        // The isLoading gate makes results non-current independent of the
+        // stamp: injectQuery reports the in-flight refetch...
+        expect(
+          fixture.componentInstance['scannerSearchQuery'].isLoading(),
+        ).toBe(true);
+        // ...and the panel therefore renders zero grantable rows.
+        expect(await harness.getScannerSearchResultCount()).toBe(0);
+        expect(await harness.hasScannerSearchLoading()).toBe(true);
+      });
+
+      it('grants once results for the new term resolve (in-flight → current)', async () => {
+        const {fixture, harness, convexMock, resolveSearch} = await setup({
+          deferSearch: true,
+        });
+        const bobRow = {
+          _id: 'user-bob' as Id<'users'>,
+          userId: 'user-bob' as Id<'users'>,
+          organizerId: FAKE_ORG_ID,
+          displayName: 'Bob',
+          email: 'bob@example.com',
+        };
+
+        await harness.setScannerSearch('alice');
+        await vi.advanceTimersByTimeAsync(300);
+        fixture.detectChanges();
+        await fixture.whenStable();
+        expect(resolveSearch('alice', [aliceRow])).toBe(true);
+        fixture.detectChanges();
+        await fixture.whenStable();
+
+        await harness.setScannerSearch('bob');
+        await vi.advanceTimersByTimeAsync(300);
+        fixture.detectChanges();
+        await fixture.whenStable();
+        // Now resolve "bob" — results become current for the visible term.
+        expect(resolveSearch('bob', [bobRow])).toBe(true);
+        fixture.detectChanges();
+        await fixture.whenStable();
+
+        expect(await harness.getScannerSearchResultCount()).toBe(1);
+        expect(await harness.getScannerSearchResultText(0)).toContain('Bob');
+
+        await harness.clickScannerSearchResult(0);
+        await fixture.whenStable();
+
+        expect(convexMock.mutation).toHaveBeenCalledWith(
+          api.communities.scanners.grant,
+          {userId: 'user-bob', organizerId: FAKE_ORG_ID},
+        );
+      });
+
+      it('does not grant a row fetched for a different community after switching', async () => {
+        const OTHER_ORG_ID = 'org-other' as Id<'organizers'>;
+        const {fixture, harness, ctxMock, convexMock, resolveSearch} =
+          await setup({deferSearch: true});
+
+        // Resolve results for the initially-selected community (FAKE_ORG_ID).
+        await harness.setScannerSearch('alice');
+        await vi.advanceTimersByTimeAsync(300);
+        fixture.detectChanges();
+        await fixture.whenStable();
+        expect(resolveSearch('alice', [aliceRow], FAKE_ORG_ID)).toBe(true);
+        fixture.detectChanges();
+        await fixture.whenStable();
+        expect(await harness.getScannerSearchResultCount()).toBe(1);
+
+        // Switch the selected community to a different organizer. The rows on
+        // screen were fetched for FAKE_ORG_ID and must no longer be grantable.
+        ctxMock.selectedCommunityId.set(OTHER_ORG_ID);
+        fixture.detectChanges();
+        await fixture.whenStable();
+
+        expect(await harness.getScannerSearchResultCount()).toBe(0);
+
+        await fixture.componentInstance.grantScannerByRow(aliceRow);
+        await fixture.whenStable();
+
+        const grantedAlice = (
+          convexMock.mutation.mock.calls as unknown[][]
+        ).some((args) => {
+          const callArgs = args[1] as Record<string, unknown> | undefined;
+          return callArgs?.['userId'] === 'user-alice';
+        });
+        expect(grantedAlice).toBe(false);
+      });
     });
   });
 

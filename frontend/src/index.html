@@ -190,7 +190,31 @@
         }
       }
     </style>
-    <script src="theme-init.js"></script>
+    <!-- Theme init: inlined (CSP allows 'unsafe-inline') so first paint of
+         the boot shell never waits on an extra uncached script request.
+         Must run before paint to avoid a light-mode flash for dark users. -->
+    <script>
+      (function () {
+        const html = document.documentElement;
+
+        try {
+          const theme = localStorage.theme;
+          const prefersDark =
+            window.matchMedia?.('(prefers-color-scheme: dark)').matches ??
+            false;
+
+          const isSystem = theme === 'system' || !('theme' in localStorage);
+          const isDark = theme === 'dark' || (isSystem && prefersDark);
+          const resolvedTheme = isDark ? 'dark' : 'light';
+          html.classList.toggle('dark', isDark);
+          html.classList.toggle('dark-theme', isDark);
+          html.setAttribute('data-theme', theme ?? 'system');
+          html.style.colorScheme = resolvedTheme;
+        } catch {
+          // localStorage may be blocked (private browsing) — fail silently
+        }
+      })();
+    </script>
   </head>
   <body>
     <app-root>

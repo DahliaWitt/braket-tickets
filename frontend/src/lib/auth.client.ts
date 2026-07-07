@@ -5,9 +5,13 @@
  * It communicates with the Convex backend which runs Better Auth server-side.
  */
 
-import { createAuthClient } from 'better-auth/client';
-import { convexClient, crossDomainClient } from '@convex-dev/better-auth/client/plugins';
-import { environment } from '../environments/environment';
+import {createAuthClient} from 'better-auth/client';
+import {
+  convexClient,
+  crossDomainClient,
+} from '@convex-dev/better-auth/client/plugins';
+import {environment} from '../environments/environment';
+import {BETTER_AUTH_STORAGE_PREFIX} from './auth-storage';
 
 // Better Auth HTTP routes are on .convex.site (port 3211), not .convex.cloud (port 3210)
 // Port 3210 (.convex.cloud) = Convex functions API (queries, mutations, actions)
@@ -41,7 +45,7 @@ const client = createAuthClient({
       : [
           crossDomainClient({
             storage: browserStorage,
-            storagePrefix: 'braket-tickets',
+            storagePrefix: BETTER_AUTH_STORAGE_PREFIX,
           }),
         ]),
   ],
@@ -50,6 +54,6 @@ const client = createAuthClient({
 // Type assertion to include convex.token() method from convexClient plugin
 export const authClient = client as typeof client & {
   convex: {
-    token: () => Promise<{ data: { token: string } | null; error: Error | null }>;
+    token: () => Promise<{data: {token: string} | null; error: Error | null}>;
   };
 };

@@ -4,6 +4,27 @@
   X-Content-Type-Options: nosniff
   Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://js.stripe.com https://*.js.stripe.com https://connect-js.stripe.com https://static.cloudflareinsights.com https://browser.sentry-cdn.com https://js.sentry-cdn.com; connect-src 'self' wss://*.convex.cloud wss://*.convex.site https://*.convex.cloud https://*.convex.site https://*.ingest.sentry.io https://*.sentry.io https://api.stripe.com https://cloudflareinsights.com https://browser.sentry-cdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://*.convex.cloud https://*.stripe.com; frame-src https://js.stripe.com https://*.js.stripe.com https://connect-js.stripe.com https://hooks.stripe.com https://www.youtube-nocookie.com; worker-src 'self' blob:; child-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'
 
+# Static images and audio — not content-hashed, so no `immutable`.
+# A day of caching plus a week of background revalidation: repeat
+# visitors get instant cache hits, and an in-place asset edit still
+# propagates within 24h. Rename the file when replacing artwork to
+# bust caches instantly.
+/*.png
+  ! Cache-Control
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+/*.svg
+  ! Cache-Control
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+/*.webp
+  ! Cache-Control
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+/*.mp3
+  ! Cache-Control
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
 # Hashed JS bundles — override with immutable caching
 /*.js
   ! Cache-Control
@@ -16,10 +37,5 @@
 
 # SPA shell — explicit no-cache
 /index.html
-  ! Cache-Control
-  Cache-Control: no-cache, no-store, must-revalidate
-
-# Theme init — never cache (not content-hashed)
-/theme-init.js
   ! Cache-Control
   Cache-Control: no-cache, no-store, must-revalidate
