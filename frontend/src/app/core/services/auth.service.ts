@@ -40,6 +40,13 @@ import {
   type SessionChannelMessage,
 } from './auth.service.helpers';
 import {AUTH_CLIENT} from './auth-client.token';
+import {
+  authCookieStorageKey,
+  authSessionDataStorageKey,
+  interpretAuthStorage,
+  type CachedSessionPeek,
+} from '../../../lib/auth-storage';
+import {environment} from '../../../environments/environment';
 
 /**
  * Error thrown when a user attempts to log in with an unverified email address.
@@ -278,6 +285,32 @@ export class AuthService implements ConvexAuthProvider {
     this.destroyRef.onDestroy(() => {
       this.sessionSync?.disconnect();
     });
+  }
+
+  /**
+   * Synchronously peeks at the persisted Better Auth crossDomain state so route
+   * guards can decide the common cases without awaiting the async
+   * `getSession()` round-trip.
+   *
+   * Only meaningful in crossDomain mode, where the localStorage credential is
+   * authoritative: an empty credential provably means logged out (the buyer
+   * default), letting the landing page render with zero network wait. In
+   * cookie/E2E mode the credential is an httpOnly cookie invisible to JS, so
+   * this returns `known: false` and callers must fall back to the async settle.
+   *
+   * This drives routing UX only — never authorization. Every Convex call is
+   * still authorized server-side, so a forged snapshot buys nothing but a
+   * dashboard shell whose queries fail.
+   */
+  peekCachedSession(): CachedSessionPeek {
+    if (environment.isE2E || !this.browser.hasLocalStorage()) {
+      return {known: false, hasCredential: false, session: null};
+    }
+
+    return interpretAuthStorage(
+      this.browser.getLocalStorageItem(authCookieStorageKey()),
+      this.browser.getLocalStorageItem(authSessionDataStorageKey()),
+    );
   }
 
   private installConvexErrorHandling(): void {

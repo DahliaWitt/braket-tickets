@@ -4,13 +4,13 @@ import {
   Router,
   type RouterStateSnapshot,
 } from '@angular/router';
-import { inject } from '@angular/core';
-import { toObservable } from '@angular/core/rxjs-interop';
-import { combineLatest, of, type Observable } from 'rxjs';
-import { catchError, filter, map, take, timeout } from 'rxjs/operators';
-import { AuthService } from '@/core/services/auth.service';
-import type { BraToastService } from '@ui/components/composites/toast/toast.service';
-import { logger } from '@/utils/logger';
+import {inject} from '@angular/core';
+import {toObservable} from '@angular/core/rxjs-interop';
+import {combineLatest, of, type Observable} from 'rxjs';
+import {catchError, filter, map, take, timeout} from 'rxjs/operators';
+import {AuthService} from '@/core/services/auth.service';
+import type {BraToastService} from '@ui/components/composites/toast/toast.service';
+import {logger} from '@/utils/logger';
 
 /**
  * Hard upper bound for the auth-settled race. If `authInitialized` never
@@ -26,7 +26,10 @@ export const AUTH_SETTLE_TIMEOUT_MS = 15_000;
  * Minimal shape every guard needs from the authenticated user. Kept loose so
  * individual callers can read other fields without a new cast.
  */
-type SettledUser = { socialSignupCompletionRequired?: boolean; _id?: string } | null | undefined;
+type SettledUser =
+  | {socialSignupCompletionRequired?: boolean; _id?: string}
+  | null
+  | undefined;
 
 export function requiresSocialSignupCompletion(user: SettledUser): boolean {
   return user?.socialSignupCompletionRequired === true;
@@ -37,11 +40,14 @@ export function createSocialSignupCompletionUrlTree(
   state: RouterStateSnapshot,
 ) {
   return router.createUrlTree(['/confirm/social-signup-complete'], {
-    queryParams: { returnUrl: state.url },
+    queryParams: {returnUrl: state.url},
   });
 }
 
-export function createAccessDeniedRedirect(router: Router, toast: BraToastService) {
+export function createAccessDeniedRedirect(
+  router: Router,
+  toast: BraToastService,
+) {
   toast.error('Access denied');
   return router.createUrlTree(['/']);
 }
@@ -55,7 +61,9 @@ export function createAccessDeniedRedirect(router: Router, toast: BraToastServic
  * Throws `TimeoutError` after `AUTH_SETTLE_TIMEOUT_MS` if the auth stream
  * never reaches a decidable state — callers handle this in `catchError`.
  */
-export function waitForAuthSettled$(auth: AuthService): Observable<SettledUser> {
+export function waitForAuthSettled$(
+  auth: AuthService,
+): Observable<SettledUser> {
   return combineLatest([
     toObservable(auth.authInitialized),
     toObservable(auth.user),
@@ -68,7 +76,7 @@ export function waitForAuthSettled$(auth: AuthService): Observable<SettledUser> 
       return syncFailed;
     }),
     take(1),
-    timeout({ first: AUTH_SETTLE_TIMEOUT_MS }),
+    timeout({first: AUTH_SETTLE_TIMEOUT_MS}),
     map(([, user]) => user as SettledUser),
   );
 }
@@ -92,9 +100,18 @@ export const authGuard: CanActivateFn = (route, state: RouterStateSnapshot) => {
 
   const redirectToLogin = () =>
     router.createUrlTree(['/login'], {
-      queryParams: { ...route.queryParams, returnUrl: state.url },
+      queryParams: {...route.queryParams, returnUrl: state.url},
     });
   const redirectToPublicHome = () => router.createUrlTree(['/']);
+
+  // Fast path: in crossDomain mode an empty credential provably means logged
+  // out, so redirect to login immediately instead of awaiting the async
+  // settle. Anything else (cached session present, or cookie/E2E mode where
+  // state is unknowable synchronously) defers to the authoritative settle.
+  const peek = auth.peekCachedSession();
+  if (peek.known && !peek.hasCredential) {
+    return redirectToLogin();
+  }
 
   return waitForAuthSettled$(auth).pipe(
     map((user) => {
@@ -105,7 +122,9 @@ export const authGuard: CanActivateFn = (route, state: RouterStateSnapshot) => {
       if (!user) {
         // authenticated + sync-failed: the session is live, but protected
         // routes cannot safely render without the user profile.
-        logger.warn('[AuthGuard] authenticated session with no user profile (sync failed)');
+        logger.warn(
+          '[AuthGuard] authenticated session with no user profile (sync failed)',
+        );
         return redirectToPublicHome();
       }
       return true;
@@ -126,6 +145,20 @@ export const authGuard: CanActivateFn = (route, state: RouterStateSnapshot) => {
  */
 export const authenticatedMatch: CanMatchFn = () => {
   const auth = inject(AuthService);
+
+  // Fast path: an empty crossDomain credential provably means logged out, so
+  // resolve synchronously and let the landing route match without awaiting the
+  // async getSession() round-trip. This is the buyer default and the main win —
+  // logged-out visitors never see the boot loading screen wait on auth.
+  //
+  // The authenticated case is intentionally NOT optimized here: a cached
+  // session still defers to the async settle so a stale snapshot cannot
+  // mis-route a genuinely logged-out user (empty credential is trustworthy;
+  // a present one is not, until the server confirms it).
+  const peek = auth.peekCachedSession();
+  if (peek.known && !peek.hasCredential) {
+    return false;
+  }
 
   return waitForAuthSettled$(auth).pipe(
     map((user) => auth.isAuthenticated() && !!user),
