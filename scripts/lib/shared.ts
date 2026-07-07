@@ -35,7 +35,7 @@ export const CONVEX_CLI = path.join(
 
 export const LOCAL_DIR = path.join(PROJECT_ROOT, '.convex-local');
 export const DEFAULT_CONVEX_LOCAL_BACKEND_RELEASE =
-  'precompiled-2026-05-12-cadb2c2';
+  'precompiled-2026-07-03-b7209ce';
 export const CONVEX_LOCAL_BACKEND_RELEASE =
   process.env['CONVEX_LOCAL_BACKEND_RELEASE'] ??
   DEFAULT_CONVEX_LOCAL_BACKEND_RELEASE;
