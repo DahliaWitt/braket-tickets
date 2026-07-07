@@ -107,6 +107,27 @@ export const ACTION_DISPLAY: Record<
   'event.update': {icon: 'calendar', label: 'UPDATED EVENT'},
   'guest.add': {icon: 'user-plus', label: 'ADDED GUEST'},
   'guest.check-in': {icon: 'scan-line', label: 'CHECKED IN GUEST'},
+  'guest.import': {icon: 'user-plus', label: 'IMPORTED GUESTS'},
+  'imported_ticket.check-in': {
+    icon: 'scan-line',
+    label: 'CHECKED IN EXTERNAL TICKET',
+  },
+  'imported_tickets.import': {
+    icon: 'user-plus',
+    label: 'IMPORTED EXTERNAL TICKETS',
+  },
+  'imported_tickets.remove': {
+    icon: 'user-plus',
+    label: 'REMOVED EXTERNAL TICKET',
+  },
+  'imported_tickets.batch_remove': {
+    icon: 'user-plus',
+    label: 'REMOVED IMPORT BATCH',
+  },
+  'imported_tickets.redact': {
+    icon: 'user-plus',
+    label: 'REDACTED EXTERNAL TICKETS',
+  },
   'magic_link.create': {icon: 'wand-2', label: 'CREATED MAGIC LINK'},
   'magic_link.delete': {icon: 'wand-2', label: 'DELETED MAGIC LINK'},
   'magic_link.disable': {icon: 'wand-2', label: 'DISABLED MAGIC LINK'},
