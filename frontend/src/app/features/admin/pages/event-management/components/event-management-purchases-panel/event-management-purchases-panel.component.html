@@ -146,7 +146,7 @@
                 "
               >
                 @if (isGeneratingPdf() === purchase.id) {
-                  <z-icon zType="loader-circle" class="mr-2 animate-spin" />
+                  <z-icon zType="loader-circle" class="animate-spin" />
                 } @else {
                   <z-icon zType="file-text" class="mr-2" />
                 }
@@ -173,7 +173,7 @@
                 "
               >
                 @if (isRefunding() === purchase.id) {
-                  <z-icon zType="loader-circle" class="mr-2 animate-spin" />
+                  <z-icon zType="loader-circle" class="animate-spin" />
                 }
                 {{ purchase.amount === 0 ? 'Cancel' : 'Refund' }}
               </button>
@@ -194,7 +194,7 @@
                   "
                 >
                   @if (isRefunding() === purchase.id) {
-                    <z-icon zType="loader-circle" class="mr-2 animate-spin" />
+                    <z-icon zType="loader-circle" class="animate-spin" />
                   }
                   Force Refund All
                 </button>
@@ -277,7 +277,7 @@
                           @if (isRefundingTicket() === ticket.id) {
                             <z-icon
                               zType="loader-circle"
-                              class="mr-2 animate-spin"
+                              class="animate-spin"
                             />
                           }
                           Refund
@@ -437,10 +437,7 @@
                         "
                       >
                         @if (isRefundingTicket() === ticket.id) {
-                          <z-icon
-                            zType="loader-circle"
-                            class="mr-2 animate-spin"
-                          />
+                          <z-icon zType="loader-circle" class="animate-spin" />
                         }
                         Refund
                       </button>
@@ -472,7 +469,7 @@
               class="flex-1 border-primary/30 text-primary hover:bg-primary/10"
             >
               @if (isGeneratingPdf() === purchase.id) {
-                <z-icon zType="loader-circle" class="mr-2 animate-spin" />
+                <z-icon zType="loader-circle" class="animate-spin" />
               } @else {
                 <z-icon zType="file-text" class="mr-2" />
               }
@@ -498,7 +495,7 @@
               class="flex-1 border-destructive/30 text-destructive hover:bg-destructive/10"
             >
               @if (isRefunding() === purchase.id) {
-                <z-icon zType="loader-circle" class="mr-2 animate-spin" />
+                <z-icon zType="loader-circle" class="animate-spin" />
               }
               {{ purchase.amount === 0 ? 'Cancel' : 'Refund' }}
             </button>
@@ -519,7 +516,7 @@
                 "
               >
                 @if (isRefunding() === purchase.id) {
-                  <z-icon zType="loader-circle" class="mr-2 animate-spin" />
+                  <z-icon zType="loader-circle" class="animate-spin" />
                 }
                 Force Refund All
               </button>
