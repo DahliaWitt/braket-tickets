@@ -9,6 +9,7 @@ import {RateLimiter, MINUTE, HOUR} from '@convex-dev/rate-limiter';
 import {components} from '../_generated/api';
 import {internalMutation} from '../_generated/server';
 import {v} from 'convex/values';
+import {getRequestMetadataSafe} from './request_metadata';
 
 export const rateLimiter = new RateLimiter(components.rateLimiter, {
   // Order-based hosted checkout flow.
@@ -196,9 +197,15 @@ export const limitPublicEndpoint = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    // key 'unknown' is a sentinel for callers with no resolvable IP (e.g. local
-    // dev, misconfigured proxies) — they share one bucket with this key.
-    await rateLimiter.limit(ctx, args.name, {key: args.key, throws: true});
+    // The platform-provided client IP (propagated from the parent HTTP action)
+    // takes precedence over args.key: the header-derived key relies on
+    // x-real-ip/x-forwarded-for, which clients can spoof to escape their
+    // bucket. args.key remains the fallback for runtimes without request
+    // metadata; its 'unknown' sentinel (no resolvable IP — e.g. local dev,
+    // misconfigured proxies) shares one bucket.
+    const {ip} = await getRequestMetadataSafe(ctx);
+    const key = ip ?? args.key;
+    await rateLimiter.limit(ctx, args.name, {key, throws: true});
     return null;
   },
 });

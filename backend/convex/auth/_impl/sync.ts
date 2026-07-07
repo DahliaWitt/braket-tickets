@@ -138,7 +138,7 @@ async function insertUserScopedAuditLog(
   reason?: string,
 ): Promise<void> {
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: userId,
       action,
@@ -385,7 +385,7 @@ export async function backfillAuthUserLinksHandler(
     }
 
     await insertAdminAuditLog(
-      {db: ctx.db},
+      {db: ctx.db, meta: ctx.meta},
       {
         adminId: args.actorUserId,
         action,

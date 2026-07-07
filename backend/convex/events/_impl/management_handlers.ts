@@ -343,7 +343,7 @@ export async function create(
   });
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: userId,
       action: 'event.create',
@@ -456,7 +456,7 @@ export async function update(
 
   if (organizerChanged) {
     await insertAdminAuditLog(
-      {db: ctx.db},
+      {db: ctx.db, meta: ctx.meta},
       {
         adminId: userId,
         action: 'event.organizer_reassign.from',
@@ -466,7 +466,7 @@ export async function update(
       },
     );
     await insertAdminAuditLog(
-      {db: ctx.db},
+      {db: ctx.db, meta: ctx.meta},
       {
         adminId: userId,
         action: 'event.organizer_reassign.to',
@@ -478,7 +478,7 @@ export async function update(
   }
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: userId,
       action: 'event.update',
@@ -537,7 +537,7 @@ export async function remove(
   }
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: userId,
       action: 'event.delete',
@@ -612,7 +612,7 @@ export async function continueEventRemovalCleanup(
   }
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: args.adminId,
       action: 'event.delete',

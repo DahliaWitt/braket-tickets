@@ -48,7 +48,7 @@ export async function add(
   });
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: user._id,
       action: ADMIN_AUDIT_ACTIONS.GUEST_ADD,
