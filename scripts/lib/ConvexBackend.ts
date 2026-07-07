@@ -121,21 +121,14 @@ export class ConvexBackend {
         `[${this.instanceId}] Backend running on port ${this._convexPort!}. Logs: ${this._logFile()}`,
       );
 
-      // Set minimal env vars before first deploy
+      // Env vars must be complete BEFORE deploy: convex.config.ts declares
+      // required env vars (convex 1.39+), so the deploy itself validates them.
       console.log(
         `[${this.instanceId}] Setting minimal env vars before deploy...`,
       );
       await this._setIsTest();
       await this._setSiteUrl(appPort);
 
-      await this._deployWithRetry();
-
-      console.log(
-        `[${this.instanceId}] Waiting for backend to accept mutations...`,
-      );
-      await this._waitForMutationReady(appPort);
-
-      // Set all env vars
       const envEntries = Object.entries(
         buildEnv(this.mode, {
           convex: this._convexPort!,
@@ -144,6 +137,13 @@ export class ConvexBackend {
         }),
       ) as [string, string][];
       await setAllEnvVars(envEntries, url, this.instanceId);
+
+      await this._deployWithRetry();
+
+      console.log(
+        `[${this.instanceId}] Waiting for backend to accept mutations...`,
+      );
+      await this._waitForMutationReady(appPort);
 
       if (this.mode === 'e2e') {
         console.log(`[${this.instanceId}] Clearing stale test data...`);
@@ -166,9 +166,7 @@ export class ConvexBackend {
         if (this.mode === 'dev') {
           await this._guardIsTestFalse();
         }
-        await this._deployWithRetry();
-        await this._waitForMutationReady(appPort);
-
+        // Env vars before deploy: required-var validation runs at deploy time.
         const envEntries = Object.entries(
           buildEnv(this.mode, {
             convex: this._convexPort!,
@@ -177,6 +175,9 @@ export class ConvexBackend {
           }),
         ) as [string, string][];
         await setAllEnvVars(envEntries, url, this.instanceId);
+
+        await this._deployWithRetry();
+        await this._waitForMutationReady(appPort);
 
         if (this.mode === 'e2e') {
           console.log(`[${this.instanceId}] Resetting backend data...`);
