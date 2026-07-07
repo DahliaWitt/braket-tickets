@@ -179,6 +179,81 @@ describe('AdminEventsTableComponent', () => {
     ]);
   });
 
+  describe('status badges', () => {
+    const pastDate = new Date(Date.now() - 2 * 86_400_000).toISOString();
+    const futureDate = new Date(Date.now() + 2 * 86_400_000).toISOString();
+
+    async function renderEventsTable(
+      events: AdminEventDoc[],
+    ): Promise<AdminEventsTableHarness> {
+      convexClientMock.client.onUpdate.mockReset();
+      convexClientMock.client.onUpdate.mockImplementation(
+        (_query, _args, onData: (data: AdminEventDoc[]) => void) => {
+          onData(events);
+          return () => void 0;
+        },
+      );
+
+      const badgeFixture = TestBed.createComponent(AdminEventsTableComponent);
+      badgeFixture.detectChanges();
+      await badgeFixture.whenStable();
+      return TestbedHarnessEnvironment.harnessForFixture(
+        badgeFixture,
+        AdminEventsTableHarness,
+      );
+    }
+
+    it('shows "past" for a published event whose date has passed', async () => {
+      const harness = await renderEventsTable([
+        {...mockEventDoc, status: 'published', date: pastDate},
+      ]);
+
+      // Desktop and mobile badges render for the same row.
+      expect(await harness.getStatusTexts()).toEqual(['past', 'past']);
+      expect(await harness.getStatusVariantAtIndex(0)).toBe('muted');
+    });
+
+    it('keeps "published" for an event happening today', async () => {
+      const harness = await renderEventsTable([
+        {...mockEventDoc, status: 'published', date: new Date().toISOString()},
+      ]);
+
+      expect(await harness.getStatusTextAtIndex(0)).toBe('published');
+      expect(await harness.getStatusVariantAtIndex(0)).toBe('success');
+    });
+
+    it('keeps "published" for a future event', async () => {
+      const harness = await renderEventsTable([
+        {...mockEventDoc, status: 'published', date: futureDate},
+      ]);
+
+      expect(await harness.getStatusTextAtIndex(0)).toBe('published');
+      expect(await harness.getStatusVariantAtIndex(0)).toBe('success');
+    });
+
+    it('keeps draft and cancelled labels for past-dated events', async () => {
+      const harness = await renderEventsTable([
+        {
+          ...mockEventDoc,
+          _id: 'draft-past' as Id<'events'>,
+          status: 'draft',
+          date: pastDate,
+        },
+        {
+          ...mockEventDoc,
+          _id: 'cancelled-past' as Id<'events'>,
+          status: 'cancelled',
+          date: pastDate,
+        },
+      ]);
+
+      expect(await harness.getStatusTextAtIndex(0)).toBe('draft');
+      expect(await harness.getStatusVariantAtIndex(0)).toBe('warning');
+      expect(await harness.getStatusTextAtIndex(1)).toBe('cancelled');
+      expect(await harness.getStatusVariantAtIndex(1)).toBe('destructive');
+    });
+  });
+
   it('should navigate to create page', () => {
     component.openCreateEventDialog();
     expect(routerMock.navigate).toHaveBeenCalledWith([

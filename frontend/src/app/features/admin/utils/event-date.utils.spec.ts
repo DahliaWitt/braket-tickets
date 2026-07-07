@@ -3,6 +3,7 @@ import {
   combineLocalEventDateTime,
   compareEventDatesDescending,
   formatEventTimeInput,
+  isEventDatePast,
   isLocalEventDateTimeValid,
   parseEventDate,
   parseEventDateInEventTimeZone,
@@ -52,6 +53,28 @@ describe('event date utilities', () => {
     expect(
       combineLocalEventDateTime(new Date(2026, 1, 26), '23:30').toISOString(),
     ).toBe('2026-02-27T07:30:00.000Z');
+  });
+
+  it('treats events before today (event timezone) as past', () => {
+    expect(
+      isEventDatePast(new Date(Date.now() - 2 * 86_400_000).toISOString()),
+    ).toBe(true);
+    expect(isEventDatePast('2023-01-01')).toBe(true);
+  });
+
+  it('does not treat today or future events as past', () => {
+    expect(isEventDatePast(new Date().toISOString())).toBe(false);
+    expect(
+      isEventDatePast(new Date(Date.now() + 2 * 86_400_000).toISOString()),
+    ).toBe(false);
+  });
+
+  it('treats missing or invalid dates as not past', () => {
+    expect(isEventDatePast(null)).toBe(false);
+    expect(isEventDatePast(undefined)).toBe(false);
+    expect(isEventDatePast('')).toBe(false);
+    expect(isEventDatePast('2026-02-31')).toBe(false);
+    expect(isEventDatePast('Dec 15, 2030')).toBe(false);
   });
 
   it('rejects nonexistent event-local times during spring-forward DST', () => {

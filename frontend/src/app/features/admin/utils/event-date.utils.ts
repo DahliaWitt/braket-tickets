@@ -3,6 +3,7 @@ import {
   eventLocalDateTimeToUtc,
   formatEventDateKey,
   isDateKey,
+  todayDateKey,
   utcToEventLocalParts,
 } from '@shared/event-time';
 
@@ -39,6 +40,18 @@ export function compareEventDatesDescending(a: string, b: string): number {
   if (left === undefined) return 1;
   if (right === undefined) return -1;
   return right - left;
+}
+
+/**
+ * Whether the event's calendar day (platform event timezone) is before today.
+ * Same cutoff as the backend's `hasEventDatePassed`, but null-safe: missing or
+ * unparseable dates are treated as not past.
+ */
+export function isEventDatePast(value: string | null | undefined): boolean {
+  if (!value) return false;
+  const eventDateKey = formatEventDateKey(value);
+  if (!eventDateKey) return false;
+  return eventDateKey < todayDateKey();
 }
 
 /** Formats a Date to ISO string for the API. */
