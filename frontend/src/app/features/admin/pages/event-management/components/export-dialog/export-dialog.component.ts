@@ -37,7 +37,7 @@ export interface ExportDialogData {
   template: `
     <div class="space-y-6">
       <div class="space-y-4">
-        <h3 class="text-sm mono-label text-muted-foreground">Select Fields</h3>
+        <h3 class="mono-label text-sm text-muted-foreground">Select Fields</h3>
         <div class="grid grid-cols-2 gap-3">
           @for (field of fields(); track field.key; let i = $index) {
             <z-checkbox
@@ -52,7 +52,7 @@ export interface ExportDialogData {
       </div>
 
       <div class="space-y-4">
-        <h3 class="text-sm mono-label text-muted-foreground">Export Format</h3>
+        <h3 class="mono-label text-sm text-muted-foreground">Export Format</h3>
         <div class="flex gap-3">
           <button
             type="button"
@@ -79,7 +79,7 @@ export interface ExportDialogData {
 
       @if (hasRefundedPurchases()) {
         <div class="space-y-4">
-          <h3 class="text-sm mono-label text-muted-foreground">Options</h3>
+          <h3 class="mono-label text-sm text-muted-foreground">Options</h3>
           <z-checkbox (checkChange)="includeRefunded.set($event)">
             <span class="flex items-center gap-2">
               Include refunded tickets
@@ -95,7 +95,7 @@ export interface ExportDialogData {
         </div>
       }
 
-      <div class="flex justify-end gap-2 pt-4 border-t border-border">
+      <div class="flex justify-end gap-2 border-t border-border pt-4">
         <button
           type="button"
           z-button
@@ -113,10 +113,10 @@ export interface ExportDialogData {
           (click)="exportData()"
         >
           @if (isExporting()) {
-            <z-icon zType="loader-circle" class="mr-2 animate-spin" />
+            <z-icon zType="loader-circle" class="animate-spin" />
             Exporting...
           } @else {
-            <z-icon zType="download" class="mr-2" />
+            <z-icon zType="download" />
             Export {{ format().toUpperCase() }}
           }
         </button>

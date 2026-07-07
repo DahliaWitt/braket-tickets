@@ -35,7 +35,7 @@ export const CONVEX_CLI = path.join(
 
 export const LOCAL_DIR = path.join(PROJECT_ROOT, '.convex-local');
 export const DEFAULT_CONVEX_LOCAL_BACKEND_RELEASE =
-  'precompiled-2026-05-12-cadb2c2';
+  'precompiled-2026-07-03-b7209ce';
 export const CONVEX_LOCAL_BACKEND_RELEASE =
   process.env['CONVEX_LOCAL_BACKEND_RELEASE'] ??
   DEFAULT_CONVEX_LOCAL_BACKEND_RELEASE;
@@ -383,6 +383,10 @@ export function buildEnv(
     BETTER_AUTH_SECRET:
       process.env['BETTER_AUTH_SECRET'] ??
       'local-dev-only-not-secure-change-me',
+    // Declared as required in convex.config.ts, so it must exist before deploy.
+    TOKEN_DIGEST_SECRET:
+      process.env['TOKEN_DIGEST_SECRET'] ??
+      'local-dev-token-digest-secret-not-secure-change-me',
   };
 
   // Mirror scripts/sync-convex-env.js, but only set keys that exist to avoid

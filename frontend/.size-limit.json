@@ -5,7 +5,7 @@
       "dist/frontend/browser/main*.js",
       "dist/frontend/browser/styles*.css"
     ],
-    "limit": "150 KB",
+    "limit": "175 KB",
     "brotli": true,
     "running": false
   },

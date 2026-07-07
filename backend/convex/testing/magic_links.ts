@@ -85,7 +85,7 @@ export async function insertSeedMagicLinkRedemption(
   }
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: link.createdBy,
       action: 'magic_link.redemption',

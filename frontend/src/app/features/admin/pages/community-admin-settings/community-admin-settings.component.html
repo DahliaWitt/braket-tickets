@@ -904,27 +904,129 @@
           Admins already have door staff access.
         </p>
 
-        <div class="flex gap-2">
+        <div class="relative">
           <input
             zInput
-            data-testid="scanner-email-input"
-            type="email"
-            placeholder="Enter user email"
-            aria-label="Scanner email address"
-            [(value)]="newScannerEmail"
-            class="flex-1"
+            data-testid="scanner-search-input"
+            type="text"
+            placeholder="search members by name or email"
+            aria-label="Search door staff members"
+            role="combobox"
+            aria-autocomplete="list"
+            [attr.aria-expanded]="scanner.showPanel()"
+            aria-controls="scanner-search-results"
+            [attr.aria-activedescendant]="scanner.activeDescendant()"
+            autocomplete="off"
+            [value]="scanner.search()"
+            (input)="onScannerSearchInput($event)"
+            (keydown)="onScannerSearchKeydown($event)"
+            class="w-full"
           />
-          <button
-            type="button"
-            z-button
-            data-testid="grant-scanner"
-            (click)="grantScanner()"
-            [zDisabled]="!newScannerEmail() || isGrantingScanner()"
-            [zLoading]="isGrantingScanner()"
-            class="min-h-11"
-          >
-            Grant
-          </button>
+
+          @if (scanner.showPanel()) {
+            <div
+              id="scanner-search-results"
+              role="listbox"
+              data-testid="scanner-search-results"
+              class="absolute top-full right-0 left-0 z-10 mt-1 max-h-80 overflow-y-auto rounded-lg border border-border bg-background shadow-lg"
+            >
+              @for (
+                candidate of scanner.results();
+                track candidate.userId;
+                let i = $index
+              ) {
+                <div
+                  role="option"
+                  [id]="scanner.optionId(i)"
+                  data-testid="scanner-search-result"
+                  [attr.aria-selected]="scanner.activeIndex() === i"
+                  [attr.aria-disabled]="scanner.isResultDisabled(candidate)"
+                  [class.bg-muted]="scanner.activeIndex() === i"
+                  class="flex min-h-11 items-center justify-between gap-3 border-b border-border px-3 py-2 last:border-b-0"
+                >
+                  <div class="flex min-w-0 flex-col">
+                    <span class="truncate font-sans text-sm text-foreground">{{
+                      candidate.displayName
+                    }}</span>
+                    @if (candidate.email) {
+                      <span
+                        class="truncate font-mono text-2xs text-muted-foreground"
+                        >{{ candidate.email }}</span
+                      >
+                    }
+                  </div>
+                  @if (scanner.resultStatus(candidate.userId); as status) {
+                    <span
+                      class="mono-label shrink-0 text-2xs text-muted-foreground"
+                      >{{ status }}</span
+                    >
+                  } @else {
+                    <button
+                      type="button"
+                      z-button
+                      zType="ghost"
+                      zSize="sm"
+                      data-testid="grant-scanner"
+                      (click)="grantScannerByRow(candidate)"
+                      [zDisabled]="isGrantingScanner()"
+                      class="min-h-11 shrink-0"
+                    >
+                      add
+                    </button>
+                  }
+                </div>
+              }
+
+              @if (scanner.showLoading()) {
+                <div
+                  data-testid="scanner-search-loading"
+                  role="status"
+                  aria-live="polite"
+                  aria-busy="true"
+                  class="px-3 py-4 text-center text-sm text-muted-foreground"
+                >
+                  searching...
+                </div>
+              }
+
+              @if (scanner.showEmailFallback()) {
+                <div
+                  role="option"
+                  data-testid="scanner-email-fallback"
+                  [attr.aria-selected]="
+                    scanner.activeIndex() === scanner.results().length
+                  "
+                  class="flex min-h-11 items-center justify-between gap-3 px-3 py-2"
+                >
+                  <span class="truncate font-sans text-sm text-foreground"
+                    >add by exact email: {{ scanner.trimmedSearch() }}</span
+                  >
+                  <button
+                    type="button"
+                    z-button
+                    zType="ghost"
+                    zSize="sm"
+                    (click)="grantScannerByExactEmail()"
+                    [zDisabled]="isGrantingScanner()"
+                    class="min-h-11 shrink-0"
+                  >
+                    add
+                  </button>
+                </div>
+              }
+
+              @if (scanner.showEmptyState()) {
+                <div
+                  data-testid="scanner-search-empty"
+                  role="status"
+                  aria-live="polite"
+                  class="px-3 py-4 text-center text-sm text-muted-foreground"
+                >
+                  no members match
+                </div>
+              }
+            </div>
+          }
         </div>
 
         <div data-testid="scanner-list" class="space-y-2">

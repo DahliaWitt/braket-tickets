@@ -263,13 +263,10 @@ interface TicketResaleInfo {
                       (click)="downloadTicketPdf(ticket._id)"
                     >
                       @if (isDownloadingPdf() === ticket._id) {
-                        <z-icon
-                          zType="loader-circle"
-                          class="mr-2 animate-spin"
-                        />
+                        <z-icon zType="loader-circle" class="animate-spin" />
                         Generating...
                       } @else {
-                        <z-icon zType="file-text" class="mr-2 h-4 w-4" />
+                        <z-icon zType="file-text" class="h-4 w-4" />
                         Download PDF
                       }
                     </button>
@@ -359,11 +356,11 @@ interface TicketResaleInfo {
                           @if (isCancellingListing() === ticket._id) {
                             <z-icon
                               zType="loader-circle"
-                              class="mr-2 animate-spin"
+                              class="animate-spin"
                             />
                             Cancelling...
                           } @else {
-                            <z-icon zType="x" class="mr-2" />
+                            <z-icon zType="x" />
                             Cancel Listing
                           }
                         </button>
@@ -375,10 +372,12 @@ interface TicketResaleInfo {
                           class="mt-4 w-full rounded-lg border border-warning/20 bg-warning/10 p-3"
                         >
                           <div class="flex items-start gap-2">
-                            <z-icon
-                              zType="loader-circle"
-                              class="mt-0.5 shrink-0 animate-spin text-warning"
-                            />
+                            <span class="mt-0.5 flex shrink-0">
+                              <z-icon
+                                zType="loader-circle"
+                                class="animate-spin text-warning"
+                              />
+                            </span>
                             <p
                               class="font-mono text-xs leading-relaxed text-warning"
                             >
@@ -491,7 +490,7 @@ interface TicketResaleInfo {
                               @if (isListingForResale() === ticket._id) {
                                 <z-icon
                                   zType="loader-circle"
-                                  class="mr-2 animate-spin"
+                                  class="animate-spin"
                                 />
                                 Listing...
                               } @else {
@@ -531,7 +530,7 @@ interface TicketResaleInfo {
                 </div>
               </z-card>
             } @empty {
-              @if (isLoading()) {
+              @if (showTicketsSkeleton()) {
                 <div
                   class="h-64 overflow-hidden rounded-xl border border-border bg-card/80"
                 >
@@ -578,6 +577,15 @@ export class TicketsComponent {
   // safe to read directly.
   readonly tickets = this.paymentService.ticketsResource.value;
   isLoading = this.paymentService.ticketsResource.isLoading;
+  /**
+   * Skeleton gate for the empty-list branch. Includes the optimistic
+   * activation window (route admitted on a cached credential, auth not yet
+   * settled) so a signed-in buyer never flashes "No tickets found" while the
+   * profile-keyed query has not started.
+   */
+  readonly showTicketsSkeleton = computed(
+    () => this.isLoading() || !this.auth.authSettled(),
+  );
   readonly copiedId = signal<string | null>(null);
   readonly isDownloadingPdf = signal<string | null>(null);
 

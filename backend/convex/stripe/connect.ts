@@ -9,10 +9,14 @@ import {
   confirmPayoutImpl,
   createPayoutIntentImpl,
   failPayoutImpl,
+  failStalePendingBatchImpl,
   getOrderByStripePaymentIntentIdImpl,
   getOrganizerInternalImpl,
   getSettlementDataForAccountImpl,
-  listConnectedAccountsWithEligibleEventsImpl,
+  listNetlessCapturedRowsImpl,
+  listPayoutBatchesNeedingRecoveryImpl,
+  listUnrecordedStripePayoutIdsImpl,
+  listPayoutReadyConnectedAccountsImpl,
   listPlatformOrganizerEligibleEventIdsImpl,
   markEventPaidOutImpl,
   markPayoutBatchSubmittedImpl,
@@ -102,20 +106,25 @@ export const getSettlementDataForAccount = internalQuery({
         amountCents: v.number(),
       }),
     ),
+    inflightSubmittedCents: v.number(),
   }),
   handler: async (ctx, args) => {
     return await getSettlementDataForAccountImpl(ctx, args);
   },
 });
 
-export const listConnectedAccountsWithEligibleEvents = internalQuery({
+export const listPayoutReadyConnectedAccounts = internalQuery({
   args: {
-    eligibleBeforeMs: v.number(),
-    limit: v.number(),
+    cursor: v.union(v.string(), v.null()),
+    numItems: v.number(),
   },
-  returns: v.array(v.string()),
+  returns: v.object({
+    accounts: v.array(v.string()),
+    continueCursor: v.string(),
+    isDone: v.boolean(),
+  }),
   handler: async (ctx, args) => {
-    return await listConnectedAccountsWithEligibleEventsImpl(ctx, args);
+    return await listPayoutReadyConnectedAccountsImpl(ctx, args);
   },
 });
 
@@ -154,6 +163,7 @@ export const createPayoutIntent = internalMutation({
       v.literal('paid'),
       v.literal('failed'),
     ),
+    createdAt: v.number(),
     stripePayoutId: v.optional(v.string()),
     reused: v.boolean(),
   }),
@@ -174,7 +184,15 @@ export const markPayoutBatchSubmitted = internalMutation({
 });
 
 export const confirmPayout = internalMutation({
-  args: {stripePayoutId: v.string()},
+  args: {
+    stripePayoutId: v.string(),
+    // Webhook context: enables metadata-based batch recovery and external
+    // payout ingestion. Absent on bare confirmations (tests, recovery).
+    amountCents: v.optional(v.number()),
+    currency: v.optional(v.string()),
+    metadataBatchId: v.optional(v.string()),
+    connectedAccountId: v.optional(v.string()),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
     return await confirmPayoutImpl(ctx, args);
@@ -185,10 +203,70 @@ export const failPayout = internalMutation({
   args: {
     stripePayoutId: v.string(),
     failureReason: v.optional(v.string()),
+    metadataBatchId: v.optional(v.string()),
+    connectedAccountId: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     return await failPayoutImpl(ctx, args);
+  },
+});
+
+export const listNetlessCapturedRows = internalQuery({
+  args: {stripeConnectedAccountId: v.string()},
+  returns: v.array(
+    v.object({
+      orderId: v.id('ticket_orders'),
+      eventId: v.id('events'),
+      stripeChargeId: v.union(v.string(), v.null()),
+      stripePaymentIntentId: v.union(v.string(), v.null()),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    return await listNetlessCapturedRowsImpl(ctx, args);
+  },
+});
+
+export const listUnrecordedStripePayoutIds = internalQuery({
+  args: {stripePayoutIds: v.array(v.string())},
+  returns: v.array(v.string()),
+  handler: async (ctx, args) => {
+    return await listUnrecordedStripePayoutIdsImpl(ctx, args);
+  },
+});
+
+export const listPayoutBatchesNeedingRecovery = internalQuery({
+  args: {now: v.number()},
+  returns: v.object({
+    submitted: v.array(
+      v.object({
+        batchId: v.id('payout_batches'),
+        connectedAccountId: v.string(),
+        stripePayoutId: v.string(),
+      }),
+    ),
+    pending: v.array(
+      v.object({
+        batchId: v.id('payout_batches'),
+        connectedAccountId: v.string(),
+        amountCents: v.number(),
+        createdAt: v.number(),
+      }),
+    ),
+  }),
+  handler: async (ctx, args) => {
+    return await listPayoutBatchesNeedingRecoveryImpl(ctx, args);
+  },
+});
+
+export const failStalePendingBatch = internalMutation({
+  args: {
+    batchId: v.id('payout_batches'),
+    failureReason: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    return await failStalePendingBatchImpl(ctx, args);
   },
 });
 

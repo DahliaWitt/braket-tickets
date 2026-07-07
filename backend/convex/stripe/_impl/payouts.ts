@@ -167,10 +167,7 @@ export function computeEventSettlements(
 
     const alreadyPaidOutCents = paidOutByEvent.get(eventId) ?? 0;
     const payableCents =
-      sums.capturedNet +
-      sums.refundNet +
-      sums.disputeNet -
-      alreadyPaidOutCents;
+      sums.capturedNet + sums.refundNet + sums.disputeNet - alreadyPaidOutCents;
 
     settlements.push({
       eventId,
@@ -208,16 +205,12 @@ export interface BuildPayoutPlanArgs {
  */
 export function buildPayoutPlan(args: BuildPayoutPlanArgs): AccountPayoutPlan {
   const eligibleEvents = args.settlements
-    .filter(
-      (s) => args.eligibleEventIds.has(s.eventId) && s.payableCents > 0,
-    )
+    .filter((s) => args.eligibleEventIds.has(s.eventId) && s.payableCents > 0)
     .slice()
     .sort((a, b) => a.eventDate - b.eventDate);
 
   const reservedCents = args.settlements
-    .filter(
-      (s) => !args.eligibleEventIds.has(s.eventId) && s.payableCents > 0,
-    )
+    .filter((s) => !args.eligibleEventIds.has(s.eventId) && s.payableCents > 0)
     .reduce((sum, s) => sum + s.payableCents, 0);
 
   const eligibleNetCents = eligibleEvents.reduce(
@@ -248,5 +241,69 @@ export function buildPayoutPlan(args: BuildPayoutPlanArgs): AccountPayoutPlan {
     availableBalanceCents: args.availableBalanceCents,
     payableCents,
     allocations,
+  };
+}
+
+/**
+ * Tolerance for the ledger trust gate. Steady-state delta is exactly zero
+ * because ledger nets come from Stripe BalanceTransactions; the epsilon only
+ * absorbs sub-dollar rounding artifacts, never real drift.
+ */
+export const PAYOUT_TRUST_EPSILON_CENTS = 100;
+
+export interface LedgerTrustGateArgs {
+  /** ALL settlements for the account (eligible and future alike). */
+  settlements: ReadonlyArray<EventSettlement>;
+  /**
+   * Sum of `amountCents` over the account's `submitted` payout batches.
+   * Money that already left the Stripe balance but whose allocations are
+   * not yet confirmed `paid`, so the ledger still claims it.
+   */
+  inflightSubmittedCents: number;
+  /** Connected account's available balance (USD cents). */
+  stripeAvailableCents: number;
+  /** Connected account's pending balance (USD cents). */
+  stripePendingCents: number;
+  epsilonCents?: number;
+}
+
+export interface LedgerTrustGateResult {
+  ok: boolean;
+  /** Signed sum of every settlement's payable — expected remaining cash. */
+  ledgerClaimCents: number;
+  /** available + pending. */
+  stripeTruthCents: number;
+  /** ledgerClaim − (stripeTruth + inflightSubmitted). */
+  deltaCents: number;
+}
+
+/**
+ * Fail-closed reconciliation gate: the ledger's remaining claim must match
+ * the money actually in Stripe before any payout is submitted.
+ *
+ * The claim is a SIGNED sum — settlements driven negative by post-payout
+ * refunds or disputes legitimately offset positive ones, exactly as they do
+ * in the real balance. One-off mismatches are expected timing races (a
+ * refund debits the balance before its webhook lands, a capture credits
+ * pending before its ledger row exists) and self-heal by the next daily
+ * run; only a persistent mismatch indicates real divergence.
+ */
+export function computeLedgerTrustGate(
+  args: LedgerTrustGateArgs,
+): LedgerTrustGateResult {
+  const epsilonCents = args.epsilonCents ?? PAYOUT_TRUST_EPSILON_CENTS;
+  const ledgerClaimCents = args.settlements.reduce(
+    (sum, s) => sum + s.payableCents,
+    0,
+  );
+  const stripeTruthCents = args.stripeAvailableCents + args.stripePendingCents;
+  const deltaCents =
+    ledgerClaimCents - (stripeTruthCents + args.inflightSubmittedCents);
+
+  return {
+    ok: Math.abs(deltaCents) <= epsilonCents,
+    ledgerClaimCents,
+    stripeTruthCents,
+    deltaCents,
   };
 }

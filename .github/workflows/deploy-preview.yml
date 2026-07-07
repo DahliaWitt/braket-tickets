@@ -217,7 +217,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: '22'
+          node-version-file: '.nvmrc'
 
       - name: Validate localhost CORS flag for preview
         run: |
@@ -238,7 +238,11 @@ jobs:
         run: pnpm sync:env:dev
 
       - name: Deploy to Convex (Dev)
-        run: pnpm convex deploy
+        env:
+          DEPLOY_REF_NAME: ${{ github.ref_name }}
+          DEPLOY_SHA: ${{ github.sha }}
+          DEPLOY_ACTOR: ${{ github.actor }}
+        run: pnpm convex deploy --message "dev deploy ${DEPLOY_REF_NAME} @ ${DEPLOY_SHA} by ${DEPLOY_ACTOR}"
 
   deploy-frontend-preview:
     name: Deploy Frontend to Cloudflare (Preview)
@@ -261,7 +265,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: '22'
+          node-version-file: '.nvmrc'
 
       - name: Install root dependencies
         run: pnpm install --frozen-lockfile

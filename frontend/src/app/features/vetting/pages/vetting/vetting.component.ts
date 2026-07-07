@@ -302,7 +302,18 @@ export class VettingComponent {
   readonly hasCodeOfConduct = computed(() => this.codeOfConduct() !== null);
   isLoading = this.questionsResource.isLoading;
   readonly isExistingApplicationGateLoading = computed(() => {
-    if (!this.auth.user() || !this.id()) {
+    if (!this.id()) {
+      return false;
+    }
+
+    // Optimistic activation window: the route was admitted on a cached
+    // credential but auth has not settled, so the user-keyed resources have
+    // not started. Show the gate skeleton instead of an empty question form.
+    if (!this.auth.authSettled()) {
+      return true;
+    }
+
+    if (!this.auth.user()) {
       return false;
     }
 
