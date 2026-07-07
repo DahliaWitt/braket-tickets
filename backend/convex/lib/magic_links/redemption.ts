@@ -134,7 +134,7 @@ export async function redeemMagicLink(
   });
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: linkDoc.createdBy,
       action: 'magic_link.redemption',

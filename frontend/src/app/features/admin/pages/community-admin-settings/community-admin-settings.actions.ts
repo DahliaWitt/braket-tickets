@@ -132,6 +132,17 @@ export async function grantCommunityScanner(
   });
 }
 
+export async function grantCommunityScannerById(
+  convex: ConvexClient,
+  userId: Id<'users'>,
+  organizerId: Id<'organizers'>,
+): Promise<void> {
+  await convex.mutation(api.communities.scanners.grant, {
+    userId,
+    organizerId,
+  });
+}
+
 export async function revokeCommunityScanner(
   convex: ConvexClient,
   userId: Id<'users'>,

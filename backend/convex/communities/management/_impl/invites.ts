@@ -154,7 +154,7 @@ export async function redeemInvite(
   });
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: invite.invitedBy,
       action: 'admin_invite.redeem',

@@ -13,6 +13,7 @@ import {
   listByEvent as listByEventImpl,
   markAsEmailed as markAsEmailedImpl,
   remove as removeImpl,
+  update as updateImpl,
 } from './_impl/guests';
 
 export const add = mutation({
@@ -25,6 +26,18 @@ export const add = mutation({
   },
   returns: v.id('guests'),
   handler: addImpl,
+});
+
+export const update = mutation({
+  args: {
+    id: v.id('guests'),
+    name: v.string(),
+    email: v.optional(v.string()),
+    type: guestTypeValidator,
+    notes: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: updateImpl,
 });
 
 export const remove = mutation({
