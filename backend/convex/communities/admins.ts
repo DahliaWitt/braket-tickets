@@ -1,6 +1,13 @@
 import {v} from 'convex/values';
 import {mutation, query} from '../_generated/server';
-import {grantCommunityAdmin, isCommunityMemberOf, listCommunityAdmins, listMyCommunityIds, revokeCommunityAdmin} from './_impl/admins';
+import {communityUserRowValidator} from '../lib/users/validators';
+import {
+  grantCommunityAdmin,
+  isCommunityMemberOf,
+  listCommunityAdmins,
+  listMyCommunityIds,
+  revokeCommunityAdmin,
+} from './_impl/admins';
 
 export const grant = mutation({
   args: {userId: v.id('users'), organizerId: v.optional(v.id('organizers'))},
@@ -16,15 +23,7 @@ export const revoke = mutation({
 
 export const listByCommunity = query({
   args: {organizerId: v.id('organizers')},
-  returns: v.array(
-    v.object({
-      _id: v.id('users'),
-      userId: v.id('users'),
-      organizerId: v.id('organizers'),
-      displayName: v.string(),
-      email: v.optional(v.string()),
-    }),
-  ),
+  returns: v.array(communityUserRowValidator),
   handler: async (ctx, args) => listCommunityAdmins(ctx, args),
 });
 
