@@ -9,6 +9,7 @@ import {
   throwNotFound,
 } from '../../lib/errors';
 import {logger} from '../../lib/logger';
+import {scheduleBroadcastCatchup} from '../../lib/broadcast_catchup';
 import {enqueueTicketEmailDelivery} from '../../lib/email_delivery_wrapper';
 import {stripePool} from '../../lib/resilience';
 import {buildTicketRosterProjection} from '../../lib/ticket_roster_projection';
@@ -620,17 +621,12 @@ async function applyResaleTicketTransfer(
     }),
   });
 
-  // Unconditional broadcast catch-up scheduling: pre-checking
-  // eventBroadcasts here would OCC-couple every in-flight settlement to a
-  // concurrent sendBroadcast; a no-op scheduled mutation is cheaper.
-  const broadcastCatchupEmail = buyerUser?.email ?? buyerGuestSession?.email;
-  if (broadcastCatchupEmail) {
-    await ctx.scheduler.runAfter(0, internal.events.broadcasts.deliverMissed, {
-      eventId: order.eventId,
-      email: broadcastCatchupEmail,
-      ...(order.userId ? {userId: order.userId} : {}),
-    });
-  }
+  // Catch the resale buyer up on broadcasts sent before they joined.
+  await scheduleBroadcastCatchup(ctx, {
+    eventId: order.eventId,
+    email: buyerUser?.email ?? buyerGuestSession?.email,
+    userId: order.userId,
+  });
 }
 
 /**

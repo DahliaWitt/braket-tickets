@@ -1038,7 +1038,10 @@ const schemaTables = {
     ),
   })
     .index('by_broadcast_and_email', ['broadcastId', 'email'])
-    .index('by_event_and_email', ['eventId', 'email']),
+    .index('by_event_and_email', ['eventId', 'email'])
+    // Email-only lookup for privacy export/erasure by recipient, mirroring
+    // the recipient indexes on sibling PII-email tables (e.g. emailDeliveries).
+    .index('by_email', ['email']),
 
   ticketReminderSends: defineTable({
     eventId: v.id('events'),

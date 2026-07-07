@@ -1,6 +1,6 @@
 import type {Doc, Id} from '../../_generated/dataModel';
 import type {MutationCtx, QueryCtx} from '../../_generated/server';
-import {internal} from '../../_generated/api';
+import {scheduleBroadcastCatchup} from '../../lib/broadcast_catchup';
 import {throwNotFound} from '../../lib/errors';
 import {
   validateEmail,
@@ -38,8 +38,11 @@ export async function add(
     validateEmail(trimmedEmail, 'Email');
   }
 
+  // Persist the trimmed, validated email so the stored record matches the
+  // value used by scheduling and the broadcast audience lookups downstream.
   const guestId = await ctx.db.insert('guests', {
     ...args,
+    email: trimmedEmail || undefined,
   });
 
   await insertAdminAuditLog(
@@ -55,14 +58,11 @@ export async function add(
   );
 
   // A late-added guest joins the broadcast audience after any prior sends;
-  // catch them up. Unconditional w.r.t. broadcast existence — see
-  // completePrimaryOrderState for the OCC rationale.
-  if (trimmedEmail) {
-    await ctx.scheduler.runAfter(0, internal.events.broadcasts.deliverMissed, {
-      eventId: args.eventId,
-      email: trimmedEmail,
-    });
-  }
+  // catch them up on anything already sent.
+  await scheduleBroadcastCatchup(ctx, {
+    eventId: args.eventId,
+    email: trimmedEmail,
+  });
 
   return guestId;
 }

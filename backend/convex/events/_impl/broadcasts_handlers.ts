@@ -381,19 +381,22 @@ export async function deliverMissedBroadcasts(
     .take(100);
   if (broadcasts.length === 0) return null;
 
-  // Rows per (event, email) are bounded by the event's broadcast count,
-  // which shares the take(100) bound above.
-  const deliveries = await ctx.db
-    .query('eventBroadcastDeliveries')
-    .withIndex('by_event_and_email', (q) =>
-      q.eq('eventId', args.eventId).eq('email', email),
-    )
-    .take(100);
-  const delivered = new Set(deliveries.map((delivery) => delivery.broadcastId));
-
-  const missed = broadcasts.filter(
-    (broadcast) => !delivered.has(broadcast._id),
+  // Check each loaded broadcast individually via `by_broadcast_and_email` so
+  // `missed` is derived from the exact broadcasts loaded above. A capped
+  // `by_event_and_email` scan could return a different 100-row window than the
+  // broadcasts query (deliveries oldest-first, broadcasts newest-first), which
+  // on an event with >100 broadcasts could resend already-delivered ones.
+  const deliveryRows = await Promise.all(
+    broadcasts.map((broadcast) =>
+      ctx.db
+        .query('eventBroadcastDeliveries')
+        .withIndex('by_broadcast_and_email', (q) =>
+          q.eq('broadcastId', broadcast._id).eq('email', email),
+        )
+        .first(),
+    ),
   );
+  const missed = broadcasts.filter((_, index) => deliveryRows[index] === null);
   if (missed.length === 0) return null;
 
   let siteUrl: string;
@@ -444,8 +447,8 @@ export async function deliverMissedBroadcasts(
   // Oldest-first so inbox order matches send order. Sends run sequentially:
   // a mid-loop throw rolls back the whole transaction, so there is no
   // partial state to guard against. Concurrent duplicates are prevented by
-  // OCC: the `by_event_and_email` read above conflicts with any concurrent
-  // insert of a delivery row for this email, so one transaction retries
+  // OCC: each per-broadcast `by_broadcast_and_email` read above conflicts with
+  // a concurrent insert of that same delivery row, so one transaction retries
   // and re-reads the committed rows.
   for (const broadcast of [...missed].reverse()) {
     await ctx.db.insert('eventBroadcastDeliveries', {
