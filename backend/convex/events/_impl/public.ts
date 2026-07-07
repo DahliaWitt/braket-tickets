@@ -1,4 +1,4 @@
-import type {Doc, Id} from '../../_generated/dataModel';
+import type {Id} from '../../_generated/dataModel';
 import type {QueryCtx} from '../../_generated/server';
 import {
   canViewCommunity,
@@ -7,11 +7,7 @@ import {
   isPlatformAdmin,
 } from '../../lib/access';
 import {countMatchingInQuery} from '../../lib/query_scan';
-import {hasEventEnded, startOfTodayInEventTimeZone} from '../../lib/timezone';
-import {
-  compareEventsByStartAscending,
-  loadRunningPublishedEvents,
-} from './ongoing';
+import {hasEventEnded, ongoingEventStartLowerBound} from '../../lib/timezone';
 import {getAuthUserId} from '../../lib/auth_identity';
 import {
   getPosterUrl,
@@ -47,29 +43,22 @@ export async function listVisiblePublishedEvents(ctx: QueryCtx) {
 
 export async function listUpcomingPublishedEvents(ctx: QueryCtx) {
   const userId = await getAuthUserId(ctx);
-  const startOfToday = startOfTodayInEventTimeZone();
+  // Look back MAX_EVENT_DURATION so running multi-day events (started before
+  // today, not yet ended) are included; the `by_status_date` index yields
+  // start-date-ascending order, honouring the "sorted by date" contract.
+  const minDate = ongoingEventStartLowerBound();
   // TODO(BRA-410): Replace this all-results read with a real paginated API.
   // eslint-disable-next-line @convex-dev/no-collect-in-query -- Temporary all-results API until pagination is added.
-  const upcoming = await ctx.db
+  const events = await ctx.db
     .query('events')
     .withIndex('by_status_date', (q) =>
-      q.eq('status', 'published').gte('date', startOfToday),
+      q.eq('status', 'published').gte('date', minDate),
     )
     .collect();
-  // Currently-running multi-day events (started before today, endDate still
-  // ahead) come from the endDate index instead of scanning past events.
-  const running = await loadRunningPublishedEvents(ctx.db);
 
-  const byId = new Map<Id<'events'>, Doc<'events'>>();
-  for (const event of [...running, ...upcoming]) byId.set(event._id, event);
-  // Restore the by-date ordering the single date-indexed query used to give
-  // (running events, whose start is in the past, sort first) so the documented
-  // "sorted by date" contract holds and matches the other discovery loaders.
-  const ongoingEvents = [...byId.values()]
-    .filter((event) => !hasEventEnded(event))
-    .sort(compareEventsByStartAscending);
-
+  const ongoingEvents = events.filter((event) => !hasEventEnded(event));
   const viewableEvents = await filterViewableEvents(ctx, userId, ongoingEvents);
+
   return await mapEventsWithPosterUrls(ctx, viewableEvents);
 }
 

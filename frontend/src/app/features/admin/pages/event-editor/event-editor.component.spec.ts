@@ -399,7 +399,7 @@ describe('EventEditorComponent', () => {
       ...m,
       date: getFutureDate(31),
       time: '20:00',
-      endDate: getFutureDate(31 + 100), // 100 days > 90-day cap
+      endDate: getFutureDate(31 + 45), // 45 days > 30-day cap
       endTime: '20:00',
     }));
     component.submitted.set(true);
@@ -411,7 +411,7 @@ describe('EventEditorComponent', () => {
     );
     expect(await harness.isSaveButtonDisabled()).toBe(true);
     expect(await harness.getEndTimeErrorText()).toContain(
-      'within 90 days of the event start',
+      'within 30 days of the event start',
     );
   });
 

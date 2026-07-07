@@ -354,14 +354,6 @@ const schemaTables = {
   })
     .index('by_status', ['status'])
     .index('by_status_date', ['status', 'date'])
-    // Drives the "currently running" source for discovery: published events
-    // whose endDate is still in the future (started-but-not-ended multi-day
-    // events). Rows without an endDate sort before any string and are excluded
-    // by a `> now` range.
-    .index('by_status_endDate', ['status', 'endDate'])
-    // Organizer-scoped variant so a single community page reads only its own
-    // running events instead of a global endDate scan.
-    .index('by_organizer_status_endDate', ['organizerId', 'status', 'endDate'])
     .index('by_organizer', ['organizerId'])
     .index('by_organizer_status', ['organizerId', 'status'])
     .index('by_organizer_status_visibility_date', [

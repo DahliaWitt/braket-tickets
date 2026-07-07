@@ -2471,7 +2471,7 @@ describe('Event listing pagination', () => {
     }
   });
 
-  it('upcoming keeps a long running event that started well before any date lookback', async () => {
+  it('upcoming keeps a running event whose start is weeks deep in the lookback', async () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(new Date('2026-06-10T20:00:00.000Z'));
@@ -2481,12 +2481,13 @@ describe('Event listing pagination', () => {
         {name: 'Long Run Crew', isPublicDirectory: true},
       );
 
-      // Started 40 days ago, ends tomorrow. A fixed start-date lookback would
-      // miss this; the endDate index catches it purely on `endDate > now`.
+      // Started 20 days ago, ends in two days (a 22-day run, within the cap).
+      // Its start is well past `date >= today`, so only the lookback window
+      // reaches it — and the window can't crowd it out.
       await t.mutation(api.testing.events.seedEvent, {
         title: 'Long Running Festival',
-        date: '2026-05-01T20:00:00.000Z',
-        endDate: '2026-06-11T20:00:00.000Z',
+        date: '2026-05-21T20:00:00.000Z',
+        endDate: '2026-06-12T20:00:00.000Z',
         price: 2000,
         totalTickets: 50,
         status: 'published',

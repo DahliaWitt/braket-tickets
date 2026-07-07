@@ -598,12 +598,6 @@ export type DataModel = {
       by_creation_time: ["_creationTime"];
       by_organizer: ["organizerId", "_creationTime"];
       by_organizer_status: ["organizerId", "status", "_creationTime"];
-      by_organizer_status_endDate: [
-        "organizerId",
-        "status",
-        "endDate",
-        "_creationTime",
-      ];
       by_organizer_status_visibility_date: [
         "organizerId",
         "status",
@@ -619,7 +613,6 @@ export type DataModel = {
       ];
       by_status: ["status", "_creationTime"];
       by_status_date: ["status", "date", "_creationTime"];
-      by_status_endDate: ["status", "endDate", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};
