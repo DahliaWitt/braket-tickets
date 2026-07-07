@@ -18,8 +18,8 @@ import {
 } from '../../lib/magic_links/validation';
 import {redeemMagicLink} from '../../lib/magic_links/redemption';
 import {
-  getMagicLinksForCreator,
-  getPastMagicLinksForCreator,
+  getMagicLinksForCommunityAdmin,
+  getPastMagicLinksForCommunityAdmin,
   resolveMagicLinkTransition,
   type MagicLinkStatusAction,
   type MagicLinksListItem,
@@ -114,9 +114,6 @@ export async function updateMagicLinkStatusHandler(
   if (!isAdmin) {
     throwForbidden('Not authorized to modify this link');
   }
-  if (!(await canManageCommunity(ctx, link.createdBy, link.organizerId))) {
-    throwForbidden('The link creator no longer manages this community');
-  }
 
   const transition = resolveMagicLinkTransition(link.status, args.action);
   await ctx.db.patch('magic_links', args.linkId, transition);
@@ -142,7 +139,7 @@ export async function listMyLinksHandler(
   const userId = await getAuthUserId(ctx);
   if (!userId) return [];
 
-  return getMagicLinksForCreator(ctx, userId, args.organizerId);
+  return getMagicLinksForCommunityAdmin(ctx, userId, args.organizerId);
 }
 
 export async function listPastMyLinksHandler(
@@ -152,5 +149,5 @@ export async function listPastMyLinksHandler(
   const userId = await getAuthUserId(ctx);
   if (!userId) return [];
 
-  return getPastMagicLinksForCreator(ctx, userId, args.organizerId);
+  return getPastMagicLinksForCommunityAdmin(ctx, userId, args.organizerId);
 }
