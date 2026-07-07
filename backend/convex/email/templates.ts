@@ -5,7 +5,7 @@
  */
 
 import {resolveSiteUrl} from '../lib/site_url';
-import {EVENT_DATE_TIME_ZONE} from '../lib/timezone';
+import {EVENT_DATE_TIME_ZONE, toDateKeyInEventTimeZone} from '../lib/timezone';
 import {eventStartInstantMs, parseUtcInstant} from '@shared/event-time';
 
 /** Escapes HTML special characters to prevent XSS in email templates. */
@@ -41,11 +41,44 @@ const eventDateTimeFormatter = new Intl.DateTimeFormat('en-US', {
   timeZoneName: 'short',
 });
 
+// Start date+time without a timezone label, paired with an end time that
+// carries the timezone — used to render next-day (overnight) ranges as
+// "Thu, Feb 26, 2026, 10:00 PM – 6:00 AM PST" (no repeated end date).
+const eventStartDateTimeNoTzFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: EVENT_DATE_TIME_ZONE,
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+});
+const eventEndTimeFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: EVENT_DATE_TIME_ZONE,
+  hour: 'numeric',
+  minute: '2-digit',
+  timeZoneName: 'short',
+});
+
+/** Whole calendar days between two instants, counted in the event timezone. */
+function eventLocalDayDiff(startMs: number, endMs: number): number {
+  const [sy, sm, sd] = toDateKeyInEventTimeZone(new Date(startMs))
+    .split('-')
+    .map(Number);
+  const [ey, em, ed] = toDateKeyInEventTimeZone(new Date(endMs))
+    .split('-')
+    .map(Number);
+  return Math.round(
+    (Date.UTC(ey, em - 1, ed) - Date.UTC(sy, sm - 1, sd)) / 86_400_000,
+  );
+}
+
 /**
- * Formats the event's start — and, when a valid endDate is set, the full
- * start–end range — in the event timezone. formatRange handles same-day
- * ("Mon, Dec 15, 2026, 8:00 – 11:00 PM PST") vs overnight
- * ("… 10:00 PM PST – Tue, Dec 16, 2026, 6:00 AM PST") rendering.
+ * Formats the event's start — and, when a valid endDate is set, its end — in
+ * the event timezone. Same-day events collapse ("Mon, Dec 15, 2026, 8:00 –
+ * 11:00 PM PST"); next-day overnight events show the end time only ("Thu, Feb
+ * 26, 2026, 10:00 PM – 6:00 AM PST"); multi-day events show both dates ("Fri,
+ * Aug 1, 2026, 8:00 PM – Sun, Aug 3, 2026, 2:00 AM PST").
  */
 function formatEventDateTime(event: {date: string; endDate?: string}): string {
   const startsAtMs = eventStartInstantMs(event.date);
@@ -54,14 +87,22 @@ function formatEventDateTime(event: {date: string; endDate?: string}): string {
   const endsAtMs = event.endDate
     ? (parseUtcInstant(event.endDate)?.getTime() ?? null)
     : null;
-  if (endsAtMs !== null && endsAtMs > startsAtMs) {
-    return eventDateTimeFormatter.formatRange(
-      new Date(startsAtMs),
-      new Date(endsAtMs),
-    );
+  if (endsAtMs === null || endsAtMs <= startsAtMs) {
+    return eventDateTimeFormatter.format(new Date(startsAtMs));
   }
 
-  return eventDateTimeFormatter.format(new Date(startsAtMs));
+  // Next-day overnight (e.g. 9pm–3am): end time only, no repeated end date.
+  if (eventLocalDayDiff(startsAtMs, endsAtMs) === 1) {
+    return `${eventStartDateTimeNoTzFormatter.format(
+      new Date(startsAtMs),
+    )} – ${eventEndTimeFormatter.format(new Date(endsAtMs))}`;
+  }
+
+  // Same day collapses; multi-day shows both dates.
+  return eventDateTimeFormatter.formatRange(
+    new Date(startsAtMs),
+    new Date(endsAtMs),
+  );
 }
 
 const vettingSubmissionTimeFormatter = new Intl.DateTimeFormat('en-US', {

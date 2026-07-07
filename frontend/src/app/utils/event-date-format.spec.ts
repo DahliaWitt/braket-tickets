@@ -62,8 +62,8 @@ describe('formatEventEndTimeSuffix', () => {
     ).toBe(' – 11:00 PM');
   });
 
-  it('includes the end day for overnight events', () => {
-    // 10pm Feb 26 – 6am Feb 27 event-local
+  it('renders a next-day overnight end as a bare time (no end date)', () => {
+    // 10pm Feb 26 – 6am Feb 27 event-local (an overnight party)
     expect(
       normalizeSpaces(
         formatEventEndTimeSuffix(
@@ -71,7 +71,19 @@ describe('formatEventEndTimeSuffix', () => {
           '2026-02-27T06:00:00.000Z',
         ),
       ),
-    ).toBe(' – Feb 27, 2026, 6:00 AM');
+    ).toBe(' – 6:00 AM');
+  });
+
+  it('includes the end date for multi-day events', () => {
+    // 10pm Feb 26 – 8pm Feb 28 event-local (a multi-day span)
+    expect(
+      normalizeSpaces(
+        formatEventEndTimeSuffix(
+          '2026-03-01T04:00:00.000Z',
+          '2026-02-27T06:00:00.000Z',
+        ),
+      ),
+    ).toBe(' – Feb 28, 2026, 8:00 PM');
   });
 
   it('returns an empty suffix for missing, invalid, or non-positive windows', () => {

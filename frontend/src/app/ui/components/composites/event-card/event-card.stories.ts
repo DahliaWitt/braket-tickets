@@ -74,8 +74,8 @@ export const OvernightWithEndTime: Story = {
       ...BASE_EVENT,
       _id: 'evt_overnight',
       title: 'Nocturne',
-      // 10pm doors, 6am close the next morning (event timezone). Exercises the
-      // eventEndTime suffix rendering the end day for a cross-midnight window.
+      // 10pm doors, 6am close the next morning (event timezone). A next-day
+      // overnight shows the end time only — no repeated end date.
       date: '2026-06-21T05:00:00.000Z',
       endDate: '2026-06-21T13:00:00.000Z',
     },
@@ -84,7 +84,29 @@ export const OvernightWithEndTime: Story = {
     docs: {
       description: {
         story:
-          'Event with an explicit end that crosses midnight. The date line renders the full window ("… 10:00 PM – Jun 21, 6:00 AM"), formatted in the platform event timezone.',
+          'Event that runs overnight into the next morning. The date line shows the end time without the end date ("… 10:00 PM – 6:00 AM"), formatted in the platform event timezone.',
+      },
+    },
+  },
+};
+
+export const MultiDayWithEndDate: Story = {
+  args: {
+    event: {
+      ...BASE_EVENT,
+      _id: 'evt_weekender',
+      title: 'Longitude Weekender',
+      // Jun 19 8pm through Jun 21 2am (event timezone) — two calendar days
+      // apart, so the end date is shown to keep the window unambiguous.
+      date: '2026-06-20T03:00:00.000Z',
+      endDate: '2026-06-21T09:00:00.000Z',
+    },
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Multi-day event spanning more than one calendar day. The date line includes the end date ("… 8:00 PM – Jun 21, 2:00 AM") so the span reads unambiguously.',
       },
     },
   },

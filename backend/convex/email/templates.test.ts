@@ -241,7 +241,7 @@ describe('purchasedTicketTemplate', () => {
     expect(html).not.toContain('2026-02-27T07:30:00.000Z');
   });
 
-  it('renders an overnight end date as a full range in the platform timezone', () => {
+  it('renders a next-day overnight end as end time only (no end date)', () => {
     const {html} = purchasedTicketTemplate(
       {
         title: 'Overnight Ticket',
@@ -255,9 +255,29 @@ describe('purchasedTicketTemplate', () => {
     );
 
     const normalized = html.replace(/\s+/g, ' ');
-    expect(normalized).toContain('Thu, Feb 26, 2026, 10:00 PM PST');
-    expect(normalized).toContain('Fri, Feb 27, 2026, 6:00 AM PST');
-    expect(normalized).toContain(' – ');
+    // Start day + time, then just the end time — the next-day date is omitted.
+    expect(normalized).toContain('Thu, Feb 26, 2026, 10:00 PM – 6:00 AM PST');
+    expect(normalized).not.toContain('Feb 27, 2026');
+  });
+
+  it('renders a multi-day event as a full range with both dates', () => {
+    const {html} = purchasedTicketTemplate(
+      {
+        title: 'Weekender Ticket',
+        date: '2026-02-27T06:00:00.000Z', // 10pm Feb 26 event-local
+        endDate: '2026-03-01T04:00:00.000Z', // 8pm Feb 28 event-local
+        location: 'Afterhours',
+      },
+      'Guest',
+      'https://qr.example/ticket.png',
+      true,
+    );
+
+    const normalized = html.replace(/\s+/g, ' ');
+    // Two calendar days apart -> the end date is shown to disambiguate.
+    expect(normalized).toContain('Feb 26, 2026');
+    expect(normalized).toContain('Feb 28, 2026');
+    expect(normalized).toContain('PST');
   });
 
   it('ignores an end date that is not after the start', () => {
