@@ -263,13 +263,10 @@ interface TicketResaleInfo {
                       (click)="downloadTicketPdf(ticket._id)"
                     >
                       @if (isDownloadingPdf() === ticket._id) {
-                        <z-icon
-                          zType="loader-circle"
-                          class="mr-2 animate-spin"
-                        />
+                        <z-icon zType="loader-circle" class="animate-spin" />
                         Generating...
                       } @else {
-                        <z-icon zType="file-text" class="mr-2 h-4 w-4" />
+                        <z-icon zType="file-text" class="h-4 w-4" />
                         Download PDF
                       }
                     </button>
@@ -359,11 +356,11 @@ interface TicketResaleInfo {
                           @if (isCancellingListing() === ticket._id) {
                             <z-icon
                               zType="loader-circle"
-                              class="mr-2 animate-spin"
+                              class="animate-spin"
                             />
                             Cancelling...
                           } @else {
-                            <z-icon zType="x" class="mr-2" />
+                            <z-icon zType="x" />
                             Cancel Listing
                           }
                         </button>
@@ -375,10 +372,12 @@ interface TicketResaleInfo {
                           class="mt-4 w-full rounded-lg border border-warning/20 bg-warning/10 p-3"
                         >
                           <div class="flex items-start gap-2">
-                            <z-icon
-                              zType="loader-circle"
-                              class="mt-0.5 shrink-0 animate-spin text-warning"
-                            />
+                            <span class="mt-0.5 flex shrink-0">
+                              <z-icon
+                                zType="loader-circle"
+                                class="animate-spin text-warning"
+                              />
+                            </span>
                             <p
                               class="font-mono text-xs leading-relaxed text-warning"
                             >
@@ -491,7 +490,7 @@ interface TicketResaleInfo {
                               @if (isListingForResale() === ticket._id) {
                                 <z-icon
                                   zType="loader-circle"
-                                  class="mr-2 animate-spin"
+                                  class="animate-spin"
                                 />
                                 Listing...
                               } @else {
