@@ -531,7 +531,7 @@ interface TicketResaleInfo {
                 </div>
               </z-card>
             } @empty {
-              @if (isLoading()) {
+              @if (showTicketsSkeleton()) {
                 <div
                   class="h-64 overflow-hidden rounded-xl border border-border bg-card/80"
                 >
@@ -578,6 +578,15 @@ export class TicketsComponent {
   // safe to read directly.
   readonly tickets = this.paymentService.ticketsResource.value;
   isLoading = this.paymentService.ticketsResource.isLoading;
+  /**
+   * Skeleton gate for the empty-list branch. Includes the optimistic
+   * activation window (route admitted on a cached credential, auth not yet
+   * settled) so a signed-in buyer never flashes "No tickets found" while the
+   * profile-keyed query has not started.
+   */
+  readonly showTicketsSkeleton = computed(
+    () => this.isLoading() || !this.auth.authSettled(),
+  );
   readonly copiedId = signal<string | null>(null);
   readonly isDownloadingPdf = signal<string | null>(null);
 
