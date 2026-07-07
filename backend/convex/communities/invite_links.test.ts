@@ -3,6 +3,7 @@ import {describe, it, expect, vi} from 'vitest';
 import {api} from '../_generated/api';
 import type {Id} from '../_generated/dataModel';
 import {addMember, removeMember, authz, authzUserId} from '../lib/authz';
+import {deactivateActiveMagicLinksForCreator} from '../lib/magic_links/deactivation';
 
 type MagicLinkSeedArgs = {
   token?: string;
@@ -1036,6 +1037,31 @@ describe('updateStatus mutation', () => {
     expect(link!.status).toBe('paused');
   });
 
+  it('co-admin can manage a link created by another community admin', async () => {
+    const t = convexTest();
+    const {organizerId, linkId} = await setupCommunityAdminWithLink(t);
+
+    // Assign a second community admin to the same community
+    const coAdminId = await t.run(async (ctx) =>
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- test setup user creation; to be replaced with createUserDirectly composite
+      ctx.db.insert('users', {email: 'co-admin@test.com'}),
+    );
+    await assignCommunityAdmin(t, coAdminId, organizerId);
+    const asCoAdmin = t.withIdentity({subject: coAdminId});
+
+    const result = await asCoAdmin.mutation(
+      api.communities.invite_links.updateStatus,
+      {
+        linkId,
+        action: 'pause',
+      },
+    );
+    expect(result.success).toBe(true);
+
+    const link = await t.run(async (ctx) => ctx.db.get(linkId));
+    expect(link!.status).toBe('paused');
+  });
+
   it('unauthenticated user cannot update status', async () => {
     const t = convexTest();
     const {linkId} = await setupCommunityAdminWithLink(t);
@@ -1131,26 +1157,25 @@ describe('redeem mutation', () => {
     expect(member).toBe(true);
   });
 
-  it('rejects active legacy links whose creator no longer manages the community', async () => {
+  it('rejects links deactivated when their creator loses community access', async () => {
     const t = convexTest();
     const {promoterId, organizerId, linkId, asRedeemer} =
       await setupRedeemScenario(t);
 
-    await t.run(async (ctx) => {
-      await authz.revokeRole(
-        ctx,
-        promoterId as string,
-        'community_admin',
-        {type: 'organizer', id: organizerId as string},
-        promoterId as string,
-      );
-    });
+    // Simulate the deactivation cascade that fires when a community admin is
+    // removed (see removeMemberWithAdminCascade → deactivateActiveMagicLinksForCreator).
+    await t.run(async (ctx) =>
+      deactivateActiveMagicLinksForCreator(ctx, {
+        organizerId,
+        creatorId: promoterId,
+      }),
+    );
 
     await expect(
       asRedeemer.mutation(api.communities.invite_links.redeem, {
         token: 'redeem-test-token',
       }),
-    ).rejects.toThrow('This link is no longer active');
+    ).rejects.toThrow('This link does not exist or has been removed');
 
     const redemptions = await t.run(async (ctx) =>
       ctx.db
@@ -1622,11 +1647,16 @@ describe('listMyLinks query', () => {
     expect(result).toEqual([]);
   });
 
-  it("returns only the caller's links, not other community admins' links", async () => {
+  it('returns links created by other admins in the same community', async () => {
     const t = convexTest();
     const {userId, orgId, asCommunityAdmin} = await setupCommunityAdmin(t);
 
-    // Create a link for our community admin
+    const otherUserId = await t.run(async (ctx) =>
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- test setup user creation; to be replaced with createUserDirectly composite
+      ctx.db.insert('users', {email: 'other@test.com'}),
+    );
+    await assignCommunityAdmin(t, otherUserId, orgId);
+
     await t.run(async (ctx) => {
       // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- test setup for magic_links state that seedMagicLink/seedMagicLinkRedemption composite covers; eslint-disable added during bulk refactor
       await ctx.db.insert('magic_links', {
@@ -1635,20 +1665,11 @@ describe('listMyLinks query', () => {
         organizerId: orgId,
         status: 'active',
       });
-    });
-
-    // Create a link for a different community admin
-    const otherUserId = await t.run(async (ctx) =>
-      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- test setup user creation; to be replaced with createUserDirectly composite
-      ctx.db.insert('users', {email: 'other@test.com'}),
-    );
-    const otherOrgId = await seedOrganizerHelper(t, 'Other List Org');
-    await t.run(async (ctx) => {
       // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- test setup for magic_links state that seedMagicLink/seedMagicLinkRedemption composite covers; eslint-disable added during bulk refactor
       await ctx.db.insert('magic_links', {
         token: 'other-link',
         createdBy: otherUserId,
-        organizerId: otherOrgId,
+        organizerId: orgId,
         status: 'active',
       });
     });
@@ -1657,8 +1678,10 @@ describe('listMyLinks query', () => {
       api.communities.invite_links.listMyLinks,
       {organizerId: orgId},
     );
-    expect(result).toHaveLength(1);
-    expect(result[0].tokenPrefix).toBe('my-link');
+    expect(result.map((link) => link.tokenPrefix).sort()).toEqual([
+      'my-link',
+      'other-li',
+    ]);
   });
 
   it("returns only the selected community's links for an admin who manages multiple communities", async () => {
@@ -1998,7 +2021,7 @@ describe('listPastMyLinks', () => {
     expect(result).toEqual([]);
   });
 
-  it('excludes other creators soft-deleted links', async () => {
+  it('includes soft-deleted links created by other admins in the same community', async () => {
     const t = convexTest();
     const {orgId, asAdmin} = await setupAdmin(t);
 
@@ -2009,13 +2032,13 @@ describe('listPastMyLinks', () => {
         email: `other-${crypto.randomUUID()}@test.com`,
       },
     )) as Id<'users'>;
-    const otherOrgId = await seedOrganizerHelper(t);
-    await assignCommunityAdmin(t, otherUserId, otherOrgId);
+    await assignCommunityAdmin(t, otherUserId, orgId);
     const asOther = t.withIdentity({subject: otherUserId});
 
     const {linkId: otherLinkId} = await seedMagicLinkHelper(t, {
       createdBy: otherUserId,
-      organizerId: otherOrgId,
+      organizerId: orgId,
+      label: 'Other Admin Archived Link',
     });
     await asOther.mutation(api.communities.invite_links.updateStatus, {
       linkId: otherLinkId,
@@ -2026,7 +2049,8 @@ describe('listPastMyLinks', () => {
       api.communities.invite_links.listPastMyLinks,
       {organizerId: orgId},
     );
-    expect(result).toEqual([]);
+    expect(result).toHaveLength(1);
+    expect(result[0].label).toBe('Other Admin Archived Link');
   });
 
   it('computes redemptionCount and lastUsedAt for past links', async () => {

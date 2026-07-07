@@ -41,6 +41,7 @@ export const ADMIN_AUDIT_ACTIONS = {
   EVENT_UPDATE: 'event.update',
   GUEST_ADD: 'guest.add',
   GUEST_CHECK_IN: 'guest.check-in',
+  GUEST_UPDATE: 'guest.update',
   MAGIC_LINK_CREATE: 'magic_link.create',
   MAGIC_LINK_DELETE: 'magic_link.delete',
   MAGIC_LINK_DISABLE: 'magic_link.disable',
@@ -127,6 +128,7 @@ export const ADMIN_AUDIT_ACTIONS_BY_CATEGORY = {
     ADMIN_AUDIT_ACTIONS.EVENT_ORGANIZER_REASSIGN_TO,
     ADMIN_AUDIT_ACTIONS.EVENT_UPDATE,
     ADMIN_AUDIT_ACTIONS.GUEST_ADD,
+    ADMIN_AUDIT_ACTIONS.GUEST_UPDATE,
   ],
   application: [
     ADMIN_AUDIT_ACTIONS.APPLICATION_REINSTATE,

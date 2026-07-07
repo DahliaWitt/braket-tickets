@@ -71,7 +71,7 @@ class ToggleComponentDisabledTestHostComponent {
       zSize="sm"
       data-testid="projected-loading-action"
     >
-      <z-icon zType="loader-circle" class="mr-2 animate-spin" />
+      <z-icon zType="loader-circle" class="animate-spin" />
       Ticket
     </button>
   `,

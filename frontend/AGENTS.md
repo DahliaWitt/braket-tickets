@@ -4,7 +4,7 @@ Applies to everything under `/frontend`.
 
 ## Angular
 
-- Keep Angular v21 zoneless patterns: signals/computed for state, `resource()` for async loading
+- Keep Angular v22 zoneless patterns: signals/computed for state, `resource()` for async loading
 - Do not add `zone.js`, `FormGroup`, `FormControl`, or `ReactiveFormsModule` for new work
 - Verify unfamiliar Angular APIs with Angular MCP or docs before changing patterns
 

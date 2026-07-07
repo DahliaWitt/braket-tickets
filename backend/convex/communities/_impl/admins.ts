@@ -27,7 +27,10 @@ import {
   refreshOrganizerDirectoryForMembershipChange,
 } from '../../lib/users/organizer_directory';
 import {throwAppError} from '../../lib/errors';
-import {buildCommunityUserRows} from '../../lib/users/helpers';
+import {
+  buildCommunityUserRows,
+  type CommunityUserRow,
+} from '../../lib/users/helpers';
 import {deactivateActiveMagicLinksForCreator} from '../../lib/magic_links/deactivation';
 
 async function requireCommunityAdminOrganizerTarget(
@@ -106,7 +109,7 @@ export async function grantCommunityAdmin(
 
   if (roleAdded) {
     await insertAdminAuditLog(
-      {db: ctx.db},
+      {db: ctx.db, meta: ctx.meta},
       {
         adminId: callerId,
         action: 'community_admin.grant',
@@ -116,7 +119,7 @@ export async function grantCommunityAdmin(
     );
   } else if (memberAdded) {
     await insertAdminAuditLog(
-      {db: ctx.db},
+      {db: ctx.db, meta: ctx.meta},
       {
         adminId: callerId,
         action: 'community_admin.member_repair',
@@ -209,7 +212,7 @@ export async function revokeCommunityAdmin(
   }
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: callerId,
       action: 'community_admin.revoke',
@@ -224,15 +227,7 @@ export async function revokeCommunityAdmin(
 export async function listCommunityAdmins(
   ctx: QueryCtx,
   args: {organizerId: Id<'organizers'>},
-): Promise<
-  Array<{
-    _id: Id<'users'>;
-    userId: Id<'users'>;
-    organizerId: Id<'organizers'>;
-    displayName: string;
-    email?: string;
-  }>
-> {
+): Promise<CommunityUserRow[]> {
   const {_id: userId} = await requireUser(ctx);
   await requireManageCommunity(ctx, userId, args.organizerId);
   return await buildCommunityUserRows(

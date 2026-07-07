@@ -123,6 +123,25 @@ const _payoutBatchStatusMatchesType: AssertEqual<
 > = true;
 
 /**
+ * How a `payout_batches` row came to exist. `cron` batches are created by
+ * the scheduled payout pipeline before their Stripe payout is submitted;
+ * `external` batches are ingested from a `payout.paid` webhook for a payout
+ * created outside the pipeline (Stripe dashboard), already `paid` at insert.
+ */
+export const PAYOUT_BATCH_ORIGINS = ['cron', 'external'] as const;
+export type PayoutBatchOrigin = (typeof PAYOUT_BATCH_ORIGINS)[number];
+
+export const payoutBatchOriginValidator = v.union(
+  v.literal(PAYOUT_BATCH_ORIGINS[0]),
+  v.literal(PAYOUT_BATCH_ORIGINS[1]),
+);
+
+const _payoutBatchOriginMatchesType: AssertEqual<
+  Infer<typeof payoutBatchOriginValidator>,
+  PayoutBatchOrigin
+> = true;
+
+/**
  * Lifecycle state for a `payout_allocations` row.
  *
  * Allocations are created alongside their parent batch and move to `paid` or

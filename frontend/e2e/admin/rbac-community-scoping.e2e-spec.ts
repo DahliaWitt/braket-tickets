@@ -9,6 +9,7 @@ import {
   waitForAuthenticatedDashboard,
 } from '../test-utils/auth-helpers';
 import {BraToastHarness} from '../../src/app/ui/components/composites/toast/toast.component.harness';
+import {CommunityAdminSettingsHarness} from '../../src/app/features/admin/pages/community-admin-settings/community-admin-settings.component.harness';
 import {api} from '@convex/_generated/api';
 import type {Id} from '@convex/_generated/dataModel';
 
@@ -371,38 +372,73 @@ test.describe('RBAC Community Admin Scoping', () => {
 
       // Verify community is auto-selected (single community)
       // Settings page should be visible with scanner section
-      const scannerEmpty = page.getByTestId('scanner-empty');
-      await expect(scannerEmpty).toBeVisible({timeout: 15000});
-
-      // Grant scanner access — use pressSequentially for reliable zInput signal update
-      const emailInput = page.getByTestId('scanner-email-input');
-      await emailInput.click();
-      await emailInput.fill(scannerEmail);
-      await emailInput.evaluate((el: HTMLInputElement) => {
-        el.dispatchEvent(new Event('input', {bubbles: true}));
+      await expect(page.getByTestId('scanner-empty')).toBeVisible({
+        timeout: 15000,
       });
 
-      // Wait for Grant button to become enabled (zDisabled checks signal)
-      const grantBtn = page.getByTestId('grant-scanner');
-      await expect(grantBtn).toBeEnabled({timeout: 5000});
-      await grantBtn.click();
+      const env = createEnvironment(page);
+      const settings = await env.getHarness(CommunityAdminSettingsHarness);
+      const toastHarness = await env.getHarness(BraToastHarness);
+
+      // Search for the seeded member by email-prefix (nameless users have no
+      // name to match, but the directory search also matches email prefix).
+      // The email-range query matches from the start of the local-part, so
+      // the search term must itself be a prefix of the seeded email.
+      await settings.setScannerSearch(`scanner-target-${suffix}`);
+
+      // Poll for the target member's row (debounced query + Convex
+      // subscription round-trip). Do NOT assume exactly one result or a
+      // specific ordering: Convex name search is OR-over-tokens, so the
+      // community admin's own name (`CA scan-<timestamp>`) shares tokens
+      // with the search term and also surfaces — as a disabled "admin" row.
+      await expect
+        .poll(() => settings.findScannerSearchResultIndex(scannerEmail), {
+          timeout: 15000,
+        })
+        .toBeGreaterThanOrEqual(0);
+      const targetIndex =
+        await settings.findScannerSearchResultIndex(scannerEmail);
+
+      // The CA's own row (matched via shared name tokens) must be disabled
+      // and labeled — it arrives in the same query payload as the target row.
+      const adminRowIndex = await settings.findScannerSearchResultIndex(
+        caUser.email,
+      );
+      if (adminRowIndex >= 0) {
+        expect(await settings.isScannerResultDisabled(adminRowIndex)).toBe(
+          true,
+        );
+        // Case-insensitive: source copy is lowercase "admin" (brand voice)
+        // but the mono-label class uppercases the rendered text.
+        expect(
+          await settings.getScannerSearchResultText(adminRowIndex),
+        ).toMatch(/admin/i);
+      }
+
+      await settings.clickScannerSearchResult(targetIndex);
 
       // Wait for success toast (confirms grant worked)
-      const env = createEnvironment(page);
-      const toastHarness = await env.getHarness(BraToastHarness);
       await expect
         .poll(() => toastHarness.hasToastWithText(/granted/i), {timeout: 15000})
         .toBe(true);
       await page.keyboard.press('Escape');
       await toastHarness.waitForToastHidden();
 
+      // Search term clears on a successful grant.
+      await expect
+        .poll(() => settings.getScannerSearchValue(), {timeout: 5000})
+        .toBe('');
+
       // Scanner should now appear in the list (Convex subscription update)
       // Nameless users fall back to email in the server read model.
-      const scannerList = page.getByTestId('scanner-list');
-      await expect(scannerList).toContainText(scannerEmail, {timeout: 15000});
+      await expect
+        .poll(() => settings.scannerListContainsText(scannerEmail), {
+          timeout: 15000,
+        })
+        .toBe(true);
 
       // Revoke scanner access — ZardDialogService renders a custom modal, not window.confirm()
-      await page.getByTestId('remove-scanner').click();
+      await settings.clickRemoveScanner(0);
 
       // Confirm in the ZardUI dialog
       const confirmDialog = page.locator('[role="dialog"]:visible');
@@ -419,7 +455,9 @@ test.describe('RBAC Community Admin Scoping', () => {
       await toastHarness.waitForToastHidden();
 
       // Scanner empty state should be back
-      await expect(scannerEmpty).toBeVisible({timeout: 10000});
+      await expect
+        .poll(() => settings.isScannerListEmpty(), {timeout: 10000})
+        .toBe(true);
 
       const revokeAuditLog = await convexHelper.query(
         api.testing.admin.getLatestAuditLog,

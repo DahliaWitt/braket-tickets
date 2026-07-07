@@ -575,3 +575,16 @@ describe('eventBroadcastTemplate', () => {
     );
   });
 });
+
+describe('wrapEmail — brand logo', () => {
+  it('uses the accent-colored mark so it survives Gmail dark-mode inversion', () => {
+    process.env.SITE_URL = 'https://braket.gay';
+
+    const {html} = applicationApprovedTemplate('Alex');
+
+    // The white mark vanishes on Gmail's inverted-light background; the accent
+    // mark keeps contrast on both. Guard against silent reversion.
+    expect(html).toContain('https://braket.gay/braket_purple.png');
+    expect(html).not.toContain('braket_white.png');
+  });
+});

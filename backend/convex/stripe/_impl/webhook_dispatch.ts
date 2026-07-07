@@ -785,10 +785,16 @@ async function handleChargeDisputeFundsReinstated(
 async function handlePayoutPaid(
   ctx: WebhookActionCtx,
   event: Stripe.PayoutPaidEvent,
+  connectedAccountId: string | undefined,
 ): Promise<HandlerResult> {
   const payout = event.data.object;
+  const metadataBatchId = payout.metadata?.['braketBatchId'];
   await ctx.runMutation(internal.stripe.connect.confirmPayout, {
     stripePayoutId: payout.id,
+    ...(typeof payout.amount === 'number' ? {amountCents: payout.amount} : {}),
+    ...(typeof payout.currency === 'string' ? {currency: payout.currency} : {}),
+    ...(metadataBatchId !== undefined ? {metadataBatchId} : {}),
+    ...(connectedAccountId !== undefined ? {connectedAccountId} : {}),
   });
   return {};
 }
@@ -796,11 +802,15 @@ async function handlePayoutPaid(
 async function handlePayoutFailed(
   ctx: WebhookActionCtx,
   event: Stripe.PayoutFailedEvent,
+  connectedAccountId: string | undefined,
 ): Promise<HandlerResult> {
   const payout = event.data.object;
+  const metadataBatchId = payout.metadata?.['braketBatchId'];
   await ctx.runMutation(internal.stripe.connect.failPayout, {
     stripePayoutId: payout.id,
     failureReason: payout.failure_message ?? payout.failure_code ?? undefined,
+    ...(metadataBatchId !== undefined ? {metadataBatchId} : {}),
+    ...(connectedAccountId !== undefined ? {connectedAccountId} : {}),
   });
   return {};
 }
@@ -967,11 +977,15 @@ export async function dispatchStripeEvent(
       return;
 
     case 'payout.paid':
-      await withClaim(ctx, event, () => handlePayoutPaid(ctx, event));
+      await withClaim(ctx, event, () =>
+        handlePayoutPaid(ctx, event, connectedAccountId),
+      );
       return;
 
     case 'payout.failed':
-      await withClaim(ctx, event, () => handlePayoutFailed(ctx, event));
+      await withClaim(ctx, event, () =>
+        handlePayoutFailed(ctx, event, connectedAccountId),
+      );
       return;
 
     case 'balance.available':

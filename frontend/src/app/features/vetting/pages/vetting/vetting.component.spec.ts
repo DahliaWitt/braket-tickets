@@ -9,7 +9,7 @@ import {Router, provideRouter} from '@angular/router';
 import {VettingComponentHarness} from './vetting.component.harness';
 import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
 import {provideZonelessChangeDetection} from '@angular/core';
-import {signal} from '@angular/core';
+import {signal, type WritableSignal} from '@angular/core';
 import {vi, describe, it, expect, beforeEach} from 'vitest';
 import {computed} from '@angular/core';
 import {ConvexError} from 'convex/values';
@@ -18,6 +18,7 @@ describe('VettingComponent', () => {
   let fixture: ComponentFixture<VettingComponent>;
   let harness: VettingComponentHarness;
   let authServiceMock: unknown;
+  let vettingAuthSettled: WritableSignal<boolean>;
   let appsServiceMock: unknown;
   let communitiesServiceMock: unknown;
   let dashboardDataMock: unknown;
@@ -93,9 +94,11 @@ describe('VettingComponent', () => {
       email: 'test@example.com',
     });
 
+    vettingAuthSettled = signal(true);
     authServiceMock = {
       user: userSignal,
       currentUser: computed(() => userSignal()),
+      authSettled: vettingAuthSettled,
     };
 
     appsServiceMock = {
@@ -174,6 +177,15 @@ describe('VettingComponent', () => {
 
   it('should create', () => {
     expect(fixture.componentInstance).toBeTruthy();
+  });
+
+  it('shows the gate skeleton during the optimistic activation window', async () => {
+    // Route admitted on a cached credential: auth not settled, user-keyed
+    // resources idle. The gate skeleton must render, not an empty form.
+    vettingAuthSettled.set(false);
+    fixture.detectChanges();
+
+    expect(await harness.isGateLoadingStateVisible()).toBe(true);
   });
 
   it('should have invalid form and disabled submit button initially', async () => {

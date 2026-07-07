@@ -315,10 +315,24 @@ export class CommunityAdminSettingsHarness extends ComponentHarness {
   private _removeAdminBtns = this.locatorForAll('[data-testid="remove-admin"]');
   private _adminEmpty = this.locatorForOptional('[data-testid="admin-empty"]');
 
-  private _scannerEmailInput = this.locatorFor(
-    '[data-testid="scanner-email-input"]',
+  private _scannerSearchInput = this.locatorFor(
+    '[data-testid="scanner-search-input"]',
   );
-  private _grantScannerBtn = this.locatorFor('[data-testid="grant-scanner"]');
+  private _scannerSearchResultsPanel = this.locatorForOptional(
+    '[data-testid="scanner-search-results"]',
+  );
+  private _scannerSearchResults = this.locatorForAll(
+    '[data-testid="scanner-search-result"]',
+  );
+  private _scannerEmailFallback = this.locatorForOptional(
+    '[data-testid="scanner-email-fallback"]',
+  );
+  private _scannerSearchEmpty = this.locatorForOptional(
+    '[data-testid="scanner-search-empty"]',
+  );
+  private _scannerSearchLoading = this.locatorForOptional(
+    '[data-testid="scanner-search-loading"]',
+  );
   private _scannerList = this.locatorForOptional(
     '[data-testid="scanner-list"]',
   );
@@ -353,15 +367,108 @@ export class CommunityAdminSettingsHarness extends ComponentHarness {
     return el !== null;
   }
 
-  async setScannerEmail(email: string): Promise<void> {
-    const el = await this._scannerEmailInput();
+  /**
+   * Sets the door staff search input value. Uses `sendKeys` (real input
+   * events) so Signal Forms / zoneless `(input)` bindings observe the change.
+   */
+  async setScannerSearch(term: string): Promise<void> {
+    const el = await this._scannerSearchInput();
     await el.clear();
-    await el.sendKeys(email);
+    if (term) {
+      await el.sendKeys(term);
+    }
   }
 
-  async clickGrantScanner(): Promise<void> {
-    const btn = await this._grantScannerBtn();
+  async getScannerSearchValue(): Promise<string> {
+    const el = await this._scannerSearchInput();
+    return (await el.getProperty<string>('value')) ?? '';
+  }
+
+  async pressScannerSearchKey(
+    key: 'ArrowDown' | 'ArrowUp' | 'Enter' | 'Escape',
+  ): Promise<void> {
+    const el = await this._scannerSearchInput();
+    await el.dispatchEvent('keydown', {key});
+  }
+
+  async hasScannerSearchResultsPanel(): Promise<boolean> {
+    return (await this._scannerSearchResultsPanel()) !== null;
+  }
+
+  async getScannerSearchResultCount(): Promise<number> {
+    const rows = await this._scannerSearchResults();
+    return rows.length;
+  }
+
+  async getScannerSearchResultText(index: number): Promise<string> {
+    const rows = await this._scannerSearchResults();
+    const row = rows[index];
+    if (!row) throw new Error(`Scanner search result ${index} not found`);
+    return (await row.text()).trim();
+  }
+
+  /** Text of every rendered search result row, in DOM order. */
+  async getScannerSearchResultTexts(): Promise<string[]> {
+    const rows = await this._scannerSearchResults();
+    return Promise.all(rows.map(async (row) => (await row.text()).trim()));
+  }
+
+  /**
+   * Index of the first search result row whose text contains `text`, or -1.
+   * Use with `expect.poll` to wait for a specific row without assuming
+   * result count or ordering — Convex name search is OR-over-tokens, so a
+   * multi-token term can surface additional (e.g. already-admin) rows.
+   */
+  async findScannerSearchResultIndex(text: string): Promise<number> {
+    const texts = await this.getScannerSearchResultTexts();
+    return texts.findIndex((rowText) => rowText.includes(text));
+  }
+
+  /** Nth-of-type is 1-based; index here is 0-based to match array conventions. */
+  private scannerResultAddButton(index: number) {
+    return this.locatorForOptional(
+      `[data-testid="scanner-search-result"]:nth-of-type(${
+        index + 1
+      }) [data-testid="grant-scanner"]`,
+    );
+  }
+
+  async clickScannerSearchResult(index: number): Promise<void> {
+    const btn = await this.scannerResultAddButton(index)();
+    if (!btn) {
+      throw new Error(
+        `Scanner search result ${index} has no add button (likely disabled)`,
+      );
+    }
     await btn.click();
+  }
+
+  async isScannerResultDisabled(index: number): Promise<boolean> {
+    const rows = await this._scannerSearchResults();
+    const row = rows[index];
+    if (!row) throw new Error(`Scanner search result ${index} not found`);
+    return (await row.getAttribute('aria-disabled')) === 'true';
+  }
+
+  async hasScannerEmailFallback(): Promise<boolean> {
+    return (await this._scannerEmailFallback()) !== null;
+  }
+
+  async clickScannerEmailFallback(): Promise<void> {
+    const btn = await this.locatorForOptional(
+      '[data-testid="scanner-email-fallback"] button',
+    )();
+    if (!btn) throw new Error('Scanner email fallback add button not found');
+    await btn.click();
+  }
+
+  async hasScannerSearchEmptyState(): Promise<boolean> {
+    return (await this._scannerSearchEmpty()) !== null;
+  }
+
+  /** True when the neutral "searching..." state renders (stale/in-flight). */
+  async hasScannerSearchLoading(): Promise<boolean> {
+    return (await this._scannerSearchLoading()) !== null;
   }
 
   async getScannerCount(): Promise<number> {
@@ -372,6 +479,19 @@ export class CommunityAdminSettingsHarness extends ComponentHarness {
   async isScannerListEmpty(): Promise<boolean> {
     const el = await this._scannerEmpty();
     return el !== null;
+  }
+
+  async scannerListContainsText(text: string): Promise<boolean> {
+    const el = await this._scannerList();
+    if (!el) return false;
+    return (await el.text()).includes(text);
+  }
+
+  async clickRemoveScanner(index: number): Promise<void> {
+    const btns = await this._removeScannerBtns();
+    const btn = btns[index];
+    if (!btn) throw new Error(`Remove scanner button ${index} not found`);
+    await btn.click();
   }
 
   async getDoorStaffHelpText(): Promise<string | null> {

@@ -56,15 +56,16 @@ export function isInitialNavigationTerminalEvent(
         class="app-boot-shell app-boot-shell--overlay"
         role="status"
         aria-live="polite"
+        aria-label="Loading Braket Tickets"
       >
-        <div class="app-boot-frame">
-          <div class="app-boot-kicker">Community access</div>
-          <div class="app-boot-wordmark">Braket</div>
-          <div class="app-boot-status">
-            <span class="app-boot-status-dot" aria-hidden="true"></span>
-            <span>Opening Braket</span>
+        <div class="app-boot-loader">
+          <div class="app-boot-loader-inner">
+            <div class="app-boot-spinner" aria-hidden="true"></div>
+            <div class="app-boot-status">loading</div>
           </div>
-          <div class="app-boot-rail" aria-hidden="true"><span></span></div>
+        </div>
+        <div class="app-boot-frame">
+          <div class="app-boot-wordmark">Braket Tickets</div>
         </div>
       </div>
     }

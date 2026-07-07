@@ -59,6 +59,7 @@ describe('Stripe Checkout session branding', () => {
 
     const [params] = checkoutSessionsCreateMock.mock.calls[0] ?? [];
     expect(params?.branding_settings).toEqual(CHECKOUT_BRANDING_SETTINGS.light);
+    expect(params?.payment_intent_data?.capture_method).toBe('automatic');
     expect(params?.metadata?.['checkoutBrandingVersion']).toBe(
       `${CHECKOUT_BRANDING_VERSION}:light`,
     );
@@ -131,6 +132,7 @@ describe('Stripe Checkout session branding', () => {
     expect(params?.metadata?.['checkoutBrandingVersion']).toBe(
       `${CHECKOUT_BRANDING_VERSION}:dark`,
     );
+    expect(params?.payment_intent_data?.capture_method).toBe('automatic');
     expect(params?.payment_intent_data?.metadata).toMatchObject({
       checkoutBrandingVersion: `${CHECKOUT_BRANDING_VERSION}:dark`,
     });

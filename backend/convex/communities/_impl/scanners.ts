@@ -14,8 +14,15 @@ import {requireManageCommunity} from '../../lib/access';
 import {rateLimiter} from '../../lib/rate_limits';
 import {insertAdminAuditLog} from '../../lib/admin_audit_log';
 import {mapEventsWithPosterUrls} from '../../lib/events/read_models';
-import {buildCommunityUserRows} from '../../lib/users/helpers';
+import {
+  buildCommunityUserRows,
+  type CommunityUserRow,
+} from '../../lib/users/helpers';
+import {searchUserApplicationsInDirectory} from '../../lib/users/organizer_directory';
 import {throwAppError} from '../../lib/errors';
+
+const GRANT_CANDIDATE_SEARCH_LIMIT = 10;
+const GRANT_CANDIDATE_SEARCH_TERM_MAX_LENGTH = 100;
 
 export async function grantCommunityScanner(
   ctx: MutationCtx,
@@ -49,7 +56,7 @@ export async function grantCommunityScanner(
   });
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: callerId,
       action: 'community_scanner.grant',
@@ -89,7 +96,7 @@ export async function revokeCommunityScanner(
   });
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: callerId,
       action: 'community_scanner.revoke',
@@ -104,21 +111,45 @@ export async function revokeCommunityScanner(
 export async function listCommunityScanners(
   ctx: QueryCtx,
   args: {organizerId: Id<'organizers'>},
-): Promise<
-  Array<{
-    _id: Id<'users'>;
-    userId: Id<'users'>;
-    organizerId: Id<'organizers'>;
-    displayName: string;
-    email?: string;
-  }>
-> {
+): Promise<CommunityUserRow[]> {
   const {_id: userId} = await requireUser(ctx);
   await requireManageCommunity(ctx, userId, args.organizerId);
   return await buildCommunityUserRows(
     ctx,
     args.organizerId,
     await listCommunityScannerIds(ctx, args.organizerId),
+  );
+}
+
+/**
+ * Searches the caller's organizer directory (members only) for door-staff
+ * grant candidates. Scoped to `organizer_user_directory` — never a global
+ * user search — so this cannot be used to enumerate platform users outside
+ * the caller's community (see plan doc security audit pass).
+ */
+export async function searchScannerGrantCandidates(
+  ctx: QueryCtx,
+  args: {organizerId: Id<'organizers'>; searchTerm: string},
+): Promise<CommunityUserRow[]> {
+  const {_id: callerId} = await requireUser(ctx);
+  await requireManageCommunity(ctx, callerId, args.organizerId);
+
+  const trimmedTerm = args.searchTerm
+    .trim()
+    .slice(0, GRANT_CANDIDATE_SEARCH_TERM_MAX_LENGTH);
+  if (!trimmedTerm) return [];
+
+  const {page} = await searchUserApplicationsInDirectory(
+    ctx,
+    args.organizerId,
+    trimmedTerm,
+    {scopedLimit: GRANT_CANDIDATE_SEARCH_LIMIT},
+  );
+
+  return await buildCommunityUserRows(
+    ctx,
+    args.organizerId,
+    page.map((row) => row.user._id),
   );
 }
 

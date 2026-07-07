@@ -14,6 +14,9 @@ export async function isPublicEndpointRateLimited(
   request: Request,
   name: PublicEndpointRateLimitName,
 ): Promise<boolean> {
+  // Header-derived IP is only the fallback key: limitPublicEndpoint prefers
+  // the platform-provided client IP from ctx.meta (not client-spoofable),
+  // which propagates into the nested mutation.
   const ip = getClientIp(request);
   try {
     await ctx.runMutation(internal.lib.rate_limits.limitPublicEndpoint, {

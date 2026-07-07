@@ -35,7 +35,7 @@ Jump to:
 
 | Workflow                   | Trigger                                                                                    | Jobs                                                                                                                            |
 | -------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| `CI`                       | Pushes to `main` or `develop`; pull requests targeting `main` or `develop`                 | `lint`, `test`, `stripe-contracts`, `build`, `storybook`, `e2e-check`, conditional `e2e`                                        |
+| `CI`                       | Pushes to `main` or `develop`; pull requests targeting `main` or `develop`                 | `lint`, `test`, `stripe-contracts`, `build`, `storybook` (currently disabled, see below), `e2e-check`, conditional `e2e`        |
 | `Prepare Release`          | Manual `workflow_dispatch`                                                                 | Opens or updates a Release Please preparation PR against `develop` with `RELEASE_PLEASE_TOKEN`                                  |
 | `Deploy to Production`     | `workflow_run` after successful `CI` push runs on `main`, or manual `workflow_dispatch`    | `deploy-context`, `changes`, `deploy-convex`, `deploy-frontend`, `deploy-observability`, `record-deployment`, `publish-release` |
 | `Deploy Preview (develop)` | `workflow_run` after successful `CI` push runs on `develop`, or manual `workflow_dispatch` | `deploy-context`, `changes`, `deploy-convex-dev`, `deploy-frontend-preview`, `deploy-observability-dev`, `record-deployment`    |
@@ -54,9 +54,11 @@ Branch protection on both `develop` and `main` requires these CI checks before m
 - `Unit Tests`
 - `Stripe Sandbox Contracts`
 - `Build Frontend`
-- `Build Storybook`
+- `Build Storybook` (currently skipped — see note below)
 - `E2E Gate`
 - `E2E Tests`
+
+**Storybook job disabled (Angular 22):** the `storybook` CI job (`Build Storybook`) is disabled with `if: false` in `.github/workflows/ci.yml`. `pnpm storybook` and `pnpm build-storybook` are non-functional after the Angular 22 upgrade because the installed `@storybook/angular` (see `frontend/package.json`) declares Angular peer ranges capped below 22 (`>=18.0.0 <22.0.0`, `@angular-devkit/architect <0.2200.0`), and no released version supports Angular 22 yet. Re-enable the job (remove `if: false`) once Angular 22 support ships upstream ([storybookjs/storybook#35318](https://github.com/storybookjs/storybook/issues/35318)) and `@storybook/angular` is upgraded. While disabled, GitHub still creates the `Build Storybook` check run with conclusion `skipped`, and a job skipped via `if:` reports as **successful** for required-status-check purposes — merges are NOT blocked. Leave `Build Storybook` in the required checks so it resumes gating automatically when the job is re-enabled.
 
 Verify the live policy with:
 
@@ -78,6 +80,15 @@ The repository uses five self-hosted GitHub Actions runners on the Whiterose hos
 - `whiterose_5`
 
 On Whiterose, the runner fleet is managed by the host-local Unraid compose project at `/boot/config/plugins/compose.manager/projects/github-runner/docker-compose.yml`. The containers are named `github-runner-1` through `github-runner-5`, use the `braket-runner:latest` image, and share the Docker socket plus cached `pnpm` and Playwright browser volumes.
+
+**Node.js version (Angular 22):** Angular 22 requires a newer Node.js patch than the `braket-runner:latest` image historically baked in (its NodeSource install lagged Angular's floor). The pinned version lives in one place — [`.nvmrc`](../../.nvmrc) — and CI and deploy workflows install it via `actions/setup-node` (`node-version-file: .nvmrc`), prepending it to `PATH` so jobs are correct regardless of the image. To remove the per-job Node install overhead, align the runner image's Node install in [`infra/runner/Dockerfile`](../../infra/runner/Dockerfile) with `.nvmrc`, then rebuild and redeploy:
+
+```bash
+# On the Whiterose host, from the repo checkout:
+docker build -t braket-runner:latest infra/runner/
+# then recreate the fleet from the compose project directory:
+docker compose -p github-runner up -d --force-recreate
+```
 
 Check GitHub registration state from a local shell with repository access:
 
@@ -314,6 +325,14 @@ Common failure modes:
 ## Run a manual deploy
 
 Prefer the GitHub Actions deploy workflows for normal releases. Use these manual commands only when you need to recover a skipped or failed deploy and you have confirmed the target environment.
+
+Deploys validate declared environment variables (`backend/convex/convex.config.ts`).
+Always run the matching `sync:env:*` command before `convex deploy` — a deploy
+against a deployment missing a required var (`SITE_URL`, `TOKEN_DIGEST_SECRET`)
+fails with a `RequiredEnvironmentVariable` error. See
+[docs/environment.md](../environment.md) for the rollout rule when adding new
+required vars. CI deploys also write an audit message to the deployment's audit
+log via `--message` (see `.github/workflows/deploy.yml`).
 
 ### Manually deploy Convex dev
 
