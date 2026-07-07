@@ -214,7 +214,7 @@ jobs:
           ref: ${{ needs.deploy-context.outputs.ref }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@c336a2788d9774dccfdeb4823a5058ccc9f07453 # v4.3.0
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -262,7 +262,7 @@ jobs:
           ref: ${{ needs.deploy-context.outputs.ref }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@c336a2788d9774dccfdeb4823a5058ccc9f07453 # v4.3.0
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -466,7 +466,7 @@ jobs:
           ref: ${{ needs.deploy-context.outputs.ref }}
 
       - name: Publish release from manifest
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           DEPLOY_REF: ${{ needs.deploy-context.outputs.ref }}
         with:
