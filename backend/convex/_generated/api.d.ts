@@ -753,6 +753,18 @@ export declare const api: {
         { organizerId: Id<"organizers">; userId: Id<"users"> },
         null
       >;
+      searchGrantCandidates: FunctionReference<
+        "query",
+        "public",
+        { organizerId: Id<"organizers">; searchTerm: string },
+        Array<{
+          _id: Id<"users">;
+          displayName: string;
+          email?: string;
+          organizerId: Id<"organizers">;
+          userId: Id<"users">;
+        }>
+      >;
     };
     trust_links: {
       checkUserTrust: FunctionReference<
