@@ -7,7 +7,7 @@ import {getUserCommunities} from '../../lib/authz';
 import {hasEventEnded, startOfTodayInEventTimeZone} from '../../lib/timezone';
 import {
   compareEventsByStartAscending,
-  loadRunningPublishedEvents,
+  loadRunningPublishedEventsForOrganizer,
 } from './ongoing';
 
 const ORGANIZER_EVENT_LIST_LIMIT = 500;
@@ -80,11 +80,9 @@ export async function loadUpcomingPublishedEventsForOrganizer(
     ),
   );
   // Currently-running multi-day events for this organizer come from the
-  // endDate index (scoped in memory) so a past start never falls outside the
+  // organizer-scoped endDate index, so a past start never falls outside the
   // date-indexed window above.
-  const running = (await loadRunningPublishedEvents(db)).filter(
-    (event) => event.organizerId === organizerId,
-  );
+  const running = await loadRunningPublishedEventsForOrganizer(db, organizerId);
 
   const byId = new Map<Id<'events'>, Doc<'events'>>();
   for (const event of [...running, ...eventGroups.flat()]) {

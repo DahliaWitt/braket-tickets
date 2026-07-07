@@ -8,7 +8,10 @@ import {
 } from '../../lib/access';
 import {countMatchingInQuery} from '../../lib/query_scan';
 import {hasEventEnded, startOfTodayInEventTimeZone} from '../../lib/timezone';
-import {loadRunningPublishedEvents} from './ongoing';
+import {
+  compareEventsByStartAscending,
+  loadRunningPublishedEvents,
+} from './ongoing';
 import {getAuthUserId} from '../../lib/auth_identity';
 import {
   getPosterUrl,
@@ -59,9 +62,12 @@ export async function listUpcomingPublishedEvents(ctx: QueryCtx) {
 
   const byId = new Map<Id<'events'>, Doc<'events'>>();
   for (const event of [...running, ...upcoming]) byId.set(event._id, event);
-  const ongoingEvents = [...byId.values()].filter(
-    (event) => !hasEventEnded(event),
-  );
+  // Restore the by-date ordering the single date-indexed query used to give
+  // (running events, whose start is in the past, sort first) so the documented
+  // "sorted by date" contract holds and matches the other discovery loaders.
+  const ongoingEvents = [...byId.values()]
+    .filter((event) => !hasEventEnded(event))
+    .sort(compareEventsByStartAscending);
 
   const viewableEvents = await filterViewableEvents(ctx, userId, ongoingEvents);
   return await mapEventsWithPosterUrls(ctx, viewableEvents);

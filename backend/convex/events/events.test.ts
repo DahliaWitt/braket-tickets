@@ -1300,6 +1300,23 @@ describe('events.listByOrganizer', () => {
         organizerId,
       });
 
+      // A different organizer's running event must never leak into this
+      // organizer's page — the running source is scoped by organizerId.
+      const otherOrganizerId = await t.mutation(
+        api.testing.communities.seedOrganizer,
+        {name: 'Unrelated Organizer'},
+      );
+      await t.mutation(api.testing.events.seedEvent, {
+        title: 'Other Org Running Weekender',
+        date: '2026-06-08T20:00:00.000Z',
+        endDate: '2026-06-11T20:00:00.000Z',
+        price: 2000,
+        totalTickets: 50,
+        status: 'published',
+        visibility: 'public',
+        organizerId: otherOrganizerId,
+      });
+
       const result = await asUser.query(api.events.public.listByOrganizer, {
         organizerId,
       });
@@ -1307,6 +1324,7 @@ describe('events.listByOrganizer', () => {
       const titles = result.events.map((event) => event.title);
       expect(titles).toContain('Organizer Running Weekender');
       expect(titles).not.toContain('Organizer Ended Weekender');
+      expect(titles).not.toContain('Other Org Running Weekender');
     } finally {
       vi.useRealTimers();
     }

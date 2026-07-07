@@ -359,6 +359,9 @@ const schemaTables = {
     // events). Rows without an endDate sort before any string and are excluded
     // by a `> now` range.
     .index('by_status_endDate', ['status', 'endDate'])
+    // Organizer-scoped variant so a single community page reads only its own
+    // running events instead of a global endDate scan.
+    .index('by_organizer_status_endDate', ['organizerId', 'status', 'endDate'])
     .index('by_organizer', ['organizerId'])
     .index('by_organizer_status', ['organizerId', 'status'])
     .index('by_organizer_status_visibility_date', [
