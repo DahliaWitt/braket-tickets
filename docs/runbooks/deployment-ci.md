@@ -326,6 +326,14 @@ Common failure modes:
 
 Prefer the GitHub Actions deploy workflows for normal releases. Use these manual commands only when you need to recover a skipped or failed deploy and you have confirmed the target environment.
 
+Deploys validate declared environment variables (`backend/convex/convex.config.ts`).
+Always run the matching `sync:env:*` command before `convex deploy` — a deploy
+against a deployment missing a required var (`SITE_URL`, `TOKEN_DIGEST_SECRET`)
+fails with a `RequiredEnvironmentVariable` error. See
+[docs/environment.md](../environment.md) for the rollout rule when adding new
+required vars. CI deploys also write an audit message to the deployment's audit
+log via `--message` (see `.github/workflows/deploy.yml`).
+
 ### Manually deploy Convex dev
 
 The `stg` Doppler config maps to the GitHub `development` environment and the shared Convex dev deployment. `CONVEX_DEPLOY_KEY` selects the deployment, so do not add `--deployment` to these commands.

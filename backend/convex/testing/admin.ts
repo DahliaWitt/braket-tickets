@@ -48,7 +48,7 @@ export async function insertSeedAuditLog(
   args: InsertSeedAuditLogArgs,
 ): Promise<Id<'adminAuditLogs'>> {
   return await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: args.adminId,
       action: args.action,
