@@ -97,6 +97,7 @@ import {
 import {
   onboardingStatusValidator,
   payoutAllocationStatusValidator,
+  payoutBatchOriginValidator,
   payoutBatchStatusValidator,
 } from './lib/validators/stripe_connect';
 import {
@@ -833,6 +834,13 @@ const schemaTables = {
     status: payoutBatchStatusValidator,
     /** Stripe payout ID, populated only after Stripe returns one. */
     stripePayoutId: v.optional(v.string()),
+    /**
+     * How the batch came to exist. `cron` (or absent, for pre-field rows)
+     * means the scheduled payout pipeline created it; `external` means a
+     * payout was made outside the pipeline (Stripe dashboard) and ingested
+     * from its `payout.paid` webhook so settlement stays truthful.
+     */
+    origin: v.optional(payoutBatchOriginValidator),
     createdAt: v.number(),
     submittedAt: v.optional(v.number()),
     confirmedAt: v.optional(v.number()),
@@ -841,7 +849,8 @@ const schemaTables = {
   })
     .index('by_idempotencyKey', ['idempotencyKey'])
     .index('by_connectedAccountId_and_status', ['connectedAccountId', 'status'])
-    .index('by_stripePayoutId', ['stripePayoutId']),
+    .index('by_stripePayoutId', ['stripePayoutId'])
+    .index('by_status_and_createdAt', ['status', 'createdAt']),
 
   /**
    * Append-only Connect payout allocation ledger.

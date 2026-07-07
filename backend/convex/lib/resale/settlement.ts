@@ -14,6 +14,7 @@ import {stripePool} from '../../lib/resilience';
 import {buildTicketRosterProjection} from '../../lib/ticket_roster_projection';
 import {executeStoredProcessorRefund} from '../payments/refund_processing';
 import {generateStripeIdempotencyKey} from '../payments/refunds';
+import {appendFinancialEvent} from '../orders/financial_events';
 import {loadOrderFinancial} from '../orders/financial_reporting';
 import {calculateResaleSellerSettlement} from './helpers';
 import {removeBuyerResaleNotificationSubscription} from './notifications';
@@ -35,7 +36,20 @@ type MarkSellerOrderRefundedArgs = {
   orderId: Id<'ticket_orders'>;
   refundedAmountCents: number;
   lostProcessingFeeCents: number;
-  stripeRefundId?: string;
+  /**
+   * Required: `appendFinancialEvent` dedups `payment_refunded` rows on
+   * (orderId, stripeRefundId); without it a retried completion would
+   * double-insert the refund.
+   */
+  stripeRefundId: string;
+  processorFeeCents?: number;
+  platformFeeCents?: number;
+  /**
+   * Net impact on the seller's connected-account balance from the refund's
+   * BalanceTransaction. Without it the settlement ledger skips this row and
+   * the payout trust gate reads the account as diverged.
+   */
+  connectedAccountNetCents?: number;
 };
 
 type ProcessSellerRefundArgs = {
@@ -50,6 +64,9 @@ type ProcessSellerRefundArgs = {
 
 export type SellerRefundResult = {
   stripeRefundId: string;
+  processorFeeCents?: number;
+  platformFeeCents?: number;
+  connectedAccountNetCents?: number;
 };
 
 export type SellerRefundWorkContext = ProcessSellerRefundArgs & {
@@ -120,29 +137,24 @@ export async function markSellerOrderRefundedState(
     throwInvalidState(ErrorMessages.INVALID_STATE('order cannot be refunded'));
   }
 
-  if (args.stripeRefundId) {
-    for await (const financialEvent of ctx.db
-      .query('order_financial_events')
-      .withIndex('by_order_and_kind', (q) =>
-        q.eq('orderId', order._id).eq('kind', 'payment_refunded'),
-      )) {
-      if (financialEvent.stripeRefundId === args.stripeRefundId) {
-        return null;
-      }
-    }
-  }
-
-  await ctx.db.insert('order_financial_events', {
+  // `appendFinancialEvent` dedups on (orderId, stripeRefundId) and lets a
+  // later `charge.refunded` webhook enrich the row in place — the raw insert
+  // this replaces produced rows the payout settlement could never see.
+  // `connectedAccountId` is passed from the already-loaded order so the
+  // helper skips its fallback read.
+  await appendFinancialEvent(ctx.db, {
     orderId: order._id,
     eventId: order.eventId,
-    currency: 'USD',
     kind: 'payment_refunded',
     amountCents: args.refundedAmountCents,
     stripePaymentIntentId: order.stripePaymentIntentId,
     stripeChargeId: order.stripeChargeId,
     stripeRefundId: args.stripeRefundId,
+    connectedAccountId: order.connectedAccountId,
+    processorFeeCents: args.processorFeeCents,
+    platformFeeCents: args.platformFeeCents,
+    connectedAccountNetCents: args.connectedAccountNetCents,
     note: `resale_seller_refund_lost_fee:${args.lostProcessingFeeCents}`,
-    occurredAt: Date.now(),
   });
 
   return null;
@@ -177,7 +189,18 @@ export async function processSellerRefundState(
     failureMessage: ErrorMessages.SERVER_ERROR,
   });
 
-  return {stripeRefundId: stripeRefund.refundId};
+  return {
+    stripeRefundId: stripeRefund.refundId,
+    ...(stripeRefund.processorFeeCents !== undefined
+      ? {processorFeeCents: stripeRefund.processorFeeCents}
+      : {}),
+    ...(stripeRefund.platformFeeCents !== undefined
+      ? {platformFeeCents: stripeRefund.platformFeeCents}
+      : {}),
+    ...(stripeRefund.connectedAccountNetCents !== undefined
+      ? {connectedAccountNetCents: stripeRefund.connectedAccountNetCents}
+      : {}),
+  };
 }
 
 export async function handleSellerRefundCompletionState(
@@ -207,6 +230,10 @@ export async function handleSellerRefundCompletionState(
       refundedAmountCents: args.context.refundAmountCents,
       lostProcessingFeeCents: args.context.lostProcessingFeeCents,
       stripeRefundId: args.result.returnValue.stripeRefundId,
+      processorFeeCents: args.result.returnValue.processorFeeCents,
+      platformFeeCents: args.result.returnValue.platformFeeCents,
+      connectedAccountNetCents:
+        args.result.returnValue.connectedAccountNetCents,
     });
 
     await ctx.db.patch('resale_listings', listing._id, {

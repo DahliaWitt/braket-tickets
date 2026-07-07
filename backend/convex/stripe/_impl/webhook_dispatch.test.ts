@@ -673,21 +673,48 @@ describe('dispatchStripeEvent — payout routing', () => {
     return {id, type, data: {object}} as unknown as Stripe.Event;
   }
 
-  it('routes payout.paid to confirmPayout with the stripe payout id', async () => {
+  it('routes payout.paid to confirmPayout with the full webhook context', async () => {
     const {ctx, runMutation} = makeClaimingCtx();
 
     await dispatchStripeEvent(
       ctx,
-      payoutEvent('evt_payout_paid', 'payout.paid', {id: 'po_paid_1'}),
+      payoutEvent('evt_payout_paid', 'payout.paid', {
+        id: 'po_paid_1',
+        amount: 2_400,
+        currency: 'usd',
+        metadata: {braketBatchId: 'batch_meta_1'},
+      }),
       NOOP_STRIPE,
       'acct_x',
     );
 
     const confirmCalls = mutationCalls(runMutation, isConfirmPayout);
-    expect(confirmCalls).toStrictEqual([{stripePayoutId: 'po_paid_1'}]);
+    expect(confirmCalls).toStrictEqual([
+      {
+        stripePayoutId: 'po_paid_1',
+        amountCents: 2_400,
+        currency: 'usd',
+        metadataBatchId: 'batch_meta_1',
+        connectedAccountId: 'acct_x',
+      },
+    ]);
 
     const finalizeCalls = mutationCalls(runMutation, isFinalizeMutation);
     expect(finalizeCalls[0]).toMatchObject({outcome: 'completed'});
+  });
+
+  it('omits webhook context fields that the payout object lacks', async () => {
+    const {ctx, runMutation} = makeClaimingCtx();
+
+    await dispatchStripeEvent(
+      ctx,
+      payoutEvent('evt_payout_paid_bare', 'payout.paid', {id: 'po_paid_2'}),
+      NOOP_STRIPE,
+      undefined,
+    );
+
+    const confirmCalls = mutationCalls(runMutation, isConfirmPayout);
+    expect(confirmCalls).toStrictEqual([{stripePayoutId: 'po_paid_2'}]);
   });
 
   it('routes payout.failed to failPayout with failure message', async () => {
@@ -706,7 +733,11 @@ describe('dispatchStripeEvent — payout routing', () => {
 
     const failCalls = mutationCalls(runMutation, isFailPayout);
     expect(failCalls).toStrictEqual([
-      {stripePayoutId: 'po_fail_1', failureReason: 'insufficient_funds'},
+      {
+        stripePayoutId: 'po_fail_1',
+        failureReason: 'insufficient_funds',
+        connectedAccountId: 'acct_x',
+      },
     ]);
   });
 });
