@@ -1,5 +1,9 @@
 import {ComponentHarness} from '@angular/cdk/testing';
-import {ImportSurfaceComponentHarness} from '@/features/admin/import';
+// Import the harness directly (not via the feature barrel): the barrel also
+// re-exports ImportSurfaceComponent, which pulls @angular/common injectables
+// into the Playwright/Node module graph and triggers JIT compilation that the
+// E2E runtime cannot satisfy. Harness-only imports keep the graph component-free.
+import {ImportSurfaceComponentHarness} from '@/features/admin/import/import-surface.component.harness';
 
 export class EventManagementBuyersTabHarness extends ComponentHarness {
   static hostSelector = 'app-event-management-buyers-tab';

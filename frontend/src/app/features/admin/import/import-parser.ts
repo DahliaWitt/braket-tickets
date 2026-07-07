@@ -36,8 +36,7 @@ function detectDelimiter(input: string): ImportDelimiter {
   };
 
   let inQuotes = false;
-  for (let i = 0; i < firstLine.length; i++) {
-    const ch = firstLine[i];
+  for (const ch of firstLine) {
     if (ch === '"') {
       inQuotes = !inQuotes;
       continue;

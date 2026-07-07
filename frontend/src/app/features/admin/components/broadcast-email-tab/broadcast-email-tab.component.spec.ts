@@ -29,7 +29,12 @@ describe('BroadcastEmailTabComponent', () => {
     convexMock = createMockConvexClient();
     const onUpdate = vi.fn(
       (_query: unknown, _args: unknown, onData: (v: unknown) => void) => {
-        onData({recipientCount: 2, exceedsCap: false});
+        onData({
+          recipientCount: 2,
+          exceedsCap: false,
+          importedReachableCount: 0,
+          importedUnreachableCount: 0,
+        });
         return () => undefined;
       },
     );
@@ -100,6 +105,84 @@ describe('BroadcastEmailTabComponent', () => {
     await fixture.whenStable();
 
     expect(component.broadcastForm().invalid()).toBe(true);
+  });
+
+  it('shows the include-external toggle, defaulting ON, even at zero imported', async () => {
+    expect(await harness.isIncludeExternalToggleVisible()).toBe(true);
+    expect(await harness.isIncludeExternalToggled()).toBe(true);
+    const countText = await harness.getIncludeExternalCountText();
+    expect(countText).toContain('includes 0 external ticket holders');
+  });
+
+  it('renders reachable and unreachable imported counts', async () => {
+    const onData = (_q: unknown, _a: unknown, cb: (v: unknown) => void) => {
+      cb({
+        recipientCount: 5,
+        exceedsCap: false,
+        importedReachableCount: 3,
+        importedUnreachableCount: 2,
+      });
+      return () => undefined;
+    };
+    convexMock.onUpdate = onData as never;
+    convexMock.client.onUpdate = onData as never;
+    convexMock.query = vi.fn((queryFn: unknown) => {
+      if (
+        functionReferenceMatches(queryFn, api.events.broadcasts.getAudience)
+      ) {
+        return Promise.resolve({
+          recipientCount: 5,
+          exceedsCap: false,
+          importedReachableCount: 3,
+          importedUnreachableCount: 2,
+        });
+      }
+      if (
+        functionReferenceMatches(queryFn, api.events.broadcasts.listHistory)
+      ) {
+        return Promise.resolve([]);
+      }
+      return Promise.resolve(null);
+    });
+
+    fixture = TestBed.createComponent(BroadcastEmailTabComponent);
+    fixture.componentRef.setInput('eventId', 'event-1');
+    fixture.componentRef.setInput('communityId', 'community-1');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      BroadcastEmailTabComponentHarness,
+    );
+
+    const countText = await harness.getIncludeExternalCountText();
+    expect(countText).toContain('includes 3 external ticket holders');
+    expect(countText).toContain("2 without an email can't be reached");
+  });
+
+  it('sends with includeExternalTicketHolders false when toggled off', async () => {
+    await harness.clickIncludeExternalToggle();
+    await fixture.whenStable();
+    expect(await harness.isIncludeExternalToggled()).toBe(false);
+
+    component.broadcastFormModel.set({
+      subject: 'Door update',
+      message: 'Bring your ID.',
+    });
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    component.openSendBroadcastConfirm();
+    const config = dialogServiceMock.create.mock.calls[0][0] as {
+      zOnOk: () => void;
+    };
+    config.zOnOk();
+    await fixture.whenStable();
+
+    expect(convexMock.mutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({includeExternalTicketHolders: false}),
+    );
   });
 
   it('opens confirmation and shows feedback after a broadcast is confirmed', async () => {

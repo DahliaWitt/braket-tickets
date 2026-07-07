@@ -28,6 +28,15 @@ export class BroadcastEmailTabComponentHarness extends ComponentHarness {
   private getExceedsCapEl = this.locatorForOptional(
     '[data-testid="broadcast-exceeds-cap"]',
   );
+  private getIncludeExternalContainer = this.locatorForOptional(
+    '[data-testid="broadcast-include-external"]',
+  );
+  private getIncludeExternalSwitch = this.locatorFor(
+    '[data-testid="broadcast-include-external-switch"] button[role="switch"]',
+  );
+  private getIncludeExternalCountEl = this.locatorForOptional(
+    '[data-testid="broadcast-include-external-count"]',
+  );
   private getHistoryCard = this.locatorFor(
     '[data-testid="broadcast-history-card"]',
   );
@@ -92,6 +101,25 @@ export class BroadcastEmailTabComponentHarness extends ComponentHarness {
 
   async isExceedingCap(): Promise<boolean> {
     return (await this.getExceedsCapEl()) !== null;
+  }
+
+  async isIncludeExternalToggleVisible(): Promise<boolean> {
+    return (await this.getIncludeExternalContainer()) !== null;
+  }
+
+  async isIncludeExternalToggled(): Promise<boolean> {
+    const toggle = await this.getIncludeExternalSwitch();
+    return (await toggle.getAttribute('aria-checked')) === 'true';
+  }
+
+  async clickIncludeExternalToggle(): Promise<void> {
+    const toggle = await this.getIncludeExternalSwitch();
+    await toggle.click();
+  }
+
+  async getIncludeExternalCountText(): Promise<string | null> {
+    const el = await this.getIncludeExternalCountEl();
+    return el ? el.text() : null;
   }
 
   async isHistoryEmpty(): Promise<boolean> {

@@ -45,7 +45,9 @@ class TestHostComponent {
 describe('ImportSurfaceComponent', () => {
   let loader: HarnessLoader;
   let host: TestHostComponent;
-  let downloadBlob: ReturnType<typeof vi.fn>;
+  let downloadBlob: ReturnType<
+    typeof vi.fn<(blob: Blob, filename: string) => void>
+  >;
 
   beforeEach(async () => {
     downloadBlob = vi.fn();

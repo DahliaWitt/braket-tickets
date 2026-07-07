@@ -17,6 +17,9 @@ Source of truth:
 - `backend/convex/events/analytics_export.ts`
 - `backend/convex/events/management.ts`
 - `backend/convex/events/_impl/management.ts`
+- `backend/convex/events/imported_tickets.ts`
+- `backend/convex/events/_impl/imported_tickets.ts`
+- `backend/convex/lib/imports/bulk.ts`
 - `backend/convex/communities/management/audit.ts`
 - `frontend/src/app/features/admin/pages/check-in/check-in.component.ts`
 
@@ -28,6 +31,7 @@ Jump to:
 - [Check missing audit logs](#check-missing-audit-logs)
 - [Fix a roster export issue](#fix-a-roster-export-issue)
 - [Handle oversized management data](#handle-oversized-management-data)
+- [Manage imported (external) ticket holders](#manage-imported-external-ticket-holders)
 
 ## Diagnose a failed check-in
 
@@ -190,3 +194,109 @@ If a management surface fails with that error:
 2. Other surfaces on the page continue to load independently, because the split queries isolate per-surface failures.
 3. Do not raise the in-code `.take()` limit as a quick fix.
 4. Treat the incident as a reporting follow-up for chunked loading or summary-backed large-event admin views.
+
+## Manage imported (external) ticket holders
+
+External ticket holders (Resident Advisor and other platform exports) are
+imported from CSV/paste into the `importedTicketHolders` table. They are inert
+admission records — never linked to Braket user accounts, never part of any
+revenue, payout, refund, or NOTAFLOF calculation. They appear in the buyers /
+attendee views and the door roster, are scannable by their external barcode,
+and are searchable by that barcode for the manual door fallback.
+
+Registered functions in `events/imported_tickets.ts`:
+
+- `events/imported_tickets.importBatch` (mutation) — commits one import batch
+  (one file = one batch key = one transaction). Enforces event-edit access,
+  re-validates every row, caps batch size, and is idempotent under retry by
+  batch key.
+- `events/imported_tickets.listByEvent` (query) — reactive roster of imported
+  entries for an event (powers the buyers view and the door check-in list).
+- `events/imported_tickets.checkIn` (mutation) — idempotent id-based check-in;
+  an already-checked-in entry returns its existing state (feeds the
+  duplicate-scan warning) instead of erroring.
+- `events/imported_tickets.removeEntry` (mutation) — removes a single entry by
+  `id`.
+- `events/imported_tickets.removeBatch` (mutation) — removes an entire batch by
+  `{eventId, batchKey}`; returns `{removedCount, checkedInCount}`.
+- `events/imported_tickets.redactByEmail` (internalMutation) — operator privacy
+  redaction, cross-referenced below.
+
+The door scanner path is `events/check_in.checkIn`. When native ticket/guest
+resolution fails and the caller passed the scanned `eventId`, the raw payload is
+exact-matched against `importedTicketHolders.externalRef` for THAT event only.
+The result carries the `imported` object (name, ticket type label, source
+label) so door staff can see it is an external ticket.
+
+### Import caps and error codes
+
+Defined in `backend/convex/lib/imports/bulk.ts`:
+
+- `MAX_IMPORT_BATCH_SIZE` = 500 rows per file. Files over the cap are rejected at
+  preview — the client never silently chunks a file. Error code
+  `BATCH_TOO_LARGE`; remedy is to split the file and import each part.
+- `MAX_IMPORTED_ENTRIES_PER_EVENT` = 5000 cumulative imported entries per event.
+  Error code `IMPORT_CAP_EXCEEDED`.
+- Empty / header-only input: error code `IMPORT_EMPTY`.
+
+### Remove a batch (including stale re-imports)
+
+Batch removal requires event-edit access and is audit-logged (one entry per
+removal, not one per row). Removing a batch that contains checked-in entries is
+allowed; the operator is warned with the checked-in count, and the audit entry
+records that count. Derived door totals drop accordingly (the imported check-in
+counts are derived from the table, not from the ticket-scoped denormalized
+counter, so removal is reflected immediately in the roster and the per-source
+breakdown).
+
+To remove a batch, use `events/imported_tickets.removeBatch` with the event's
+`_id` and the batch's `batchKey` (visible on the imported-tickets section of the
+buyers view, grouped per batch). To remove a single entry, use
+`events/imported_tickets.removeEntry` with the entry `_id`.
+
+### No liveness / revocation check (the refund caveat)
+
+External barcodes are validated ONLY against the CSV that was imported — there
+is no live check against the external platform. A ticket that was refunded or
+revoked on RA after export **still scans** if it was present in the imported
+CSV. This is intentional (out of scope: no API/OAuth integration with external
+platforms). The remedy when this matters at the door:
+
+1. Re-export a fresh attendee list from the external platform as close to doors
+   as possible.
+2. Re-import it. In the default "skip duplicates" mode, barcodes already present
+   are skipped, so only genuinely new tickets are added.
+3. Remove the stale batch(es) via `events/imported_tickets.removeBatch` so
+   revoked barcodes no longer resolve. Removing a batch with checked-in entries
+   is allowed with the checked-in-count warning.
+
+Note that acceptance is limited to exact-match within the scanned event's
+imported set, so a forged or copied barcode is contained by the same
+duplicate-scan protection as native tickets, and external references never check
+in across events.
+
+### Privacy requests for imported entries
+
+Imported names and emails are personal data. There is no account linkage to
+resolve, so email is the only identifier. Use the operator redaction mutation
+`internal.events.imported_tickets.redactByEmail` (args `{email, operatorUserId}`)
+to redact imported entries whose email matches a verified address across all
+events; it clears the name/email to a tombstone while leaving the inert
+admission record and its audit trail intact. Full procedure and the identifier
+table (including `importedTicketHolders.email`) live in
+[Privacy Requests](./privacy-requests.md) → "Locate Braket Data".
+
+### Import and imported-check-in audit actions
+
+Batch-level, in the `check-in`/import audit categories (values in
+`backend/convex/lib/admin_audit_actions.ts`):
+
+- `guest.import` — guest bulk add batch.
+- `imported_tickets.import` — external ticket import batch.
+- `imported_tickets.remove` — single imported entry removal.
+- `imported_tickets.batch_remove` — batch removal (records the checked-in count).
+- `imported_ticket.check-in` — external ticket-holder check-in at the door.
+- `imported_tickets.redact` — operator privacy redaction.
+
+Audit entries and error messages carry counts, batch keys, and row indexes
+only — never raw names or emails.

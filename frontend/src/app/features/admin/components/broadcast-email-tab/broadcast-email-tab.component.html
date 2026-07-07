@@ -10,20 +10,20 @@
     >
       <div>
         <p
-          class="text-xs uppercase font-mono text-muted-foreground tracking-widest"
+          class="font-mono text-xs tracking-widest text-muted-foreground uppercase"
         >
           Broadcast Email
         </p>
-        <p class="text-xs font-mono text-muted-foreground">
+        <p class="font-mono text-xs text-muted-foreground">
           Send a custom email to all ticket holders and guests for this event.
         </p>
       </div>
 
       <div class="grid gap-4 md:grid-cols-2">
-        <div class="md:col-span-2 space-y-1">
+        <div class="space-y-1 md:col-span-2">
           <label
             for="broadcast-subject"
-            class="text-xs uppercase font-mono text-muted-foreground tracking-widest"
+            class="font-mono text-xs tracking-widest text-muted-foreground uppercase"
           >
             Subject
           </label>
@@ -35,16 +35,16 @@
             class="w-full rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             placeholder="Email subject"
           />
-          <p class="text-2xs font-mono text-muted-foreground">
+          <p class="font-mono text-2xs text-muted-foreground">
             {{ broadcastSubjectLength() }} /
             {{ maxTicketReminderSubjectLength }}
           </p>
         </div>
 
-        <div class="md:col-span-2 space-y-1">
+        <div class="space-y-1 md:col-span-2">
           <label
             for="broadcast-message"
-            class="text-xs uppercase font-mono text-muted-foreground tracking-widest"
+            class="font-mono text-xs tracking-widest text-muted-foreground uppercase"
           >
             Message
           </label>
@@ -56,7 +56,7 @@
             class="w-full rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             placeholder="Write your broadcast message..."
           ></textarea>
-          <p class="text-2xs font-mono text-muted-foreground">
+          <p class="font-mono text-2xs text-muted-foreground">
             {{ broadcastMessageLength() }} /
             {{ maxTicketReminderMessageLength }}
           </p>
@@ -65,7 +65,7 @@
 
       @if (hasBroadcastLengthErrors()) {
         <p
-          class="text-xs font-mono text-destructive"
+          class="font-mono text-xs text-destructive"
           data-testid="broadcast-length-error"
         >
           Subject or message exceeds allowed length.
@@ -74,33 +74,62 @@
 
       @if (isLoadingBroadcastAudience()) {
         <p
-          class="text-xs font-mono text-muted-foreground"
+          class="font-mono text-xs text-muted-foreground"
           data-testid="broadcast-audience-loading"
         >
           Calculating audience...
         </p>
       } @else if (broadcastAudienceError()) {
         <p
-          class="text-xs font-mono text-destructive"
+          class="font-mono text-xs text-destructive"
           data-testid="broadcast-audience-error"
         >
           {{ broadcastAudienceError() }}
         </p>
       } @else if (broadcastExceedsCap()) {
         <p
-          class="text-xs font-mono text-destructive"
+          class="font-mono text-xs text-destructive"
           data-testid="broadcast-exceeds-cap"
         >
           {{ broadcastRecipientCount() }} recipients exceeds the 500 limit.
         </p>
       } @else {
         <p
-          class="text-xs font-mono text-muted-foreground"
+          class="font-mono text-xs text-muted-foreground"
           data-testid="broadcast-recipient-count"
         >
           {{ broadcastRecipientCount() }} recipients (ticket holders + guests).
         </p>
       }
+
+      <!-- external ticket-holder inclusion — always visible, defaults ON -->
+      <div
+        class="flex flex-col gap-1 border-t border-border/60 pt-4"
+        data-testid="broadcast-include-external"
+      >
+        <z-switch
+          [(zChecked)]="includeExternalTicketHolders"
+          zSize="sm"
+          data-testid="broadcast-include-external-switch"
+        >
+          <span class="font-mono text-xs text-foreground lowercase">
+            include external ticket holders
+          </span>
+        </z-switch>
+        <p
+          class="font-mono text-2xs text-muted-foreground lowercase"
+          data-testid="broadcast-include-external-count"
+        >
+          @if (importedReachableCount() === 1) {
+            includes 1 external ticket holder
+          } @else {
+            includes {{ importedReachableCount() }} external ticket holders
+          }
+          @if (importedUnreachableCount() > 0) {
+            · {{ importedUnreachableCount() }} without an email can't be reached
+          }
+        </p>
+      </div>
 
       <button
         z-button
@@ -110,7 +139,7 @@
         data-testid="send-broadcast"
         [zDisabled]="isSendBroadcastDisabled()"
         [attr.aria-busy]="isSendingBroadcast()"
-        class="w-full sm:w-auto border-primary/50 text-primary hover:bg-primary/10"
+        class="w-full border-primary/50 text-primary hover:bg-primary/10 sm:w-auto"
       >
         @if (isSendingBroadcast()) {
           <z-icon zType="loader-circle" class="mr-2 animate-spin" />
@@ -123,7 +152,7 @@
 
       @if (sendFeedback(); as feedback) {
         <p
-          class="text-xs font-mono"
+          class="font-mono text-xs"
           data-testid="broadcast-send-feedback"
           [class.text-destructive]="feedback.kind === 'error'"
           [class.text-emerald-500]="feedback.kind === 'success'"
@@ -142,14 +171,14 @@
   >
     <div class="space-y-4">
       <p
-        class="text-xs uppercase font-mono text-muted-foreground tracking-widest"
+        class="font-mono text-xs tracking-widest text-muted-foreground uppercase"
       >
         Send History
       </p>
 
       @if (broadcastHistoryError()) {
         <p
-          class="text-destructive text-sm"
+          class="text-sm text-destructive"
           data-testid="broadcast-history-error-state"
           role="alert"
         >
@@ -159,16 +188,16 @@
         <div class="space-y-3">
           @for (i of [1, 2, 3]; track i) {
             <div
-              class="rounded-lg border border-border/60 bg-muted/40 p-4 animate-pulse"
+              class="animate-pulse rounded-lg border border-border/60 bg-muted/40 p-4"
             >
-              <div class="h-4 w-48 bg-muted-foreground/20 rounded mb-2"></div>
-              <div class="h-3 w-32 bg-muted-foreground/10 rounded"></div>
+              <div class="mb-2 h-4 w-48 rounded bg-muted-foreground/20"></div>
+              <div class="h-3 w-32 rounded bg-muted-foreground/10"></div>
             </div>
           }
         </div>
       } @else if (broadcastHistory().length === 0) {
         <p
-          class="text-sm font-mono text-muted-foreground"
+          class="font-mono text-sm text-muted-foreground"
           data-testid="broadcast-history-empty"
         >
           No broadcast emails sent yet.
@@ -182,10 +211,10 @@
             >
               <div class="flex items-start justify-between gap-4">
                 <div class="min-w-0 flex-1">
-                  <p class="text-sm font-medium text-foreground truncate">
+                  <p class="truncate text-sm font-medium text-foreground">
                     {{ entry.subject }}
                   </p>
-                  <p class="text-2xs font-mono text-muted-foreground mt-1">
+                  <p class="mt-1 font-mono text-2xs text-muted-foreground">
                     Sent by {{ entry.adminName }} to {{ entry.recipientCount }}
                     {{
                       entry.recipientCount === 1 ? 'recipient' : 'recipients'
@@ -193,7 +222,7 @@
                   </p>
                 </div>
                 <time
-                  class="text-2xs font-mono text-muted-foreground whitespace-nowrap"
+                  class="font-mono text-2xs whitespace-nowrap text-muted-foreground"
                   [attr.datetime]="entry.sentAt"
                 >
                   {{ entry.sentAt | date: 'short' }}

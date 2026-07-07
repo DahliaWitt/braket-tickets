@@ -1,6 +1,9 @@
 import {ComponentHarness} from '@angular/cdk/testing';
 import {ZardButtonComponentHarness} from '@ui/components/primitives/button/button.component.harness';
-import {ImportSurfaceComponentHarness} from '@/features/admin/import';
+// Direct harness import (not the feature barrel): the barrel re-exports the
+// ImportSurfaceComponent, dragging @angular/common injectables into the
+// Playwright/Node graph and triggering JIT compilation the E2E runtime lacks.
+import {ImportSurfaceComponentHarness} from '@/features/admin/import/import-surface.component.harness';
 
 export class EventManagementGuestsTabHarness extends ComponentHarness {
   static hostSelector = 'app-event-management-guests-tab';
