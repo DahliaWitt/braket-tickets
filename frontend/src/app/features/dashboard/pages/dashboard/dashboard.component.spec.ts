@@ -14,6 +14,8 @@ import {
 } from '@/features/dashboard/services/dashboard-page-data.service';
 import {provideRouter} from '@angular/router';
 import {provideZonelessChangeDetection, signal} from '@angular/core';
+import {IMAGE_LOADER} from '@angular/common';
+import {createBraketImageLoader} from '@/core/image-loader/braket-image-loader';
 import {type UpcomingEvent} from '@/core/models/event.types';
 import {type Community} from '@/core/services/communities.service';
 import {vi, beforeAll, describe, it, expect, beforeEach} from 'vitest';
@@ -232,6 +234,13 @@ describe('DashboardComponent', () => {
         provideRouter([{path: '**', children: []}]),
         {provide: AuthService, useValue: authServiceMock},
         {provide: DashboardDataService, useValue: dashboardDataMock},
+        // NgOptimizedImage requires a loader when templates use ngSrcset.
+        // Use the real loader (passthrough on non-Cloudflare origins) so the
+        // spec stays locked to production behavior.
+        {
+          provide: IMAGE_LOADER,
+          useFactory: () => createBraketImageLoader('http://localhost'),
+        },
       ],
     });
     TestBed.overrideComponent(DashboardComponent, {
@@ -581,6 +590,107 @@ describe('DashboardComponent', () => {
       expect(fixture.componentInstance.visibleEvents()[0]?.title).toBe(
         'Earlier Event',
       );
+    });
+
+    it('should render the poster with a decorative ambient-fill backdrop', async () => {
+      const posterEvent: UpcomingEvent = {
+        ...mockEvent,
+        posterUrl: 'https://example.com/poster.jpg',
+      } as never;
+      setup({
+        approvals: mockApprovals,
+        events: [posterEvent],
+        eventAvailability: purchaseAccessFor([posterEvent]),
+      });
+      await createComponent();
+
+      expect(await harness.getPosterCount()).toBe(1);
+      expect(await harness.getPosterBackdropCount()).toBe(1);
+      expect(await harness.posterBackdropsAreDecorative()).toBe(true);
+    });
+
+    it('should size the poster frame from the measured image ratio', async () => {
+      const posterEvent: UpcomingEvent = {
+        ...mockEvent,
+        posterUrl: 'https://example.com/poster.jpg',
+      } as never;
+      setup({
+        approvals: mockApprovals,
+        events: [posterEvent],
+        eventAvailability: purchaseAccessFor([posterEvent]),
+      });
+      await createComponent();
+      const component = fixture.componentInstance;
+
+      expect(await harness.getPosterFrameCount()).toBe(1);
+      // 4:5 flyer default until the image reports its natural size
+      expect(component.posterAspectRatio(posterEvent._id)).toBeCloseTo(4 / 5);
+
+      const loadEvent = {
+        target: {naturalWidth: 1600, naturalHeight: 900},
+      } as unknown as Event;
+      component.onPosterLoad(posterEvent._id, loadEvent);
+      expect(component.posterAspectRatio(posterEvent._id)).toBeCloseTo(
+        1600 / 900,
+      );
+    });
+
+    it('should clamp hostile poster dimensions to the supported ratio range', async () => {
+      const posterEvent: UpcomingEvent = {
+        ...mockEvent,
+        posterUrl: 'https://example.com/poster.jpg',
+      } as never;
+      setup({
+        approvals: mockApprovals,
+        events: [posterEvent],
+        eventAvailability: purchaseAccessFor([posterEvent]),
+      });
+      await createComponent();
+      const component = fixture.componentInstance;
+
+      // Extreme portrait sliver (1x10000) clamps to the 9:16 floor
+      component.onPosterLoad(posterEvent._id, {
+        target: {naturalWidth: 1, naturalHeight: 10000},
+      } as unknown as Event);
+      expect(component.posterAspectRatio(posterEvent._id)).toBeCloseTo(9 / 16);
+
+      // Extreme landscape strip (10000x1) clamps to the 2.5:1 ceiling
+      component.onPosterLoad(posterEvent._id, {
+        target: {naturalWidth: 10000, naturalHeight: 1},
+      } as unknown as Event);
+      expect(component.posterAspectRatio(posterEvent._id)).toBeCloseTo(5 / 2);
+    });
+
+    it('should keep the default ratio when the image reports no size', async () => {
+      const posterEvent: UpcomingEvent = {
+        ...mockEvent,
+        posterUrl: 'https://example.com/poster.jpg',
+      } as never;
+      setup({
+        approvals: mockApprovals,
+        events: [posterEvent],
+        eventAvailability: purchaseAccessFor([posterEvent]),
+      });
+      await createComponent();
+      const component = fixture.componentInstance;
+
+      const loadEvent = {
+        target: {naturalWidth: 0, naturalHeight: 0},
+      } as unknown as Event;
+      component.onPosterLoad(posterEvent._id, loadEvent);
+      expect(component.posterAspectRatio(posterEvent._id)).toBeCloseTo(4 / 5);
+    });
+
+    it('should render no poster layers when the event has no poster', async () => {
+      setup({
+        approvals: mockApprovals,
+        events: [mockEvent],
+        eventAvailability: purchaseAccessFor([mockEvent]),
+      });
+      await createComponent();
+
+      expect(await harness.getPosterCount()).toBe(0);
+      expect(await harness.getPosterBackdropCount()).toBe(0);
     });
 
     it('should show no events section when backend returns no viewable events', async () => {
