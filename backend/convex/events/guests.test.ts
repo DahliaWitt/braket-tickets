@@ -1,7 +1,7 @@
 import type {EventStatus} from '@shared/domain/event-status';
 import {convexTest} from '../setup.testing';
 import {describe, it, expect} from 'vitest';
-import {api} from '../_generated/api';
+import {api, internal} from '../_generated/api';
 import type {Id} from '../_generated/dataModel';
 import {addMember, authz} from '../lib/authz';
 import {ADMIN_AUDIT_ACTIONS} from '../lib/admin_audit_actions';
@@ -315,6 +315,23 @@ describe('guests.add', () => {
       }),
     ).rejects.toThrow('Notes exceeds maximum length');
   });
+
+  it('rejects a blank name', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    await expect(
+      asAdmin.mutation(api.events.guests.add, {
+        eventId,
+        name: '   ',
+        type: 'guest',
+      }),
+    ).rejects.toThrow(/name is required/i);
+  });
 });
 
 describe('guests.remove', () => {
@@ -379,6 +396,342 @@ describe('guests.remove', () => {
     await expect(
       t.mutation(api.events.guests.remove, {id: guestId}),
     ).rejects.toThrow('Unauthenticated');
+  });
+});
+
+describe('guests.update', () => {
+  it('updates name, email, type, and notes', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Original Name',
+      email: 'original@example.com',
+      type: 'guest',
+      notes: 'Original notes',
+    });
+
+    await asAdmin.mutation(api.events.guests.update, {
+      id: guestId,
+      name: 'Updated Name',
+      email: 'updated@example.com',
+      type: 'artist guest',
+      notes: 'Updated notes',
+    });
+
+    const guests = await asAdmin.query(api.events.guests.listByEvent, {
+      eventId,
+    });
+    const updated = guests.find((g) => g._id === guestId);
+    expect(updated?.name).toBe('Updated Name');
+    expect(updated?.email).toBe('updated@example.com');
+    expect(updated?.type).toBe('artist guest');
+    expect(updated?.notes).toBe('Updated notes');
+  });
+
+  it('clears optional fields omitted from the update', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Has Optional Fields',
+      email: 'has-email@example.com',
+      type: 'guest',
+      notes: 'Has notes',
+    });
+
+    await asAdmin.mutation(api.events.guests.update, {
+      id: guestId,
+      name: 'No Optional Fields',
+      type: 'guest',
+    });
+
+    const guest = await t.run(async (ctx) => ctx.db.get(guestId));
+    expect(guest?.name).toBe('No Optional Fields');
+    expect(guest?.email).toBeUndefined();
+    expect(guest?.notes).toBeUndefined();
+  });
+
+  it('preserves eventId, emailedAt, checkedInAt, and checkedInBy', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Metadata Guest',
+      type: 'guest',
+    });
+
+    await t.mutation(internal.events.guests.markAsEmailed, {id: guestId});
+
+    /* eslint-disable no-raw-db-mutations/no-raw-db-mutation -- guests.update must preserve check-in state set by ticket_check_in.checkIn, which requires full event/ticket setup; pre-setting checkedInAt/checkedInBy directly for this preservation test, matching the precedent at guests.test.ts (see "includes check-in status") */
+    await t.run(async (ctx) => {
+      await ctx.db.patch('guests', guestId, {
+        checkedInAt: Date.now(),
+        checkedInBy: adminId,
+      });
+    });
+    /* eslint-enable no-raw-db-mutations/no-raw-db-mutation */
+
+    const beforeUpdate = await t.run(async (ctx) => ctx.db.get(guestId));
+
+    await asAdmin.mutation(api.events.guests.update, {
+      id: guestId,
+      name: 'Metadata Guest Updated',
+      type: 'guest',
+    });
+
+    const afterUpdate = await t.run(async (ctx) => ctx.db.get(guestId));
+    expect(afterUpdate?.eventId).toBe(eventId);
+    expect(afterUpdate?.emailedAt).toBe(beforeUpdate?.emailedAt);
+    expect(afterUpdate?.emailedAt).toBeDefined();
+    expect(afterUpdate?.checkedInAt).toBe(beforeUpdate?.checkedInAt);
+    expect(afterUpdate?.checkedInBy).toBe(adminId);
+  });
+
+  it('rejects non-admin users', async () => {
+    const t = convexTest();
+
+    const userId = await t.mutation(api.testing.users.createUserDirectly, {
+      name: 'Regular User',
+      email: 'regular-update@test.com',
+    });
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Guest',
+      type: 'guest',
+    });
+
+    const asUser = t.withIdentity({subject: userId});
+
+    await expect(
+      asUser.mutation(api.events.guests.update, {
+        id: guestId,
+        name: 'Hacked Name',
+        type: 'guest',
+      }),
+    ).rejects.toThrow('Unauthorized');
+  });
+
+  it('rejects a community admin from a different organizer', async () => {
+    const t = convexTest();
+
+    const rootAdminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asRootAdmin = t.withIdentity({subject: rootAdminId});
+    const guestId = await asRootAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Org A Guest',
+      type: 'guest',
+    });
+
+    // A community admin scoped to a different organizer must not be able to
+    // edit a guest that belongs to another organizer's event.
+    const otherOrganizerId = await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {name: 'Other Org', slug: `other-org-guests-${Date.now()}`},
+    );
+    const otherAdminId = await t.mutation(
+      api.testing.users.createUserDirectly,
+      {name: 'Other Admin', email: `other-admin-${Date.now()}@test.com`},
+    );
+    await t.mutation(api.testing.communities.seedCommunityAdmin, {
+      userId: otherAdminId,
+      organizerId: otherOrganizerId,
+      grantedBy: rootAdminId,
+    });
+
+    const asOtherAdmin = t.withIdentity({subject: otherAdminId});
+
+    await expect(
+      asOtherAdmin.mutation(api.events.guests.update, {
+        id: guestId,
+        name: 'Cross-Org Edit',
+        type: 'guest',
+      }),
+    ).rejects.toThrow('Unauthorized');
+  });
+
+  it('rejects unauthenticated users', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Guest',
+      type: 'guest',
+    });
+
+    await expect(
+      t.mutation(api.events.guests.update, {
+        id: guestId,
+        name: 'Guest',
+        type: 'guest',
+      }),
+    ).rejects.toThrow('Unauthenticated');
+  });
+
+  it('throws not-found for an unknown guest id', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Temporary Guest',
+      type: 'guest',
+    });
+    await asAdmin.mutation(api.events.guests.remove, {id: guestId});
+
+    await expect(
+      asAdmin.mutation(api.events.guests.update, {
+        id: guestId,
+        name: 'Ghost Guest',
+        type: 'guest',
+      }),
+    ).rejects.toThrow(/not found/i);
+  });
+
+  it('validates name, email, and notes length', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Guest',
+      type: 'guest',
+    });
+
+    const longName = 'x'.repeat(201); // MAX_GUEST_NAME_LENGTH is 200
+    await expect(
+      asAdmin.mutation(api.events.guests.update, {
+        id: guestId,
+        name: longName,
+        type: 'guest',
+      }),
+    ).rejects.toThrow(/exceeds maximum length/);
+
+    const longEmail = 'x'.repeat(255) + '@example.com'; // Exceeds MAX_GUEST_EMAIL_LENGTH (254)
+    await expect(
+      asAdmin.mutation(api.events.guests.update, {
+        id: guestId,
+        name: 'Guest',
+        email: longEmail,
+        type: 'guest',
+      }),
+    ).rejects.toThrow(/exceeds maximum length/);
+
+    const longNotes = 'x'.repeat(1001); // MAX_GUEST_NOTES_LENGTH is 1000
+    await expect(
+      asAdmin.mutation(api.events.guests.update, {
+        id: guestId,
+        name: 'Guest',
+        notes: longNotes,
+        type: 'guest',
+      }),
+    ).rejects.toThrow(/exceeds maximum length/);
+  });
+
+  it('rejects a blank name', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Original Name',
+      type: 'guest',
+    });
+
+    await expect(
+      asAdmin.mutation(api.events.guests.update, {
+        id: guestId,
+        name: '   ',
+        type: 'guest',
+      }),
+    ).rejects.toThrow(/name is required/i);
+  });
+
+  it('writes an audit log entry on guest update', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Pre-Update Name',
+      type: 'guest',
+    });
+
+    await asAdmin.mutation(api.events.guests.update, {
+      id: guestId,
+      name: 'Audited Update Name',
+      type: 'guest',
+    });
+
+    const organizerId = await t.run(async (ctx) => {
+      const event = await ctx.db.get(eventId);
+      return event!.organizerId;
+    });
+
+    const auditLogs = await t.run(async (ctx) => {
+      return await ctx.db
+        .query('adminAuditLogs')
+        .withIndex('by_eventId', (q) => q.eq('eventId', eventId))
+        .collect();
+    });
+
+    const guestUpdateLog = auditLogs.find(
+      (log) => log.action === ADMIN_AUDIT_ACTIONS.GUEST_UPDATE,
+    );
+    expect(guestUpdateLog).toBeDefined();
+    expect(guestUpdateLog?.adminId).toBe(adminId);
+    expect(guestUpdateLog?.eventId).toBe(eventId);
+    expect(guestUpdateLog?.organizerId).toBe(organizerId);
+    expect(guestUpdateLog?.source).toBe('admin-ui');
+    expect(guestUpdateLog?.reason).toBe('Audited Update Name');
+
+    const result = await asAdmin.query(
+      api.communities.management.audit.listAuditLogs,
+      {
+        organizerId,
+        paginationOpts: {numItems: 25, cursor: null},
+      },
+    );
+    const guestUpdateEntry = result.page.find(
+      (entry) => entry.action === ADMIN_AUDIT_ACTIONS.GUEST_UPDATE,
+    );
+    expect(guestUpdateEntry).toBeDefined();
+    expect(guestUpdateEntry?.reason).toBe('Audited Update Name');
   });
 });
 

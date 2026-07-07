@@ -107,6 +107,7 @@ export const ACTION_DISPLAY: Record<
   'event.update': {icon: 'calendar', label: 'UPDATED EVENT'},
   'guest.add': {icon: 'user-plus', label: 'ADDED GUEST'},
   'guest.check-in': {icon: 'scan-line', label: 'CHECKED IN GUEST'},
+  'guest.update': {icon: 'pencil', label: 'UPDATED GUEST'},
   'magic_link.create': {icon: 'wand-2', label: 'CREATED MAGIC LINK'},
   'magic_link.delete': {icon: 'wand-2', label: 'DELETED MAGIC LINK'},
   'magic_link.disable': {icon: 'wand-2', label: 'DISABLED MAGIC LINK'},
