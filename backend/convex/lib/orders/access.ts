@@ -1,6 +1,6 @@
 import type {Doc, Id} from '../../_generated/dataModel';
 import type {MutationCtx, QueryCtx} from '../../_generated/server';
-import {hasEventDatePassed} from '../../lib/timezone';
+import {hasEventEnded} from '../../lib/timezone';
 import type {CallerIdentity} from '../../lib/caller_identity';
 import {throwAppError} from '../../lib/errors';
 import type {PaymentErrorCode} from '@shared/contracts/payment-error-codes';
@@ -38,7 +38,10 @@ export function assertOrderOwnedByIdentity(
 }
 
 export function assertPurchasableEvent(
-  event: Pick<Doc<'events'>, 'status' | 'ticketSalesStatus' | 'date'>,
+  event: Pick<
+    Doc<'events'>,
+    'status' | 'ticketSalesStatus' | 'date' | 'endDate'
+  >,
 ): void {
   if (event.status !== 'published') {
     throwOrderError(
@@ -52,13 +55,16 @@ export function assertPurchasableEvent(
     throwOrderError('EVENT_UNAVAILABLE', 'Ticket sales are not active');
   }
 
-  if (hasEventDatePassed(event.date)) {
+  if (hasEventEnded(event)) {
     throwOrderError('EVENT_UNAVAILABLE', 'This event has already occurred');
   }
 }
 
 export function assertEventStillFulfillable(
-  event: Pick<Doc<'events'>, 'status' | 'ticketSalesStatus' | 'date'>,
+  event: Pick<
+    Doc<'events'>,
+    'status' | 'ticketSalesStatus' | 'date' | 'endDate'
+  >,
 ): void {
   if (event.status === 'cancelled') {
     throwOrderError('EVENT_UNAVAILABLE', 'This event has been cancelled');
@@ -68,7 +74,7 @@ export function assertEventStillFulfillable(
     throwOrderError('EVENT_UNAVAILABLE', 'Ticket sales are paused');
   }
 
-  if (hasEventDatePassed(event.date)) {
+  if (hasEventEnded(event)) {
     throwOrderError('EVENT_UNAVAILABLE', 'This event has already occurred');
   }
 }

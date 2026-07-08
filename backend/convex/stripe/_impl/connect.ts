@@ -14,7 +14,7 @@ import {payoutSentTemplate} from '../../email/templates';
 import type {OnboardingStatus} from '../../lib/validators/stripe_connect';
 import {isOrganizerPayoutReady} from '../../lib/stripe_connect_state';
 import {computeEventSettlements} from './payouts';
-import {eventStartInstantMs} from '@shared/event-time';
+import {eventEndInstantMs} from '@shared/event-time';
 
 export const MAX_ALLOCATIONS_PER_BATCH = 1_000;
 /**
@@ -292,11 +292,18 @@ export async function getSettlementDataForAccountImpl(
       );
       return [];
     }
-    const eventDateMs = eventStartInstantMs(event.date);
-    if (eventDateMs === null) {
+    // Payout eligibility (and the reserve/FIFO ordering that keys off this
+    // instant) is based on when the event is OVER — its endDate when set —
+    // so a multi-day event's funds are reserved until PAYOUT_DELAY after it
+    // actually ends, not PAYOUT_DELAY after it starts.
+    const eventEndMs = eventEndInstantMs(event.date, event.endDate);
+    if (eventEndMs === null) {
+      // eventEndInstantMs reads endDate when present and otherwise start, so a
+      // null pinpoints the corrupt field for the operator.
+      const invalidField = event.endDate != null ? 'endDate' : 'date';
       throwAppError(
         'PAYOUT_SETTLEMENT_INVALID_EVENT_DATE',
-        `Event ${event._id} has an invalid date; refusing to compute payout settlement for Stripe account ${args.stripeConnectedAccountId}`,
+        `Event ${event._id} has an invalid ${invalidField}; refusing to compute payout settlement for Stripe account ${args.stripeConnectedAccountId}`,
         {
           eventId: event._id,
           organizerId: organizer._id,
@@ -306,8 +313,8 @@ export async function getSettlementDataForAccountImpl(
     }
     return {
       _id: event._id,
-      date: eventDateMs,
-      eligible: eventDateMs <= args.eligibleBeforeMs,
+      date: eventEndMs,
+      eligible: eventEndMs <= args.eligibleBeforeMs,
       title: event.title,
     };
   });
@@ -434,6 +441,23 @@ export async function listPlatformOrganizerEligibleEventIdsImpl(
 
     for (const event of page.page) {
       if (event.paidOutAt) continue;
+      // `date < cutoff` is a superset of end-eligible events (endDate > date),
+      // so re-check against the event END: a multi-day event whose start is
+      // payout-delay-old but whose endDate is still ahead must not retire yet.
+      const eventEndMs = eventEndInstantMs(event.date, event.endDate);
+      if (eventEndMs === null) {
+        // Corrupt end instant would otherwise wedge this event's retirement
+        // silently on every run — surface it so an operator can repair. The
+        // null pinpoints which field (endDate when present, else start date).
+        const invalidField = event.endDate != null ? 'endDate' : 'date';
+        logger.error(
+          'stripe',
+          `Platform-organizer event has an invalid ${invalidField}; skipping retirement until repaired`,
+          {eventId: event._id, organizerId: event.organizerId},
+        );
+        continue;
+      }
+      if (eventEndMs > args.eligibleBeforeMs) continue; // still running
       const organizer = fetchedOrganizers.get(event.organizerId) ?? null;
       if (organizer?.isPlatformOrganizer) {
         eventIds.push(event._id);

@@ -3,6 +3,7 @@ import {
   dateKeyToLocalDate,
   formatEventDate,
   formatEventDateKey,
+  formatEventEndTimeSuffix,
   getTodayInEventTimeZone,
 } from './event-date-format';
 
@@ -45,5 +46,80 @@ describe('formatEventDate', () => {
   it('parses date keys into local calendar dates', () => {
     expect(dateKeyToLocalDate('2026-02-26')).toEqual(new Date(2026, 1, 26));
     expect(dateKeyToLocalDate('not-a-date')).toBeNull();
+  });
+});
+
+describe('formatEventEndTimeSuffix', () => {
+  it('renders a same-day end as a bare time suffix', () => {
+    // 8pm – 11pm Feb 26 event-local
+    expect(
+      normalizeSpaces(
+        formatEventEndTimeSuffix(
+          '2026-02-27T07:00:00.000Z',
+          '2026-02-27T04:00:00.000Z',
+        ),
+      ),
+    ).toBe(' – 11:00 PM');
+  });
+
+  it('renders a next-day overnight end as a bare time (no end date)', () => {
+    // 10pm Feb 26 – 6am Feb 27 event-local (an overnight party)
+    expect(
+      normalizeSpaces(
+        formatEventEndTimeSuffix(
+          '2026-02-27T14:00:00.000Z',
+          '2026-02-27T06:00:00.000Z',
+        ),
+      ),
+    ).toBe(' – 6:00 AM');
+  });
+
+  it('includes the end date when the end is the next day at a later clock time (a 24h+ span, not an overnight)', () => {
+    // 8pm Feb 26 – 9pm Feb 27 event-local: next calendar day but a later clock
+    // time, so it must not collapse to a misleading "8:00 PM – 9:00 PM".
+    expect(
+      normalizeSpaces(
+        formatEventEndTimeSuffix(
+          '2026-02-28T05:00:00.000Z',
+          '2026-02-27T04:00:00.000Z',
+        ),
+      ),
+    ).toBe(' – Feb 27, 2026, 9:00 PM');
+  });
+
+  it('includes the end date for multi-day events', () => {
+    // 10pm Feb 26 – 8pm Feb 28 event-local (a multi-day span)
+    expect(
+      normalizeSpaces(
+        formatEventEndTimeSuffix(
+          '2026-03-01T04:00:00.000Z',
+          '2026-02-27T06:00:00.000Z',
+        ),
+      ),
+    ).toBe(' – Feb 28, 2026, 8:00 PM');
+  });
+
+  it('returns an empty suffix for missing, invalid, or non-positive windows', () => {
+    expect(
+      formatEventEndTimeSuffix(undefined, '2026-02-27T04:00:00.000Z'),
+    ).toBe('');
+    expect(formatEventEndTimeSuffix(null, '2026-02-27T04:00:00.000Z')).toBe('');
+    expect(
+      formatEventEndTimeSuffix('not-a-date', '2026-02-27T04:00:00.000Z'),
+    ).toBe('');
+    expect(formatEventEndTimeSuffix('2026-02-27T07:00:00.000Z', null)).toBe('');
+    // End at or before the start renders nothing.
+    expect(
+      formatEventEndTimeSuffix(
+        '2026-02-27T04:00:00.000Z',
+        '2026-02-27T04:00:00.000Z',
+      ),
+    ).toBe('');
+    expect(
+      formatEventEndTimeSuffix(
+        '2026-02-27T02:00:00.000Z',
+        '2026-02-27T04:00:00.000Z',
+      ),
+    ).toBe('');
   });
 });

@@ -184,6 +184,47 @@ export function utcToEventLocalParts(
   };
 }
 
+/** Whole calendar days between two instants, counted in the event timezone. */
+export function eventLocalDayDiff(
+  startMs: number,
+  endMs: number,
+  options?: EventTimeOptions,
+): number {
+  const [sy, sm, sd] = toDateKeyInEventTimeZone(new Date(startMs), options)
+    .split('-')
+    .map(Number);
+  const [ey, em, ed] = toDateKeyInEventTimeZone(new Date(endMs), options)
+    .split('-')
+    .map(Number);
+  return Math.round(
+    (Date.UTC(ey, em - 1, ed) - Date.UTC(sy, sm - 1, sd)) / 86_400_000,
+  );
+}
+
+/**
+ * Whether `endMs` is a genuine overnight wrap of `startMs`: it lands on the
+ * next calendar day (event timezone) at an *earlier* wall-clock time than the
+ * start — e.g. 9:00 PM → 3:00 AM. Used to decide when an end can render as a
+ * bare time with no repeated date.
+ *
+ * A next-day end at an equal-or-later wall-clock time is a 24h+ event, not an
+ * overnight, and must keep its end date so "8:00 PM – 9:00 PM" cannot be
+ * mistaken for a one-hour same-evening event.
+ */
+export function isEventOvernightWrap(
+  startMs: number,
+  endMs: number,
+  options?: EventTimeOptions,
+): boolean {
+  if (eventLocalDayDiff(startMs, endMs, options) !== 1) return false;
+  const startParts = utcToEventLocalParts(startMs, options);
+  const endParts = utcToEventLocalParts(endMs, options);
+  if (!startParts || !endParts) return false;
+  const startMinute = Number(startParts.hour) * 60 + Number(startParts.minute);
+  const endMinute = Number(endParts.hour) * 60 + Number(endParts.minute);
+  return endMinute < startMinute;
+}
+
 /**
  * Returns the event start instant in milliseconds.
  *
@@ -203,6 +244,36 @@ export function eventStartInstantMs(
 
   const date = toDate(value);
   return date?.getTime() ?? null;
+}
+
+/**
+ * The instant an event is considered over, in milliseconds. Use this — not
+ * eventStartInstantMs — for end-of-event gating such as the payout delay, so a
+ * multi-day event's funds are not released while it is still running.
+ *
+ * Fails closed and distinguishes a *missing* end from an *invalid* one:
+ * - `endsAtUtc` absent — only `undefined`/`null` (the value Convex stores for a
+ *   missing optional) — → the start instant (eventStartInstantMs), preserving
+ *   pre-endDate behavior for single-day and legacy events.
+ * - `endsAtUtc` present and parseable → its instant.
+ * - `endsAtUtc` present but unparseable (including `''`) → `null`. A write
+ *   never produces an empty or malformed end, so anything present-but-invalid
+ *   is corruption and must not silently degrade to the *start*, which in payout
+ *   gating would release funds as if the multi-day event had no end at all.
+ *   Callers treat `null` as "date invalid" (throw / hold / show no status).
+ * Also `null` when there is no valid end and the start cannot be parsed.
+ */
+export function eventEndInstantMs(
+  startsAtUtc: EventTimeInput,
+  endsAtUtc?: string | null,
+  options?: EventTimeOptions,
+): number | null {
+  // Only a truly absent value (undefined/null) takes the start fallback; a
+  // present string — even '' — must parse or fail closed to null.
+  if (endsAtUtc != null) {
+    return parseUtcInstant(endsAtUtc)?.getTime() ?? null;
+  }
+  return eventStartInstantMs(startsAtUtc, options);
 }
 
 export function startOfDateKeyInEventTimeZone(
@@ -266,6 +337,44 @@ export function hasEventDatePassed(
     throw new Error(`Invalid event date format: "${startsAtUtc}"`);
   }
   return eventDateKey < todayDateKey(options);
+}
+
+/**
+ * Whether the event is over.
+ *
+ * With a valid explicit end instant, the event ends exactly at that instant.
+ * Without one (or with an unparseable one), falls back to day granularity:
+ * the event is over once its start date's calendar day in the event timezone
+ * has passed (see hasEventDatePassed).
+ */
+export function hasEventEnded(
+  startsAtUtc: string,
+  endsAtUtc?: string | null,
+  options?: EventTimeOptions,
+): boolean {
+  if (endsAtUtc) {
+    const endMs = parseUtcInstant(endsAtUtc)?.getTime();
+    if (endMs !== undefined) {
+      return (options?.now ?? new Date()).getTime() >= endMs;
+    }
+  }
+  return hasEventDatePassed(startsAtUtc, options);
+}
+
+/**
+ * Whether the event is in progress: the start instant has been reached and
+ * the event has not ended per hasEventEnded (including the day-granularity
+ * fallback when no end instant is set).
+ */
+export function isEventHappeningNow(
+  startsAtUtc: string,
+  endsAtUtc?: string | null,
+  options?: EventTimeOptions,
+): boolean {
+  const startMs = eventStartInstantMs(startsAtUtc, options);
+  if (startMs === null) return false;
+  const nowMs = (options?.now ?? new Date()).getTime();
+  return nowMs >= startMs && !hasEventEnded(startsAtUtc, endsAtUtc, options);
 }
 
 export function eventLocalDateTimeToUtc(

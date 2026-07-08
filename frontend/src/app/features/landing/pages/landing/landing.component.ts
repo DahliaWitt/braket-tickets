@@ -21,6 +21,7 @@ import {safeResourceValue} from '@/utils/resource';
 import type {PublicEventCard} from '@shared/contracts/public-event';
 import {getBuyerPricingSummary} from '@shared/pricing/pricing-summary';
 import {EventDatePipe} from '@/utils/event-date.pipe';
+import {EventEndTimePipe} from '@/utils/event-end-time.pipe';
 
 @Component({
   selector: 'app-landing',
@@ -29,6 +30,7 @@ import {EventDatePipe} from '@/utils/event-date.pipe';
     RouterLink,
     ContentLayoutComponent,
     EventDatePipe,
+    EventEndTimePipe,
     NgOptimizedImage,
     BraCommunityAvatarComponent,
   ],
@@ -132,7 +134,8 @@ import {EventDatePipe} from '@/utils/event-date.pipe';
                     </h2>
                     <p class="mono-label text-2xs text-muted-foreground">
                       {{ event.date | eventDate: 'mediumDate' }},
-                      {{ event.date | eventDate: 'shortTime' }}
+                      {{ event.date | eventDate: 'shortTime'
+                      }}{{ event.endDate | eventEndTime: event.date }}
                       @if (event.location) {
                         <span> · {{ event.location }}</span>
                       }

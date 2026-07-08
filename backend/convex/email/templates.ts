@@ -6,7 +6,11 @@
 
 import {resolveSiteUrl} from '../lib/site_url';
 import {EVENT_DATE_TIME_ZONE} from '../lib/timezone';
-import {eventStartInstantMs} from '@shared/event-time';
+import {
+  eventStartInstantMs,
+  isEventOvernightWrap,
+  parseUtcInstant,
+} from '@shared/event-time';
 
 /** Escapes HTML special characters to prevent XSS in email templates. */
 function escapeHtml(unsafe: string): string {
@@ -30,20 +34,68 @@ const baseStyles = {
   border: '#332A33',
 };
 
-function formatEventDateTime(value: string): string {
-  const startsAtMs = eventStartInstantMs(value);
-  if (startsAtMs === null) return value;
+const eventDateTimeFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: EVENT_DATE_TIME_ZONE,
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  timeZoneName: 'short',
+});
 
-  return new Intl.DateTimeFormat('en-US', {
-    timeZone: EVENT_DATE_TIME_ZONE,
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZoneName: 'short',
-  }).format(new Date(startsAtMs));
+// Start date+time without a timezone label, paired with an end time that
+// carries the timezone — used to render next-day (overnight) ranges as
+// "Thu, Feb 26, 2026, 10:00 PM – 6:00 AM PST" (no repeated end date).
+const eventStartDateTimeNoTzFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: EVENT_DATE_TIME_ZONE,
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+});
+const eventEndTimeFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: EVENT_DATE_TIME_ZONE,
+  hour: 'numeric',
+  minute: '2-digit',
+  timeZoneName: 'short',
+});
+
+/**
+ * Formats the event's start — and, when a valid endDate is set, its end — in
+ * the event timezone. Same-day events collapse ("Mon, Dec 15, 2026, 8:00 –
+ * 11:00 PM PST"); next-day overnight events show the end time only ("Thu, Feb
+ * 26, 2026, 10:00 PM – 6:00 AM PST"); multi-day events — including a next-day
+ * end at a later wall-clock time (a 24h+ span) — show both dates ("Fri, Aug 1,
+ * 2026, 8:00 PM – Sun, Aug 3, 2026, 2:00 AM PST").
+ */
+function formatEventDateTime(event: {date: string; endDate?: string}): string {
+  const startsAtMs = eventStartInstantMs(event.date);
+  if (startsAtMs === null) return event.date;
+
+  const endsAtMs = event.endDate
+    ? (parseUtcInstant(event.endDate)?.getTime() ?? null)
+    : null;
+  if (endsAtMs === null || endsAtMs <= startsAtMs) {
+    return eventDateTimeFormatter.format(new Date(startsAtMs));
+  }
+
+  // Only a genuine overnight wrap (next calendar day, earlier clock time)
+  // drops the end date; formatRange handles same-day collapse and multi-day.
+  if (isEventOvernightWrap(startsAtMs, endsAtMs)) {
+    return `${eventStartDateTimeNoTzFormatter.format(
+      new Date(startsAtMs),
+    )} – ${eventEndTimeFormatter.format(new Date(endsAtMs))}`;
+  }
+
+  // Same day collapses; multi-day shows both dates.
+  return eventDateTimeFormatter.formatRange(
+    new Date(startsAtMs),
+    new Date(endsAtMs),
+  );
 }
 
 const vettingSubmissionTimeFormatter = new Intl.DateTimeFormat('en-US', {
@@ -297,13 +349,13 @@ export function emailChangeConfirmationTemplate(
 }
 
 export function purchasedTicketTemplate(
-  event: {title: string; date: string; location?: string},
+  event: {title: string; date: string; endDate?: string; location?: string},
   buyerName: string,
   qrCodeSource: string,
   isGuest = false,
   community?: {slug?: string; hasCodeOfConduct?: boolean},
 ): {subject: string; html: string} {
-  const dateStr = formatEventDateTime(event.date);
+  const dateStr = formatEventDateTime(event);
 
   // Escape user-controlled data to prevent XSS
   const safeTitle = escapeHtml(event.title);
@@ -358,12 +410,12 @@ export function purchasedTicketTemplate(
 }
 
 export function resaleAvailableTemplate(
-  event: {title: string; date: string; location?: string},
+  event: {title: string; date: string; endDate?: string; location?: string},
   eventId: string,
 ): {subject: string; html: string} {
   const safeTitle = escapeHtml(event.title);
   const safeLocation = event.location ? escapeHtml(event.location) : '';
-  const dateStr = formatEventDateTime(event.date);
+  const dateStr = formatEventDateTime(event);
   const siteUrl = resolveSiteUrl();
   const eventUrl = `${siteUrl}/events/${eventId}`;
 
@@ -394,7 +446,13 @@ function escapeAndFormatMultiline(text: string): string {
 }
 
 export function ticketPurchaseReminderTemplate(args: {
-  event: {_id: string; title: string; date: string; location?: string};
+  event: {
+    _id: string;
+    title: string;
+    date: string;
+    endDate?: string;
+    location?: string;
+  };
   organizer: {id: string; name: string};
   message: string;
   siteUrl: string;
@@ -419,7 +477,7 @@ export function ticketPurchaseReminderTemplate(args: {
   const unsubUrl = `${apiSiteUrl}/api/unsubscribe?token=${encodeURIComponent(unsubToken)}`;
   const oneClickUnsubUrl = `${apiSiteUrl}/api/unsubscribe/one-click?token=${encodeURIComponent(unsubToken)}`;
   const listId = `Braket Tickets ${organizer.id} <reminders.${organizer.id}.braket.gay>`;
-  const dateStr = formatEventDateTime(event.date);
+  const dateStr = formatEventDateTime(event);
 
   const content = `
       <h2 style="margin: 0 0 16px 0; font-family: 'Syne', 'Chakra Petch', system-ui, sans-serif; font-size: 24px; line-height: 1.15; font-weight: 700; color: ${baseStyles.textLight};">
@@ -585,7 +643,13 @@ export function applicationRejectedTemplate(
  * with a "View Event" CTA.
  */
 export function eventBroadcastTemplate(args: {
-  event: {_id: string; title: string; date: string; location?: string};
+  event: {
+    _id: string;
+    title: string;
+    date: string;
+    endDate?: string;
+    location?: string;
+  };
   organizer: {id: string; name: string};
   message: string;
   siteUrl: string;
@@ -606,7 +670,7 @@ export function eventBroadcastTemplate(args: {
   const safeOrganizerName = escapeHtml(organizer.name);
   const safeLocation = event.location ? escapeHtml(event.location) : null;
   const safeMessage = escapeAndFormatMultiline(message);
-  const eventDate = formatEventDateTime(event.date);
+  const eventDate = formatEventDateTime(event);
   const eventUrl = `${siteUrl}/events/${event._id}`;
   const unsubUrl = `${apiSiteUrl}/api/unsubscribe?token=${encodeURIComponent(unsubToken)}`;
   const oneClickUnsubUrl = `${apiSiteUrl}/api/unsubscribe/one-click?token=${encodeURIComponent(unsubToken)}`;
@@ -820,6 +884,7 @@ export function eventAnnouncementTemplate(args: {
     _id: string;
     title: string;
     date: string;
+    endDate?: string;
     location?: string;
     description?: string;
   };
@@ -846,7 +911,7 @@ export function eventAnnouncementTemplate(args: {
   const safeTitle = escapeHtml(event.title);
   const safeOrgName = escapeHtml(organizer.name);
   const safeLocation = event.location ? escapeHtml(event.location) : null;
-  const eventDate = formatEventDateTime(event.date);
+  const eventDate = formatEventDateTime(event);
   const safeDesc = event.description
     ? escapeHtml(event.description.slice(0, 300)) +
       (event.description.length > 300 ? '…' : '')

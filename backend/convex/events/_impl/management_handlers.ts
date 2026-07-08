@@ -36,6 +36,7 @@ import {
 import {
   type CreateEventInput,
   type UpdateEventInput,
+  assertEventEndAfterStart,
   prepareEventCreateFields,
   prepareEventUpdateFields,
 } from '../../lib/events/writes';
@@ -437,6 +438,15 @@ export async function update(
     });
   }
 
+  // Validate the effective start/end window against merged values, so moving
+  // the start past a stored end (or setting an end before the stored start)
+  // is rejected.
+  const nextEndDate =
+    args.endDate === null ? undefined : (args.endDate ?? event.endDate);
+  if (nextEndDate !== undefined) {
+    assertEventEndAfterStart(args.date ?? event.date, nextEndDate);
+  }
+
   const {id, announcement, ...updateArgs} = args;
   const preparedPatch = await prepareEventUpdateFields(
     ctx.db,
@@ -444,6 +454,11 @@ export async function update(
     updateArgs as UpdateEventInput,
   );
   const patch = pruneNoopEventPatch(event, preparedPatch);
+  if (args.endDate === null && event.endDate !== undefined) {
+    // Explicit undefined removes the field in ctx.db.patch. This must bypass
+    // pruneNoopEventPatch, which drops undefined values.
+    patch.endDate = undefined;
+  }
   const hasPatch = Object.keys(patch).length > 0;
   if (!hasPatch && announcement === undefined) {
     return null;
