@@ -1805,6 +1805,7 @@ export declare const api: {
           eventId: Id<"events">;
           quantity: number;
           sessionToken: string;
+          termsAccepted: boolean;
           tier: "regular" | "notaflof" | "supporter";
         },
         { orderId: Id<"ticket_orders">; success: boolean }
@@ -1867,6 +1868,7 @@ export declare const api: {
           eventId: Id<"events">;
           quantity: number;
           sessionToken: string;
+          termsAccepted: boolean;
           tier: "regular" | "notaflof" | "supporter";
           totalAmount: number;
         },
@@ -4939,6 +4941,8 @@ export declare const internal: {
           stripeCheckoutSessionId?: string;
           stripePaymentIntentId?: string;
           tier: "regular" | "notaflof" | "supporter";
+          tosAcceptedAt?: number;
+          tosVersion?: string;
           trustSource: "direct" | "shared" | "open_access";
           trustViaOrganizerId?: Id<"organizers">;
           userId?: Id<"users">;
@@ -4973,6 +4977,8 @@ export declare const internal: {
           stripeCheckoutSessionId?: string;
           stripePaymentIntentId?: string;
           tier: "regular" | "notaflof" | "supporter";
+          tosAcceptedAt?: number;
+          tosVersion?: string;
           trustSource: "direct" | "shared" | "open_access";
           trustViaOrganizerId?: Id<"organizers">;
           userId?: Id<"users">;
@@ -5020,6 +5026,8 @@ export declare const internal: {
           stripeCheckoutSessionId?: string;
           stripePaymentIntentId?: string;
           tier: "regular" | "notaflof" | "supporter";
+          tosAcceptedAt?: number;
+          tosVersion?: string;
           trustSource: "direct" | "shared" | "open_access";
           trustViaOrganizerId?: Id<"organizers">;
           userId?: Id<"users">;

@@ -648,6 +648,9 @@ const schemaTables = {
      */
     trustSource: callerTrustSourceValidator,
     trustViaOrganizerId: v.optional(v.id('organizers')),
+    // ToS assent evidence for guest purchases (BRA-455)
+    tosAcceptedAt: v.optional(v.number()),
+    tosVersion: v.optional(v.string()),
   })
     .index('by_owner_user_event_state', ['userId', 'eventId', 'state'])
     .index('by_owner_guest_event_state', ['guestSessionId', 'eventId', 'state'])

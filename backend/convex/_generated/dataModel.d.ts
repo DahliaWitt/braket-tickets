@@ -1468,6 +1468,8 @@ export type DataModel = {
       stripeCheckoutSessionId?: string;
       stripePaymentIntentId?: string;
       tier: "regular" | "notaflof" | "supporter";
+      tosAcceptedAt?: number;
+      tosVersion?: string;
       trustSource: "direct" | "shared" | "open_access";
       trustViaOrganizerId?: Id<"organizers">;
       userId?: Id<"users">;
@@ -1494,6 +1496,8 @@ export type DataModel = {
       | "stripeCheckoutSessionId"
       | "stripePaymentIntentId"
       | "tier"
+      | "tosAcceptedAt"
+      | "tosVersion"
       | "trustSource"
       | "trustViaOrganizerId"
       | "userId";

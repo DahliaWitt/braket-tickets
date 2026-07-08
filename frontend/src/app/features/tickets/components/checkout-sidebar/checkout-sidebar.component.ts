@@ -14,7 +14,7 @@ import {
   type ElementRef,
   viewChild,
 } from '@angular/core';
-import {CurrencyPipe} from '@angular/common';
+import {CurrencyPipe, NgTemplateOutlet} from '@angular/common';
 import {Router, RouterLink} from '@angular/router';
 import {A11yModule} from '@angular/cdk/a11y';
 import {form, FormField, required, email} from '@angular/forms/signals';
@@ -37,6 +37,7 @@ import {type EventDetail} from '@/core/models/event.types';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     CurrencyPipe,
+    NgTemplateOutlet,
     RouterLink,
     A11yModule,
     FormField,
@@ -60,6 +61,10 @@ export class CheckoutSidebarComponent {
   readonly isGuest = input(false);
   readonly guestEmail = input<string | null>(null);
   readonly guestEmailCollected = output<string>();
+
+  // Guest terms-of-service assent (BRA-455) — parent owns the state
+  readonly termsAccepted = input(false);
+  readonly termsAcceptedChange = output<boolean>();
 
   // Guest email form state
   private readonly guestEmailSubmitted = signal(false);
@@ -181,6 +186,13 @@ export class CheckoutSidebarComponent {
     const value = readInputValue(event.target);
     if (value === null) return;
     this.customAmountInput.emit(value);
+  }
+
+  protected onTermsToggle(event: globalThis.Event): void {
+    const target = event.target;
+    if (target instanceof HTMLInputElement) {
+      this.termsAcceptedChange.emit(target.checked);
+    }
   }
 
   readonly maxTicketsNotice = computed(() => {

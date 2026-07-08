@@ -528,27 +528,38 @@
             </div>
           } @else if (totalAmount() > 0) {
             <div class="relative z-10 space-y-4">
-              <app-stripe-payment
-                [publishableKey]="stripeConfig.publishableKey"
-                [resetKey]="stripeResetKey()"
-                [checkoutSessionFetcher]="checkoutSessionFetcher()"
-                [connectedAccountId]="connectedAccountId()"
-                [mockPayments]="stripeConfig.mockPayments"
-                [amount]="totalAmount()"
-                [buyerEmail]="buyerEmail()"
-                [paymentLabel]="event().title || 'Ticket Purchase'"
-                (paymentConfirmed)="paymentConfirmed.emit()"
-                (paymentError)="paymentError.emit($event)"
-              />
+              @if (isGuest()) {
+                <ng-container [ngTemplateOutlet]="guestTermsAssent" />
+              }
+              @if (!isGuest() || termsAccepted()) {
+                <app-stripe-payment
+                  [publishableKey]="stripeConfig.publishableKey"
+                  [resetKey]="stripeResetKey()"
+                  [checkoutSessionFetcher]="checkoutSessionFetcher()"
+                  [connectedAccountId]="connectedAccountId()"
+                  [mockPayments]="stripeConfig.mockPayments"
+                  [amount]="totalAmount()"
+                  [buyerEmail]="buyerEmail()"
+                  [paymentLabel]="event().title || 'Ticket Purchase'"
+                  (paymentConfirmed)="paymentConfirmed.emit()"
+                  (paymentError)="paymentError.emit($event)"
+                />
+              }
             </div>
           } @else {
-            <z-button
-              data-testid="checkout-free-ticket"
-              (click)="freeTicketClaimed.emit()"
-              class="w-full border-none bg-success py-6 font-display tracking-widest uppercase shadow-[0_0_20px_-5px_hsl(var(--success)/0.4)] hover:bg-success/90"
-            >
-              GET TICKET
-            </z-button>
+            <div class="space-y-4">
+              @if (isGuest()) {
+                <ng-container [ngTemplateOutlet]="guestTermsAssent" />
+              }
+              <z-button
+                data-testid="checkout-free-ticket"
+                (click)="freeTicketClaimed.emit()"
+                [zDisabled]="isGuest() && !termsAccepted()"
+                class="w-full border-none bg-success py-6 font-display tracking-widest uppercase shadow-[0_0_20px_-5px_hsl(var(--success)/0.4)] hover:bg-success/90"
+              >
+                GET TICKET
+              </z-button>
+            </div>
           }
         </div>
       }
@@ -662,3 +673,43 @@
     aria-hidden="true"
   ></div>
 }
+
+<!-- Guest ToS assent block (BRA-455) — shared by the paid and free ticket gates -->
+<ng-template #guestTermsAssent>
+  <div
+    class="flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-4"
+    data-testid="checkout-terms"
+  >
+    <input
+      id="checkout-terms-checkbox"
+      type="checkbox"
+      data-testid="checkout-terms-checkbox"
+      [checked]="termsAccepted()"
+      (change)="onTermsToggle($event)"
+      class="focus-ring mt-0.5 h-6 w-6 shrink-0 cursor-pointer rounded border-muted-foreground bg-background text-primary focus:ring-primary focus:ring-offset-background"
+    />
+    <label
+      for="checkout-terms-checkbox"
+      class="cursor-pointer font-sans text-sm leading-relaxed text-muted-foreground"
+    >
+      i'm 18 or older and agree to the
+      <a
+        routerLink="/terms"
+        data-testid="checkout-terms-link"
+        target="_blank"
+        rel="noopener"
+        class="text-primary hover:underline"
+        >terms of service</a
+      >
+      and
+      <a
+        routerLink="/privacy"
+        data-testid="checkout-privacy-link"
+        target="_blank"
+        rel="noopener"
+        class="text-primary hover:underline"
+        >privacy policy</a
+      >
+    </label>
+  </div>
+</ng-template>

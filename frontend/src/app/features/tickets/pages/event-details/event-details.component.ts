@@ -303,6 +303,7 @@ export class EventDetailsComponent {
   readonly guestEmail = this.checkoutStore.guestEmail;
   readonly buyerEmail = this.checkoutStore.buyerEmail;
   readonly guestSessionToken = this.checkoutStore.guestSessionToken;
+  readonly guestTermsAccepted = this.checkoutStore.guestTermsAccepted;
 
   private readonly queryParamMap = toSignal(this.route.queryParamMap, {
     requireSync: true,
@@ -484,6 +485,10 @@ export class EventDetailsComponent {
     }
   }
 
+  onGuestTermsAcceptedChange(accepted: boolean): void {
+    this.checkoutStore.setGuestTermsAccepted(accepted);
+  }
+
   onSidebarOpenChange(isOpen: boolean): void {
     if (!isOpen) {
       this.closePaymentSidebar();
@@ -595,6 +600,7 @@ export class EventDetailsComponent {
         amount,
         sessionToken,
         checkoutTheme,
+        this.guestTermsAccepted(),
       );
       this.checkoutStore.setActiveCheckoutSession(result);
       return {
@@ -691,6 +697,7 @@ export class EventDetailsComponent {
             this.checkoutQuantity(),
             this.selectedTier(),
             sessionToken,
+            this.guestTermsAccepted(),
           );
         } else {
           await this.paymentService.claimFreeTicket(

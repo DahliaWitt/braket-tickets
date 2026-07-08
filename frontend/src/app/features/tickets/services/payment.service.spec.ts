@@ -136,6 +136,7 @@ describe('PaymentService', () => {
         5000,
         'guest_session_token',
         'dark',
+        true,
       );
 
       expect(convexClientMock.mutation).toHaveBeenCalledWith(
@@ -146,6 +147,7 @@ describe('PaymentService', () => {
           quantity: 1,
           tier: 'supporter',
           totalAmount: 5000,
+          termsAccepted: true,
         }),
       );
       expect(convexClientMock.action).toHaveBeenCalledWith(
@@ -357,6 +359,7 @@ describe('PaymentService', () => {
         1,
         'notaflof',
         'guest_token',
+        true,
       );
 
       expect(convexClientMock.mutation).toHaveBeenCalledWith(
@@ -366,6 +369,7 @@ describe('PaymentService', () => {
           quantity: 1,
           tier: 'notaflof',
           sessionToken: 'guest_token',
+          termsAccepted: true,
         },
       );
       expect(result.success).toBe(true);

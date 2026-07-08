@@ -188,6 +188,14 @@ test.describe('Payment Purchase Flow', () => {
     await checkout.setGuestEmail(guestEmail);
     await checkout.submitGuestEmail();
 
+    // Guests must assent to the ToS + privacy terms before the Stripe payment
+    // element mounts (BRA-455). Without this the checkout gate never opens and
+    // the payment harness wait below would hang.
+    await expect
+      .poll(() => checkout.isTermsCheckboxVisible(), {timeout: 10000})
+      .toBe(true);
+    await checkout.acceptTerms();
+
     const stripePayment = await getHarnessWhenVisible(
       page,
       AppStripePaymentHarness,
