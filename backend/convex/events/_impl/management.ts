@@ -71,7 +71,7 @@ export async function buildManagementSummary(
   // truncating revenue / tier counts. `runManagementDatasetLoaders` surfaces
   // EVERY offending dataset at once rather than failing fast on the first one,
   // so operators pruning an oversized event see the full punch list.
-  const {tickets, financialEvents, completedOrders} =
+  const {tickets, financialEvents, completedOrders, importedEntries} =
     await runManagementDatasetLoaders({
       tickets: () =>
         loadManagementDatasetWithinLimit({
@@ -102,6 +102,18 @@ export async function buildManagementSummary(
               .withIndex('by_event_and_state', (q) =>
                 q.eq('eventId', args.eventId).eq('state', 'completed'),
               )
+              .take(limit),
+        }),
+      // Imported (external) entries are a NON-financial admission roster. They
+      // share the guests dataset budget (both are per-event rosters capped well
+      // below the transaction read ceiling) and never feed sales/revenue math.
+      importedEntries: () =>
+        loadManagementDatasetWithinLimit({
+          dataset: 'guests',
+          load: (limit) =>
+            ctx.db
+              .query('importedTicketHolders')
+              .withIndex('by_event', (q) => q.eq('eventId', args.eventId))
               .take(limit),
         }),
     });
@@ -205,6 +217,40 @@ export async function buildManagementSummary(
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([date, quantity]) => ({date, quantity}));
 
+  // Imported (external) entry counts — NEW, SEPARATE fields that never touch the
+  // sales/financial numbers above. Attendance is the exception (door metrics
+  // measure people at the event), so checked-in imported entries surface here
+  // with a per-source breakdown.
+  let importedTotal = 0;
+  let importedCheckedIn = 0;
+  const importedBySource = new Map<
+    string,
+    {total: number; checkedIn: number}
+  >();
+  for (const entry of importedEntries) {
+    importedTotal += 1;
+    const isCheckedIn = entry.checkedInAt !== undefined;
+    if (isCheckedIn) importedCheckedIn += 1;
+    const bucket = importedBySource.get(entry.sourceLabel) ?? {
+      total: 0,
+      checkedIn: 0,
+    };
+    bucket.total += 1;
+    if (isCheckedIn) bucket.checkedIn += 1;
+    importedBySource.set(entry.sourceLabel, bucket);
+  }
+  const imported = {
+    total: importedTotal,
+    checkedIn: importedCheckedIn,
+    bySource: Array.from(importedBySource.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([sourceLabel, counts]) => ({
+        sourceLabel,
+        total: counts.total,
+        checkedIn: counts.checkedIn,
+      })),
+  };
+
   return {
     event: toEventDocShape(event),
     soldCount: canonicalSoldCount,
@@ -229,6 +275,7 @@ export async function buildManagementSummary(
     revenueByTier,
     salesByDay,
     checkInStats,
+    imported,
   };
 }
 
