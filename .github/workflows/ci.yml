@@ -30,7 +30,7 @@ jobs:
       CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Setup pnpm + Node
         uses: ./.github/actions/setup-node-pnpm
       - name: Install dependencies
@@ -63,7 +63,7 @@ jobs:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Setup pnpm + Node
         uses: ./.github/actions/setup-node-pnpm
       - name: Install dependencies
@@ -99,7 +99,7 @@ jobs:
           }
       - name: Upload frontend coverage to Codecov
         if: ${{ always() && env.CODECOV_TOKEN != '' && steps.assert_frontend_coverage.outcome == 'success' && steps.assert_convex_coverage.outcome == 'success' }}
-        uses: codecov/codecov-action@ad3126e916f78f00edff4ed0317cf185271ccc2d # v5.4.2
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           token: ${{ env.CODECOV_TOKEN }}
           files: frontend/coverage/coverage-final.json
@@ -118,7 +118,7 @@ jobs:
           fail_ci_if_error: false
       - name: Upload convex coverage to Codecov
         if: ${{ always() && env.CODECOV_TOKEN != '' && steps.assert_frontend_coverage.outcome == 'success' && steps.assert_convex_coverage.outcome == 'success' }}
-        uses: codecov/codecov-action@ad3126e916f78f00edff4ed0317cf185271ccc2d # v5.4.2
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           token: ${{ env.CODECOV_TOKEN }}
           files: backend/coverage/coverage-final.json
@@ -148,7 +148,7 @@ jobs:
       STRIPE_SANDBOX_CONNECTED_ACCOUNT_ID: ${{ secrets.STRIPE_SANDBOX_CONNECTED_ACCOUNT_ID }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Setup pnpm + Node
         uses: ./.github/actions/setup-node-pnpm
       - name: Install dependencies
@@ -169,7 +169,7 @@ jobs:
       deployment: false
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Setup pnpm + Node
         uses: ./.github/actions/setup-node-pnpm
       - name: Install dependencies
@@ -253,7 +253,7 @@ jobs:
       deployment: false
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Setup pnpm + Node
         uses: ./.github/actions/setup-node-pnpm
       - name: Install dependencies
@@ -279,7 +279,7 @@ jobs:
       should_run: ${{ steps.check.outputs.should_run }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
 
@@ -298,15 +298,24 @@ jobs:
     environment:
       name: ${{ github.event_name == 'pull_request' && 'development' || github.ref_name == 'main' && 'production' || 'development' }}
       deployment: false
+    env:
+      # The self-hosted pool shares one PLAYWRIGHT_BROWSERS_PATH volume across
+      # all concurrent E2E jobs. `playwright install` garbage-collects browser
+      # revisions it considers "unused", so a PR on a newer Playwright deletes
+      # the older revision that other in-flight PRs are still running on (and
+      # vice versa) — every job then fails with "Executable doesn't exist".
+      # Disabling GC lets revisions for all in-flight Playwright versions
+      # coexist in the shared volume. See docs/runbooks/deployment-ci.md.
+      PLAYWRIGHT_SKIP_BROWSER_GC: '1'
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
       - name: Setup Node.js
         # e2e.ts --build compiles the Angular app, which requires Node >=22.22.3
         # (newer than the runner image). Pin via .nvmrc until the image is rebuilt.
