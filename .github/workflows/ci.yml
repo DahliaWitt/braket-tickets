@@ -298,6 +298,15 @@ jobs:
     environment:
       name: ${{ github.event_name == 'pull_request' && 'development' || github.ref_name == 'main' && 'production' || 'development' }}
       deployment: false
+    env:
+      # The self-hosted pool shares one PLAYWRIGHT_BROWSERS_PATH volume across
+      # all concurrent E2E jobs. `playwright install` garbage-collects browser
+      # revisions it considers "unused", so a PR on a newer Playwright deletes
+      # the older revision that other in-flight PRs are still running on (and
+      # vice versa) — every job then fails with "Executable doesn't exist".
+      # Disabling GC lets revisions for all in-flight Playwright versions
+      # coexist in the shared volume. See docs/runbooks/deployment-ci.md.
+      PLAYWRIGHT_SKIP_BROWSER_GC: '1'
 
     steps:
       - name: Checkout code
