@@ -28,26 +28,25 @@ describe('BroadcastEmailTabComponent', () => {
   beforeEach(async () => {
     convexMock = createMockConvexClient();
     const onUpdate = vi.fn(
-      (_query: unknown, _args: unknown, onData: (v: unknown) => void) => {
-        onData({recipientCount: 2, exceedsCap: false});
+      (queryFn: unknown, _args: unknown, onData: (v: unknown) => void) => {
+        // Emit asynchronously to mirror the real Convex client: injectQueries
+        // registers the active subscription only after onUpdate returns, and its
+        // settle guard drops any emission that arrives before that. A synchronous
+        // onData here would be silently discarded.
+        if (
+          functionReferenceMatches(queryFn, api.events.broadcasts.getAudience)
+        ) {
+          queueMicrotask(() => onData({recipientCount: 2, exceedsCap: false}));
+        } else if (
+          functionReferenceMatches(queryFn, api.events.broadcasts.listHistory)
+        ) {
+          queueMicrotask(() => onData([]));
+        }
         return () => undefined;
       },
     );
     convexMock.onUpdate = onUpdate;
     convexMock.client.onUpdate = onUpdate;
-    convexMock.query = vi.fn((queryFn: unknown) => {
-      if (
-        functionReferenceMatches(queryFn, api.events.broadcasts.getAudience)
-      ) {
-        return Promise.resolve({recipientCount: 2, exceedsCap: false});
-      }
-      if (
-        functionReferenceMatches(queryFn, api.events.broadcasts.listHistory)
-      ) {
-        return Promise.resolve([]);
-      }
-      return Promise.resolve(null);
-    });
     convexMock.mutation = vi
       .fn()
       .mockResolvedValue({success: true, recipientCount: 2});
@@ -106,6 +105,20 @@ describe('BroadcastEmailTabComponent', () => {
     await fixture.whenStable();
 
     expect(component.broadcastForm().invalid()).toBe(true);
+  });
+
+  it('skips both queries when eventId is empty', async () => {
+    const skippedFixture = TestBed.createComponent(BroadcastEmailTabComponent);
+    const skippedComponent = skippedFixture.componentInstance;
+    skippedFixture.componentRef.setInput('eventId', '');
+    skippedFixture.componentRef.setInput('communityId', 'community-1');
+    skippedFixture.detectChanges();
+    await skippedFixture.whenStable();
+
+    expect(skippedComponent.queries.statuses().audience).toBe('skipped');
+    expect(skippedComponent.queries.statuses().history).toBe('skipped');
+    expect(skippedComponent.broadcastAudience()).toBeNull();
+    expect(skippedComponent.broadcastHistory()).toEqual([]);
   });
 
   it('opens confirmation and shows feedback after a broadcast is confirmed', async () => {

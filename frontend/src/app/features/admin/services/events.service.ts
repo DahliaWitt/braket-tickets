@@ -17,7 +17,6 @@ import {
 
 type CreateEventArgs = FunctionArgs<typeof api.events.management.create>;
 type UpdateEventArgs = FunctionArgs<typeof api.events.management.update>;
-const MAX_EVENT_IDS_PER_BATCH = 50;
 const EVENT_READ_RETRY_DELAYS_MS = [0, 250, 750, 1500, 3000] as const;
 
 function parseUploadStorageId(responseText: string): string {
@@ -38,7 +37,6 @@ export type EventAvailability = FunctionReturnType<
 export type BatchAvailability = FunctionReturnType<
   typeof api.events.public.getBatchAvailability
 >;
-export const EMPTY_BATCH_AVAILABILITY: BatchAvailability = {};
 
 /**
  * Service for managing events in the ticket platform.
@@ -138,37 +136,6 @@ export class EventsService {
       eventId: id as Id<'events'>,
       now: Math.floor(Date.now() / 60000) * 60000,
     });
-  }
-
-  /**
-   * Fetches ticket availability for multiple events in a single query.
-   * More efficient than calling getAvailability for each event.
-   *
-   * @param ids - Array of event IDs
-   * @returns Map of event ID to availability info
-   */
-  getBatchAvailability(ids: string[]): Promise<BatchAvailability> {
-    if (ids.length === 0) {
-      return Promise.resolve(EMPTY_BATCH_AVAILABILITY);
-    }
-
-    const now = Math.floor(Date.now() / 60000) * 60000;
-    const chunks: Id<'events'>[][] = [];
-    for (let i = 0; i < ids.length; i += MAX_EVENT_IDS_PER_BATCH) {
-      chunks.push(ids.slice(i, i + MAX_EVENT_IDS_PER_BATCH) as Id<'events'>[]);
-    }
-
-    return Promise.all(
-      chunks.map((eventIds) =>
-        this.convex.query(api.events.public.getBatchAvailability, {
-          eventIds,
-          now,
-        }),
-      ),
-    ).then(
-      (results) =>
-        Object.assign({}, ...(results as object[])) as BatchAvailability,
-    );
   }
 
   /**

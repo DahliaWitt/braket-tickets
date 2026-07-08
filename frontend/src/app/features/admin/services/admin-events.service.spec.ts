@@ -18,7 +18,6 @@ import {
   type EventManagementResale,
   type EventManagementSummary,
   type EventTierPricingStats,
-  type Guest,
   type GuestType,
   type TicketReminderAudience,
   type TicketReminderSendResult,
@@ -110,18 +109,6 @@ describe('AdminEventsService', () => {
     },
     resaleListings: [],
   };
-
-  const mockGuests: Guest[] = [
-    {
-      _id: mockGuestId,
-      _creationTime: Date.now(),
-      eventId: mockEventId,
-      name: 'VIP Guest',
-      email: 'vip@example.com',
-      type: 'guest',
-      notes: 'Important guest',
-    },
-  ];
 
   beforeEach(() => {
     convexMock = createMockConvexClient();
@@ -509,40 +496,6 @@ describe('AdminEventsService', () => {
         },
       );
       expect(result).toEqual(mockResult);
-    });
-  });
-
-  describe('getGuests', () => {
-    it('should return guest list for an event', async () => {
-      convexMock.client.query.mockResolvedValue(mockGuests);
-
-      const result = await service.getGuests(mockEventId);
-
-      expect(convexMock.client.query).toHaveBeenCalledWith(
-        api.events.guests.listByEvent,
-        {
-          eventId: mockEventId,
-        },
-      );
-      expect(result).toHaveLength(1);
-      expect(result[0].name).toBe('VIP Guest');
-    });
-
-    it('should return empty array when no guests exist', async () => {
-      convexMock.client.query.mockResolvedValue([]);
-
-      const result = await service.getGuests(mockEventId);
-
-      expect(result).toHaveLength(0);
-    });
-
-    it('should throw when query fails', async () => {
-      convexMock.client.query.mockRejectedValue(new Error('Event not found'));
-
-      await expect(service.getGuests(mockEventId)).rejects.toThrow(
-        'Event not found',
-      );
-      expect(convexMock.client.query).toHaveBeenCalledTimes(5);
     });
   });
 

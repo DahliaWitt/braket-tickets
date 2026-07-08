@@ -5,13 +5,12 @@ import {
   computed,
   ChangeDetectionStrategy,
   type OnInit,
-  type Signal,
   effect,
 } from '@angular/core';
 import {RouterLink} from '@angular/router';
 import {FormField, form} from '@angular/forms/signals';
 import {AuthService} from '@/core/services/auth.service';
-import {injectQuery, skipToken} from 'convex-angular';
+import {injectQueries, skipToken} from 'convex-angular';
 import {toast} from 'ngx-sonner';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 import {ZardCardComponent} from '@ui/components/primitives/card/card.component';
@@ -69,14 +68,14 @@ export class CheckInComponent implements OnInit {
     () => this.auth.userRole() === 'root_admin',
   );
 
-  private readonly adminEventsQuery = injectQuery(
-    api.events.management.adminList,
-    () => (this.isRootAdmin() ? {} : skipToken),
-  );
-  private readonly staffEventsQuery = injectQuery(
-    api.communities.scanners.myScannerEvents,
-    () => (this.isRootAdmin() ? skipToken : {}),
-  );
+  private readonly eventsQueries = injectQueries(() => ({
+    admin: this.isRootAdmin()
+      ? {query: api.events.management.adminList, args: {}}
+      : skipToken,
+    staff: this.isRootAdmin()
+      ? skipToken
+      : {query: api.communities.scanners.myScannerEvents, args: {}},
+  }));
 
   /**
    * Raw query data (undefined when the query is still loading). Used by the
@@ -85,9 +84,9 @@ export class CheckInComponent implements OnInit {
    */
   private readonly rawEventsData = computed(() => {
     if (this.isRootAdmin()) {
-      return this.adminEventsQuery.data();
+      return this.eventsQueries.results().admin;
     }
-    return this.staffEventsQuery.data();
+    return this.eventsQueries.results().staff;
   });
 
   readonly events = computed(() => this.rawEventsData() ?? []);
@@ -107,23 +106,17 @@ export class CheckInComponent implements OnInit {
     () => (this.checkInModel().eventId as Id<'events'>) || null,
   );
 
-  private readonly ticketsQuery = injectQuery(
-    api.tickets.public.listByEvent,
-    () => {
-      const eventId = this.selectedEventId();
-      if (!eventId) return skipToken;
-      return {eventId};
-    },
-  );
-
-  private readonly guestsQuery = injectQuery(
-    api.events.guests.listByEvent,
-    () => {
-      const eventId = this.selectedEventId();
-      if (!eventId) return skipToken;
-      return {eventId};
-    },
-  );
+  private readonly rosterQueries = injectQueries(() => {
+    const eventId = this.selectedEventId();
+    return {
+      tickets: eventId
+        ? {query: api.tickets.public.listByEvent, args: {eventId}}
+        : skipToken,
+      guests: eventId
+        ? {query: api.events.guests.listByEvent, args: {eventId}}
+        : skipToken,
+    };
+  });
 
   /**
    * Stale-data guard for event switch A→B.
@@ -153,22 +146,28 @@ export class CheckInComponent implements OnInit {
   // source of truth, no effect/setter mirror.
   readonly tickets = computed<Ticket[]>(() =>
     this.computeRosterForSelectedEvent(
-      this.ticketsQuery.data(),
-      this.ticketsQuery.isLoading(),
+      this.rosterQueries.results().tickets,
+      this.rosterQueries.statuses().tickets === 'pending',
     ),
   );
   readonly guests = computed<Guest[]>(() =>
     this.computeRosterForSelectedEvent(
-      this.guestsQuery.data(),
-      this.guestsQuery.isLoading(),
+      this.rosterQueries.results().guests,
+      this.rosterQueries.statuses().guests === 'pending',
     ),
   );
 
-  // Direct re-export of the underlying query signals. No `computed(() => q.isLoading())`
-  // wrapper — that would add an extra reactive node that does nothing a direct
-  // signal reference doesn't already do.
-  readonly isLoadingTickets: Signal<boolean> = this.ticketsQuery.isLoading;
-  readonly isLoadingGuests: Signal<boolean> = this.guestsQuery.isLoading;
+  // injectQueries exposes per-key state only through the aggregate `statuses()`
+  // record — there is no per-key `isLoading` signal to re-export. Derive each
+  // roster's loading flag from its OWN key's status, never the aggregate
+  // `isLoading()` (which spans both keys and would gate one roster on the
+  // other's fetch). Matches the repo idiom (dashboard-page-data, community-admin).
+  readonly isLoadingTickets = computed(
+    () => this.rosterQueries.statuses().tickets === 'pending',
+  );
+  readonly isLoadingGuests = computed(
+    () => this.rosterQueries.statuses().guests === 'pending',
+  );
 
   readonly activeTab = signal<'tickets' | 'guests'>('tickets');
 

@@ -9,7 +9,6 @@ import {
   type EventManagementResale,
   type EventManagementSummary,
   type EventTierPricingStats,
-  type Guest,
   type GuestType,
   type TicketReminderAudience,
   type TicketReminderSendResult,
@@ -266,24 +265,6 @@ export class AdminEventsService {
       },
     );
     return result.success;
-  }
-
-  /**
-   * Fetches all guests for an event.
-   *
-   * @param eventId - The ID of the event to fetch guests for.
-   * @returns Array of guest records for the event.
-   */
-  getGuests(eventId: string): Promise<Guest[]> {
-    return retryWithDelays({
-      delaysMs: MANAGEMENT_READ_RETRY_DELAYS_MS,
-      run: () =>
-        this.convex.query(api.events.guests.listByEvent, {
-          eventId: eventId as Id<'events'>,
-        }),
-      shouldRetry: (_error, attemptIndex) =>
-        attemptIndex < MANAGEMENT_READ_RETRY_DELAYS_MS.length - 1,
-    });
   }
 
   /**

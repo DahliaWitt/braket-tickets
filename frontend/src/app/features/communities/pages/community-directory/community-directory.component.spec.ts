@@ -45,10 +45,13 @@ const mockCommunities = [
 // ---------------------------------------------------------------------------
 
 /**
- * The community directory component calls injectQuery in this order:
+ * The community directory component subscribes via injectQueries in this order:
  *   1. list               (authenticated only)
  *   2. getUserApprovals   (authenticated only)
  *   3. getMyApplications  (authenticated only)
+ *
+ * The order relies on injectQueries preserving Object.keys insertion order of
+ * the definition record (communities -> approvals -> myApplications).
  */
 function createConvexMock(options: {
   communities?: unknown[];
@@ -73,17 +76,21 @@ function createConvexMock(options: {
         onData: (data: unknown) => void,
         onError?: (error: Error) => void,
       ) => {
+        // Emit asynchronously to mirror the real Convex client: injectQueries
+        // registers the active subscription only after onUpdate returns, and its
+        // settle/fail guard drops any emission that arrives before that. A
+        // synchronous onData/onError here would be silently discarded.
         const idx = callIndex++;
         if (idx === 0) {
           if (listError) {
-            onError?.(listError);
+            queueMicrotask(() => onError?.(listError));
           } else {
-            onData(communities);
+            queueMicrotask(() => onData(communities));
           }
         } else if (idx === 1) {
-          onData(approvals);
+          queueMicrotask(() => onData(approvals));
         } else {
-          onData(applications);
+          queueMicrotask(() => onData(applications));
         }
         return () => void 0;
       },
@@ -296,8 +303,11 @@ async function setupRelationshipLoading() {
     .fn()
     .mockImplementation(
       (_query: unknown, _args: unknown, onData: (data: unknown) => void) => {
+        // Only the communities query (idx 0) emits; approvals/applications stay
+        // pending. Emit asynchronously so injectQueries' settle guard accepts it
+        // (see createConvexMock note).
         if (callIndex++ === 0) {
-          onData(mockCommunities);
+          queueMicrotask(() => onData(mockCommunities));
         }
         return () => void 0;
       },
@@ -327,6 +337,9 @@ async function setupRelationshipLoading() {
 
   const fixture = TestBed.createComponent(CommunityDirectoryComponent);
   fixture.detectChanges();
+  // Flush the queued communities emission so the cards render; approvals and
+  // applications remain pending (never emit), keeping the relationship CTA gated.
+  await fixture.whenStable();
 
   return {fixture};
 }
@@ -346,11 +359,13 @@ async function setupRelationshipError() {
         onData: (data: unknown) => void,
         onError?: (error: Error) => void,
       ) => {
+        // Emit asynchronously (see createConvexMock note): synchronous
+        // onData/onError would be dropped by injectQueries' settle/fail guard.
         const idx = callIndex++;
         if (idx === 0) {
-          onData(mockCommunities);
+          queueMicrotask(() => onData(mockCommunities));
         } else {
-          onError?.(relationshipError);
+          queueMicrotask(() => onError?.(relationshipError));
         }
         return () => void 0;
       },
@@ -911,27 +926,16 @@ describe('CommunityDirectoryComponent', () => {
     it('refetches the authenticated directory queries when retrying a signed-in failure', async () => {
       const {fixture, harness} = await setupAuthenticatedError();
       const component = fixture.componentInstance as unknown as {
-        allCommunitiesQuery: {refetch: () => void};
-        approvalsQuery: {refetch: () => void};
-        myApplicationsQuery: {refetch: () => void};
+        queries: {refetch: () => void};
       };
-      const allCommunitiesRefetch = vi.spyOn(
-        component.allCommunitiesQuery,
-        'refetch',
-      );
-      const approvalsRefetch = vi.spyOn(component.approvalsQuery, 'refetch');
-      const applicationsRefetch = vi.spyOn(
-        component.myApplicationsQuery,
-        'refetch',
-      );
+      const refetchSpy = vi.spyOn(component.queries, 'refetch');
       const retryButton = await harness.getRetryButton();
       expect(retryButton).toBeTruthy();
 
       await retryButton?.click();
 
-      expect(allCommunitiesRefetch).toHaveBeenCalledTimes(1);
-      expect(approvalsRefetch).toHaveBeenCalledTimes(1);
-      expect(applicationsRefetch).toHaveBeenCalledTimes(1);
+      // A single injectQueries refetch resubscribes all three keyed queries.
+      expect(refetchSpy).toHaveBeenCalledTimes(1);
     });
   });
 

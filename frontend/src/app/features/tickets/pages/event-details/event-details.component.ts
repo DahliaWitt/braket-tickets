@@ -16,7 +16,7 @@ import {toSignal} from '@angular/core/rxjs-interop';
 import {NgOptimizedImage} from '@angular/common';
 import {ActivatedRoute, Router, RouterLink} from '@angular/router';
 import {AuthService} from '@/core/services/auth.service';
-import {injectQuery, skipToken} from 'convex-angular';
+import {injectQueries, injectQuery, skipToken} from 'convex-angular';
 import {PaymentService} from '@/features/tickets/services/payment.service';
 import {ApplicationsService} from '@/features/vetting/services/applications.service';
 import {type Application} from '@/features/vetting/models/application.model';
@@ -98,17 +98,19 @@ export class EventDetailsComponent {
     return this.auth.userRole() === 'root_admin';
   }
 
-  private readonly eventQuery = injectQuery(api.events.public.get, () => ({
-    id: this.eventId(),
+  private readonly queries = injectQueries(() => ({
+    event: {
+      query: api.events.public.get,
+      args: {id: this.eventId()},
+    },
+    availability: {
+      query: api.events.public.getAvailability,
+      args: {
+        eventId: this.eventId(),
+        now: Math.floor(Date.now() / 60000) * 60000,
+      },
+    },
   }));
-
-  private readonly availabilityQuery = injectQuery(
-    api.events.public.getAvailability,
-    () => ({
-      eventId: this.eventId(),
-      now: Math.floor(Date.now() / 60000) * 60000,
-    }),
-  );
 
   private readonly organizerResource = resource({
     params: () => {
@@ -184,7 +186,14 @@ export class EventDetailsComponent {
     api.communities.trust_links.checkUserTrust,
     () => {
       const user = this.auth.user();
-      const event = this.eventQuery.data();
+      // Read through the memoized `event` computed rather than
+      // `queries.results().event` directly: `results()` emits a new object on
+      // every settle of any key (event OR availability), so reading it here
+      // would re-run this argsFn — and resubscribe the trust query — on every
+      // availability push. The `event` computed is Object.is-stable across
+      // availability-only updates, preserving the original narrow dependency
+      // on the event document alone.
+      const event = this.event();
       if (event?.visibility === EVENT_VISIBILITY.PUBLIC) return skipToken;
       if (!user?._id || !event) return skipToken;
       return {
@@ -201,12 +210,12 @@ export class EventDetailsComponent {
     return null;
   });
   readonly event = computed<EventDetail | null>(
-    () => this.eventQuery.data() ?? null,
+    () => this.queries.results().event ?? null,
   );
   readonly hasLoadError = computed(
     () =>
-      !!this.eventQuery.error() ||
-      !!this.availabilityQuery.error() ||
+      !!this.queries.errors().event ||
+      !!this.queries.errors().availability ||
       !!this.organizerResource.error() ||
       !!this.appStatusResource.error(),
   );
@@ -225,7 +234,7 @@ export class EventDetailsComponent {
     () => safeResourceValue(this.appStatusResource)?.status ?? null,
   );
   readonly loading = computed(() => {
-    if (this.eventQuery.isLoading() || this.availabilityQuery.isLoading()) {
+    if (this.queries.isLoading()) {
       return true;
     }
 
@@ -235,7 +244,9 @@ export class EventDetailsComponent {
     );
   });
 
-  readonly availability = computed(() => this.availabilityQuery.data() ?? null);
+  readonly availability = computed(
+    () => this.queries.results().availability ?? null,
+  );
 
   readonly remainingTickets = computed(() => {
     const avail = this.availability();

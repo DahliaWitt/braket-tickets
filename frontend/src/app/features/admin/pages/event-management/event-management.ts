@@ -12,6 +12,9 @@ import {DatePipe} from '@angular/common';
 import {ActivatedRoute, RouterLink} from '@angular/router';
 import {toSignal} from '@angular/core/rxjs-interop';
 import {ConvexError} from 'convex/values';
+import {injectQuery, skipToken} from 'convex-angular';
+import {api} from '@convex/_generated/api';
+import {type Id} from '@convex/_generated/dataModel';
 import {PAYOUT_DELAY_DAYS} from '@shared/constants';
 import {eventEndInstantMs} from '@shared/event-time';
 import {
@@ -25,7 +28,6 @@ import {
   type EventManagementResale,
   type EventManagementSummary,
   type EventTierPricingStats,
-  type Guest,
   type SettlementExportInput,
 } from '../../models/event-management.model';
 import {ZardAlertComponent} from '@ui/components/primitives/alert/alert.component';
@@ -225,14 +227,15 @@ export class EventManagement {
     },
   });
 
-  /** Guests surface — backed by `api.events.guests.listByEvent`. */
-  readonly guestsResource = resource({
-    params: () => ({eventId: this.eventId()}),
-    loader: ({params}): Promise<Guest[]> => {
-      if (!params.eventId) return Promise.resolve([]);
-      return this.adminEventsService.getGuests(params.eventId);
+  /** Guests surface — live subscription to `api.events.guests.listByEvent`. */
+  private readonly guestsQuery = injectQuery(
+    api.events.guests.listByEvent,
+    () => {
+      const eventId = this.eventId();
+      if (!eventId) return skipToken;
+      return {eventId: eventId as Id<'events'>};
     },
-  });
+  );
 
   readonly tierPricingStatsResource = resource({
     params: () => {
@@ -272,7 +275,7 @@ export class EventManagement {
         summary: this.summaryResource.error(),
         purchases: this.purchasesResource.error(),
         resale: this.resaleResource.error(),
-        guests: this.guestsResource.error(),
+        guests: this.guestsQuery.error(),
       };
       for (const [label, error] of Object.entries(surfaces)) {
         if (!error) continue;
@@ -304,7 +307,7 @@ export class EventManagement {
       this.summaryResource.error() != null ||
       this.purchasesResource.error() != null ||
       this.resaleResource.error() != null ||
-      this.guestsResource.error() != null,
+      this.guestsQuery.error() != null,
   );
 
   /** Summary accessor — gates the whole page. */
@@ -328,15 +331,13 @@ export class EventManagement {
   );
 
   /** Guests accessor */
-  readonly guests = computed(
-    () => safeResourceValue(this.guestsResource) ?? [],
-  );
+  readonly guests = computed(() => this.guestsQuery.data() ?? []);
 
   /** Loading state for the primary dashboard (summary). */
   readonly isLoading = this.summaryResource.isLoading;
 
   /** Loading state for guests specifically. */
-  readonly isLoadingGuests = this.guestsResource.isLoading;
+  readonly isLoadingGuests = this.guestsQuery.isLoading;
 
   /** Writable signal for action-triggered errors (e.g., status update, PDF generation) */
   private readonly actionError = signal<string | null>(null);
@@ -357,7 +358,7 @@ export class EventManagement {
       this.summaryResource.error(),
       this.purchasesResource.error(),
       this.resaleResource.error(),
-      this.guestsResource.error(),
+      this.guestsQuery.error(),
     ];
 
     for (const error of resourceErrors) {
@@ -461,7 +462,6 @@ export class EventManagement {
     this.summaryResource.reload();
     this.purchasesResource.reload();
     this.resaleResource.reload();
-    this.guestsResource.reload();
     this.reloadToken.update((n) => n + 1);
   }
 

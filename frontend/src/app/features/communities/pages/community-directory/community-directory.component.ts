@@ -11,7 +11,7 @@ import {RouterLink} from '@angular/router';
 import {PublicCommunitiesService} from '@/core/services/public-communities.service';
 import {api} from '@convex/_generated/api';
 import {type FunctionReturnType} from 'convex/server';
-import {injectQuery, skipToken} from 'convex-angular';
+import {injectQueries, skipToken} from 'convex-angular';
 import {AuthService} from '@/core/services/auth.service';
 import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton.component';
 import {BraCommunityAvatarComponent} from '@ui/components/primitives/community-avatar/community-avatar.component';
@@ -281,11 +281,24 @@ export class CommunityDirectoryComponent {
   private readonly publicCommunitiesService = inject(PublicCommunitiesService);
   private readonly publicDirectoryAttempt = signal(0);
 
-  // Authenticated users see all communities, unauthenticated see public directory only
-  private readonly allCommunitiesQuery = injectQuery(
-    api.communities.list.list,
-    () => (this.auth.isAuthenticated() ? {} : skipToken),
-  );
+  // Authenticated users see all communities plus their relationship data;
+  // unauthenticated users fall back to the public HTTP directory below.
+  // Key order (communities -> approvals -> myApplications) is load-bearing:
+  // injectQueries subscribes in Object.keys insertion order.
+  private readonly queries = injectQueries(() => {
+    const authed = this.auth.isAuthenticated();
+    return {
+      communities: authed
+        ? {query: api.communities.list.list, args: {}}
+        : skipToken,
+      approvals: authed
+        ? {query: api.communities.trust_links.getUserApprovals, args: {}}
+        : skipToken,
+      myApplications: authed
+        ? {query: api.communities.applications.getMyApplications, args: {}}
+        : skipToken,
+    };
+  });
 
   private readonly publicDirectoryResource = resource({
     params: () => ({
@@ -298,31 +311,21 @@ export class CommunityDirectoryComponent {
         : this.publicCommunitiesService.listDirectory(),
   });
 
-  private readonly approvalsQuery = injectQuery(
-    api.communities.trust_links.getUserApprovals,
-    () => (this.auth.isAuthenticated() ? {} : skipToken),
-  );
-
-  private readonly myApplicationsQuery = injectQuery(
-    api.communities.applications.getMyApplications,
-    () => (this.auth.isAuthenticated() ? {} : skipToken),
-  );
-
   readonly isLoading = computed(() =>
     this.auth.isAuthenticated()
-      ? this.allCommunitiesQuery.isLoading()
+      ? this.queries.statuses().communities === 'pending'
       : this.publicDirectoryResource.isLoading(),
   );
 
   readonly hasLoadError = computed(() =>
     this.auth.isAuthenticated()
-      ? this.allCommunitiesQuery.error() != null
+      ? this.queries.errors().communities != null
       : this.publicDirectoryResource.error() != null,
   );
 
   readonly communities = computed(() => {
     if (this.auth.isAuthenticated()) {
-      const all = this.allCommunitiesQuery.data() ?? [];
+      const all = this.queries.results().communities ?? [];
       return all.map((c: CommunityListItem) => ({
         _id: c._id,
         name: c.name,
@@ -336,18 +339,19 @@ export class CommunityDirectoryComponent {
     return safeResourceValue(this.publicDirectoryResource) ?? [];
   });
 
-  readonly isRelationshipLoading = computed(
-    () =>
-      this.auth.isAuthenticated() &&
-      (this.approvalsQuery.isLoading() || this.myApplicationsQuery.isLoading()),
-  );
+  readonly isRelationshipLoading = computed(() => {
+    if (!this.auth.isAuthenticated()) return false;
+    const statuses = this.queries.statuses();
+    return (
+      statuses.approvals === 'pending' || statuses.myApplications === 'pending'
+    );
+  });
 
-  readonly hasRelationshipError = computed(
-    () =>
-      this.auth.isAuthenticated() &&
-      (this.approvalsQuery.error() != null ||
-        this.myApplicationsQuery.error() != null),
-  );
+  readonly hasRelationshipError = computed(() => {
+    if (!this.auth.isAuthenticated()) return false;
+    const errors = this.queries.errors();
+    return errors.approvals != null || errors.myApplications != null;
+  });
 
   readonly statusMap = computed(
     (): Map<string, 'access' | 'pending' | 'rejected'> => {
@@ -357,7 +361,7 @@ export class CommunityDirectoryComponent {
       // getMyApplications returns newest-first (desc); track seen organizer IDs
       // so that a newer pending application is not overwritten by an older rejected one.
       const seenOrgIds = new Set<string>();
-      const applications = this.myApplicationsQuery.data() ?? [];
+      const applications = this.queries.results().myApplications ?? [];
       for (const app of applications) {
         if (!app.organizerId) continue;
         if (seenOrgIds.has(app.organizerId)) continue;
@@ -370,7 +374,7 @@ export class CommunityDirectoryComponent {
       }
 
       // Approvals override application status
-      const approvals = this.approvalsQuery.data() ?? [];
+      const approvals = this.queries.results().approvals ?? [];
       for (const approval of approvals) {
         map.set(approval.organizerId, 'access');
       }
@@ -386,7 +390,7 @@ export class CommunityDirectoryComponent {
     >();
     if (!this.auth.isAuthenticated()) return map;
 
-    const applications = this.myApplicationsQuery.data() ?? [];
+    const applications = this.queries.results().myApplications ?? [];
     for (const app of applications) {
       if (!app.organizerId || map.has(app.organizerId)) continue;
       map.set(app.organizerId, app.status);
@@ -397,9 +401,7 @@ export class CommunityDirectoryComponent {
 
   protected retryDirectoryLoad(): void {
     if (this.auth.isAuthenticated()) {
-      this.allCommunitiesQuery.refetch();
-      this.approvalsQuery.refetch();
-      this.myApplicationsQuery.refetch();
+      this.queries.refetch();
       return;
     }
 
