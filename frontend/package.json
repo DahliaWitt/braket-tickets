@@ -73,7 +73,7 @@
     "@angular/build": "^22.0.5",
     "@angular/cli": "^22.0.5",
     "@angular/compiler-cli": "^22.0.5",
-    "@anthropic-ai/sdk": "^0.86.1",
+    "@anthropic-ai/sdk": "^0.91.1",
     "@axe-core/playwright": "^4.11.1",
     "@codecov/vite-plugin": "^2.0.1",
     "@compodoc/compodoc": "^1.1.26",
