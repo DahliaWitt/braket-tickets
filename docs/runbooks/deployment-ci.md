@@ -53,9 +53,9 @@ When troubleshooting automatic deploys, start from the parent `CI` run on the br
 
 `CI` jobs `lint`, `test`, `stripe-contracts`, `build`, and `e2e-check` run on GitHub-hosted `ubuntu-latest` runners (free with unlimited minutes for public repositories; 4 vCPU / 16 GB). Only the `e2e` job and the deploy/release workflows run on the self-hosted Whiterose pool, which provides warm pnpm and Playwright browser volumes. This keeps the small self-hosted pool dedicated to E2E and deploys instead of queueing lint/test/build behind them.
 
-Hosted runners are ephemeral, so those jobs restore caches explicitly: the pnpm store via `actions/setup-node` (`cache: pnpm`, keyed on `pnpm-lock.yaml`) and, for `build`, the Angular build cache at `frontend/.angular/cache` via `actions/cache`. The Angular CLI disables its build cache when it detects CI, so `frontend/angular.json` sets `cli.cache.environment: "all"` — removing that setting silently turns the cache step into a no-op.
+Hosted runners are ephemeral, so those jobs restore caches explicitly: the shared composite action [`.github/actions/setup-node-pnpm`](../../.github/actions/setup-node-pnpm/action.yml) installs pnpm plus the `.nvmrc` Node version and restores the pnpm store (`actions/setup-node` with `cache: pnpm`), and the `build` job restores the Angular build cache at `frontend/.angular/cache` via `actions/cache`. The Angular CLI disables its build cache when it detects CI, so the `build` job enables it at runtime with `ng config cli.cache.environment all` — scoped to that job on purpose; a global `angular.json` setting would also switch the self-hosted `e2e` and deploy builds to persistent incremental caching on the Whiterose disk.
 
-The `e2e-check` gate intentionally has no `needs:` on `lint`/`test`/`build`: E2E starts in parallel with the fan-out, so PR wall-clock is `max(fan-out, e2e)` instead of their sum. A push that fails lint can waste one E2E run on the pool; the `cancel-in-progress` concurrency group bounds the cost on re-pushes. `stripe-contracts` keeps `needs: [lint]` to conserve Stripe sandbox API quota.
+The `e2e-check` gate intentionally has no `needs:` on `lint`/`test`/`build`: E2E starts in parallel with the fan-out, so PR wall-clock is `max(fan-out, e2e)` instead of their sum. A PR push that fails lint can waste one E2E run on the pool, bounded by the `cancel-in-progress` concurrency group on re-push (`cancel-in-progress` applies to `pull_request` events only, not branch pushes). Wasted runs on `develop`/`main` pushes should be rare because the strict up-to-date requirement means the merged state already passed full CI on the PR. `stripe-contracts` keeps `needs: [lint]` to conserve Stripe sandbox API quota.
 
 Branch protection on both `develop` and `main` requires these CI checks before merge:
 
@@ -473,17 +473,17 @@ Do not force-push or bypass the existing workflows.
 
 The repo ships three files:
 
-| File                     | Tracked | Purpose                                                                   |
-| ------------------------ | ------- | ------------------------------------------------------------------------- |
-| `.actrc`                 | yes     | Default flags: maps `self-hosted` to the custom `braket-act-runner` image |
-| `.github/act/Dockerfile` | yes     | Extends `catthehacker/ubuntu:act-latest` with pnpm via corepack           |
-| `.act.secrets`           | no      | Local secrets (copy from `.act.secrets.example`)                          |
+| File                     | Tracked | Purpose                                                                                       |
+| ------------------------ | ------- | --------------------------------------------------------------------------------------------- |
+| `.actrc`                 | yes     | Default flags: maps `self-hosted` and `ubuntu-latest` to the custom `braket-act-runner` image |
+| `.github/act/Dockerfile` | yes     | Extends `catthehacker/ubuntu:act-latest` with pnpm via corepack                               |
+| `.act.secrets`           | no      | Local secrets (copy from `.act.secrets.example`)                                              |
 
 On Apple Silicon Macs, `.actrc` sets `--container-architecture linux/amd64` so the x86_64 Docker images run under Rosetta emulation.
 
 ### Build the runner image
 
-The CI workflow runs on a self-hosted runner with pnpm pre-installed. The base `catthehacker/ubuntu:act-latest` image does not include pnpm, so a custom image is required:
+CI fan-out jobs run on `ubuntu-latest` and the `e2e` job on a self-hosted runner with pnpm pre-installed; `.actrc` maps both labels to the same custom image. The base `catthehacker/ubuntu:act-latest` image does not include pnpm, so a custom image is required:
 
 ```bash
 docker build --platform linux/amd64 -t braket-act-runner:latest .github/act/
@@ -521,7 +521,7 @@ act is best suited for validating individual jobs (especially `lint`). Heavier j
 
 - **Apple Silicon OOM**: x86_64 emulation consumes significantly more memory. The Angular build (`build` job) is OOM-killed (exit 137) under default Docker Desktop memory limits. Increase Docker Desktop memory to 8+ GB or validate builds natively.
 - **Codecov upload**: The `test` job's Codecov upload fails because act copies files instead of running `git clone`, so the container has no `.git` directory. The tests themselves pass — the failure is cosmetic.
-- **Job dependencies**: act resolves `needs:` chains, so `-j e2e` also runs `lint`, `test`, `build`, and `e2e-check`. If any dependency job fails (even for act-specific reasons), downstream jobs are skipped.
+- **Job dependencies**: act resolves `needs:` chains, so `-j e2e` also runs `e2e-check` first — but not `lint`/`test`/`build`, which are no longer dependencies of the E2E lane. If a dependency job fails (even for act-specific reasons), downstream jobs are skipped.
 - **WebKit system deps**: The Playwright install step (`playwright install --with-deps`) installs OS packages via apt; this works but adds ~60s to startup.
 - **Email secrets**: Email verification tests need Resend credentials in `.act.secrets`; SMTP credentials are fallback-only.
 

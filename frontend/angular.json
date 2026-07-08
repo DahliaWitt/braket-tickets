@@ -4,10 +4,7 @@
   "cli": {
     "packageManager": "pnpm",
     "schematicCollections": ["angular-eslint"],
-    "analytics": false,
-    "cache": {
-      "environment": "all"
-    }
+    "analytics": false
   },
   "newProjectRoot": "projects",
   "projects": {
