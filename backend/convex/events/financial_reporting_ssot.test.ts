@@ -361,3 +361,138 @@ describe('canonical financial reporting', () => {
     });
   });
 });
+
+describe('management summary — imported ticket-holder counts', () => {
+  async function seedEventWithSold(
+    t: ReturnType<typeof convexTest>,
+    args: {totalTickets: number; soldCount: number},
+  ): Promise<Id<'events'>> {
+    const organizerId = await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {
+        name: 'Imp Summary Org',
+        slug: `imp-sum-${crypto.randomUUID().slice(0, 8)}`,
+      },
+    );
+    return t.mutation(api.testing.events.seedEvent, {
+      title: 'Imp Summary Event',
+      date: '2026-06-01T00:00:00.000Z',
+      price: 2500,
+      totalTickets: args.totalTickets,
+      status: 'published',
+      visibility: 'public',
+      organizerId,
+      soldCount: args.soldCount,
+    });
+  }
+
+  it('reports imported counts separately; native sales metrics stay native-only', async () => {
+    const t = convexTest();
+    const adminId = await seedAdmin(t);
+    const eventId = await seedEventWithSold(t, {
+      totalTickets: 500,
+      soldCount: 200,
+    });
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    const summaryBefore = await asAdmin.query(
+      internal.events.management.getManagementSummaryInternal,
+      {eventId, requestUserId: adminId},
+    );
+    // 200 native sales (inventory-backed soldCount).
+    expect(summaryBefore.soldCount).toBe(200);
+    expect(summaryBefore.imported).toEqual({
+      total: 0,
+      checkedIn: 0,
+      bySource: [],
+    });
+    const sellThroughBefore =
+      summaryBefore.soldCount / summaryBefore.totalTickets;
+    const tierCountsBefore = summaryBefore.tierCounts;
+
+    // Import 40 external entries across two sources.
+    await asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId,
+      batchKey: 'sum-imp-ra',
+      dedupMode: 'skip',
+      sourceLabel: 'RA',
+      rows: Array.from({length: 25}, (_, i) => ({
+        name: `RA ${i}`,
+        externalRef: `RA-${i}`,
+      })),
+    });
+    await asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId,
+      batchKey: 'sum-imp-dice',
+      dedupMode: 'skip',
+      sourceLabel: 'DICE',
+      rows: Array.from({length: 15}, (_, i) => ({
+        name: `DICE ${i}`,
+        externalRef: `DICE-${i}`,
+      })),
+    });
+
+    const summaryAfter = await asAdmin.query(
+      internal.events.management.getManagementSummaryInternal,
+      {eventId, requestUserId: adminId},
+    );
+
+    // Native sales figures are UNCHANGED by the import.
+    expect(summaryAfter.soldCount).toBe(200);
+    expect(summaryAfter.tierCounts).toEqual(tierCountsBefore);
+    expect(summaryAfter.soldCount / summaryAfter.totalTickets).toBe(
+      sellThroughBefore,
+    );
+    // Imported entries have no orders — revenue is untouched.
+    expect(summaryAfter.revenue).toEqual(summaryBefore.revenue);
+
+    // NEW imported fields report 40 total across the per-source breakdown.
+    expect(summaryAfter.imported.total).toBe(40);
+    expect(summaryAfter.imported.checkedIn).toBe(0);
+    expect(summaryAfter.imported.bySource).toEqual([
+      {sourceLabel: 'DICE', total: 15, checkedIn: 0},
+      {sourceLabel: 'RA', total: 25, checkedIn: 0},
+    ]);
+  });
+
+  it('counts checked-in imported entries without touching native check-in stats', async () => {
+    const t = convexTest();
+    const adminId = await seedAdmin(t);
+    const eventId = await seedEventWithSold(t, {
+      totalTickets: 100,
+      soldCount: 0,
+    });
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    await asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId,
+      batchKey: 'sum-ci',
+      dedupMode: 'skip',
+      sourceLabel: 'RA',
+      rows: [
+        {name: 'Checked', externalRef: 'CI-A'},
+        {name: 'NotChecked', externalRef: 'CI-B'},
+      ],
+    });
+
+    // Check in one imported entry via the external scan fallback.
+    await asAdmin.mutation(api.events.check_in.checkIn, {
+      ticketId: 'CI-A',
+      eventId,
+    });
+
+    const summary = await asAdmin.query(
+      internal.events.management.getManagementSummaryInternal,
+      {eventId, requestUserId: adminId},
+    );
+
+    // The ticket-scoped native check-in counter is untouched by imported check-ins.
+    expect(summary.checkInStats.checkedIn).toBe(0);
+    // The imported breakdown reflects the door reality.
+    expect(summary.imported.total).toBe(2);
+    expect(summary.imported.checkedIn).toBe(1);
+    expect(summary.imported.bySource).toEqual([
+      {sourceLabel: 'RA', total: 2, checkedIn: 1},
+    ]);
+  });
+});

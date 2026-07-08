@@ -118,7 +118,7 @@ updates:
         patterns:
           - '*'
 
-  # Base images: ops log forwarder (node:22-alpine) and the self-hosted
+  # Base images: ops log forwarder (node:24-alpine) and the self-hosted
   # runner image (myoung34/github-runner). .github/act/Dockerfile is excluded
   # on purpose — it tracks a floating :act-latest tag.
   - package-ecosystem: 'docker'
@@ -140,3 +140,16 @@ updates:
       - 'docker'
     cooldown:
       default-days: 7
+    ignore:
+      # Node's release cadence: only EVEN majors become LTS, and a fresh even
+      # major is not Active LTS until ~October of its release year. Dependabot
+      # cannot read the LTS schedule, so left alone it proposes odd (non-LTS)
+      # majors or same-day even majors — e.g. the 22 -> 26 jump in #142, where
+      # 26 was <1 day old and skipped the mature 24 LTS. Block node major bumps
+      # and step the major by hand to the next even line once it reaches Active
+      # LTS. The floating `NN-alpine` tag still tracks minor/patch in-major, so
+      # security patches within the pinned line keep flowing. Scoped to node so
+      # the runner image (myoung34/github-runner) still gets major PRs.
+      - dependency-name: 'node'
+        update-types:
+          - 'version-update:semver-major'
