@@ -130,6 +130,25 @@ describe('guests.addMany', () => {
     );
   });
 
+  it('treats names differing only by internal whitespace as duplicates', async () => {
+    const t = convexTest();
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    const result = await asAdmin.mutation(api.events.guests.addMany, {
+      eventId,
+      batchKey: 'batch-ws',
+      rows: [
+        {name: 'John  Doe', email: 'jd@example.com'},
+        {name: 'John Doe', email: 'jd@example.com'},
+      ],
+    });
+
+    expect(result.insertedCount).toBe(1);
+    expect(result.skippedCount).toBe(1);
+  });
+
   it('writes exactly one batch-level audit entry, not one per row', async () => {
     const t = convexTest();
     const adminId = await setupAdmin(t);

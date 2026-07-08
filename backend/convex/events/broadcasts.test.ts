@@ -925,6 +925,39 @@ describe('eventBroadcasts.send dedup', () => {
     }
   });
 
+  it('returns already_sent (not no_recipients) when a committed broadcast later has an empty audience', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminAndEvent(t);
+    await seedGuest(t, eventId, {name: 'Solo', email: 'solo@example.com'});
+
+    const first = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Only Send',
+      message: 'Hi',
+    });
+    expect(first.success).toBe(true);
+
+    // Remove the only recipient so the audience is now empty on retry.
+    const guestId = await t.run(
+      async (ctx) =>
+        (await ctx.db
+          .query('guests')
+          .withIndex('by_event', (q) => q.eq('eventId', eventId))
+          .first())!._id,
+    );
+    await asAdmin.mutation(api.events.guests.remove, {id: guestId});
+
+    const retry = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Only Send',
+      message: 'Hi',
+    });
+    // A committed broadcast whose audience later emptied is a retry, not a
+    // never-sent empty event.
+    expect(retry.success).toBe(false);
+    if (!retry.success) expect(retry.error).toBe('already_sent');
+  });
+
   it('allows sending to different events', async () => {
     const t = convexTest();
     const {asAdmin} = await seedAdminAndEvent(t);

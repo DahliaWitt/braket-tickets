@@ -19,19 +19,25 @@ export type ImportFieldKey =
   | 'notes';
 
 /**
- * Guest type mirror. Locked to the backend `guests.type` union via the
- * assignment below — if the backend enum changes, this array stops matching the
- * `GuestType` type and the file fails to compile. Runtime values live on the
- * frontend because the parser/validation runs client-side; the backend remains
- * the security authority.
+ * Guest type mirror. Runtime values live on the frontend because the
+ * parser/validation runs client-side; the backend remains the security
+ * authority. Locked to the backend `guests.type` union via the presence map
+ * below: `satisfies Record<GuestType, true>` requires a key for every member,
+ * so a REMOVED/RENAMED backend value fails to compile AND a newly ADDED value
+ * fails until it is listed here (a plain `readonly GuestType[]` would silently
+ * omit additions).
  */
 export type GuestType = Doc<'guests'>['type'];
 
-export const IMPORT_GUEST_TYPES: readonly GuestType[] = [
-  'guest',
-  'artist guest',
-  'staff',
-] as const;
+const GUEST_TYPE_PRESENCE = {
+  guest: true,
+  'artist guest': true,
+  staff: true,
+} satisfies Record<GuestType, true>;
+
+export const IMPORT_GUEST_TYPES = Object.keys(
+  GUEST_TYPE_PRESENCE,
+) as GuestType[];
 
 /** Delimiters the parser can auto-detect. Spreadsheet paste is tab-separated. */
 export type ImportDelimiter = 'tab' | 'comma' | 'semicolon';

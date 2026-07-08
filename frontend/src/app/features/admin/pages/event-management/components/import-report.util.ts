@@ -53,10 +53,15 @@ export function buildImportErrorReport(
 function extractConvexErrorMessage(error: unknown): string | null {
   if (!(error instanceof ConvexError)) return null;
   const data: unknown = error.data;
-  if (typeof data === 'string') return data;
+  if (typeof data === 'string') return nonBlankOrNull(data);
   if (data && typeof data === 'object' && 'message' in data) {
     const message = (data as {message: unknown}).message;
-    if (typeof message === 'string') return message;
+    if (typeof message === 'string') return nonBlankOrNull(message);
   }
   return null;
+}
+
+/** Returns the string only when it has non-whitespace content, else null. */
+function nonBlankOrNull(value: string): string | null {
+  return value.trim().length > 0 ? value : null;
 }

@@ -318,7 +318,7 @@ Batch-level, in the `check-in`/import audit categories (values in
 - `imported_tickets.import` — external ticket import batch.
 - `imported_tickets.remove` — single imported entry removal.
 - `imported_tickets.batch_remove` — batch removal (records the checked-in count).
-- `imported_ticket.check-in` — external ticket-holder check-in at the door.
+- `imported_tickets.check-in` — external ticket-holder check-in at the door.
 - `imported_tickets.redact` — operator privacy redaction.
 
 Audit entries and error messages carry counts, batch keys, and row indexes

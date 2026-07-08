@@ -312,21 +312,25 @@ import type {
                 <thead class="sticky top-0 bg-muted">
                   <tr>
                     <th
+                      scope="col"
                       class="mono-label px-3 py-2 text-left text-2xs text-muted-foreground"
                     >
                       row
                     </th>
                     <th
+                      scope="col"
                       class="mono-label px-3 py-2 text-left text-2xs text-muted-foreground"
                     >
                       name
                     </th>
                     <th
+                      scope="col"
                       class="mono-label px-3 py-2 text-left text-2xs text-muted-foreground"
                     >
                       state
                     </th>
                     <th
+                      scope="col"
                       class="mono-label px-3 py-2 text-left text-2xs text-muted-foreground"
                     >
                       reason
@@ -601,6 +605,7 @@ export class ImportSurfaceComponent {
     if (!this.canParse()) return;
     const result = parseImportText(this.rawText(), {
       acceptedFields: new Set(this.config().acceptedFields),
+      maxRows: this.config().maxRows,
     });
     this.parseResult.set(result);
 
@@ -661,6 +666,7 @@ export class ImportSurfaceComponent {
     const result = parseImportText(this.rawText(), {
       acceptedFields: new Set(this.config().acceptedFields),
       manualMapping: this.manualMapping(),
+      maxRows: this.config().maxRows,
     });
     this.parseResult.set(result);
     if (!result.ok) {

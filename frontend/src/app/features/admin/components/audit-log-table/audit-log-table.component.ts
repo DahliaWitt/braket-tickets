@@ -109,7 +109,7 @@ export const ACTION_DISPLAY: Record<
   'guest.check-in': {icon: 'scan-line', label: 'CHECKED IN GUEST'},
   'guest.import': {icon: 'user-plus', label: 'IMPORTED GUESTS'},
   'guest.update': {icon: 'pencil', label: 'UPDATED GUEST'},
-  'imported_ticket.check-in': {
+  'imported_tickets.check-in': {
     icon: 'scan-line',
     label: 'CHECKED IN EXTERNAL TICKET',
   },
@@ -118,11 +118,11 @@ export const ACTION_DISPLAY: Record<
     label: 'IMPORTED EXTERNAL TICKETS',
   },
   'imported_tickets.remove': {
-    icon: 'user-plus',
+    icon: 'trash',
     label: 'REMOVED EXTERNAL TICKET',
   },
   'imported_tickets.batch_remove': {
-    icon: 'user-plus',
+    icon: 'trash',
     label: 'REMOVED IMPORT BATCH',
   },
   'imported_tickets.redact': {

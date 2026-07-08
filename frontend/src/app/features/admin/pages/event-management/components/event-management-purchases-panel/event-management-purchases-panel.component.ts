@@ -109,7 +109,9 @@ export class EventManagementPurchasesPanelComponent {
   }
 
   async removeImportedEntry(entry: ImportedTicketHolder): Promise<void> {
-    if (this.removingEntryId()) return;
+    // Refuse while ANY removal (single or batch) is in flight so a single-entry
+    // delete can't race a batch delete that also contains this entry.
+    if (this.removingEntryId() || this.removingBatchKey()) return;
     this.removingEntryId.set(entry._id);
     try {
       await this.adminEventsService.removeImportedEntry(entry._id);
@@ -124,7 +126,8 @@ export class EventManagementPurchasesPanelComponent {
   }
 
   removeImportedBatch(batch: ImportedBatchGroup): void {
-    if (this.removingBatchKey()) return;
+    // Refuse while ANY removal is in flight (see removeImportedEntry).
+    if (this.removingEntryId() || this.removingBatchKey()) return;
 
     const count = batch.entries.length;
     const ticketLabel = count === 1 ? 'ticket' : 'tickets';
@@ -150,7 +153,8 @@ export class EventManagementPurchasesPanelComponent {
   }
 
   private async performBatchRemoval(batch: ImportedBatchGroup): Promise<void> {
-    if (this.removingBatchKey()) return;
+    // A single-entry removal may have started while the confirm dialog was open.
+    if (this.removingEntryId() || this.removingBatchKey()) return;
     this.removingBatchKey.set(batch.batchKey);
     try {
       const result = await this.adminEventsService.removeImportedBatch(
@@ -191,7 +195,7 @@ export class EventManagementPurchasesPanelComponent {
 
     this.dialogService.create({
       zTitle: 'Export Attendee List',
-      zDescription: `Export ${this.purchases().length + this.importedEntries().length} attendees to CSV or PDF`,
+      zDescription: `Export ${this.purchases().length + this.guests().length + this.importedEntries().length} attendees to CSV or PDF`,
       zContent: ExportDialogComponent,
       zData: dialogData,
       zHideFooter: true,

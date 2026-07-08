@@ -47,7 +47,7 @@ export const ADMIN_AUDIT_ACTIONS = {
   IMPORTED_TICKETS_REMOVE: 'imported_tickets.remove',
   IMPORTED_TICKETS_BATCH_REMOVE: 'imported_tickets.batch_remove',
   IMPORTED_TICKETS_REDACT: 'imported_tickets.redact',
-  IMPORTED_TICKET_CHECK_IN: 'imported_ticket.check-in',
+  IMPORTED_TICKET_CHECK_IN: 'imported_tickets.check-in',
   MAGIC_LINK_CREATE: 'magic_link.create',
   MAGIC_LINK_DELETE: 'magic_link.delete',
   MAGIC_LINK_DISABLE: 'magic_link.disable',

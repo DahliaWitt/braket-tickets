@@ -105,6 +105,20 @@ describe('buildPreview partitioning', () => {
       expect(preview.rows[0].partition).toBe('valid');
       expect(preview.rows[0].values.guestType).toBe('staff');
     });
+
+    it('an invalid row does not make a later valid row with the same key a duplicate', () => {
+      // Row 1 shares the name+email dedup key but is invalid (bad type); it was
+      // never submitted, so row 2 (same key, valid) must stay valid.
+      const parsed = parse(
+        GUEST_IMPORT_CONFIG,
+        'Name,Email,Type\nzoe,zoe@example.test,VIP\nzoe,zoe@example.test,guest',
+      );
+      const preview = buildPreview(parsed.rows, GUEST_IMPORT_CONFIG, {
+        dedupMode: 'skip',
+      });
+      expect(preview.rows[0].partition).toBe('invalid');
+      expect(preview.rows[1].partition).toBe('valid');
+    });
   });
 
   describe('duplicate reason copy', () => {

@@ -304,17 +304,18 @@ export class EventManagement {
   );
 
   /**
-   * Error state — true when any of the four management resources is in an
-   * error state. Every surface is a gated admin read; a failure on any one
-   * of them must surface as an error instead of silently rendering empty
-   * tabs.
+   * Error state — true when any management resource is in an error state. Every
+   * surface is a gated admin read; a failure on any one of them must surface as
+   * an error instead of silently rendering empty tabs (the imported-tickets
+   * fetch included, so a failed load doesn't silently hide external buyers).
    */
   readonly hasLoadError = computed(
     () =>
       this.summaryResource.error() != null ||
       this.purchasesResource.error() != null ||
       this.resaleResource.error() != null ||
-      this.guestsResource.error() != null,
+      this.guestsResource.error() != null ||
+      this.importedTicketsResource.error() != null,
   );
 
   /** Summary accessor — gates the whole page. */
@@ -373,6 +374,7 @@ export class EventManagement {
       this.purchasesResource.error(),
       this.resaleResource.error(),
       this.guestsResource.error(),
+      this.importedTicketsResource.error(),
     ];
 
     for (const error of resourceErrors) {

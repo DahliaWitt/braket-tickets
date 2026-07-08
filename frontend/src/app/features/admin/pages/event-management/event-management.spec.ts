@@ -38,6 +38,7 @@ interface AdminEventsServiceMock {
   getManagementResale: Mock;
   getTierPricingStats: Mock;
   getGuests: Mock;
+  listImportedTickets: Mock;
   getTicketPdf: Mock;
   sendTicketPurchaseReminder: Mock;
   updateResaleSettings: Mock;
@@ -299,6 +300,7 @@ describe('EventManagement', () => {
         .fn()
         .mockImplementation(() => Promise.resolve(tierPricingStatsData)),
       getGuests: vi.fn().mockResolvedValue([]),
+      listImportedTickets: vi.fn().mockResolvedValue([]),
       getTicketPdf: vi
         .fn()
         .mockResolvedValue('data:application/pdf;base64,abc123'),

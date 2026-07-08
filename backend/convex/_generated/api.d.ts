@@ -461,7 +461,7 @@ export declare const api: {
                 | "imported_tickets.remove"
                 | "imported_tickets.batch_remove"
                 | "imported_tickets.redact"
-                | "imported_ticket.check-in"
+                | "imported_tickets.check-in"
                 | "magic_link.create"
                 | "magic_link.delete"
                 | "magic_link.disable"
@@ -2461,7 +2461,7 @@ export declare const api: {
             | "imported_tickets.remove"
             | "imported_tickets.batch_remove"
             | "imported_tickets.redact"
-            | "imported_ticket.check-in"
+            | "imported_tickets.check-in"
             | "magic_link.create"
             | "magic_link.delete"
             | "magic_link.disable"
@@ -3731,7 +3731,7 @@ export declare const internal: {
               | "imported_tickets.remove"
               | "imported_tickets.batch_remove"
               | "imported_tickets.redact"
-              | "imported_ticket.check-in"
+              | "imported_tickets.check-in"
               | "magic_link.create"
               | "magic_link.delete"
               | "magic_link.disable"
@@ -3778,7 +3778,7 @@ export declare const internal: {
             action:
               | "ticket.check-in"
               | "guest.check-in"
-              | "imported_ticket.check-in";
+              | "imported_tickets.check-in";
             adminId: Id<"users">;
             eventId?: Id<"events">;
             ipAddress?: string;

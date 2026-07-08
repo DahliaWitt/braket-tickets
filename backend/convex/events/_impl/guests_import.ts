@@ -205,7 +205,7 @@ export async function addMany(
   // ONE batch-level audit entry (never one per row). PII stays out of the
   // payload — `reason` carries counts and the batch key only.
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: user._id,
       action: ADMIN_AUDIT_ACTIONS.GUEST_IMPORT,

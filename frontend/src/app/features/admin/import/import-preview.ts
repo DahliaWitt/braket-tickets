@@ -97,8 +97,13 @@ export function buildPreview(
       }
     }
 
-    if (strongKey !== null) seenStrong.add(strongKey);
-    if (weakKey !== null) seenWeak.add(weakKey);
+    // Only track keys for rows that actually count as present. An invalid row
+    // was never submitted, so it must not make a later valid row with the same
+    // key look like a duplicate.
+    if (partition !== 'invalid') {
+      if (strongKey !== null) seenStrong.add(strongKey);
+      if (weakKey !== null) seenWeak.add(weakKey);
+    }
 
     return {
       sourceRowNumber: parsed.sourceRowNumber,

@@ -297,7 +297,7 @@ export async function importBatch(
   });
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: user._id,
       action: ADMIN_AUDIT_ACTIONS.IMPORTED_TICKETS_IMPORT,
@@ -341,7 +341,7 @@ export async function removeEntry(
   await ctx.db.delete('importedTicketHolders', args.id);
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: user._id,
       action: ADMIN_AUDIT_ACTIONS.IMPORTED_TICKETS_REMOVE,
@@ -396,7 +396,7 @@ export async function removeBatch(
   }
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: user._id,
       action: ADMIN_AUDIT_ACTIONS.IMPORTED_TICKETS_BATCH_REMOVE,
@@ -656,7 +656,7 @@ export async function redactByEmail(
   for (let i = 0; i < eventIds.length; i += 1) {
     const event = events[i];
     await insertAdminAuditLog(
-      {db: ctx.db},
+      {db: ctx.db, meta: ctx.meta},
       {
         adminId: args.operatorUserId,
         action: ADMIN_AUDIT_ACTIONS.IMPORTED_TICKETS_REDACT,

@@ -257,12 +257,25 @@ test.describe('CSV import — external tickets & guest bulk add', () => {
         return null;
       }
     };
-    await expect
-      .poll(async () => (await tryCheckIn()) !== null, {timeout: 15000})
-      .toBe(true);
+    // Wait for the freshly-mounted (or re-rendered) host, then return it — so
+    // action calls never dereference a null harness and never poll a mutating
+    // action. The `!` is guaranteed by the poll that immediately precedes it.
+    const resolveCheckIn = async (): Promise<CheckInComponentHarness> => {
+      let harness: CheckInComponentHarness | null = null;
+      await expect
+        .poll(
+          async () => {
+            harness = await tryCheckIn();
+            return harness !== null;
+          },
+          {timeout: 15000},
+        )
+        .toBe(true);
+      return harness!;
+    };
 
     // selectEventByLabel polls for the option internally before selecting.
-    await (await tryCheckIn())!.selectEventByLabel(eventTitle);
+    await (await resolveCheckIn()).selectEventByLabel(eventTitle);
 
     // The imported section renders the entry with its source badge at the door.
     await expect
@@ -279,7 +292,7 @@ test.describe('CSV import — external tickets & guest bulk add', () => {
       .not.toBeNull();
 
     // Manual fallback: search by the barcode digits printed under the QR.
-    await (await tryCheckIn())!.enterSearchTerm(barcode);
+    await (await resolveCheckIn()).enterSearchTerm(barcode);
     await expect
       .poll(
         async () =>
@@ -289,7 +302,7 @@ test.describe('CSV import — external tickets & guest bulk add', () => {
       .not.toBeNull();
 
     // Check the entry in and assert the reactive checked-in state through the DOM.
-    await (await tryCheckIn())!.clickImportedCheckInByName(holderName);
+    await (await resolveCheckIn()).clickImportedCheckInByName(holderName);
     await expect
       .poll(
         async () => {

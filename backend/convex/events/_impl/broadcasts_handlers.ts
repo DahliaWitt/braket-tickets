@@ -271,10 +271,6 @@ export async function sendBroadcast(
       )
     : baseAudience;
 
-  if (fullAudience.recipientCount === 0) {
-    return {success: false as const, error: 'no_recipients' as const};
-  }
-
   // External-only recipients are full-audience emails not covered by the base
   // (native/guest) audience — an imported email that collides with a native
   // purchaser is a base recipient, never double-counted here.
@@ -290,19 +286,26 @@ export async function sendBroadcast(
   const baseRecipients = baseAudience.recipients ?? [];
 
   // A segment is "fresh" when it has recipients and its dedup key is not yet
-  // committed. Determine freshness before any cap rejection.
-  const baseFresh =
-    baseRecipients.length > 0 && !(await hasEmailDedup(ctx, baseDedupKey));
+  // committed. Determine freshness before any empty/cap rejection so a retry is
+  // never masked as an empty send.
+  const baseCommitted = await hasEmailDedup(ctx, baseDedupKey);
+  const externalCommitted = wantExternal
+    ? await hasEmailDedup(ctx, externalDedupKey)
+    : false;
+  const baseFresh = baseRecipients.length > 0 && !baseCommitted;
   const externalFresh =
-    wantExternal &&
-    externalOnlyRecipients.length > 0 &&
-    !(await hasEmailDedup(ctx, externalDedupKey));
+    wantExternal && externalOnlyRecipients.length > 0 && !externalCommitted;
 
-  // Nothing new to send → already_sent. This precedes the cap check so a
-  // legitimately-committed broadcast keeps returning already_sent on retry even
-  // if its audience later grows past the cap.
+  // Nothing new to send. Distinguish a genuine empty event (nothing ever
+  // committed → no_recipients) from a retry of a broadcast whose audience later
+  // emptied (a committed segment → already_sent). This precedes the cap check so
+  // a committed broadcast keeps returning already_sent even if the audience
+  // later grows past the cap.
   if (!baseFresh && !externalFresh) {
-    return {success: false as const, error: 'already_sent' as const};
+    if (baseCommitted || externalCommitted) {
+      return {success: false as const, error: 'already_sent' as const};
+    }
+    return {success: false as const, error: 'no_recipients' as const};
   }
 
   // Cap applies only to the segment(s) being freshly sent.

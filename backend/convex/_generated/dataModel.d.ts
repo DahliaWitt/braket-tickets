@@ -115,7 +115,7 @@ export type DataModel = {
         | "imported_tickets.remove"
         | "imported_tickets.batch_remove"
         | "imported_tickets.redact"
-        | "imported_ticket.check-in"
+        | "imported_tickets.check-in"
         | "magic_link.create"
         | "magic_link.delete"
         | "magic_link.disable"

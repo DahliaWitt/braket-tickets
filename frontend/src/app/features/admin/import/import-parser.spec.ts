@@ -203,4 +203,18 @@ describe('parseImportText', () => {
     if (!result.ok) return;
     expect(result.rows).toHaveLength(2);
   });
+
+  it('caps tokenization at maxRows + 1 so an over-cap paste stays bounded', () => {
+    // 10 data rows with maxRows: 3 → tokenize stops after header + maxRows + 1
+    // records, yielding 4 data rows (enough to still flag over-cap) not all 10.
+    const input =
+      'Name\n' + Array.from({length: 10}, (_, i) => `g${i}`).join('\n');
+    const result = parseImportText(input, {
+      acceptedFields: guestFields,
+      maxRows: 3,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.rows).toHaveLength(4);
+  });
 });

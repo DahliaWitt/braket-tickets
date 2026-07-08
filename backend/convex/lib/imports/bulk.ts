@@ -81,11 +81,13 @@ export function assertEventImportCapNotExceeded(
 
 /**
  * Builds the case-insensitive name+email dedup key. Email is normalized (trim +
- * lowercase); name is trimmed + lowercased. A missing email collapses to an
- * empty segment so name-only rows still key consistently.
+ * lowercase); name is trimmed, internal whitespace runs collapsed to a single
+ * space, then lowercased — so "John  Doe" and "John Doe" key identically. A
+ * missing email collapses to an empty segment so name-only rows still key
+ * consistently.
  */
 export function nameEmailDedupKey(name: string, email?: string): string {
-  const normalizedName = name.trim().toLowerCase();
+  const normalizedName = name.trim().replace(/\s+/g, ' ').toLowerCase();
   const normalizedEmail = normalizeEmailOrNull(email) ?? '';
   return `${normalizedName}\u0000${normalizedEmail}`;
 }
