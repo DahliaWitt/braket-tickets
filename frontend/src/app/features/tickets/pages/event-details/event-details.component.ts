@@ -51,6 +51,7 @@ import {CheckoutStore} from './checkout-store';
 import {getContactDialogDescription} from './event-details-copy';
 import {getBuyerPricingSummary} from '@shared/pricing/pricing-summary';
 import {EventDatePipe} from '@/utils/event-date.pipe';
+import {EventEndTimePipe} from '@/utils/event-end-time.pipe';
 
 type EventOrganizer = NonNullable<EventDetail['organizer']>;
 
@@ -59,6 +60,7 @@ type EventOrganizer = NonNullable<EventDetail['organizer']>;
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     EventDatePipe,
+    EventEndTimePipe,
     RouterLink,
     NgOptimizedImage,
     ZardButtonComponent,

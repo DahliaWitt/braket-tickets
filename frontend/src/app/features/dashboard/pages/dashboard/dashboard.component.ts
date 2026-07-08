@@ -21,12 +21,14 @@ import {
   type BuyerPricingInput,
 } from '@shared/pricing/pricing-summary';
 import {EventDatePipe} from '@/utils/event-date.pipe';
+import {EventEndTimePipe} from '@/utils/event-end-time.pipe';
 
 @Component({
   selector: 'app-dashboard',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     EventDatePipe,
+    EventEndTimePipe,
     RouterLink,
     NgOptimizedImage,
     ContentLayoutComponent,
@@ -266,10 +268,17 @@ export class DashboardComponent {
 
   // Next event per community
   readonly nextEventByOrganizer = computed(() => {
-    const map = new Map<string, {title: string; date: string}>();
+    const map = new Map<
+      string,
+      {title: string; date: string; endDate?: string}
+    >();
     for (const event of this.sortedRawEvents()) {
       if (event.organizerId && !map.has(event.organizerId)) {
-        map.set(event.organizerId, {title: event.title, date: event.date});
+        map.set(event.organizerId, {
+          title: event.title,
+          date: event.date,
+          endDate: event.endDate,
+        });
       }
     }
     return map;

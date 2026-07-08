@@ -9,7 +9,7 @@ import {
 import {internal} from '../_generated/api';
 import {getAuthUserId, requireUser} from '../lib/auth_identity';
 import {isPlatformAdmin, loadEventOrThrow} from '../lib/access';
-import {hasEventDatePassed} from '../lib/timezone';
+import {hasEventEnded} from '../lib/timezone';
 import {rateLimiter} from '../lib/rate_limits';
 import {findMatchingInQuery} from '../lib/query_scan';
 import {getGroupedResaleListingsByEvent} from '../lib/resale/read_models';
@@ -81,9 +81,8 @@ export const listTicketForResale = mutation({
     const salesStatus = event.ticketSalesStatus ?? 'active';
     if (salesStatus === 'ended') throwInvalidState('Ticket sales have ended');
 
-    // Check event date hasn't passed
-    if (hasEventDatePassed(event.date))
-      throwInvalidState('Event has already occurred');
+    // Check the event hasn't ended (honors endDate for overnight events)
+    if (hasEventEnded(event)) throwInvalidState('Event has already occurred');
 
     // Check for existing active listing (listed or pending)
     const existingListing = await findMatchingInQuery(

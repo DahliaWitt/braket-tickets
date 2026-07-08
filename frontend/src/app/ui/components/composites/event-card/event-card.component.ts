@@ -15,12 +15,14 @@ import {ZardButtonComponent} from '@ui/components/primitives/button/button.compo
 import {ZardCardComponent} from '@ui/components/primitives/card/card.component';
 import type {EventVisibility} from '@shared/domain/event-visibility';
 import {EventDatePipe} from '@/utils/event-date.pipe';
+import {EventEndTimePipe} from '@/utils/event-end-time.pipe';
 
 export interface EventCardData {
   _id: string; // intentionally string, not Id<'events'> — UI components don't import Convex types
   title: string;
   description?: string;
   date: string;
+  endDate?: string;
   location?: string;
   price: number;
   slidingScaleEnabled?: boolean;
@@ -40,6 +42,7 @@ export interface EventCardData {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     EventDatePipe,
+    EventEndTimePipe,
     RouterLink,
     NgOptimizedImage,
     ZardButtonComponent,
@@ -120,7 +123,8 @@ export interface EventCardData {
             class="font-mono text-sm font-bold text-muted-foreground"
           >
             {{ event().date | eventDate: 'mediumDate' }},
-            {{ event().date | eventDate: 'shortTime' }}
+            {{ event().date | eventDate: 'shortTime'
+            }}{{ event().endDate | eventEndTime: event().date }}
           </p>
           @if (event().location) {
             <p

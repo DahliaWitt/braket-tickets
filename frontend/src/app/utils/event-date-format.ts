@@ -1,8 +1,11 @@
 import {
   DEFAULT_EVENT_TIME_ZONE,
   dateKeyToLocalDate as sharedDateKeyToLocalDate,
+  eventLocalDayDiff,
   eventStartInstantMs,
   formatEventDateKey as sharedFormatEventDateKey,
+  isEventOvernightWrap,
+  parseUtcInstant,
   todayDateKey,
 } from '@shared/event-time';
 
@@ -75,6 +78,49 @@ export function formatEventDate(
   } catch {
     return null;
   }
+}
+
+/**
+ * Suffix appended after an event's rendered start time to show its end.
+ * Same day or a genuine overnight wrap (next calendar day at an earlier clock
+ * time, like 9pm–3am) shows only the end time — e.g. ' – 3:00 AM'. Multi-day
+ * events — including a next-day end at a later clock time (a 24h+ span) —
+ * include the end date — e.g. ' – Aug 3, 2:00 AM' — so the span is
+ * unambiguous. Returns '' when endDate is missing, unparseable, or not after
+ * the start, so templates can append it unconditionally.
+ */
+export function formatEventEndTimeSuffix(
+  endDate: string | null | undefined,
+  startDate: string | number | Date | null | undefined,
+): string {
+  if (!endDate || startDate === null || startDate === undefined) return '';
+
+  const startMs =
+    typeof startDate === 'string'
+      ? eventStartInstantMs(startDate)
+      : new Date(startDate).getTime();
+  const endMs = parseUtcInstant(endDate)?.getTime() ?? null;
+  if (
+    startMs === null ||
+    Number.isNaN(startMs) ||
+    endMs === null ||
+    endMs <= startMs
+  ) {
+    return '';
+  }
+
+  const endTime = formatEventDate(endMs, 'shortTime');
+  if (!endTime) return '';
+
+  if (
+    eventLocalDayDiff(startMs, endMs) === 0 ||
+    isEventOvernightWrap(startMs, endMs)
+  ) {
+    return ` – ${endTime}`;
+  }
+
+  const endDay = formatEventDate(endMs, 'mediumDate');
+  return endDay ? ` – ${endDay}, ${endTime}` : ` – ${endTime}`;
 }
 
 export function formatEventDateKey(

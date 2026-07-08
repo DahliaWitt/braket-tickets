@@ -258,6 +258,13 @@ const schemaTables = {
      * validateISODate in lib/validation.ts.
      */
     date: v.string(),
+    /**
+     * Optional event end instant, same ISO 8601 UTC format as `date` and
+     * validated to be after it. When absent, the event is treated as ending
+     * at midnight (event timezone) after its start date — see hasEventEnded
+     * in shared/event-time.ts.
+     */
+    endDate: v.optional(v.string()),
     location: v.optional(v.string()),
     poster: v.optional(v.string()), // URL or Storage ID
     /**

@@ -145,7 +145,7 @@ The daily cron `process scheduled Stripe payouts` runs `stripe/actions.processSc
 An event settles for payout only when all of these are true:
 
 - It has `order_financial_events` rows for the organizer's connected account (ledger-derived — event `status` does not matter).
-- The event date is older than the payout delay window (otherwise its positive net is reserved, not paid).
+- The event is **over** by more than the payout delay window (otherwise its positive net is reserved, not paid). "Over" means the payout reference instant — `events.endDate` when set, else the start `events.date` — is older than `now - PAYOUT_DELAY_MS`. A running multi-day event stays reserved until its `endDate` plus the delay, even though its start is already past. See `eventEndInstantMs` in [shared/event-time.ts](../../shared/event-time.ts).
 - Its organizer has a Connect account and is payout-ready: `stripeOnboardingStatus === 'complete'` and `stripePayoutsEnabled === true` (or is a platform organizer, in which case the event retires via path 1).
 
 ### Read the payout status in the UI

@@ -40,6 +40,7 @@ import type {ResaleListingStatus} from '@shared/domain/resale-listing-status';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
 import {formatUsdCents} from '@shared/pricing/pricing-summary';
 import {EventDatePipe} from '@/utils/event-date.pipe';
+import {EventEndTimePipe} from '@/utils/event-end-time.pipe';
 
 /** Resale listing data mapped to a ticket */
 interface TicketResaleInfo {
@@ -52,6 +53,7 @@ interface TicketResaleInfo {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     EventDatePipe,
+    EventEndTimePipe,
     UpperCasePipe,
     RouterLink,
     ZardCardComponent,
@@ -168,7 +170,11 @@ interface TicketResaleInfo {
                       >
                         @if (ticket.resolvedEvent?.date; as eventDate) {
                           {{ eventDate | eventDate: 'longDate' }},
-                          {{ eventDate | eventDate: 'shortTime' }}
+                          {{ eventDate | eventDate: 'shortTime'
+                          }}{{
+                            ticket.resolvedEvent.endDate
+                              | eventEndTime: eventDate
+                          }}
                         }
                       </p>
                       <p
