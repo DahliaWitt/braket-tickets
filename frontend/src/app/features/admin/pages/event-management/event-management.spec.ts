@@ -38,6 +38,7 @@ interface AdminEventsServiceMock {
   getManagementResale: Mock;
   getTierPricingStats: Mock;
   getGuests: Mock;
+  listImportedTickets: Mock;
   getTicketPdf: Mock;
   sendTicketPurchaseReminder: Mock;
   updateResaleSettings: Mock;
@@ -72,6 +73,7 @@ function summaryOf(data: FullMockData): EventManagementSummary {
     remainingCount: data.remainingCount,
     isSoldOut: data.isSoldOut,
     totalTickets: data.totalTickets,
+    imported: {total: 0, checkedIn: 0, bySource: []},
     tierCounts: data.tierCounts,
     salesByDay: data.salesByDay,
     revenue: data.revenue,
@@ -298,6 +300,7 @@ describe('EventManagement', () => {
         .fn()
         .mockImplementation(() => Promise.resolve(tierPricingStatsData)),
       getGuests: vi.fn().mockResolvedValue([]),
+      listImportedTickets: vi.fn().mockResolvedValue([]),
       getTicketPdf: vi
         .fn()
         .mockResolvedValue('data:application/pdf;base64,abc123'),

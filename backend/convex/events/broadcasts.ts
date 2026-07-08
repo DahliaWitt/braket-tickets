@@ -25,10 +25,20 @@ const sendResultValidator = v.union(
 );
 
 export const getAudience = query({
-  args: {eventId: v.id('events')},
+  args: {
+    eventId: v.id('events'),
+    // Mirrors the send toggle (default ON). When false, imported entries are
+    // excluded from the previewed recipient count.
+    includeExternalTicketHolders: v.optional(v.boolean()),
+  },
   returns: v.object({
     recipientCount: v.number(),
     exceedsCap: v.boolean(),
+    // Reachability split for imported (external) ticket holders so the compose
+    // flow can render "includes N external ticket holders". `reachable` = with
+    // email (join the audience when included); `unreachable` = without email.
+    importedReachableCount: v.number(),
+    importedUnreachableCount: v.number(),
   }),
   handler: async (ctx, args) => await getBroadcastAudience(ctx, args),
 });
@@ -52,6 +62,10 @@ export const send = mutation({
     eventId: v.id('events'),
     subject: v.string(),
     message: v.string(),
+    // Include imported (external) ticket holders WITH an email in the audience.
+    // Defaults to true. Recipients are deduped by normalized email across
+    // native purchasers, guests, and imported entries regardless of this flag.
+    includeExternalTicketHolders: v.optional(v.boolean()),
   },
   returns: sendResultValidator,
   handler: async (ctx, args) => await sendBroadcast(ctx, args),

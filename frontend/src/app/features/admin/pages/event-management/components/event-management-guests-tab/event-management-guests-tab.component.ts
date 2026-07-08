@@ -1,8 +1,8 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  DestroyRef,
   computed,
+  DestroyRef,
   inject,
   input,
   output,
@@ -26,6 +26,15 @@ import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton
 import {ZardTooltipDirective} from '@ui/components/primitives/tooltip/tooltip';
 import {logger} from '@/utils/logger';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
+import {GUEST_IMPORT_CONFIG} from '@/features/admin/import/import-config';
+// Import the surface directly (not via the barrel) so @defer can code-split it:
+// a barrel that also exports the eagerly-used config keeps the component eager.
+import {ImportSurfaceComponent} from '@/features/admin/import/import-surface.component';
+import type {
+  ImportConfirmPayload,
+  ImportReport,
+} from '@/features/admin/import/import-surface.types';
+import {buildImportErrorReport, buildImportReport} from '../import-report.util';
 
 /** Max guest ticket sends dispatched at once by "Send All". */
 const SEND_ALL_CONCURRENCY = 8;
@@ -92,6 +101,7 @@ function isAddGuestDialogResult(value: unknown): value is AddGuestDialogResult {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     BraStatusBadgeComponent,
+    ImportSurfaceComponent,
     ZardButtonComponent,
     ZardCardComponent,
     ZardIconComponent,
@@ -118,6 +128,72 @@ export class EventManagementGuestsTabComponent {
   readonly pendingSendGuests = computed(() =>
     this.guests().filter((guest) => guest.email && !guest.emailedAt),
   );
+
+  /** Config for the shared import surface (guest target). */
+  readonly guestImportConfig = GUEST_IMPORT_CONFIG;
+
+  /** Whether the bulk-import surface is open (lazily rendered via @defer). */
+  readonly isImporting = signal(false);
+
+  /** Server report fed back to the surface after the bulk mutation returns. */
+  readonly importReport = signal<ImportReport | null>(null);
+
+  /**
+   * Strong dedup keys (name+email, lowercased) for the current guest list,
+   * matching `GUEST_IMPORT_CONFIG.dedupKey`. Feeds the preview's duplicate
+   * hints from the live guest subscription. The server re-checks at commit.
+   */
+  readonly existingGuestKeys = computed<ReadonlySet<string>>(() => {
+    const keys = new Set<string>();
+    for (const guest of this.guests()) {
+      // Derive the key through the config so the tab's preview hints can never
+      // drift from the surface's within-batch dedup.
+      const key = GUEST_IMPORT_CONFIG.dedupKey({
+        name: guest.name,
+        email: guest.email,
+      });
+      if (key !== null) keys.add(key);
+    }
+    return keys;
+  });
+
+  openImportSurface(): void {
+    this.importReport.set(null);
+    this.isImporting.set(true);
+  }
+
+  closeImportSurface(): void {
+    this.isImporting.set(false);
+    this.importReport.set(null);
+  }
+
+  async onGuestImportConfirmed(payload: ImportConfirmPayload): Promise<void> {
+    try {
+      const result = await this.adminEventsService.bulkAddGuests(
+        this.eventId(),
+        payload.batchKey,
+        payload.rows.map((row) => ({
+          name: row.name,
+          email: row.email,
+          type: row.guestType,
+          notes: row.notes,
+        })),
+      );
+      this.importReport.set(buildImportReport(result));
+      if (result.insertedCount > 0) {
+        this.dataChanged.emit();
+      }
+    } catch (error) {
+      // Route through the central PII-scrubbing logger — never log row values.
+      logger.error('Failed to bulk add guests', error);
+      this.importReport.set(
+        buildImportErrorReport(
+          error,
+          "couldn't add those guests — try again in a bit",
+        ),
+      );
+    }
+  }
 
   guestActionLabel(guest: Guest): string {
     const name = guest.name || guest.email || 'guest';

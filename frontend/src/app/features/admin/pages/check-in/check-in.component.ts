@@ -27,11 +27,22 @@ import {type Id} from '@convex/_generated/dataModel';
 import {type FunctionReturnType} from 'convex/server';
 type Ticket = FunctionReturnType<typeof api.tickets.public.listByEvent>[0];
 type Guest = FunctionReturnType<typeof api.events.guests.listByEvent>[0];
+type ImportedEntry = FunctionReturnType<
+  typeof api.events.imported_tickets.listByEvent
+>[0];
 type CheckInResult = FunctionReturnType<typeof api.events.check_in.checkIn>;
 
 // Precompute lowercase search string to avoid repeated operations during filtering
 type SearchableTicket = Ticket & {searchStr: string};
 type SearchableGuest = Guest & {searchStr: string};
+type SearchableImported = ImportedEntry & {searchStr: string};
+
+/** Per-source door count for the imported check-in breakdown. */
+interface ImportedSourceCount {
+  sourceLabel: string;
+  total: number;
+  checkedIn: number;
+}
 interface ManualFeedback {
   kind: 'success' | 'error';
   message: string;
@@ -63,6 +74,7 @@ export class CheckInComponent implements OnInit {
   readonly manualFeedback = signal<ManualFeedback | null>(null);
   private readonly recentTicketCheckIns = signal<Record<string, number>>({});
   private readonly recentGuestCheckIns = signal<Record<string, number>>({});
+  private readonly recentImportedCheckIns = signal<Record<string, number>>({});
 
   // Config
   private readonly isRootAdmin = computed(
@@ -125,6 +137,15 @@ export class CheckInComponent implements OnInit {
     },
   );
 
+  private readonly importedQuery = injectQuery(
+    api.events.imported_tickets.listByEvent,
+    () => {
+      const eventId = this.selectedEventId();
+      if (!eventId) return skipToken;
+      return {eventId};
+    },
+  );
+
   /**
    * Stale-data guard for event switch A→B.
    *
@@ -161,6 +182,12 @@ export class CheckInComponent implements OnInit {
     this.computeRosterForSelectedEvent(
       this.guestsQuery.data(),
       this.guestsQuery.isLoading(),
+    ),
+  );
+  readonly importedEntries = computed<ImportedEntry[]>(() =>
+    this.computeRosterForSelectedEvent(
+      this.importedQuery.data(),
+      this.importedQuery.isLoading(),
     ),
   );
 
@@ -205,6 +232,51 @@ export class CheckInComponent implements OnInit {
     return all.filter((g) => g.searchStr.includes(term));
   });
 
+  // Imported (external) entries also match on their external reference (barcode
+  // digits) so door staff can type the number printed under the QR when a scan
+  // fails — the manual fallback for external tickets.
+  readonly searchableImported = computed<SearchableImported[]>(() => {
+    return this.importedEntries().map((entry) => ({
+      ...entry,
+      searchStr:
+        `${entry.name} ${entry.email || ''} ${entry.externalRef || ''} ${entry.orderRef || ''} ${entry.ticketTypeLabel || ''} ${entry.sourceLabel}`.toLowerCase(),
+    }));
+  });
+
+  readonly filteredImported = computed(() => {
+    const all = this.searchableImported();
+    const term = this.checkInModel().filter?.toLowerCase() || '';
+    if (!term) return all;
+
+    return all.filter((entry) => entry.searchStr.includes(term));
+  });
+
+  readonly isLoadingImported: Signal<boolean> = this.importedQuery.isLoading;
+
+  /**
+   * Per-source door counts for imported entries (total + checked-in), so the
+   * combined door total presents the breakdown rather than silently folding
+   * external attendees into the ticket-scoped counter. Derived here from the
+   * table, mirroring how guest check-in counts are derived today.
+   */
+  readonly importedSourceCounts = computed<ImportedSourceCount[]>(() => {
+    const bySource = new Map<string, ImportedSourceCount>();
+    for (const entry of this.importedEntries()) {
+      const existing = bySource.get(entry.sourceLabel) ?? {
+        sourceLabel: entry.sourceLabel,
+        total: 0,
+        checkedIn: 0,
+      };
+      existing.total += 1;
+      if (this.importedCheckedInAt(entry) !== undefined)
+        existing.checkedIn += 1;
+      bySource.set(entry.sourceLabel, existing);
+    }
+    return [...bySource.values()].sort((a, b) =>
+      a.sourceLabel.localeCompare(b.sourceLabel),
+    );
+  });
+
   readonly eventTitle = computed(() => {
     const id = this.selectedEventId();
     if (!id) return null;
@@ -222,6 +294,7 @@ export class CheckInComponent implements OnInit {
       this.manualFeedback.set(null);
       this.recentTicketCheckIns.set({});
       this.recentGuestCheckIns.set({});
+      this.recentImportedCheckIns.set({});
     });
 
     // Clear stale dropdown selection when the selected event disappears from
@@ -266,12 +339,17 @@ export class CheckInComponent implements OnInit {
   /** Called by the scanner child when a QR code is detected. */
   onQRScanned(data: string): void {
     this.checkInService.triggerHaptic();
-    void this.checkInService.checkIn(data);
+    // Forward the scanned event so the external-ticket fallback can resolve
+    // RA-style barcodes against this event's imported entries.
+    void this.checkInService.checkIn(data, this.selectedEventId() ?? undefined);
   }
 
   /** Check in a ticket from the manual list. */
   async checkInTicket(scanData: string): Promise<void> {
-    await this.checkInService.checkIn(scanData);
+    await this.checkInService.checkIn(
+      scanData,
+      this.selectedEventId() ?? undefined,
+    );
     this.applyManualCheckInResult('ticket', scanData, this.lastResult());
   }
 
@@ -279,6 +357,34 @@ export class CheckInComponent implements OnInit {
   async checkInGuest(guestId: string): Promise<void> {
     await this.checkInService.checkInGuest(guestId);
     this.applyManualCheckInResult('guest', guestId, this.lastResult());
+  }
+
+  /** Check in an external (imported) ticket holder from the imported list. */
+  async checkInImported(entryId: string): Promise<void> {
+    const result = await this.checkInService.checkInImported(entryId);
+    if (!result) {
+      this.manualFeedback.set({
+        kind: 'error',
+        message: 'External ticket check-in did not start.',
+      });
+      return;
+    }
+    if (!result.success) {
+      this.manualFeedback.set({kind: 'error', message: result.message});
+      return;
+    }
+    const timestamp = result.entry.checkedInAt ?? Date.now();
+    this.recentImportedCheckIns.update((current) => ({
+      ...current,
+      [entryId]: timestamp,
+    }));
+    // A re-check of an already-admitted holder signals a duplicate, matching the
+    // native ticket path's failure feedback — not a fresh green success.
+    this.manualFeedback.set(
+      result.alreadyCheckedIn
+        ? {kind: 'error', message: 'Already checked in.'}
+        : {kind: 'success', message: 'External ticket holder checked in.'},
+    );
   }
 
   enableScannerSounds(): void {
@@ -318,6 +424,15 @@ export class CheckInComponent implements OnInit {
 
   guestCheckedInAt(guest: Guest): number | undefined {
     return guest.checkedInAt ?? this.recentGuestCheckIns()[guest._id];
+  }
+
+  importedCheckedInAt(entry: ImportedEntry): number | undefined {
+    return entry.checkedInAt ?? this.recentImportedCheckIns()[entry._id];
+  }
+
+  importedCheckInLabel(entry: ImportedEntry, rowIndex: number): string {
+    const name = entry.name || 'external ticket holder';
+    return `Check in external row ${rowIndex + 1}, source ${entry.sourceLabel}, id ${this.idSuffix(entry._id)}, for ${name}`;
   }
 
   private applyManualCheckInResult(
