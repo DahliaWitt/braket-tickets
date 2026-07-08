@@ -459,6 +459,8 @@ jobs:
       }}
     permissions:
       contents: write
+      issues: write
+      pull-requests: write
     steps:
       - name: Checkout deployed ref
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -541,3 +543,48 @@ jobs:
               name: tag,
               body,
             });
+
+            // Advance release-please's label state machine. release-please marks
+            // each release PR "autorelease: pending" on merge and expects it to flip
+            // to "autorelease: tagged" once the release is cut. With
+            // skip-github-release: true, release-please never performs that flip
+            // itself, and it refuses to open the next release PR while any merged
+            // release PR is still "pending". Since this job is what actually cuts the
+            // release, it must own the transition — otherwise the pipeline wedges
+            // after the first release (see PR #40 / the 0.1.15 stall).
+            const pending = await github.paginate(
+              github.rest.issues.listForRepo,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'closed',
+                labels: 'autorelease: pending',
+                per_page: 100,
+              },
+            );
+            for (const issue of pending) {
+              if (!issue.pull_request) {
+                continue;
+              }
+              try {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  labels: ['autorelease: tagged'],
+                });
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  name: 'autorelease: pending',
+                });
+                core.info(
+                  `PR #${issue.number}: autorelease pending -> tagged`,
+                );
+              } catch (error) {
+                core.warning(
+                  `Failed to relabel PR #${issue.number} (autorelease pending -> tagged): ${error.message}`,
+                );
+              }
+            }
