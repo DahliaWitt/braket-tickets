@@ -1,3 +1,6 @@
+// TEMP(ci/e2e-on-hosted): forces affected-E2E to select this @smoke spec so the
+// hosted-runner pipeline (convex-local-backend + browsers + build) is validated
+// before merge. Stripped before this PR lands.
 import {createEnvironment, test, expect} from '../helpers/test-setup';
 import {EmailHarness} from '../helpers/email-harness';
 import {waitForAuthenticatedDashboard} from '../test-utils/auth-helpers';
