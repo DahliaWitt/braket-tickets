@@ -26,7 +26,10 @@ import {
   extractErrorMessage,
   isRetryableAuthBackendError,
 } from '@/core/utils/auth.utils';
-import {isRecord} from '@shared/type-guards';
+import {
+  isDuplicateSignupError,
+  isVerificationRequiredError,
+} from '@/core/utils/auth-error-codes';
 import {PasswordService} from '@/core/services/password.service';
 import {UserProfileService} from '@/core/services/user-profile.service';
 import {
@@ -87,54 +90,6 @@ export interface SocialAuthCompletionState {
 interface BetterAuthSession {
   user: {email: string; name?: string; image?: string | null};
   session?: {id?: string | null} | null;
-}
-
-/**
- * Collects searchable error text from a Better Auth error response or a
- * thrown error.  Accesses typed fields directly when the structured error
- * shape is detected; falls back to the shared error message extractor for
- * thrown Error objects and other shapes.
- */
-function collectAuthErrorText(error: unknown): string {
-  const parts: string[] = [];
-
-  const visit = (value: unknown): void => {
-    if (isRecord(value)) {
-      if (typeof value['message'] === 'string') parts.push(value['message']);
-      if (typeof value['code'] === 'string') parts.push(value['code']);
-      if (typeof value['statusText'] === 'string')
-        parts.push(value['statusText']);
-      if (value['cause'] !== undefined) visit(value['cause']);
-      return;
-    }
-
-    if (value instanceof Error) {
-      parts.push(value.message);
-      if (value.cause !== undefined) visit(value.cause);
-      return;
-    }
-
-    parts.push(extractErrorMessage(value));
-  };
-
-  visit(error);
-  return parts.join(' ').toLowerCase();
-}
-
-function isVerificationRequiredError(error: unknown): boolean {
-  const text = collectAuthErrorText(error);
-  return text.includes('verif') || text.includes('not verified');
-}
-
-function isDuplicateSignupError(error: unknown): boolean {
-  const text = collectAuthErrorText(error);
-  return (
-    text.includes('account with this email already exists') ||
-    text.includes('user already exists') ||
-    text.includes('already in use') ||
-    text.includes('user_already_exists') ||
-    text.includes('failed_to_create_user')
-  );
 }
 
 class SessionNotReadyError extends Error {
