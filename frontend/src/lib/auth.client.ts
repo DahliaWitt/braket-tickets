@@ -27,7 +27,9 @@ const isE2EMode = environment.isE2E;
 const browserStorage =
   typeof window !== 'undefined' ? window.localStorage : undefined;
 
-const client = createAuthClient({
+// The convexClient plugin declares `$InferServerPlugin`, so `convex.token()` is
+// inferred with a real `{token: string}` return type — no manual assertion needed.
+export const authClient = createAuthClient({
   baseURL: CONVEX_SITE_URL,
   // Required for cross-origin requests to include cookies
   fetchOptions: {
@@ -50,10 +52,3 @@ const client = createAuthClient({
         ]),
   ],
 });
-
-// Type assertion to include convex.token() method from convexClient plugin
-export const authClient = client as typeof client & {
-  convex: {
-    token: () => Promise<{data: {token: string} | null; error: Error | null}>;
-  };
-};
