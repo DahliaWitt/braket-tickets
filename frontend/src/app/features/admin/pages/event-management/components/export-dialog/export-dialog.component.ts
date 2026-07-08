@@ -21,11 +21,13 @@ import {
 import {
   type EventManagementPurchase,
   type Guest,
+  type ImportedTicketHolder,
 } from '@/features/admin/models/event-management.model';
 
 export interface ExportDialogData {
   purchases: EventManagementPurchase[];
   guests?: Guest[];
+  importedEntries?: ImportedTicketHolder[];
   eventTitle: string;
   eventDate?: string;
 }
@@ -191,6 +193,7 @@ export class ExportDialogComponent {
           includeRefunded: this.includeRefunded(),
         },
         this.data.guests,
+        this.data.importedEntries,
       );
       this.dialogRef.close({exported: true});
     } finally {
