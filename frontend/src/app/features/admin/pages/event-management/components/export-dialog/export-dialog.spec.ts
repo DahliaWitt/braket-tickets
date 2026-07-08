@@ -109,6 +109,7 @@ describe('ExportDialogComponent', () => {
         eventDate: 'June 15, 2024',
       }),
       mockDialogData.guests,
+      mockDialogData.importedEntries,
     );
     expect(dialogRefMock.close).toHaveBeenCalledWith({exported: true});
   });
@@ -125,6 +126,7 @@ describe('ExportDialogComponent', () => {
         format: 'pdf',
       }),
       mockDialogData.guests,
+      mockDialogData.importedEntries,
     );
   });
 
@@ -150,6 +152,49 @@ describe('ExportDialogComponent', () => {
     }
 
     expect(component.hasSelectedFields()).toBe(false);
+  });
+
+  it('should forward populated guests and imported entries to the export service', async () => {
+    const guests = [
+      {_id: 'guest1' as Id<'guests'>, name: 'Guest One'},
+    ] as unknown as NonNullable<ExportDialogData['guests']>;
+    const importedEntries = [
+      {name: 'Imported One', source: 'resident-advisor'},
+    ] as unknown as NonNullable<ExportDialogData['importedEntries']>;
+    const dataWithImports: ExportDialogData = {
+      ...mockDialogData,
+      guests,
+      importedEntries,
+    };
+
+    TestBed.resetTestingModule();
+    await TestBed.configureTestingModule({
+      imports: [ExportDialogComponent],
+      providers: [
+        provideZonelessChangeDetection(),
+        {provide: BraDialogRef, useValue: dialogRefMock},
+        {provide: BRA_MODAL_DATA, useValue: dataWithImports},
+        {provide: AttendeeExportService, useValue: exportServiceMock},
+      ],
+    }).compileComponents();
+
+    const importsFixture = TestBed.createComponent(ExportDialogComponent);
+    importsFixture.detectChanges();
+    await importsFixture.whenStable();
+    const importsHarness = await TestbedHarnessEnvironment.harnessForFixture(
+      importsFixture,
+      ExportDialogHarness,
+    );
+
+    await importsHarness.selectCsvFormat();
+    await importsHarness.clickExport();
+
+    expect(exportServiceMock.export).toHaveBeenCalledWith(
+      dataWithImports.purchases,
+      expect.objectContaining({format: 'csv'}),
+      guests,
+      importedEntries,
+    );
   });
 
   it('should show refunded export options for partially refunded purchases', async () => {

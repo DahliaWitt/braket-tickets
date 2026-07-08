@@ -105,9 +105,51 @@
           class="font-mono text-xs text-muted-foreground"
           data-testid="broadcast-recipient-count"
         >
-          {{ broadcastRecipientCount() }} recipients (ticket holders + guests).
+          {{ broadcastRecipientCount() }} recipients (ticket holders + guests
+          @if (includeExternalTicketHolders() && importedReachableCount() > 0) {
+            <span>&nbsp;+ external</span>
+          }
+          ).
         </p>
       }
+
+      <!-- external ticket-holder inclusion — always visible, defaults ON -->
+      <div
+        class="flex flex-col gap-1 border-t border-border/60 pt-4"
+        data-testid="broadcast-include-external"
+      >
+        <z-switch
+          [(zChecked)]="includeExternalTicketHolders"
+          zSize="sm"
+          data-testid="broadcast-include-external-switch"
+        >
+          <span class="font-mono text-xs text-foreground lowercase">
+            include external ticket holders
+          </span>
+        </z-switch>
+        <p
+          class="font-mono text-2xs text-muted-foreground lowercase"
+          data-testid="broadcast-include-external-count"
+        >
+          @if (includeExternalTicketHolders()) {
+            @if (importedReachableCount() === 1) {
+              including 1 external ticket holder
+            } @else {
+              including {{ importedReachableCount() }} external ticket holders
+            }
+            @if (importedUnreachableCount() > 0) {
+              · {{ importedUnreachableCount() }} without an email can't be
+              reached
+            }
+          } @else {
+            @if (importedReachableCount() === 1) {
+              1 external ticket holder excluded
+            } @else {
+              {{ importedReachableCount() }} external ticket holders excluded
+            }
+          }
+        </p>
+      </div>
 
       <button
         z-button
@@ -130,7 +172,7 @@
           class="font-mono text-xs"
           data-testid="broadcast-send-feedback"
           [class.text-destructive]="feedback.kind === 'error'"
-          [class.text-emerald-500]="feedback.kind === 'success'"
+          [class.text-success]="feedback.kind === 'success'"
           [attr.role]="feedback.kind === 'error' ? 'alert' : 'status'"
         >
           {{ feedback.message }}
