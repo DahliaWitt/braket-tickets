@@ -40,7 +40,7 @@ import {
           class="space-y-4 rounded-xl border border-destructive/30 p-6"
         >
           <p
-            class="font-mono text-sm tracking-widest text-destructive uppercase"
+            class="font-mono text-sm tracking-widest text-destructive-text uppercase"
           >
             Invalid unsubscribe link
           </p>
@@ -179,7 +179,7 @@ import {
               zSize="sm"
               (click)="unsubscribeAll()"
               [zLoading]="unsubAllLoading()"
-              class="text-destructive hover:text-destructive"
+              class="text-destructive-text hover:text-destructive-text"
               data-testid="unsub-all-btn"
             >
               Unsubscribe from eligible communities

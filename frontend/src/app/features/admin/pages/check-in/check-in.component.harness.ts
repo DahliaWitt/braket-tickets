@@ -17,8 +17,10 @@ export class CheckInComponentHarness extends ComponentHarness {
   // Camera buttons use z-button custom element; not needed for spec (camera functionality tested separately)
   protected getActionButtons = this.locatorForAll('z-button');
   protected getVideoElement = this.locatorForOptional('video');
-  // Camera error has no testid; <p class="text-destructive"> inside a destructive alert div
-  protected getCameraError = this.locatorForOptional('.bg-destructive\\/5 p');
+  // Manual check-in feedback message (rendered inside the [data-testid="manual-check-in-feedback"] alert)
+  protected getCameraError = this.locatorForOptional(
+    '[data-testid="manual-check-in-feedback"] p',
+  );
   protected getLastResult = this.locatorForOptional('[role="alert"]');
   protected getListItems = this.locatorForAll('[data-testid="buyer-entry"]');
   protected getCardContents = this.locatorForAll('[data-slot="card-content"]');

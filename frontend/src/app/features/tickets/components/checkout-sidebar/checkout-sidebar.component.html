@@ -85,7 +85,7 @@
             </div>
             @if (isGuestEmailInvalid()) {
               <p
-                class="font-mono text-xs tracking-wide text-destructive uppercase"
+                class="font-mono text-xs tracking-wide text-destructive-text uppercase"
                 role="alert"
               >
                 enter a valid email address
@@ -332,7 +332,7 @@
                     </div>
                     @if (slidingScaleError()) {
                       <p
-                        class="ml-1 font-mono text-xs tracking-wide text-destructive uppercase"
+                        class="ml-1 font-mono text-xs tracking-wide text-destructive-text uppercase"
                       >
                         {{ slidingScaleError() }}
                       </p>
@@ -413,7 +413,7 @@
                       </div>
                       @if (slidingScaleError()) {
                         <p
-                          class="ml-1 font-mono text-xs tracking-wide text-destructive uppercase"
+                          class="ml-1 font-mono text-xs tracking-wide text-destructive-text uppercase"
                         >
                           {{ slidingScaleError() }}
                         </p>
@@ -629,16 +629,16 @@
         <div
           class="mb-4 flex h-20 w-20 items-center justify-center rounded-full border border-destructive/20 bg-destructive/10"
         >
-          <span class="font-display text-4xl text-destructive">!</span>
+          <span class="font-display text-4xl text-destructive-text">!</span>
         </div>
         <div class="space-y-2">
           <h3
-            class="font-display text-2xl tracking-tight text-destructive uppercase"
+            class="font-display text-2xl tracking-tight text-destructive-text uppercase"
           >
             Transaction Failed
           </h3>
           <p
-            class="mx-auto max-w-[250px] font-mono text-sm wrap-break-word text-destructive/80"
+            class="mx-auto max-w-[250px] font-mono text-sm wrap-break-word text-destructive-text/80"
           >
             {{ paymentErrorMessage() }}
           </p>

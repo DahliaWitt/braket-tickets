@@ -109,7 +109,7 @@ const MISSING_RESET_TOKEN_MESSAGE = 'Invalid reset link. No token provided.';
                   @if (isFieldInvalid(f.password)) {
                     <div
                       id="password-error"
-                      class="font-mono text-2xs tracking-widest text-destructive uppercase"
+                      class="font-mono text-2xs tracking-widest text-destructive-text uppercase"
                     >
                       @if (hasError(f.password, 'required')) {
                         Password is required
@@ -174,7 +174,7 @@ const MISSING_RESET_TOKEN_MESSAGE = 'Invalid reset link. No token provided.';
                   ) {
                     <div
                       id="passwordConfirm-error"
-                      class="font-mono text-2xs tracking-widest text-destructive uppercase"
+                      class="font-mono text-2xs tracking-widest text-destructive-text uppercase"
                     >
                       @if (hasError(f.passwordConfirm, 'required')) {
                         Password is required
@@ -189,7 +189,7 @@ const MISSING_RESET_TOKEN_MESSAGE = 'Invalid reset link. No token provided.';
                   <div
                     id="form-error"
                     role="alert"
-                    class="border border-destructive/20 bg-destructive/10 p-3 font-mono text-xs text-destructive"
+                    class="border border-destructive/20 bg-destructive/10 p-3 font-mono text-xs text-destructive-text"
                   >
                     ERROR: {{ error() }}
                   </div>

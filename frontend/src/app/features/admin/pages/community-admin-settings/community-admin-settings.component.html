@@ -139,7 +139,7 @@
                 id="name-maxlength-error"
                 data-testid="profile-name-maxlength"
                 role="alert"
-                class="mono-label pl-1 text-2xs text-destructive"
+                class="mono-label pl-1 text-2xs text-destructive-text"
               >
                 NAME EXCEEDS {{ MAX_COMMUNITY_NAME_LENGTH }} CHARACTER LIMIT
               </p>
@@ -150,7 +150,7 @@
               id="name-char-count"
               data-testid="profile-name-char-count"
               class="mono-label pl-1 text-2xs"
-              [class.text-destructive]="
+              [class.text-destructive-text]="
                 nameCharCount() >= MAX_COMMUNITY_NAME_LENGTH
               "
               [class.text-warning]="
@@ -220,7 +220,7 @@
                 id="description-maxlength-error"
                 data-testid="profile-description-maxlength"
                 role="alert"
-                class="mono-label pl-1 text-2xs text-destructive"
+                class="mono-label pl-1 text-2xs text-destructive-text"
               >
                 DESCRIPTION EXCEEDS
                 {{ MAX_COMMUNITY_DESCRIPTION_LENGTH }} CHARACTER LIMIT
@@ -232,7 +232,7 @@
               id="description-char-count"
               data-testid="profile-description-char-count"
               class="mono-label pl-1 text-2xs"
-              [class.text-destructive]="
+              [class.text-destructive-text]="
                 descriptionCharCount() >= MAX_COMMUNITY_DESCRIPTION_LENGTH
               "
               [class.text-warning]="
@@ -329,7 +329,7 @@
           @if (!hasVettingQuestions()) {
             <p
               data-testid="publish-blocked-warning"
-              class="pl-1 font-sans text-xs text-destructive"
+              class="pl-1 font-sans text-xs text-destructive-text"
             >
               Add at least one vetting question before publishing.
             </p>
@@ -368,7 +368,7 @@
                   type="button"
                   data-testid="remove-logo"
                   (click)="removeLogo()"
-                  class="text-left font-mono text-xs tracking-widest text-muted-foreground uppercase transition-colors hover:text-destructive"
+                  class="text-left font-mono text-xs tracking-widest text-muted-foreground uppercase transition-colors hover:text-destructive-text"
                 >
                   Remove Logo
                 </button>
@@ -614,7 +614,7 @@
 
         @if (stripeError()) {
           <p
-            class="font-mono text-sm text-destructive"
+            class="font-mono text-sm text-destructive-text"
             data-testid="stripe-error"
           >
             {{ stripeError() }}
@@ -771,7 +771,7 @@
                   (click)="removeQuestion(i)"
                   [attr.aria-label]="'Remove question ' + (i + 1)"
                   [zTooltip]="'Remove question'"
-                  class="p-1 text-muted-foreground transition-colors hover:text-destructive"
+                  class="p-1 text-muted-foreground transition-colors hover:text-destructive-text"
                 >
                   <z-icon zType="x" class="h-4 w-4" aria-hidden="true" />
                 </button>
@@ -871,7 +871,7 @@
                 data-testid="remove-admin"
                 (click)="confirmRemoveAdmin(admin.userId)"
                 [zDisabled]="isLastAdmin()"
-                class="text-muted-foreground hover:text-destructive"
+                class="text-muted-foreground hover:text-destructive-text"
                 [attr.aria-label]="'Remove admin ' + admin.displayName"
                 [zTooltip]="'Remove ' + admin.displayName"
               >
@@ -1049,7 +1049,7 @@
                 zSize="sm"
                 data-testid="remove-scanner"
                 (click)="confirmRemoveScanner(scanner.userId)"
-                class="text-muted-foreground hover:text-destructive"
+                class="text-muted-foreground hover:text-destructive-text"
                 [attr.aria-label]="'Remove door staff ' + scanner.displayName"
                 [zTooltip]="'Remove ' + scanner.displayName"
               >

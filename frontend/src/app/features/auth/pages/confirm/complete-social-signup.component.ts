@@ -102,7 +102,7 @@ type CompleteState = 'loading' | 'ready' | 'submitting' | 'error';
             @if (inlineError()) {
               <p
                 data-testid="social-signup-inline-error"
-                class="mono-label text-2xs text-destructive"
+                class="mono-label text-2xs text-destructive-text"
               >
                 {{ inlineError() }}
               </p>

@@ -213,7 +213,7 @@ type CheckInResult = FunctionReturnType<typeof api.events.check_in.checkIn>;
                   stroke-width="2"
                   stroke-linecap="round"
                   stroke-linejoin="round"
-                  class="mt-0.5 text-destructive"
+                  class="mt-0.5 text-destructive-text"
                   aria-hidden="true"
                 >
                   <circle cx="12" cy="12" r="10" />
@@ -222,12 +222,12 @@ type CheckInResult = FunctionReturnType<typeof api.events.check_in.checkIn>;
                 </svg>
                 <div class="space-y-1">
                   <p
-                    class="font-mono text-xs font-bold text-destructive uppercase"
+                    class="font-mono text-xs font-bold text-destructive-text uppercase"
                   >
                     {{ cameraError() }}
                   </p>
                   <p
-                    class="text-2xs leading-relaxed text-destructive/80 uppercase"
+                    class="text-2xs leading-relaxed text-destructive-text/80 uppercase"
                   >
                     Check browser camera permission, close other apps using the
                     camera, then try again.
@@ -293,7 +293,7 @@ type CheckInResult = FunctionReturnType<typeof api.events.check_in.checkIn>;
                           stroke-width="3"
                           stroke-linecap="round"
                           stroke-linejoin="round"
-                          class="text-destructive"
+                          class="text-destructive-text"
                         >
                           <line x1="18" x2="6" y1="6" y2="18" />
                           <line x1="6" x2="18" y1="6" y2="18" />
@@ -301,11 +301,11 @@ type CheckInResult = FunctionReturnType<typeof api.events.check_in.checkIn>;
                       </div>
                       <div>
                         <span
-                          class="block font-mono text-sm font-black tracking-tighter text-destructive uppercase"
+                          class="block font-mono text-sm font-black tracking-tighter text-destructive-text uppercase"
                           >INVALID</span
                         >
                         <span
-                          class="text-2xs font-bold tracking-widest text-destructive uppercase"
+                          class="text-2xs font-bold tracking-widest text-destructive-text uppercase"
                           >Not checked in</span
                         >
                       </div>
