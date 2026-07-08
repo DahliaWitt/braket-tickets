@@ -2,13 +2,22 @@ import {v} from 'convex/values';
 import {mutation} from '../_generated/server';
 import {guestTypeValidator} from '../lib/validators/guests';
 import {ticketStatusValidator} from '../lib/validators/ticketing';
-import {checkIn as checkInImpl, revertCheckIn as revertCheckInImpl} from './_impl/check_in_handlers';
+import {
+  checkIn as checkInImpl,
+  revertCheckIn as revertCheckInImpl,
+} from './_impl/check_in_handlers';
 
 // LINT.IfChange
 export const checkIn = mutation({
   args: {
     ticketId: v.optional(v.string()),
     guestId: v.optional(v.string()),
+    // The scanned event context. Required for the external-ticket fallback:
+    // when native ticket/guest resolution fails, the raw payload is exact-
+    // matched against importedTicketHolders.externalRef for THIS event only.
+    // Optional so native ticket/guest scans (which carry their own event via
+    // the resolved record) remain unchanged.
+    eventId: v.optional(v.string()),
   },
   returns: v.object({
     success: v.boolean(),
@@ -52,6 +61,29 @@ export const checkIn = mutation({
         email: v.optional(v.string()),
         type: guestTypeValidator,
         notes: v.optional(v.string()),
+        checkedInAt: v.optional(v.number()),
+        checkedInBy: v.optional(v.id('users')),
+        event: v.optional(
+          v.object({
+            title: v.string(),
+            date: v.string(),
+            location: v.optional(v.string()),
+          }),
+        ),
+      }),
+    ),
+    // External ticket-holder result. Populated only when the external fallback
+    // matched a payload against an imported entry's barcode (externalRef). The
+    // UI renders an external source badge from `sourceLabel`. No email/PII
+    // beyond the display name is exposed here.
+    imported: v.optional(
+      v.object({
+        _id: v.id('importedTicketHolders'),
+        _creationTime: v.number(),
+        eventId: v.id('events'),
+        name: v.string(),
+        ticketTypeLabel: v.optional(v.string()),
+        sourceLabel: v.string(),
         checkedInAt: v.optional(v.number()),
         checkedInBy: v.optional(v.id('users')),
         event: v.optional(

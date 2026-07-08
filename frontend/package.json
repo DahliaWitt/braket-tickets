@@ -54,7 +54,7 @@
     "highlight.js": "^11.11.1",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
-    "marked": "^17.0.5",
+    "marked": "^18.0.5",
     "ng-apexcharts": "^2.3.0",
     "ngx-markdown": "^22.0.0",
     "ngx-sonner": "^3.1.0",

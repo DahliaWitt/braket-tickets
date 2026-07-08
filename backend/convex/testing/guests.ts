@@ -1,12 +1,7 @@
 import {v} from 'convex/values';
 import type {Id} from '../_generated/dataModel';
 import type {MutationCtx} from '../_generated/server';
-import {
-  MAX_GUEST_EMAIL_LENGTH,
-  MAX_GUEST_NAME_LENGTH,
-  MAX_GUEST_NOTES_LENGTH,
-  validateStringLength,
-} from '../lib/validation';
+import {validateGuestFields} from '../lib/events/guest_fields';
 import {digestBearerToken, tokenPrefix} from '../lib/token_digests';
 import {guestTypeValidator, type GuestType} from '../lib/validators/guests';
 import {testingMutation} from './wrappers';
@@ -25,9 +20,7 @@ export async function insertSeedGuest(
   ctx: MutationCtx,
   args: InsertSeedGuestArgs,
 ): Promise<Id<'guests'>> {
-  validateStringLength(args.name, 'Name', MAX_GUEST_NAME_LENGTH);
-  validateStringLength(args.email, 'Email', MAX_GUEST_EMAIL_LENGTH);
-  validateStringLength(args.notes, 'Notes', MAX_GUEST_NOTES_LENGTH);
+  validateGuestFields(args);
 
   // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed helper with direct guest state control.
   const guestId = await ctx.db.insert('guests', {

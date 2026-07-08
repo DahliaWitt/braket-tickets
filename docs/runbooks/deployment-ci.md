@@ -113,6 +113,15 @@ The repository uses five self-hosted GitHub Actions runners on the Whiterose hos
 
 On Whiterose, the runner fleet is managed by the host-local Unraid compose project at `/boot/config/plugins/compose.manager/projects/github-runner/docker-compose.yml`. The containers are named `github-runner-1` through `github-runner-5`, use the `braket-runner:latest` image, and share the Docker socket plus cached `pnpm` and Playwright browser volumes.
 
+**Shared Playwright browser volume (`PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers`):** all concurrent `e2e` jobs mount the same browser volume. `playwright install` normally garbage-collects browser revisions it considers "unused", so a PR that bumps `@playwright/test` deletes the older revision that other in-flight PRs are actively running on (and their installs delete the newer one), and every job fails with `browserType.launch: Executable doesn't exist ... chromium_headless_shell-<rev>`. The `e2e` job sets `PLAYWRIGHT_SKIP_BROWSER_GC: '1'` (see `.github/workflows/ci.yml`) so revisions for every in-flight Playwright version coexist. Trade-off: the volume is never pruned, so it grows as Playwright versions accumulate. Reclaim space by removing stale revision dirs under `/opt/playwright-browsers` when the pool is idle (inspect a runner container to confirm the host mount source first):
+
+```bash
+# On the Whiterose host, with no e2e jobs running — list revisions by size:
+ssh whiterose 'docker exec github-runner-1 sh -c "du -sh /opt/playwright-browsers/* | sort -h"'
+# then delete revision dirs older than the currently-pinned @playwright/test
+# (frontend/package.json). Deleting the current revision only forces a re-download.
+```
+
 **Node.js version (Angular 22):** Angular 22 requires a newer Node.js patch than the `braket-runner:latest` image historically baked in (its NodeSource install lagged Angular's floor). The pinned version lives in one place — [`.nvmrc`](../../.nvmrc) — and CI and deploy workflows install it via `actions/setup-node` (`node-version-file: .nvmrc`), prepending it to `PATH` so jobs are correct regardless of the image. To remove the per-job Node install overhead, align the runner image's Node install in [`infra/runner/Dockerfile`](../../infra/runner/Dockerfile) with `.nvmrc`, then rebuild and redeploy:
 
 ```bash

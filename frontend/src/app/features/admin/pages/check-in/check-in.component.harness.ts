@@ -40,6 +40,24 @@ export class CheckInComponentHarness extends ComponentHarness {
     '[data-testid="event-empty-state"]',
   );
   protected getScannerPanel = this.locatorForOptional('app-check-in-scanner');
+  protected getImportedSection = this.locatorForOptional(
+    '[data-testid="imported-section"]',
+  );
+  protected getImportedEntries = this.locatorForAll(
+    '[data-testid="imported-entry"]',
+  );
+  protected getImportedSourceBadges = this.locatorForAll(
+    '[data-testid="imported-source-badge"]',
+  );
+  protected getImportedSourceCounts = this.locatorForOptional(
+    '[data-testid="imported-source-counts"]',
+  );
+  protected getImportedSourceCountItems = this.locatorForAll(
+    '[data-testid="imported-source-count"]',
+  );
+  protected getImportedCheckInButtons = this.locatorForAll(
+    '[data-testid="imported-entry"] button[aria-label^="Check in external"]',
+  );
 
   async selectEventByLabel(label: string): Promise<void> {
     await waitForHarnessCondition(
@@ -226,6 +244,58 @@ export class CheckInComponentHarness extends ComponentHarness {
     const button = await this.getSoundToggle();
     if (button) {
       await button.click();
+    }
+  }
+
+  async hasImportedSection(): Promise<boolean> {
+    return Boolean(await this.getImportedSection());
+  }
+
+  async getImportedEntryCount(): Promise<number> {
+    const entries = await this.getImportedEntries();
+    return entries.length;
+  }
+
+  async getImportedEntryTextByName(name: string): Promise<string | null> {
+    const entries = await this.getImportedEntries();
+    for (const entry of entries) {
+      const text = await entry.text();
+      if (text.includes(name)) return text;
+    }
+    return null;
+  }
+
+  async getImportedSourceBadgeTexts(): Promise<string[]> {
+    const badges = await this.getImportedSourceBadges();
+    return Promise.all(
+      badges.map(async (badge) => (await badge.text()).trim()),
+    );
+  }
+
+  async getImportedSourceCountsText(): Promise<string | null> {
+    const el = await this.getImportedSourceCounts();
+    return el ? (await el.text()).replace(/\s+/g, ' ').trim() : null;
+  }
+
+  /** Per-source door count chips (one per distinct imported source label). */
+  async getImportedSourceCountTexts(): Promise<string[]> {
+    const items = await this.getImportedSourceCountItems();
+    return Promise.all(
+      items.map(async (item) =>
+        (await item.text()).replace(/\s+/g, ' ').trim(),
+      ),
+    );
+  }
+
+  async clickImportedCheckInByName(name: string): Promise<void> {
+    // The check-in button's aria-label ends with "for <name>", so match on it.
+    const buttons = await this.getImportedCheckInButtons();
+    for (const button of buttons) {
+      const label = (await button.getAttribute('aria-label')) ?? '';
+      if (label.includes(name)) {
+        await button.click();
+        return;
+      }
     }
   }
 
