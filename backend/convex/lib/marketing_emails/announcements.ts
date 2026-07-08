@@ -326,6 +326,7 @@ export async function sendScheduledAnnouncementBatch(
           _id: event._id,
           title: event.title,
           date: event.date,
+          endDate: event.endDate,
           location: event.location,
           description: event.description,
         },

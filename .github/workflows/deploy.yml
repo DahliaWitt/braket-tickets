@@ -217,7 +217,7 @@ jobs:
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
 
       - name: Setup Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version-file: '.nvmrc'
 
@@ -265,7 +265,7 @@ jobs:
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
 
       - name: Setup Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version-file: '.nvmrc'
 
@@ -491,7 +491,13 @@ jobs:
                 repo: context.repo.repo,
                 tag,
               });
-              core.info(`GitHub Release ${tag} already exists; leaving it unchanged.`);
+              core.warning(
+                `GitHub Release ${tag} already exists; leaving it unchanged. ` +
+                  `This prod deploy did not publish a new release — the manifest version ` +
+                  `(${version}) was not bumped since the last release. If you expected a new ` +
+                  `release, merge the release-please "release" PR into develop before promoting ` +
+                  `develop to main.`,
+              );
               return;
             } catch (error) {
               if (error.status !== 404) {

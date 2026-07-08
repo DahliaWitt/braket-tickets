@@ -27,7 +27,7 @@ const IGNORED_PATH_PREFIXES = [
   'node_modules/',
 ];
 
-const EVENT_DATE_REFERENCE = String.raw`(?:\b(?:event|evt|nextEvt|selectedEvent|activeEvent|args\.event)\.date|\b[a-zA-Z_$][\w$]*\.event\.date)`;
+const EVENT_DATE_REFERENCE = String.raw`(?:\b(?:event|evt|nextEvt|selectedEvent|activeEvent|args\.event)\.(?:date|endDate)|\b[a-zA-Z_$][\w$]*\.event\.(?:date|endDate))`;
 
 // Regexes intentionally catch common event-date drift patterns at lint time.
 // They are a guardrail, not a replacement for using shared event-time helpers

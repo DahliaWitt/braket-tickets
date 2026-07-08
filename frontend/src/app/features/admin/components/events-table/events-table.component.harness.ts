@@ -68,4 +68,19 @@ export class AdminEventsTableHarness extends ComponentHarness {
     const badges = await this.getStatusBadges();
     return ((await badges[index]?.text()) ?? '').trim();
   }
+
+  /**
+   * All status badge texts in DOM order: desktop table rows first, then
+   * mobile cards (both variants carry the same test id).
+   */
+  async getStatusTexts(): Promise<string[]> {
+    const badges = await this.getStatusBadges();
+    const texts = await Promise.all(badges.map((badge) => badge.text()));
+    return texts.map((text) => text.trim());
+  }
+
+  async getStatusVariantAtIndex(index: number): Promise<string | null> {
+    const badges = await this.getStatusBadges();
+    return (await badges[index]?.getAttribute('data-status')) ?? null;
+  }
 }

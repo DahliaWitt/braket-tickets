@@ -19,6 +19,7 @@ import {testingMutation, testingQuery} from './wrappers';
 const seedEventArgsValidator = {
   title: v.string(),
   date: v.string(),
+  endDate: v.optional(v.string()),
   price: v.number(),
   organizerId: v.id('organizers'),
   description: v.optional(v.string()),
@@ -75,6 +76,7 @@ export function distributePhantomTiers(
 interface InsertSeedEventArgs {
   title: string;
   date: string;
+  endDate?: string;
   price: number;
   organizerId: Id<'organizers'>;
   description?: string;
@@ -110,6 +112,14 @@ export async function insertSeedEvent(
   const normalizedDate = args.date.includes('T')
     ? args.date
     : `${args.date}T12:00:00.000Z`;
+  // Same short-date normalization for the optional end instant so seeds may
+  // pass a bare 'YYYY-MM-DD' end and still satisfy validateCreateEventInput.
+  const normalizedEndDate =
+    args.endDate === undefined
+      ? undefined
+      : args.endDate.includes('T')
+        ? args.endDate
+        : `${args.endDate}T12:00:00.000Z`;
 
   const sliderConfig = args.slidingScaleEnabled
     ? {
@@ -130,6 +140,7 @@ export async function insertSeedEvent(
     title: args.title,
     description: args.description,
     date: normalizedDate,
+    endDate: normalizedEndDate,
     location: args.location,
     price: args.price,
     totalTickets: args.totalTickets ?? 100,
@@ -145,6 +156,7 @@ export async function insertSeedEvent(
     title: args.title,
     description: args.description,
     date: normalizedDate,
+    endDate: normalizedEndDate,
     location: args.location,
     price: args.price,
     totalTickets: args.totalTickets ?? 100,

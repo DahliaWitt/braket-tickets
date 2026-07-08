@@ -349,6 +349,122 @@ describe('EventEditorComponent', () => {
     );
   });
 
+  it('should require end date and end time together', async () => {
+    component.eventModel.update((m) => ({
+      ...m,
+      date: getFutureDate(31),
+      endTime: '06:00',
+    }));
+    component.submitted.set(true);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(component.eventForm.endTime().errors()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({kind: 'endDateTimePair'}),
+      ]),
+    );
+    expect(await harness.isSaveButtonDisabled()).toBe(true);
+    expect(await harness.getEndTimeErrorText()).toContain(
+      'Set both end date and time',
+    );
+  });
+
+  it('should reject an end before the event start', async () => {
+    const eventDate = getFutureDate(31);
+    component.eventModel.update((m) => ({
+      ...m,
+      date: eventDate,
+      time: '22:00',
+      endDate: eventDate,
+      endTime: '20:00',
+    }));
+    component.submitted.set(true);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(component.eventForm.endTime().errors()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({kind: 'endBeforeStart'}),
+      ]),
+    );
+    expect(await harness.isSaveButtonDisabled()).toBe(true);
+    expect(await harness.getEndTimeErrorText()).toContain(
+      'End date must be after the event start',
+    );
+  });
+
+  it('should reject an end more than the max duration after the start', async () => {
+    component.eventModel.update((m) => ({
+      ...m,
+      date: getFutureDate(31),
+      time: '20:00',
+      endDate: getFutureDate(31 + 45), // 45 days > 30-day cap
+      endTime: '20:00',
+    }));
+    component.submitted.set(true);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(component.eventForm.endTime().errors()).toEqual(
+      expect.arrayContaining([expect.objectContaining({kind: 'endTooFar'})]),
+    );
+    expect(await harness.isSaveButtonDisabled()).toBe(true);
+    expect(await harness.getEndTimeErrorText()).toContain(
+      'within 30 days of the event start',
+    );
+  });
+
+  it('should submit an overnight end window as an ISO endDate after the start', async () => {
+    const eventDate = getFutureDate(31);
+    const endDate = getFutureDate(32);
+    component.eventModel.update((m) => ({
+      ...m,
+      date: eventDate,
+      time: '22:00',
+      endDate,
+      endTime: '06:00',
+    }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(await harness.isSaveButtonDisabled()).toBe(false);
+
+    await component.onSubmit('published');
+    await fixture.whenStable();
+
+    expect(eventsServiceMock.updateWithPoster).toHaveBeenCalledTimes(1);
+    const submitted = eventsServiceMock.updateWithPoster.mock.calls[0][0] as {
+      date: string;
+      endDate: string;
+    };
+    expect(submitted.endDate).toMatch(/^\d{4}-\d{2}-\d{2}T.*Z$/);
+    expect(new Date(submitted.endDate).getTime()).toBeGreaterThan(
+      new Date(submitted.date).getTime(),
+    );
+  });
+
+  it('should submit endDate null when the end window is cleared in edit mode', async () => {
+    component.eventModel.update((m) => ({
+      ...m,
+      date: getFutureDate(31),
+      endDate: null,
+      endTime: '',
+    }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    await component.onSubmit('published');
+    await fixture.whenStable();
+
+    expect(eventsServiceMock.updateWithPoster).toHaveBeenCalledWith(
+      expect.objectContaining({endDate: null}),
+      undefined,
+      expect.any(Function),
+      expect.any(AbortSignal),
+    );
+  });
+
   it('should enable save button when a file is selected', async () => {
     // Simulate the child component emitting a fileChanged event to the parent
     const mockFile = new File([''], 'test.png', {type: 'image/png'});

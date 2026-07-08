@@ -1521,10 +1521,24 @@ describe('computePayoutStatus', () => {
     });
   });
 
-  it('returns null for invalid event dates', () => {
+  it('returns {state: "error"} for invalid event dates', () => {
     expect(
       computePayoutStatus({...baseEvent, date: '2025-02-31'}, new Date()),
-    ).toBeNull();
+    ).toEqual({state: 'error'});
+  });
+
+  it('returns {state: "error"} for a corrupt endDate rather than keying off the start', () => {
+    // A valid past start with a malformed end must fail closed — surfacing an
+    // error state, never a start-based "processing" that would release funds.
+    const result = computePayoutStatus(
+      {
+        status: 'published',
+        date: '2025-01-01T20:00:00.000Z',
+        endDate: '2025-02-31T20:00:00.000Z',
+      },
+      new Date('2025-06-01T00:00:00.000Z'),
+    );
+    expect(result).toEqual({state: 'error'});
   });
 
   it('returns {state: "pending"} at the boundary (exactly 3 days have not elapsed yet)', () => {
@@ -1549,5 +1563,22 @@ describe('computePayoutStatus', () => {
       exactPayoutDate,
     );
     expect(result?.state).toBe('processing');
+  });
+
+  it('keys the payout window off endDate for a running multi-day event', () => {
+    const multiDay = {
+      status: 'published' as const,
+      date: '2025-01-01T20:00:00.000Z',
+      endDate: '2025-01-08T20:00:00.000Z',
+    };
+    // Three days after the start but before the end: still pre-payout, even
+    // though the naive start+delay window would already be "processing".
+    expect(
+      computePayoutStatus(multiDay, new Date('2025-01-04T20:00:00.000Z')),
+    ).toEqual({state: 'pre-event'});
+    // Four days after the end: the window has fully elapsed.
+    expect(
+      computePayoutStatus(multiDay, new Date('2025-01-12T20:00:00.000Z')),
+    ).toEqual({state: 'processing'});
   });
 });
