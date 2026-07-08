@@ -28,6 +28,7 @@ import {
   type EventManagementResale,
   type EventManagementSummary,
   type EventTierPricingStats,
+  type ImportedTicketHolder,
   type SettlementExportInput,
 } from '../../models/event-management.model';
 import {ZardAlertComponent} from '@ui/components/primitives/alert/alert.component';
@@ -237,6 +238,22 @@ export class EventManagement {
     },
   );
 
+  /**
+   * Imported external ticket-holders — fetched (one-shot `convex.query`) from
+   * the roster-authorized `api.events.imported_tickets.listByEvent` and reloaded
+   * via `reloadData()` after an import commits. The backend function is a Convex
+   * query, but this surface consumes it through a `resource()` loader, not a
+   * live subscription. It serves both the buyers-list merge and the import
+   * preview's dedup hints.
+   */
+  readonly importedTicketsResource = resource({
+    params: () => ({eventId: this.eventId()}),
+    loader: ({params}): Promise<ImportedTicketHolder[]> => {
+      if (!params.eventId) return Promise.resolve([]);
+      return this.adminEventsService.listImportedTickets(params.eventId);
+    },
+  });
+
   readonly tierPricingStatsResource = resource({
     params: () => {
       const summary = this.summary();
@@ -276,6 +293,7 @@ export class EventManagement {
         purchases: this.purchasesResource.error(),
         resale: this.resaleResource.error(),
         guests: this.guestsQuery.error(),
+        importedTickets: this.importedTicketsResource.error(),
       };
       for (const [label, error] of Object.entries(surfaces)) {
         if (!error) continue;
@@ -297,17 +315,18 @@ export class EventManagement {
   );
 
   /**
-   * Error state — true when any of the four management resources is in an
-   * error state. Every surface is a gated admin read; a failure on any one
-   * of them must surface as an error instead of silently rendering empty
-   * tabs.
+   * Error state — true when any management resource is in an error state. Every
+   * surface is a gated admin read; a failure on any one of them must surface as
+   * an error instead of silently rendering empty tabs (the imported-tickets
+   * fetch included, so a failed load doesn't silently hide external buyers).
    */
   readonly hasLoadError = computed(
     () =>
       this.summaryResource.error() != null ||
       this.purchasesResource.error() != null ||
       this.resaleResource.error() != null ||
-      this.guestsQuery.error() != null,
+      this.guestsQuery.error() != null ||
+      this.importedTicketsResource.error() != null,
   );
 
   /** Summary accessor — gates the whole page. */
@@ -332,6 +351,11 @@ export class EventManagement {
 
   /** Guests accessor */
   readonly guests = computed(() => this.guestsQuery.data() ?? []);
+
+  /** Imported external ticket-holders accessor (one-shot fetch, reloadable). */
+  readonly importedTickets = computed(
+    () => safeResourceValue(this.importedTicketsResource) ?? [],
+  );
 
   /** Loading state for the primary dashboard (summary). */
   readonly isLoading = this.summaryResource.isLoading;
@@ -359,6 +383,7 @@ export class EventManagement {
       this.purchasesResource.error(),
       this.resaleResource.error(),
       this.guestsQuery.error(),
+      this.importedTicketsResource.error(),
     ];
 
     for (const error of resourceErrors) {
@@ -462,6 +487,7 @@ export class EventManagement {
     this.summaryResource.reload();
     this.purchasesResource.reload();
     this.resaleResource.reload();
+    this.importedTicketsResource.reload();
     this.reloadToken.update((n) => n + 1);
   }
 

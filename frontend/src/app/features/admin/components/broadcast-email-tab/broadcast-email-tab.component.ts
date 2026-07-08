@@ -21,6 +21,7 @@ import {ZardButtonComponent} from '@ui/components/primitives/button/button.compo
 import {ZardCardComponent} from '@ui/components/primitives/card/card.component';
 import {BraDialogService} from '@ui/components/composites/dialog/dialog.service';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
+import {ZardSwitchComponent} from '@ui/components/primitives/switch/switch.component';
 import {logger} from '@/utils/logger';
 
 @Component({
@@ -33,6 +34,7 @@ import {logger} from '@/utils/logger';
     ZardButtonComponent,
     ZardCardComponent,
     ZardIconComponent,
+    ZardSwitchComponent,
   ],
   templateUrl: './broadcast-email-tab.component.html',
 })
@@ -62,12 +64,25 @@ export class BroadcastEmailTabComponent {
     });
   });
 
+  // include external (imported) ticket holders in the send — defaults ON,
+  // mirroring the backend default. Always visible in the compose flow so
+  // organizers discover the behavior before they need it.
+  readonly includeExternalTicketHolders = signal(true);
+
   readonly queries = injectQueries(() => {
     const rawEventId = this.eventId();
     const eventId = rawEventId ? (rawEventId as Id<'events'>) : null;
     return {
       audience: eventId
-        ? {query: api.events.broadcasts.getAudience, args: {eventId}}
+        ? {
+            query: api.events.broadcasts.getAudience,
+            // Reading the toggle here re-keys the subscription when it flips,
+            // so the audience count updates live for the chosen scope.
+            args: {
+              eventId,
+              includeExternalTicketHolders: this.includeExternalTicketHolders(),
+            },
+          }
         : skipToken,
       history: eventId
         ? {query: api.events.broadcasts.listHistory, args: {eventId}}
@@ -86,6 +101,12 @@ export class BroadcastEmailTabComponent {
   );
   readonly broadcastExceedsCap = computed(
     () => this.broadcastAudience()?.exceedsCap ?? false,
+  );
+  readonly importedReachableCount = computed(
+    () => this.broadcastAudience()?.importedReachableCount ?? 0,
+  );
+  readonly importedUnreachableCount = computed(
+    () => this.broadcastAudience()?.importedUnreachableCount ?? 0,
   );
   readonly broadcastAudienceError = computed(() => {
     const error = this.queries.errors().audience;
@@ -185,6 +206,7 @@ export class BroadcastEmailTabComponent {
         eventId: eventId as Id<'events'>,
         subject,
         message,
+        includeExternalTicketHolders: this.includeExternalTicketHolders(),
       });
       if (result.success) {
         const label = result.recipientCount === 1 ? 'recipient' : 'recipients';

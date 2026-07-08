@@ -22,6 +22,7 @@ Jump to:
 
 - [Fix a failing CI job](#fix-a-failing-ci-job)
 - [Fix Release Please automation](#fix-release-please-automation)
+- [Auto-merge and branch updates](#auto-merge-and-branch-updates)
 - [Check self-hosted runner capacity](#check-self-hosted-runner-capacity)
 - [Explain why a deploy was skipped](#explain-why-a-deploy-was-skipped)
 - [Restore a failed Convex deploy](#restore-a-failed-convex-deploy)
@@ -48,17 +49,31 @@ GitHub Actions jobs that need environment-scoped secrets use the selected GitHub
 
 When troubleshooting automatic deploys, start from the parent `CI` run on the branch push, confirm it completed successfully, then open the separate `Deploy Preview (develop)` or `Deploy to Production` workflow run for deploy logs.
 
+### Runner routing
+
+`CI` jobs `lint`, `test`, `stripe-contracts`, `build`, and `e2e-check` run on GitHub-hosted `ubuntu-latest` runners (free with unlimited minutes for public repositories; 4 vCPU / 16 GB). Only the `e2e` job and the deploy/release workflows run on the self-hosted Whiterose pool, which provides warm pnpm and Playwright browser volumes. This keeps the small self-hosted pool dedicated to E2E and deploys instead of queueing lint/test/build behind them.
+
+Hosted runners are ephemeral, so those jobs restore caches explicitly: the shared composite action [`.github/actions/setup-node-pnpm`](../../.github/actions/setup-node-pnpm/action.yml) installs pnpm plus the `.nvmrc` Node version and restores the pnpm store (`actions/setup-node` with `cache: pnpm`), and the `build` job restores the Angular build cache at `frontend/.angular/cache` via `actions/cache`. The Angular CLI disables its build cache when it detects CI, so the `build` job enables it at runtime with `ng config cli.cache.environment all` — scoped to that job on purpose; a global `angular.json` setting would also switch the self-hosted `e2e` and deploy builds to persistent incremental caching on the Whiterose disk.
+
+The `e2e-check` gate intentionally has no `needs:` on `lint`/`test`/`build`: E2E starts in parallel with the fan-out, so PR wall-clock is `max(fan-out, e2e)` instead of their sum. A PR push that fails lint can waste one E2E run on the pool, bounded by the `cancel-in-progress` concurrency group on re-push (`cancel-in-progress` applies to `pull_request` events only, not branch pushes). Wasted runs on `develop`/`main` pushes should be rare because the strict up-to-date requirement means the merged state already passed full CI on the PR. `stripe-contracts` keeps `needs: [lint]` to conserve Stripe sandbox API quota.
+
 Branch protection on both `develop` and `main` requires these CI checks before merge:
 
 - `Lint + Typecheck (ESLint + tsc)`
 - `Unit Tests`
 - `Stripe Sandbox Contracts`
 - `Build Frontend`
-- `Build Storybook` (currently skipped — see note below)
 - `E2E Gate`
 - `E2E Tests`
 
-**Storybook job disabled (Angular 22):** the `storybook` CI job (`Build Storybook`) is disabled with `if: false` in `.github/workflows/ci.yml`. `pnpm storybook` and `pnpm build-storybook` are non-functional after the Angular 22 upgrade because the installed `@storybook/angular` (see `frontend/package.json`) declares Angular peer ranges capped below 22 (`>=18.0.0 <22.0.0`, `@angular-devkit/architect <0.2200.0`), and no released version supports Angular 22 yet. Re-enable the job (remove `if: false`) once Angular 22 support ships upstream ([storybookjs/storybook#35318](https://github.com/storybookjs/storybook/issues/35318)) and `@storybook/angular` is upgraded. While disabled, GitHub still creates the `Build Storybook` check run with conclusion `skipped`, and a job skipped via `if:` reports as **successful** for required-status-check purposes — merges are NOT blocked. Leave `Build Storybook` in the required checks so it resumes gating automatically when the job is re-enabled.
+**Storybook job disabled (Angular 22):** the `storybook` CI job (`Build Storybook`) is disabled with `if: false` in `.github/workflows/ci.yml`. `pnpm storybook` and `pnpm build-storybook` are non-functional after the Angular 22 upgrade because the installed `@storybook/angular` (see `frontend/package.json`) declares Angular peer ranges capped below 22 (`>=18.0.0 <22.0.0`, `@angular-devkit/architect <0.2200.0`), and no released version supports Angular 22 yet. Re-enable the job (remove `if: false`) once Angular 22 support ships upstream ([storybookjs/storybook#35318](https://github.com/storybookjs/storybook/issues/35318)) and `@storybook/angular` is upgraded. `Build Storybook` was removed from the `develop` and `main` required status checks on 2026-07-08: a job disabled via `if:` reports `skipped` (which satisfies required checks, so merges were never blocked), but a permanently-skipped required check is a foot-gun for merge automation that waits on required checks. When re-enabling the job, re-add the required check on both branches:
+
+```bash
+for branch in develop main; do
+  gh api -X POST "repos/DahliaWitt/braket-tickets/branches/$branch/protection/required_status_checks/contexts" \
+    -f 'contexts[]=Build Storybook'
+done
+```
 
 Verify the live policy with:
 
@@ -69,9 +84,26 @@ for branch in develop main; do
 done
 ```
 
+## Auto-merge and branch updates
+
+The repository has GitHub auto-merge enabled, and `develop` requires branches to be up to date with the base before merging (`required_status_checks.strict: true`, matching `main`). The intended PR flow:
+
+1. Open the PR and enable auto-merge: `gh pr merge --auto --squash <number>`.
+2. The PR merges automatically once all required checks pass and the branch is up to date.
+3. When another PR merges first, open PRs become out of date and auto-merge waits. Update them one at a time with `gh pr update-branch <number>` — serial updates avoid re-running CI on every open PR after every merge.
+
+Each update re-runs CI, but the fan-out jobs run on free GitHub-hosted runners and `e2e` only runs when affected (see `scripts/run-affected-e2e.ts`), so the marginal cost is small. GitHub does not update out-of-date branches automatically, and pushes made by `GITHUB_TOKEN` automation do not trigger `pull_request` workflows — a bot-driven branch updater would leave PRs stuck with checks that never report. Keep branch updates on a user token (`gh pr update-branch`).
+
+Verify the live settings with:
+
+```bash
+gh api repos/DahliaWitt/braket-tickets --jq '{allow_auto_merge}'
+gh api repos/DahliaWitt/braket-tickets/branches/develop/protection/required_status_checks --jq '{strict, contexts}'
+```
+
 ## Check self-hosted runner capacity
 
-The repository uses five self-hosted GitHub Actions runners on the Whiterose host:
+The repository uses five self-hosted GitHub Actions runners on the Whiterose host. They serve the CI `e2e` job and the deploy/release workflows; all other CI jobs run on GitHub-hosted runners (see [Runner routing](#runner-routing)):
 
 - `whiterose_1`
 - `whiterose_2`
@@ -80,6 +112,15 @@ The repository uses five self-hosted GitHub Actions runners on the Whiterose hos
 - `whiterose_5`
 
 On Whiterose, the runner fleet is managed by the host-local Unraid compose project at `/boot/config/plugins/compose.manager/projects/github-runner/docker-compose.yml`. The containers are named `github-runner-1` through `github-runner-5`, use the `braket-runner:latest` image, and share the Docker socket plus cached `pnpm` and Playwright browser volumes.
+
+**Shared Playwright browser volume (`PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers`):** all concurrent `e2e` jobs mount the same browser volume. `playwright install` normally garbage-collects browser revisions it considers "unused", so a PR that bumps `@playwright/test` deletes the older revision that other in-flight PRs are actively running on (and their installs delete the newer one), and every job fails with `browserType.launch: Executable doesn't exist ... chromium_headless_shell-<rev>`. The `e2e` job sets `PLAYWRIGHT_SKIP_BROWSER_GC: '1'` (see `.github/workflows/ci.yml`) so revisions for every in-flight Playwright version coexist. Trade-off: the volume is never pruned, so it grows as Playwright versions accumulate. Reclaim space by removing stale revision dirs under `/opt/playwright-browsers` when the pool is idle (inspect a runner container to confirm the host mount source first):
+
+```bash
+# On the Whiterose host, with no e2e jobs running — list revisions by size:
+ssh whiterose 'docker exec github-runner-1 sh -c "du -sh /opt/playwright-browsers/* | sort -h"'
+# then delete revision dirs older than the currently-pinned @playwright/test
+# (frontend/package.json). Deleting the current revision only forces a re-download.
+```
 
 **Node.js version (Angular 22):** Angular 22 requires a newer Node.js patch than the `braket-runner:latest` image historically baked in (its NodeSource install lagged Angular's floor). The pinned version lives in one place — [`.nvmrc`](../../.nvmrc) — and CI and deploy workflows install it via `actions/setup-node` (`node-version-file: .nvmrc`), prepending it to `PATH` so jobs are correct regardless of the image. To remove the per-job Node install overhead, align the runner image's Node install in [`infra/runner/Dockerfile`](../../infra/runner/Dockerfile) with `.nvmrc`, then rebuild and redeploy:
 
@@ -441,17 +482,17 @@ Do not force-push or bypass the existing workflows.
 
 The repo ships three files:
 
-| File                     | Tracked | Purpose                                                                   |
-| ------------------------ | ------- | ------------------------------------------------------------------------- |
-| `.actrc`                 | yes     | Default flags: maps `self-hosted` to the custom `braket-act-runner` image |
-| `.github/act/Dockerfile` | yes     | Extends `catthehacker/ubuntu:act-latest` with pnpm via corepack           |
-| `.act.secrets`           | no      | Local secrets (copy from `.act.secrets.example`)                          |
+| File                     | Tracked | Purpose                                                                                       |
+| ------------------------ | ------- | --------------------------------------------------------------------------------------------- |
+| `.actrc`                 | yes     | Default flags: maps `self-hosted` and `ubuntu-latest` to the custom `braket-act-runner` image |
+| `.github/act/Dockerfile` | yes     | Extends `catthehacker/ubuntu:act-latest` with pnpm via corepack                               |
+| `.act.secrets`           | no      | Local secrets (copy from `.act.secrets.example`)                                              |
 
 On Apple Silicon Macs, `.actrc` sets `--container-architecture linux/amd64` so the x86_64 Docker images run under Rosetta emulation.
 
 ### Build the runner image
 
-The CI workflow runs on a self-hosted runner with pnpm pre-installed. The base `catthehacker/ubuntu:act-latest` image does not include pnpm, so a custom image is required:
+CI fan-out jobs run on `ubuntu-latest` and the `e2e` job on a self-hosted runner with pnpm pre-installed; `.actrc` maps both labels to the same custom image. The base `catthehacker/ubuntu:act-latest` image does not include pnpm, so a custom image is required:
 
 ```bash
 docker build --platform linux/amd64 -t braket-act-runner:latest .github/act/
@@ -489,7 +530,7 @@ act is best suited for validating individual jobs (especially `lint`). Heavier j
 
 - **Apple Silicon OOM**: x86_64 emulation consumes significantly more memory. The Angular build (`build` job) is OOM-killed (exit 137) under default Docker Desktop memory limits. Increase Docker Desktop memory to 8+ GB or validate builds natively.
 - **Codecov upload**: The `test` job's Codecov upload fails because act copies files instead of running `git clone`, so the container has no `.git` directory. The tests themselves pass — the failure is cosmetic.
-- **Job dependencies**: act resolves `needs:` chains, so `-j e2e` also runs `lint`, `test`, `build`, and `e2e-check`. If any dependency job fails (even for act-specific reasons), downstream jobs are skipped.
+- **Job dependencies**: act resolves `needs:` chains, so `-j e2e` also runs `e2e-check` first — but not `lint`/`test`/`build`, which are no longer dependencies of the E2E lane. If a dependency job fails (even for act-specific reasons), downstream jobs are skipped.
 - **WebKit system deps**: The Playwright install step (`playwright install --with-deps`) installs OS packages via apt; this works but adds ~60s to startup.
 - **Email secrets**: Email verification tests need Resend credentials in `.act.secrets`; SMTP credentials are fallback-only.
 

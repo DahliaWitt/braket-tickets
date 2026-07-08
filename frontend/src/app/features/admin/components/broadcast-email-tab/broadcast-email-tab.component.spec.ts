@@ -36,7 +36,14 @@ describe('BroadcastEmailTabComponent', () => {
         if (
           functionReferenceMatches(queryFn, api.events.broadcasts.getAudience)
         ) {
-          queueMicrotask(() => onData({recipientCount: 2, exceedsCap: false}));
+          queueMicrotask(() =>
+            onData({
+              recipientCount: 2,
+              exceedsCap: false,
+              importedReachableCount: 0,
+              importedUnreachableCount: 0,
+            }),
+          );
         } else if (
           functionReferenceMatches(queryFn, api.events.broadcasts.listHistory)
         ) {
@@ -119,6 +126,89 @@ describe('BroadcastEmailTabComponent', () => {
     expect(skippedComponent.queries.statuses().history).toBe('skipped');
     expect(skippedComponent.broadcastAudience()).toBeNull();
     expect(skippedComponent.broadcastHistory()).toEqual([]);
+  });
+
+  it('shows the include-external toggle, defaulting ON, even at zero imported', async () => {
+    expect(await harness.isIncludeExternalToggleVisible()).toBe(true);
+    expect(await harness.isIncludeExternalToggled()).toBe(true);
+    const countText = await harness.getIncludeExternalCountText();
+    // Toggle defaults ON, so the count reads "including" (present participle).
+    expect(countText).toContain('including 0 external ticket holders');
+  });
+
+  it('reads as excluded when the toggle is off', async () => {
+    await harness.clickIncludeExternalToggle();
+    expect(await harness.isIncludeExternalToggled()).toBe(false);
+    const countText = await harness.getIncludeExternalCountText();
+    expect(countText).toContain('external ticket holders excluded');
+    expect(countText).not.toContain('including');
+  });
+
+  it('renders reachable and unreachable imported counts', async () => {
+    // Route by function reference and emit on a microtask — same contract as
+    // the beforeEach mock (injectQueries drops synchronous emissions).
+    const onUpdate = vi.fn(
+      (queryFn: unknown, _args: unknown, cb: (v: unknown) => void) => {
+        if (
+          functionReferenceMatches(queryFn, api.events.broadcasts.getAudience)
+        ) {
+          queueMicrotask(() =>
+            cb({
+              recipientCount: 5,
+              exceedsCap: false,
+              importedReachableCount: 3,
+              importedUnreachableCount: 2,
+            }),
+          );
+        } else if (
+          functionReferenceMatches(queryFn, api.events.broadcasts.listHistory)
+        ) {
+          queueMicrotask(() => cb([]));
+        }
+        return () => undefined;
+      },
+    );
+    convexMock.onUpdate = onUpdate;
+    convexMock.client.onUpdate = onUpdate;
+
+    fixture = TestBed.createComponent(BroadcastEmailTabComponent);
+    fixture.componentRef.setInput('eventId', 'event-1');
+    fixture.componentRef.setInput('communityId', 'community-1');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      BroadcastEmailTabComponentHarness,
+    );
+
+    const countText = await harness.getIncludeExternalCountText();
+    expect(countText).toContain('including 3 external ticket holders');
+    expect(countText).toContain("2 without an email can't be reached");
+  });
+
+  it('sends with includeExternalTicketHolders false when toggled off', async () => {
+    await harness.clickIncludeExternalToggle();
+    await fixture.whenStable();
+    expect(await harness.isIncludeExternalToggled()).toBe(false);
+
+    component.broadcastFormModel.set({
+      subject: 'Door update',
+      message: 'Bring your ID.',
+    });
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    component.openSendBroadcastConfirm();
+    const config = dialogServiceMock.create.mock.calls[0][0] as {
+      zOnOk: () => void;
+    };
+    config.zOnOk();
+    await fixture.whenStable();
+
+    expect(convexMock.mutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({includeExternalTicketHolders: false}),
+    );
   });
 
   it('opens confirmation and shows feedback after a broadcast is confirmed', async () => {
