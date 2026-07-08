@@ -106,7 +106,12 @@ jobs:
           flags: frontend
           slug: ${{ github.repository }}
           disable_search: true
-          fail_ci_if_error: true
+          # Best-effort: a Codecov infra flake (e.g. CLI GPG-signature
+          # verification failing on ephemeral hosted runners, which lack the
+          # warm keyring the self-hosted pool had) must not fail a green test
+          # suite. Coverage generation is still enforced by the
+          # assert_*_coverage steps above.
+          fail_ci_if_error: false
       - name: Upload convex coverage to Codecov
         if: ${{ always() && env.CODECOV_TOKEN != '' && steps.assert_frontend_coverage.outcome == 'success' && steps.assert_convex_coverage.outcome == 'success' }}
         uses: codecov/codecov-action@ad3126e916f78f00edff4ed0317cf185271ccc2d # v5.4.2
@@ -116,7 +121,8 @@ jobs:
           flags: convex
           slug: ${{ github.repository }}
           disable_search: true
-          fail_ci_if_error: true
+          # Best-effort — see the frontend upload step above.
+          fail_ci_if_error: false
 
   stripe-contracts:
     name: Stripe Sandbox Contracts
