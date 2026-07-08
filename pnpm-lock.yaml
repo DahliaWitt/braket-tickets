@@ -107,8 +107,8 @@ importers:
         specifier: ^0.4.7
         version: 0.4.7(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.6))(hono@4.12.18)(react@19.2.6)(typescript@6.0.3)(zod@4.4.3))(convex@1.42.1(react@19.2.6))
       '@djpanda/convex-authz':
-        specifier: ^2.1.1
-        version: 2.1.1(convex@1.42.1(react@19.2.6))(react@19.2.6)
+        specifier: ^2.4.1
+        version: 2.4.1(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.6))(hono@4.12.18)(react@19.2.6)(typescript@6.0.3)(zod@4.4.3)
       '@react-pdf/renderer':
         specifier: ^4.5.1
         version: 4.5.1(react@19.2.6)
@@ -171,8 +171,8 @@ importers:
         specifier: ^4.1.4
         version: 4.1.4(vitest@4.1.4)
       convex-test:
-        specifier: ^0.0.49
-        version: 0.0.49(convex@1.42.1(react@19.2.6))
+        specifier: ^0.0.54
+        version: 0.0.54(convex@1.42.1(react@19.2.6))
       eslint:
         specifier: ^10.2.0
         version: 10.2.0(jiti@2.6.1)
@@ -760,6 +760,7 @@ packages:
   '@angular/platform-browser-dynamic@21.2.8':
     resolution: {integrity: sha512-9XeplSHsKnLDm14dvwXG00Ox6WbDrhf7ub7MxxcJ6gCgRm/yqJ3Vrz4a+NBpYnelapqiCCGEdHeyx2xt8vG1qA==}
     engines: {node: ^20.19.0 || ^22.12.0 || >=24.0.0}
+    deprecated: '@angular/platform-browser-dynamic is deprecated. Use `@angular/platform-browser` instead.'
     peerDependencies:
       '@angular/common': 21.2.8
       '@angular/compiler': 21.2.8
@@ -1601,8 +1602,8 @@ packages:
       convex: ^1.25.0
       react: 19.2.6
 
-  '@convex-dev/crons@0.2.0':
-    resolution: {integrity: sha512-JowF/DDPl8FuhXml2/0jmEa6uIKr/UK1UwP+FdbPt2BRVxACRX4CNlzDQEtHbO2p2FVKiJh4zEg8p5/YM27PEA==}
+  '@convex-dev/crons@0.2.2':
+    resolution: {integrity: sha512-V5kLBb0kTb2MA6uN0MgEYEgeW1mp+1oioA0tnuh8yWZcb6FToY+e67MJ5SQ98N1JjY2K0JIofAzLUYe9gEdU2A==}
     peerDependencies:
       convex: ^1.24.8
 
@@ -1682,8 +1683,8 @@ packages:
     resolution: {integrity: sha512-Xc3VhU02wqZ1HvHRJUwL09HkZSTvidqY5Ya0NXBSYOxAp+Ln9dcJr9fySI+CkONzP3PekQo9WdzCv0PGER/mOA==}
     engines: {node: '>=14.17.0'}
 
-  '@djpanda/convex-authz@2.1.1':
-    resolution: {integrity: sha512-/sVWdl6Xf3bfTJhC/YP8B45THSKXnmPuT1nGDvAlvcqpGpb1PQvoiZYnHVeWPY+C4mT8OIQmb7f2xrELdRkPug==}
+  '@djpanda/convex-authz@2.4.1':
+    resolution: {integrity: sha512-+nqEztMuTBBdCgDTxGo6f4/d/9/WUqvY1INU6gzn3nK1B8LmmyaTqIlrj1FtmMdG2kwRtNxnQordDAQLhuRtxw==}
     peerDependencies:
       convex: ^1.29.3
       react: 19.2.6
@@ -5049,8 +5050,8 @@ packages:
       zod:
         optional: true
 
-  convex-test@0.0.49:
-    resolution: {integrity: sha512-mBDhwvxUZYtRuEx4a9opk7LI6IghcPOHd99QVPAzMugeYeAukLjkFkkkAU9J53edxxwGWfx1IsoKLzC+DK6ugg==}
+  convex-test@0.0.54:
+    resolution: {integrity: sha512-C0v2SQcuxrELAJRNzE6fQ686XDPor7UFoC22jcoJXeCRqhLo8ZIMZ4jyUHoo1UdAL2enCb0AbiprCVpLDN8u9Q==}
     peerDependencies:
       convex: ^1.32.0
 
@@ -11490,7 +11491,7 @@ snapshots:
 
   '@babel/template@7.28.6':
     dependencies:
-      '@babel/code-frame': 7.29.0
+      '@babel/code-frame': 7.29.7
       '@babel/parser': 7.29.2
       '@babel/types': 7.29.0
 
@@ -11502,7 +11503,7 @@ snapshots:
 
   '@babel/traverse@7.29.0':
     dependencies:
-      '@babel/code-frame': 7.29.0
+      '@babel/code-frame': 7.29.7
       '@babel/generator': 7.29.1
       '@babel/helper-globals': 7.28.0
       '@babel/parser': 7.29.2
@@ -11748,7 +11749,7 @@ snapshots:
       - hono
       - typescript
 
-  '@convex-dev/crons@0.2.0(convex@1.42.1(react@19.2.6))':
+  '@convex-dev/crons@0.2.2(convex@1.42.1(react@19.2.6))':
     dependencies:
       convex: 1.42.1(react@19.2.6)
       cron-parser: 4.9.0
@@ -11822,11 +11823,18 @@ snapshots:
 
   '@discoveryjs/json-ext@1.1.0': {}
 
-  '@djpanda/convex-authz@2.1.1(convex@1.42.1(react@19.2.6))(react@19.2.6)':
+  '@djpanda/convex-authz@2.4.1(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.6))(hono@4.12.18)(react@19.2.6)(typescript@6.0.3)(zod@4.4.3)':
     dependencies:
-      '@convex-dev/crons': 0.2.0(convex@1.42.1(react@19.2.6))
+      '@convex-dev/crons': 0.2.2(convex@1.42.1(react@19.2.6))
+      '@testing-library/dom': 10.4.1
       convex: 1.42.1(react@19.2.6)
+      convex-helpers: 0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.6))(hono@4.12.18)(react@19.2.6)(typescript@6.0.3)(zod@4.4.3)
       react: 19.2.6
+    transitivePeerDependencies:
+      - '@standard-schema/spec'
+      - hono
+      - typescript
+      - zod
 
   '@edge-runtime/primitives@4.1.0': {}
 
@@ -15254,7 +15262,7 @@ snapshots:
       typescript: 6.0.3
       zod: 4.4.3
 
-  convex-test@0.0.49(convex@1.42.1(react@19.2.6)):
+  convex-test@0.0.54(convex@1.42.1(react@19.2.6)):
     dependencies:
       convex: 1.42.1(react@19.2.6)
 
@@ -16334,7 +16342,7 @@ snapshots:
 
   fork-ts-checker-webpack-plugin@9.1.0(typescript@6.0.3)(webpack@5.105.4(esbuild@0.27.3)):
     dependencies:
-      '@babel/code-frame': 7.29.0
+      '@babel/code-frame': 7.29.7
       chalk: 4.1.2
       chokidar: 4.0.3
       cosmiconfig: 8.3.6(typescript@6.0.3)
@@ -18235,7 +18243,7 @@ snapshots:
 
   parse-json@5.2.0:
     dependencies:
-      '@babel/code-frame': 7.29.0
+      '@babel/code-frame': 7.29.7
       error-ex: 1.3.4
       json-parse-even-better-errors: 2.3.1
       lines-and-columns: 1.2.4
