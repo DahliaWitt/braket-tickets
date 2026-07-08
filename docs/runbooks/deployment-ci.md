@@ -22,6 +22,7 @@ Jump to:
 
 - [Fix a failing CI job](#fix-a-failing-ci-job)
 - [Fix Release Please automation](#fix-release-please-automation)
+- [Auto-merge and branch updates](#auto-merge-and-branch-updates)
 - [Check self-hosted runner capacity](#check-self-hosted-runner-capacity)
 - [Explain why a deploy was skipped](#explain-why-a-deploy-was-skipped)
 - [Restore a failed Convex deploy](#restore-a-failed-convex-deploy)
@@ -48,17 +49,31 @@ GitHub Actions jobs that need environment-scoped secrets use the selected GitHub
 
 When troubleshooting automatic deploys, start from the parent `CI` run on the branch push, confirm it completed successfully, then open the separate `Deploy Preview (develop)` or `Deploy to Production` workflow run for deploy logs.
 
+### Runner routing
+
+`CI` jobs `lint`, `test`, `stripe-contracts`, `build`, and `e2e-check` run on GitHub-hosted `ubuntu-latest` runners (free with unlimited minutes for public repositories; 4 vCPU / 16 GB). Only the `e2e` job and the deploy/release workflows run on the self-hosted Whiterose pool, which provides warm pnpm and Playwright browser volumes. This keeps the small self-hosted pool dedicated to E2E and deploys instead of queueing lint/test/build behind them.
+
+Hosted runners are ephemeral, so those jobs restore caches explicitly: the pnpm store via `actions/setup-node` (`cache: pnpm`, keyed on `pnpm-lock.yaml`) and, for `build`, the Angular build cache at `frontend/.angular/cache` via `actions/cache`. The Angular CLI disables its build cache when it detects CI, so `frontend/angular.json` sets `cli.cache.environment: "all"` — removing that setting silently turns the cache step into a no-op.
+
+The `e2e-check` gate intentionally has no `needs:` on `lint`/`test`/`build`: E2E starts in parallel with the fan-out, so PR wall-clock is `max(fan-out, e2e)` instead of their sum. A push that fails lint can waste one E2E run on the pool; the `cancel-in-progress` concurrency group bounds the cost on re-pushes. `stripe-contracts` keeps `needs: [lint]` to conserve Stripe sandbox API quota.
+
 Branch protection on both `develop` and `main` requires these CI checks before merge:
 
 - `Lint + Typecheck (ESLint + tsc)`
 - `Unit Tests`
 - `Stripe Sandbox Contracts`
 - `Build Frontend`
-- `Build Storybook` (currently skipped — see note below)
 - `E2E Gate`
 - `E2E Tests`
 
-**Storybook job disabled (Angular 22):** the `storybook` CI job (`Build Storybook`) is disabled with `if: false` in `.github/workflows/ci.yml`. `pnpm storybook` and `pnpm build-storybook` are non-functional after the Angular 22 upgrade because the installed `@storybook/angular` (see `frontend/package.json`) declares Angular peer ranges capped below 22 (`>=18.0.0 <22.0.0`, `@angular-devkit/architect <0.2200.0`), and no released version supports Angular 22 yet. Re-enable the job (remove `if: false`) once Angular 22 support ships upstream ([storybookjs/storybook#35318](https://github.com/storybookjs/storybook/issues/35318)) and `@storybook/angular` is upgraded. While disabled, GitHub still creates the `Build Storybook` check run with conclusion `skipped`, and a job skipped via `if:` reports as **successful** for required-status-check purposes — merges are NOT blocked. Leave `Build Storybook` in the required checks so it resumes gating automatically when the job is re-enabled.
+**Storybook job disabled (Angular 22):** the `storybook` CI job (`Build Storybook`) is disabled with `if: false` in `.github/workflows/ci.yml`. `pnpm storybook` and `pnpm build-storybook` are non-functional after the Angular 22 upgrade because the installed `@storybook/angular` (see `frontend/package.json`) declares Angular peer ranges capped below 22 (`>=18.0.0 <22.0.0`, `@angular-devkit/architect <0.2200.0`), and no released version supports Angular 22 yet. Re-enable the job (remove `if: false`) once Angular 22 support ships upstream ([storybookjs/storybook#35318](https://github.com/storybookjs/storybook/issues/35318)) and `@storybook/angular` is upgraded. `Build Storybook` was removed from the `develop` and `main` required status checks on 2026-07-08: a job disabled via `if:` reports `skipped` (which satisfies required checks, so merges were never blocked), but a permanently-skipped required check is a foot-gun for merge automation that waits on required checks. When re-enabling the job, re-add the required check on both branches:
+
+```bash
+for branch in develop main; do
+  gh api -X POST "repos/DahliaWitt/braket-tickets/branches/$branch/protection/required_status_checks/contexts" \
+    -f 'contexts[]=Build Storybook'
+done
+```
 
 Verify the live policy with:
 
@@ -69,9 +84,26 @@ for branch in develop main; do
 done
 ```
 
+## Auto-merge and branch updates
+
+The repository has GitHub auto-merge enabled, and `develop` requires branches to be up to date with the base before merging (`required_status_checks.strict: true`, matching `main`). The intended PR flow:
+
+1. Open the PR and enable auto-merge: `gh pr merge --auto --squash <number>`.
+2. The PR merges automatically once all required checks pass and the branch is up to date.
+3. When another PR merges first, open PRs become out of date and auto-merge waits. Update them one at a time with `gh pr update-branch <number>` — serial updates avoid re-running CI on every open PR after every merge.
+
+Each update re-runs CI, but the fan-out jobs run on free GitHub-hosted runners and `e2e` only runs when affected (see `scripts/run-affected-e2e.ts`), so the marginal cost is small. GitHub does not update out-of-date branches automatically, and pushes made by `GITHUB_TOKEN` automation do not trigger `pull_request` workflows — a bot-driven branch updater would leave PRs stuck with checks that never report. Keep branch updates on a user token (`gh pr update-branch`).
+
+Verify the live settings with:
+
+```bash
+gh api repos/DahliaWitt/braket-tickets --jq '{allow_auto_merge}'
+gh api repos/DahliaWitt/braket-tickets/branches/develop/protection/required_status_checks --jq '{strict, contexts}'
+```
+
 ## Check self-hosted runner capacity
 
-The repository uses five self-hosted GitHub Actions runners on the Whiterose host:
+The repository uses five self-hosted GitHub Actions runners on the Whiterose host. They serve the CI `e2e` job and the deploy/release workflows; all other CI jobs run on GitHub-hosted runners (see [Runner routing](#runner-routing)):
 
 - `whiterose_1`
 - `whiterose_2`
