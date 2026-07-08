@@ -1,4 +1,59 @@
 <div class="ph-no-capture space-y-4">
+  <div class="flex items-center justify-end">
+    <button
+      type="button"
+      z-button
+      zType="outline"
+      zSize="sm"
+      (click)="openImportSurface()"
+      data-testid="import-tickets-button"
+      class="border-primary/50 text-primary hover:bg-primary/10"
+    >
+      <z-icon zType="inbox" class="mr-2" />
+      import external tickets
+    </button>
+  </div>
+
+  @if (isImporting()) {
+    <div
+      class="overflow-hidden rounded-xl border border-border bg-card"
+      data-testid="ticket-import-panel"
+    >
+      <div
+        class="flex items-center justify-between border-b border-border px-4 py-3"
+      >
+        <span class="mono-label text-2xs text-muted-foreground">
+          import external tickets
+        </span>
+        <button
+          type="button"
+          z-button
+          zType="ghost"
+          zSize="sm"
+          (click)="closeImportSurface()"
+          data-testid="ticket-import-close"
+          class="min-h-[24px] text-muted-foreground hover:bg-muted/60"
+        >
+          <z-icon zType="x" class="mr-1" />
+          done
+        </button>
+      </div>
+      @defer (when isImporting()) {
+        <app-import-surface
+          [config]="buyerImportConfig"
+          [existingStrongKeys]="existingStrongKeys()"
+          [existingWeakKeys]="existingWeakKeys()"
+          [report]="importReport()"
+          (confirmed)="onTicketImportConfirmed($event)"
+        />
+      } @placeholder {
+        <div class="p-6 text-center font-mono text-sm text-muted-foreground">
+          loading importer…
+        </div>
+      }
+    </div>
+  }
+
   <app-ticket-reminder-tab
     [eventId]="eventId()"
     [communityId]="communityId()"
@@ -10,6 +65,7 @@
   <app-event-management-purchases-panel
     [purchases]="purchases()"
     [guests]="guests()"
+    [importedEntries]="importedEntries()"
     [eventTitle]="eventTitle()"
     [eventDate]="eventDate()"
     (dataChanged)="dataChanged.emit()"

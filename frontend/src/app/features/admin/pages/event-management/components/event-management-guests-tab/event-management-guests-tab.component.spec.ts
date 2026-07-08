@@ -22,6 +22,7 @@ describe('EventManagementGuestsTabComponent', () => {
   let harness: EventManagementGuestsTabHarness;
   let adminEventsServiceMock: {
     addGuest: ReturnType<typeof vi.fn>;
+    bulkAddGuests: ReturnType<typeof vi.fn>;
     updateGuest: ReturnType<typeof vi.fn>;
     removeGuest: ReturnType<typeof vi.fn>;
     sendGuestTicket: ReturnType<typeof vi.fn<SendGuestTicketFn>>;
@@ -59,6 +60,11 @@ describe('EventManagementGuestsTabComponent', () => {
 
     adminEventsServiceMock = {
       addGuest: vi.fn().mockResolvedValue('guest-1'),
+      bulkAddGuests: vi.fn().mockResolvedValue({
+        insertedCount: 1,
+        skippedCount: 0,
+        outcomes: [{rowIndex: 0, status: 'inserted'}],
+      }),
       updateGuest: vi.fn().mockResolvedValue(null),
       removeGuest: vi.fn().mockResolvedValue(undefined),
       sendGuestTicket: vi
@@ -232,6 +238,75 @@ describe('EventManagementGuestsTabComponent', () => {
         'Remove Riley Staff, riley@example.com, staff, id GUEST-2',
       ]),
     );
+  });
+
+  it('opens the bulk-import surface and reaches addMany with the guest row shape', async () => {
+    const dataChangedSpy = vi.fn();
+    fixture.componentInstance.dataChanged.subscribe(dataChangedSpy);
+
+    await harness.clickImportButton();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(await harness.isImportPanelOpen()).toBe(true);
+
+    const surface = await harness.getImportSurfaceHarness();
+    expect(surface).not.toBeNull();
+
+    // Paste a two-column guest list (name/email) and advance to preview.
+    await surface!.pasteText('name\temail\nZoe Example\tzoe@example.test');
+    await surface!.clickNext();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    await surface!.clickConfirm();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(adminEventsServiceMock.bulkAddGuests).toHaveBeenCalledTimes(1);
+    const [eventId, batchKey, rows] = adminEventsServiceMock.bulkAddGuests.mock
+      .calls[0] as [string, string, unknown];
+    expect(eventId).toBe('event-1');
+    expect(typeof batchKey).toBe('string');
+    expect(batchKey.length).toBeGreaterThan(0);
+    // guestType is mapped to the mutation's `type` field; email preserved.
+    expect(rows).toEqual([
+      {
+        name: 'Zoe Example',
+        email: 'zoe@example.test',
+        type: 'guest',
+        notes: undefined,
+      },
+    ]);
+
+    // Server-authoritative report renders on the surface's report step.
+    expect(await surface!.getReportInsertedText()).toContain('1 added');
+    expect(dataChangedSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('flags an existing guest as a duplicate in the bulk-import preview', async () => {
+    fixture.componentRef.setInput('guests', [
+      {...mockGuest, name: 'Zoe Example', email: 'zoe@example.test'},
+    ]);
+    fixture.detectChanges();
+
+    await harness.clickImportButton();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const surface = await harness.getImportSurfaceHarness();
+    expect(surface).not.toBeNull();
+
+    await surface!.pasteText('name\temail\nZoe Example\tzoe@example.test');
+    await surface!.clickNext();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    // The existing guest name+email key flows into the preview → duplicate.
+    expect(await surface!.getRowCountByPartition('duplicate')).toBe(1);
   });
 
   it('dispatches sends for multiple guests without blocking on an in-flight send', async () => {
