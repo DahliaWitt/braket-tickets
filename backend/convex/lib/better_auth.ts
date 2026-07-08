@@ -78,8 +78,22 @@ async function dispatchEmailSend(
 
 /**
  * Custom plugin to add OTT (one-time token) to verify-email redirects.
- * The @convex-dev/better-auth crossDomain plugin only handles OTT for OAuth and magic-link,
- * but not for email verification. This plugin fills that gap.
+ *
+ * DELIBERATE reimplementation, NOT dead code — do not delete. The
+ * @convex-dev/better-auth 0.12.5 crossDomain plugin attaches its OTT after-hook
+ * only to `/callback`, `/oauth2/callback`, and `/magic-link/verify` (see its
+ * `crossDomain` server plugin), and never to `/verify-email`. Without this
+ * plugin, cross-domain email-verification sign-in silently loses the session on
+ * the redirect back to the app: the browser lands on the app origin with no
+ * usable credential because the crossDomain flow relies on the OTT query param,
+ * not a third-party cookie.
+ *
+ * This gap is masked in E2E, which runs in cookie mode (crossDomain disabled on
+ * both client and server), so no automated test would catch a regression here.
+ *
+ * Retire this plugin ONLY once upstream's crossDomain OTT hook covers
+ * `/verify-email` redirects. Tracking: the PR that introduced this refactor
+ * drafts an upstream issue for get-convex/better-auth requesting exactly that.
  */
 const verifyEmailOttPlugin = (): BetterAuthPlugin => ({
   id: 'verify-email-ott',
