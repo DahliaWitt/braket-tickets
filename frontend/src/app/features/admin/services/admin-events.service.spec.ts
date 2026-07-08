@@ -4,6 +4,8 @@ import {ConvexError} from 'convex/values';
 import {describe, it, expect, beforeEach} from 'vitest';
 import {
   AdminEventsService,
+  type BulkGuestRow,
+  type ImportTicketRow,
   type TicketSalesStatus,
 } from '@/features/admin/services/admin-events.service';
 import {CONVEX} from 'convex-angular';
@@ -20,6 +22,9 @@ import {
   type EventTierPricingStats,
   type Guest,
   type GuestType,
+  type ImportBatchRemovalResult,
+  type ImportBatchResult,
+  type ImportedTicketHolder,
   type TicketReminderAudience,
   type TicketReminderSendResult,
 } from '../models/event-management.model';
@@ -53,6 +58,7 @@ describe('AdminEventsService', () => {
     remainingCount: 50,
     isSoldOut: false,
     totalTickets: 100,
+    imported: {total: 0, checkedIn: 0, bySource: []},
     tierCounts: {regular: 40, notaflof: 5, supporter: 5},
     salesByDay: [{date: '2024-01-01', quantity: 10}],
     revenue: {
@@ -780,6 +786,133 @@ describe('AdminEventsService', () => {
       await expect(service.getGuestTicketPdf('invalid-guest')).rejects.toThrow(
         'Guest not found',
       );
+    });
+  });
+
+  describe('bulkAddGuests', () => {
+    it('should forward eventId, batchKey, and rows to the addMany mutation', async () => {
+      const rows: BulkGuestRow[] = [
+        {name: 'Alice', email: 'alice@example.com', type: 'guest'},
+        {name: 'Bob'},
+      ];
+      const mockResult = {
+        insertedCount: 2,
+        skippedCount: 0,
+        outcomes: [],
+      } as unknown as ImportBatchResult;
+      convexMock.mutation.mockResolvedValue(mockResult);
+
+      const result = await service.bulkAddGuests(mockEventId, 'batch-1', rows);
+
+      expect(convexMock.mutation).toHaveBeenCalledWith(
+        api.events.guests.addMany,
+        {
+          eventId: mockEventId,
+          batchKey: 'batch-1',
+          rows,
+        },
+      );
+      expect(result).toBe(mockResult);
+    });
+
+    it('should throw when the mutation rejects', async () => {
+      convexMock.mutation.mockRejectedValue(new Error('maximum of 500 rows'));
+
+      await expect(
+        service.bulkAddGuests(mockEventId, 'batch-x', [{name: 'A'}]),
+      ).rejects.toThrow('maximum of 500 rows');
+    });
+  });
+
+  describe('importTicketBatch', () => {
+    it('should forward dedupMode, sourceLabel, and rows to importBatch', async () => {
+      const rows: ImportTicketRow[] = [
+        {name: 'Holder One', externalRef: 'RA-1'},
+      ];
+      const mockResult = {
+        insertedCount: 1,
+        skippedCount: 0,
+        outcomes: [],
+      } as unknown as ImportBatchResult;
+      convexMock.mutation.mockResolvedValue(mockResult);
+
+      const result = await service.importTicketBatch(
+        mockEventId,
+        'batch-imp',
+        'skip',
+        rows,
+        'resident-advisor',
+      );
+
+      expect(convexMock.mutation).toHaveBeenCalledWith(
+        api.events.imported_tickets.importBatch,
+        {
+          eventId: mockEventId,
+          batchKey: 'batch-imp',
+          dedupMode: 'skip',
+          sourceLabel: 'resident-advisor',
+          rows,
+        },
+      );
+      expect(result).toBe(mockResult);
+    });
+  });
+
+  describe('listImportedTickets', () => {
+    it('should query imported ticket holders for an event', async () => {
+      const mockEntries = [
+        {name: 'Imported One'},
+      ] as unknown as ImportedTicketHolder[];
+      convexMock.query.mockResolvedValue(mockEntries);
+
+      const result = await service.listImportedTickets(mockEventId);
+
+      expect(convexMock.query).toHaveBeenCalledWith(
+        api.events.imported_tickets.listByEvent,
+        {
+          eventId: mockEventId,
+        },
+      );
+      expect(result).toBe(mockEntries);
+    });
+  });
+
+  describe('removeImportedEntry', () => {
+    it('should remove a single imported entry by id', async () => {
+      convexMock.mutation.mockResolvedValue(undefined);
+
+      await service.removeImportedEntry('imported-entry-1');
+
+      expect(convexMock.mutation).toHaveBeenCalledWith(
+        api.events.imported_tickets.removeEntry,
+        {
+          id: 'imported-entry-1',
+        },
+      );
+    });
+  });
+
+  describe('removeImportedBatch', () => {
+    it('should remove an import batch and return the removal result', async () => {
+      const mockResult = {
+        removedCount: 3,
+        checkedInCount: 1,
+      } as unknown as ImportBatchRemovalResult;
+      convexMock.mutation.mockResolvedValue(mockResult);
+
+      const result = await service.removeImportedBatch(
+        mockEventId,
+        'batch-remove',
+      );
+
+      expect(convexMock.mutation).toHaveBeenCalledWith(
+        api.events.imported_tickets.removeBatch,
+        {
+          eventId: mockEventId,
+          batchKey: 'batch-remove',
+        },
+      );
+      expect(result).toBe(mockResult);
     });
   });
 });

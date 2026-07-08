@@ -44,6 +44,7 @@ describe('EventAnalyticsTabComponent', () => {
       remainingCount: 10,
       isSoldOut: false,
       totalTickets: 10,
+      imported: {total: 0, checkedIn: 0, bySource: []},
       tierCounts: {
         regular: 0,
         notaflof: 0,
