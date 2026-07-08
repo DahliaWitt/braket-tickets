@@ -1,8 +1,26 @@
+/**
+ * Escapes a single cell for CSV output.
+ *
+ * Two concerns, applied to EVERY cell:
+ * 1. Formula injection — a cell beginning with `=`, `+`, `-`, or `@` is treated
+ *    as a formula by Excel/Sheets/LibreOffice. External ticket-holder names come
+ *    from an outside platform and are attacker-controllable (e.g.
+ *    `=HYPERLINK(...)`); a native buyer name could also start with one of those
+ *    characters. A leading apostrophe forces the app to render the cell as text.
+ *    We apply this before quote-wrapping so the apostrophe lands inside quotes.
+ * 2. Structural escaping — cells containing a comma, quote, or newline are
+ *    wrapped in double quotes with internal quotes doubled.
+ */
 export function escapeCsvValue(value: string): string {
-  if (value.includes(',') || value.includes('"') || value.includes('\n')) {
-    return `"${value.replace(/"/g, '""')}"`;
+  const formulaSafe = /^[=+\-@]/.test(value) ? `'${value}` : value;
+  if (
+    formulaSafe.includes(',') ||
+    formulaSafe.includes('"') ||
+    formulaSafe.includes('\n')
+  ) {
+    return `"${formulaSafe.replace(/"/g, '""')}"`;
   }
-  return value;
+  return formulaSafe;
 }
 
 export function formatExportDateTime(timestamp: number): string {

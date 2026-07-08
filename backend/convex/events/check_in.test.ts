@@ -1535,3 +1535,239 @@ describe('checkIn / revertCheckIn — counter cascade', () => {
     expect(eventAfter?.checkedInCount).toBe(2);
   });
 });
+
+describe('ticketCheckIn.checkIn — external ticket fallback', () => {
+  async function seedEventWithAdmin(t: ReturnType<typeof convexTest>) {
+    const adminId = await createRootAdmin(t, {
+      name: 'Ext Admin',
+      email: `ext-admin-${Date.now()}-${Math.random()}@test.com`,
+    });
+    const organizerId = await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {name: 'Ext Org'},
+    );
+    const eventId = await t.mutation(api.testing.events.seedEvent, {
+      title: 'Ext Event',
+      date: '2026-01-01',
+      price: 2500,
+      totalTickets: 100,
+      status: 'published',
+      visibility: 'public',
+      organizerId,
+    });
+    return {adminId, organizerId, eventId};
+  }
+
+  it('checks in an imported entry when the payload equals its barcode and returns name + source', async () => {
+    const t = convexTest();
+    const {adminId, eventId} = await seedEventWithAdmin(t);
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    await asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId,
+      batchKey: 'ext-scan-1',
+      dedupMode: 'skip',
+      sourceLabel: 'RA',
+      rows: [{name: 'External Holder', externalRef: 'EXT-BARCODE-1'}],
+    });
+
+    const res = await asAdmin.mutation(api.events.check_in.checkIn, {
+      ticketId: 'EXT-BARCODE-1',
+      eventId,
+    });
+
+    expect(res.success).toBe(true);
+    expect(res.imported).toBeDefined();
+    expect(res.imported?.name).toBe('External Holder');
+    expect(res.imported?.sourceLabel).toBe('RA');
+    expect(res.imported?.checkedInAt).toBeDefined();
+    expect(res.ticket).toBeUndefined();
+    expect(res.guest).toBeUndefined();
+  });
+
+  it('surfaces the ticket type label on the external result', async () => {
+    const t = convexTest();
+    const {adminId, eventId} = await seedEventWithAdmin(t);
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    await asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId,
+      batchKey: 'ext-type-1',
+      dedupMode: 'skip',
+      sourceLabel: 'RA',
+      rows: [
+        {
+          name: 'Typed Holder',
+          externalRef: 'EXT-TYPE-1',
+          ticketTypeLabel: 'GA',
+        },
+      ],
+    });
+
+    const res = await asAdmin.mutation(api.events.check_in.checkIn, {
+      ticketId: 'EXT-TYPE-1',
+      eventId,
+    });
+    expect(res.success).toBe(true);
+    expect(res.imported?.ticketTypeLabel).toBe('GA');
+  });
+
+  it('rejects the same barcode payload scanned against a DIFFERENT event', async () => {
+    const t = convexTest();
+    const {adminId, eventId} = await seedEventWithAdmin(t);
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    // A second event where the barcode was NOT imported.
+    const otherEventId = await t.mutation(api.testing.events.seedEvent, {
+      title: 'Other Event',
+      date: '2026-02-01',
+      price: 2500,
+      totalTickets: 100,
+      status: 'published',
+      visibility: 'public',
+      organizerId: await t.mutation(api.testing.communities.seedOrganizer, {
+        name: 'Other Org',
+      }),
+    });
+
+    await asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId,
+      batchKey: 'ext-cross-1',
+      dedupMode: 'skip',
+      rows: [{name: 'Scoped Holder', externalRef: 'CROSS-BARCODE-1'}],
+    });
+
+    // Scanning against the OTHER event must not resolve the barcode.
+    const res = await asAdmin.mutation(api.events.check_in.checkIn, {
+      ticketId: 'CROSS-BARCODE-1',
+      eventId: otherEventId,
+    });
+    expect(res.success).toBe(false);
+    expect(res.imported).toBeUndefined();
+    expect(res.message).toContain('Invalid Ticket QR Code');
+
+    // The entry in the original event remains not-checked-in.
+    const entries = await asAdmin.query(
+      api.events.imported_tickets.listByEvent,
+      {eventId},
+    );
+    expect(entries[0].checkedInAt).toBeUndefined();
+  });
+
+  it('warns (already checked in) with who/when on a repeat scan', async () => {
+    const t = convexTest();
+    const {adminId, eventId} = await seedEventWithAdmin(t);
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    await asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId,
+      batchKey: 'ext-dupe-1',
+      dedupMode: 'skip',
+      rows: [{name: 'Repeat Holder', externalRef: 'EXT-DUPE-1'}],
+    });
+
+    const first = await asAdmin.mutation(api.events.check_in.checkIn, {
+      ticketId: 'EXT-DUPE-1',
+      eventId,
+    });
+    expect(first.success).toBe(true);
+
+    const second = await asAdmin.mutation(api.events.check_in.checkIn, {
+      ticketId: 'EXT-DUPE-1',
+      eventId,
+    });
+    expect(second.success).toBe(false);
+    expect(second.message).toMatch(/already checked in/i);
+    // Duplicate-scan state carries who/when.
+    expect(second.imported?.checkedInAt).toBeDefined();
+    expect(second.imported?.checkedInBy).toBe(adminId);
+  });
+
+  it('shared-barcode entries check in in creation order, then warn once all are used', async () => {
+    const t = convexTest();
+    const {adminId, eventId} = await seedEventWithAdmin(t);
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    // include-duplicates creates two entries sharing one barcode.
+    await asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId,
+      batchKey: 'ext-shared-1',
+      dedupMode: 'include',
+      rows: [
+        {name: 'Shared A', externalRef: 'SHARED-BC'},
+        {name: 'Shared B', externalRef: 'SHARED-BC'},
+      ],
+    });
+
+    // First scan checks in the earliest (creation order).
+    const first = await asAdmin.mutation(api.events.check_in.checkIn, {
+      ticketId: 'SHARED-BC',
+      eventId,
+    });
+    expect(first.success).toBe(true);
+    expect(first.imported?.name).toBe('Shared A');
+
+    // Second scan checks in the next not-yet-checked-in entry.
+    const second = await asAdmin.mutation(api.events.check_in.checkIn, {
+      ticketId: 'SHARED-BC',
+      eventId,
+    });
+    expect(second.success).toBe(true);
+    expect(second.imported?.name).toBe('Shared B');
+
+    // Third scan: all checked in → warn.
+    const third = await asAdmin.mutation(api.events.check_in.checkIn, {
+      ticketId: 'SHARED-BC',
+      eventId,
+    });
+    expect(third.success).toBe(false);
+    expect(third.message).toMatch(/already checked in/i);
+  });
+
+  it('does not fire the fallback for a valid native ticket payload', async () => {
+    const t = convexTest();
+    const {adminId, eventId} = await seedEventWithAdmin(t);
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    const attendeeId = await t.mutation(api.testing.users.createUserDirectly, {
+      name: 'Native Buyer',
+      email: `native-${Date.now()}@test.com`,
+    });
+    const ticketId = await t.mutation(api.testing.tickets.seedTicket, {
+      userId: attendeeId,
+      eventId,
+      status: 'valid',
+      tier: 'regular',
+      trustSource: 'open_access',
+    });
+
+    const res = await asAdmin.mutation(api.events.check_in.checkIn, {
+      ticketId,
+      eventId,
+    });
+    expect(res.success).toBe(true);
+    expect(res.ticket).toBeDefined();
+    expect(res.imported).toBeUndefined();
+  });
+
+  it('leaves invalid payloads as invalid when no eventId is provided', async () => {
+    const t = convexTest();
+    const {adminId, eventId} = await seedEventWithAdmin(t);
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    await asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId,
+      batchKey: 'ext-noevent-1',
+      dedupMode: 'skip',
+      rows: [{name: 'Unreachable', externalRef: 'NOEVENT-BC'}],
+    });
+
+    // Without eventId the fallback cannot scope the lookup → invalid.
+    const res = await asAdmin.mutation(api.events.check_in.checkIn, {
+      ticketId: 'NOEVENT-BC',
+    });
+    expect(res.success).toBe(false);
+    expect(res.imported).toBeUndefined();
+    expect(res.message).toContain('Invalid Ticket QR Code');
+  });
+});

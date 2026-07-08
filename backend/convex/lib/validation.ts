@@ -26,6 +26,13 @@ export const MAX_GUEST_NAME_LENGTH = 200;
 export const MAX_GUEST_EMAIL_LENGTH = 254; // RFC 5321
 export const MAX_GUEST_NOTES_LENGTH = 1000;
 
+// Imported ticket-holder limits. Buyer names originate on an external platform
+// and are attacker-controllable, so every field is capped as untrusted input.
+export const MAX_IMPORTED_NAME_LENGTH = 200;
+export const MAX_IMPORTED_EMAIL_LENGTH = 254; // RFC 5321
+export const MAX_IMPORTED_LABEL_LENGTH = 100; // ticket type / source / external ref / order ref
+export const MAX_IMPORTED_PURCHASE_DATE_LENGTH = 50;
+
 // Community-related limits
 export const MAX_COMMUNITY_NAME_LENGTH = 200;
 export const MAX_COMMUNITY_EMAIL_LENGTH = 254;
@@ -339,6 +346,35 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export function validateEmail(email: string, fieldName = 'Email'): void {
   validateStringLength(email, fieldName, MAX_EMAIL_LENGTH);
   if (!EMAIL_REGEX.test(email)) {
+    throwInvalidInput(`${fieldName} is invalid`, {fieldName});
+  }
+}
+
+/**
+ * Returns true when an email string contains an `@`. This is the deliberately
+ * lenient presence check the guest / imported paths share: email is optional
+ * and pasted from external sources, so we reject only obviously non-email
+ * values (no `@`) rather than applying the strict RFC regex, which would
+ * reject legitimate-but-unusual addresses and surface confusing per-row errors.
+ */
+export function emailHasAtSign(email: string): boolean {
+  return email.includes('@');
+}
+
+/**
+ * Validates an optional email is within length and contains an `@`.
+ * Shared by the single-add guest path, guest bulk-add, and the external
+ * ticket-holder import so all three keep one source of truth for the rule.
+ * @throws ConvexError when the email exceeds the cap or lacks an `@`
+ */
+export function validateOptionalEmailWithAt(
+  email: string | undefined | null,
+  maxLength: number,
+  fieldName = 'Email',
+): void {
+  if (!email) return;
+  validateStringLength(email, fieldName, maxLength);
+  if (!emailHasAtSign(email)) {
     throwInvalidInput(`${fieldName} is invalid`, {fieldName});
   }
 }
