@@ -106,7 +106,16 @@ jobs:
           flags: frontend
           slug: ${{ github.repository }}
           disable_search: true
-          fail_ci_if_error: true
+          # Install the Codecov CLI from PyPI instead of downloading it from
+          # cli.codecov.io. The download path GPG-verifies the binary against a
+          # key fetched from keybase.io, which fails ("No public key") on
+          # ephemeral hosted runners that lack the warm keyring the self-hosted
+          # pool had; the PyPI path anchors integrity to pip/TLS instead.
+          use_pypi: true
+          # Defense in depth: even with the PyPI path, a Codecov infra flake
+          # must not redden a green test suite. Coverage generation is still
+          # enforced by the assert_*_coverage steps above.
+          fail_ci_if_error: false
       - name: Upload convex coverage to Codecov
         if: ${{ always() && env.CODECOV_TOKEN != '' && steps.assert_frontend_coverage.outcome == 'success' && steps.assert_convex_coverage.outcome == 'success' }}
         uses: codecov/codecov-action@ad3126e916f78f00edff4ed0317cf185271ccc2d # v5.4.2
@@ -116,7 +125,9 @@ jobs:
           flags: convex
           slug: ${{ github.repository }}
           disable_search: true
-          fail_ci_if_error: true
+          # See the frontend upload step above.
+          use_pypi: true
+          fail_ci_if_error: false
 
   stripe-contracts:
     name: Stripe Sandbox Contracts
