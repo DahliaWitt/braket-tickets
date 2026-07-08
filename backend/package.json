@@ -34,7 +34,7 @@
     "convex": "^1.42.1",
     "convex-helpers": "^0.1.120",
     "fontkit": "^2.0.4",
-    "nodemailer": "^8.0.5",
+    "nodemailer": "^9.0.1",
     "qrcode": "^1.5.4",
     "react": "^19.2.5",
     "resend": "^6.12.2",
