@@ -11,6 +11,7 @@ export const publicEventCardValidator = v.object({
   title: v.string(),
   description: v.optional(v.string()),
   date: v.string(),
+  endDate: v.optional(v.string()),
   location: v.optional(v.string()),
   price: v.number(),
   slidingScaleEnabled: v.optional(v.boolean()),

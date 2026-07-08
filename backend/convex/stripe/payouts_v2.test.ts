@@ -347,6 +347,50 @@ describe('confirmPayout', () => {
     expect(settlementData.events.map((event) => event._id)).toContain(eventId);
   });
 
+  it('reserves a running multi-day event until PAYOUT_DELAY after its endDate', async () => {
+    const t = convexTest();
+    const organizerId = await seedOrganizerWithAccount(t, 'acct_multiday');
+    // 7-day festival: starts Jan 1, ends Jan 8 (event timezone).
+    const eventId = await t.mutation(api.testing.events.seedEvent, {
+      title: 'Seven Day Festival',
+      price: 2500,
+      totalTickets: 100,
+      date: '2026-01-01T20:00:00.000Z',
+      endDate: '2026-01-08T20:00:00.000Z',
+      status: 'published',
+      visibility: 'public',
+      organizerId,
+    });
+    await t.run(async (ctx) => {
+      await seedCapturedLedgerRow(ctx, eventId, 'acct_multiday', 2_400);
+    });
+
+    // Cutoff three days after the START but before the END — old behaviour
+    // would release funds mid-festival; end-aware eligibility must reserve.
+    const midEvent = await t.query(
+      internal.stripe.connect.getSettlementDataForAccount,
+      {
+        stripeConnectedAccountId: 'acct_multiday',
+        eligibleBeforeMs: Date.parse('2026-01-04T20:00:00.000Z'),
+      },
+    );
+    expect(
+      midEvent.events.find((event) => event._id === eventId)?.eligible,
+    ).toBe(false);
+
+    // Cutoff after the endDate — now eligible.
+    const afterEnd = await t.query(
+      internal.stripe.connect.getSettlementDataForAccount,
+      {
+        stripeConnectedAccountId: 'acct_multiday',
+        eligibleBeforeMs: Date.parse('2026-01-09T20:00:00.000Z'),
+      },
+    );
+    expect(
+      afterEnd.events.find((event) => event._id === eventId)?.eligible,
+    ).toBe(true);
+  });
+
   it('keeps drafted and cancelled events with ledger rows in Connect settlement data', async () => {
     // The 2026-07 shortfall class: captured money is owed regardless of the
     // event's current status. Settlement derives its event set from the
@@ -427,6 +471,27 @@ describe('confirmPayout', () => {
         eligibleBeforeMs: Date.now(),
       }),
     ).rejects.toThrow('has an invalid date');
+  });
+
+  it('fails closed when a Connect settlement event has a malformed endDate', async () => {
+    const t = convexTest();
+    const organizerId = await seedOrganizerWithAccount(t, 'acct_bad_end');
+    const eventId = await seedEvent(t, organizerId, 'Bad End Event');
+
+    await t.run(async (ctx) => {
+      await seedCapturedLedgerRow(ctx, eventId, 'acct_bad_end', 2_400);
+      // Valid start, corrupt end — must not silently fall back to the start
+      // and release funds as if the event had no end.
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Corrupt endDate used to verify end-aware settlement fails closed.
+      await ctx.db.patch(eventId, {endDate: '2026-02-31T08:00:00.000Z'});
+    });
+
+    await expect(
+      t.query(internal.stripe.connect.getSettlementDataForAccount, {
+        stripeConnectedAccountId: 'acct_bad_end',
+        eligibleBeforeMs: Date.now(),
+      }),
+    ).rejects.toThrow('has an invalid endDate');
   });
 
   it('stamps paidOutAt only after confirmed allocations cover the event settlement', async () => {

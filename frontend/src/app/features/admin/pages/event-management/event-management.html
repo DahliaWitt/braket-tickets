@@ -125,7 +125,13 @@
     <!-- Payout Status Banner -->
     @if (payoutStatus(); as status) {
       <z-alert
-        [zType]="status.state === 'paid' ? 'success' : 'info'"
+        [zType]="
+          status.state === 'paid'
+            ? 'success'
+            : status.state === 'error'
+              ? 'warning'
+              : 'info'
+        "
         zAppearance="soft"
         [zTitle]="
           status.state === 'paid'
@@ -134,7 +140,9 @@
               ? 'Payout Scheduled'
               : status.state === 'processing'
                 ? 'Payout Processing'
-                : 'Payout Policy'
+                : status.state === 'error'
+                  ? 'Payout Needs Attention'
+                  : 'Payout Policy'
         "
         [zDescription]="payoutStatusDescription()"
       />

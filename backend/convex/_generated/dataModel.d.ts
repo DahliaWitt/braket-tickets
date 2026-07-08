@@ -577,6 +577,7 @@ export type DataModel = {
       checkedInCount?: number;
       date: string;
       description?: string;
+      endDate?: string;
       inventoryId?: Id<"event_inventory">;
       lastCheckInAt?: number | null;
       location?: string;
@@ -605,6 +606,7 @@ export type DataModel = {
       | "checkedInCount"
       | "date"
       | "description"
+      | "endDate"
       | "inventoryId"
       | "lastCheckInAt"
       | "location"

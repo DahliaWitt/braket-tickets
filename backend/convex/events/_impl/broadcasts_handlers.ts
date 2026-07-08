@@ -90,7 +90,7 @@ async function sendBroadcastEmailToRecipient(
     broadcastId: Id<'eventBroadcasts'>;
     event: Pick<
       Doc<'events'>,
-      '_id' | 'title' | 'date' | 'location' | 'organizerId'
+      '_id' | 'title' | 'date' | 'endDate' | 'location' | 'organizerId'
     >;
     organizerName: string;
     subject: string;
@@ -124,6 +124,7 @@ async function sendBroadcastEmailToRecipient(
       _id: event._id,
       title: event.title,
       date: event.date,
+      endDate: event.endDate,
       location: event.location,
     },
     organizer: {

@@ -18,9 +18,21 @@ import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton
 import {api} from '@convex/_generated/api';
 import {type Id} from '@convex/_generated/dataModel';
 import {logger} from '@/utils/logger';
-import {compareEventDatesDescending} from '@/features/admin/utils/event-date.utils';
+import {
+  compareEventDatesDescending,
+  isEventEnded,
+  isEventHappeningNow,
+} from '@/features/admin/utils/event-date.utils';
 import {BraStatusBadgeComponent} from '@ui/components/primitives/status-badge/status-badge.component';
+import {type BraStatusBadgeVariants} from '@ui/components/primitives/status-badge/status-badge.variants';
 import {EventDatePipe} from '@/utils/event-date.pipe';
+
+type EventDisplayStatus =
+  | 'draft'
+  | 'published'
+  | 'cancelled'
+  | 'past'
+  | 'happening now';
 
 type RouteQueryParams = Readonly<
   Record<string, string | number | boolean | null | undefined>
@@ -128,17 +140,11 @@ type RouteQueryParams = Readonly<
                 </td>
                 <td class="p-5 align-top">
                   <bra-status-badge
-                    [status]="
-                      event.status === 'published'
-                        ? 'success'
-                        : event.status === 'cancelled'
-                          ? 'destructive'
-                          : 'warning'
-                    "
+                    [status]="eventStatusVariant(event)"
                     size="md"
                     data-testid="event-status"
                   >
-                    {{ event.status || 'draft' }}
+                    {{ eventDisplayStatus(event) }}
                   </bra-status-badge>
                 </td>
                 <td class="p-5 align-top">
@@ -236,16 +242,11 @@ type RouteQueryParams = Readonly<
                   >
                     <span class="truncate">{{ event.title }}</span>
                     <bra-status-badge
-                      [status]="
-                        event.status === 'published'
-                          ? 'success'
-                          : event.status === 'cancelled'
-                            ? 'destructive'
-                            : 'warning'
-                      "
+                      [status]="eventStatusVariant(event)"
                       class="shrink-0"
+                      data-testid="event-status"
                     >
-                      {{ event.status || 'draft' }}
+                      {{ eventDisplayStatus(event) }}
                     </bra-status-badge>
                   </div>
                   <div class="mt-1 font-mono text-xs text-muted-foreground">
@@ -359,6 +360,37 @@ export class AdminEventsTableComponent {
     ),
   );
   isLoading = this.eventsQuery.isLoading;
+
+  protected eventDisplayStatus(event: AdminEventListItem): EventDisplayStatus {
+    const status = event.status || 'draft';
+    if (status !== 'published') {
+      return status;
+    }
+    if (isEventHappeningNow(event.date, event.endDate)) {
+      return 'happening now';
+    }
+    if (isEventEnded(event.date, event.endDate)) {
+      return 'past';
+    }
+    return 'published';
+  }
+
+  protected eventStatusVariant(
+    event: AdminEventListItem,
+  ): NonNullable<BraStatusBadgeVariants['status']> {
+    switch (this.eventDisplayStatus(event)) {
+      case 'published':
+        return 'success';
+      case 'happening now':
+        return 'info';
+      case 'cancelled':
+        return 'destructive';
+      case 'past':
+        return 'muted';
+      case 'draft':
+        return 'warning';
+    }
+  }
 
   openCreateEventDialog() {
     void this.router.navigate([this.routePrefix(), 'events', 'new']);

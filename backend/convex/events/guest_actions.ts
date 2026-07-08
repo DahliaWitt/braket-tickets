@@ -146,7 +146,12 @@ async function deliverGuestTicket(
 
   const pdfBase64 = pdfDataUrl.split(',')[1];
   const {subject, html} = purchasedTicketTemplate(
-    {title: event.title, date: event.date, location: event.location},
+    {
+      title: event.title,
+      date: event.date,
+      endDate: event.endDate,
+      location: event.location,
+    },
     guest.name,
     'cid:qrcode',
     true,

@@ -101,6 +101,10 @@ export class EventEditorHarness extends ComponentHarness {
   );
   private getDateError = this.locatorForOptional('[data-testid="date-error"]');
   private getTimeError = this.locatorForOptional('[data-testid="time-error"]');
+  private getEndTimeInput = this.locatorFor('input#endTime');
+  private getEndTimeError = this.locatorForOptional(
+    '[data-testid="end-time-error"]',
+  );
   private getTotalTicketsError = this.locatorForOptional(
     '[data-testid="totalTickets-error"]',
   );
@@ -324,6 +328,18 @@ export class EventEditorHarness extends ComponentHarness {
 
   async getTimeErrorText() {
     const error = await this.getTimeError();
+    return error ? (await error.text()).trim() : null;
+  }
+
+  async setEndTime(value: string) {
+    const input = await this.getEndTimeInput();
+    await input.clear();
+    await input.sendKeys(value);
+    await input.blur();
+  }
+
+  async getEndTimeErrorText() {
+    const error = await this.getEndTimeError();
     return error ? (await error.text()).trim() : null;
   }
 
