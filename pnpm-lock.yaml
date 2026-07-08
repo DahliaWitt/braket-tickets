@@ -125,8 +125,8 @@ importers:
         specifier: ^2.0.4
         version: 2.0.4
       nodemailer:
-        specifier: ^8.0.5
-        version: 8.0.5
+        specifier: ^9.0.1
+        version: 9.0.1
       qrcode:
         specifier: ^1.5.4
         version: 1.5.4
@@ -7349,8 +7349,8 @@ packages:
     resolution: {integrity: sha512-tGnJW6OKRii9u/b2WiUViTJS+h7Apxx17qsMUjsUeNDiMMX5ZFf8F8Fcz7PAQ6omvOxHZtvDTmOYKJQwmfpjeg==}
     engines: {node: '>=20'}
 
-  nodemailer@8.0.5:
-    resolution: {integrity: sha512-0PF8Yb1yZuQfQbq+5/pZJrtF6WQcjTd5/S4JOHs9PGFxuTqoB/icwuB44pOdURHJbRKX1PPoJZtY7R4VUoCC8w==}
+  nodemailer@9.0.1:
+    resolution: {integrity: sha512-Gwv8SQewT616ZM/URn0H54b8PWo/Wum7md3EW2aWy1lO27+WZCX+Xyak3J+NlmHUjDh5ME+uesJUDRbR3Ye8Bw==}
     engines: {node: '>=6.0.0'}
 
   nopt@9.0.0:
@@ -17923,7 +17923,7 @@ snapshots:
       '@types/sarif': 2.1.7
       fs-extra: 11.3.4
 
-  nodemailer@8.0.5: {}
+  nodemailer@9.0.1: {}
 
   nopt@9.0.0:
     dependencies:
