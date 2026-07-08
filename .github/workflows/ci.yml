@@ -289,8 +289,15 @@ jobs:
 
   e2e:
     name: E2E Tests
-    runs-on: self-hosted
-    timeout-minutes: 15
+    # GitHub-hosted (4 vCPU / 16 GB). Each job is isolated, which removes the
+    # self-hosted contention that saturated the shared 16-core host (a single
+    # E2E job draws ~9 cores: Convex backend ~3, browsers ~5, node ~1) and the
+    # shared-browser-volume GC race. Slower per run than the idle self-hosted
+    # box, but 20 can run in parallel with zero cross-job interference.
+    runs-on: ubuntu-latest
+    # Isolated on 4 vCPU is slower than the self-hosted box; give headroom over
+    # the old 15-min ceiling. Tune down once real durations are known.
+    timeout-minutes: 30
     needs: [e2e-check]
     if: ${{ needs.e2e-check.outputs.should_run == 'true' && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
     # Never expose production environment secrets to pull_request workflows.
@@ -298,15 +305,6 @@ jobs:
     environment:
       name: ${{ github.event_name == 'pull_request' && 'development' || github.ref_name == 'main' && 'production' || 'development' }}
       deployment: false
-    env:
-      # The self-hosted pool shares one PLAYWRIGHT_BROWSERS_PATH volume across
-      # all concurrent E2E jobs. `playwright install` garbage-collects browser
-      # revisions it considers "unused", so a PR on a newer Playwright deletes
-      # the older revision that other in-flight PRs are still running on (and
-      # vice versa) — every job then fails with "Executable doesn't exist".
-      # Disabling GC lets revisions for all in-flight Playwright versions
-      # coexist in the shared volume. See docs/runbooks/deployment-ci.md.
-      PLAYWRIGHT_SKIP_BROWSER_GC: '1'
 
     steps:
       - name: Checkout code
@@ -314,34 +312,44 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
-      - name: Setup Node.js
-        # e2e.ts --build compiles the Angular app, which requires Node >=22.22.3
-        # (newer than the runner image). Pin via .nvmrc until the image is rebuilt.
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version-file: '.nvmrc'
+      - name: Setup pnpm + Node
+        uses: ./.github/actions/setup-node-pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Fix interrupted dpkg state
-        run: sudo dpkg --configure -a 2>/dev/null || true
+      - name: Resolve Playwright version
+        # Cache key for the browser cache — the installed CLI version determines
+        # the browser revisions, so keying on it invalidates on a Playwright bump.
+        id: pw
+        run: echo "version=$(pnpm --filter frontend exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Playwright browser cache
+        id: pw-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
 
       - name: Install Playwright browsers
         working-directory: ./frontend
-        run: |
-          if [ -n "${PLAYWRIGHT_BROWSERS_PATH:-}" ] && [ -d "$PLAYWRIGHT_BROWSERS_PATH" ]; then
-            echo "Using pre-installed browsers at $PLAYWRIGHT_BROWSERS_PATH"
-            # Ensure the currently locked Playwright browser revisions exist.
-            # install-deps only installs system packages and won't download missing browsers.
-            pnpm exec playwright install chromium webkit
-            pnpm exec playwright install-deps chromium webkit 2>/dev/null || true
-          else
-            echo "PLAYWRIGHT_BROWSERS_PATH not set or missing — installing browsers"
-            pnpm exec playwright install --with-deps chromium webkit
-          fi
+        # On a cache hit only the OS deps need (re)installing; on a miss, download
+        # the browsers too. --with-deps handles the apt packages either way.
+        run: pnpm exec playwright install --with-deps chromium webkit
+
+      - name: Enable Angular build cache on CI
+        # build:e2e runs `ng build`, whose cache the CLI disables under CI by
+        # default. Enable it for this job so the restored .angular/cache is used.
+        working-directory: ./frontend
+        run: pnpm exec ng config cli.cache.environment all
+
+      - name: Restore Angular build cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: frontend/.angular/cache
+          key: angular-e2e-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            angular-e2e-${{ runner.os }}-
 
       - name: Run E2E tests
         run: npx tsx scripts/e2e.ts --build
@@ -350,7 +358,11 @@ jobs:
           # e2e.ts will replace these with per-run ephemeral ports.
           CONVEX_URL: http://127.0.0.1:3210
           CONVEX_SITE_URL: http://127.0.0.1:3211
-          PW_WORKERS: '5'
+          # 4 vCPU runner. PW_WORKERS=4 oversubscribes slightly (workers + the
+          # ~3-core Convex backend) but the job is isolated, so it only slows
+          # this run — no cross-job 503 contention. Monitor and drop to 3/2 if
+          # runs approach the timeout.
+          PW_WORKERS: '4'
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
           SMTP_USER: ${{ secrets.SMTP_USER }}
