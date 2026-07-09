@@ -7,7 +7,11 @@
 import {resolveSiteUrl} from '../lib/site_url';
 import {EVENT_DATE_TIME_ZONE} from '../lib/timezone';
 import {escapeHtml} from '../lib/email/escape_html';
-import {eventStartInstantMs} from '@shared/event-time';
+import {
+  eventStartInstantMs,
+  isEventOvernightWrap,
+  parseUtcInstant,
+} from '@shared/event-time';
 
 // Base styles for email-safe CSS (inline everything)
 const baseStyles = {
@@ -21,20 +25,68 @@ const baseStyles = {
   border: '#332A33',
 };
 
-function formatEventDateTime(value: string): string {
-  const startsAtMs = eventStartInstantMs(value);
-  if (startsAtMs === null) return value;
+const eventDateTimeFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: EVENT_DATE_TIME_ZONE,
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  timeZoneName: 'short',
+});
 
-  return new Intl.DateTimeFormat('en-US', {
-    timeZone: EVENT_DATE_TIME_ZONE,
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZoneName: 'short',
-  }).format(new Date(startsAtMs));
+// Start date+time without a timezone label, paired with an end time that
+// carries the timezone — used to render next-day (overnight) ranges as
+// "Thu, Feb 26, 2026, 10:00 PM – 6:00 AM PST" (no repeated end date).
+const eventStartDateTimeNoTzFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: EVENT_DATE_TIME_ZONE,
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+});
+const eventEndTimeFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: EVENT_DATE_TIME_ZONE,
+  hour: 'numeric',
+  minute: '2-digit',
+  timeZoneName: 'short',
+});
+
+/**
+ * Formats the event's start — and, when a valid endDate is set, its end — in
+ * the event timezone. Same-day events collapse ("Mon, Dec 15, 2026, 8:00 –
+ * 11:00 PM PST"); next-day overnight events show the end time only ("Thu, Feb
+ * 26, 2026, 10:00 PM – 6:00 AM PST"); multi-day events — including a next-day
+ * end at a later wall-clock time (a 24h+ span) — show both dates ("Fri, Aug 1,
+ * 2026, 8:00 PM – Sun, Aug 3, 2026, 2:00 AM PST").
+ */
+function formatEventDateTime(event: {date: string; endDate?: string}): string {
+  const startsAtMs = eventStartInstantMs(event.date);
+  if (startsAtMs === null) return event.date;
+
+  const endsAtMs = event.endDate
+    ? (parseUtcInstant(event.endDate)?.getTime() ?? null)
+    : null;
+  if (endsAtMs === null || endsAtMs <= startsAtMs) {
+    return eventDateTimeFormatter.format(new Date(startsAtMs));
+  }
+
+  // Only a genuine overnight wrap (next calendar day, earlier clock time)
+  // drops the end date; formatRange handles same-day collapse and multi-day.
+  if (isEventOvernightWrap(startsAtMs, endsAtMs)) {
+    return `${eventStartDateTimeNoTzFormatter.format(
+      new Date(startsAtMs),
+    )} – ${eventEndTimeFormatter.format(new Date(endsAtMs))}`;
+  }
+
+  // Same day collapses; multi-day shows both dates.
+  return eventDateTimeFormatter.formatRange(
+    new Date(startsAtMs),
+    new Date(endsAtMs),
+  );
 }
 
 const vettingSubmissionTimeFormatter = new Intl.DateTimeFormat('en-US', {
@@ -58,6 +110,11 @@ function wrapEmail(
   options?: {includeLegacyFooter?: boolean},
 ): string {
   const APP_NAME = 'Braket Tickets';
+  // Use the accent-colored mark, not the white one. Gmail (iOS/Android) dark mode
+  // inverts the dark email background to light but never recolors images, so a white
+  // logo vanishes on the flipped-light background. Gmail ignores prefers-color-scheme,
+  // so a media-query logo swap cannot target it; the purple mark keeps contrast on both.
+  const logoSrc = `${resolveSiteUrl()}/braket_purple.png`;
   const safePreheader = escapeHtml(preheader).replaceAll('—', '&mdash;');
   const includeLegacyFooter = options?.includeLegacyFooter ?? true;
   const footerHtml = includeLegacyFooter
@@ -115,7 +172,7 @@ function wrapEmail(
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width: 560px;">
                   <tr>
                       <td align="center" style="padding-bottom: 32px;">
-                          <img src="${resolveSiteUrl()}/braket_white.png" alt="${APP_NAME}" width="64" height="64" style="display: block; margin: 0 auto 16px auto;"/>
+                          <img src="${logoSrc}" alt="${APP_NAME}" width="64" height="64" style="display: block; margin: 0 auto 16px auto;"/>
                       </td>
                   </tr>
               </table>
@@ -283,13 +340,13 @@ export function emailChangeConfirmationTemplate(
 }
 
 export function purchasedTicketTemplate(
-  event: {title: string; date: string; location?: string},
+  event: {title: string; date: string; endDate?: string; location?: string},
   buyerName: string,
   qrCodeSource: string,
   isGuest = false,
   community?: {slug?: string; hasCodeOfConduct?: boolean},
 ): {subject: string; html: string} {
-  const dateStr = formatEventDateTime(event.date);
+  const dateStr = formatEventDateTime(event);
 
   // Escape user-controlled data to prevent XSS
   const safeTitle = escapeHtml(event.title);
@@ -344,12 +401,12 @@ export function purchasedTicketTemplate(
 }
 
 export function resaleAvailableTemplate(
-  event: {title: string; date: string; location?: string},
+  event: {title: string; date: string; endDate?: string; location?: string},
   eventId: string,
 ): {subject: string; html: string} {
   const safeTitle = escapeHtml(event.title);
   const safeLocation = event.location ? escapeHtml(event.location) : '';
-  const dateStr = formatEventDateTime(event.date);
+  const dateStr = formatEventDateTime(event);
   const siteUrl = resolveSiteUrl();
   const eventUrl = `${siteUrl}/events/${eventId}`;
 
@@ -380,7 +437,13 @@ function escapeAndFormatMultiline(text: string): string {
 }
 
 export function ticketPurchaseReminderTemplate(args: {
-  event: {_id: string; title: string; date: string; location?: string};
+  event: {
+    _id: string;
+    title: string;
+    date: string;
+    endDate?: string;
+    location?: string;
+  };
   organizer: {id: string; name: string};
   message: string;
   /**
@@ -419,7 +482,7 @@ export function ticketPurchaseReminderTemplate(args: {
   const unsubUrl = `${apiSiteUrl}/api/unsubscribe?token=${encodeURIComponent(unsubToken)}`;
   const oneClickUnsubUrl = `${apiSiteUrl}/api/unsubscribe/one-click?token=${encodeURIComponent(unsubToken)}`;
   const listId = `Braket Tickets ${organizer.id} <reminders.${organizer.id}.braket.gay>`;
-  const dateStr = formatEventDateTime(event.date);
+  const dateStr = formatEventDateTime(event);
 
   const content = `
       <h2 style="margin: 0 0 16px 0; font-family: 'Syne', 'Chakra Petch', system-ui, sans-serif; font-size: 24px; line-height: 1.15; font-weight: 700; color: ${baseStyles.textLight};">
@@ -583,7 +646,13 @@ export function applicationRejectedTemplate(
  * with a "View Event" CTA.
  */
 export function eventBroadcastTemplate(args: {
-  event: {_id: string; title: string; date: string; location?: string};
+  event: {
+    _id: string;
+    title: string;
+    date: string;
+    endDate?: string;
+    location?: string;
+  };
   organizer: {id: string; name: string};
   message: string;
   /**
@@ -614,7 +683,7 @@ export function eventBroadcastTemplate(args: {
   // linebreaks. Both render inside the existing block-level <div> wrapper.
   const messageBody =
     bodyHtml !== undefined ? bodyHtml : escapeAndFormatMultiline(message);
-  const eventDate = formatEventDateTime(event.date);
+  const eventDate = formatEventDateTime(event);
   const eventUrl = `${siteUrl}/events/${event._id}`;
   const unsubUrl = `${apiSiteUrl}/api/unsubscribe?token=${encodeURIComponent(unsubToken)}`;
   const oneClickUnsubUrl = `${apiSiteUrl}/api/unsubscribe/one-click?token=${encodeURIComponent(unsubToken)}`;
@@ -828,6 +897,7 @@ export function eventAnnouncementTemplate(args: {
     _id: string;
     title: string;
     date: string;
+    endDate?: string;
     location?: string;
     description?: string;
   };
@@ -854,7 +924,7 @@ export function eventAnnouncementTemplate(args: {
   const safeTitle = escapeHtml(event.title);
   const safeOrgName = escapeHtml(organizer.name);
   const safeLocation = event.location ? escapeHtml(event.location) : null;
-  const eventDate = formatEventDateTime(event.date);
+  const eventDate = formatEventDateTime(event);
   const safeDesc = event.description
     ? escapeHtml(event.description.slice(0, 300)) +
       (event.description.length > 300 ? '…' : '')

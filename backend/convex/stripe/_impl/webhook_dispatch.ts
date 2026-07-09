@@ -792,9 +792,7 @@ async function handlePayoutPaid(
   await ctx.runMutation(internal.stripe.connect.confirmPayout, {
     stripePayoutId: payout.id,
     ...(typeof payout.amount === 'number' ? {amountCents: payout.amount} : {}),
-    ...(typeof payout.currency === 'string'
-      ? {currency: payout.currency}
-      : {}),
+    ...(typeof payout.currency === 'string' ? {currency: payout.currency} : {}),
     ...(metadataBatchId !== undefined ? {metadataBatchId} : {}),
     ...(connectedAccountId !== undefined ? {connectedAccountId} : {}),
   });

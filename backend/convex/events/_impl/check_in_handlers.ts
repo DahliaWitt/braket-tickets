@@ -2,9 +2,11 @@ import {internal} from '../../_generated/api';
 import type {Doc, Id} from '../../_generated/dataModel';
 import type {MutationCtx} from '../../_generated/server';
 import {requireUser} from '../../lib/auth_identity';
+import {getAuditRequestFields} from '../../lib/request_metadata';
 import {findMatchingInQuery} from '../../lib/query_scan';
 import {buildTicketRosterProjection} from '../../lib/ticket_roster_projection';
 import {canEditEvent, canScanEvent} from '../../lib/access';
+import {resolveAndCheckInByExternalRef} from './imported_tickets';
 import {ADMIN_AUDIT_ACTIONS} from '../../lib/admin_audit_actions';
 import {logger} from '../../lib/logger';
 import {
@@ -69,13 +71,36 @@ type GuestResult = {
   };
 };
 
+type ImportedResult = {
+  _id: Id<'importedTicketHolders'>;
+  _creationTime: number;
+  eventId: Id<'events'>;
+  name: string;
+  ticketTypeLabel?: string;
+  sourceLabel: string;
+  checkedInAt?: number;
+  checkedInBy?: Id<'users'>;
+  event?: {
+    title: string;
+    date: string;
+    location?: string;
+  };
+};
+
 type CheckInResult =
-  | {success: true; message: string; ticket?: TicketResult; guest?: GuestResult}
+  | {
+      success: true;
+      message: string;
+      ticket?: TicketResult;
+      guest?: GuestResult;
+      imported?: ImportedResult;
+    }
   | {
       success: false;
       message: string;
       ticket?: TicketResult;
       guest?: GuestResult;
+      imported?: ImportedResult;
     };
 
 type CheckInScanSource = 'admin-ui' | 'door-scanner';
@@ -88,12 +113,14 @@ function failCheckIn(args: {
   message: string;
   ticket?: TicketResult;
   guest?: GuestResult;
+  imported?: ImportedResult;
 }): CheckInResult {
   return {
     success: false,
     message: args.message,
     ...(args.ticket ? {ticket: args.ticket} : {}),
     ...(args.guest ? {guest: args.guest} : {}),
+    ...(args.imported ? {imported: args.imported} : {}),
   };
 }
 
@@ -150,11 +177,84 @@ async function loadCheckInAuthorization(
   return {success: true, event, isEditor, auditSource};
 }
 
+/**
+ * External ticket fallback for the scanner. Runs ONLY after native ticket/guest
+ * resolution has failed to find a match, and ONLY when the caller supplied the
+ * scanned `eventId` (the scanner is always event-scoped). Exact-matches the raw
+ * payload against importedTicketHolders.externalRef for that single event and
+ * checks it in via the shared imported check-in logic (same scan authorization
+ * as native tickets). Returns `null` when nothing matches so the caller keeps
+ * the existing invalid-ticket behavior.
+ */
+async function tryExternalTicketFallback(
+  ctx: MutationCtx,
+  args: {
+    eventId: Id<'events'> | null;
+    payload: string;
+    userId: Id<'users'>;
+  },
+): Promise<CheckInResult | null> {
+  if (!args.eventId) return null;
+
+  const resolution = await resolveAndCheckInByExternalRef(ctx, {
+    eventId: args.eventId,
+    externalRef: args.payload,
+    userId: args.userId,
+  });
+  if (!resolution.matched) return null;
+
+  const {result} = resolution;
+  const event = await ctx.db.get('events', args.eventId);
+  const eventShape = event
+    ? {title: event.title, date: event.date, location: event.location}
+    : undefined;
+
+  if (!result.success) {
+    return failCheckIn({message: result.message});
+  }
+
+  const {entry, alreadyCheckedIn} = result;
+  const imported: ImportedResult = {
+    _id: entry._id,
+    _creationTime: entry._creationTime,
+    eventId: entry.eventId,
+    name: entry.name,
+    ...(entry.ticketTypeLabel !== undefined
+      ? {ticketTypeLabel: entry.ticketTypeLabel}
+      : {}),
+    sourceLabel: entry.sourceLabel,
+    ...(entry.checkedInAt !== undefined
+      ? {checkedInAt: entry.checkedInAt}
+      : {}),
+    ...(entry.checkedInBy !== undefined
+      ? {checkedInBy: entry.checkedInBy}
+      : {}),
+    ...(eventShape ? {event: eventShape} : {}),
+  };
+
+  if (alreadyCheckedIn) {
+    return failCheckIn({
+      message:
+        entry.checkedInAt !== undefined
+          ? `Already checked in at ${formatPlatformTime(entry.checkedInAt)}`
+          : 'Already checked in',
+      imported,
+    });
+  }
+
+  return {
+    success: true,
+    message: `Checked in: ${entry.name}`,
+    imported,
+  };
+}
+
 export async function checkIn(
   ctx: MutationCtx,
   args: {
     ticketId?: string;
     guestId?: string;
+    eventId?: string;
   },
 ): Promise<CheckInResult> {
   const user = await requireUser(ctx);
@@ -166,14 +266,37 @@ export async function checkIn(
   const guestId = args.guestId
     ? ctx.db.normalizeId('guests', args.guestId)
     : null;
+  const scannedEventId = args.eventId
+    ? ctx.db.normalizeId('events', args.eventId)
+    : null;
+
+  // The raw payload for the external fallback: the scanner sends the barcode as
+  // `ticketId` (its default for non-prefixed payloads), so prefer that; fall
+  // back to the `guestId` raw string if that path was taken instead.
+  const rawPayload = args.ticketId ?? args.guestId ?? null;
+
+  const tryFallback = async (): Promise<CheckInResult | null> => {
+    if (rawPayload === null) return null;
+    return tryExternalTicketFallback(ctx, {
+      eventId: scannedEventId,
+      payload: rawPayload,
+      userId,
+    });
+  };
 
   if (args.ticketId && !ticketId) {
+    // A non-normalizable payload is today's "any non-prefixed string is a
+    // candidate ticket id" case — try the external fallback before rejecting.
+    const fallback = await tryFallback();
+    if (fallback) return fallback;
     return failCheckIn({
       message: 'Invalid Ticket QR Code',
     });
   }
 
   if (args.guestId && !guestId) {
+    const fallback = await tryFallback();
+    if (fallback) return fallback;
     return failCheckIn({
       message: 'Invalid Guest QR Code',
     });
@@ -182,6 +305,8 @@ export async function checkIn(
   if (ticketId) {
     const ticket = await ctx.db.get('tickets', ticketId);
     if (!ticket) {
+      const fallback = await tryFallback();
+      if (fallback) return fallback;
       return failCheckIn({
         message: 'Ticket not found',
       });
@@ -283,12 +408,14 @@ export async function checkIn(
         : Promise.resolve(null),
     ]);
 
+    const auditFields = await getAuditRequestFields(ctx);
     await ctx.scheduler.runAfter(
       0,
       internal.communities.management.audit.recordCheckIn,
       {
         adminId: userId,
         action: 'ticket.check-in',
+        ...auditFields,
         eventId: freshTicket.eventId,
         organizerId: freshEvent.organizerId,
         source: auditSource,
@@ -325,6 +452,8 @@ export async function checkIn(
   if (guestId) {
     const guest = await ctx.db.get('guests', guestId);
     if (!guest) {
+      const fallback = await tryFallback();
+      if (fallback) return fallback;
       return failCheckIn({
         message: 'Guest ticket not found',
       });
@@ -370,12 +499,14 @@ export async function checkIn(
       checkedInAt,
     });
 
+    const auditFields = await getAuditRequestFields(ctx);
     await ctx.scheduler.runAfter(
       0,
       internal.communities.management.audit.recordCheckIn,
       {
         adminId: userId,
         action: 'guest.check-in',
+        ...auditFields,
         eventId: guest.eventId,
         organizerId: event.organizerId,
         source: auditSource,
@@ -477,12 +608,14 @@ export async function revertCheckIn(
     checkedInCount: Math.max(0, (freshEvent.checkedInCount ?? 0) - 1),
   });
 
+  const auditFields = await getAuditRequestFields(ctx);
   await ctx.scheduler.runAfter(
     0,
     internal.communities.management.audit.logAdminAccess,
     {
       adminId: userId,
       action: ADMIN_AUDIT_ACTIONS.TICKET_CHECK_IN_REVERT,
+      ...auditFields,
       eventId: freshTicket.eventId,
       organizerId: freshEvent.organizerId,
       source: auditSource,

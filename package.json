@@ -72,7 +72,7 @@
     "@types/node": "^22.10.7",
     "angular-eslint": "^22.0.0",
     "chokidar": "^5.0.0",
-    "convex": "^1.35.1",
+    "convex": "^1.42.1",
     "eslint": "^10.2.0",
     "git-format-staged": "^4.0.1",
     "globals": "^17.0.0",
@@ -88,7 +88,7 @@
     "tsx": "^4.21.0",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.58.2",
-    "vite": "^7.3.2",
+    "vite": "^8.0.16",
     "vitest": "^4.1.4"
   },
   "pnpm": {

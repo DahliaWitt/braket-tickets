@@ -29,6 +29,7 @@ import {ZardButtonComponent} from '@ui/components/primitives/button/button.compo
 import {ZardCardComponent} from '@ui/components/primitives/card/card.component';
 import {BraDialogService} from '@ui/components/composites/dialog/dialog.service';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
+import {ZardSwitchComponent} from '@ui/components/primitives/switch/switch.component';
 import {logger} from '@/utils/logger';
 import {safeResourceValue} from '@/utils/resource';
 
@@ -43,6 +44,7 @@ import {safeResourceValue} from '@/utils/resource';
     ZardButtonComponent,
     ZardCardComponent,
     ZardIconComponent,
+    ZardSwitchComponent,
   ],
   templateUrl: './broadcast-email-tab.component.html',
 })
@@ -111,9 +113,15 @@ export class BroadcastEmailTabComponent {
 
   private readonly broadcastAudienceReloadToken = signal(0);
 
+  // include external (imported) ticket holders in the send — defaults ON,
+  // mirroring the backend default. Always visible in the compose flow so
+  // organizers discover the behavior before they need it.
+  readonly includeExternalTicketHolders = signal(true);
+
   readonly broadcastAudienceResource = resource({
     params: () => ({
       eventId: this.eventId() || null,
+      includeExternal: this.includeExternalTicketHolders(),
       parentReloadToken: this.reloadToken(),
       localReloadToken: this.broadcastAudienceReloadToken(),
     }),
@@ -121,6 +129,7 @@ export class BroadcastEmailTabComponent {
       if (!params.eventId) return Promise.resolve(null);
       return this.convex.query(api.events.broadcasts.getAudience, {
         eventId: params.eventId as Id<'events'>,
+        includeExternalTicketHolders: params.includeExternal,
       });
     },
   });
@@ -149,6 +158,12 @@ export class BroadcastEmailTabComponent {
   );
   readonly broadcastExceedsCap = computed(
     () => this.broadcastAudience()?.exceedsCap ?? false,
+  );
+  readonly importedReachableCount = computed(
+    () => this.broadcastAudience()?.importedReachableCount ?? 0,
+  );
+  readonly importedUnreachableCount = computed(
+    () => this.broadcastAudience()?.importedUnreachableCount ?? 0,
   );
   readonly broadcastAudienceError = computed(() => {
     const error = this.broadcastAudienceResource.error();
@@ -250,6 +265,7 @@ export class BroadcastEmailTabComponent {
         subject,
         message,
         bodyJson,
+        includeExternalTicketHolders: this.includeExternalTicketHolders(),
       };
       const result = await this.convex.mutation(
         api.events.broadcasts.send,

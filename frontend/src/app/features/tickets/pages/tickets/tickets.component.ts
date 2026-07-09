@@ -40,6 +40,7 @@ import type {ResaleListingStatus} from '@shared/domain/resale-listing-status';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
 import {formatUsdCents} from '@shared/pricing/pricing-summary';
 import {EventDatePipe} from '@/utils/event-date.pipe';
+import {EventEndTimePipe} from '@/utils/event-end-time.pipe';
 
 /** Resale listing data mapped to a ticket */
 interface TicketResaleInfo {
@@ -52,6 +53,7 @@ interface TicketResaleInfo {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     EventDatePipe,
+    EventEndTimePipe,
     UpperCasePipe,
     RouterLink,
     ZardCardComponent,
@@ -100,7 +102,7 @@ interface TicketResaleInfo {
               class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-destructive/20"
             >
               <svg
-                class="h-10 w-10 text-destructive"
+                class="h-10 w-10 text-destructive-text"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -115,7 +117,7 @@ interface TicketResaleInfo {
               </svg>
             </div>
             <h2
-              class="mb-4 font-display text-2xl font-bold tracking-tight text-destructive uppercase md:text-3xl"
+              class="mb-4 font-display text-2xl font-bold tracking-tight text-destructive-text uppercase md:text-3xl"
             >
               hit a snag
             </h2>
@@ -168,7 +170,11 @@ interface TicketResaleInfo {
                       >
                         @if (ticket.resolvedEvent?.date; as eventDate) {
                           {{ eventDate | eventDate: 'longDate' }},
-                          {{ eventDate | eventDate: 'shortTime' }}
+                          {{ eventDate | eventDate: 'shortTime'
+                          }}{{
+                            ticket.resolvedEvent.endDate
+                              | eventEndTime: eventDate
+                          }}
                         }
                       </p>
                       <p
@@ -184,7 +190,7 @@ interface TicketResaleInfo {
                         @case ('listed') {
                           <span
                             data-testid="ticket-status-badge"
-                            class="rounded border border-info/30 bg-info/10 px-2 py-0.5 font-mono text-2xs text-info"
+                            class="rounded border border-info/30 bg-info/10 px-2 py-0.5 font-mono text-2xs text-info-text"
                           >
                             LISTED
                           </span>
@@ -263,13 +269,10 @@ interface TicketResaleInfo {
                       (click)="downloadTicketPdf(ticket._id)"
                     >
                       @if (isDownloadingPdf() === ticket._id) {
-                        <z-icon
-                          zType="loader-circle"
-                          class="mr-2 animate-spin"
-                        />
+                        <z-icon zType="loader-circle" class="animate-spin" />
                         Generating...
                       } @else {
-                        <z-icon zType="file-text" class="mr-2 h-4 w-4" />
+                        <z-icon zType="file-text" class="h-4 w-4" />
                         Download PDF
                       }
                     </button>
@@ -319,17 +322,17 @@ interface TicketResaleInfo {
                             <div class="flex items-start gap-2">
                               <z-icon
                                 zType="info"
-                                class="mt-0.5 shrink-0 text-info"
+                                class="mt-0.5 shrink-0 text-info-text"
                               />
                               <p
-                                class="font-mono text-xs leading-relaxed text-info/80"
+                                class="font-mono text-xs leading-relaxed text-info-text/80"
                               >
                                 Your ticket is queued for resale. It becomes
                                 available for purchase when the event sells out.
                               </p>
                             </div>
                             <p
-                              class="ml-6 font-mono text-2xs tracking-widest text-info/60 uppercase"
+                              class="ml-6 font-mono text-2xs tracking-widest text-info-text uppercase"
                             >
                               {{ getResaleQueueCount(ticket.eventId) }}
                               listing{{
@@ -346,7 +349,7 @@ interface TicketResaleInfo {
                           type="button"
                           z-button
                           zType="outline"
-                          class="mt-3 min-h-11 w-full border-destructive/30 font-mono text-xs tracking-widest text-destructive uppercase hover:bg-destructive/10"
+                          class="mt-3 min-h-11 w-full border-destructive/30 font-mono text-xs tracking-widest text-destructive-text uppercase hover:bg-destructive/10"
                           aria-label="Cancel resale listing"
                           (click)="
                             cancelResaleListing(resale.listingId, ticket._id)
@@ -359,11 +362,11 @@ interface TicketResaleInfo {
                           @if (isCancellingListing() === ticket._id) {
                             <z-icon
                               zType="loader-circle"
-                              class="mr-2 animate-spin"
+                              class="animate-spin"
                             />
                             Cancelling...
                           } @else {
-                            <z-icon zType="x" class="mr-2" />
+                            <z-icon zType="x" />
                             Cancel Listing
                           }
                         </button>
@@ -375,10 +378,12 @@ interface TicketResaleInfo {
                           class="mt-4 w-full rounded-lg border border-warning/20 bg-warning/10 p-3"
                         >
                           <div class="flex items-start gap-2">
-                            <z-icon
-                              zType="loader-circle"
-                              class="mt-0.5 shrink-0 animate-spin text-warning"
-                            />
+                            <span class="mt-0.5 flex shrink-0">
+                              <z-icon
+                                zType="loader-circle"
+                                class="animate-spin text-warning"
+                              />
+                            </span>
                             <p
                               class="font-mono text-xs leading-relaxed text-warning"
                             >
@@ -491,7 +496,7 @@ interface TicketResaleInfo {
                               @if (isListingForResale() === ticket._id) {
                                 <z-icon
                                   zType="loader-circle"
-                                  class="mr-2 animate-spin"
+                                  class="animate-spin"
                                 />
                                 Listing...
                               } @else {
@@ -531,7 +536,7 @@ interface TicketResaleInfo {
                 </div>
               </z-card>
             } @empty {
-              @if (isLoading()) {
+              @if (showTicketsSkeleton()) {
                 <div
                   class="h-64 overflow-hidden rounded-xl border border-border bg-card/80"
                 >
@@ -578,6 +583,15 @@ export class TicketsComponent {
   // safe to read directly.
   readonly tickets = this.paymentService.ticketsResource.value;
   isLoading = this.paymentService.ticketsResource.isLoading;
+  /**
+   * Skeleton gate for the empty-list branch. Includes the optimistic
+   * activation window (route admitted on a cached credential, auth not yet
+   * settled) so a signed-in buyer never flashes "No tickets found" while the
+   * profile-keyed query has not started.
+   */
+  readonly showTicketsSkeleton = computed(
+    () => this.isLoading() || !this.auth.authSettled(),
+  );
   readonly copiedId = signal<string | null>(null);
   readonly isDownloadingPdf = signal<string | null>(null);
 

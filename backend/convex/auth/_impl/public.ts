@@ -13,11 +13,13 @@ import {
   requireUser,
 } from '../../lib/auth_identity';
 import {insertAdminAuditLog} from '../../lib/admin_audit_log';
+import {throwAppError, throwUnauthenticated} from '../../lib/errors';
 import {
-  getAppErrorMessage,
-  throwAppError,
-  throwUnauthenticated,
-} from '../../lib/errors';
+  mapEmailChangeError,
+  mapLinkAccountError,
+  mapSetPasswordError,
+  mapUnlinkAccountError,
+} from './auth_error_map';
 import {rateLimiter} from '../../lib/rate_limits';
 import {
   MAX_CALLBACK_URL_LENGTH,
@@ -58,87 +60,19 @@ async function insertAuthAuditLog(
   });
 }
 
-function mapEmailChangeError(message: string): string {
-  const normalized = message.toLowerCase();
-
-  if (
-    normalized.includes('already exists') ||
-    normalized.includes('another email')
-  ) {
-    return 'Email address already in use';
-  }
-
-  if (normalized.includes('email is the same')) {
-    return 'New email must be different from current email';
-  }
-
-  if (normalized.includes('disabled')) {
-    return 'Email change is currently unavailable';
-  }
-
-  if (
-    normalized.includes('smtp') ||
-    normalized.includes('resend') ||
-    normalized.includes('delivery is required') ||
-    normalized.includes('email delivery is not configured')
-  ) {
-    return 'Email change is currently unavailable';
-  }
-
-  if (normalized.includes('invalid email')) {
-    return 'Please enter a valid email address';
-  }
-
-  return message || 'Failed to request email change';
-}
-
-function mapLinkAccountError(message: string): string {
-  const normalized = message.toLowerCase();
-
-  if (
-    normalized.includes('already linked') ||
-    normalized.includes('already exists') ||
-    normalized.includes('linked to another')
-  ) {
-    return 'This provider cannot be connected to this account right now.';
-  }
-
-  if (
-    normalized.includes('disabled') ||
-    normalized.includes('invalid provider')
-  ) {
-    return 'This provider is unavailable right now.';
-  }
-
-  return 'Unable to connect provider right now.';
-}
-
-function mapUnlinkAccountError(message: string): string {
-  if (message.toLowerCase().includes('last account')) {
-    return 'Cannot remove the last login method.';
-  }
-
-  return 'Unable to remove this login method right now.';
-}
-
-function mapSetPasswordError(_message: string): string {
-  return 'Unable to set password right now.';
-}
-
 /**
- * Extracts a user-facing message from an unknown error (handling
- * ConvexError, Error, and fallback), applies a domain-specific mapper,
- * and throws an AppError — replacing the repeated
+ * Applies a Better Auth error mapper (code-first, message-fallback; see
+ * `./auth_error_map`) to an unknown thrown error and throws the resulting
+ * AppError — replacing the repeated
  * `catch (err) → err instanceof Error ? … : String(err) → throwAppError(…)`
  * boilerplate across auth handlers.
  */
 function mapAndThrowAuthError(
   code: string,
-  mapper: (message: string) => string,
+  mapper: (error: unknown) => string,
   error: unknown,
 ): never {
-  const message = getAppErrorMessage(error) ?? String(error);
-  throwAppError(code, mapper(message));
+  throwAppError(code, mapper(error));
 }
 
 export async function syncCurrentUserHandler(ctx: MutationCtx): Promise<{
@@ -414,7 +348,7 @@ export async function cancelEmailChangeHandler(
   });
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: userId,
       action: 'account.email_change.cancelled',
@@ -449,7 +383,7 @@ export async function requestEmailChangeHandler(
   });
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: userId,
       action: 'account.email_change.requested',
@@ -461,7 +395,7 @@ export async function requestEmailChangeHandler(
     message: string,
   ): Promise<{success: false; message: string}> => {
     await insertAdminAuditLog(
-      {db: ctx.db},
+      {db: ctx.db, meta: ctx.meta},
       {
         adminId: userId,
         action: 'account.email_change.failed',
@@ -510,7 +444,7 @@ export async function requestEmailChangeHandler(
     });
 
     await insertAdminAuditLog(
-      {db: ctx.db},
+      {db: ctx.db, meta: ctx.meta},
       {
         adminId: userId,
         action: 'account.email_change.verification_queued',
@@ -522,7 +456,6 @@ export async function requestEmailChangeHandler(
     await ctx.db.patch('users', userId, {
       pendingEmail: undefined,
     });
-    const message = getAppErrorMessage(err) ?? String(err);
-    return await fail(mapEmailChangeError(message));
+    return await fail(mapEmailChangeError(err));
   }
 }

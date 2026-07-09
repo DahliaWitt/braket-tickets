@@ -10,6 +10,7 @@ import type {
 } from './types';
 import {requireUser} from '../../lib/auth_identity';
 import {insertAdminAuditLog} from '../../lib/admin_audit_log';
+import {getAuditRequestFields} from '../../lib/request_metadata';
 import {pruneNoopEventPatch, resolveEditableEventForCaller} from './editor';
 import {loadCanonicalListAvailability} from './listing';
 import {
@@ -35,6 +36,7 @@ import {
 import {
   type CreateEventInput,
   type UpdateEventInput,
+  assertEventEndAfterStart,
   prepareEventCreateFields,
   prepareEventUpdateFields,
 } from '../../lib/events/writes';
@@ -145,6 +147,37 @@ async function deleteReleasedOrdersForEvent(
   return hasMoreWork;
 }
 
+/**
+ * Deletes a batch of imported ticket holders and their import-batch records for
+ * an event. Imported PII must not outlive the event. Runs inside the existing
+ * batched cleanup loop so a large imported set (up to the per-event cap) drains
+ * across transactions instead of blowing the write budget.
+ */
+async function deleteImportedEntriesForEvent(
+  db: EventCleanupDb,
+  eventId: Id<'events'>,
+): Promise<boolean> {
+  const entries = await db
+    .query('importedTicketHolders')
+    .withIndex('by_event', (q) => q.eq('eventId', eventId))
+    .take(EVENT_CLEANUP_BATCH_SIZE);
+  for (const entry of entries) {
+    await db.delete('importedTicketHolders', entry._id);
+  }
+  if (entries.length === EVENT_CLEANUP_BATCH_SIZE) {
+    return true;
+  }
+
+  const batches = await db
+    .query('importBatches')
+    .withIndex('by_event_batch_key_target', (q) => q.eq('eventId', eventId))
+    .take(EVENT_CLEANUP_BATCH_SIZE);
+  for (const batch of batches) {
+    await db.delete('importBatches', batch._id);
+  }
+  return batches.length === EVENT_CLEANUP_BATCH_SIZE;
+}
+
 async function finalizeEventRemoval(
   db: EventCleanupDb,
   event: Doc<'events'>,
@@ -182,7 +215,11 @@ async function runEventRemovalCleanupBatch(
     'cancelled',
   );
   const hasMoreReleasedOrders = await deleteReleasedOrdersForEvent(db, eventId);
-  return hasMoreOpenOrders || hasMoreReleasedOrders;
+  const hasMoreImportedEntries = await deleteImportedEntriesForEvent(
+    db,
+    eventId,
+  );
+  return hasMoreOpenOrders || hasMoreReleasedOrders || hasMoreImportedEntries;
 }
 
 async function runGatedManagementAction<T>(
@@ -343,7 +380,7 @@ export async function create(
   });
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: userId,
       action: 'event.create',
@@ -401,6 +438,15 @@ export async function update(
     });
   }
 
+  // Validate the effective start/end window against merged values, so moving
+  // the start past a stored end (or setting an end before the stored start)
+  // is rejected.
+  const nextEndDate =
+    args.endDate === null ? undefined : (args.endDate ?? event.endDate);
+  if (nextEndDate !== undefined) {
+    assertEventEndAfterStart(args.date ?? event.date, nextEndDate);
+  }
+
   const {id, announcement, ...updateArgs} = args;
   const preparedPatch = await prepareEventUpdateFields(
     ctx.db,
@@ -408,6 +454,11 @@ export async function update(
     updateArgs as UpdateEventInput,
   );
   const patch = pruneNoopEventPatch(event, preparedPatch);
+  if (args.endDate === null && event.endDate !== undefined) {
+    // Explicit undefined removes the field in ctx.db.patch. This must bypass
+    // pruneNoopEventPatch, which drops undefined values.
+    patch.endDate = undefined;
+  }
   const hasPatch = Object.keys(patch).length > 0;
   if (!hasPatch && announcement === undefined) {
     return null;
@@ -454,6 +505,9 @@ export async function update(
     previousStatus: event.status,
   });
 
+  // One update can write up to three audit rows; resolve request metadata once
+  // and pass it explicitly (meta omitted) so each insert reuses it.
+  const auditFields = await getAuditRequestFields(ctx);
   if (organizerChanged) {
     await insertAdminAuditLog(
       {db: ctx.db},
@@ -463,6 +517,7 @@ export async function update(
         eventId: id,
         organizerId: event.organizerId,
         source: 'admin-ui',
+        ...auditFields,
       },
     );
     await insertAdminAuditLog(
@@ -473,6 +528,7 @@ export async function update(
         eventId: id,
         organizerId: nextOrganizerId,
         source: 'admin-ui',
+        ...auditFields,
       },
     );
   }
@@ -485,6 +541,7 @@ export async function update(
       eventId: id,
       organizerId: nextOrganizerId,
       source: 'admin-ui',
+      ...auditFields,
     },
   );
   return null;
@@ -537,7 +594,7 @@ export async function remove(
   }
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: userId,
       action: 'event.delete',
@@ -612,7 +669,7 @@ export async function continueEventRemovalCleanup(
   }
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: args.adminId,
       action: 'event.delete',

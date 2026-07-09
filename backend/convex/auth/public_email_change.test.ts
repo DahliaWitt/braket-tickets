@@ -1,9 +1,68 @@
-import {describe, it, expect} from 'vitest';
+import {describe, it, expect, vi, afterEach} from 'vitest';
+import {APIError} from 'better-auth/api';
 import {convexTest} from '../setup.testing';
 import {api, internal} from '../_generated/api';
 import type {Id} from '../_generated/dataModel';
+import {authComponent} from '../lib/better_auth';
 
 describe('Email Change (Better Auth)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('maps a CHANGE_EMAIL_DISABLED APIError from changeEmail by machine code', async () => {
+    const t = convexTest();
+
+    const userId = (await t.mutation(api.testing.users.createUserDirectly, {
+      name: 'Requester',
+      email: 'requester@example.com',
+    })) as Id<'users'>;
+
+    // Force Better Auth's changeEmail to throw the real machine-coded APIError.
+    const changeEmailMock = vi.fn().mockRejectedValue(
+      // Mirrors better-auth's APIError.from("BAD_REQUEST",
+      // BASE_ERROR_CODES.CHANGE_EMAIL_DISABLED) with a rewritten message to
+      // prove detection no longer depends on message wording.
+      APIError.from('BAD_REQUEST', {
+        code: 'CHANGE_EMAIL_DISABLED',
+        message: 'totally different wording that no substring would match',
+      }),
+    );
+    vi.spyOn(authComponent, 'getAuth').mockResolvedValue({
+      auth: {api: {changeEmail: changeEmailMock}} as never,
+      headers: new Headers(),
+    });
+
+    const asUser = t.withIdentity({
+      subject: userId,
+      email: 'requester@example.com',
+      name: 'Requester',
+    });
+
+    const result = await asUser.mutation(api.auth.public.requestEmailChange, {
+      newEmail: 'fresh@example.com',
+      callbackURL: 'http://localhost:4200/confirm/email-change',
+    });
+
+    expect(changeEmailMock).toHaveBeenCalledTimes(1);
+    expect(result.success).toBe(false);
+    expect(result.message).toBe('Email change is currently unavailable');
+
+    // pendingEmail must be rolled back and the failure audited.
+    const appUser = await t.run(async (ctx) => await ctx.db.get(userId));
+    expect(appUser?.pendingEmail).toBeUndefined();
+
+    const actions = await t.run(async (ctx) => {
+      const logs = await ctx.db
+        .query('adminAuditLogs')
+        .withIndex('by_adminId', (q) => q.eq('adminId', userId))
+        .collect();
+      return logs.map((log) => log.action);
+    });
+    expect(actions).toContain('account.email_change.failed');
+    expect(actions).not.toContain('account.email_change.verification_queued');
+  });
+
   it('syncs app user email on Better Auth user onUpdate trigger', async () => {
     const t = convexTest();
 

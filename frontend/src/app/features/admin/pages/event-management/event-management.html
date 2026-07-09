@@ -11,7 +11,7 @@
       data-testid="management-load-error"
       role="alert"
       aria-live="assertive"
-      class="flex flex-col items-start gap-4 rounded-xl border border-destructive/40 bg-destructive/10 p-6 text-destructive"
+      class="flex flex-col items-start gap-4 rounded-xl border border-destructive/40 bg-destructive/10 p-6 text-destructive-text"
     >
       <p>{{ errorMessage() }}</p>
       <a
@@ -82,12 +82,14 @@
       <div
         class="flex items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/10 p-4"
       >
-        <z-icon zType="circle-alert" class="text-destructive" />
+        <z-icon zType="circle-alert" class="text-destructive-text" />
         <div>
-          <p class="font-display tracking-wider text-destructive uppercase">
+          <p
+            class="font-display tracking-wider text-destructive-text uppercase"
+          >
             Sold Out
           </p>
-          <p class="font-mono text-xs text-destructive/70">
+          <p class="font-mono text-xs text-destructive-text">
             All tickets have been sold for this event.
           </p>
         </div>
@@ -110,12 +112,14 @@
       <div
         class="flex items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/10 p-4"
       >
-        <z-icon zType="circle-alert" class="text-destructive" />
+        <z-icon zType="circle-alert" class="text-destructive-text" />
         <div>
-          <p class="font-display tracking-wider text-destructive uppercase">
+          <p
+            class="font-display tracking-wider text-destructive-text uppercase"
+          >
             Ticket Sales Ended
           </p>
-          <p class="font-mono text-xs text-destructive/70">
+          <p class="font-mono text-xs text-destructive-text">
             Ticket sales have been permanently ended for this event.
           </p>
         </div>
@@ -125,7 +129,13 @@
     <!-- Payout Status Banner -->
     @if (payoutStatus(); as status) {
       <z-alert
-        [zType]="status.state === 'paid' ? 'success' : 'info'"
+        [zType]="
+          status.state === 'paid'
+            ? 'success'
+            : status.state === 'error'
+              ? 'warning'
+              : 'info'
+        "
         zAppearance="soft"
         [zTitle]="
           status.state === 'paid'
@@ -134,7 +144,9 @@
               ? 'Payout Scheduled'
               : status.state === 'processing'
                 ? 'Payout Processing'
-                : 'Payout Policy'
+                : status.state === 'error'
+                  ? 'Payout Needs Attention'
+                  : 'Payout Policy'
         "
         [zDescription]="payoutStatusDescription()"
       />
@@ -151,6 +163,7 @@
           [soldCount]="data.soldCount"
           [heldCount]="data.heldCount"
           [totalTickets]="data.totalTickets"
+          [externalCount]="data.imported.total"
         />
       </z-card>
 
@@ -416,6 +429,7 @@
         [eventDate]="data.event.date"
         [purchases]="purchases()"
         [guests]="guests()"
+        [importedEntries]="importedTickets()"
         [reloadToken]="reloadToken()"
         (dataChanged)="reloadData()"
       />

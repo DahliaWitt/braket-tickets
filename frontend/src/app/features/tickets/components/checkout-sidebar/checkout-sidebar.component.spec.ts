@@ -437,4 +437,92 @@ describe('CheckoutSidebarComponent — logarithmic supporter slider', () => {
       );
     });
   });
+
+  describe('guest ToS assent (BRA-455)', () => {
+    // Puts the sidebar into the guest ticket-selection view (email already
+    // collected) so the payment gate cascade renders.
+    function asGuestWithEmail(): void {
+      fixture.componentRef.setInput('isGuest', true);
+      fixture.componentRef.setInput('guestEmail', 'guest@example.com');
+      fixture.componentRef.setInput('selectedTier', 'regular');
+    }
+
+    it('shows the assent block and gates the Stripe mount until accepted', async () => {
+      asGuestWithEmail();
+      fixture.componentRef.setInput('totalAmount', 4000);
+      fixture.componentRef.setInput('termsAccepted', false);
+      fixture.detectChanges();
+
+      expect(await harness.isTermsCheckboxVisible()).toBe(true);
+      expect(await harness.isStripePaymentVisible()).toBe(false);
+
+      fixture.componentRef.setInput('termsAccepted', true);
+      fixture.detectChanges();
+
+      // Checkbox stays visible above the now-mounted payment element.
+      expect(await harness.isTermsCheckboxVisible()).toBe(true);
+      expect(await harness.isStripePaymentVisible()).toBe(true);
+    });
+
+    it('keeps the free ticket button disabled until terms are accepted', async () => {
+      asGuestWithEmail();
+      fixture.componentRef.setInput('totalAmount', 0);
+      fixture.componentRef.setInput('termsAccepted', false);
+      fixture.detectChanges();
+
+      expect(await harness.isTermsCheckboxVisible()).toBe(true);
+      expect(await harness.isFreeTicketVisible()).toBe(true);
+      expect(await harness.isFreeTicketEnabled()).toBe(false);
+
+      fixture.componentRef.setInput('termsAccepted', true);
+      fixture.detectChanges();
+
+      expect(await harness.isFreeTicketEnabled()).toBe(true);
+    });
+
+    it('links to the terms of service and privacy policy pages', async () => {
+      asGuestWithEmail();
+      fixture.componentRef.setInput('totalAmount', 4000);
+      fixture.componentRef.setInput('termsAccepted', false);
+      fixture.detectChanges();
+
+      const hrefs = await harness.getTermsLinkHrefs();
+      expect(hrefs.terms).toBe('/terms');
+      expect(hrefs.privacy).toBe('/privacy');
+    });
+
+    it('emits termsAcceptedChange when the checkbox is toggled', async () => {
+      asGuestWithEmail();
+      fixture.componentRef.setInput('totalAmount', 4000);
+      fixture.componentRef.setInput('termsAccepted', false);
+      fixture.detectChanges();
+
+      const emitSpy = vi.spyOn(component.termsAcceptedChange, 'emit');
+
+      await harness.toggleTerms();
+
+      expect(emitSpy).toHaveBeenCalledWith(true);
+    });
+
+    it('shows no assent checkbox for signed-in users', async () => {
+      fixture.componentRef.setInput('isGuest', false);
+      fixture.componentRef.setInput('selectedTier', 'regular');
+      fixture.componentRef.setInput('totalAmount', 4000);
+      fixture.detectChanges();
+
+      expect(await harness.isTermsCheckboxVisible()).toBe(false);
+      expect(await harness.isStripePaymentVisible()).toBe(true);
+    });
+
+    it('does not disable the free ticket button for signed-in users', async () => {
+      fixture.componentRef.setInput('isGuest', false);
+      fixture.componentRef.setInput('selectedTier', 'regular');
+      fixture.componentRef.setInput('totalAmount', 0);
+      fixture.detectChanges();
+
+      expect(await harness.isTermsCheckboxVisible()).toBe(false);
+      expect(await harness.isFreeTicketVisible()).toBe(true);
+      expect(await harness.isFreeTicketEnabled()).toBe(true);
+    });
+  });
 });

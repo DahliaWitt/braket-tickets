@@ -33,6 +33,20 @@ describe('check-event-time-drift', () => {
     );
   });
 
+  it('flags the same drift patterns on event end dates', () => {
+    expect(
+      findingNames(`template: "{{ event.endDate | date: 'shortTime' }}"`),
+    ).toContain('raw-angular-date-pipe');
+    expect(
+      findingNames(
+        `const label = new Date(event.endDate).toLocaleTimeString('en-US');`,
+      ),
+    ).toContain('raw-event-date-locale-format');
+    expect(findingNames(`const key = event.endDate.slice(0, 10);`)).toContain(
+      'raw-event-date-key-extraction',
+    );
+  });
+
   it('flags ISO slicing from event dates', () => {
     expect(findingNames(`const key = event.date.slice(0, 10);`)).toContain(
       'raw-event-date-key-extraction',

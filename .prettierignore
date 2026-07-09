@@ -11,3 +11,4 @@ test-results
 frontend/storybook-static
 *.log
 .agent
+pnpm-lock.yaml

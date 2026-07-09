@@ -258,6 +258,13 @@ const schemaTables = {
      * validateISODate in lib/validation.ts.
      */
     date: v.string(),
+    /**
+     * Optional event end instant, same ISO 8601 UTC format as `date` and
+     * validated to be after it. When absent, the event is treated as ending
+     * at midnight (event timezone) after its start date — see hasEventEnded
+     * in shared/event-time.ts.
+     */
+    endDate: v.optional(v.string()),
     location: v.optional(v.string()),
     poster: v.optional(v.string()), // URL or Storage ID
     /**
@@ -641,6 +648,9 @@ const schemaTables = {
      */
     trustSource: callerTrustSourceValidator,
     trustViaOrganizerId: v.optional(v.id('organizers')),
+    // ToS assent evidence for guest purchases (BRA-455)
+    tosAcceptedAt: v.optional(v.number()),
+    tosVersion: v.optional(v.string()),
   })
     .index('by_owner_user_event_state', ['userId', 'eventId', 'state'])
     .index('by_owner_guest_event_state', ['guestSessionId', 'eventId', 'state'])
@@ -965,9 +975,80 @@ const schemaTables = {
     type: guestTypeValidator,
     notes: v.optional(v.string()),
     emailedAt: v.optional(v.number()),
+    /**
+     * In-flight lock for guest ticket-email sends. Holds the claim timestamp
+     * while a send action is running, `null` once released, absent if never
+     * claimed. Prevents concurrent admins/tabs from double-sending the same
+     * guest's ticket. A claim older than the staleness window is treated as
+     * abandoned (crashed action) and is reclaimable. See
+     * `events/_impl/guests.ts` `beginGuestTicketSend`.
+     */
+    emailSendLockedAt: v.optional(v.union(v.number(), v.null())),
     checkedInAt: v.optional(v.number()),
     checkedInBy: v.optional(v.id('users')),
   }).index('by_event', ['eventId']),
+
+  /**
+   * External ticket holders imported from other platforms (e.g. Resident
+   * Advisor). These are inert admission records — NEVER linked to Braket user
+   * accounts, orders, or the purchase/ticket tables. Every string field is
+   * treated as untrusted input (buyer names are attacker-controllable on the
+   * external platform) and length-capped server-side.
+   *
+   * - `externalRef` is the barcode: the only strong dedup / scan key.
+   * - `orderRef` is metadata only (one order spans many rows), never a dedup key.
+   * - `purchaseDateRaw` is the raw source string, display-only, never parsed.
+   * - `batchKey` ties the entry to the import batch it arrived in.
+   */
+  importedTicketHolders: defineTable({
+    eventId: v.id('events'),
+    name: v.string(),
+    email: v.optional(v.string()),
+    externalRef: v.optional(v.string()),
+    // Normalized (trim + lowercase) form of externalRef used for dedup and
+    // scanner matching, so a barcode's case can never split it into duplicate
+    // admission records or miss at the door. externalRef stays verbatim for
+    // display. Set iff externalRef is present.
+    externalRefKey: v.optional(v.string()),
+    orderRef: v.optional(v.string()),
+    ticketTypeLabel: v.optional(v.string()),
+    purchaseDateRaw: v.optional(v.string()),
+    sourceLabel: v.string(),
+    batchKey: v.string(),
+    checkedInAt: v.optional(v.number()),
+    checkedInBy: v.optional(v.id('users')),
+  })
+    .index('by_event', ['eventId'])
+    .index('by_event_external_ref_key', ['eventId', 'externalRefKey'])
+    .index('by_event_batch_key', ['eventId', 'batchKey']),
+
+  /**
+   * One record per committed bulk import (guest bulk-add or external
+   * ticket-holder import). Backs idempotent replay (a repeated batch key is a
+   * no-op returning the original result), batch-level audit, and batch removal.
+   * Skipped-row outcomes cannot be reconstructed from the entries table, so
+   * this is the durable source of the import report.
+   */
+  importBatches: defineTable({
+    eventId: v.id('events'),
+    batchKey: v.string(),
+    target: v.union(v.literal('guests'), v.literal('importedTickets')),
+    result: v.object({
+      insertedCount: v.number(),
+      skippedCount: v.number(),
+      outcomes: v.array(
+        v.object({
+          rowIndex: v.number(),
+          status: v.union(
+            v.literal('inserted'),
+            v.literal('skipped'),
+            v.literal('invalid'),
+          ),
+          reason: v.optional(v.string()),
+        }),
+      ),
+    }),
+  }).index('by_event_batch_key_target', ['eventId', 'batchKey', 'target']),
 
   /**
    * Temporary table for E2E testing to capture emails.
@@ -1033,6 +1114,31 @@ const schemaTables = {
   })
     .index('by_event', ['eventId'])
     .index('by_event_and_sentAt', ['eventId', 'sentAt']),
+
+  /**
+   * Durable per-recipient broadcast delivery ledger: one row per
+   * (broadcast, recipient email). Unlike `emailDedup` (24h TTL), rows
+   * persist so late ticket buyers can be caught up on missed broadcasts
+   * exactly once (see `events/_impl/broadcasts_handlers.ts`).
+   */
+  eventBroadcastDeliveries: defineTable({
+    broadcastId: v.id('eventBroadcasts'),
+    eventId: v.id('events'),
+    /** Normalized via normalizeEmailOrNull (trim + lowercase). */
+    email: v.string(),
+    sentAt: v.number(),
+    /** How this delivery came about. */
+    origin: v.union(
+      v.literal('send'),
+      v.literal('catchup'),
+      v.literal('backfill'),
+    ),
+  })
+    .index('by_broadcast_and_email', ['broadcastId', 'email'])
+    .index('by_event_and_email', ['eventId', 'email'])
+    // Email-only lookup for privacy export/erasure by recipient, mirroring
+    // the recipient indexes on sibling PII-email tables (e.g. emailDeliveries).
+    .index('by_email', ['email']),
 
   ticketReminderSends: defineTable({
     eventId: v.id('events'),

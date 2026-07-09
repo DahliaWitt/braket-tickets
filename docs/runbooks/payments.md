@@ -43,6 +43,7 @@ When investigating a ticketing incident, check these in order:
 
 ### Quick invariants
 
+- Purchases and new resale listings are blocked once the event has ended: at `events.endDate` when set, otherwise at midnight (platform event timezone, `America/Los_Angeles`) after `events.date`. A customer seeing "This event has already occurred" mid-event usually means the event is missing an `endDate` that crosses midnight — see `hasEventEnded` in [shared/event-time.ts](../../shared/event-time.ts) and the gates in [backend/convex/lib/orders/access.ts](../../backend/convex/lib/orders/access.ts).
 - Primary remaining inventory = `events.totalTickets - event_inventory.soldCount - event_inventory.heldCount`
 - `ticket_orders.state = open` means the order currently holds inventory or a resale listing
 - `ticket_orders.state = completed` means tickets were issued or resale completed

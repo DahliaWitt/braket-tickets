@@ -59,7 +59,7 @@
 
     @if (hasReminderLengthErrors()) {
       <p
-        class="font-mono text-xs text-destructive"
+        class="font-mono text-xs text-destructive-text"
         data-testid="ticket-reminder-length-error"
       >
         Subject or message exceeds allowed length.
@@ -75,7 +75,7 @@
       </p>
     } @else if (reminderAudienceError()) {
       <p
-        class="font-mono text-xs text-destructive"
+        class="font-mono text-xs text-destructive-text"
         data-testid="ticket-reminder-audience-error"
       >
         {{ reminderAudienceError() }}
@@ -103,17 +103,14 @@
       zSize="sm"
       type="submit"
       data-testid="send-ticket-reminder"
+      [zLoading]="isSendingTicketReminder()"
       [zDisabled]="isSendReminderDisabled()"
-      [attr.aria-busy]="isSendingTicketReminder()"
       class="w-full border-primary/50 text-primary hover:bg-primary/10 sm:w-auto"
     >
-      @if (isSendingTicketReminder()) {
-        <z-icon zType="loader-circle" class="mr-2 animate-spin" />
-        Sending...
-      } @else {
-        <z-icon zType="mail" class="mr-2" />
-        Send Reminder
+      @if (!isSendingTicketReminder()) {
+        <z-icon zType="mail" />
       }
+      Send Reminder
     </button>
   </form>
 </z-card>

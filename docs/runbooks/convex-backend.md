@@ -40,12 +40,25 @@ For manual dev deploy commands, including the destructive dev-data reset path fo
 
 The table below lists the common deploy failures:
 
-| Cause              | Fix                                                                                               |
-| ------------------ | ------------------------------------------------------------------------------------------------- |
-| Schema validation  | See [Run a safe schema migration](#run-a-safe-schema-migration)                                   |
-| Bundle error       | Fix the code error, push again                                                                    |
-| Deploy key invalid | Regenerate in Convex Dashboard → Settings → Deploy Keys, update `CONVEX_DEPLOY_KEY` GitHub secret |
-| Rate limit         | Wait 5 minutes, re-run the GitHub Action                                                          |
+| Cause                         | Fix                                                                                                                       |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Schema validation             | See [Run a safe schema migration](#run-a-safe-schema-migration)                                                           |
+| Bundle error                  | Fix the code error, push again                                                                                            |
+| Deploy key invalid            | Regenerate in Convex Dashboard → Settings → Deploy Keys, update `CONVEX_DEPLOY_KEY` GitHub secret                         |
+| Rate limit                    | Wait 5 minutes, re-run the GitHub Action                                                                                  |
+| `RequiredEnvironmentVariable` | A required env var declared in `backend/convex/convex.config.ts` is missing — run the matching `sync:env:*` before deploy |
+
+### Inspect data with an inline query
+
+For ad-hoc read-only inspection, prefer `--inline-query` (convex 1.36+) over
+writing throwaway named query functions:
+
+```bash
+pnpm convex run --inline-query 'await ctx.db.query("adminAuditLogs").order("desc").take(5)'
+```
+
+Inline queries are read-only; anything that writes still needs a real
+(reviewed, committed) mutation.
 
 ### Roll back with a revert commit
 
@@ -82,12 +95,13 @@ Backfills in this repo are not uniform. Before running anything, read the exact 
 
 Verified examples from the current repo:
 
-| Migration                    | Invocation                                                                                          | Notes                                                                         |
-| ---------------------------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| Bearer token digest backfill | `pnpm convex run --prod migrations:runTokenDigestBackfills '{"dryRun":true}'` before the real run   | Uses `@convex-dev/migrations`; requires `TOKEN_DIGEST_SECRET` to be set first |
-| Slug backfill                | `pnpm convex run --prod migrations/slug_backfill:backfillSlugs`                                     | No args; batches 100 organizers; self-schedules when more remain              |
-| Community status backfill    | `pnpm convex run --prod migrations/community_status_backfill:run '{"dryRun":true}'`                 | Supports `dryRun` and `cursor`; returns `processed`, `updated`, `hasMore`     |
-| Discord cleanup backfill     | `pnpm convex run --prod migrations/discord_cleanup_backfill:cleanDiscordFields '{"batchSize":100}'` | Supports `cursor` and `batchSize`; removes fields via `db.replace()`          |
+| Migration                    | Invocation                                                                                                 | Notes                                                                                                                                         |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bearer token digest backfill | `pnpm convex run --prod migrations:runTokenDigestBackfills '{"dryRun":true}'` before the real run          | Uses `@convex-dev/migrations`; requires `TOKEN_DIGEST_SECRET` to be set first                                                                 |
+| Slug backfill                | `pnpm convex run --prod migrations/slug_backfill:backfillSlugs`                                            | No args; batches 100 organizers; self-schedules when more remain                                                                              |
+| Community status backfill    | `pnpm convex run --prod migrations/community_status_backfill:run '{"dryRun":true}'`                        | Supports `dryRun` and `cursor`; returns `processed`, `updated`, `hasMore`                                                                     |
+| Discord cleanup backfill     | `pnpm convex run --prod migrations/discord_cleanup_backfill:cleanDiscordFields '{"batchSize":100}'`        | Supports `cursor` and `batchSize`; removes fields via `db.replace()`                                                                          |
+| Broadcast delivery backfill  | `pnpm convex run --prod migrations:backfillEventBroadcastDeliveries '{"dryRun":true}'` before the real run | Uses `@convex-dev/migrations`; seeds `eventBroadcastDeliveries` from 30-day `emailDeliveries` history (see `docs/runbooks/email-delivery.md`) |
 
 ### Bearer token digest migration
 

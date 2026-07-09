@@ -1,37 +1,46 @@
 version: 2
 
 updates:
-  # pnpm is configured through Dependabot's npm ecosystem.
-  # Keep all workspace manifests in one update block so changes share the
-  # root pnpm-lock.yaml and cross-package groups stay coherent.
+  # pnpm workspace: Dependabot expands the pnpm-workspace.yaml globs from the
+  # root entry, so '/' alone covers ., backend, frontend, scripts, and shared/*.
+  # Do NOT list workspace subdirectories — dependabot-core treats root +
+  # subdirectory entries for a pnpm workspace as a misconfiguration
+  # (dependabot/dependabot-core#11487), and the multi-directory path also
+  # triggers the un-rebasable "unknown group" bug (dependabot-core#14780).
   - package-ecosystem: 'npm'
-    directories:
-      - '/'
-      - '/backend'
-      - '/frontend'
-    target-branch: 'develop'
+    directory: '/'
     schedule:
       interval: 'weekly'
       day: 'monday'
       time: '09:00'
       timezone: 'America/Los_Angeles'
-    open-pull-requests-limit: 8
+    open-pull-requests-limit: 10
     assignees:
       - 'DahliaWitt'
     commit-message:
-      prefix: 'chore(deps)'
+      # include: scope appends "(deps)" or "(deps-dev)" to the prefix, so the
+      # prefix must be the bare commit type to yield "chore(deps): bump x".
+      prefix: 'chore'
       include: 'scope'
     labels:
       - 'dependencies'
       - 'javascript'
+    # Supply-chain cooldown: never propose a version until it has survived on
+    # the registry for N days (compromised releases are usually pulled within
+    # days). Security updates bypass cooldown, so CVE fixes are not delayed.
+    cooldown:
+      default-days: 7
+      semver-major-days: 21
+      semver-minor-days: 7
+      semver-patch-days: 3
+    # A dependency joins the FIRST group it matches — keep the named risk
+    # groups above the catch-alls. Majors outside the named groups arrive as
+    # individual PRs for individual review.
     groups:
       angular:
         patterns:
           - '@angular/*'
           - '@angular-devkit/*'
-          - '@angular/build'
-          - '@angular/cli'
-          - '@angular/compiler-cli'
           - 'angular-eslint'
           - 'ngx-markdown'
       auth:
@@ -50,46 +59,40 @@ updates:
         patterns:
           - 'stripe'
           - '@stripe/*'
-        group-by: 'dependency-name'
       observability:
         patterns:
           - '@sentry/*'
           - '@codecov/*'
           - 'codecov'
-        group-by: 'dependency-name'
       storybook:
         dependency-type: 'development'
         patterns:
           - 'storybook'
           - '@storybook/*'
-      tests-and-build-tools:
+      production-minor-patch:
+        dependency-type: 'production'
+        update-types:
+          - 'minor'
+          - 'patch'
+        patterns:
+          - '*'
+      development-minor-patch:
         dependency-type: 'development'
         update-types:
           - 'minor'
           - 'patch'
         patterns:
-          - '@playwright/*'
-          - '@ngx-playwright/*'
-          - '@vitest/*'
-          - 'vitest'
-          - 'vite'
-          - 'typescript'
-          - 'tsx'
-          - 'eslint'
-          - 'eslint-*'
-          - '@eslint/*'
-          - 'typescript-eslint'
-          - '@typescript-eslint/*'
-          - 'prettier'
-          - '@types/*'
-          - 'jsdom'
-          - 'wrangler'
-        group-by: 'dependency-name'
+          - '*'
+      security:
+        applies-to: 'security-updates'
+        patterns:
+          - '*'
 
   # GitHub Actions workflows pin actions to SHAs with version comments.
+  # directory: '/' covers .github/workflows; there are no composite actions
+  # under .github/actions, so no extra directories are needed.
   - package-ecosystem: 'github-actions'
     directory: '/'
-    target-branch: 'develop'
     schedule:
       interval: 'monthly'
       day: 'monday'
@@ -99,8 +102,54 @@ updates:
     assignees:
       - 'DahliaWitt'
     commit-message:
+      # No include: scope here — the prefix already carries the (ci) scope,
+      # and include: scope would double it to "chore(ci)(deps):".
       prefix: 'chore(ci)'
-      include: 'scope'
     labels:
       - 'dependencies'
       - 'ci'
+    cooldown:
+      default-days: 7
+    groups:
+      actions-minor-patch:
+        update-types:
+          - 'minor'
+          - 'patch'
+        patterns:
+          - '*'
+
+  # Base images: ops log forwarder (node:24-alpine) and the self-hosted
+  # runner image (myoung34/github-runner). .github/act/Dockerfile is excluded
+  # on purpose — it tracks a floating :act-latest tag.
+  - package-ecosystem: 'docker'
+    directories:
+      - '/ops'
+      - '/infra/runner'
+    schedule:
+      interval: 'monthly'
+      day: 'monday'
+      time: '10:00'
+      timezone: 'America/Los_Angeles'
+    open-pull-requests-limit: 3
+    assignees:
+      - 'DahliaWitt'
+    commit-message:
+      prefix: 'chore(ci)'
+    labels:
+      - 'dependencies'
+      - 'docker'
+    cooldown:
+      default-days: 7
+    ignore:
+      # Node's release cadence: only EVEN majors become LTS, and a fresh even
+      # major is not Active LTS until ~October of its release year. Dependabot
+      # cannot read the LTS schedule, so left alone it proposes odd (non-LTS)
+      # majors or same-day even majors — e.g. the 22 -> 26 jump in #142, where
+      # 26 was <1 day old and skipped the mature 24 LTS. Block node major bumps
+      # and step the major by hand to the next even line once it reaches Active
+      # LTS. The floating `NN-alpine` tag still tracks minor/patch in-major, so
+      # security patches within the pinned line keep flowing. Scoped to node so
+      # the runner image (myoung34/github-runner) still gets major PRs.
+      - dependency-name: 'node'
+        update-types:
+          - 'version-update:semver-major'

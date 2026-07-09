@@ -51,6 +51,7 @@ import {CheckoutStore} from './checkout-store';
 import {getContactDialogDescription} from './event-details-copy';
 import {getBuyerPricingSummary} from '@shared/pricing/pricing-summary';
 import {EventDatePipe} from '@/utils/event-date.pipe';
+import {EventEndTimePipe} from '@/utils/event-end-time.pipe';
 
 type EventOrganizer = NonNullable<EventDetail['organizer']>;
 
@@ -59,6 +60,7 @@ type EventOrganizer = NonNullable<EventDetail['organizer']>;
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     EventDatePipe,
+    EventEndTimePipe,
     RouterLink,
     NgOptimizedImage,
     ZardButtonComponent,
@@ -301,6 +303,7 @@ export class EventDetailsComponent {
   readonly guestEmail = this.checkoutStore.guestEmail;
   readonly buyerEmail = this.checkoutStore.buyerEmail;
   readonly guestSessionToken = this.checkoutStore.guestSessionToken;
+  readonly guestTermsAccepted = this.checkoutStore.guestTermsAccepted;
 
   private readonly queryParamMap = toSignal(this.route.queryParamMap, {
     requireSync: true,
@@ -482,6 +485,10 @@ export class EventDetailsComponent {
     }
   }
 
+  onGuestTermsAcceptedChange(accepted: boolean): void {
+    this.checkoutStore.setGuestTermsAccepted(accepted);
+  }
+
   onSidebarOpenChange(isOpen: boolean): void {
     if (!isOpen) {
       this.closePaymentSidebar();
@@ -593,6 +600,7 @@ export class EventDetailsComponent {
         amount,
         sessionToken,
         checkoutTheme,
+        this.guestTermsAccepted(),
       );
       this.checkoutStore.setActiveCheckoutSession(result);
       return {
@@ -689,6 +697,7 @@ export class EventDetailsComponent {
             this.checkoutQuantity(),
             this.selectedTier(),
             sessionToken,
+            this.guestTermsAccepted(),
           );
         } else {
           await this.paymentService.claimFreeTicket(

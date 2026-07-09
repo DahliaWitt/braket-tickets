@@ -31,7 +31,7 @@
             class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-destructive/20"
           >
             <svg
-              class="h-10 w-10 text-destructive"
+              class="h-10 w-10 text-destructive-text"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -46,7 +46,7 @@
             </svg>
           </div>
           <h2
-            class="mb-4 font-display text-2xl font-bold tracking-tight text-destructive uppercase md:text-3xl"
+            class="mb-4 font-display text-2xl font-bold tracking-tight text-destructive-text uppercase md:text-3xl"
           >
             hit a snag
           </h2>
@@ -193,7 +193,8 @@
                 <span class="flex items-center gap-2">
                   <z-icon zType="calendar" class="text-primary" />
                   {{ evt.date | eventDate: 'longDate' }},
-                  {{ evt.date | eventDate: 'shortTime' }}
+                  {{ evt.date | eventDate: 'shortTime'
+                  }}{{ evt.endDate | eventEndTime: evt.date }}
                 </span>
                 <span class="h-1 w-1 rounded-full bg-muted"></span>
                 <span class="flex items-center gap-2 tracking-wider uppercase">
@@ -371,7 +372,7 @@
                 } @else if (limitReached()) {
                   <div
                     data-testid="ticket-limit-reached"
-                    class="flex items-center gap-2 rounded border border-secondary/50 bg-secondary/10 px-4 py-3 font-mono text-xs tracking-wider text-secondary uppercase"
+                    class="flex items-center gap-2 rounded border border-secondary/50 bg-secondary/10 px-4 py-3 font-mono text-xs tracking-wider text-secondary-text uppercase"
                   >
                     <z-icon zType="circle-check" />
                     Ticket Limit Reached ({{ userTicketCount() }} owned)
@@ -384,7 +385,7 @@
                     <z-button
                       zType="outline"
                       (click)="navigateToLogin()"
-                      class="w-full border-secondary/50 px-6 py-4 font-display text-sm tracking-wider text-secondary uppercase hover:bg-secondary/10 sm:w-auto"
+                      class="w-full border-secondary/50 px-6 py-4 font-display text-sm tracking-wider text-secondary-text uppercase hover:bg-secondary/10 sm:w-auto"
                     >
                       <z-icon zType="arrow-right" class="mr-2" />
                       Sign in for pricing
@@ -430,7 +431,7 @@
                     zType="outline"
                     (click)="contactOrganizer()"
                     data-testid="contact-community-button"
-                    class="w-full border-secondary/50 px-6 py-4 font-display text-sm tracking-wider text-secondary uppercase hover:bg-secondary/10 sm:w-auto"
+                    class="w-full border-secondary/50 px-6 py-4 font-display text-sm tracking-wider text-secondary-text uppercase hover:bg-secondary/10 sm:w-auto"
                   >
                     <z-icon zType="mail" class="mr-2" />
                     Contact Community
@@ -489,8 +490,10 @@
       [buyerEmail]="buyerEmail()"
       [isGuest]="!auth.user()"
       [guestEmail]="guestEmail()"
+      [termsAccepted]="guestTermsAccepted()"
       [isResalePurchase]="isResalePurchase()"
       (guestEmailCollected)="onGuestEmailCollected($event)"
+      (termsAcceptedChange)="onGuestTermsAcceptedChange($event)"
       (closeRequested)="closePaymentSidebar()"
       (quantityChanged)="updateQuantity($event)"
       (tierSelected)="selectTier($event)"

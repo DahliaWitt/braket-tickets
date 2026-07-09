@@ -79,7 +79,9 @@ export class EventEditorHarness extends ComponentHarness {
   private getFileInput = this.locatorFor('input[type="file"]');
   private getSelectFileLabel = this.locatorFor('label.cursor-pointer');
   private getFileNameText = this.locatorFor('span.truncate');
-  private getClearFileButton = this.locatorFor('button.text-destructive');
+  private getClearFileButton = this.locatorFor(
+    '[data-testid="poster-clear-btn"]',
+  );
   private getTotalTicketsInput = this.locatorFor('input#totalTickets');
   private getSlidingScaleCheckbox = this.locatorFor(
     'input#slidingScaleEnabled',
@@ -101,6 +103,10 @@ export class EventEditorHarness extends ComponentHarness {
   );
   private getDateError = this.locatorForOptional('[data-testid="date-error"]');
   private getTimeError = this.locatorForOptional('[data-testid="time-error"]');
+  private getEndTimeInput = this.locatorFor('input#endTime');
+  private getEndTimeError = this.locatorForOptional(
+    '[data-testid="end-time-error"]',
+  );
   private getTotalTicketsError = this.locatorForOptional(
     '[data-testid="totalTickets-error"]',
   );
@@ -189,7 +195,9 @@ export class EventEditorHarness extends ComponentHarness {
   }
 
   async hasClearFileButton() {
-    const btn = await this.locatorForOptional('button.text-destructive')();
+    const btn = await this.locatorForOptional(
+      '[data-testid="poster-clear-btn"]',
+    )();
     return !!btn;
   }
 
@@ -248,7 +256,9 @@ export class EventEditorHarness extends ComponentHarness {
   }
 
   async getErrorText() {
-    const error = await this.locatorForOptional('p.text-destructive')();
+    const error = await this.locatorForOptional(
+      '[data-testid="event-editor-error"]',
+    )();
     return error ? error.text() : null;
   }
 
@@ -324,6 +334,18 @@ export class EventEditorHarness extends ComponentHarness {
 
   async getTimeErrorText() {
     const error = await this.getTimeError();
+    return error ? (await error.text()).trim() : null;
+  }
+
+  async setEndTime(value: string) {
+    const input = await this.getEndTimeInput();
+    await input.clear();
+    await input.sendKeys(value);
+    await input.blur();
+  }
+
+  async getEndTimeErrorText() {
+    const error = await this.getEndTimeError();
     return error ? (await error.text()).trim() : null;
   }
 

@@ -1,11 +1,13 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   DestroyRef,
   inject,
   input,
   output,
   signal,
+  type WritableSignal,
 } from '@angular/core';
 import {takeUntilDestroyed} from '@angular/core/rxjs-interop';
 import {toast} from 'ngx-sonner';
@@ -24,6 +26,44 @@ import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton
 import {ZardTooltipDirective} from '@ui/components/primitives/tooltip/tooltip';
 import {logger} from '@/utils/logger';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
+import {GUEST_IMPORT_CONFIG} from '@/features/admin/import/import-config';
+// Import the surface directly (not via the barrel) so @defer can code-split it:
+// a barrel that also exports the eagerly-used config keeps the component eager.
+import {ImportSurfaceComponent} from '@/features/admin/import/import-surface.component';
+import type {
+  ImportConfirmPayload,
+  ImportReport,
+} from '@/features/admin/import/import-surface.types';
+import {buildImportErrorReport, buildImportReport} from '../import-report.util';
+
+/** Max guest ticket sends dispatched at once by "Send All". */
+const SEND_ALL_CONCURRENCY = 8;
+
+/**
+ * Runs `worker` over `items` with at most `limit` in flight at a time, returning
+ * results in input order. `worker` is expected to swallow its own errors (this
+ * pool does not) so one failure never rejects the whole batch.
+ */
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  limit: number,
+  worker: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  const runners = Array.from(
+    {length: Math.min(limit, items.length)},
+    async () => {
+      while (cursor < items.length) {
+        const index = cursor;
+        cursor += 1;
+        results[index] = await worker(items[index]);
+      }
+    },
+  );
+  await Promise.all(runners);
+  return results;
+}
 
 function pdfDataUrlToBlob(dataUrl: string): Blob {
   const [metadata, base64] = dataUrl.split(',');
@@ -61,6 +101,7 @@ function isAddGuestDialogResult(value: unknown): value is AddGuestDialogResult {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     BraStatusBadgeComponent,
+    ImportSurfaceComponent,
     ZardButtonComponent,
     ZardCardComponent,
     ZardIconComponent,
@@ -80,8 +121,79 @@ export class EventManagementGuestsTabComponent {
   readonly isLoading = input(false);
   readonly dataChanged = output<void>();
 
-  readonly isGeneratingGuestPdf = signal<string | null>(null);
-  readonly isSendingTicket = signal<string | null>(null);
+  readonly generatingPdfIds = signal<ReadonlySet<string>>(new Set());
+  readonly sendingTicketIds = signal<ReadonlySet<string>>(new Set());
+  readonly isSendingAll = signal(false);
+
+  readonly pendingSendGuests = computed(() =>
+    this.guests().filter((guest) => guest.email && !guest.emailedAt),
+  );
+
+  /** Config for the shared import surface (guest target). */
+  readonly guestImportConfig = GUEST_IMPORT_CONFIG;
+
+  /** Whether the bulk-import surface is open (lazily rendered via @defer). */
+  readonly isImporting = signal(false);
+
+  /** Server report fed back to the surface after the bulk mutation returns. */
+  readonly importReport = signal<ImportReport | null>(null);
+
+  /**
+   * Strong dedup keys (name+email, lowercased) for the current guest list,
+   * matching `GUEST_IMPORT_CONFIG.dedupKey`. Feeds the preview's duplicate
+   * hints from the live guest subscription. The server re-checks at commit.
+   */
+  readonly existingGuestKeys = computed<ReadonlySet<string>>(() => {
+    const keys = new Set<string>();
+    for (const guest of this.guests()) {
+      // Derive the key through the config so the tab's preview hints can never
+      // drift from the surface's within-batch dedup.
+      const key = GUEST_IMPORT_CONFIG.dedupKey({
+        name: guest.name,
+        email: guest.email,
+      });
+      if (key !== null) keys.add(key);
+    }
+    return keys;
+  });
+
+  openImportSurface(): void {
+    this.importReport.set(null);
+    this.isImporting.set(true);
+  }
+
+  closeImportSurface(): void {
+    this.isImporting.set(false);
+    this.importReport.set(null);
+  }
+
+  async onGuestImportConfirmed(payload: ImportConfirmPayload): Promise<void> {
+    try {
+      const result = await this.adminEventsService.bulkAddGuests(
+        this.eventId(),
+        payload.batchKey,
+        payload.rows.map((row) => ({
+          name: row.name,
+          email: row.email,
+          type: row.guestType,
+          notes: row.notes,
+        })),
+      );
+      this.importReport.set(buildImportReport(result));
+      if (result.insertedCount > 0) {
+        this.dataChanged.emit();
+      }
+    } catch (error) {
+      // Route through the central PII-scrubbing logger — never log row values.
+      logger.error('Failed to bulk add guests', error);
+      this.importReport.set(
+        buildImportErrorReport(
+          error,
+          "couldn't add those guests — try again in a bit",
+        ),
+      );
+    }
+  }
 
   guestActionLabel(guest: Guest): string {
     const name = guest.name || guest.email || 'guest';
@@ -178,25 +290,95 @@ export class EventManagementGuestsTabComponent {
   }
 
   async sendGuestTicket(guestId: string): Promise<void> {
-    if (this.isSendingTicket()) return;
+    if (this.sendingTicketIds().has(guestId)) return;
 
-    this.isSendingTicket.set(guestId);
-    try {
-      await this.adminEventsService.sendGuestTicket(guestId);
+    // Single send is a deliberate (re)send, so it does not skip already-emailed
+    // guests — but the backend still dedupes it against concurrent in-flight
+    // sends, which surfaces here as 'skipped'.
+    const outcome = await this.dispatchSendTicket(guestId, false);
+    if (outcome === 'sent') {
       toast.success('Ticket sent successfully');
       this.dataChanged.emit();
+    } else if (outcome === 'skipped') {
+      toast.info('This ticket is already being sent');
+    } else {
+      toast.error('Failed to send guest ticket');
+    }
+  }
+
+  async sendAllTickets(): Promise<void> {
+    if (this.isSendingAll()) return;
+
+    const targets = this.pendingSendGuests().filter(
+      (guest) => !this.sendingTicketIds().has(guest._id),
+    );
+    if (targets.length === 0) return;
+
+    const noun = targets.length === 1 ? 'guest' : 'guests';
+    if (!confirm(`Send tickets to ${targets.length} ${noun}?`)) return;
+
+    this.isSendingAll.set(true);
+    try {
+      // Batch mode skips guests already emailed, enforced atomically on the
+      // backend so a stale roster cannot re-email guests another admin handled.
+      // Cap in-flight sends: each is a Convex action that generates a PDF and
+      // hits Resend, so an unbounded fan-out over a large roster would pile up
+      // action concurrency and provider rate limits.
+      const outcomes = await mapWithConcurrency(
+        targets,
+        SEND_ALL_CONCURRENCY,
+        (guest) => this.dispatchSendTicket(guest._id, true),
+      );
+      const sent = outcomes.filter((outcome) => outcome === 'sent').length;
+      const skipped = outcomes.filter(
+        (outcome) => outcome === 'skipped',
+      ).length;
+      const failed = outcomes.filter((outcome) => outcome === 'failed').length;
+      if (sent > 0) {
+        toast.success(`Sent ${sent} ticket${sent === 1 ? '' : 's'}`);
+      }
+      if (skipped > 0) {
+        toast.info(
+          `Skipped ${skipped} already-sent guest${skipped === 1 ? '' : 's'}`,
+        );
+      }
+      if (failed > 0) {
+        toast.error(
+          `Failed to send ${failed} ticket${failed === 1 ? '' : 's'}`,
+        );
+      }
+      // Reconcile the roster whenever server state advanced — sends we made or
+      // sends a concurrent admin already made (surfaced as skips).
+      if (sent > 0 || skipped > 0) {
+        this.dataChanged.emit();
+      }
+    } finally {
+      this.isSendingAll.set(false);
+    }
+  }
+
+  private async dispatchSendTicket(
+    guestId: string,
+    skipIfAlreadyEmailed: boolean,
+  ): Promise<'sent' | 'skipped' | 'failed'> {
+    this.updateIdSet(this.sendingTicketIds, guestId, true);
+    try {
+      const result = await this.adminEventsService.sendGuestTicket(guestId, {
+        skipIfAlreadyEmailed,
+      });
+      return result.status;
     } catch (error) {
       logger.error('Failed to send guest ticket', error);
-      toast.error('Failed to send guest ticket');
+      return 'failed';
     } finally {
-      this.isSendingTicket.set(null);
+      this.updateIdSet(this.sendingTicketIds, guestId, false);
     }
   }
 
   async downloadGuestTicket(guestId: string): Promise<void> {
-    if (this.isGeneratingGuestPdf()) return;
+    if (this.generatingPdfIds().has(guestId)) return;
 
-    this.isGeneratingGuestPdf.set(guestId);
+    this.updateIdSet(this.generatingPdfIds, guestId, true);
     try {
       const pdfDataUrl =
         await this.adminEventsService.getGuestTicketPdf(guestId);
@@ -209,8 +391,24 @@ export class EventManagementGuestsTabComponent {
       logger.error('Failed to download guest ticket', error);
       toast.error('Failed to download guest ticket.');
     } finally {
-      this.isGeneratingGuestPdf.set(null);
+      this.updateIdSet(this.generatingPdfIds, guestId, false);
     }
+  }
+
+  private updateIdSet(
+    idSet: WritableSignal<ReadonlySet<string>>,
+    id: string,
+    present: boolean,
+  ): void {
+    idSet.update((ids) => {
+      const next = new Set(ids);
+      if (present) {
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
+      return next;
+    });
   }
 
   private idSuffix(id: string): string {

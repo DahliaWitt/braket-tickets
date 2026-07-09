@@ -121,3 +121,24 @@ export function getAppErrorMessage(error: unknown): string | null {
 
   return null;
 }
+
+/**
+ * Extracts the structured `code` from a ConvexError payload built by
+ * {@link appErrorData}. Symmetric companion to {@link getAppErrorMessage},
+ * which only surfaces the human-readable message and discards the code.
+ *
+ * The `code` is the stable, machine-branchable field: callers (including the
+ * frontend, which receives it via `error.data.code`) should prefer it over
+ * substring-matching the message, whose wording can change without notice.
+ */
+export function getAppErrorCode(error: unknown): string | null {
+  if (
+    error instanceof ConvexError &&
+    isRecord(error.data) &&
+    typeof error.data['code'] === 'string'
+  ) {
+    return error.data['code'];
+  }
+
+  return null;
+}

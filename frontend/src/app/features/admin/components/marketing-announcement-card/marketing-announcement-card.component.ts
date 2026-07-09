@@ -125,7 +125,7 @@ function humanizeMarketingError(
 
         @if (statusError()) {
           <p
-            class="font-mono text-xs text-destructive"
+            class="font-mono text-xs text-destructive-text"
             data-testid="marketing-announcement-error"
             role="alert"
           >
@@ -279,7 +279,7 @@ function humanizeMarketingError(
 
         @if (recipientCountError()) {
           <p
-            class="font-mono text-xs text-destructive"
+            class="font-mono text-xs text-destructive-text"
             data-testid="marketing-recipient-error"
             role="alert"
           >
@@ -370,7 +370,7 @@ function humanizeMarketingError(
                 (click)="cancelScheduledAnnouncement()"
                 [zDisabled]="isActionLoading()"
                 data-testid="marketing-cancel-scheduled"
-                class="text-destructive hover:text-destructive"
+                class="text-destructive-text hover:text-destructive-text"
               >
                 Cancel scheduled send
               </button>

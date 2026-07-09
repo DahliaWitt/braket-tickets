@@ -112,6 +112,52 @@ Source of truth:
 - `backend/convex/email/templates.ts`
 - `backend/convex/marketing/emails.ts`
 
+## Event broadcast catch-up for late ticket buyers
+
+**Behavior:** Event broadcasts (`api.events.broadcasts.send`) are also delivered
+to recipients who join the audience after the send. Primary order completion,
+resale settlement, and guest-list adds each schedule
+`internal.events.broadcasts.deliverMissed`, which sends every broadcast the
+recipient's normalized email has not yet received, oldest-first.
+
+**Delivery ledger:** `eventBroadcastDeliveries` stores one row per
+(broadcast, normalized recipient email) with `origin: 'send' | 'catchup' | 'backfill'`.
+This table — not `emailDedup` (24h TTL) — is the durable record of who received
+which broadcast. Rows are never cleaned up; the durable dedup is the point.
+
+Source of truth:
+
+- `backend/convex/events/_impl/broadcasts_handlers.ts` — send fan-out and `deliverMissedBroadcasts`
+- `backend/convex/lib/orders/complete.ts`, `backend/convex/lib/resale/settlement.ts`, `backend/convex/events/_impl/guests.ts` — scheduling triggers
+
+### Backfill after deploy
+
+Run `migrations:backfillEventBroadcastDeliveries` promptly after the feature
+deploys. It seeds `eventBroadcastDeliveries` from historical `emailDeliveries`
+rows with `source === 'broadcast'` so pre-feature broadcasts are not re-sent to
+existing holders the next time they buy an additional ticket.
+
+```bash
+# Dry run first (throws "DRY RUN" by design after processing one batch)
+pnpm convex run --prod migrations:backfillEventBroadcastDeliveries '{"dryRun":true}'
+
+# Real run (self-schedules until the table is fully scanned)
+pnpm convex run --prod migrations:backfillEventBroadcastDeliveries
+```
+
+**Coverage window:** `emailDeliveries` rows are pruned after 30 days
+(`backend/convex/email/email_delivery.ts` `cleanupOldDeliveries`), so the
+backfill only covers broadcasts sent in the last 30 days. For older broadcasts,
+an existing holder who buys an additional ticket may receive one duplicate of
+an old broadcast — accepted residual risk (bounded, one-time).
+
+### Troubleshooting catch-up
+
+| Cause                                       | Fix                                                                                                                                                                                                                                                                                |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Late buyer did not receive a past broadcast | Check `eventBroadcastDeliveries` `by_event_and_email` for the normalized email. No row = catch-up never ran or was skipped; check Convex logs for `deliverMissed` warnings (missing `SITE_URL` or email credentials skip WITHOUT recording rows, so the next purchase retriggers). |
+| Recipient received a broadcast twice        | Confirm the backfill migration ran after deploy; duplicates are expected only for broadcasts older than the 30-day `emailDeliveries` retention window.                                                                                                                             |
+
 ## Verify ticket purchase reminder delivery
 
 **Symptom:** Ticket purchase reminder emails are not delivering, are sent to the wrong audience, or an admin reports being blocked from sending.

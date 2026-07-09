@@ -2,32 +2,36 @@
   <z-card class="border-border bg-card/80">
     <div class="space-y-4">
       <div class="flex items-center justify-between">
-        <p class="text-xs uppercase font-mono text-muted-foreground tracking-widest">
+        <p
+          class="font-mono text-xs tracking-widest text-muted-foreground uppercase"
+        >
           Resale Settings
         </p>
         @if (resaleEnabled()) {
           <span
-            class="rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-2xs font-mono text-success uppercase"
+            class="rounded-full border border-success/30 bg-success/10 px-2 py-0.5 font-mono text-2xs text-success uppercase"
           >
             Active
           </span>
         } @else {
           <span
-            class="rounded-full border border-border bg-muted px-2 py-0.5 text-2xs font-mono text-muted-foreground uppercase"
+            class="rounded-full border border-border bg-muted px-2 py-0.5 font-mono text-2xs text-muted-foreground uppercase"
           >
             Off
           </span>
         }
       </div>
 
-      <p class="text-xs text-muted-foreground font-mono">
+      <p class="font-mono text-xs text-muted-foreground">
         Control whether ticket holders can list their tickets for resale.
       </p>
 
       <div
         class="flex items-center justify-between rounded-lg border border-border/60 bg-muted/40 px-4 py-3"
       >
-        <label for="resale-toggle" class="text-sm font-mono text-foreground"> Enable Resale </label>
+        <label for="resale-toggle" class="font-mono text-sm text-foreground">
+          Enable Resale
+        </label>
         <button
           type="button"
           id="resale-toggle"
@@ -35,7 +39,7 @@
           [attr.aria-checked]="resaleEnabled()"
           (click)="toggleResaleEnabled()"
           [disabled]="isUpdatingResaleSettings()"
-          class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           [class.bg-primary]="resaleEnabled()"
           [class.bg-muted-foreground/30]="!resaleEnabled()"
           data-testid="resale-toggle"
@@ -53,7 +57,9 @@
           <div
             class="flex items-center justify-between rounded-lg border border-border/60 bg-muted/40 px-4 py-3"
           >
-            <label for="resale-fee" class="text-sm font-mono text-foreground"> Resale Fee </label>
+            <label for="resale-fee" class="font-mono text-sm text-foreground">
+              Resale Fee
+            </label>
             <div class="flex items-center gap-1">
               <input
                 id="resale-fee"
@@ -63,14 +69,15 @@
                 min="0"
                 max="100"
                 step="0.1"
-                class="w-20 min-h-11 rounded-md border border-border bg-background px-3 py-2.5 text-sm font-mono text-foreground text-right focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                class="min-h-11 w-20 rounded-md border border-border bg-background px-3 py-2.5 text-right font-mono text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 data-testid="resale-fee-input"
               />
-              <span class="text-sm font-mono text-muted-foreground">%</span>
+              <span class="font-mono text-sm text-muted-foreground">%</span>
             </div>
           </div>
-          <p class="text-2xs font-mono text-muted-foreground ml-1">
-            Suggested: 4.2%. Roughly covers processing fees on the original purchase refund.
+          <p class="ml-1 font-mono text-2xs text-muted-foreground">
+            Suggested: 4.2%. Roughly covers processing fees on the original
+            purchase refund.
           </p>
         </div>
       }
@@ -80,42 +87,46 @@
   <z-card class="border-border bg-card/80">
     <div class="space-y-4">
       <div class="flex items-center justify-between">
-        <p class="text-xs uppercase font-mono text-muted-foreground tracking-widest">
+        <p
+          class="font-mono text-xs tracking-widest text-muted-foreground uppercase"
+        >
           Resale Queue
         </p>
         <span
-          class="text-xs font-mono text-muted-foreground uppercase tracking-widest"
+          class="font-mono text-xs tracking-widest text-muted-foreground uppercase"
           data-testid="resale-queue-count"
         >
           {{ resaleListingCount() }} active
         </span>
       </div>
 
-      <div class="hidden md:block rounded-xl border border-border bg-card overflow-hidden">
-        <table class="w-full text-left border-collapse">
-          <thead class="bg-muted border-b border-border">
+      <div
+        class="hidden overflow-hidden rounded-xl border border-border bg-card md:block"
+      >
+        <table class="w-full border-collapse text-left">
+          <thead class="border-b border-border bg-muted">
             <tr>
               <th
                 scope="col"
-                class="px-6 py-4 text-xs font-mono text-muted-foreground uppercase tracking-widest"
+                class="px-6 py-4 font-mono text-xs tracking-widest text-muted-foreground uppercase"
               >
                 Date Listed
               </th>
               <th
                 scope="col"
-                class="px-6 py-4 text-xs font-mono text-muted-foreground uppercase tracking-widest"
+                class="px-6 py-4 font-mono text-xs tracking-widest text-muted-foreground uppercase"
               >
                 Seller
               </th>
               <th
                 scope="col"
-                class="px-6 py-4 text-xs font-mono text-muted-foreground uppercase tracking-widest"
+                class="px-6 py-4 font-mono text-xs tracking-widest text-muted-foreground uppercase"
               >
                 Status
               </th>
               <th
                 scope="col"
-                class="px-6 py-4 text-xs font-mono text-muted-foreground uppercase tracking-widest text-right"
+                class="px-6 py-4 text-right font-mono text-xs tracking-widest text-muted-foreground uppercase"
               >
                 Actions
               </th>
@@ -124,11 +135,11 @@
           <tbody>
             @for (listing of resaleListings(); track listing._id) {
               <tr
-                class="border-b border-border/50 hover:bg-muted/40 transition-colors"
+                class="border-b border-border/50 transition-colors hover:bg-muted/40"
                 data-testid="resale-listing-row"
                 [attr.data-resale-listing-id]="listing._id"
               >
-                <td class="px-6 py-4 text-sm font-mono text-muted-foreground">
+                <td class="px-6 py-4 font-mono text-sm text-muted-foreground">
                   {{ listing._creationTime | date: 'shortDate' }}
                 </td>
                 <td class="px-6 py-4">
@@ -137,7 +148,7 @@
                       listing.sellerName
                     }}</span>
                     @if (listing.sellerEmail) {
-                      <span class="text-xs font-mono text-muted-foreground">{{
+                      <span class="font-mono text-xs text-muted-foreground">{{
                         listing.sellerEmail
                       }}</span>
                     }
@@ -145,9 +156,9 @@
                 </td>
                 <td class="px-6 py-4">
                   <span
-                    class="px-2 py-0.5 rounded text-2xs font-mono uppercase tracking-widest border"
+                    class="rounded border px-2 py-0.5 font-mono text-2xs tracking-widest uppercase"
                     [class.bg-info/10]="listing.status === 'listed'"
-                    [class.text-info]="listing.status === 'listed'"
+                    [class.text-info-text]="listing.status === 'listed'"
                     [class.border-info/30]="listing.status === 'listed'"
                     [class.bg-warning/10]="listing.status === 'pending'"
                     [class.text-warning]="listing.status === 'pending'"
@@ -156,14 +167,18 @@
                     [class.text-success]="listing.status === 'completed'"
                     [class.border-success/30]="listing.status === 'completed'"
                     [class.bg-muted]="listing.status === 'cancelled'"
-                    [class.text-muted-foreground]="listing.status === 'cancelled'"
+                    [class.text-muted-foreground]="
+                      listing.status === 'cancelled'
+                    "
                     [class.border-border]="listing.status === 'cancelled'"
                   >
                     {{ listing.status }}
                   </span>
                 </td>
                 <td class="px-6 py-4 text-right">
-                  @if (listing.status === 'listed' || listing.status === 'pending') {
+                  @if (
+                    listing.status === 'listed' || listing.status === 'pending'
+                  ) {
                     <button
                       type="button"
                       z-button
@@ -171,12 +186,12 @@
                       zSize="sm"
                       (click)="adminCancelListing(listing._id)"
                       [zDisabled]="isCancellingListing() === listing._id"
-                      class="text-destructive hover:bg-destructive/10"
+                      class="text-destructive-text hover:bg-destructive/10"
                       aria-label="Cancel this resale listing"
                       [zTooltip]="'Cancel listing'"
                     >
                       @if (isCancellingListing() === listing._id) {
-                        <z-icon zType="loader-circle" class="mr-2 animate-spin" />
+                        <z-icon zType="loader-circle" class="animate-spin" />
                       }
                       Cancel
                     </button>
@@ -186,7 +201,9 @@
             } @empty {
               <tr>
                 <td colspan="4" class="px-6 py-12 text-center">
-                  <span class="text-sm text-muted-foreground font-mono">No resale listings.</span>
+                  <span class="font-mono text-sm text-muted-foreground"
+                    >No resale listings.</span
+                  >
                 </td>
               </tr>
             }
@@ -194,7 +211,7 @@
         </table>
       </div>
 
-      <div class="md:hidden space-y-4">
+      <div class="space-y-4 md:hidden">
         @for (listing of resaleListings(); track listing._id) {
           <z-card
             class="border-border bg-card/80"
@@ -204,17 +221,19 @@
             <div class="space-y-3">
               <div class="flex items-start justify-between">
                 <div>
-                  <p class="font-display text-foreground">{{ listing.sellerName }}</p>
+                  <p class="font-display text-foreground">
+                    {{ listing.sellerName }}
+                  </p>
                   @if (listing.sellerEmail) {
-                    <p class="text-xs font-mono text-muted-foreground truncate">
+                    <p class="truncate font-mono text-xs text-muted-foreground">
                       {{ listing.sellerEmail }}
                     </p>
                   }
                 </div>
                 <span
-                  class="px-2 py-0.5 rounded text-2xs font-mono uppercase tracking-widest border shrink-0"
+                  class="shrink-0 rounded border px-2 py-0.5 font-mono text-2xs tracking-widest uppercase"
                   [class.bg-info/10]="listing.status === 'listed'"
-                  [class.text-info]="listing.status === 'listed'"
+                  [class.text-info-text]="listing.status === 'listed'"
                   [class.border-info/30]="listing.status === 'listed'"
                   [class.bg-warning/10]="listing.status === 'pending'"
                   [class.text-warning]="listing.status === 'pending'"
@@ -229,14 +248,18 @@
                   {{ listing.status }}
                 </span>
               </div>
-              <div class="grid grid-cols-2 gap-3 text-xs font-mono text-foreground/80">
+              <div
+                class="grid grid-cols-2 gap-3 font-mono text-xs text-foreground/80"
+              >
                 <div>
-                  <div class="text-muted-foreground uppercase mb-1">Listed</div>
+                  <div class="mb-1 text-muted-foreground uppercase">Listed</div>
                   <div>{{ listing._creationTime | date: 'short' }}</div>
                 </div>
               </div>
-              @if (listing.status === 'listed' || listing.status === 'pending') {
-                <div class="flex justify-end pt-2 border-t border-border/50">
+              @if (
+                listing.status === 'listed' || listing.status === 'pending'
+              ) {
+                <div class="flex justify-end border-t border-border/50 pt-2">
                   <button
                     type="button"
                     z-button
@@ -244,12 +267,12 @@
                     zSize="sm"
                     (click)="adminCancelListing(listing._id)"
                     [zDisabled]="isCancellingListing() === listing._id"
-                    class="min-h-11 text-destructive border-destructive/30 hover:bg-destructive/10"
+                    class="min-h-11 border-destructive/30 text-destructive-text hover:bg-destructive/10"
                     aria-label="Cancel this resale listing"
                     [zTooltip]="'Cancel listing'"
                   >
                     @if (isCancellingListing() === listing._id) {
-                      <z-icon zType="loader-circle" class="mr-2 animate-spin" />
+                      <z-icon zType="loader-circle" class="animate-spin" />
                     }
                     Cancel Listing
                   </button>
@@ -259,7 +282,7 @@
           </z-card>
         } @empty {
           <div
-            class="text-center py-10 text-muted-foreground font-mono border border-dashed border-border rounded-lg"
+            class="rounded-lg border border-dashed border-border py-10 text-center font-mono text-muted-foreground"
           >
             No resale listings.
           </div>
@@ -270,27 +293,39 @@
 
   <z-card class="border-border bg-card/80">
     <div class="space-y-4">
-      <p class="text-xs uppercase font-mono text-muted-foreground tracking-widest">
+      <p
+        class="font-mono text-xs tracking-widest text-muted-foreground uppercase"
+      >
         Resale Metrics
       </p>
 
       <div class="grid grid-cols-2 gap-4">
         <div>
-          <div class="text-xs font-mono text-muted-foreground uppercase">Total Resales</div>
-          <div class="text-2xl font-display text-foreground" data-testid="resale-completed-count">
+          <div class="font-mono text-xs text-muted-foreground uppercase">
+            Total Resales
+          </div>
+          <div
+            class="font-display text-2xl text-foreground"
+            data-testid="resale-completed-count"
+          >
             {{ resaleMetrics()?.completedResales ?? 0 }}
           </div>
         </div>
         <div>
-          <div class="text-xs font-mono text-muted-foreground uppercase">Notification Subs</div>
-          <div class="text-2xl font-display text-foreground" data-testid="resale-notification-subs">
+          <div class="font-mono text-xs text-muted-foreground uppercase">
+            Notification Subs
+          </div>
+          <div
+            class="font-display text-2xl text-foreground"
+            data-testid="resale-notification-subs"
+          >
             {{ resaleMetrics()?.notificationSubscribers ?? 0 }}
           </div>
         </div>
       </div>
 
       <div
-        class="rounded-lg border border-border/60 bg-muted/40 p-4 text-xs font-mono text-muted-foreground space-y-2"
+        class="space-y-2 rounded-lg border border-border/60 bg-muted/40 p-4 font-mono text-xs text-muted-foreground"
       >
         <div class="flex items-center justify-between">
           <span>Seller refunds</span>
@@ -311,13 +346,14 @@
           </span>
         </div>
         <div
-          class="flex items-center justify-between text-destructive"
+          class="flex items-center justify-between text-destructive-text"
           data-testid="resale-lost-processing-fees"
         >
           <span>Lost processing fees</span>
           <span data-testid="resale-lost-processing-fees-value">
             {{
-              lostProcessingFeesCents() / 100 | currency: 'USD' : 'symbol' : '1.2-2'
+              lostProcessingFeesCents() / 100
+                | currency: 'USD' : 'symbol' : '1.2-2'
             }}
           </span>
         </div>

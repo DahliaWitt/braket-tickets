@@ -1,6 +1,9 @@
 <app-content-layout>
   <div class="flex grow flex-col">
-    @if (approvalsLoading() || isLoading()) {
+    <!-- !auth.authSettled() covers the optimistic activation window: the route
+         was admitted on a cached credential, so keep the skeleton up until the
+         profile-keyed resources start instead of flashing an empty dashboard. -->
+    @if (!auth.authSettled() || approvalsLoading() || isLoading()) {
       <!-- Loading skeleton -->
       <div class="fade-in space-y-6 py-6">
         <z-skeleton class="h-3 w-40" />
@@ -33,7 +36,7 @@
           class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-destructive/20"
         >
           <svg
-            class="h-10 w-10 text-destructive"
+            class="h-10 w-10 text-destructive-text"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -48,7 +51,7 @@
           </svg>
         </div>
         <h2
-          class="mb-4 font-display text-2xl font-bold tracking-tight text-destructive uppercase md:text-3xl"
+          class="mb-4 font-display text-2xl font-bold tracking-tight text-destructive-text uppercase md:text-3xl"
         >
           hit a snag
         </h2>
@@ -163,7 +166,8 @@
                   </h3>
                   <p class="mono-label text-2xs text-muted-foreground/60">
                     {{ event.date | eventDate: 'mediumDate' }},
-                    {{ event.date | eventDate: 'shortTime' }}
+                    {{ event.date | eventDate: 'shortTime'
+                    }}{{ event.endDate | eventEndTime: event.date }}
                     &middot;
                     {{ priceSummary(event).primaryText }}
                   </p>
@@ -223,7 +227,8 @@
                   </h3>
                   <p class="mono-label text-2xs text-muted-foreground/60">
                     {{ event.date | eventDate: 'mediumDate' }},
-                    {{ event.date | eventDate: 'shortTime' }}
+                    {{ event.date | eventDate: 'shortTime'
+                    }}{{ event.endDate | eventEndTime: event.date }}
                   </p>
                   <bra-status-badge status="accent"
                     >Vetting Required</bra-status-badge
@@ -247,7 +252,7 @@
             class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
           >
             <div class="min-w-0">
-              <p class="mono-label mb-2 text-2xs text-destructive/80">
+              <p class="mono-label mb-2 text-2xs text-destructive-text/80">
                 Vetting update
               </p>
               <h2
@@ -334,7 +339,9 @@
                     class="truncate font-mono text-2xs text-muted-foreground/50"
                   >
                     {{ nextEvt.date | eventDate: 'mediumDate' }},
-                    {{ nextEvt.date | eventDate: 'shortTime' }} &mdash;
+                    {{ nextEvt.date | eventDate: 'shortTime'
+                    }}{{ nextEvt.endDate | eventEndTime: nextEvt.date }}
+                    &mdash;
                     {{ nextEvt.title }}
                   </p>
                 }
@@ -403,7 +410,7 @@
                 <div class="mt-auto flex items-center justify-between gap-3">
                   <bra-status-badge
                     status="destructive"
-                    class="w-fit text-destructive/80"
+                    class="w-fit text-destructive-text/80"
                     >Rejected</bra-status-badge
                   >
                   @if (entry.canResubmit) {
@@ -565,7 +572,8 @@
                   </h3>
                   <p class="mono-label text-2xs text-muted-foreground">
                     {{ event.date | eventDate: 'mediumDate' }},
-                    {{ event.date | eventDate: 'shortTime' }}
+                    {{ event.date | eventDate: 'shortTime'
+                    }}{{ event.endDate | eventEndTime: event.date }}
                     @if (event.location) {
                       <span> &middot; {{ event.location }}</span>
                     }

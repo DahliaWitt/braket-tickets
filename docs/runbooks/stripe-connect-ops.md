@@ -145,7 +145,7 @@ The daily cron `process scheduled Stripe payouts` runs `stripe/actions.processSc
 An event settles for payout only when all of these are true:
 
 - It has `order_financial_events` rows for the organizer's connected account (ledger-derived — event `status` does not matter).
-- The event date is older than the payout delay window (otherwise its positive net is reserved, not paid).
+- The event is **over** by more than the payout delay window (otherwise its positive net is reserved, not paid). "Over" means the payout reference instant — `events.endDate` when set, else the start `events.date` — is older than `now - PAYOUT_DELAY_MS`. A running multi-day event stays reserved until its `endDate` plus the delay, even though its start is already past. See `eventEndInstantMs` in [shared/event-time.ts](../../shared/event-time.ts).
 - Its organizer has a Connect account and is payout-ready: `stripeOnboardingStatus === 'complete'` and `stripePayoutsEnabled === true` (or is a platform organizer, in which case the event retires via path 1).
 
 ### Read the payout status in the UI
@@ -202,7 +202,7 @@ Platform organizers never go through this path. `listPlatformOrganizerEligibleEv
 - Refund / dispute net debits reduced the account's Stripe balance after capture.
 - Another cron run already paid out part of the captured revenue on a prior day.
 
-All numbers are sourced from `order_financial_events.connectedAccountNetCents`, populated from Stripe's expanded BalanceTransaction data on captures and refunds. There is no estimation — if the numbers look wrong, the underlying BalanceTransaction is the source of truth. Capture or refund webhook deliveries that cannot read that BalanceTransaction should remain retryable instead of completing with a payout-skipped ledger row. The [trust gate](#payout-trust-gate) blocks the payout entirely when the ledger and the Stripe balance disagree, so a payout that *did* go out was computed from numbers that matched Stripe at submit time.
+All numbers are sourced from `order_financial_events.connectedAccountNetCents`, populated from Stripe's expanded BalanceTransaction data on captures and refunds. There is no estimation — if the numbers look wrong, the underlying BalanceTransaction is the source of truth. Capture or refund webhook deliveries that cannot read that BalanceTransaction should remain retryable instead of completing with a payout-skipped ledger row. The [trust gate](#payout-trust-gate) blocks the payout entirely when the ledger and the Stripe balance disagree, so a payout that _did_ go out was computed from numbers that matched Stripe at submit time.
 
 ## Manual payouts from the Stripe dashboard
 
@@ -234,15 +234,3 @@ Internal actions, run from the Convex Dashboard (Functions → `stripe/actions`)
 - `backfillPaymentCapturedNet({connectedAccountId})` — finds `payment_captured` rows missing `connectedAccountNetCents` (the pre-capture-race-fix population), re-reads each charge's BalanceTransaction, and enriches the row in place. Idempotent; returns `{scanned, enriched, skipped, failed}`.
 
 **Run order matters when both are needed on one account: ingest the external payout FIRST, then backfill.** Backfilling first inflates payable while the manual payout is still unrecorded; the trust gate blocks payouts either way, but doing it in order keeps allocations attributed to the right events. The order is machine-checked: `backfillPaymentCapturedNet` refuses with `EXTERNAL_PAYOUT_UNRECORDED` (listing the offending payout ids) while the account has paid payouts the ledger never recorded.
-
-## Explain a missing payout email
-
-`stripe.confirmPayout` confirms `payout_allocations` and may stamp `paidOutAt` only when the event has no remaining Connect payable balance. Platform-organizer events use `stripe.markEventPaidOut` directly. The payout email fires from inside `markEventPaidOut` when `payoutAmountCents > 0`, guarded by `guardEmailDedup` to avoid duplicates on retries.
-
-No email is sent when:
-
-- The event was a platform organizer event retired via `markEventPaidOut` without a payout amount.
-- Revenue was zero before the settlement window (rare but possible — `buildPayoutPlan` excludes events with `payableCents <= 0`).
-- The organizer row has no `email`.
-
-If the event was paid out with a positive amount and no email arrived, switch to [Email Delivery](./email-delivery.md).

@@ -15,7 +15,14 @@
           Broadcast Email
         </p>
         <p class="font-mono text-xs text-muted-foreground">
-          Send a custom email to all ticket holders and guests for this event.
+          send a custom email to all ticket holders and guests for this event.
+        </p>
+        <p
+          class="font-mono text-xs text-muted-foreground"
+          data-testid="broadcast-catchup-note"
+        >
+          people who get tickets after you send will automatically receive it
+          too.
         </p>
       </div>
 
@@ -65,7 +72,7 @@
 
       @if (hasBroadcastLengthErrors()) {
         <p
-          class="font-mono text-xs text-destructive"
+          class="font-mono text-xs text-destructive-text"
           data-testid="broadcast-length-error"
         >
           Subject or message exceeds allowed length.
@@ -81,14 +88,14 @@
         </p>
       } @else if (broadcastAudienceError()) {
         <p
-          class="font-mono text-xs text-destructive"
+          class="font-mono text-xs text-destructive-text"
           data-testid="broadcast-audience-error"
         >
           {{ broadcastAudienceError() }}
         </p>
       } @else if (broadcastExceedsCap()) {
         <p
-          class="font-mono text-xs text-destructive"
+          class="font-mono text-xs text-destructive-text"
           data-testid="broadcast-exceeds-cap"
         >
           {{ broadcastRecipientCount() }} recipients exceeds the 500 limit.
@@ -98,9 +105,51 @@
           class="font-mono text-xs text-muted-foreground"
           data-testid="broadcast-recipient-count"
         >
-          {{ broadcastRecipientCount() }} recipients (ticket holders + guests).
+          {{ broadcastRecipientCount() }} recipients (ticket holders + guests
+          @if (includeExternalTicketHolders() && importedReachableCount() > 0) {
+            <span>&nbsp;+ external</span>
+          }
+          ).
         </p>
       }
+
+      <!-- external ticket-holder inclusion — always visible, defaults ON -->
+      <div
+        class="flex flex-col gap-1 border-t border-border/60 pt-4"
+        data-testid="broadcast-include-external"
+      >
+        <z-switch
+          [(zChecked)]="includeExternalTicketHolders"
+          zSize="sm"
+          data-testid="broadcast-include-external-switch"
+        >
+          <span class="font-mono text-xs text-foreground lowercase">
+            include external ticket holders
+          </span>
+        </z-switch>
+        <p
+          class="font-mono text-2xs text-muted-foreground lowercase"
+          data-testid="broadcast-include-external-count"
+        >
+          @if (includeExternalTicketHolders()) {
+            @if (importedReachableCount() === 1) {
+              including 1 external ticket holder
+            } @else {
+              including {{ importedReachableCount() }} external ticket holders
+            }
+            @if (importedUnreachableCount() > 0) {
+              · {{ importedUnreachableCount() }} without an email can't be
+              reached
+            }
+          } @else {
+            @if (importedReachableCount() === 1) {
+              1 external ticket holder excluded
+            } @else {
+              {{ importedReachableCount() }} external ticket holders excluded
+            }
+          }
+        </p>
+      </div>
 
       <button
         z-button
@@ -108,25 +157,22 @@
         zSize="sm"
         type="submit"
         data-testid="send-broadcast"
+        [zLoading]="isSendingBroadcast()"
         [zDisabled]="isSendBroadcastDisabled()"
-        [attr.aria-busy]="isSendingBroadcast()"
         class="w-full border-primary/50 text-primary hover:bg-primary/10 sm:w-auto"
       >
-        @if (isSendingBroadcast()) {
-          <z-icon zType="loader-circle" class="mr-2 animate-spin" />
-          Sending...
-        } @else {
-          <z-icon zType="mail" class="mr-2" />
-          Send Email
+        @if (!isSendingBroadcast()) {
+          <z-icon zType="mail" />
         }
+        Send Email
       </button>
 
       @if (sendFeedback(); as feedback) {
         <p
           class="font-mono text-xs"
           data-testid="broadcast-send-feedback"
-          [class.text-destructive]="feedback.kind === 'error'"
-          [class.text-emerald-500]="feedback.kind === 'success'"
+          [class.text-destructive-text]="feedback.kind === 'error'"
+          [class.text-success]="feedback.kind === 'success'"
           [attr.role]="feedback.kind === 'error' ? 'alert' : 'status'"
         >
           {{ feedback.message }}
@@ -149,7 +195,7 @@
 
       @if (broadcastHistoryError()) {
         <p
-          class="text-sm text-destructive"
+          class="text-sm text-destructive-text"
           data-testid="broadcast-history-error-state"
           role="alert"
         >

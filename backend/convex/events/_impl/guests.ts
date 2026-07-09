@@ -1,7 +1,11 @@
 import type {Doc, Id} from '../../_generated/dataModel';
 import type {MutationCtx, QueryCtx} from '../../_generated/server';
+import {scheduleBroadcastCatchup} from '../../lib/broadcast_catchup';
+import {internal} from '../../_generated/api';
 import {throwNotFound} from '../../lib/errors';
+import {validateGuestFields} from '../../lib/events/guest_fields';
 import {
+  validateEmail,
   validateRequiredString,
   validateStringLength,
   MAX_GUEST_NAME_LENGTH,
@@ -25,17 +29,25 @@ export async function add(
 ): Promise<Id<'guests'>> {
   const {user, event} = await requireEventForEdit(ctx, args.eventId);
 
-  validateRequiredString(args.name, 'Name');
-  validateStringLength(args.name, 'Name', MAX_GUEST_NAME_LENGTH);
-  validateStringLength(args.email, 'Email', MAX_GUEST_EMAIL_LENGTH);
-  validateStringLength(args.notes, 'Notes', MAX_GUEST_NOTES_LENGTH);
+  validateGuestFields(args);
 
+  // The admin UI trims and requires a plausible address before submitting;
+  // enforce the same here so direct API calls cannot enqueue broadcast
+  // sends (immediate or catch-up) to non-address strings.
+  const trimmedEmail = args.email?.trim();
+  if (trimmedEmail) {
+    validateEmail(trimmedEmail, 'Email');
+  }
+
+  // Persist the trimmed, validated email so the stored record matches the
+  // value used by scheduling and the broadcast audience lookups downstream.
   const guestId = await ctx.db.insert('guests', {
     ...args,
+    email: trimmedEmail || undefined,
   });
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: user._id,
       action: ADMIN_AUDIT_ACTIONS.GUEST_ADD,
@@ -45,6 +57,13 @@ export async function add(
       source: 'admin-ui',
     },
   );
+
+  // A late-added guest joins the broadcast audience after any prior sends;
+  // catch them up on anything already sent.
+  await scheduleBroadcastCatchup(ctx, {
+    eventId: args.eventId,
+    email: trimmedEmail,
+  });
 
   return guestId;
 }
@@ -81,7 +100,7 @@ export async function update(
   });
 
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: user._id,
       action: ADMIN_AUDIT_ACTIONS.GUEST_UPDATE,
@@ -137,12 +156,125 @@ export async function getInternal(
   return await ctx.db.get('guests', args.id);
 }
 
+/**
+ * How long a guest ticket-email send lock is honored before it is treated as
+ * abandoned. A normal send (PDF build + email dispatch) completes in seconds; a
+ * lock older than this only survives when the send action crashed between
+ * claiming and releasing, so reclaiming it lets a retry proceed. Kept well above
+ * realistic send latency so a genuinely in-flight send is never stolen.
+ */
+export const GUEST_TICKET_SEND_LOCK_STALE_MS = 5 * 60 * 1000;
+
+export type BeginGuestTicketSendResult = {
+  claimed: boolean;
+  reason: 'claimed' | 'already_sent' | 'in_flight' | 'not_found';
+  /**
+   * Ownership token for the claim — the timestamp written to
+   * `emailSendLockedAt`. Only the holder may release the lock, so an older
+   * attempt that resumes after the stale window cannot clear a newer
+   * reclaimed lock. `null` when the claim was not granted. The timestamp is a
+   * sound token because a reclaim only happens once the prior lock is stale
+   * (>5 min old), so the owner's and a reclaimer's tokens can never collide.
+   */
+  lockToken: number | null;
+};
+
+/**
+ * Atomically claims the right to send a guest's ticket email so concurrent
+ * admins/tabs cannot double-send.
+ *
+ * Two guards, because they cover different windows:
+ * - The in-flight lock (`emailSendLockedAt`) serializes racing claims; since
+ *   mutations are transactional, only one of any set wins and the losers are
+ *   turned away `in_flight`. It expires (staleness) so a crashed send self-heals.
+ * - For batch "send all" (`requireUnsent`), the guest is also skipped if a
+ *   durable delivery record already exists OR `emailedAt` is set. The delivery
+ *   record is written inside the send action the moment the provider accepts
+ *   the email, so it closes the window where delivery succeeded but the
+ *   post-send `emailedAt` write failed or the action crashed — the lock alone
+ *   cannot, because it expires. A genuinely failed delivery records no delivery
+ *   row, so it stays retryable (at-least-once for failures, no duplicates).
+ *
+ * Single resends pass `requireUnsent: false`: a deliberate resend bypasses both
+ * the delivery-record and `emailedAt` checks and is gated only by the lock.
+ */
+export async function beginGuestTicketSend(
+  ctx: MutationCtx,
+  args: {
+    id: Id<'guests'>;
+    requireUnsent: boolean;
+  },
+): Promise<BeginGuestTicketSendResult> {
+  const guest = await ctx.db.get('guests', args.id);
+  if (!guest) return {claimed: false, reason: 'not_found', lockToken: null};
+
+  if (args.requireUnsent) {
+    if (guest.emailedAt !== undefined) {
+      return {claimed: false, reason: 'already_sent', lockToken: null};
+    }
+    const alreadyDelivered = await ctx.runQuery(
+      internal.email.email_delivery.hasDelivery,
+      {source: 'ticket', sourceId: args.id},
+    );
+    if (alreadyDelivered) {
+      return {claimed: false, reason: 'already_sent', lockToken: null};
+    }
+  }
+
+  const now = Date.now();
+  const lockedAt = guest.emailSendLockedAt;
+  if (
+    typeof lockedAt === 'number' &&
+    now - lockedAt < GUEST_TICKET_SEND_LOCK_STALE_MS
+  ) {
+    return {claimed: false, reason: 'in_flight', lockToken: null};
+  }
+
+  await ctx.db.patch('guests', args.id, {emailSendLockedAt: now});
+  return {claimed: true, reason: 'claimed', lockToken: now};
+}
+
+/**
+ * Records a successful send. Always sets `emailedAt` (the delivery happened),
+ * but only releases the lock when this attempt still owns it, so a send that
+ * resumed after being stale-reclaimed cannot clear the newer holder's lock.
+ */
 export async function markAsEmailed(
   ctx: MutationCtx,
   args: {
     id: Id<'guests'>;
+    lockToken: number;
   },
 ): Promise<null> {
-  await ctx.db.patch('guests', args.id, {emailedAt: Date.now()});
+  const guest = await ctx.db.get('guests', args.id);
+  if (!guest) return null;
+  await ctx.db.patch('guests', args.id, {
+    emailedAt: Date.now(),
+    ...(guest.emailSendLockedAt === args.lockToken
+      ? {emailSendLockedAt: null}
+      : {}),
+  });
+  return null;
+}
+
+/**
+ * Releases the in-flight send lock without marking the guest emailed. Called on
+ * the failure path so a failed send can be retried immediately instead of
+ * waiting out the staleness window. Only clears the lock when this attempt
+ * still owns it (`emailSendLockedAt === lockToken`), so an older attempt cannot
+ * release a newer reclaimed lock. `null` (not `undefined`) is used because
+ * `ctx.db.patch` does not clear fields set to `undefined` in this codebase.
+ */
+export async function clearGuestTicketSendLock(
+  ctx: MutationCtx,
+  args: {
+    id: Id<'guests'>;
+    lockToken: number;
+  },
+): Promise<null> {
+  const guest = await ctx.db.get('guests', args.id);
+  if (guest && guest.emailSendLockedAt === args.lockToken) {
+    await ctx.db.patch('guests', args.id, {emailSendLockedAt: null});
+  }
   return null;
 }

@@ -19,6 +19,7 @@ export const eventDocFields = {
   title: v.string(),
   description: v.optional(v.string()),
   date: v.string(),
+  endDate: v.optional(v.string()),
   location: v.optional(v.string()),
   poster: v.optional(v.string()),
   price: v.number(),
@@ -100,6 +101,7 @@ export const guestFields = {
   type: guestTypeValidator,
   notes: v.optional(v.string()),
   emailedAt: v.optional(v.number()),
+  emailSendLockedAt: v.optional(v.union(v.number(), v.null())),
   checkedInAt: v.optional(v.number()),
   checkedInBy: v.optional(v.id('users')),
 };
@@ -164,6 +166,26 @@ const purchaseObject = v.object({
   ),
 });
 
+/**
+ * Imported (external) ticket-holder counts for the management summary. These
+ * are NEW, SEPARATE fields — they never move a sales/financial number.
+ * `total` = all imported entries for the event; `checkedIn` = those with a
+ * check-in timestamp; `bySource` = per-source breakdown (RA, External, ...).
+ * Native sales metrics (soldCount, tierCounts, revenue, sell-through) remain
+ * computed over native purchases ONLY.
+ */
+const importedSummaryObject = v.object({
+  total: v.number(),
+  checkedIn: v.number(),
+  bySource: v.array(
+    v.object({
+      sourceLabel: v.string(),
+      total: v.number(),
+      checkedIn: v.number(),
+    }),
+  ),
+});
+
 export const managementSummaryValidator = v.object({
   event: canonicalEventDocValidator,
   soldCount: v.number(),
@@ -185,6 +207,7 @@ export const managementSummaryValidator = v.object({
     }),
   ),
   checkInStats: checkInStatsObject,
+  imported: importedSummaryObject,
 });
 
 export const managementPurchasesValidator = v.object({
@@ -251,6 +274,7 @@ export const createEventArgs = {
   title: v.string(),
   description: v.optional(v.string()),
   date: v.string(),
+  endDate: v.optional(v.string()),
   location: v.optional(v.string()),
   price: v.number(),
   totalTickets: v.number(),
@@ -269,6 +293,8 @@ export const updateEventArgs = {
   title: v.optional(v.string()),
   description: v.optional(v.string()),
   date: v.optional(v.string()),
+  /** New end instant; `null` clears the stored endDate. */
+  endDate: v.optional(v.union(v.string(), v.null())),
   status: v.optional(eventStatusValidator),
   totalTickets: v.optional(v.number()),
   price: v.optional(v.number()),

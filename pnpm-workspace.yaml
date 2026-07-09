@@ -12,6 +12,18 @@ packages:
   # Shared packages (if any are added in the future)
   - 'shared/*'
 
+# Single-source version pins for auth protocol packages.
+# The better-auth client (frontend) and server (backend) speak the same wire
+# protocol and MUST stay on the exact same version — a partial bump silently
+# splits the client/server auth protocol. @convex-dev/better-auth is the Convex
+# adapter and peer-requires better-auth >=1.6.11 <1.7.0, so it moves in lockstep.
+# Both packages live only in backend/ and frontend/; reference via "catalog:".
+# Bump both versions here in one place. Dependabot's "auth" group updates the
+# catalog entries (pnpm catalog support is GA).
+catalog:
+  '@convex-dev/better-auth': ^0.12.5
+  better-auth: 1.6.23
+
 # Temporary security override note:
 # Active pnpm overrides live in the root package.json under pnpm.overrides
 # because this repo is pinned to pnpm 9.15.0.

@@ -48,7 +48,11 @@ import {
   EVENT_VISIBILITY,
   type EventVisibility,
 } from '@shared/domain/event-visibility';
-import {MAX_EVENT_TITLE_LENGTH} from '@shared/constants';
+import {
+  MAX_EVENT_TITLE_LENGTH,
+  MAX_EVENT_DURATION_DAYS,
+  MAX_EVENT_DURATION_MS,
+} from '@shared/constants';
 import {extractConvexErrorMessage} from '@/core/utils/error-message.utils';
 import {toast} from 'ngx-sonner';
 import {logger} from '@/utils/logger';
@@ -57,6 +61,7 @@ import {getTodayInEventTimeZone} from '@/utils/event-date-format';
 import {
   isSignalFormFieldInvalid,
   signalFormFieldHasError,
+  signalFormFieldErrorMessage,
   notBlank,
 } from '@/utils/signal-form';
 
@@ -64,6 +69,8 @@ interface EventFormModel {
   title: string;
   date: Date | null;
   time: string;
+  endDate: Date | null;
+  endTime: string;
   location: string;
   description: string;
   price: string; // String for input compatibility
@@ -111,6 +118,8 @@ function createEmptyEventFormModel(organizerId = ''): EventFormModel {
     title: '',
     date: null,
     time: '20:00',
+    endDate: null,
+    endTime: '',
     location: '',
     description: '',
     price: '0',
@@ -210,6 +219,8 @@ function buildEventFormModel(evt: EditableEvent): EventFormModel {
     title: evt.title,
     date: parsedDate,
     time: formatEventTimeInput(evt.date),
+    endDate: evt.endDate ? parseEventDateInEventTimeZone(evt.endDate) : null,
+    endTime: evt.endDate ? formatEventTimeInput(evt.endDate) : '',
     location: evt.location || '',
     description: evt.description || '',
     price: String((evt.price || 0) / 100),
@@ -319,7 +330,7 @@ export class EventEditorComponent implements HasUnsavedChanges {
   readonly inputClasses =
     'font-sans border rounded-sm px-3 py-2 bg-background border-border text-foreground w-full focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors placeholder:text-muted-foreground/40 disabled:opacity-50 disabled:cursor-not-allowed';
   readonly errorClasses =
-    'border-destructive/50 text-destructive focus:ring-destructive/50';
+    'border-destructive/50 text-destructive-text focus:ring-destructive/50';
 
   readonly isCreateMode = computed(() => !this.id());
 
@@ -471,6 +482,52 @@ export class EventEditorComponent implements HasUnsavedChanges {
         : null;
     });
 
+    validate(f.endTime, (ctx) => {
+      const endDate = ctx.valueOf(f.endDate);
+      const endTime = ctx.value();
+      if (!endDate && !endTime) return null;
+      if (!endDate || !endTime) {
+        return {
+          kind: 'endDateTimePair',
+          message: 'Set both end date and time, or clear both',
+        };
+      }
+      if (!isLocalEventDateTimeValid(endDate, endTime)) {
+        return {
+          kind: 'invalidEventTime',
+          message: 'Choose a valid time for this date',
+        };
+      }
+
+      const startDate = ctx.valueOf(f.date);
+      const startTime = ctx.valueOf(f.time);
+      if (
+        !startDate ||
+        !startTime ||
+        !isLocalEventDateTimeValid(startDate, startTime)
+      ) {
+        return null;
+      }
+
+      const start = combineLocalEventDateTime(startDate, startTime);
+      const end = combineLocalEventDateTime(endDate, endTime);
+      if (end.getTime() <= start.getTime()) {
+        return {
+          kind: 'endBeforeStart',
+          message: 'End date must be after the event start',
+        };
+      }
+      // Mirror the backend cap (and its wording) so an over-long span is caught
+      // before submit.
+      if (end.getTime() - start.getTime() > MAX_EVENT_DURATION_MS) {
+        return {
+          kind: 'endTooFar',
+          message: `End date must be within ${MAX_EVENT_DURATION_DAYS} days of the event start`,
+        };
+      }
+      return null;
+    });
+
     required(f.price);
     validate(f.price, ({value}) => {
       return invalidUsdAmountError(value());
@@ -600,7 +657,9 @@ export class EventEditorComponent implements HasUnsavedChanges {
       current.organizerId !== pristine.organizerId ||
       current.visibility !== pristine.visibility ||
       this.hasPosterChange() ||
-      isDateDirty(current.date, pristine.date)
+      isDateDirty(current.date, pristine.date) ||
+      current.endTime !== pristine.endTime ||
+      isDateDirty(current.endDate, pristine.endDate)
     );
   });
 
@@ -669,6 +728,16 @@ export class EventEditorComponent implements HasUnsavedChanges {
 
   hasError<T>(field: MaybeFieldTree<T>, errorKind: string): boolean {
     return signalFormFieldHasError(field, errorKind);
+  }
+
+  /** First end-window validation message, or null when the end fields are valid. */
+  protected endWindowError(): string | null {
+    return signalFormFieldErrorMessage(this.eventForm.endTime, [
+      'endDateTimePair',
+      'invalidEventTime',
+      'endBeforeStart',
+      'endTooFar',
+    ]);
   }
 
   toggleSlidingScale(event: Event) {
@@ -796,9 +865,17 @@ export class EventEditorComponent implements HasUnsavedChanges {
           }
         : undefined;
 
+      const endDateArg =
+        formValue.endDate && formValue.endTime
+          ? formatDateYmd(
+              combineLocalEventDateTime(formValue.endDate, formValue.endTime),
+            )
+          : undefined;
+
       const baseArgs = {
         title: formValue.title,
         date: formatDateYmd(combineLocalEventDateTime(date, formValue.time)),
+        ...(endDateArg !== undefined ? {endDate: endDateArg} : {}),
         location: formValue.location.trim() || undefined,
         description: formValue.description.trim() || undefined,
         price: priceCents,
@@ -832,6 +909,8 @@ export class EventEditorComponent implements HasUnsavedChanges {
           {
             id: this.event()!._id,
             ...baseArgs,
+            // Explicit null clears a previously stored end date.
+            ...(endDateArg === undefined ? {endDate: null} : {}),
             organizerId: (formValue.organizerId || undefined) as
               | Id<'organizers'>
               | undefined,

@@ -30,6 +30,10 @@ export const recordCheckIn = internalMutation({
     eventId: v.optional(v.id('events')),
     organizerId: v.optional(v.id('organizers')),
     source: v.optional(v.string()),
+    // Captured by the scheduling mutation: request metadata does not survive
+    // ctx.scheduler, so the hot-path mutation passes it through explicitly.
+    ipAddress: v.optional(v.string()),
+    userAgent: v.optional(v.string()),
   },
   returns: v.null(),
   handler: recordCheckInLogImpl,
@@ -68,6 +72,10 @@ export const logAdminAccess = internalMutation({
     targetUserId: v.optional(v.id('users')),
     organizerId: v.optional(v.id('organizers')),
     source: v.optional(v.string()),
+    // Only needed when invoked via ctx.scheduler (request metadata does not
+    // survive scheduling); runMutation callers get automatic capture.
+    ipAddress: v.optional(v.string()),
+    userAgent: v.optional(v.string()),
   },
   returns: v.null(),
   handler: logAdminAccessImpl,

@@ -199,7 +199,7 @@ export async function sendTicketPurchaseReminder(
 
   // 11. Audit log
   await insertAdminAuditLog(
-    {db: ctx.db},
+    {db: ctx.db, meta: ctx.meta},
     {
       adminId: userId,
       action: 'event.reminder-email.send.approved_no_ticket',

@@ -1,7 +1,8 @@
 import {v} from 'convex/values';
 
-import {mutation, query} from '../_generated/server';
+import {internalMutation, mutation, query} from '../_generated/server';
 import {
+  deliverMissedBroadcasts,
   getBroadcastAudience,
   listBroadcastHistory,
   sendBroadcast,
@@ -24,10 +25,20 @@ const sendResultValidator = v.union(
 );
 
 export const getAudience = query({
-  args: {eventId: v.id('events')},
+  args: {
+    eventId: v.id('events'),
+    // Mirrors the send toggle (default ON). When false, imported entries are
+    // excluded from the previewed recipient count.
+    includeExternalTicketHolders: v.optional(v.boolean()),
+  },
   returns: v.object({
     recipientCount: v.number(),
     exceedsCap: v.boolean(),
+    // Reachability split for imported (external) ticket holders so the compose
+    // flow can render "includes N external ticket holders". `reachable` = with
+    // email (join the audience when included); `unreachable` = without email.
+    importedReachableCount: v.number(),
+    importedUnreachableCount: v.number(),
   }),
   handler: async (ctx, args) => await getBroadcastAudience(ctx, args),
 });
@@ -54,7 +65,25 @@ export const send = mutation({
     // Optional serialized ProseMirror JSON rich body. When present, the server
     // validates + renders it and derives the canonical plain text from it.
     bodyJson: v.optional(v.string()),
+    // Include imported (external) ticket holders WITH an email in the audience.
+    // Defaults to true. Recipients are deduped by normalized email across
+    // native purchasers, guests, and imported entries regardless of this flag.
+    includeExternalTicketHolders: v.optional(v.boolean()),
   },
   returns: sendResultValidator,
   handler: async (ctx, args) => await sendBroadcast(ctx, args),
+});
+
+/**
+ * Scheduled by ticket-acquisition mutations (primary completion, resale
+ * settlement, guest add) to deliver broadcasts the recipient missed.
+ */
+export const deliverMissed = internalMutation({
+  args: {
+    eventId: v.id('events'),
+    email: v.string(),
+    userId: v.optional(v.id('users')),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => await deliverMissedBroadcasts(ctx, args),
 });
