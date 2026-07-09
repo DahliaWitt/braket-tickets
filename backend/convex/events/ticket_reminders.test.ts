@@ -1038,3 +1038,86 @@ describe('Unsub Token Generation', () => {
     expect(prefAfter!.optedIn).toBe(true);
   });
 });
+
+describe('Ticket Reminder Audience — imported entries excluded', () => {
+  it('imported ticket holders never enter the approved-without-ticket segment', async () => {
+    const t = convexTest();
+
+    const adminId = await t.mutation(api.testing.users.createUserDirectly, {
+      name: 'Admin',
+      email: `admin-imp-reminder-${Date.now()}@test-reminders.com`,
+      isRootAdmin: true,
+    });
+    const organizerId = await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {name: 'Reminder Community'},
+    );
+    const eventId = await t.mutation(api.testing.events.seedEvent, {
+      title: 'Reminder Event',
+      date: '2026-06-01T02:00:00.000Z',
+      price: 1500,
+      totalTickets: 100,
+      status: 'published',
+      visibility: 'public',
+      organizerId,
+    });
+
+    // One approved member without a ticket → the baseline audience.
+    const memberId = await t.mutation(api.testing.users.createUserDirectly, {
+      name: 'Approved Member',
+      email: 'member@example.com',
+    });
+    await t.run(async (ctx) => {
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- no production composite for applications; mirrors the existing reminder-audience tests
+      await ctx.db.insert('applications', {
+        userId: memberId,
+        organizerId,
+        status: 'approved',
+        answers: {},
+      });
+    });
+
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    const audienceBefore = await asAdmin.query(
+      api.events.reminders.getTicketReminderAudience,
+      {eventId},
+    );
+    expect(audienceBefore.segment).toBe('approved_no_ticket');
+    expect(audienceBefore.recipientCount).toBe(1);
+
+    // Import external ticket holders WITH emails (including one whose email
+    // matches the approved member — must NOT create a duplicate or linkage).
+    await asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId,
+      batchKey: 'reminder-imp-1',
+      dedupMode: 'skip',
+      sourceLabel: 'RA',
+      rows: [
+        {name: 'Ext One', email: 'ext-one@example.com', externalRef: 'R1'},
+        {name: 'Ext Two', email: 'ext-two@example.com', externalRef: 'R2'},
+        // Same email as the approved member — inert, unlinked.
+        {name: 'Ext Member', email: 'member@example.com', externalRef: 'R3'},
+      ],
+    });
+
+    // The reminder audience count is UNCHANGED — imported entries are inert,
+    // unlinked records with no membership, so they cannot match the
+    // member-based segment.
+    const audienceAfter = await asAdmin.query(
+      api.events.reminders.getTicketReminderAudience,
+      {eventId},
+    );
+    expect(audienceAfter.recipientCount).toBe(1);
+
+    // The resolved recipient list contains ONLY the approved member — none of
+    // the imported emails leak into the reminder send audience.
+    const {recipients} = await t.run(async (ctx) =>
+      loadTicketReminderRecipients(ctx, eventId),
+    );
+    const emails = recipients.map((r) => r.email.toLowerCase());
+    expect(emails).toEqual(['member@example.com']);
+    expect(emails).not.toContain('ext-one@example.com');
+    expect(emails).not.toContain('ext-two@example.com');
+  });
+});

@@ -184,6 +184,59 @@ describe('marketing_emails.getRecipientCount', () => {
     expect(result.cappedAt500).toBe(false);
   });
 
+  it('never includes imported ticket holders in the marketing audience', async () => {
+    const t = convexTest();
+    const orgId = await seedOrg(t);
+    const userId = await seedUser(t, 'member@test.com');
+    await approveUser(t, userId, orgId);
+    await seedMarketingPreference(t, {
+      userId,
+      organizerId: orgId,
+      optedIn: true,
+      unsubToken: 'mk-baseline',
+    });
+
+    const eventId = await t.mutation(api.testing.events.seedEvent, {
+      title: 'Test',
+      date: '2026-12-01',
+      price: 0,
+      totalTickets: 100,
+      status: 'draft',
+      visibility: 'public',
+      organizerId: orgId,
+    });
+
+    const adminId = await seedUser(t, 'admin@test.com');
+    await seedCommunityAdmin(t, adminId, orgId);
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    // Baseline: exactly one marketing recipient (the vetted, opted-in member).
+    const before = await asAdmin.query(api.marketing.emails.getRecipientCount, {
+      eventId,
+    });
+    expect(before.count).toBe(1);
+
+    // Import external ticket holders — one whose email matches the vetted
+    // member (proving no email-based linkage into the marketing lane) and one
+    // entirely new address that must never surface as a marketing recipient.
+    await asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId,
+      batchKey: 'mk-import',
+      dedupMode: 'skip',
+      rows: [
+        {name: 'Member Dup', email: 'MEMBER@test.com', externalRef: 'MK-1'},
+        {name: 'Outsider', email: 'outsider@test.com', externalRef: 'MK-2'},
+      ],
+    });
+
+    // The marketing audience is membership-based and never reads the imported
+    // table, so the count is unchanged.
+    const after = await asAdmin.query(api.marketing.emails.getRecipientCount, {
+      eventId,
+    });
+    expect(after.count).toBe(1);
+  });
+
   it('deduplicates users appearing in multiple approval paths', async () => {
     const t = convexTest();
     const org1 = await seedOrg(t, 'Org1');

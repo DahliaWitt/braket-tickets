@@ -70,6 +70,14 @@ export type RosterRow = {
 // getEventCheckInSummary — live O(1) summary.
 // The summary depends on events.checkedInCount/events.lastCheckInAt and
 // event_inventory.soldCount being maintained by ticket/order writers.
+//
+// SCOPE: this counter is TICKET-scoped. Guest check-ins and imported
+// external-ticket check-ins (events/_impl/imported_tickets.applyImportedCheckIn)
+// deliberately do NOT increment events.checkedInCount — they patch their own
+// rows. So this summary reflects Braket-native ticket check-ins only; imported
+// door counts are derived separately from importedTicketHolders and surfaced via
+// the management summary's per-source breakdown. Keep new check-in writers off
+// this counter unless they represent native tickets.
 // LINT.ThenChange("./check_in.ts")
 // ---------------------------------------------------------------------------
 

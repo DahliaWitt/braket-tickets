@@ -68,3 +68,25 @@ export type TicketReminderAudience = FunctionReturnType<
 export type TicketReminderSendResult = FunctionReturnType<
   typeof api.events.reminders.sendTicketPurchaseReminder
 >;
+
+/**
+ * A single imported external ticket-holder, locked to the reactive
+ * `imported_tickets.listByEvent` query return shape. Imported entries are a
+ * distinct record type — never a purchase/order/ticket — and carry a source
+ * label plus optional external reference / order reference / ticket type label /
+ * raw purchase-date string. They are inert: excluded from all financial
+ * surfaces, never linked to Braket accounts.
+ */
+export type ImportedTicketHolder = FunctionReturnType<
+  typeof api.events.imported_tickets.listByEvent
+>[number];
+
+/** Structured result of a bulk import (guest or ticket), server-authoritative. */
+export type ImportBatchResult = FunctionReturnType<
+  typeof api.events.imported_tickets.importBatch
+>;
+
+/** Result of removing an import batch — includes the checked-in count warning. */
+export type ImportBatchRemovalResult = FunctionReturnType<
+  typeof api.events.imported_tickets.removeBatch
+>;
