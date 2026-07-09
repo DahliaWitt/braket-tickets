@@ -11,7 +11,7 @@ export const dropdownItemVariants = cva(
       variant: {
         default: '',
         destructive:
-          'text-destructive-text hover:bg-destructive/10 focus:bg-destructive/10 focus:text-destructive-text dark:hover:bg-destructive/20 dark:focus:bg-destructive/20',
+          'text-destructive-text hover:bg-destructive/10 hover:text-destructive-text focus:bg-destructive/10 focus:text-destructive-text dark:hover:bg-destructive/20 dark:focus:bg-destructive/20',
       },
       inset: {
         true: 'pl-8',

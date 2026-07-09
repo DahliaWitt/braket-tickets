@@ -1,4 +1,9 @@
-import {test, expect, uniqueName} from './helpers/test-setup';
+import {
+  test,
+  expect,
+  uniqueName,
+  type ConvexHelper,
+} from './helpers/test-setup';
 import type {Page, Locator} from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import {api} from '@convex/_generated/api';
@@ -43,6 +48,71 @@ async function scanColorContrast(
     return {route, violationIds: critical.map((v) => v.id)};
   }
   return null;
+}
+
+/** Seed an org (with vetting questions) + a published event for /events/:id and /vetting/:id. */
+async function seedOrgAndEvent(
+  convexHelper: ConvexHelper,
+  namePrefix: string,
+): Promise<{orgId: string; eventTitle: string; eventId: string}> {
+  const orgId = (await convexHelper.mutation(
+    api.testing.communities.seedOrganizer,
+    {
+      name: uniqueName(`${namePrefix} Org`),
+      isPlatformOrganizer: true,
+      isPublicDirectory: true,
+      vettingQuestions: [
+        {
+          id: 'q1',
+          question: 'How did you hear about us?',
+          type: 'text' as const,
+          required: true,
+        },
+      ],
+    },
+  )) as string;
+  const eventTitle = uniqueName(`${namePrefix} Event`);
+  const eventId = (await convexHelper.mutation(api.testing.events.seedEvent, {
+    title: eventTitle,
+    date: '2030-06-01',
+    price: 1500,
+    totalTickets: 50,
+    status: 'published',
+    visibility: 'public',
+    organizerId: orgId,
+  })) as string;
+  return {orgId, eventTitle, eventId};
+}
+
+/** Run the /dashboard, /events/:id, /vetting/:id contrast sequence used by both auth tests. */
+async function auditAuthedUserRoutes(
+  page: Page,
+  seeded: {orgId: string; eventTitle: string; eventId: string},
+  options: {theme?: 'dark'} = {},
+): Promise<ContrastViolation[]> {
+  const violations: ContrastViolation[] = [];
+  const dashboardV = await scanColorContrast(
+    page,
+    '/dashboard',
+    page.getByRole('heading', {level: 1}),
+    options,
+  );
+  if (dashboardV) violations.push(dashboardV);
+  const eventV = await scanColorContrast(
+    page,
+    `/events/${seeded.eventId}`,
+    page.getByRole('heading', {name: seeded.eventTitle}),
+    options,
+  );
+  if (eventV) violations.push(eventV);
+  const vettingV = await scanColorContrast(
+    page,
+    `/vetting/${seeded.orgId}`,
+    page.getByRole('heading', {level: 1}),
+    options,
+  );
+  if (vettingV) violations.push(vettingV);
+  return violations;
 }
 
 test.describe('Accessibility Audit', () => {
@@ -144,60 +214,8 @@ test.describe('Accessibility Audit', () => {
     convexHelper,
   }) => {
     const page = authedPage;
-    const violations: ContrastViolation[] = [];
-
-    // --- /dashboard ---
-    const dashboardV = await scanColorContrast(
-      page,
-      '/dashboard',
-      page.getByRole('heading', {level: 1}),
-    );
-    if (dashboardV) violations.push(dashboardV);
-
-    // Seed an org with vetting questions and a published event for /events/:id and /vetting/:id
-    const orgId = await convexHelper.mutation(
-      api.testing.communities.seedOrganizer,
-      {
-        name: uniqueName('A11y Contrast Org'),
-        isPlatformOrganizer: true,
-        isPublicDirectory: true,
-        vettingQuestions: [
-          {
-            id: 'q1',
-            question: 'How did you hear about us?',
-            type: 'text' as const,
-            required: true,
-          },
-        ],
-      },
-    );
-    const eventTitle = uniqueName('A11y Contrast Event');
-    const eventId = await convexHelper.mutation(api.testing.events.seedEvent, {
-      title: eventTitle,
-      date: '2030-06-01',
-      price: 1500,
-      totalTickets: 50,
-      status: 'published',
-      visibility: 'public',
-      organizerId: orgId,
-    });
-
-    // --- /events/:id (event with vetting-required warning banner) ---
-    const eventV = await scanColorContrast(
-      page,
-      `/events/${eventId}`,
-      page.getByRole('heading', {name: eventTitle}),
-    );
-    if (eventV) violations.push(eventV);
-
-    // --- /vetting/:id ---
-    const vettingV = await scanColorContrast(
-      page,
-      `/vetting/${orgId}`,
-      page.getByRole('heading', {level: 1}),
-    );
-    if (vettingV) violations.push(vettingV);
-
+    const seeded = await seedOrgAndEvent(convexHelper, 'A11y Contrast');
+    const violations = await auditAuthedUserRoutes(page, seeded);
     expect(violations).toEqual([]);
   });
 
@@ -253,63 +271,10 @@ test.describe('Accessibility Audit', () => {
       window.localStorage.setItem('theme', 'dark');
     });
 
-    const violations: ContrastViolation[] = [];
-
-    // --- /dashboard ---
-    const dashboardV = await scanColorContrast(
-      page,
-      '/dashboard',
-      page.getByRole('heading', {level: 1}),
-      {theme: 'dark'},
-    );
-    if (dashboardV) violations.push(dashboardV);
-
-    // Seed an org with vetting questions and a published event for /events/:id and /vetting/:id
-    const orgId = await convexHelper.mutation(
-      api.testing.communities.seedOrganizer,
-      {
-        name: uniqueName('A11y Dark Contrast Org'),
-        isPlatformOrganizer: true,
-        isPublicDirectory: true,
-        vettingQuestions: [
-          {
-            id: 'q1',
-            question: 'How did you hear about us?',
-            type: 'text' as const,
-            required: true,
-          },
-        ],
-      },
-    );
-    const eventTitle = uniqueName('A11y Dark Contrast Event');
-    const eventId = await convexHelper.mutation(api.testing.events.seedEvent, {
-      title: eventTitle,
-      date: '2030-06-01',
-      price: 1500,
-      totalTickets: 50,
-      status: 'published',
-      visibility: 'public',
-      organizerId: orgId,
+    const seeded = await seedOrgAndEvent(convexHelper, 'A11y Dark Contrast');
+    const violations = await auditAuthedUserRoutes(page, seeded, {
+      theme: 'dark',
     });
-
-    // --- /events/:id ---
-    const eventV = await scanColorContrast(
-      page,
-      `/events/${eventId}`,
-      page.getByRole('heading', {name: eventTitle}),
-      {theme: 'dark'},
-    );
-    if (eventV) violations.push(eventV);
-
-    // --- /vetting/:id ---
-    const vettingV = await scanColorContrast(
-      page,
-      `/vetting/${orgId}`,
-      page.getByRole('heading', {level: 1}),
-      {theme: 'dark'},
-    );
-    if (vettingV) violations.push(vettingV);
-
     expect(violations).toEqual([]);
   });
 
