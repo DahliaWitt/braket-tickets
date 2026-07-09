@@ -157,6 +157,7 @@ export class AdminEventsService {
     eventId: string,
     subject: string,
     message: string,
+    bodyJson?: string,
   ): Promise<TicketReminderSendResult> {
     return this.convex.mutation(
       api.events.reminders.sendTicketPurchaseReminder,
@@ -164,6 +165,7 @@ export class AdminEventsService {
         eventId: eventId as Id<'events'>,
         subject,
         message,
+        bodyJson,
       },
     );
   }

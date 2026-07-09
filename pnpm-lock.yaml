@@ -86,7 +86,7 @@ importers:
         version: 7.3.2(@types/node@22.19.7)(jiti@2.6.1)(less@4.6.4)(lightningcss@1.32.0)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3)
       vitest:
         specifier: ^4.1.4
-        version: 4.1.4(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@22.19.7)(@vitest/coverage-v8@4.1.4)(jsdom@27.4.0(@noble/hashes@2.2.0))(vite@7.3.2(@types/node@22.19.7)(jiti@2.6.1)(less@4.6.4)(lightningcss@1.32.0)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))
+        version: 4.1.4(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@22.19.7)(@vitest/coverage-v8@4.1.4)(happy-dom@20.10.6)(jsdom@27.4.0(@noble/hashes@2.2.0))(vite@7.3.2(@types/node@22.19.7)(jiti@2.6.1)(less@4.6.4)(lightningcss@1.32.0)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))
 
   backend:
     dependencies:
@@ -148,6 +148,42 @@ importers:
       '@edge-runtime/vm':
         specifier: ^3.2.0
         version: 3.2.0
+      '@tiptap/core':
+        specifier: 3.27.2
+        version: 3.27.2(@tiptap/pm@3.27.2)
+      '@tiptap/extension-bold':
+        specifier: 3.27.2
+        version: 3.27.2(@tiptap/core@3.27.2(@tiptap/pm@3.27.2))
+      '@tiptap/extension-document':
+        specifier: 3.27.2
+        version: 3.27.2(@tiptap/core@3.27.2(@tiptap/pm@3.27.2))
+      '@tiptap/extension-hard-break':
+        specifier: 3.27.2
+        version: 3.27.2(@tiptap/core@3.27.2(@tiptap/pm@3.27.2))
+      '@tiptap/extension-heading':
+        specifier: 3.27.2
+        version: 3.27.2(@tiptap/core@3.27.2(@tiptap/pm@3.27.2))
+      '@tiptap/extension-image':
+        specifier: 3.27.2
+        version: 3.27.2(@tiptap/core@3.27.2(@tiptap/pm@3.27.2))
+      '@tiptap/extension-italic':
+        specifier: 3.27.2
+        version: 3.27.2(@tiptap/core@3.27.2(@tiptap/pm@3.27.2))
+      '@tiptap/extension-link':
+        specifier: 3.27.2
+        version: 3.27.2(@tiptap/core@3.27.2(@tiptap/pm@3.27.2))(@tiptap/pm@3.27.2)
+      '@tiptap/extension-list':
+        specifier: 3.27.2
+        version: 3.27.2(@tiptap/core@3.27.2(@tiptap/pm@3.27.2))(@tiptap/pm@3.27.2)
+      '@tiptap/extension-paragraph':
+        specifier: 3.27.2
+        version: 3.27.2(@tiptap/core@3.27.2(@tiptap/pm@3.27.2))
+      '@tiptap/extension-text':
+        specifier: 3.27.2
+        version: 3.27.2(@tiptap/core@3.27.2(@tiptap/pm@3.27.2))
+      '@tiptap/html':
+        specifier: 3.27.2
+        version: 3.27.2(@tiptap/core@3.27.2(@tiptap/pm@3.27.2))(@tiptap/pm@3.27.2)(happy-dom@20.10.6)
       '@types/fontkit':
         specifier: 2.0.9
         version: 2.0.9
@@ -186,7 +222,7 @@ importers:
         version: 7.3.2(@types/node@22.19.7)(jiti@2.6.1)(less@4.6.4)(lightningcss@1.32.0)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3)
       vitest:
         specifier: ^4.1.4
-        version: 4.1.4(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@22.19.7)(@vitest/coverage-v8@4.1.4)(jsdom@27.4.0(@noble/hashes@2.2.0))(vite@7.3.2(@types/node@22.19.7)(jiti@2.6.1)(less@4.6.4)(lightningcss@1.32.0)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))
+        version: 4.1.4(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@22.19.7)(@vitest/coverage-v8@4.1.4)(happy-dom@20.10.6)(jsdom@27.4.0(@noble/hashes@2.2.0))(vite@7.3.2(@types/node@22.19.7)(jiti@2.6.1)(less@4.6.4)(lightningcss@1.32.0)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))
       vitest-mock-extended:
         specifier: ^4.0.0
         version: 4.0.0(typescript@6.0.3)(vitest@4.1.4)
@@ -226,6 +262,42 @@ importers:
       '@stripe/stripe-js':
         specifier: ^9.2.0
         version: 9.2.0
+      '@tiptap/core':
+        specifier: 3.27.2
+        version: 3.27.2(@tiptap/pm@3.27.2)
+      '@tiptap/extension-bold':
+        specifier: 3.27.2
+        version: 3.27.2(@tiptap/core@3.27.2(@tiptap/pm@3.27.2))
+      '@tiptap/extension-document':
+        specifier: 3.27.2
+        version: 3.27.2(@tiptap/core@3.27.2(@tiptap/pm@3.27.2))
+      '@tiptap/extension-hard-break':
+        specifier: 3.27.2
+        version: 3.27.2(@tiptap/core@3.27.2(@tiptap/pm@3.27.2))
+      '@tiptap/extension-heading':
+        specifier: 3.27.2
+        version: 3.27.2(@tiptap/core@3.27.2(@tiptap/pm@3.27.2))
+      '@tiptap/extension-image':
+        specifier: 3.27.2
+        version: 3.27.2(@tiptap/core@3.27.2(@tiptap/pm@3.27.2))
+      '@tiptap/extension-italic':
+        specifier: 3.27.2
+        version: 3.27.2(@tiptap/core@3.27.2(@tiptap/pm@3.27.2))
+      '@tiptap/extension-link':
+        specifier: 3.27.2
+        version: 3.27.2(@tiptap/core@3.27.2(@tiptap/pm@3.27.2))(@tiptap/pm@3.27.2)
+      '@tiptap/extension-list':
+        specifier: 3.27.2
+        version: 3.27.2(@tiptap/core@3.27.2(@tiptap/pm@3.27.2))(@tiptap/pm@3.27.2)
+      '@tiptap/extension-paragraph':
+        specifier: 3.27.2
+        version: 3.27.2(@tiptap/core@3.27.2(@tiptap/pm@3.27.2))
+      '@tiptap/extension-text':
+        specifier: 3.27.2
+        version: 3.27.2(@tiptap/core@3.27.2(@tiptap/pm@3.27.2))
+      '@tiptap/pm':
+        specifier: 3.27.2
+        version: 3.27.2
       apexcharts:
         specifier: ^5.10.4
         version: 5.10.4
@@ -388,7 +460,7 @@ importers:
         version: 1.3.6
       vitest:
         specifier: ^4.1.4
-        version: 4.1.4(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@22.19.7)(@vitest/coverage-v8@4.1.4)(jsdom@27.4.0(@noble/hashes@2.2.0))(vite@7.3.5(@types/node@22.19.7)(jiti@2.6.1)(less@4.6.4)(lightningcss@1.32.0)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))
+        version: 4.1.4(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@22.19.7)(@vitest/coverage-v8@4.1.4)(happy-dom@20.10.6)(jsdom@27.4.0(@noble/hashes@2.2.0))(vite@7.3.5(@types/node@22.19.7)(jiti@2.6.1)(less@4.6.4)(lightningcss@1.32.0)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))
       wrangler:
         specifier: ^4.59.1
         version: 4.78.0
@@ -982,6 +1054,7 @@ packages:
         integrity: sha512-9XeplSHsKnLDm14dvwXG00Ox6WbDrhf7ub7MxxcJ6gCgRm/yqJ3Vrz4a+NBpYnelapqiCCGEdHeyx2xt8vG1qA==,
       }
     engines: {node: ^20.19.0 || ^22.12.0 || >=24.0.0}
+    deprecated: '@angular/platform-browser-dynamic is deprecated. Use `@angular/platform-browser` instead.'
     peerDependencies:
       '@angular/common': 21.2.8
       '@angular/compiler': 21.2.8
@@ -5709,6 +5782,112 @@ packages:
       }
     engines: {node: '>=16', pnpm: '>=8.6.0'}
 
+  '@tiptap/core@3.27.2':
+    resolution:
+      {
+        integrity: sha512-zRWROdDbeIghFIT05ZYc+0cCkQFBy7sN/VjFc41qJ1fuq+lfgGDotVUXLuVqVe288jSpo/VGmy/iFLIQTc9mwg==,
+      }
+    peerDependencies:
+      '@tiptap/pm': 3.27.2
+
+  '@tiptap/extension-bold@3.27.2':
+    resolution:
+      {
+        integrity: sha512-R+HZ/symZZhhnxZf3xyGbm2mWf48K+/kYucm88TMzMUWBjXhnL1G2JwaURxXUXb0nvsz6T2IqOhPKwCvAtb7oQ==,
+      }
+    peerDependencies:
+      '@tiptap/core': 3.27.2
+
+  '@tiptap/extension-document@3.27.2':
+    resolution:
+      {
+        integrity: sha512-RkvCVKsAUEBxdc5EltXQfaiC33/PFByokRuVI08IeQDukwF9lrvba/O8vHAcHAh+XWTiy+U88m5ORLUO1MIlJA==,
+      }
+    peerDependencies:
+      '@tiptap/core': 3.27.2
+
+  '@tiptap/extension-hard-break@3.27.2':
+    resolution:
+      {
+        integrity: sha512-nlr095C2FOOXF77gp1xKUUdpnvACckyVhIQJyurxOpHFtKFNEL/850MX/QhPHMAbGb/VdkcBqyLvQI59i0pA9A==,
+      }
+    peerDependencies:
+      '@tiptap/core': 3.27.2
+
+  '@tiptap/extension-heading@3.27.2':
+    resolution:
+      {
+        integrity: sha512-AERG0GecEYhQ3j4y1VK+FsDcl1PN5IPMTFZNEbsqyo/ZZBE1bIGriTV5/dTAWPfmUFnJEfR7FYTkqu2cMvL+oA==,
+      }
+    peerDependencies:
+      '@tiptap/core': 3.27.2
+
+  '@tiptap/extension-image@3.27.2':
+    resolution:
+      {
+        integrity: sha512-xnDCj+9oNwr4Zh9B+HHi+9lXyUVYv2KmCF3QuCdGxhZA4FDNlJT3gISwYnH4LNtKSD1XHh/gSCMTpZF+8oqe3g==,
+      }
+    peerDependencies:
+      '@tiptap/core': 3.27.2
+
+  '@tiptap/extension-italic@3.27.2':
+    resolution:
+      {
+        integrity: sha512-iAnhS/UbQkk8jioeIMyn98clQGF+6eozrYqABmmzE/lxvYew0PfeNbNnj2poOCZ93USU1pYcf06Kp2Q85wpfwA==,
+      }
+    peerDependencies:
+      '@tiptap/core': 3.27.2
+
+  '@tiptap/extension-link@3.27.2':
+    resolution:
+      {
+        integrity: sha512-I3VvI5/J4afMEQbjkcW2sw0ediJMy+Asz46nI2C6cK+qDtGatE9jOZo/rFMG5scTwSx3nrIZkbCcTMTJz1TFEw==,
+      }
+    peerDependencies:
+      '@tiptap/core': 3.27.2
+      '@tiptap/pm': 3.27.2
+
+  '@tiptap/extension-list@3.27.2':
+    resolution:
+      {
+        integrity: sha512-SsVnh5ruM9QjgOGbhJjegHAIADuoE+9Sb0UV+lyxAeuEwO98JpVmE926Yur9abzUAA9MWZZ/XBIzoA5q0a4dBQ==,
+      }
+    peerDependencies:
+      '@tiptap/core': 3.27.2
+      '@tiptap/pm': 3.27.2
+
+  '@tiptap/extension-paragraph@3.27.2':
+    resolution:
+      {
+        integrity: sha512-On4uQqEbdmV5sgDRisIkLUqrhSEjr38QnIr7Zl2Lvnd4//RGkuJALhyJrZBkHh0VXNMbqPeJ3lL7l/beG1RXDg==,
+      }
+    peerDependencies:
+      '@tiptap/core': 3.27.2
+
+  '@tiptap/extension-text@3.27.2':
+    resolution:
+      {
+        integrity: sha512-ZipAYrdVLtWU/YwdXkSGrW/PJnxqLGtx/GR5f0BSMO/OzxJppSc+5GSu+MEbwlFaptloSKQEHRbkACXDqm4IJg==,
+      }
+    peerDependencies:
+      '@tiptap/core': 3.27.2
+
+  '@tiptap/html@3.27.2':
+    resolution:
+      {
+        integrity: sha512-d0ZjEImVxTZY2Mq4XXDEciz9mcCNPJxfLqqBsRQwiD2ergwnUvgNtoyRRP78pvCEqOmM5TK/KzXZBb5go8tL4Q==,
+      }
+    peerDependencies:
+      '@tiptap/core': 3.27.2
+      '@tiptap/pm': 3.27.2
+      happy-dom: ^20.8.9
+
+  '@tiptap/pm@3.27.2':
+    resolution:
+      {
+        integrity: sha512-4eBV9Fx16ZZUJuO4AvHzykxdYXfF/iMjpoI8q9PHvxOe+xx8tNa4ONhZMKJLpgCKEECJiBkQmr0gOmarzB0MtA==,
+      }
+
   '@tootallnate/quickjs-emscripten@0.23.0':
     resolution:
       {
@@ -6195,6 +6374,12 @@ packages:
     resolution:
       {
         integrity: sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q==,
+      }
+
+  '@types/whatwg-mimetype@3.0.2':
+    resolution:
+      {
+        integrity: sha512-c2AKvDT8ToxLIOUlN51gTiHXflsfIFisS4pO7pDPoKouJCESkhZnEy623gwP9laCy5lnLDAw1vAzu2vM2YLOrA==,
       }
 
   '@types/ws@8.18.1':
@@ -7328,6 +7513,13 @@ packages:
       {
         integrity: sha512-E+XQCRwSbaaiChtv6k6Dwgc+bx+Bs6vuKJHHl5kox/BaKbhiXzqQOwK4cO22yElGp2OCmjwVhT3HmxgyPGnJfQ==,
       }
+
+  buffer-image-size@0.6.4:
+    resolution:
+      {
+        integrity: sha512-nEh+kZOPY1w+gcCMobZ6ETUp9WfibndnosbpwB1iJk/8Gt5ZF2bhS6+B6bPYz424KtwsR6Rflc3tCz1/ghX2dQ==,
+      }
+    engines: {node: '>=4.0'}
 
   bundle-name@4.1.0:
     resolution:
@@ -9841,6 +10033,13 @@ packages:
     engines: {node: '>=0.4.7'}
     hasBin: true
 
+  happy-dom@20.10.6:
+    resolution:
+      {
+        integrity: sha512-6QD0ilzDDt93tX44y8tbmZdAcdTRYDhUP+Asgi6pC8Pp5IA3cvaZGyoVN/EGtlq9ziT65iPuBBn3ASLr6hCgVw==,
+      }
+    engines: {node: '>=20.0.0'}
+
   has-flag@4.0.0:
     resolution:
       {
@@ -11005,6 +11204,12 @@ packages:
     resolution:
       {
         integrity: sha512-7ylylesZQ/PV29jhEDl3Ufjo6ZX7gCqJr5F7PKrqc93v7fzSymt1BpwEU8nAUXs8qzzvqhbjhK5QZg6Mt/HkBg==,
+      }
+
+  linkifyjs@4.3.3:
+    resolution:
+      {
+        integrity: sha512-P8aEP5U/D1/IlTY2OeYsErdwh9bGuLE30NcXtKEjgdHcahveQoQwM2yZNsioQHsWFz0P7KKudisbrzCgR0sDHg==,
       }
 
   listr2@10.2.1:
@@ -12258,6 +12463,12 @@ packages:
         integrity: sha512-QkCdPooczexPLiXIrbVOPYkR3VO3T6v2OyKRkR1Xbhpy7/LAVXwahnRCgRp78Oe/Ehf0C/HATAxfSr6eA1oX+w==,
       }
 
+  orderedmap@2.1.1:
+    resolution:
+      {
+        integrity: sha512-TvAWxi0nDe1j/rtMcWcIj94+Ffe6n7zhow33h40SKxmsmozs6dz/e+EajymfoFcHd7sxNn8yHM8839uixMOV6g==,
+      }
+
   os-name@4.0.1:
     resolution:
       {
@@ -12956,6 +13167,84 @@ packages:
         integrity: sha512-oj87CgZICdulUohogVAR7AjlC0327U4el4L6eAvOqCeudMDVU0NThNaV+b9Df4dXgSP1gXMTnPdhfe/2qDH5cg==,
       }
 
+  prosemirror-changeset@2.4.1:
+    resolution:
+      {
+        integrity: sha512-96WBLhOaYhJ+kPhLg3uW359Tz6I/MfcrQfL4EGv4SrcqKEMC1gmoGrXHecPE8eOwTVCJ4IwgfzM8fFad25wNfw==,
+      }
+
+  prosemirror-commands@1.7.1:
+    resolution:
+      {
+        integrity: sha512-rT7qZnQtx5c0/y/KlYaGvtG411S97UaL6gdp6RIZ23DLHanMYLyfGBV5DtSnZdthQql7W+lEVbpSfwtO8T+L2w==,
+      }
+
+  prosemirror-dropcursor@1.8.3:
+    resolution:
+      {
+        integrity: sha512-FoYbsJR8gK+DGlqhNoE29Loa38eIZPzQRIb1VMaDNBoo4OLP6vVof/jR8qFY/6XvUd6Dhug8MDCHl2a/h8RTfQ==,
+      }
+
+  prosemirror-gapcursor@1.4.1:
+    resolution:
+      {
+        integrity: sha512-pMdYaEnjNMSwl11yjEGtgTmLkR08m/Vl+Jj443167p9eB3HVQKhYCc4gmHVDsLPODfZfjr/MmirsdyZziXbQKw==,
+      }
+
+  prosemirror-history@1.5.0:
+    resolution:
+      {
+        integrity: sha512-zlzTiH01eKA55UAf1MEjtssJeHnGxO0j4K4Dpx+gnmX9n+SHNlDqI2oO1Kv1iPN5B1dm5fsljCfqKF9nFL6HRg==,
+      }
+
+  prosemirror-inputrules@1.5.1:
+    resolution:
+      {
+        integrity: sha512-7wj4uMjKaXWAQ1CDgxNzNtR9AlsuwzHfdFH1ygEHA2KHF2DOEaXl1CJfNPAKCg9qNEh4rum975QLaCiQPyY6Fw==,
+      }
+
+  prosemirror-keymap@1.2.3:
+    resolution:
+      {
+        integrity: sha512-4HucRlpiLd1IPQQXNqeo81BGtkY8Ai5smHhKW9jjPKRc2wQIxksg7Hl1tTI2IfT2B/LgX6bfYvXxEpJl7aKYKw==,
+      }
+
+  prosemirror-model@1.25.10:
+    resolution:
+      {
+        integrity: sha512-9n6rH4DbJU1eH4SxLt6Y0HhJIo6cZsb7DJ/30uob1hOKPeO6TAaMWI2tc7kwR92BjfPOU2fFHWbZLovLi3XQfA==,
+      }
+
+  prosemirror-schema-list@1.5.1:
+    resolution:
+      {
+        integrity: sha512-927lFx/uwyQaGwJxLWCZRkjXG0p48KpMj6ueoYiu4JX05GGuGcgzAy62dfiV8eFZftgyBUvLx76RsMe20fJl+Q==,
+      }
+
+  prosemirror-state@1.4.4:
+    resolution:
+      {
+        integrity: sha512-6jiYHH2CIGbCfnxdHbXZ12gySFY/fz/ulZE333G6bPqIZ4F+TXo9ifiR86nAHpWnfoNjOb3o5ESi7J8Uz1jXHw==,
+      }
+
+  prosemirror-tables@1.8.5:
+    resolution:
+      {
+        integrity: sha512-V/0cDCsHKHe/tfWkeCmthNUcEp1IVO3p6vwN8XtwE9PZQLAZJigbw3QoraAdfJPir4NKJtNvOB8oYGKRl+t0Dw==,
+      }
+
+  prosemirror-transform@1.12.0:
+    resolution:
+      {
+        integrity: sha512-GxboyN4AMIsoHNtz5uf2r2Ru551i5hWeCMD6E2Ib4Eogqoub0NflniaBPVQ4MrGE5yZ8JV9tUHg9qcZTTrcN4w==,
+      }
+
+  prosemirror-view@1.42.0:
+    resolution:
+      {
+        integrity: sha512-N54DF3OXNWDuP81G1kbfCys8ZzIjuL1VnvJ2mk5STSu/fNxWIcX/EutQLA3s9KR/2wVhgDi4hzBB/1fINVxk0A==,
+      }
+
   proxy-addr@2.0.7:
     resolution:
       {
@@ -13497,6 +13786,12 @@ packages:
       }
     engines: {node: '>=18.0.0', npm: '>=8.0.0'}
     hasBin: true
+
+  rope-sequence@1.3.4:
+    resolution:
+      {
+        integrity: sha512-UT5EDe2cu2E/6O4igUr5PSFs23nvvukicWHx6GnOPlHAiiYbzNuCRQCuiUdHJQcqKalLKlrYJnjY0ySGsXNQXQ==,
+      }
 
   rou3@0.7.12:
     resolution:
@@ -15296,6 +15591,12 @@ packages:
         integrity: sha512-/BpdSx+yCQGnCvecbyXdxHDkuk55/G3xwnC0GqY4gmQ3j+A+g8kzzgB4Nk/SINjqn6+waqw3EgbVF2QKExkRxQ==,
       }
 
+  w3c-keyname@2.2.8:
+    resolution:
+      {
+        integrity: sha512-dpojBhNsCNN7T82Tm7k26A6G9ML3NkhDsnw9n/eoxSRlVBB4CEtIQ/KTCLI2Fwf3ataSXRhYFkQi3SlnFwPvPQ==,
+      }
+
   w3c-xmlserializer@5.0.0:
     resolution:
       {
@@ -15488,6 +15789,13 @@ packages:
     engines: {node: '>=18'}
     deprecated: Use @exodus/bytes instead for a more spec-conformant and faster implementation
 
+  whatwg-mimetype@3.0.0:
+    resolution:
+      {
+        integrity: sha512-nt+N2dzIutVRxARx1nghPKGv1xHikU7HKdfafKkLNLindmPU/ch3U31NOCGGA/dmPcmb1VlofO0vnKAcsm0o/Q==,
+      }
+    engines: {node: '>=12'}
+
   whatwg-mimetype@4.0.0:
     resolution:
       {
@@ -15660,6 +15968,21 @@ packages:
     resolution:
       {
         integrity: sha512-sAt8BhgNbzCtgGbt2OxmpuryO63ZoDk/sqaB/znQm94T4fCEsy/yV+7CdC1kJhOU9lboAEU7R3kquuycDoibVA==,
+      }
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
+  ws@8.21.0:
+    resolution:
+      {
+        integrity: sha512-Vsp28b7DRcimFQvrqu2Wek3z1iYxDCWqHYB8Qsnk/S4RfaCQzPGPyBNuVjJV3cd6UiKtUtp6sNM77gWvzcCH+g==,
       }
     engines: {node: '>=10.0.0'}
     peerDependencies:
@@ -16286,7 +16609,7 @@ snapshots:
       lmdb: 3.5.4
       postcss: 8.5.10
       tailwindcss: 4.2.2
-      vitest: 4.1.4(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@22.19.7)(@vitest/coverage-v8@4.1.4)(jsdom@27.4.0(@noble/hashes@2.2.0))(vite@7.3.5(@types/node@22.19.7)(jiti@2.6.1)(less@4.6.4)(lightningcss@1.32.0)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))
+      vitest: 4.1.4(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@22.19.7)(@vitest/coverage-v8@4.1.4)(happy-dom@20.10.6)(jsdom@27.4.0(@noble/hashes@2.2.0))(vite@7.3.5(@types/node@22.19.7)(jiti@2.6.1)(less@4.6.4)(lightningcss@1.32.0)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))
     transitivePeerDependencies:
       - '@types/node'
       - chokidar
@@ -20042,6 +20365,75 @@ snapshots:
 
   '@thednp/shorty@2.0.14': {}
 
+  '@tiptap/core@3.27.2(@tiptap/pm@3.27.2)':
+    dependencies:
+      '@tiptap/pm': 3.27.2
+
+  '@tiptap/extension-bold@3.27.2(@tiptap/core@3.27.2(@tiptap/pm@3.27.2))':
+    dependencies:
+      '@tiptap/core': 3.27.2(@tiptap/pm@3.27.2)
+
+  '@tiptap/extension-document@3.27.2(@tiptap/core@3.27.2(@tiptap/pm@3.27.2))':
+    dependencies:
+      '@tiptap/core': 3.27.2(@tiptap/pm@3.27.2)
+
+  '@tiptap/extension-hard-break@3.27.2(@tiptap/core@3.27.2(@tiptap/pm@3.27.2))':
+    dependencies:
+      '@tiptap/core': 3.27.2(@tiptap/pm@3.27.2)
+
+  '@tiptap/extension-heading@3.27.2(@tiptap/core@3.27.2(@tiptap/pm@3.27.2))':
+    dependencies:
+      '@tiptap/core': 3.27.2(@tiptap/pm@3.27.2)
+
+  '@tiptap/extension-image@3.27.2(@tiptap/core@3.27.2(@tiptap/pm@3.27.2))':
+    dependencies:
+      '@tiptap/core': 3.27.2(@tiptap/pm@3.27.2)
+
+  '@tiptap/extension-italic@3.27.2(@tiptap/core@3.27.2(@tiptap/pm@3.27.2))':
+    dependencies:
+      '@tiptap/core': 3.27.2(@tiptap/pm@3.27.2)
+
+  '@tiptap/extension-link@3.27.2(@tiptap/core@3.27.2(@tiptap/pm@3.27.2))(@tiptap/pm@3.27.2)':
+    dependencies:
+      '@tiptap/core': 3.27.2(@tiptap/pm@3.27.2)
+      '@tiptap/pm': 3.27.2
+      linkifyjs: 4.3.3
+
+  '@tiptap/extension-list@3.27.2(@tiptap/core@3.27.2(@tiptap/pm@3.27.2))(@tiptap/pm@3.27.2)':
+    dependencies:
+      '@tiptap/core': 3.27.2(@tiptap/pm@3.27.2)
+      '@tiptap/pm': 3.27.2
+
+  '@tiptap/extension-paragraph@3.27.2(@tiptap/core@3.27.2(@tiptap/pm@3.27.2))':
+    dependencies:
+      '@tiptap/core': 3.27.2(@tiptap/pm@3.27.2)
+
+  '@tiptap/extension-text@3.27.2(@tiptap/core@3.27.2(@tiptap/pm@3.27.2))':
+    dependencies:
+      '@tiptap/core': 3.27.2(@tiptap/pm@3.27.2)
+
+  '@tiptap/html@3.27.2(@tiptap/core@3.27.2(@tiptap/pm@3.27.2))(@tiptap/pm@3.27.2)(happy-dom@20.10.6)':
+    dependencies:
+      '@tiptap/core': 3.27.2(@tiptap/pm@3.27.2)
+      '@tiptap/pm': 3.27.2
+      happy-dom: 20.10.6
+
+  '@tiptap/pm@3.27.2':
+    dependencies:
+      prosemirror-changeset: 2.4.1
+      prosemirror-commands: 1.7.1
+      prosemirror-dropcursor: 1.8.3
+      prosemirror-gapcursor: 1.4.1
+      prosemirror-history: 1.5.0
+      prosemirror-inputrules: 1.5.1
+      prosemirror-keymap: 1.2.3
+      prosemirror-model: 1.25.10
+      prosemirror-schema-list: 1.5.1
+      prosemirror-state: 1.4.4
+      prosemirror-tables: 1.8.5
+      prosemirror-transform: 1.12.0
+      prosemirror-view: 1.42.0
+
   '@tootallnate/quickjs-emscripten@0.23.0': {}
 
   '@ts-morph/common@0.22.0':
@@ -20370,6 +20762,8 @@ snapshots:
 
   '@types/unist@3.0.3': {}
 
+  '@types/whatwg-mimetype@3.0.2': {}
+
   '@types/ws@8.18.1':
     dependencies:
       '@types/node': 22.19.7
@@ -20492,7 +20886,7 @@ snapshots:
       obug: 2.1.1
       std-env: 4.0.0
       tinyrainbow: 3.1.0
-      vitest: 4.1.4(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@22.19.7)(@vitest/coverage-v8@4.1.4)(jsdom@27.4.0(@noble/hashes@2.2.0))(vite@7.3.2(@types/node@22.19.7)(jiti@2.6.1)(less@4.6.4)(lightningcss@1.32.0)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))
+      vitest: 4.1.4(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@22.19.7)(@vitest/coverage-v8@4.1.4)(happy-dom@20.10.6)(jsdom@27.4.0(@noble/hashes@2.2.0))(vite@7.3.2(@types/node@22.19.7)(jiti@2.6.1)(less@4.6.4)(lightningcss@1.32.0)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))
 
   '@vitest/expect@3.2.4':
     dependencies:
@@ -21047,7 +21441,7 @@ snapshots:
     optionalDependencies:
       react: 19.2.6
       react-dom: 19.2.6(react@19.2.6)
-      vitest: 4.1.4(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@22.19.7)(@vitest/coverage-v8@4.1.4)(jsdom@27.4.0(@noble/hashes@2.2.0))(vite@7.3.2(@types/node@22.19.7)(jiti@2.6.1)(less@4.6.4)(lightningcss@1.32.0)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))
+      vitest: 4.1.4(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@22.19.7)(@vitest/coverage-v8@4.1.4)(happy-dom@20.10.6)(jsdom@27.4.0(@noble/hashes@2.2.0))(vite@7.3.2(@types/node@22.19.7)(jiti@2.6.1)(less@4.6.4)(lightningcss@1.32.0)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))
     transitivePeerDependencies:
       - '@cloudflare/workers-types'
       - '@opentelemetry/api'
@@ -21175,6 +21569,10 @@ snapshots:
   buffer-crc32@0.2.13: {}
 
   buffer-from@1.1.2: {}
+
+  buffer-image-size@0.6.4:
+    dependencies:
+      '@types/node': 22.19.7
 
   bundle-name@4.1.0:
     dependencies:
@@ -22817,6 +23215,19 @@ snapshots:
     optionalDependencies:
       uglify-js: 3.19.3
 
+  happy-dom@20.10.6:
+    dependencies:
+      '@types/node': 22.19.7
+      '@types/whatwg-mimetype': 3.0.2
+      '@types/ws': 8.18.1
+      buffer-image-size: 0.6.4
+      entities: 7.0.1
+      whatwg-mimetype: 3.0.0
+      ws: 8.21.0
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
   has-flag@4.0.0: {}
 
   has-symbols@1.1.0: {}
@@ -23483,6 +23894,8 @@ snapshots:
       unicode-trie: 2.0.0
 
   lines-and-columns@1.2.4: {}
+
+  linkifyjs@4.3.3: {}
 
   listr2@10.2.1:
     dependencies:
@@ -24418,6 +24831,8 @@ snapshots:
   ordered-binary@1.6.1:
     optional: true
 
+  orderedmap@2.1.1: {}
+
   os-name@4.0.1:
     dependencies:
       macos-release: 2.5.1
@@ -24831,6 +25246,80 @@ snapshots:
       loose-envify: 1.4.0
       object-assign: 4.1.1
       react-is: 16.13.1
+
+  prosemirror-changeset@2.4.1:
+    dependencies:
+      prosemirror-transform: 1.12.0
+
+  prosemirror-commands@1.7.1:
+    dependencies:
+      prosemirror-model: 1.25.10
+      prosemirror-state: 1.4.4
+      prosemirror-transform: 1.12.0
+
+  prosemirror-dropcursor@1.8.3:
+    dependencies:
+      prosemirror-state: 1.4.4
+      prosemirror-transform: 1.12.0
+      prosemirror-view: 1.42.0
+
+  prosemirror-gapcursor@1.4.1:
+    dependencies:
+      prosemirror-keymap: 1.2.3
+      prosemirror-model: 1.25.10
+      prosemirror-state: 1.4.4
+      prosemirror-view: 1.42.0
+
+  prosemirror-history@1.5.0:
+    dependencies:
+      prosemirror-state: 1.4.4
+      prosemirror-transform: 1.12.0
+      prosemirror-view: 1.42.0
+      rope-sequence: 1.3.4
+
+  prosemirror-inputrules@1.5.1:
+    dependencies:
+      prosemirror-state: 1.4.4
+      prosemirror-transform: 1.12.0
+
+  prosemirror-keymap@1.2.3:
+    dependencies:
+      prosemirror-state: 1.4.4
+      w3c-keyname: 2.2.8
+
+  prosemirror-model@1.25.10:
+    dependencies:
+      orderedmap: 2.1.1
+
+  prosemirror-schema-list@1.5.1:
+    dependencies:
+      prosemirror-model: 1.25.10
+      prosemirror-state: 1.4.4
+      prosemirror-transform: 1.12.0
+
+  prosemirror-state@1.4.4:
+    dependencies:
+      prosemirror-model: 1.25.10
+      prosemirror-transform: 1.12.0
+      prosemirror-view: 1.42.0
+
+  prosemirror-tables@1.8.5:
+    dependencies:
+      prosemirror-keymap: 1.2.3
+      prosemirror-model: 1.25.10
+      prosemirror-state: 1.4.4
+      prosemirror-transform: 1.12.0
+      prosemirror-view: 1.42.0
+
+  prosemirror-transform@1.12.0:
+    dependencies:
+      prosemirror-model: 1.25.10
+
+  prosemirror-view@1.42.0:
+    dependencies:
+      prosemirror-model: 1.25.10
+      prosemirror-state: 1.4.4
+      prosemirror-transform: 1.12.0
 
   proxy-addr@2.0.7:
     dependencies:
@@ -25246,6 +25735,8 @@ snapshots:
       '@rollup/rollup-win32-x64-gnu': 4.60.2
       '@rollup/rollup-win32-x64-msvc': 4.60.2
       fsevents: 2.3.3
+
+  rope-sequence@1.3.4: {}
 
   rou3@0.7.12: {}
 
@@ -26303,9 +26794,9 @@ snapshots:
     dependencies:
       ts-essentials: 10.1.1(typescript@6.0.3)
       typescript: 6.0.3
-      vitest: 4.1.4(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@22.19.7)(@vitest/coverage-v8@4.1.4)(jsdom@27.4.0(@noble/hashes@2.2.0))(vite@7.3.2(@types/node@22.19.7)(jiti@2.6.1)(less@4.6.4)(lightningcss@1.32.0)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))
+      vitest: 4.1.4(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@22.19.7)(@vitest/coverage-v8@4.1.4)(happy-dom@20.10.6)(jsdom@27.4.0(@noble/hashes@2.2.0))(vite@7.3.2(@types/node@22.19.7)(jiti@2.6.1)(less@4.6.4)(lightningcss@1.32.0)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))
 
-  vitest@4.1.4(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@22.19.7)(@vitest/coverage-v8@4.1.4)(jsdom@27.4.0(@noble/hashes@2.2.0))(vite@7.3.2(@types/node@22.19.7)(jiti@2.6.1)(less@4.6.4)(lightningcss@1.32.0)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3)):
+  vitest@4.1.4(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@22.19.7)(@vitest/coverage-v8@4.1.4)(happy-dom@20.10.6)(jsdom@27.4.0(@noble/hashes@2.2.0))(vite@7.3.2(@types/node@22.19.7)(jiti@2.6.1)(less@4.6.4)(lightningcss@1.32.0)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3)):
     dependencies:
       '@vitest/expect': 4.1.4
       '@vitest/mocker': 4.1.4(vite@7.3.2(@types/node@22.19.7)(jiti@2.6.1)(less@4.6.4)(lightningcss@1.32.0)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))
@@ -26332,11 +26823,12 @@ snapshots:
       '@opentelemetry/api': 1.9.1
       '@types/node': 22.19.7
       '@vitest/coverage-v8': 4.1.4(vitest@4.1.4)
+      happy-dom: 20.10.6
       jsdom: 27.4.0(@noble/hashes@2.2.0)
     transitivePeerDependencies:
       - msw
 
-  vitest@4.1.4(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@22.19.7)(@vitest/coverage-v8@4.1.4)(jsdom@27.4.0(@noble/hashes@2.2.0))(vite@7.3.5(@types/node@22.19.7)(jiti@2.6.1)(less@4.6.4)(lightningcss@1.32.0)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3)):
+  vitest@4.1.4(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@22.19.7)(@vitest/coverage-v8@4.1.4)(happy-dom@20.10.6)(jsdom@27.4.0(@noble/hashes@2.2.0))(vite@7.3.5(@types/node@22.19.7)(jiti@2.6.1)(less@4.6.4)(lightningcss@1.32.0)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3)):
     dependencies:
       '@vitest/expect': 4.1.4
       '@vitest/mocker': 4.1.4(vite@7.3.5(@types/node@22.19.7)(jiti@2.6.1)(less@4.6.4)(lightningcss@1.32.0)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))
@@ -26363,6 +26855,7 @@ snapshots:
       '@opentelemetry/api': 1.9.1
       '@types/node': 22.19.7
       '@vitest/coverage-v8': 4.1.4(vitest@4.1.4)
+      happy-dom: 20.10.6
       jsdom: 27.4.0(@noble/hashes@2.2.0)
     transitivePeerDependencies:
       - msw
@@ -26391,6 +26884,8 @@ snapshots:
 
   vscode-uri@3.1.0:
     optional: true
+
+  w3c-keyname@2.2.8: {}
 
   w3c-xmlserializer@5.0.0:
     dependencies:
@@ -26560,6 +27055,8 @@ snapshots:
     dependencies:
       iconv-lite: 0.6.3
 
+  whatwg-mimetype@3.0.0: {}
+
   whatwg-mimetype@4.0.0: {}
 
   whatwg-mimetype@5.0.0: {}
@@ -26664,6 +27161,8 @@ snapshots:
   ws@8.18.0: {}
 
   ws@8.20.0: {}
+
+  ws@8.21.0: {}
 
   wsl-utils@0.1.0:
     dependencies:

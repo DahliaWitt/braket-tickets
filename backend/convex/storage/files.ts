@@ -1,6 +1,12 @@
 import {v} from 'convex/values';
-import {action, internalMutation, mutation} from '../_generated/server';
+import {
+  action,
+  internalMutation,
+  internalQuery,
+  mutation,
+} from '../_generated/server';
 import {internal} from '../_generated/api';
+import type {Id} from '../_generated/dataModel';
 import {getAuthUserId, requireUser} from '../lib/auth_identity';
 import {getAppErrorMessage, throwUnauthenticated} from '../lib/errors';
 import {rateLimiter} from '../lib/rate_limits';
@@ -197,6 +203,12 @@ export const confirmUpload = action({
   returns: v.object({
     valid: v.boolean(),
     storageId: v.optional(v.id('_storage')),
+    // SIGNED, short-lived storage URL for the confirmed file. PREVIEW ONLY —
+    // used to display the image in the composer immediately after upload. It is
+    // NOT persisted or emailed: signed URLs expire, so emails embed the durable
+    // server-owned route (/api/images/{storageId}) instead, resolved at send
+    // time from the storageId. Present only on the success path.
+    url: v.optional(v.string()),
     error: v.optional(v.string()),
   }),
   handler: async (ctx, args) => {
@@ -278,7 +290,14 @@ export const confirmUpload = action({
       };
     }
 
-    return {valid: true, storageId: args.storageId};
+    // Resolve a SIGNED preview URL for the confirmed file so the composer can
+    // display it immediately. This is preview-only: it is never persisted or
+    // emailed (signed URLs expire). Emails embed the durable server-owned route
+    // /api/images/{storageId} instead. Null coalesces to undefined to satisfy
+    // the optional return validator.
+    const url = (await ctx.storage.getUrl(args.storageId)) ?? undefined;
+
+    return {valid: true, storageId: args.storageId, url};
   },
 });
 
@@ -321,6 +340,72 @@ export const _markUploadConfirmed = internalMutation({
       confirmedAt: Date.now(),
     });
     return null;
+  },
+});
+
+/**
+ * Resolves a PUBLISHED EMAIL image for the public image route.
+ *
+ * The gate is `richEmailImages` membership ALONE. A registry row is only ever
+ * written by a send handler AFTER the confirmed-upload + sender-ownership
+ * checks passed, so membership proves the file was magic-byte validated at
+ * send time. Deliberately NO live `confirmedUploads` requirement: sent emails
+ * embed durable `/api/images` URLs, and upload-lifecycle cleanup (e.g. a
+ * poster being replaced via `cleanupReplacedUpload`) must never retroactively
+ * break an already-delivered email. Published blobs are likewise pinned
+ * against deletion by that cleanup.
+ *
+ * Unpublished ids — event posters, community logos, abandoned composer drafts,
+ * any future upload category — return null and 404 on the route.
+ *
+ * The content type is read from the `_storage` system metadata and clamped to
+ * the image allowlist (see the clamp comment below).
+ */
+export const getPublishedEmailImage = internalQuery({
+  args: {storageId: v.string()},
+  returns: v.union(
+    v.null(),
+    v.object({
+      storageId: v.id('_storage'),
+      contentType: v.string(),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    // A malformed id string can make the index comparison throw; treat any throw
+    // as "not found" so a forged id fails closed (404) rather than 500s.
+    let published;
+    try {
+      published = await ctx.db
+        .query('richEmailImages')
+        .withIndex('by_storageId', (q) =>
+          q.eq('storageId', args.storageId as Id<'_storage'>),
+        )
+        .first();
+    } catch {
+      return null;
+    }
+    if (published === null) {
+      return null;
+    }
+
+    // published.storageId is a real stored id, so system.get is safe here.
+    const metadata = await ctx.db.system.get('_storage', published.storageId);
+    if (metadata === null) {
+      return null;
+    }
+
+    // Clamp to the validated image allowlist. `_storage` contentType is set by
+    // the client at upload time, so serving it verbatim would let a magic-byte-
+    // valid polyglot be served as e.g. text/html. Anything outside the image
+    // allowlist becomes a non-renderable octet-stream (paired with `nosniff` on
+    // the public route) so it can never execute as HTML.
+    const metaType = metadata.contentType ?? '';
+    return {
+      storageId: published.storageId,
+      contentType: isAllowedMimeType(metaType)
+        ? metaType
+        : 'application/octet-stream',
+    };
   },
 });
 

@@ -184,6 +184,8 @@ export async function queueTicketPurchaseReminderEmails(
     recipients: TicketReminderRecipient[];
     subject: string;
     message: string;
+    /** Optional pre-rendered rich HTML fragment (shared across recipients). */
+    bodyHtml?: string;
     organizerName: string;
   },
 ): Promise<number> {
@@ -224,6 +226,7 @@ export async function queueTicketPurchaseReminderEmails(
           name: args.organizerName,
         },
         message: args.message,
+        bodyHtml: args.bodyHtml,
         siteUrl,
         apiSiteUrl,
         unsubToken,

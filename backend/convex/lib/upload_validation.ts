@@ -49,11 +49,40 @@ export function asStorageId(value: string): Id<'_storage'> | null {
  * Deletes a stored file and its confirmedUploads record when an entity's
  * file reference is replaced or removed. Best-effort: logs and continues
  * if either operation fails (file may already be gone).
+ *
+ * PINNED EXCEPTION: files published in a sent rich email (`richEmailImages`)
+ * are never deleted here. Sent emails embed durable `/api/images/{storageId}`
+ * URLs, so replacing an entity asset that was also emailed must not
+ * retroactively break delivered emails. Published-image lifecycle is owned by
+ * the email-image GC, never by entity cleanup.
  */
 export async function cleanupReplacedUpload(
   ctx: MutationCtx,
   oldStorageId: Id<'_storage'>,
 ): Promise<void> {
+  try {
+    const published = await ctx.db
+      .query('richEmailImages')
+      .withIndex('by_storageId', (q) => q.eq('storageId', oldStorageId))
+      .first();
+    if (published !== null) {
+      logger.info(
+        'storage',
+        'Skipping cleanup of an email-published image (pinned by sent emails)',
+        {storageId: oldStorageId},
+      );
+      return;
+    }
+  } catch (e) {
+    // Fail toward leaking a file, never toward breaking a sent email.
+    logger.warn(
+      'storage',
+      'Failed to check email-image pin during cleanup; skipping deletion',
+      {storageId: oldStorageId, error: e},
+    );
+    return;
+  }
+
   try {
     const confirmed = await ctx.db
       .query('confirmedUploads')

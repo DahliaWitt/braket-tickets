@@ -527,4 +527,86 @@ describe('EventsService', () => {
       );
     });
   });
+
+  describe('uploadRichTextImage', () => {
+    const xhrState = {
+      status: 200,
+      responseText: JSON.stringify({storageId: 'storage-abc'}),
+      capturedLoadHandler: undefined as (() => void) | undefined,
+    };
+
+    const noopProgress = (): void => undefined;
+
+    beforeEach(() => {
+      xhrState.capturedLoadHandler = undefined;
+      xhrState.status = 200;
+      xhrState.responseText = JSON.stringify({storageId: 'storage-abc'});
+
+      function MockXHR(this: Record<string, unknown>) {
+        this.open = vi.fn();
+        this.setRequestHeader = vi.fn();
+        this.upload = {addEventListener: vi.fn()};
+        this.addEventListener = vi.fn((event: string, handler: () => void) => {
+          if (event === 'load') xhrState.capturedLoadHandler = handler;
+        });
+        this.abort = vi.fn();
+        this.send = vi.fn(() => xhrState.capturedLoadHandler?.());
+        Object.defineProperty(this, 'status', {get: () => xhrState.status});
+        Object.defineProperty(this, 'responseText', {
+          get: () => xhrState.responseText,
+        });
+      }
+      vi.stubGlobal('XMLHttpRequest', MockXHR);
+
+      // validateUpload, then generateUploadUrl
+      convexClientMock.mutation
+        .mockResolvedValueOnce({valid: true})
+        .mockResolvedValueOnce('https://upload.example.com');
+    });
+
+    it('resolves to the storageId + preview url when confirmUpload returns valid: true', async () => {
+      convexClientMock.action.mockResolvedValue({
+        valid: true,
+        storageId: 'storage-abc' as Id<'_storage'>,
+        url: 'https://files.example.com/storage-abc.png',
+      });
+
+      const file = new File(['png-bytes'], 'inline.png', {type: 'image/png'});
+      const {storageId, url} = await service.uploadRichTextImage(
+        file,
+        noopProgress,
+      );
+
+      expect(storageId).toBe('storage-abc');
+      expect(url).toBe('https://files.example.com/storage-abc.png');
+      expect(convexClientMock.action).toHaveBeenCalledWith(
+        api.storage.files.confirmUpload,
+        {storageId: 'storage-abc', mimeType: 'image/png'},
+      );
+    });
+
+    it('rejects with the server error when confirmUpload returns valid: false', async () => {
+      convexClientMock.action.mockResolvedValue({
+        valid: false,
+        error: 'Magic bytes do not match declared MIME type',
+      });
+
+      const file = new File(['bad-bytes'], 'fake.png', {type: 'image/png'});
+      await expect(
+        service.uploadRichTextImage(file, noopProgress),
+      ).rejects.toThrow('Magic bytes do not match declared MIME type');
+    });
+
+    it('rejects when confirmUpload is valid but returns no url', async () => {
+      convexClientMock.action.mockResolvedValue({
+        valid: true,
+        storageId: 'storage-abc' as Id<'_storage'>,
+      });
+
+      const file = new File(['png-bytes'], 'inline.png', {type: 'image/png'});
+      await expect(
+        service.uploadRichTextImage(file, noopProgress),
+      ).rejects.toThrow('image upload failed');
+    });
+  });
 });

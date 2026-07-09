@@ -722,6 +722,359 @@ describe('eventBroadcasts.send', () => {
   });
 });
 
+// ── send (rich body) ──────────────────────────────────────────────────
+
+describe('eventBroadcasts.send — rich body', () => {
+  const richDoc = (content: unknown): string =>
+    JSON.stringify({type: 'doc', content});
+
+  it('validates + renders bodyJson, stores it, derives plain text, and sends rich HTML', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminAndEvent(t);
+
+    await seedTicketHolder(t, eventId, 'rich-holder@example.com');
+
+    const bodyJson = richDoc([
+      {
+        type: 'paragraph',
+        content: [
+          {type: 'text', text: 'Doors ', marks: [{type: 'bold'}]},
+          {type: 'text', text: 'at 9pm'},
+        ],
+      },
+      {
+        type: 'bulletList',
+        content: [
+          {
+            type: 'listItem',
+            content: [
+              {
+                type: 'paragraph',
+                content: [{type: 'text', text: 'bring ID'}],
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+
+    const result = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Rich Update',
+      // Client best-effort plain text is ignored; server re-derives from bodyJson.
+      message: 'client-supplied-should-be-ignored',
+      bodyJson,
+    });
+
+    expect(result.success).toBe(true);
+
+    const broadcast = await t.run(async (ctx) =>
+      ctx.db
+        .query('eventBroadcasts')
+        .withIndex('by_event', (q) => q.eq('eventId', eventId))
+        .first(),
+    );
+    expect(broadcast).not.toBeNull();
+    // Stored bodyJson is the SANITIZED document (structurally equal for a
+    // clean input; raw client strings are never persisted).
+    expect(JSON.parse(broadcast!.bodyJson!)).toEqual(JSON.parse(bodyJson));
+    // message column is the server-derived plain text, not the client message.
+    expect(broadcast!.message).toContain('Doors at 9pm');
+    expect(broadcast!.message).toContain('- bring ID');
+    expect(broadcast!.message).not.toContain(
+      'client-supplied-should-be-ignored',
+    );
+
+    const capturedPayloads = await t.query(api.testing.email.getSentEmails, {
+      to: 'rich-holder@example.com',
+    });
+    const payload = capturedPayloads[0] as QueuedSmtpArgs | null;
+    expect(payload?.html).toContain('<strong');
+    expect(payload?.html).toContain('<ul');
+    expect(payload?.text).toContain('Doors at 9pm');
+  });
+
+  it('returns validation_error for a bodyJson with a javascript: link', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminAndEvent(t);
+
+    await seedTicketHolder(t, eventId, 'holder@example.com');
+
+    const result = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Malicious',
+      message: 'fallback',
+      bodyJson: richDoc([
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text: 'click',
+              marks: [{type: 'link', attrs: {href: 'javascript:alert(1)'}}],
+            },
+          ],
+        },
+      ]),
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe('validation_error');
+    }
+
+    const broadcasts = await t.run(async (ctx) =>
+      ctx.db
+        .query('eventBroadcasts')
+        .withIndex('by_event', (q) => q.eq('eventId', eventId))
+        .collect(),
+    );
+    expect(broadcasts).toHaveLength(0);
+  });
+
+  it('returns validation_error for a bodyJson with an unknown node type', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminAndEvent(t);
+
+    await seedTicketHolder(t, eventId, 'holder@example.com');
+
+    const result = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Bad node',
+      message: 'fallback',
+      bodyJson: richDoc([{type: 'script', content: []}]),
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe('validation_error');
+    }
+  });
+
+  // ── Inline-image security gate (adversarial) ────────────────────────
+  const PNG_BYTES = new Uint8Array([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+  ]);
+
+  async function seedConfirmedImage(
+    t: TestHarness,
+    asAdmin: ReturnType<TestHarness['withIdentity']>,
+  ): Promise<Id<'_storage'>> {
+    const storageId = await t.run(async (ctx) => {
+      const blob = new Blob([PNG_BYTES.buffer as ArrayBuffer], {
+        type: 'image/png',
+      });
+      return await ctx.storage.store(blob);
+    });
+    const result = await asAdmin.action(api.storage.files.confirmUpload, {
+      storageId,
+      mimeType: 'image/png',
+    });
+    expect(result.valid).toBe(true);
+    return storageId;
+  }
+
+  it('rejects a forged image src (arbitrary remote host, no storageId)', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminAndEvent(t);
+    await seedTicketHolder(t, eventId, 'holder@example.com');
+
+    const result = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Tracking pixel',
+      message: 'fallback',
+      bodyJson: richDoc([
+        {
+          type: 'image',
+          attrs: {src: 'https://attacker.example/pixel.png', alt: 'x'},
+        },
+      ]),
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe('validation_error');
+    }
+    const broadcasts = await t.run(async (ctx) =>
+      ctx.db
+        .query('eventBroadcasts')
+        .withIndex('by_event', (q) => q.eq('eventId', eventId))
+        .collect(),
+    );
+    expect(broadcasts).toHaveLength(0);
+  });
+
+  it('rejects an image whose storageId is not a confirmed upload', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminAndEvent(t);
+    await seedTicketHolder(t, eventId, 'holder@example.com');
+
+    // A well-formed but UNconfirmed storage id (stored, never confirmed).
+    const unconfirmed = await t.run(async (ctx) => {
+      const blob = new Blob([PNG_BYTES.buffer as ArrayBuffer], {
+        type: 'image/png',
+      });
+      return await ctx.storage.store(blob);
+    });
+
+    const result = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Forged id',
+      message: 'fallback',
+      bodyJson: richDoc([
+        {type: 'image', attrs: {storageId: unconfirmed, alt: 'x'}},
+      ]),
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe('validation_error');
+    }
+    const broadcasts = await t.run(async (ctx) =>
+      ctx.db
+        .query('eventBroadcasts')
+        .withIndex('by_event', (q) => q.eq('eventId', eventId))
+        .collect(),
+    );
+    expect(broadcasts).toHaveLength(0);
+  });
+
+  it('renders a confirmed image through the durable /api/images route', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminAndEvent(t);
+    await seedTicketHolder(t, eventId, 'img-holder@example.com');
+    const storageId = await seedConfirmedImage(t, asAdmin);
+
+    // Smuggle preview-only / hostile extra attrs alongside the storageId: the
+    // validator ignores them for rendering, and persistence must strip them.
+    const bodyJson = richDoc([
+      {
+        type: 'image',
+        attrs: {
+          storageId,
+          alt: 'flyer',
+          src: 'https://signed.example/preview?sig=SECRET',
+          onerror: 'alert(1)',
+        },
+      },
+    ]);
+
+    const result = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Confirmed image',
+      message: 'fallback',
+      bodyJson,
+    });
+    expect(result.success).toBe(true);
+
+    const capturedPayloads = await t.query(api.testing.email.getSentEmails, {
+      to: 'img-holder@example.com',
+    });
+    const payload = capturedPayloads[0] as QueuedSmtpArgs | null;
+    // Durable, server-owned route — never the attacker host, never the signed
+    // preview getUrl (which is not durable and must not be emailed).
+    expect(payload?.html).toContain(
+      `/api/images/${encodeURIComponent(storageId)}`,
+    );
+    expect(payload?.html).not.toContain('attacker');
+    const signedPreviewUrl = await t.run((ctx) =>
+      ctx.storage.getUrl(storageId),
+    );
+    expect(signedPreviewUrl).toBeTruthy();
+    expect(payload?.html).not.toContain(signedPreviewUrl as string);
+
+    // The send registered the image as published, so the public /api/images
+    // route (which serves ONLY registered images) can resolve it.
+    const published = await t.run((ctx) =>
+      ctx.db
+        .query('richEmailImages')
+        .withIndex('by_storageId', (q) => q.eq('storageId', storageId))
+        .first(),
+    );
+    expect(published).not.toBeNull();
+
+    // Persistence regression: the stored bodyJson is the SANITIZED document —
+    // the smuggled signed preview src and onerror attrs must not survive.
+    const stored = await t.run(async (ctx) =>
+      ctx.db
+        .query('eventBroadcasts')
+        .withIndex('by_event', (q) => q.eq('eventId', eventId))
+        .first(),
+    );
+    expect(stored?.bodyJson).toContain(storageId);
+    expect(stored?.bodyJson).not.toContain('signed.example');
+    expect(stored?.bodyJson).not.toContain('onerror');
+    expect(stored?.bodyJson).not.toContain('"src"');
+  });
+
+  it('rejects a body that renders past the amplification cap without burning the dedup slot', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminAndEvent(t);
+    await seedTicketHolder(t, eventId, 'holder@example.com');
+
+    // ~5KB of JSON (mostly empty paragraphs) renders to ~49KB of styled HTML —
+    // past the rendered-size cap. Must fail as validation_error BEFORE the
+    // dedup read so a corrected retry with the same subject still sends.
+    const result = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Amplified',
+      message: 'fallback',
+      bodyJson: richDoc([
+        {type: 'paragraph', content: [{type: 'text', text: 'x'}]},
+        ...Array.from({length: 250}, () => ({type: 'paragraph'})),
+      ]),
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe('validation_error');
+    }
+
+    // Same subject → same dedup key: succeeds only if the bomb never burned it.
+    const retry = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Amplified',
+      message: 'legit body',
+    });
+    expect(retry.success).toBe(true);
+  });
+
+  it('rejects an image confirmed by a different user (ownership)', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminAndEvent(t);
+    await seedTicketHolder(t, eventId, 'holder@example.com');
+
+    // A DIFFERENT user confirms an upload; the admin sender does not own it and
+    // must not be able to republish it through the durable image route.
+    const otherId = await t.mutation(api.testing.users.createUserDirectly, {
+      name: 'Other Uploader',
+      email: 'other-uploader@example.com',
+    });
+    const storageId = await seedConfirmedImage(
+      t,
+      t.withIdentity({subject: otherId}),
+    );
+
+    const result = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Someone else image',
+      message: 'fallback',
+      bodyJson: richDoc([{type: 'image', attrs: {storageId, alt: 'x'}}]),
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe('validation_error');
+    }
+    const broadcasts = await t.run(async (ctx) =>
+      ctx.db
+        .query('eventBroadcasts')
+        .withIndex('by_event', (q) => q.eq('eventId', eventId))
+        .collect(),
+    );
+    expect(broadcasts).toHaveLength(0);
+  });
+});
+
 // ── listHistory ──────────────────────────────────────────────────────
 
 describe('eventBroadcasts.listHistory', () => {

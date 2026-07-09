@@ -14,6 +14,20 @@ import {
 } from '../../lib/validation';
 import {eventBroadcastTemplate} from '../../email/templates';
 import {
+  extractPlainText,
+  renderValidatedRichBody,
+} from '../../lib/email/rich_text_render';
+import {
+  validateRichBodyJson,
+  type RichBodyDoc,
+} from '../../lib/email/rich_text_validator';
+import {
+  areAllImagesConfirmed,
+  buildImageUrlMap,
+  collectImageStorageIds,
+  recordPublishedEmailImages,
+} from '../../lib/email/rich_text_images';
+import {
   ensureAddressMarketingPreferenceForSend,
   ensureUserMarketingPreferenceForSend,
 } from '../../lib/audience/eager_preference';
@@ -75,6 +89,7 @@ export async function sendBroadcast(
     eventId: Id<'events'>;
     subject: string;
     message: string;
+    bodyJson?: string;
   },
 ) {
   const {_id: userId} = await requireUser(ctx);
@@ -115,7 +130,27 @@ export async function sendBroadcast(
   const event = eventExists;
 
   const subject = args.subject.trim();
-  const message = args.message.trim();
+
+  // Rich body is the source of truth for the plain text when present: validate
+  // + render it, then derive the canonical plain text (used for the stored
+  // message column, length validation, and the plain-text email part). A
+  // validation failure returns the soft validation_error contract, matching the
+  // rest of this handler, rather than throwing.
+  let richDoc: RichBodyDoc | null = null;
+  let imageStorageIds: string[] = [];
+  if (args.bodyJson !== undefined) {
+    try {
+      richDoc = validateRichBodyJson(args.bodyJson);
+    } catch (error) {
+      return {
+        success: false as const,
+        error: 'validation_error' as const,
+        message: getAppErrorMessage(error) ?? 'Invalid message content',
+      };
+    }
+    imageStorageIds = collectImageStorageIds(richDoc);
+  }
+  const message = (richDoc ? extractPlainText(richDoc) : args.message).trim();
 
   if (!subject) {
     return {
@@ -149,6 +184,45 @@ export async function sendBroadcast(
       error: 'validation_error' as const,
       message: getAppErrorMessage(error) ?? 'Validation failed',
     };
+  }
+
+  // Security gate: every inline image MUST reference a confirmed upload OWNED
+  // BY THE SENDER. This blocks a forged bodyJson embedding an arbitrary remote
+  // host (tracking pixel / third-party image), a storage id we never confirmed,
+  // or another user's confirmed upload. Runs before the dedup insert so a
+  // rejected send never burns the dedup slot.
+  if (imageStorageIds.length > 0) {
+    if (!(await areAllImagesConfirmed(ctx, userId, imageStorageIds))) {
+      return {
+        success: false as const,
+        error: 'validation_error' as const,
+        message: 'Message contains an image that is not a confirmed upload',
+      };
+    }
+  }
+
+  // Render once, BEFORE the dedup read: the renderer enforces the rendered-size
+  // amplification cap, and an over-cap (or unresolved-image) body must be a
+  // plain validation failure that never burns the dedup slot. Rendering is
+  // cheap under the 32KB input/output caps and identical across recipients;
+  // each confirmed image resolves to a durable server-owned URL.
+  let bodyHtml: string | undefined;
+  if (richDoc) {
+    try {
+      bodyHtml = renderValidatedRichBody(
+        richDoc,
+        buildImageUrlMap(
+          imageStorageIds,
+          resolveEmailApiBaseUrl(resolveSiteUrl()),
+        ),
+      );
+    } catch (error) {
+      return {
+        success: false as const,
+        error: 'validation_error' as const,
+        message: getAppErrorMessage(error) ?? 'Invalid message content',
+      };
+    }
   }
 
   const dedupKey = `broadcast:${userId}:${args.eventId}:${subject}`;
@@ -229,9 +303,19 @@ export async function sendBroadcast(
     adminId: userId,
     subject,
     message,
+    // Persist the SANITIZED document, never the raw client string: the raw
+    // bodyJson carries signed preview image URLs (capability URLs) and any
+    // attributes the validator stripped, which must not outlive the request.
+    bodyJson: richDoc ? JSON.stringify(richDoc) : undefined,
     recipientCount: recipients.length,
     sentAt: Date.now(),
   });
+
+  // Register the inline images as published-in-a-sent-email — the public
+  // /api/images route serves ONLY registered images. Same transaction as the
+  // send, so recipients can never open an email whose images are not yet
+  // servable, and abandoned composer uploads are never publicly exposed.
+  await recordPublishedEmailImages(ctx, imageStorageIds);
 
   await Promise.all(
     recipients.map(async (recipient) => {
@@ -264,6 +348,7 @@ export async function sendBroadcast(
           name: organizerName,
         },
         message,
+        bodyHtml,
         siteUrl,
         apiSiteUrl,
         unsubToken,

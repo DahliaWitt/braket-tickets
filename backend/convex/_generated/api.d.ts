@@ -940,7 +940,12 @@ export declare const api: {
       send: FunctionReference<
         "mutation",
         "public",
-        { eventId: Id<"events">; message: string; subject: string },
+        {
+          bodyJson?: string;
+          eventId: Id<"events">;
+          message: string;
+          subject: string;
+        },
         | { recipientCount: number; success: true }
         | {
             count?: number;
@@ -1662,7 +1667,12 @@ export declare const api: {
       sendTicketPurchaseReminder: FunctionReference<
         "mutation",
         "public",
-        { eventId: Id<"events">; message: string; subject: string },
+        {
+          bodyJson?: string;
+          eventId: Id<"events">;
+          message: string;
+          subject: string;
+        },
         { recipientCount: number; segment: "approved_no_ticket" }
       >;
     };
@@ -2186,7 +2196,12 @@ export declare const api: {
         "action",
         "public",
         { mimeType: string; storageId: Id<"_storage"> },
-        { error?: string; storageId?: Id<"_storage">; valid: boolean }
+        {
+          error?: string;
+          storageId?: Id<"_storage">;
+          url?: string;
+          valid: boolean;
+        }
       >;
       generateUploadUrl: FunctionReference<"mutation", "public", {}, string>;
       validateUpload: FunctionReference<
@@ -5179,6 +5194,12 @@ export declare const internal: {
         "internal",
         { storageId: Id<"_storage">; uploaderUserId: Id<"users"> },
         null
+      >;
+      getPublishedEmailImage: FunctionReference<
+        "query",
+        "internal",
+        { storageId: string },
+        null | { contentType: string; storageId: Id<"_storage"> }
       >;
     };
   };

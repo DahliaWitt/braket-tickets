@@ -1007,11 +1007,27 @@ const schemaTables = {
     .index('by_storageId', ['storageId'])
     .index('by_storageId_and_uploaderUserId', ['storageId', 'uploaderUserId']),
 
+  /**
+   * Registry of inline images actually published in a SENT rich email
+   * (broadcast or ticket reminder). Written atomically in the send transaction.
+   * The public, unauthenticated `/api/images/{storageId}` route serves ONLY
+   * images with a row here — a confirmed upload that was never emailed (e.g. an
+   * event poster or an abandoned composer draft) stays private to the signed
+   * getUrl flow. Also serves as the reference registry for storage GC.
+   */
+  richEmailImages: defineTable({
+    storageId: v.id('_storage'),
+    firstPublishedAt: v.number(),
+  }).index('by_storageId', ['storageId']),
+
   eventBroadcasts: defineTable({
     eventId: v.id('events'),
     adminId: v.id('users'),
     subject: v.string(),
+    /** Plain-text message body. For rich sends this is the plain text extracted from bodyJson. */
     message: v.string(),
+    /** Optional serialized ProseMirror JSON rich body (see lib/email/rich_text_validator.ts). */
+    bodyJson: v.optional(v.string()),
     recipientCount: v.number(),
     sentAt: v.number(),
   })
@@ -1022,7 +1038,10 @@ const schemaTables = {
     eventId: v.id('events'),
     adminId: v.id('users'),
     subject: v.string(),
+    /** Plain-text message body. For rich sends this is the plain text extracted from bodyJson. */
     message: v.string(),
+    /** Optional serialized ProseMirror JSON rich body (see lib/email/rich_text_validator.ts). */
+    bodyJson: v.optional(v.string()),
     recipientCount: v.number(),
     sentAt: v.number(),
   })

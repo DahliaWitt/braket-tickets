@@ -7,6 +7,7 @@ import {
   assertUploadConfirmed,
   cleanupReplacedUpload,
 } from '../lib/upload_validation';
+import {recordPublishedEmailImages} from '../lib/email/rich_text_images';
 
 /**
  * Unit tests for convex/storage/files.ts
@@ -416,7 +417,11 @@ describe('files', () => {
           mimeType: 'image/jpeg',
         });
 
-        expect(result).toEqual({valid: true, storageId});
+        expect(result.valid).toBe(true);
+        expect(result.storageId).toBe(storageId);
+        // Success now surfaces a durable public URL for the confirmed file.
+        expect(typeof result.url).toBe('string');
+        expect(result.url).toBeTruthy();
 
         const confirmationRecord = await t.run(async (ctx) => {
           return await ctx.db
@@ -440,7 +445,10 @@ describe('files', () => {
           mimeType: 'image/png',
         });
 
-        expect(result).toEqual({valid: true, storageId});
+        expect(result.valid).toBe(true);
+        expect(result.storageId).toBe(storageId);
+        expect(typeof result.url).toBe('string');
+        expect(result.url).toBeTruthy();
       });
 
       it('rejects a JPEG file claimed as PNG (deletes it)', async () => {
@@ -548,7 +556,8 @@ describe('files', () => {
             mimeType: 'image/jpeg',
           },
         );
-        expect(firstResult).toEqual({valid: true, storageId});
+        expect(firstResult.valid).toBe(true);
+        expect(firstResult.storageId).toBe(storageId);
 
         const secondResult = await secondUser.action(
           api.storage.files.confirmUpload,
@@ -735,7 +744,10 @@ describe('files', () => {
         mimeType: 'image/jpeg',
       });
 
-      expect(result).toEqual({valid: true, storageId});
+      expect(result.valid).toBe(true);
+      expect(result.storageId).toBe(storageId);
+      expect(typeof result.url).toBe('string');
+      expect(result.url).toBeTruthy();
     });
   });
 
@@ -810,6 +822,45 @@ describe('files', () => {
         await cleanupReplacedUpload(ctx, storageId);
         return null;
       });
+    });
+
+    it('pins files published in a sent rich email (skips deletion entirely)', async () => {
+      const {t, asUser} = await createAuthenticatedUser();
+
+      const jpegBytes = new Uint8Array([
+        0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
+      ]);
+      const storageId = await t.run(async (ctx) => {
+        const blob = new Blob([jpegBytes.buffer as ArrayBuffer], {
+          type: 'image/jpeg',
+        });
+        return await ctx.storage.store(blob);
+      });
+      await asUser.action(api.storage.files.confirmUpload, {
+        storageId,
+        mimeType: 'image/jpeg',
+      });
+      // Mark the upload as published in a sent email (the send-handler step).
+      await t.run((ctx) => recordPublishedEmailImages(ctx, [storageId]));
+
+      await t.run(async (ctx) => {
+        await cleanupReplacedUpload(ctx, storageId);
+        return null;
+      });
+
+      // Blob AND confirmation record both survive: sent emails reference the
+      // blob via durable /api/images URLs, so entity cleanup must not touch it.
+      const urlAfter = await t.run(async (ctx) =>
+        ctx.storage.getUrl(storageId),
+      );
+      expect(urlAfter).not.toBeNull();
+      const recordAfter = await t.run(async (ctx) =>
+        ctx.db
+          .query('confirmedUploads')
+          .withIndex('by_storageId', (q) => q.eq('storageId', storageId))
+          .first(),
+      );
+      expect(recordAfter).not.toBeNull();
     });
   });
 
