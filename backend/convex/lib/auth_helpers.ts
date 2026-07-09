@@ -1,7 +1,11 @@
 /**
- * Better Auth helper utilities for Convex.
+ * Identity resolution helpers for Convex, backed by Better Auth.
  *
- * This module provides compatibility helpers for migrating from @convex-dev/auth to Better Auth.
+ * This is the canonical module for resolving the calling user from a Better Auth
+ * session and for looking up app `users` documents by Better Auth id or by
+ * normalized email (with collision detection). Feature code should reach for
+ * `requireUser` / `getAuthUser` / `getAuthUserId` here rather than touching
+ * Better Auth session APIs directly.
  */
 
 import {v} from 'convex/values';
