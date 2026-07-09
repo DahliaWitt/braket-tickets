@@ -35,6 +35,9 @@ const RESET = '\x1b[0m';
 
 const COMMON_SYNC_KEYS = [
   'AUTH_BASE_URL',
+  // Incident kill switch for the haveIBeenPwned breach check (fails closed).
+  // Optional: skipped when unset in Doppler. 'true' disables, 'false' re-enables.
+  'AUTH_HIBP_DISABLED',
   'BETTER_AUTH_SECRET',
   'CONVEX_SITE_URL',
   'GOOGLE_CLIENT_ID',

@@ -4,6 +4,8 @@ import {api} from '@convex/_generated/api';
 import {logger} from '@/utils/logger';
 import {retryWithDelays} from '@/utils/async-control';
 import {isRetryableAuthBackendError} from '@/core/utils/auth.utils';
+import {isCompromisedPasswordError} from '@/core/utils/auth-error-codes';
+import {COMPROMISED_PASSWORD_MESSAGE} from '@shared/constants';
 import {AUTH_CLIENT} from './auth-client.token';
 import {BrowserPlatformService} from './browser-platform.service';
 
@@ -61,6 +63,10 @@ export class PasswordService {
     });
 
     if (error) {
+      if (isCompromisedPasswordError(error)) {
+        // Expected, user-recoverable rejection — not an error-level event.
+        throw new Error(COMPROMISED_PASSWORD_MESSAGE, {cause: error});
+      }
       logger.error('Password reset confirmation failed:', error);
       const message = error.message || '';
       if (

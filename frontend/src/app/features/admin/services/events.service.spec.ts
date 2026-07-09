@@ -120,50 +120,6 @@ describe('EventsService', () => {
     });
   });
 
-  describe('getBatchAvailability', () => {
-    it('should return empty object without querying when no IDs are provided', async () => {
-      const result = await service.getBatchAvailability([]);
-
-      expect(result).toEqual({});
-      expect(convexClientMock.client.query).not.toHaveBeenCalledWith(
-        api.events.public.getBatchAvailability,
-        expect.anything(),
-      );
-    });
-
-    it('should chunk IDs into batches of 50 and merge responses', async () => {
-      const ids = Array.from({length: 120}, (_, i) => `event-${i + 1}`);
-      convexClientMock.client.query.mockImplementation(
-        (_fn, args: {eventIds: string[]; now: number}) =>
-          Object.fromEntries(
-            args.eventIds.map((id) => [id, {isSoldOut: false}]),
-          ),
-      );
-
-      const result = await service.getBatchAvailability(ids);
-
-      expect(convexClientMock.client.query).toHaveBeenCalledTimes(3);
-      expect(convexClientMock.client.query).toHaveBeenNthCalledWith(
-        1,
-        api.events.public.getBatchAvailability,
-        expect.objectContaining({eventIds: ids.slice(0, 50)}),
-      );
-      expect(convexClientMock.client.query).toHaveBeenNthCalledWith(
-        2,
-        api.events.public.getBatchAvailability,
-        expect.objectContaining({eventIds: ids.slice(50, 100)}),
-      );
-      expect(convexClientMock.client.query).toHaveBeenNthCalledWith(
-        3,
-        api.events.public.getBatchAvailability,
-        expect.objectContaining({eventIds: ids.slice(100, 120)}),
-      );
-      expect(Object.keys(result)).toHaveLength(120);
-      expect(result['event-1']).toEqual({isSoldOut: false});
-      expect(result['event-120']).toEqual({isSoldOut: false});
-    });
-  });
-
   describe('createWithPoster', () => {
     it('should include organizerId when provided', async () => {
       convexClientMock.mutation.mockResolvedValue('new-event-id');

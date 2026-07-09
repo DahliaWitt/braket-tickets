@@ -17,6 +17,7 @@ import {ResaleService} from '@/features/tickets/services/resale.service';
 import {CONVEX} from 'convex-angular';
 import {type Id} from '@convex/_generated/dataModel';
 import {api} from '@convex/_generated/api';
+import {type FunctionReturnType} from 'convex/server';
 import {toast} from 'ngx-sonner';
 import {
   createMockConvexClient,
@@ -59,7 +60,6 @@ interface AdminEventsServiceMock {
   getManagementPurchases: Mock;
   getManagementResale: Mock;
   getTierPricingStats: Mock;
-  getGuests: Mock;
   listImportedTickets: Mock;
   getTicketPdf: Mock;
   sendTicketPurchaseReminder: Mock;
@@ -140,6 +140,7 @@ describe('EventManagement', () => {
   let convexMock: MockConvexClient;
   let reminderAudienceData: TicketReminderAudience;
   let reminderAudienceError: Error | null;
+  let guestsData: FunctionReturnType<typeof api.events.guests.listByEvent>;
   let tierPricingStatsData: EventTierPricingStats;
 
   const defaultBroadcastAudience = {
@@ -306,6 +307,7 @@ describe('EventManagement', () => {
       missingOrganizer: false,
     };
     reminderAudienceError = null;
+    guestsData = [];
     tierPricingStatsData = {
       ...defaultTierPricingStats,
       tiers: defaultTierPricingStats.tiers.map((tier) => ({...tier})),
@@ -321,7 +323,6 @@ describe('EventManagement', () => {
       getTierPricingStats: vi
         .fn()
         .mockImplementation(() => Promise.resolve(tierPricingStatsData)),
-      getGuests: vi.fn().mockResolvedValue([]),
       listImportedTickets: vi.fn().mockResolvedValue([]),
       getTicketPdf: vi
         .fn()
@@ -344,45 +345,13 @@ describe('EventManagement', () => {
       export: vi.fn().mockResolvedValue(undefined),
     };
 
-    const query = vi.fn((queryFn: unknown) => {
-      if (functionReferenceMatches(queryFn, api.events.broadcasts.listHistory))
-        return Promise.resolve([]);
-      if (
-        functionReferenceMatches(queryFn, api.events.broadcasts.getAudience)
-      ) {
-        return reminderAudienceError
-          ? Promise.reject(reminderAudienceError)
-          : Promise.resolve(defaultBroadcastAudience);
-      }
-      if (
-        functionReferenceMatches(
-          queryFn,
-          api.marketing.emails.getAnnouncementStatus,
-        )
-      ) {
-        return Promise.resolve(marketingAnnouncementStatus);
-      }
-      if (
-        functionReferenceMatches(
-          queryFn,
-          api.marketing.emails.getRecipientCount,
-        )
-      ) {
-        return Promise.resolve(marketingRecipientCount);
-      }
-      if (
-        functionReferenceMatches(
-          queryFn,
-          api.events.reminders.getTicketReminderAudience,
-        )
-      ) {
-        if (reminderAudienceError) return Promise.reject(reminderAudienceError);
-        return Promise.resolve(reminderAudienceData);
-      }
+    const query = vi.fn(() => Promise.resolve(null));
 
-      return Promise.resolve(null);
-    });
-
+    // Emissions are deferred to a microtask because injectQueries registers a
+    // subscription in its active-key map only after onUpdate() returns; a
+    // synchronous emission is dropped by its staleness guard. The real
+    // ConvexReactClient also never emits synchronously, so deferral matches
+    // production timing for injectQuery consumers too.
     const onUpdate = vi.fn(
       (
         queryFn: unknown,
@@ -390,22 +359,56 @@ describe('EventManagement', () => {
         onData: (value: unknown) => void,
         onError: (error: Error) => void,
       ) => {
-        if (
-          functionReferenceMatches(
-            queryFn,
-            api.events.reminders.getTicketReminderAudience,
-          )
-        ) {
-          if (reminderAudienceError) {
-            onError(reminderAudienceError);
-          } else {
-            onData(reminderAudienceData);
+        queueMicrotask(() => {
+          if (
+            functionReferenceMatches(queryFn, api.events.guests.listByEvent)
+          ) {
+            onData(guestsData);
+            return;
           }
-        } else if (reminderAudienceError) {
-          onError(reminderAudienceError);
-        } else {
-          onData(reminderAudienceData);
-        }
+          if (
+            functionReferenceMatches(
+              queryFn,
+              api.events.reminders.getTicketReminderAudience,
+            )
+          ) {
+            if (reminderAudienceError) onError(reminderAudienceError);
+            else onData(reminderAudienceData);
+            return;
+          }
+          if (
+            functionReferenceMatches(queryFn, api.events.broadcasts.getAudience)
+          ) {
+            if (reminderAudienceError) onError(reminderAudienceError);
+            else onData(defaultBroadcastAudience);
+            return;
+          }
+          if (
+            functionReferenceMatches(queryFn, api.events.broadcasts.listHistory)
+          ) {
+            onData([]);
+            return;
+          }
+          if (
+            functionReferenceMatches(
+              queryFn,
+              api.marketing.emails.getAnnouncementStatus,
+            )
+          ) {
+            onData(marketingAnnouncementStatus);
+            return;
+          }
+          if (
+            functionReferenceMatches(
+              queryFn,
+              api.marketing.emails.getRecipientCount,
+            )
+          ) {
+            onData(marketingRecipientCount);
+            return;
+          }
+          onData(null);
+        });
 
         return () => void 0;
       },
@@ -792,21 +795,30 @@ describe('EventManagement', () => {
   });
 
   it('should show reminder audience error when preview loading fails', async () => {
+    // The reminder audience is a live subscription created at mount, so the
+    // error must exist before the component subscribes — the old
+    // reloadToken-driven refetch path no longer exists. Mount a fresh
+    // component instead of mutating the shared fixture.
     reminderAudienceError = new Error('preview failed');
 
-    fixture.componentInstance.reloadToken.update((current) => current + 1);
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
+    const errorFixture = TestBed.createComponent(EventManagement);
+    errorFixture.componentRef.setInput('id', 'event1');
+    errorFixture.detectChanges();
+    await errorFixture.whenStable();
+    errorFixture.detectChanges();
+    const errorHarness = await TestbedHarnessEnvironment.harnessForFixture(
+      errorFixture,
+      EventManagementHarness,
+    );
 
-    await harness.clickTab('buyers');
-    fixture.detectChanges();
-    await fixture.whenStable();
+    await errorHarness.clickTab('buyers');
+    errorFixture.detectChanges();
+    await errorFixture.whenStable();
 
-    expect(await harness.getReminderAudienceErrorText()).toContain(
+    expect(await errorHarness.getReminderAudienceErrorText()).toContain(
       "couldn't load reminder audience",
     );
-    expect(await harness.isReminderSendDisabled()).toBe(true);
+    expect(await errorHarness.isReminderSendDisabled()).toBe(true);
   });
 
   describe('single ticket refunds', () => {

@@ -6,7 +6,6 @@ import {describe, it, expect, vi} from 'vitest';
 import {CommunitySelectorComponent} from './community-selector.component';
 import {CommunitySelectorHarness} from './community-selector.harness';
 import {CommunityContextService} from '../../services/community-context.service';
-import {CommunitiesService} from '@/core/services/communities.service';
 import {AuthService} from '@/core/services/auth.service';
 import {CommunityAdminDefaultService} from '@/features/admin/services/community-admin-default.service';
 import {CONVEX} from 'convex-angular';
@@ -54,9 +53,17 @@ async function setup(options: {
   selectedName?: string | null;
   hasMultiple?: boolean;
   isAdminOverride?: boolean;
-  communitiesServiceGet?: (
-    id: Id<'organizers'>,
-  ) => Promise<{name: string; slug?: string | null} | null>;
+  communityNamesById?: Record<
+    string,
+    {name: string; slug?: string | null} | null
+  >;
+  listCommunities?: {
+    _id: Id<'organizers'>;
+    name: string;
+    slug?: string | null;
+  }[];
+  /** Per-ID lookups that never emit — the subscription stays pending. */
+  pendingIds?: string[];
   userRole?: 'root_admin' | 'community_admin';
   isSelectedDefault?: boolean;
 }) {
@@ -75,14 +82,35 @@ async function setup(options: {
     isAdminOverride: options.isAdminOverride ?? false,
   });
 
-  const communitiesServiceMock = {
-    get: options.communitiesServiceGet ?? vi.fn().mockResolvedValue(null),
-    list: vi.fn().mockResolvedValue([]),
-  };
-
-  // Convex client mock is required because CommunitiesService injects it via
-  // provideConvex() and injectConvexQuery.
+  // Convex mock drives name resolution: per-ID `communities.public.get`
+  // subscriptions (args include `id`) and the root-admin batch
+  // `communities.list.list` subscription (empty args). injectQuery/injectQueries
+  // record the active subscription AFTER calling onUpdate, so emit
+  // asynchronously via queueMicrotask; a synchronous emit would be dropped.
+  const namesById = options.communityNamesById ?? {};
+  const listData = options.listCommunities ?? [];
+  const onUpdate = vi
+    .fn()
+    .mockImplementation(
+      (
+        _queryRef: unknown,
+        args: Record<string, unknown>,
+        onData: (d: unknown) => void,
+      ) => {
+        queueMicrotask(() => {
+          if (args && 'id' in args) {
+            if (options.pendingIds?.includes(String(args.id))) return;
+            onData(namesById[String(args.id)] ?? null);
+          } else {
+            onData(listData);
+          }
+        });
+        return () => void 0;
+      },
+    );
   const convexClientMock: MockConvexClient = createMockConvexClient();
+  convexClientMock.onUpdate = onUpdate;
+  convexClientMock.client.onUpdate = onUpdate;
 
   // AuthService mock provides userRole signal for the batch-vs-individual fetch branch.
   const role = options.userRole ?? 'community_admin';
@@ -101,7 +129,6 @@ async function setup(options: {
       provideZonelessChangeDetection(),
       provideRouter([{path: '**', children: []}]),
       {provide: CommunityContextService, useValue: ctxMock},
-      {provide: CommunitiesService, useValue: communitiesServiceMock},
       {provide: AuthService, useValue: authServiceMock},
       {provide: CommunityAdminDefaultService, useValue: defaultServiceMock},
       {provide: CONVEX, useValue: convexClientMock},
@@ -112,7 +139,12 @@ async function setup(options: {
   const fixture: ComponentFixture<CommunitySelectorComponent> =
     TestBed.createComponent(CommunitySelectorComponent);
   fixture.detectChanges();
+  // Flush the async (queueMicrotask) subscription emissions from the Convex
+  // mock, then re-run change detection so options() reflects resolved names.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  fixture.detectChanges();
   await fixture.whenStable();
+  fixture.detectChanges();
 
   const harness = await TestbedHarnessEnvironment.harnessForFixture(
     fixture,
@@ -123,7 +155,6 @@ async function setup(options: {
     fixture,
     harness,
     ctxMock,
-    communitiesServiceMock,
     authServiceMock,
     defaultServiceMock,
     activatedRouteStub,
@@ -143,7 +174,7 @@ describe('CommunitySelectorComponent', () => {
         selectedId: communityA,
         selectedName: 'Alpha Crew',
         hasMultiple: false,
-        communitiesServiceGet: vi.fn().mockResolvedValue({name: 'Alpha Crew'}),
+        communityNamesById: {[communityA]: {name: 'Alpha Crew'}},
       });
 
       expect(await harness.isStaticNameVisible()).toBe(true);
@@ -156,7 +187,7 @@ describe('CommunitySelectorComponent', () => {
         selectedId: communityA,
         selectedName: 'Alpha Crew',
         hasMultiple: false,
-        communitiesServiceGet: vi.fn().mockResolvedValue({name: 'Alpha Crew'}),
+        communityNamesById: {[communityA]: {name: 'Alpha Crew'}},
       });
 
       expect(await harness.isDropdownVisible()).toBe(false);
@@ -169,7 +200,7 @@ describe('CommunitySelectorComponent', () => {
         selectedName: 'Alpha Crew',
         hasMultiple: false,
         isSelectedDefault: true,
-        communitiesServiceGet: vi.fn().mockResolvedValue({name: 'Alpha Crew'}),
+        communityNamesById: {[communityA]: {name: 'Alpha Crew'}},
       });
 
       expect(await harness.hasSetDefaultButton()).toBe(false);
@@ -186,11 +217,6 @@ describe('CommunitySelectorComponent', () => {
         selectedId: communityA,
         selectedName: null,
         hasMultiple: true,
-        communitiesServiceGet: vi
-          .fn()
-          .mockImplementation(async (id: Id<'organizers'>) =>
-            id === communityA ? {name: 'Alpha Crew'} : {name: 'Beta Squad'},
-          ),
       });
 
       expect(await harness.isDropdownVisible()).toBe(true);
@@ -202,14 +228,31 @@ describe('CommunitySelectorComponent', () => {
         selectedId: communityA,
         selectedName: null,
         hasMultiple: true,
-        communitiesServiceGet: vi
-          .fn()
-          .mockImplementation(async (id: Id<'organizers'>) =>
-            id === communityA ? {name: 'Alpha Crew'} : {name: 'Beta Squad'},
-          ),
       });
 
       expect(await harness.isStaticNameVisible()).toBe(false);
+    });
+
+    it('keeps pending name lookups out of options and resolved names', async () => {
+      const {ctxMock} = await setup({
+        communities: [communityA, communityB],
+        selectedId: communityA,
+        selectedName: null,
+        hasMultiple: true,
+        communityNamesById: {[communityA]: {name: 'Alpha Crew'}},
+        pendingIds: [communityB],
+      });
+
+      // Only the resolved community is published; the still-loading one must
+      // not surface as an 'Unknown' placeholder in the shared context (it
+      // feeds selectedCommunityName() and the header label).
+      const published = ctxMock.setResolvedNames.mock.lastCall?.[0] as Map<
+        string,
+        string
+      >;
+      expect(published.get(communityA)).toBe('Alpha Crew');
+      expect(published.has(communityB)).toBe(false);
+      expect([...published.values()]).not.toContain('Unknown');
     });
 
     it('calls selectCommunity on dropdown change', async () => {
@@ -218,11 +261,10 @@ describe('CommunitySelectorComponent', () => {
         selectedId: communityA,
         selectedName: null,
         hasMultiple: true,
-        communitiesServiceGet: vi
-          .fn()
-          .mockImplementation(async (id: Id<'organizers'>) =>
-            id === communityA ? {name: 'Alpha Crew'} : {name: 'Beta Squad'},
-          ),
+        communityNamesById: {
+          [communityA]: {name: 'Alpha Crew'},
+          [communityB]: {name: 'Beta Squad'},
+        },
       });
 
       await harness.selectCommunity(communityB);
@@ -236,11 +278,10 @@ describe('CommunitySelectorComponent', () => {
         selectedId: communityB,
         selectedName: null,
         hasMultiple: true,
-        communitiesServiceGet: vi
-          .fn()
-          .mockImplementation(async (id: Id<'organizers'>) =>
-            id === communityA ? {name: 'Puppy Pilled'} : {name: 'Braket'},
-          ),
+        communityNamesById: {
+          [communityA]: {name: 'Puppy Pilled'},
+          [communityB]: {name: 'Braket'},
+        },
       });
 
       expect(await harness.getSelectedValue()).toBe(communityB);
@@ -252,13 +293,10 @@ describe('CommunitySelectorComponent', () => {
         selectedId: communityA,
         selectedName: null,
         hasMultiple: true,
-        communitiesServiceGet: vi
-          .fn()
-          .mockImplementation(async (id: Id<'organizers'>) =>
-            id === communityA
-              ? {name: 'Alpha Crew', slug: 'alpha-crew'}
-              : {name: 'Beta Squad', slug: 'beta-squad'},
-          ),
+        communityNamesById: {
+          [communityA]: {name: 'Alpha Crew', slug: 'alpha-crew'},
+          [communityB]: {name: 'Beta Squad', slug: 'beta-squad'},
+        },
       });
 
       const router = TestBed.inject(Router);
@@ -282,13 +320,10 @@ describe('CommunitySelectorComponent', () => {
         selectedId: communityA,
         selectedName: null,
         hasMultiple: true,
-        communitiesServiceGet: vi
-          .fn()
-          .mockImplementation(async (id: Id<'organizers'>) =>
-            id === communityA
-              ? {name: 'Alpha Crew', slug: 'alpha-crew'}
-              : {name: 'Beta Squad', slug: 'beta-squad'},
-          ),
+        communityNamesById: {
+          [communityA]: {name: 'Alpha Crew', slug: 'alpha-crew'},
+          [communityB]: {name: 'Beta Squad', slug: 'beta-squad'},
+        },
       });
 
       expect(await harness.hasSetDefaultButton()).toBe(true);
@@ -302,13 +337,10 @@ describe('CommunitySelectorComponent', () => {
         selectedId: communityB,
         selectedName: null,
         hasMultiple: true,
-        communitiesServiceGet: vi
-          .fn()
-          .mockImplementation(async (id: Id<'organizers'>) =>
-            id === communityA
-              ? {name: 'Alpha Crew', slug: 'alpha-crew'}
-              : {name: 'Beta Squad', slug: 'beta-squad'},
-          ),
+        communityNamesById: {
+          [communityA]: {name: 'Alpha Crew', slug: 'alpha-crew'},
+          [communityB]: {name: 'Beta Squad', slug: 'beta-squad'},
+        },
       });
 
       await harness.clickSetDefaultButton();
@@ -327,11 +359,6 @@ describe('CommunitySelectorComponent', () => {
         selectedName: null,
         hasMultiple: true,
         isSelectedDefault: true,
-        communitiesServiceGet: vi
-          .fn()
-          .mockImplementation(async (id: Id<'organizers'>) =>
-            id === communityA ? {name: 'Alpha Crew'} : {name: 'Beta Squad'},
-          ),
       });
 
       expect(await harness.getSetDefaultButtonText()).toContain('Default');
@@ -345,7 +372,6 @@ describe('CommunitySelectorComponent', () => {
         selectedName: null,
         hasMultiple: true,
         userRole: 'root_admin',
-        communitiesServiceGet: vi.fn().mockResolvedValue(null),
       });
 
       expect(await harness.hasSetDefaultButton()).toBe(true);
@@ -364,7 +390,6 @@ describe('CommunitySelectorComponent', () => {
         selectedName: 'Sister City',
         hasMultiple: true,
         isAdminOverride: true,
-        communitiesServiceGet: vi.fn().mockResolvedValue({name: 'Sister City'}),
         userRole: 'root_admin',
       });
 
@@ -381,7 +406,6 @@ describe('CommunitySelectorComponent', () => {
         selectedName: 'Sister City',
         hasMultiple: true,
         isAdminOverride: true,
-        communitiesServiceGet: vi.fn().mockResolvedValue({name: 'Sister City'}),
         userRole: 'root_admin',
       });
 
@@ -395,7 +419,6 @@ describe('CommunitySelectorComponent', () => {
         selectedName: null,
         hasMultiple: false,
         isAdminOverride: true,
-        communitiesServiceGet: vi.fn().mockResolvedValue(null),
         userRole: 'root_admin',
       });
 
@@ -416,9 +439,6 @@ describe('CommunitySelectorComponent', () => {
         selectedName: 'Non-Member Org',
         hasMultiple: true,
         isAdminOverride: true,
-        communitiesServiceGet: vi
-          .fn()
-          .mockResolvedValue({name: 'Non-Member Org'}),
         userRole: 'root_admin',
       });
 
@@ -433,11 +453,6 @@ describe('CommunitySelectorComponent', () => {
         selectedName: null,
         hasMultiple: true,
         isAdminOverride: false,
-        communitiesServiceGet: vi
-          .fn()
-          .mockImplementation(async (id: Id<'organizers'>) =>
-            id === communityA ? {name: 'Alpha Crew'} : {name: 'Beta Squad'},
-          ),
       });
 
       expect(await harness.isDropdownVisible()).toBe(true);

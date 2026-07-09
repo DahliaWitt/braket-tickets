@@ -86,6 +86,22 @@ describe('TicketReminderTabComponent', () => {
     expect(await editor.isImageButtonEnabled()).toBe(true);
   });
 
+  it('subscribes to the reminder audience and reflects the recipient count', () => {
+    expect(component.reminderRecipientCount()).toBe(3);
+    expect(component.reminderMissingCommunity()).toBe(false);
+    expect(component.reminderAudience()).not.toBeNull();
+    expect(convexMock.onUpdate).toHaveBeenCalled();
+  });
+
+  it('skips the audience query when eventId is empty', async () => {
+    fixture.componentRef.setInput('eventId', '');
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(component.reminderRecipientCount()).toBe(0);
+    expect(component.isSendReminderDisabled()).toBe(true);
+  });
+
   it('should make form invalid when subject exceeds max length', async () => {
     const overLength = 'a'.repeat(MAX_TICKET_REMINDER_SUBJECT_LENGTH + 1);
     component.reminderFormModel.set({
