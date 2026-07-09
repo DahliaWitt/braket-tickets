@@ -75,7 +75,11 @@ export function collectAuthErrorText(error: unknown): string {
       if (typeof value['statusText'] === 'string') {
         parts.push(value['statusText']);
       }
-      if (value['cause'] !== undefined) visit(value['cause'], depth + 1);
+      // Same nesting points as extractBetterAuthErrorCode, so a code shadowed
+      // by an outer non-matching code still surfaces in the fallback text.
+      for (const key of ['error', 'body', 'cause'] as const) {
+        if (value[key] !== undefined) visit(value[key], depth + 1);
+      }
       return;
     }
 

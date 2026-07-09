@@ -120,6 +120,15 @@ describe('isCompromisedPasswordError', () => {
     expect(isCompromisedPasswordError('PASSWORD_WRONG')).toBe(false);
   });
 
+  it('detects a code shadowed by an outer non-matching code', () => {
+    expect(
+      isCompromisedPasswordError({
+        code: 'INTERNAL_SERVER_ERROR',
+        body: {code: 'PASSWORD_COMPROMISED'},
+      }),
+    ).toBe(true);
+  });
+
   it('survives circular cause chains', () => {
     const a: {message: string; cause?: unknown} = {message: 'a'};
     const b: {message: string; cause?: unknown} = {message: 'b', cause: a};

@@ -507,7 +507,10 @@ function getAuthConfig() {
  * (/change-password, /set-password) must never appear here: Convex
  * mutations cannot fetch, and the plugin fails closed.
  */
-export const HIBP_CHECKED_PATHS = ['/sign-up/email', '/reset-password'];
+export const HIBP_CHECKED_PATHS = [
+  '/sign-up/email',
+  '/reset-password',
+] as const;
 
 /**
  * Creates a Better Auth instance with Convex integration.
@@ -636,12 +639,14 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
             haveIBeenPwned({
               // Only paths served through Better Auth HTTP routes (Convex
               // httpActions, where outbound fetch is permitted). Deliberately
-              // NOT the plugin defaults: /change-password and /set-password
-              // run through Convex mutations (auth.public.changePassword /
-              // setPassword call auth.api.* in mutation context), where
-              // fetch is prohibited — including them would hard-fail every
-              // password change because the plugin fails closed.
-              paths: HIBP_CHECKED_PATHS,
+              // drops /change-password from the plugin defaults: it runs
+              // through a Convex mutation (auth.public.changePassword calls
+              // auth.api.* in mutation context), where fetch is prohibited —
+              // including it would hard-fail every password change because
+              // the plugin fails closed. /set-password (also mutation
+              // context) was never a plugin default; it stays out of
+              // HIBP_CHECKED_PATHS for the same reason.
+              paths: [...HIBP_CHECKED_PATHS],
               customPasswordCompromisedMessage: COMPROMISED_PASSWORD_MESSAGE,
             }),
           ]),

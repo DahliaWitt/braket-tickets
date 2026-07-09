@@ -63,10 +63,11 @@ export class PasswordService {
     });
 
     if (error) {
-      logger.error('Password reset confirmation failed:', error);
       if (isCompromisedPasswordError(error)) {
+        // Expected, user-recoverable rejection — not an error-level event.
         throw new Error(COMPROMISED_PASSWORD_MESSAGE, {cause: error});
       }
+      logger.error('Password reset confirmation failed:', error);
       const message = error.message || '';
       if (
         message.toLowerCase().includes('expired') ||

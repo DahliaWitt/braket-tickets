@@ -122,6 +122,11 @@ Scope:
   prohibited, so they are deliberately excluded from `HIBP_CHECKED_PATHS`.
 - Disabled entirely when `IS_TEST=true` (E2E and local test runs never call
   the external API) and when the `AUTH_HIBP_DISABLED` kill switch is set.
+- Local dev (`pnpm dev`) runs with `IS_TEST=false`
+  (`scripts/lib/ConvexBackend.ts`), so signups and `pnpm seed` (which signs
+  up through the real route) DO call the live HIBP API and fail closed when
+  offline. Set `AUTH_HIBP_DISABLED=true` in the `local` Doppler config to
+  work offline.
 
 Expected rejection behavior: a breached password fails with HTTP 400 and the
 user sees the shared copy from `COMPROMISED_PASSWORD_MESSAGE` in
@@ -139,9 +144,11 @@ To disable the check during an HIBP outage:
 
 1. Set `AUTH_HIBP_DISABLED=true` in the affected Doppler config.
 2. Sync it to the deployment: `pnpm sync:env:dev` for the dev deployment, or
-   the production sync flow (`DOPPLER_CONFIG=prd pnpm sync:env:prod`, or the
-   GitHub Actions path) for production. `backend/scripts/sync-env.ts` lists
-   the key.
+   the production sync flow (`DOPPLER_CONFIG=prd pnpm sync:env:prod`) for
+   production. `backend/scripts/sync-env.ts` lists the key. For the GitHub
+   Actions path instead: set the `AUTH_HIBP_DISABLED` **variable** (not
+   secret) in the matching GitHub environment — the deploy workflows map it
+   from `vars.AUTH_HIBP_DISABLED` — and re-run the Deploy Backend job.
 3. No code deploy is needed; the flag is read on each auth request.
 
 To re-enable after the outage, set `AUTH_HIBP_DISABLED=false` (or any value
