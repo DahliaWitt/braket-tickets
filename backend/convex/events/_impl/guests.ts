@@ -3,6 +3,7 @@ import type {MutationCtx, QueryCtx} from '../../_generated/server';
 import {scheduleBroadcastCatchup} from '../../lib/broadcast_catchup';
 import {internal} from '../../_generated/api';
 import {throwNotFound} from '../../lib/errors';
+import {validateGuestFields} from '../../lib/events/guest_fields';
 import {
   validateEmail,
   validateRequiredString,
@@ -28,10 +29,7 @@ export async function add(
 ): Promise<Id<'guests'>> {
   const {user, event} = await requireEventForEdit(ctx, args.eventId);
 
-  validateRequiredString(args.name, 'Name');
-  validateStringLength(args.name, 'Name', MAX_GUEST_NAME_LENGTH);
-  validateStringLength(args.email, 'Email', MAX_GUEST_EMAIL_LENGTH);
-  validateStringLength(args.notes, 'Notes', MAX_GUEST_NOTES_LENGTH);
+  validateGuestFields(args);
 
   // The admin UI trims and requires a plausible address before submitting;
   // enforce the same here so direct API calls cannot enqueue broadcast

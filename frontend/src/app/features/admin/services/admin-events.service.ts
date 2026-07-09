@@ -1,7 +1,7 @@
 import {Injectable} from '@angular/core';
 import {ConvexError} from 'convex/values';
 import {injectConvex} from 'convex-angular';
-import type {FunctionReturnType} from 'convex/server';
+import type {FunctionArgs, FunctionReturnType} from 'convex/server';
 import {api} from '@convex/_generated/api';
 import {type Doc, type Id} from '@convex/_generated/dataModel';
 import {
@@ -11,9 +11,21 @@ import {
   type EventTierPricingStats,
   type Guest,
   type GuestType,
+  type ImportBatchResult,
+  type ImportBatchRemovalResult,
+  type ImportedTicketHolder,
   type TicketReminderAudience,
   type TicketReminderSendResult,
 } from '../models/event-management.model';
+
+// Argument shapes are pulled straight from the generated API so the frontend
+// stays locked to the backend contract (never redefine bulk-import rows).
+type BulkAddGuestsArgs = FunctionArgs<typeof api.events.guests.addMany>;
+type ImportTicketBatchArgs = FunctionArgs<
+  typeof api.events.imported_tickets.importBatch
+>;
+export type BulkGuestRow = BulkAddGuestsArgs['rows'][number];
+export type ImportTicketRow = ImportTicketBatchArgs['rows'][number];
 import {isManagementDataTooLargeError} from '../utils/management-data-errors';
 import {isNonRetryableReadError, retryWithDelays} from '@/utils/async-control';
 
@@ -341,6 +353,90 @@ export class AdminEventsService {
   async removeGuest(guestId: string): Promise<void> {
     await this.convex.mutation(api.events.guests.remove, {
       id: guestId as Id<'guests'>,
+    });
+  }
+
+  /**
+   * Bulk-adds guests from a validated CSV/paste import.
+   *
+   * One transaction — subscribers see a single invalidation, not one per row.
+   * Idempotent under retry via `batchKey`. Returns the server-authoritative
+   * structured result (inserted/skipped counts + per-row outcomes).
+   *
+   * @param eventId - The event to add guests to.
+   * @param batchKey - Client-generated idempotency key for the import.
+   * @param rows - Normalized guest rows (name required; email/type/notes optional).
+   */
+  bulkAddGuests(
+    eventId: string,
+    batchKey: string,
+    rows: BulkGuestRow[],
+  ): Promise<ImportBatchResult> {
+    return this.convex.mutation(api.events.guests.addMany, {
+      eventId: eventId as Id<'events'>,
+      batchKey,
+      rows,
+    });
+  }
+
+  /**
+   * Imports a batch of external ticket holders (e.g. an RA export).
+   *
+   * Imported entries are a distinct, inert record type — never a purchase.
+   * One transaction, idempotent under retry via `batchKey`. `dedupMode`
+   * controls barcode dedup against prior imports; `sourceLabel` attributes the
+   * batch. Returns the server-authoritative structured result.
+   */
+  importTicketBatch(
+    eventId: string,
+    batchKey: string,
+    dedupMode: ImportTicketBatchArgs['dedupMode'],
+    rows: ImportTicketRow[],
+    sourceLabel?: string,
+  ): Promise<ImportBatchResult> {
+    return this.convex.mutation(api.events.imported_tickets.importBatch, {
+      eventId: eventId as Id<'events'>,
+      batchKey,
+      dedupMode,
+      sourceLabel,
+      rows,
+    });
+  }
+
+  /**
+   * Lists imported external ticket holders for an event (one-shot `convex.query`
+   * — not a live subscription; callers reload it explicitly).
+   *
+   * Powers both the buyers-list merge (with source badge) and the preview dedup
+   * hints. Roster-view authorized.
+   */
+  listImportedTickets(eventId: string): Promise<ImportedTicketHolder[]> {
+    return this.convex.query(api.events.imported_tickets.listByEvent, {
+      eventId: eventId as Id<'events'>,
+    });
+  }
+
+  /**
+   * Removes a single imported ticket-holder entry. Event-edit authorized,
+   * audit-logged.
+   */
+  async removeImportedEntry(entryId: string): Promise<void> {
+    await this.convex.mutation(api.events.imported_tickets.removeEntry, {
+      id: entryId as Id<'importedTicketHolders'>,
+    });
+  }
+
+  /**
+   * Removes an entire import batch by its batch key. Returns the removed and
+   * checked-in counts so the confirm dialog can warn about checked-in entries.
+   */
+  removeImportedBatch(
+    eventId: string,
+    batchKey: string,
+  ): Promise<ImportBatchRemovalResult> {
+    return this.convex.mutation(api.events.imported_tickets.removeBatch, {
+      eventId: eventId as Id<'events'>,
+      batchKey,
     });
   }
 

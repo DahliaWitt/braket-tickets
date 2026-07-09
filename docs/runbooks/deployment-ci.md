@@ -51,11 +51,13 @@ When troubleshooting automatic deploys, start from the parent `CI` run on the br
 
 ### Runner routing
 
-`CI` jobs `lint`, `test`, `stripe-contracts`, `build`, and `e2e-check` run on GitHub-hosted `ubuntu-latest` runners (free with unlimited minutes for public repositories; 4 vCPU / 16 GB). Only the `e2e` job and the deploy/release workflows run on the self-hosted Whiterose pool, which provides warm pnpm and Playwright browser volumes. This keeps the small self-hosted pool dedicated to E2E and deploys instead of queueing lint/test/build behind them.
+**All `CI` jobs run on GitHub-hosted `ubuntu-latest` runners** (free with unlimited minutes for public repositories; 4 vCPU / 16 GB), including `e2e`. Only the deploy/release workflows still run on the self-hosted Whiterose pool.
 
-Hosted runners are ephemeral, so those jobs restore caches explicitly: the shared composite action [`.github/actions/setup-node-pnpm`](../../.github/actions/setup-node-pnpm/action.yml) installs pnpm plus the `.nvmrc` Node version and restores the pnpm store (`actions/setup-node` with `cache: pnpm`), and the `build` job restores the Angular build cache at `frontend/.angular/cache` via `actions/cache`. The Angular CLI disables its build cache when it detects CI, so the `build` job enables it at runtime with `ng config cli.cache.environment all` — scoped to that job on purpose; a global `angular.json` setting would also switch the self-hosted `e2e` and deploy builds to persistent incremental caching on the Whiterose disk.
+`e2e` moved to hosted runners (2026-07-08) because the shared 16-core Whiterose host could fit only ~2 concurrent E2E jobs before saturating: each job draws ~9 cores (Convex local backend ~3, browsers ~5 with WebKit heaviest, node ~1), so a batch of PRs oversubscribed the host and the app-under-test returned `503`s, plus the pool's shared `PLAYWRIGHT_BROWSERS_PATH` volume caused a browser-GC race across Playwright versions. Hosted runners give each E2E job an isolated 4 vCPU / 16 GB with up to 20 in parallel — slower per run than the idle self-hosted box, but no cross-job contention and no shared-volume race. On 4 vCPU the job runs `PW_WORKERS=4` (monitor; drop to 3/2 if runs approach the 30-min timeout).
 
-The `e2e-check` gate intentionally has no `needs:` on `lint`/`test`/`build`: E2E starts in parallel with the fan-out, so PR wall-clock is `max(fan-out, e2e)` instead of their sum. A PR push that fails lint can waste one E2E run on the pool, bounded by the `cancel-in-progress` concurrency group on re-push (`cancel-in-progress` applies to `pull_request` events only, not branch pushes). Wasted runs on `develop`/`main` pushes should be rare because the strict up-to-date requirement means the merged state already passed full CI on the PR. `stripe-contracts` keeps `needs: [lint]` to conserve Stripe sandbox API quota.
+Hosted runners are ephemeral, so jobs restore caches explicitly: the shared composite action [`.github/actions/setup-node-pnpm`](../../.github/actions/setup-node-pnpm/action.yml) installs pnpm plus the `.nvmrc` Node version and restores the pnpm store (`actions/setup-node` with `cache: pnpm`); the `build` and `e2e` jobs restore the Angular build cache at `frontend/.angular/cache` via `actions/cache`, and `e2e` also caches the Playwright browsers (`~/.cache/ms-playwright`, keyed on the resolved Playwright version). The Angular CLI disables its build cache when it detects CI, so the `build` and `e2e` jobs enable it at runtime with `ng config cli.cache.environment all` — scoped to those jobs on purpose; a global `angular.json` setting would also switch the self-hosted deploy builds to persistent incremental caching on the Whiterose disk.
+
+The `e2e-check` gate intentionally has no `needs:` on `lint`/`test`/`build`: E2E starts in parallel with the fan-out, so PR wall-clock is `max(fan-out, e2e)` instead of their sum. A PR push that fails lint can waste one hosted E2E run, bounded by the `cancel-in-progress` concurrency group on re-push (`cancel-in-progress` applies to `pull_request` events only, not branch pushes). Wasted runs on `develop`/`main` pushes should be rare because the strict up-to-date requirement means the merged state already passed full CI on the PR. `stripe-contracts` keeps `needs: [lint]` to conserve Stripe sandbox API quota.
 
 Branch protection on both `develop` and `main` requires these CI checks before merge:
 
@@ -103,7 +105,7 @@ gh api repos/DahliaWitt/braket-tickets/branches/develop/protection/required_stat
 
 ## Check self-hosted runner capacity
 
-The repository uses five self-hosted GitHub Actions runners on the Whiterose host. They serve the CI `e2e` job and the deploy/release workflows; all other CI jobs run on GitHub-hosted runners (see [Runner routing](#runner-routing)):
+The repository uses five self-hosted GitHub Actions runners on the Whiterose host. They serve **only the deploy/release workflows** — all `CI` jobs, including `e2e`, run on GitHub-hosted runners (see [Runner routing](#runner-routing)). The fleet was left at five for deploy concurrency; since CI no longer uses it, scaling down (`docker compose` in the `github-runner` project) is safe if the host is needed for other workloads.
 
 - `whiterose_1`
 - `whiterose_2`
@@ -111,7 +113,7 @@ The repository uses five self-hosted GitHub Actions runners on the Whiterose hos
 - `whiterose_4`
 - `whiterose_5`
 
-On Whiterose, the runner fleet is managed by the host-local Unraid compose project at `/boot/config/plugins/compose.manager/projects/github-runner/docker-compose.yml`. The containers are named `github-runner-1` through `github-runner-5`, use the `braket-runner:latest` image, and share the Docker socket plus cached `pnpm` and Playwright browser volumes.
+On Whiterose, the runner fleet is managed by the host-local Unraid compose project at `/boot/config/plugins/compose.manager/projects/github-runner/docker-compose.yml`. The containers are named `github-runner-1` through `github-runner-5`, use the `braket-runner:latest` image, and share the Docker socket plus a cached `pnpm` volume. (These runners now handle only deploys; the previously shared `/opt/playwright-browsers` volume and its browser-GC workaround are gone with `e2e` — see [Runner routing](#runner-routing). Deploys build the frontend but do not run Playwright.)
 
 **Node.js version (Angular 22):** Angular 22 requires a newer Node.js patch than the `braket-runner:latest` image historically baked in (its NodeSource install lagged Angular's floor). The pinned version lives in one place — [`.nvmrc`](../../.nvmrc) — and CI and deploy workflows install it via `actions/setup-node` (`node-version-file: .nvmrc`), prepending it to `PATH` so jobs are correct regardless of the image. To remove the per-job Node install overhead, align the runner image's Node install in [`infra/runner/Dockerfile`](../../infra/runner/Dockerfile) with `.nvmrc`, then rebuild and redeploy:
 
@@ -483,7 +485,7 @@ On Apple Silicon Macs, `.actrc` sets `--container-architecture linux/amd64` so t
 
 ### Build the runner image
 
-CI fan-out jobs run on `ubuntu-latest` and the `e2e` job on a self-hosted runner with pnpm pre-installed; `.actrc` maps both labels to the same custom image. The base `catthehacker/ubuntu:act-latest` image does not include pnpm, so a custom image is required:
+All CI jobs run on `ubuntu-latest`; `.actrc` maps that label to the custom image (and keeps a `self-hosted` mapping for the deploy workflows). The base `catthehacker/ubuntu:act-latest` image does not include pnpm, so a custom image is required:
 
 ```bash
 docker build --platform linux/amd64 -t braket-act-runner:latest .github/act/

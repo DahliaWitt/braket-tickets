@@ -147,6 +147,37 @@ async function deleteReleasedOrdersForEvent(
   return hasMoreWork;
 }
 
+/**
+ * Deletes a batch of imported ticket holders and their import-batch records for
+ * an event. Imported PII must not outlive the event. Runs inside the existing
+ * batched cleanup loop so a large imported set (up to the per-event cap) drains
+ * across transactions instead of blowing the write budget.
+ */
+async function deleteImportedEntriesForEvent(
+  db: EventCleanupDb,
+  eventId: Id<'events'>,
+): Promise<boolean> {
+  const entries = await db
+    .query('importedTicketHolders')
+    .withIndex('by_event', (q) => q.eq('eventId', eventId))
+    .take(EVENT_CLEANUP_BATCH_SIZE);
+  for (const entry of entries) {
+    await db.delete('importedTicketHolders', entry._id);
+  }
+  if (entries.length === EVENT_CLEANUP_BATCH_SIZE) {
+    return true;
+  }
+
+  const batches = await db
+    .query('importBatches')
+    .withIndex('by_event_batch_key_target', (q) => q.eq('eventId', eventId))
+    .take(EVENT_CLEANUP_BATCH_SIZE);
+  for (const batch of batches) {
+    await db.delete('importBatches', batch._id);
+  }
+  return batches.length === EVENT_CLEANUP_BATCH_SIZE;
+}
+
 async function finalizeEventRemoval(
   db: EventCleanupDb,
   event: Doc<'events'>,
@@ -184,7 +215,11 @@ async function runEventRemovalCleanupBatch(
     'cancelled',
   );
   const hasMoreReleasedOrders = await deleteReleasedOrdersForEvent(db, eventId);
-  return hasMoreOpenOrders || hasMoreReleasedOrders;
+  const hasMoreImportedEntries = await deleteImportedEntriesForEvent(
+    db,
+    eventId,
+  );
+  return hasMoreOpenOrders || hasMoreReleasedOrders || hasMoreImportedEntries;
 }
 
 async function runGatedManagementAction<T>(
