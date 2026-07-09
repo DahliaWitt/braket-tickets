@@ -22,7 +22,6 @@ import {
   type EventTierPricingStats,
   type Guest,
   type GuestType,
-  type ImportBatchRemovalResult,
   type ImportBatchResult,
   type ImportedTicketHolder,
   type TicketReminderAudience,
@@ -897,7 +896,7 @@ describe('AdminEventsService', () => {
       const mockResult = {
         removedCount: 3,
         checkedInCount: 1,
-      } as unknown as ImportBatchRemovalResult;
+      };
       convexMock.mutation.mockResolvedValue(mockResult);
 
       const result = await service.removeImportedBatch(

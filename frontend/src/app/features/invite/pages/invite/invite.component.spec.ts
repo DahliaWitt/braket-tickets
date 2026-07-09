@@ -33,12 +33,6 @@ interface InviteComponentWithRedeem {
   redirectTimeoutId: ReturnType<typeof setTimeout> | null;
 }
 
-interface InviteValidationPayload {
-  valid: boolean;
-  communityName?: string;
-  error?: string;
-}
-
 interface RedeemMutationResult {
   alreadyMember: boolean;
   alreadyRedeemed: boolean;
@@ -82,7 +76,7 @@ describe('InviteComponent', () => {
         onData({
           valid: true,
           communityName: 'Signal House',
-        } as InviteValidationPayload);
+        });
         return () => undefined;
       },
     );

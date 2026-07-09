@@ -762,14 +762,14 @@ export class VettingComponent {
   asStringField(
     field: MaybeFieldTree<VettingFieldValue> | null,
   ): MaybeFieldTree<string> | null {
-    return castSignalFormField<string>(field as MaybeFieldTree<unknown> | null);
+    return castSignalFormField<string>(field);
   }
 
   asBoolField(
     field: MaybeFieldTree<VettingFieldValue> | null,
   ): MaybeFieldTree<boolean> | null {
     return castSignalFormField<boolean>(
-      field as MaybeFieldTree<unknown> | null,
+      field,
     );
   }
 
@@ -777,7 +777,7 @@ export class VettingComponent {
     field: MaybeFieldTree<VettingFieldValue> | null,
   ): MaybeFieldTree<string[]> | null {
     return castSignalFormField<string[]>(
-      field as MaybeFieldTree<unknown> | null,
+      field,
     );
   }
 

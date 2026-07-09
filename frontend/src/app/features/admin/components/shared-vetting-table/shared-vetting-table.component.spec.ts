@@ -168,7 +168,7 @@ describe('SharedVettingTableComponent', () => {
       .calls[0][0] as BraDialogOptions<unknown, unknown>;
     expect(dialogConfig.zOkDestructive).toBe(true);
     expect(dialogConfig.zTitle).toBe('Remove Trust Link');
-    await dialogConfig.zOnOk?.(undefined as never);
+    await dialogConfig.zOnOk?.(undefined);
     expect(trustLinksServiceMock.remove).toHaveBeenCalledWith(orgA, orgB);
   });
 
@@ -192,7 +192,7 @@ describe('SharedVettingTableComponent', () => {
       .calls[0][0] as BraDialogOptions<unknown, unknown>;
     expect(dialogConfig.zOkDestructive).toBeUndefined();
     expect(dialogConfig.zTitle).toBe('Create Trust Link');
-    await dialogConfig.zOnOk?.(undefined as never);
+    await dialogConfig.zOnOk?.(undefined);
     expect(trustLinksServiceMock.create).toHaveBeenCalledWith(orgA, orgB);
   });
 

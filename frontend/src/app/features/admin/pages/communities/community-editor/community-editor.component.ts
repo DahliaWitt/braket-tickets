@@ -111,6 +111,7 @@ export class AdminCommunityEditorComponent {
     contactInfo: '',
     description: '',
     isPublicDirectory: false,
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- narrows the literal to the enum so the mutable form object stays assignable to the save payload (ng build)
     status: 'draft' as CommunityPublicationStatus,
     vettingQuestions: [] as VettingQuestionFormValue[],
   });

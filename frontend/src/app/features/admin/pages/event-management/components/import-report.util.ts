@@ -55,7 +55,7 @@ function extractConvexErrorMessage(error: unknown): string | null {
   const data: unknown = error.data;
   if (typeof data === 'string') return nonBlankOrNull(data);
   if (data && typeof data === 'object' && 'message' in data) {
-    const message = (data as {message: unknown}).message;
+    const message = (data).message;
     if (typeof message === 'string') return nonBlankOrNull(message);
   }
   return null;

@@ -120,9 +120,9 @@ describe('CheckInComponent', () => {
       title,
       totalTickets: 100,
       visibility: 'public',
-    }) as ScannerEvent;
+    });
   const makeAdminEvent = (id: string, title: string): AdminEvent =>
-    ({...makeScannerEvent(id, title)}) as AdminEvent;
+    ({...makeScannerEvent(id, title)});
   const setUserRole = async (role: UserRole): Promise<void> => {
     userRoleSignal.set(role);
     fixture.detectChanges();
@@ -911,7 +911,7 @@ describe('CheckInComponent', () => {
     beforeEach(() => {
       warnSpy = vi
         .spyOn(toast, 'warning')
-        .mockImplementation(() => '' as unknown as string & number);
+        .mockImplementation(() => '');
       warnSpy.mockClear();
     });
 

@@ -166,7 +166,7 @@ describe('convex-angular primitives', () => {
       ],
       providers: [
         provideZonelessChangeDetection(),
-        { provide: CONVEX, useValue: mockConvex as unknown as MockConvexProvider },
+        { provide: CONVEX, useValue: mockConvex },
       ],
     });
   });

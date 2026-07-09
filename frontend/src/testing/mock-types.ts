@@ -168,7 +168,7 @@ export function createMockUser(overrides: Partial<UserModel> = {}): UserModel {
     email: 'test@example.com',
     communityAdminOrganizerIds: [],
     ...overrides,
-  } as UserModel;
+  };
 }
 
 /**

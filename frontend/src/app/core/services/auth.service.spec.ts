@@ -158,7 +158,7 @@ describe('AuthService', () => {
       data: null,
       error: null,
     });
-    vi.mocked(authClient.signOut).mockResolvedValue(undefined as never);
+    vi.mocked(authClient.signOut).mockResolvedValue(undefined);
     vi.mocked(authClient.getSession).mockResolvedValue({
       data: null,
       error: null,
@@ -742,7 +742,7 @@ describe('AuthService', () => {
 
   describe('logout', () => {
     it('should call authClient.signOut and navigate', async () => {
-      vi.mocked(authClient.signOut).mockResolvedValue(undefined as never);
+      vi.mocked(authClient.signOut).mockResolvedValue(undefined);
 
       await service.logout();
 
@@ -1269,7 +1269,7 @@ describe('AuthService', () => {
     }
 
     it('should process a valid LOGOUT message and clear auth state', async () => {
-      vi.mocked(authClient.signOut).mockResolvedValue(undefined as never);
+      vi.mocked(authClient.signOut).mockResolvedValue(undefined);
 
       dispatchMessage({type: 'LOGOUT'});
 

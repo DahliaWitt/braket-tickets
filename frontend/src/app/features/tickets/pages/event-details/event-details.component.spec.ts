@@ -347,7 +347,7 @@ describe('EventDetailsComponent', () => {
         logoUrl: '/braket.svg',
         email: 'hello@voidcollective.test',
         contactInfo: 'Signal-only contact hours: Tuesdays and Thursdays.',
-      } as Community),
+      }),
     };
     mockDarkMode = {
       themeMode: signal(EDarkModes.LIGHT),

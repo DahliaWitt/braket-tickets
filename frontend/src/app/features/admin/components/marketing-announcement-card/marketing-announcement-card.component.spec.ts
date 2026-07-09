@@ -139,8 +139,8 @@ describe('MarketingAnnouncementCardComponent', () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
-    vi.spyOn(toast, 'success').mockImplementation(() => '' as string & number);
-    vi.spyOn(toast, 'error').mockImplementation(() => '' as string & number);
+    vi.spyOn(toast, 'success').mockImplementation(() => '');
+    vi.spyOn(toast, 'error').mockImplementation(() => '');
     marketingStatus = null;
     recipientCount = {
       count: 7,

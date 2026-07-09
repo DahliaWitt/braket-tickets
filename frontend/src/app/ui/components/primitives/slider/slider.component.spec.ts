@@ -71,7 +71,7 @@ describe('ZardSliderComponent', () => {
       width: rect.width,
       height: rect.height,
       toJSON: () => ({}),
-    } as DOMRect;
+    };
     vi.spyOn(sliderElement, 'getBoundingClientRect').mockReturnValue(domRect);
   };
 

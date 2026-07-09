@@ -24,7 +24,7 @@ describe('MainLayoutComponent', () => {
     mockAuth = {
       isAuthenticated: signal(false),
       user: signal(null),
-      userRole: signal('user' as string),
+      userRole: signal('user'),
       isScannerStaff: signal(false),
       isCommunityAdmin: signal(false),
       logout: vi.fn(),

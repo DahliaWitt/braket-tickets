@@ -1,3 +1,7 @@
+/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion --
+   These specs cast vi.fn mocks to the callback/return types the dialog API
+   expects; tsconfig.spec.json requires the casts even though the lint config
+   considers them redundant. */
 import type {OverlayRef} from '@angular/cdk/overlay';
 import {Subject} from 'rxjs';
 import {vi} from 'vitest';
