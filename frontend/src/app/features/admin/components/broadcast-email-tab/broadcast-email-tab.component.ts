@@ -5,7 +5,6 @@ import {
   inject,
   input,
   output,
-  resource,
   signal,
 } from '@angular/core';
 import {DatePipe} from '@angular/common';
@@ -17,14 +16,13 @@ import {
   MAX_TICKET_REMINDER_MESSAGE_LENGTH,
   MAX_TICKET_REMINDER_SUBJECT_LENGTH,
 } from '@shared/constants';
-import {injectConvex} from 'convex-angular';
+import {injectConvex, injectQueries, skipToken} from 'convex-angular';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 import {ZardCardComponent} from '@ui/components/primitives/card/card.component';
 import {BraDialogService} from '@ui/components/composites/dialog/dialog.service';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
 import {ZardSwitchComponent} from '@ui/components/primitives/switch/switch.component';
 import {logger} from '@/utils/logger';
-import {safeResourceValue} from '@/utils/resource';
 
 @Component({
   selector: 'app-broadcast-email-tab',
@@ -66,48 +64,38 @@ export class BroadcastEmailTabComponent {
     });
   });
 
-  private readonly broadcastAudienceReloadToken = signal(0);
-
   // include external (imported) ticket holders in the send — defaults ON,
   // mirroring the backend default. Always visible in the compose flow so
   // organizers discover the behavior before they need it.
   readonly includeExternalTicketHolders = signal(true);
 
-  readonly broadcastAudienceResource = resource({
-    params: () => ({
-      eventId: this.eventId() || null,
-      includeExternal: this.includeExternalTicketHolders(),
-      parentReloadToken: this.reloadToken(),
-      localReloadToken: this.broadcastAudienceReloadToken(),
-    }),
-    loader: ({params}) => {
-      if (!params.eventId) return Promise.resolve(null);
-      return this.convex.query(api.events.broadcasts.getAudience, {
-        eventId: params.eventId as Id<'events'>,
-        includeExternalTicketHolders: params.includeExternal,
-      });
-    },
-  });
-
-  readonly broadcastHistoryResource = resource({
-    params: () => ({
-      eventId: this.eventId() || null,
-      parentReloadToken: this.reloadToken(),
-      localReloadToken: this.broadcastAudienceReloadToken(),
-    }),
-    loader: ({params}) => {
-      if (!params.eventId) return Promise.resolve(null);
-      return this.convex.query(api.events.broadcasts.listHistory, {
-        eventId: params.eventId as Id<'events'>,
-      });
-    },
+  readonly queries = injectQueries(() => {
+    const rawEventId = this.eventId();
+    const eventId = rawEventId ? (rawEventId as Id<'events'>) : null;
+    return {
+      audience: eventId
+        ? {
+            query: api.events.broadcasts.getAudience,
+            // Reading the toggle here re-keys the subscription when it flips,
+            // so the audience count updates live for the chosen scope.
+            args: {
+              eventId,
+              includeExternalTicketHolders: this.includeExternalTicketHolders(),
+            },
+          }
+        : skipToken,
+      history: eventId
+        ? {query: api.events.broadcasts.listHistory, args: {eventId}}
+        : skipToken,
+    };
   });
 
   readonly broadcastAudience = computed(
-    () => safeResourceValue(this.broadcastAudienceResource) ?? null,
+    () => this.queries.results().audience ?? null,
   );
-  readonly isLoadingBroadcastAudience =
-    this.broadcastAudienceResource.isLoading;
+  readonly isLoadingBroadcastAudience = computed(
+    () => this.queries.statuses().audience === 'pending',
+  );
   readonly broadcastRecipientCount = computed(
     () => this.broadcastAudience()?.recipientCount ?? 0,
   );
@@ -121,7 +109,7 @@ export class BroadcastEmailTabComponent {
     () => this.broadcastAudience()?.importedUnreachableCount ?? 0,
   );
   readonly broadcastAudienceError = computed(() => {
-    const error = this.broadcastAudienceResource.error();
+    const error = this.queries.errors().audience;
     if (!error) return null;
     return error instanceof Error && error.message
       ? `couldn't load audience — ${error.message}`
@@ -129,11 +117,13 @@ export class BroadcastEmailTabComponent {
   });
 
   readonly broadcastHistory = computed(
-    () => safeResourceValue(this.broadcastHistoryResource) ?? [],
+    () => this.queries.results().history ?? [],
   );
-  readonly isLoadingBroadcastHistory = this.broadcastHistoryResource.isLoading;
+  readonly isLoadingBroadcastHistory = computed(
+    () => this.queries.statuses().history === 'pending',
+  );
   readonly broadcastHistoryError = computed(() => {
-    const error = this.broadcastHistoryResource.error();
+    const error = this.queries.errors().history;
     if (!error) return null;
     return error instanceof Error && error.message
       ? `couldn't load broadcast history — ${error.message}`
@@ -224,7 +214,6 @@ export class BroadcastEmailTabComponent {
         toast.success(successMessage);
         this.sendFeedback.set({kind: 'success', message: successMessage});
         this.broadcastFormModel.set({subject: '', message: ''});
-        this.broadcastAudienceReloadToken.update((count) => count + 1);
         this.dataChanged.emit();
       } else {
         const errorMessages: Record<string, string> = {

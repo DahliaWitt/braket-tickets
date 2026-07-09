@@ -37,6 +37,15 @@ import {
   type ContactCommunityDialogData,
 } from './contact-community-dialog.component';
 
+// convex-angular's injectQueries registers its per-key staleness guard AFTER
+// `onUpdate()` returns, so any mock that invokes the data callback synchronously
+// inside `onUpdate` has that first emission rejected. Real ConvexReactClient
+// never emits synchronously from `onUpdate`; mirror that contract by deferring
+// the initial emission to a microtask so the subscription is registered first.
+const emitAsync = (onData: (data: unknown) => void, value: unknown): void => {
+  queueMicrotask(() => onData(value));
+};
+
 interface MockAuthServiceForEventDetails {
   user: () => {_id: string; name: string} | null;
   userRole: () => string;
@@ -248,13 +257,16 @@ describe('EventDetailsComponent', () => {
 
         if ('id' in typedArgs) {
           const eventId = typedArgs.id;
-          onData(eventDocsById.get(eventId) ?? eventDocsById.get('1') ?? null);
+          emitAsync(
+            onData,
+            eventDocsById.get(eventId) ?? eventDocsById.get('1') ?? null,
+          );
           return () => void 0;
         }
 
         if ('eventId' in typedArgs) {
           const eventId = typedArgs.eventId;
-          onData(availabilityByEventId.get(eventId) ?? null);
+          emitAsync(onData, availabilityByEventId.get(eventId) ?? null);
           return () => void 0;
         }
 
@@ -264,11 +276,11 @@ describe('EventDetailsComponent', () => {
           !('eventId' in typedArgs) &&
           !('id' in typedArgs)
         ) {
-          onData({trusted: true, source: 'direct', via: null});
+          emitAsync(onData, {trusted: true, source: 'direct', via: null});
           return () => void 0;
         }
 
-        onData(null);
+        emitAsync(onData, null);
         return () => void 0;
       });
 
@@ -963,11 +975,14 @@ describe('EventDetailsComponent', () => {
           void queryRef;
           const typedArgs = args as Record<string, string>;
           if ('id' in typedArgs) {
-            onData(eventDocsById.get(typedArgs.id) ?? null);
+            emitAsync(onData, eventDocsById.get(typedArgs.id) ?? null);
             return () => void 0;
           }
           if ('eventId' in typedArgs) {
-            onData(availabilityByEventId.get(typedArgs.eventId) ?? null);
+            emitAsync(
+              onData,
+              availabilityByEventId.get(typedArgs.eventId) ?? null,
+            );
             return () => void 0;
           }
           if (
@@ -975,10 +990,10 @@ describe('EventDetailsComponent', () => {
             !('eventId' in typedArgs) &&
             !('id' in typedArgs)
           ) {
-            onData({trusted: false, source: 'direct', via: null});
+            emitAsync(onData, {trusted: false, source: 'direct', via: null});
             return () => void 0;
           }
-          onData(null);
+          emitAsync(onData, null);
           return () => void 0;
         },
       );
@@ -1051,13 +1066,18 @@ describe('EventDetailsComponent', () => {
             const typedArgs = args as Record<string, string>;
 
             if ('id' in typedArgs) {
-              onData(eventDocsById.get(typedArgs.id) ?? null);
+              emitAsync(onData, eventDocsById.get(typedArgs.id) ?? null);
               return () => void 0;
             }
 
             if ('eventId' in typedArgs) {
+              // Capture the raw callback for later manual (post-subscription)
+              // emissions; defer only the initial emission.
               emitAvailabilityUpdate = onData;
-              onData(availabilityByEventId.get(typedArgs.eventId) ?? null);
+              emitAsync(
+                onData,
+                availabilityByEventId.get(typedArgs.eventId) ?? null,
+              );
               return () => void 0;
             }
 
@@ -1067,11 +1087,11 @@ describe('EventDetailsComponent', () => {
               !('id' in typedArgs)
             ) {
               emitTrustUpdate = onData;
-              onData({trusted: false, source: 'direct', via: null});
+              emitAsync(onData, {trusted: false, source: 'direct', via: null});
               return () => void 0;
             }
 
-            onData(null);
+            emitAsync(onData, null);
             return () => void 0;
           },
         );
@@ -1478,7 +1498,8 @@ describe('EventDetailsComponent', () => {
 
           if ('id' in typedArgs) {
             const eventId = typedArgs.id;
-            onData(
+            emitAsync(
+              onData,
               eventDocsById.get(eventId) ?? eventDocsById.get('1') ?? null,
             );
             return () => void 0;
@@ -1486,7 +1507,7 @@ describe('EventDetailsComponent', () => {
 
           if ('eventId' in typedArgs) {
             const eventId = typedArgs.eventId;
-            onData(availabilityByEventId.get(eventId) ?? null);
+            emitAsync(onData, availabilityByEventId.get(eventId) ?? null);
             return () => void 0;
           }
 
@@ -1496,11 +1517,11 @@ describe('EventDetailsComponent', () => {
             !('eventId' in typedArgs) &&
             !('id' in typedArgs)
           ) {
-            onData({trusted: false, source: 'direct', via: null});
+            emitAsync(onData, {trusted: false, source: 'direct', via: null});
             return () => void 0;
           }
 
-          onData(null);
+          emitAsync(onData, null);
           return () => void 0;
         },
       );
@@ -1530,7 +1551,8 @@ describe('EventDetailsComponent', () => {
 
           if ('id' in typedArgs) {
             const eventId = typedArgs.id;
-            onData(
+            emitAsync(
+              onData,
               eventDocsById.get(eventId) ?? eventDocsById.get('1') ?? null,
             );
             return () => void 0;
@@ -1538,7 +1560,7 @@ describe('EventDetailsComponent', () => {
 
           if ('eventId' in typedArgs) {
             const eventId = typedArgs.eventId;
-            onData(availabilityByEventId.get(eventId) ?? null);
+            emitAsync(onData, availabilityByEventId.get(eventId) ?? null);
             return () => void 0;
           }
 
@@ -1547,11 +1569,11 @@ describe('EventDetailsComponent', () => {
             !('eventId' in typedArgs) &&
             !('id' in typedArgs)
           ) {
-            onData({trusted: false, source: 'direct', via: null});
+            emitAsync(onData, {trusted: false, source: 'direct', via: null});
             return () => void 0;
           }
 
-          onData(null);
+          emitAsync(onData, null);
           return () => void 0;
         },
       );

@@ -36,13 +36,14 @@ import {ZardInputDirective} from '@ui/components/primitives/input/input.directiv
 import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton.component';
 import {BraDialogService} from '@ui/components/composites/dialog/dialog.service';
 import {type Id} from '@convex/_generated/dataModel';
+import {api} from '@convex/_generated/api';
+import {injectQuery, skipToken} from 'convex-angular';
 import type {CommunityPublicationStatus} from '@shared/domain/community-publication-status';
 import {ConvexError} from 'convex/values';
 import {logger} from '@/utils/logger';
 import {safeResourceValue} from '@/utils/resource';
 import {createSubmitGuard} from '@/utils/submit-guard';
 import {readInputChecked} from '@ui/utils/dom-event';
-import {type Application} from '@/features/vetting/models/application.model';
 import {
   castSignalFormField,
   isSignalFormFieldInvalid,
@@ -176,28 +177,18 @@ export class VettingComponent {
    * Note: Uses the resolved organizerId (from questionsResource) so slug-based
    * routes work correctly — the raw route param may be a slug, not a Convex ID.
    */
-  existingApplicationResource = resource({
-    params: () => ({
-      user: this.auth.user(),
-      organizerId: this.organizerIdFromResource(),
-    }),
-    loader: async ({params}): Promise<Application | null> => {
-      if (!params.user || !params.organizerId) return Promise.resolve(null);
-
-      try {
-        return await this.appsService.getMyApplicationForOrganizer(
-          params.organizerId,
-        );
-      } catch (error: unknown) {
-        logger.error('Failed to load existing application status', error);
-        throw error;
-      }
+  private existingApplicationQuery = injectQuery(
+    api.communities.applications.getMyApplicationForOrganizer,
+    () => {
+      const organizerId = this.organizerIdFromResource();
+      const user = this.auth.user();
+      return organizerId && user ? {organizerId} : skipToken;
     },
-  });
+  );
 
   /** The user's existing application, exposed for template access */
-  readonly existingApplication = computed(
-    () => safeResourceValue(this.existingApplicationResource) ?? null,
+  readonly existingApplication = computed(() =>
+    this.appsService.mapToApp(this.existingApplicationQuery.data() ?? null),
   );
 
   /**
@@ -330,7 +321,7 @@ export class VettingComponent {
       return false;
     }
 
-    return this.existingApplicationResource.isLoading();
+    return this.existingApplicationQuery.isLoading();
   });
   readonly existingApplicationGateErrorMessage = computed(() => {
     if (!this.auth.user() || !this.id()) {
@@ -349,7 +340,7 @@ export class VettingComponent {
       return "We couldn't load this community's application status right now. Refresh and try again.";
     }
 
-    return this.existingApplicationResource.error()
+    return this.existingApplicationQuery.error()
       ? "We couldn't check your application status right now. Refresh and try again."
       : null;
   });

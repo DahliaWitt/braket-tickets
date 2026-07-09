@@ -28,7 +28,7 @@ import {
   type StripeConnectComponentKind,
 } from '@/features/admin/components/stripe-connect/stripe-connect-embed.component';
 import {CommunityContextService} from '@/features/admin/services/community-context.service';
-import {injectConvex, injectQuery, skipToken} from 'convex-angular';
+import {injectConvex, injectQueries, skipToken} from 'convex-angular';
 import {ActivatedRoute, Router} from '@angular/router';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
@@ -209,32 +209,15 @@ export class CommunityAdminSettingsComponent {
     if (this.isLogoRemoved()) return null;
     return this.existingLogoUrl();
   });
-  private readonly organizerQuery = injectQuery(
-    api.communities.profile.getAdmin,
-    () => {
-      const id = this.communityCtx.selectedCommunityId();
-      return id ? {id} : skipToken;
-    },
+  // Page skeleton gates on the organizer query only; per-key status maps
+  // skipToken → 'skipped' → false (matching the old skipToken → isLoading:false)
+  // and a still-loading organizer → 'pending' → true.
+  readonly isLoading = computed(
+    () => this.queries.statuses().organizer === 'pending',
   );
-  private readonly adminsQuery = injectQuery(
-    api.communities.admins.listByCommunity,
-    () => {
-      const id = this.communityCtx.selectedCommunityId();
-      return id ? {organizerId: id} : skipToken;
-    },
-  );
-  private readonly scannersQuery = injectQuery(
-    api.communities.scanners.listByCommunity,
-    () => {
-      const id = this.communityCtx.selectedCommunityId();
-      return id ? {organizerId: id} : skipToken;
-    },
-  );
-
-  readonly isLoading = computed(() => this.organizerQuery.isLoading());
-  readonly organizer = computed(() => this.organizerQuery.data() ?? null);
-  readonly adminList = computed(() => this.adminsQuery.data() ?? []);
-  readonly scannerList = computed(() => this.scannersQuery.data() ?? []);
+  readonly organizer = computed(() => this.queries.results().organizer ?? null);
+  readonly adminList = computed(() => this.queries.results().admins ?? []);
+  readonly scannerList = computed(() => this.queries.results().scanners ?? []);
   readonly isLastAdmin = computed(() => this.adminList().length <= 1);
 
   readonly newAdminEmail = signal('');
@@ -250,22 +233,58 @@ export class CommunityAdminSettingsComponent {
   readonly scannerSearchInputValue = signal('');
   private readonly debouncedScannerSearchTerm = signal('');
 
-  private readonly scannerSearchQuery = injectQuery(
-    api.communities.scanners.searchGrantCandidates,
-    () => {
-      const organizerId = this.communityCtx.selectedCommunityId();
-      const searchTerm = this.debouncedScannerSearchTerm();
-      return organizerId && searchTerm ? {organizerId, searchTerm} : skipToken;
-    },
-  );
+  // One consolidated subscription record for every organizer-scoped query.
+  // Each key mirrors its original skipToken gate: it returns {query, args}
+  // only when the organizer id (and, for scannerSearch, the debounced term)
+  // is present, else skipToken. injectQueries preserves each key's prior
+  // results() entry across an args change and exposes a per-key status()
+  // ('pending' on subscribe, 'success' on settle, 'skipped' for skipToken).
+  private readonly queries = injectQueries(() => {
+    const id = this.communityCtx.selectedCommunityId();
+    const searchTerm = this.debouncedScannerSearchTerm();
+    return {
+      organizer: id
+        ? {query: api.communities.profile.getAdmin, args: {id}}
+        : skipToken,
+      admins: id
+        ? {
+            query: api.communities.admins.listByCommunity,
+            args: {organizerId: id},
+          }
+        : skipToken,
+      scanners: id
+        ? {
+            query: api.communities.scanners.listByCommunity,
+            args: {organizerId: id},
+          }
+        : skipToken,
+      scannerSearch:
+        id && searchTerm
+          ? {
+              query: api.communities.scanners.searchGrantCandidates,
+              args: {organizerId: id, searchTerm},
+            }
+          : skipToken,
+      notificationPref: id
+        ? {
+            query:
+              api.communities.management.notification_preferences
+                .getMyNotificationPreference,
+            args: {organizerId: id},
+          }
+        : skipToken,
+    };
+  });
 
   /**
-   * The (term, organizer) pair that produced the current `scannerSearchQuery`
-   * data. Stamped from the live subscription args when data emits — Convex
+   * The (term, organizer) pair that produced the current `scannerSearch`
+   * results. Stamped from the live subscription args when data emits — Convex
    * only pushes data for the active subscription args, so at emit time the
    * untracked debounced term / selected organizer ARE the args that produced
-   * that payload. `injectQuery` retains prior `.data()` across an args change,
-   * so this stamp is what lets us tell current data from stale/in-flight data.
+   * that payload. `injectQueries` preserves each key's prior `results()` entry
+   * across an args change (it resets a key to undefined only when the key is
+   * absent), so this stamp is what lets us tell current data from
+   * stale/in-flight data.
    */
   private readonly loadedScannerSearchTerm = signal<string | null>(null);
   private readonly loadedScannerOrganizerId = signal<Id<'organizers'> | null>(
@@ -277,21 +296,28 @@ export class CommunityAdminSettingsComponent {
     const term = this.debouncedScannerSearchTerm().trim();
     const organizerId = this.communityCtx.selectedCommunityId();
     // Belt-and-suspenders gate; each conjunct closes a distinct stale window:
-    //   - term non-empty: an empty/skip-token query is never "current"
-    //     (skipToken also sets isLoading false, so this must come first).
+    //   - term non-empty: an empty/skip-token query is never "current".
+    //     skipToken yields status 'skipped' (never 'success'), so the skip
+    //     case is excluded by the status check itself, but keep this to close
+    //     the keystroke → debounce gap alongside the next conjunct.
     //   - term === visible input: closes the keystroke → debounce gap
     //     (immediate input changed but the debounced query hasn't fired).
-    //   - !isLoading(): `injectQuery` sets isLoading TRUE synchronously on an
-    //     args change and back to false only when the NEW args' data lands
-    //     (convex-angular fesm2022 lines 1165, 1176-1183), so `!isLoading()`
-    //     deterministically means `.data()` is for the current args, not an
-    //     in-flight refetch that still holds the previous payload.
+    //   - statuses().scannerSearch === 'success': injectQueries sets the key's
+    //     status to 'pending' synchronously when args change and to 'success'
+    //     only when the NEW args' data lands (convex-angular fesm2022
+    //     injectQueries effect: 'pending' at subscribe time, 'success' in
+    //     `settle`), so requiring '=== success' deterministically means
+    //     results().scannerSearch is for the current args, not an in-flight
+    //     refetch that still holds the previous payload. Never use the aggregate
+    //     `!queries.isLoading()`: it is true whenever ANY of the 5 keys is
+    //     pending, which would spuriously gate scanner results when an
+    //     unrelated query reloads.
     //   - loadedTerm/loadedOrganizerId stamp: independent confirmation that
     //     the delivered data was produced by exactly this term + organizer.
     return (
       term.length > 0 &&
       term === this.scannerSearchInputValue().trim() &&
-      !this.scannerSearchQuery.isLoading() &&
+      this.queries.statuses().scannerSearch === 'success' &&
       this.loadedScannerSearchTerm() === term &&
       this.loadedScannerOrganizerId() === organizerId
     );
@@ -303,7 +329,7 @@ export class CommunityAdminSettingsComponent {
       searchInput: this.scannerSearchInputValue,
       debouncedTerm: this.debouncedScannerSearchTerm,
       debounce: this.scannerDebounce,
-      results: computed(() => this.scannerSearchQuery.data() ?? []),
+      results: computed(() => this.queries.results().scannerSearch ?? []),
       resultsAreCurrent: this.scannerResultsAreCurrent,
       resultUserId: (candidate) => candidate.userId,
       adminUserIds: computed(
@@ -312,15 +338,6 @@ export class CommunityAdminSettingsComponent {
       scannerUserIds: computed(
         () => new Set(this.scannerList().map((scanner) => scanner.userId)),
       ),
-    },
-  );
-
-  private readonly notificationPrefQuery = injectQuery(
-    api.communities.management.notification_preferences
-      .getMyNotificationPreference,
-    () => {
-      const id = this.communityCtx.selectedCommunityId();
-      return id ? {organizerId: id} : skipToken;
     },
   );
 
@@ -355,12 +372,12 @@ export class CommunityAdminSettingsComponent {
 
     // Stamp the (term, organizer) that produced the current scanner-search
     // data. Convex pushes data only for the active subscription args, so when
-    // `.data()` emits the untracked debounced term / selected organizer are
-    // exactly the args that produced it. `injectQuery` keeps prior `.data()`
-    // during a refetch, so without this stamp a stale row could be rendered
-    // or granted for a term the user has already moved past.
+    // the results entry emits the untracked debounced term / selected organizer are
+    // exactly the args that produced it. `injectQueries` keeps each key's prior
+    // `results()` entry during a refetch, so without this stamp a stale row
+    // could be rendered or granted for a term the user has already moved past.
     effect(() => {
-      const data = this.scannerSearchQuery.data();
+      const data = this.queries.results().scannerSearch;
       if (data === undefined) return; // no payload yet
       this.loadedScannerSearchTerm.set(
         untracked(this.debouncedScannerSearchTerm).trim(),
@@ -436,7 +453,7 @@ export class CommunityAdminSettingsComponent {
     });
 
     effect(() => {
-      const pref = this.notificationPrefQuery.data();
+      const pref = this.queries.results().notificationPref;
       if (pref === undefined) return; // still loading
       if (pref === null) {
         this.notifMode.set('off');
