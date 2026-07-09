@@ -2,6 +2,7 @@ import {inject, Injectable} from '@angular/core';
 import {
   type EventManagementPurchase,
   type Guest,
+  type ImportedTicketHolder,
 } from '../models/event-management.model';
 import type {jsPDF as JsPDF} from 'jspdf';
 import {BRAND_PALETTE} from '../../../utils/brand-palette';
@@ -96,6 +97,7 @@ export class AttendeeExportService {
     purchases: EventManagementPurchase[],
     config: ExportConfig,
     guests: Guest[] = [],
+    importedEntries: ImportedTicketHolder[] = [],
   ): Promise<void> {
     const enabledFields = config.fields.filter((f) => f.enabled);
     const includeRefunded = config.includeRefunded ?? false;
@@ -110,6 +112,7 @@ export class AttendeeExportService {
         config,
         guests,
         includeRefunded,
+        importedEntries,
       );
     } else {
       await this.exportPdf(
@@ -119,6 +122,7 @@ export class AttendeeExportService {
         config,
         guests,
         includeRefunded,
+        importedEntries,
       );
     }
   }
@@ -193,6 +197,7 @@ export class AttendeeExportService {
     config: ExportConfig,
     guests: Guest[],
     includeRefunded: boolean,
+    importedEntries: ImportedTicketHolder[],
   ): void {
     // Determine if we need a status column (only when including refunds)
     const includeStatus = includeRefunded && refundedPurchases.length > 0;
@@ -206,6 +211,7 @@ export class AttendeeExportService {
       fields,
       guests,
       includeStatus,
+      importedEntries,
     );
 
     // Build headers - add Status column if we have refunds
@@ -262,6 +268,7 @@ export class AttendeeExportService {
     config: ExportConfig,
     guests: Guest[],
     includeRefunded: boolean,
+    importedEntries: ImportedTicketHolder[],
   ): Promise<void> {
     const {jsPDF, autoTable} = await this.loadPdfExportDependencies();
 
@@ -302,12 +309,13 @@ export class AttendeeExportService {
       );
     }
 
-    // Active attendees table
+    // Active attendees table — imported external entries join the active list.
     const activeData = prepareAttendeeExportData(
       activePurchases,
       fields,
       guests,
       false,
+      importedEntries,
     );
     const activeBody = activeData.map((row) =>
       fields.map((f) => row[f.key] ?? ''),

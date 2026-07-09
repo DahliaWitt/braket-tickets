@@ -109,7 +109,13 @@ export type DataModel = {
         | "event.update"
         | "guest.add"
         | "guest.check-in"
+        | "guest.import"
         | "guest.update"
+        | "imported_tickets.import"
+        | "imported_tickets.remove"
+        | "imported_tickets.batch_remove"
+        | "imported_tickets.redact"
+        | "imported_tickets.check-in"
         | "magic_link.create"
         | "magic_link.delete"
         | "magic_link.disable"
@@ -727,6 +733,88 @@ export type DataModel = {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_event: ["eventId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  importBatches: {
+    document: {
+      batchKey: string;
+      eventId: Id<"events">;
+      result: {
+        insertedCount: number;
+        outcomes: Array<{
+          reason?: string;
+          rowIndex: number;
+          status: "inserted" | "skipped" | "invalid";
+        }>;
+        skippedCount: number;
+      };
+      target: "guests" | "importedTickets";
+      _id: Id<"importBatches">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "batchKey"
+      | "eventId"
+      | "result"
+      | "result.insertedCount"
+      | "result.outcomes"
+      | "result.skippedCount"
+      | "target";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_event_batch_key_target: [
+        "eventId",
+        "batchKey",
+        "target",
+        "_creationTime",
+      ];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  importedTicketHolders: {
+    document: {
+      batchKey: string;
+      checkedInAt?: number;
+      checkedInBy?: Id<"users">;
+      email?: string;
+      eventId: Id<"events">;
+      externalRef?: string;
+      externalRefKey?: string;
+      name: string;
+      orderRef?: string;
+      purchaseDateRaw?: string;
+      sourceLabel: string;
+      ticketTypeLabel?: string;
+      _id: Id<"importedTicketHolders">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "batchKey"
+      | "checkedInAt"
+      | "checkedInBy"
+      | "email"
+      | "eventId"
+      | "externalRef"
+      | "externalRefKey"
+      | "name"
+      | "orderRef"
+      | "purchaseDateRaw"
+      | "sourceLabel"
+      | "ticketTypeLabel";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_event: ["eventId", "_creationTime"];
+      by_event_batch_key: ["eventId", "batchKey", "_creationTime"];
+      by_event_external_ref_key: ["eventId", "externalRefKey", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};

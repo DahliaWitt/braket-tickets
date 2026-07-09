@@ -36,17 +36,21 @@ import {
       <div class="flex items-start justify-between gap-4">
         <div class="min-w-0">
           <p
-            class="text-2xs font-mono uppercase tracking-widest text-muted-foreground mb-1"
+            class="mb-1 font-mono text-2xs tracking-widest text-muted-foreground uppercase"
           >
             {{ label() }}
           </p>
           <p
-            class="text-3xl font-display text-foreground leading-none tabular-nums"
+            class="font-display text-3xl leading-none text-foreground tabular-nums"
             [attr.data-testid]="testid() + '-main'"
-          >{{ soldCount() }} <span class="text-muted-foreground/60 text-2xl">/</span> {{ totalTickets() }}</p>
+          >
+            {{ soldCount() }}
+            <span class="text-2xl text-muted-foreground/60">/</span>
+            {{ totalTickets() }}
+          </p>
         </div>
         <div
-          class="rounded-full border border-primary/30 bg-primary/30 px-3 py-1 text-sm font-mono text-foreground shrink-0 tabular-nums"
+          class="shrink-0 rounded-full border border-primary/30 bg-primary/30 px-3 py-1 font-mono text-sm text-foreground tabular-nums"
           [attr.data-testid]="testid() + '-percent'"
         >
           {{ soldPercentage() }}%
@@ -59,7 +63,7 @@ import {
            visually fills to. aria-valuetext takes precedence for SR
            announcement and carries the full sold/held/remaining breakdown. -->
       <div
-        class="inventory-meter-track relative h-2.5 w-full overflow-hidden bg-muted/60 border border-border"
+        class="inventory-meter-track relative h-2.5 w-full overflow-hidden border border-border bg-muted/60"
         role="progressbar"
         [attr.aria-valuemin]="0"
         [attr.aria-valuemax]="totalTickets()"
@@ -87,21 +91,21 @@ import {
 
       <!-- Below-meter status line: context-dependent copy -->
       <p
-        class="text-2xs font-mono uppercase tracking-widest flex flex-wrap items-center gap-x-3 gap-y-1"
+        class="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-2xs tracking-widest uppercase"
         [attr.data-testid]="testid() + '-status'"
       >
         @if (remainingCount() > 0) {
           <span class="text-muted-foreground">
-            <span class="text-foreground tabular-nums">{{ remainingCount() }}</span>
+            <span class="text-foreground tabular-nums">{{
+              remainingCount()
+            }}</span>
             remaining
           </span>
         } @else {
           <span class="text-destructive">sold out</span>
         }
         @if (heldCount() > 0) {
-          <span
-            class="text-muted-foreground/60 select-none"
-            aria-hidden="true"
+          <span class="text-muted-foreground/60 select-none" aria-hidden="true"
             >·</span
           >
           <span class="text-[color:var(--chart-4,theme(colors.violet.400))]">
@@ -110,6 +114,19 @@ import {
           </span>
         }
       </p>
+
+      <!-- Secondary external-ticket annotation — subordinate mono label, NOT a
+           stat card. Native sold count and percentages above are unchanged;
+           this only surfaces the fuller people-at-the-door picture when
+           external (imported) entries exist. -->
+      @if (externalCount() > 0) {
+        <p
+          class="font-mono text-2xs tracking-widest text-muted-foreground/70 uppercase tabular-nums"
+          [attr.data-testid]="testid() + '-external'"
+        >
+          + {{ externalCount() }} external · {{ combinedTotal() }} total
+        </p>
+      }
     </div>
   `,
   styles: `
@@ -169,6 +186,17 @@ export class BraInventoryMeterComponent {
   readonly label = input<string>('Tickets Sold');
   /** Prefix for data-testid attributes — makes it addressable in harnesses. */
   readonly testid = input<string>('inventory-meter');
+  /**
+   * External (imported) ticket-holder count. Purely additive annotation — it
+   * NEVER moves soldCount, percentages, or the meter fill. When > 0, a
+   * subordinate "+ N external · M total" line renders below the status line.
+   */
+  readonly externalCount = input<number>(0);
+
+  /** sold (native) + external, for the secondary annotation only. */
+  readonly combinedTotal = computed(
+    () => this.soldCount() + this.externalCount(),
+  );
 
   readonly remainingCount = computed(() =>
     Math.max(0, this.totalTickets() - this.soldCount() - this.heldCount()),
@@ -184,7 +212,10 @@ export class BraInventoryMeterComponent {
 
   readonly soldPercentage = computed(() => {
     if (this.totalTickets() === 0) return 0;
-    return Math.min(100, Math.round((this.soldCount() / this.totalTickets()) * 100));
+    return Math.min(
+      100,
+      Math.round((this.soldCount() / this.totalTickets()) * 100),
+    );
   });
 
   readonly heldPercentage = computed(() => {

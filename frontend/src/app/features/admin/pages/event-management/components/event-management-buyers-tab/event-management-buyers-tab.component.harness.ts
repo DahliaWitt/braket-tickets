@@ -1,7 +1,43 @@
 import {ComponentHarness} from '@angular/cdk/testing';
+// Import the harness directly (not via the feature barrel): the barrel also
+// re-exports ImportSurfaceComponent, which pulls @angular/common injectables
+// into the Playwright/Node module graph and triggers JIT compilation that the
+// E2E runtime cannot satisfy. Harness-only imports keep the graph component-free.
+import {ImportSurfaceComponentHarness} from '@/features/admin/import/import-surface.component.harness';
 
 export class EventManagementBuyersTabHarness extends ComponentHarness {
   static hostSelector = 'app-event-management-buyers-tab';
+
+  private readonly getImportButton = this.locatorFor(
+    '[data-testid="import-tickets-button"]',
+  );
+  private readonly getImportPanel = this.locatorForOptional(
+    '[data-testid="ticket-import-panel"]',
+  );
+  private readonly getImportClose = this.locatorForOptional(
+    '[data-testid="ticket-import-close"]',
+  );
+  private readonly getImportSurface = this.locatorForOptional(
+    ImportSurfaceComponentHarness,
+  );
+
+  async clickImportButton(): Promise<void> {
+    await (await this.getImportButton()).click();
+  }
+
+  async isImportPanelOpen(): Promise<boolean> {
+    return (await this.getImportPanel()) !== null;
+  }
+
+  async clickImportClose(): Promise<void> {
+    const button = await this.getImportClose();
+    if (button) await button.click();
+  }
+
+  /** The lazily-rendered import surface harness (null until the panel opens). */
+  async getImportSurfaceHarness(): Promise<ImportSurfaceComponentHarness | null> {
+    return this.getImportSurface();
+  }
 
   async clickPurchaseTicketsToggle(purchaseId: string): Promise<void> {
     const toggle = await this.locatorFor(
