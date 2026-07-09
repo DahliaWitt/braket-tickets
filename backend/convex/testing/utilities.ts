@@ -104,6 +104,7 @@ export const resetRateLimit = testingMutation({
     name: v.union(
       v.literal('requestEmailChange'),
       v.literal('cancelEmailChange'),
+      v.literal('broadcastEmail'),
     ),
     key: v.string(),
   },

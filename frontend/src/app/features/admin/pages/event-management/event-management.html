@@ -163,6 +163,7 @@
           [soldCount]="data.soldCount"
           [heldCount]="data.heldCount"
           [totalTickets]="data.totalTickets"
+          [externalCount]="data.imported.total"
         />
       </z-card>
 
@@ -428,6 +429,7 @@
         [eventDate]="data.event.date"
         [purchases]="purchases()"
         [guests]="guests()"
+        [importedEntries]="importedTickets()"
         [reloadToken]="reloadToken()"
         (dataChanged)="reloadData()"
       />

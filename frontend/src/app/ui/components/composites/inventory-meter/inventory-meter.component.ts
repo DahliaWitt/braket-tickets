@@ -114,6 +114,19 @@ import {
           </span>
         }
       </p>
+
+      <!-- Secondary external-ticket annotation — subordinate mono label, NOT a
+           stat card. Native sold count and percentages above are unchanged;
+           this only surfaces the fuller people-at-the-door picture when
+           external (imported) entries exist. -->
+      @if (externalCount() > 0) {
+        <p
+          class="font-mono text-2xs tracking-widest text-muted-foreground/70 uppercase tabular-nums"
+          [attr.data-testid]="testid() + '-external'"
+        >
+          + {{ externalCount() }} external · {{ combinedTotal() }} total
+        </p>
+      }
     </div>
   `,
   styles: `
@@ -173,6 +186,17 @@ export class BraInventoryMeterComponent {
   readonly label = input<string>('Tickets Sold');
   /** Prefix for data-testid attributes — makes it addressable in harnesses. */
   readonly testid = input<string>('inventory-meter');
+  /**
+   * External (imported) ticket-holder count. Purely additive annotation — it
+   * NEVER moves soldCount, percentages, or the meter fill. When > 0, a
+   * subordinate "+ N external · M total" line renders below the status line.
+   */
+  readonly externalCount = input<number>(0);
+
+  /** sold (native) + external, for the secondary annotation only. */
+  readonly combinedTotal = computed(
+    () => this.soldCount() + this.externalCount(),
+  );
 
   readonly remainingCount = computed(() =>
     Math.max(0, this.totalTickets() - this.soldCount() - this.heldCount()),
