@@ -81,7 +81,7 @@ type CommunityListItem = FunctionReturnType<
           >
             <div
               aria-hidden="true"
-              class="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/15 text-destructive"
+              class="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/15 text-destructive-text"
             >
               <span class="font-display text-3xl font-bold">!</span>
             </div>
@@ -216,7 +216,7 @@ type CommunityListItem = FunctionReturnType<
                       >
                         <span
                           data-testid="status-rejected"
-                          class="inline-flex min-h-6 items-center gap-1 rounded bg-destructive/10 px-2 py-1 font-mono text-xs tracking-widest text-destructive uppercase"
+                          class="inline-flex min-h-6 items-center gap-1 rounded bg-destructive/10 px-2 py-1 font-mono text-xs tracking-widest text-destructive-text uppercase"
                         >
                           Rejected
                         </span>

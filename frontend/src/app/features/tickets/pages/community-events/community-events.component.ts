@@ -112,9 +112,12 @@ import {queryLoadState} from '@/utils/resource';
               data-testid="community-events-error"
               class="flex flex-col items-center justify-center gap-4 py-20"
             >
-              <z-icon zType="circle-alert" class="h-12 w-12 text-destructive" />
+              <z-icon
+                zType="circle-alert"
+                class="h-12 w-12 text-destructive-text"
+              />
               <h1
-                class="font-display text-2xl font-bold tracking-tight text-destructive uppercase"
+                class="font-display text-2xl font-bold tracking-tight text-destructive-text uppercase"
               >
                 Community Not Found
               </h1>

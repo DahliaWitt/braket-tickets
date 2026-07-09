@@ -53,10 +53,12 @@ const datePickerStoryState: DatePickerStoryState = {
             zSize="sm"
             class="rounded-sm! border! border-b-0! border-border! bg-background! py-2! font-sans! text-sm!"
             [class.border-destructive/50!]="isFieldInvalid(eventForm.date)"
-            [class.text-destructive!]="isFieldInvalid(eventForm.date)"
+            [class.text-destructive-text!]="isFieldInvalid(eventForm.date)"
           />
           @if (isFieldInvalid(eventForm.date)) {
-            <p class="text-xs text-destructive uppercase">Date is required</p>
+            <p class="text-xs text-destructive-text uppercase">
+              Date is required
+            </p>
           }
         </div>
 

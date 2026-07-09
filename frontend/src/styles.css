@@ -27,18 +27,21 @@
   --color-primary-foreground: hsl(var(--primary-foreground));
   --color-secondary: hsl(var(--secondary));
   --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-secondary-text: hsl(var(--secondary-text));
   --color-muted: hsl(var(--muted));
   --color-muted-foreground: hsl(var(--muted-foreground));
   --color-accent: hsl(var(--accent));
   --color-accent-foreground: hsl(var(--accent-foreground));
   --color-destructive: hsl(var(--destructive));
   --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-destructive-text: hsl(var(--destructive-text));
   --color-success: hsl(var(--success));
   --color-success-foreground: hsl(var(--success-foreground));
   --color-warning: hsl(var(--warning));
   --color-warning-foreground: hsl(var(--warning-foreground));
   --color-info: hsl(var(--info));
   --color-info-foreground: hsl(var(--info-foreground));
+  --color-info-text: hsl(var(--info-text));
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
@@ -67,12 +70,14 @@
     --accent-foreground: 0 0% 100%;
     --destructive: 0 84% 42%; /* Deep red — AA as text on white (5.5:1) and as button bg with white text (5.5:1); matches success/warning calibration */
     --destructive-foreground: 0 0% 98%;
+    --destructive-text: 0 84% 38%; /* AA-safe destructive text on self-tinted bg-destructive/10 underlay (5.08:1 worst case on bg-muted); slightly darker than --destructive so soft badges/alerts pass AA */
     --success: 160 84% 22%; /* Deep emerald — survives self-tinted bg-success/10 underlay at AA (5.07:1 worst case on bg-muted) */
     --success-foreground: 0 0% 100%;
     --warning: 38 92% 26%; /* Burnt amber — survives self-tinted bg-warning/10 underlay at AA (4.97:1 worst case on bg-muted) */
     --warning-foreground: 0 0% 100%;
     --info: 262 72% 50%;
     --info-foreground: 0 0% 100%;
+    --info-text: 262 72% 50%; /* Matches --info in light mode (already AA on self-tinted bg-info/10: 5.34:1) — defined for symmetry with dark mode so text-info-text resolves in both modes */
     --border: 320 6% 82%;
     --input: 320 6% 82%;
     --ring: 335 90% 45%;
@@ -97,12 +102,14 @@
     --accent-foreground: 0 0% 100%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
+    --destructive-text: 0 84% 70%; /* AA-safe destructive text in dark mode — main --destructive (L 30.6%) is invisible as text (1.98:1 on page bg); this brighter variant passes AA on self-tinted bg-destructive/10 (5.02:1) and on the page background (7.04:1) */
     --success: 160 72% 45%;
     --success-foreground: 0 0% 100%;
     --warning: 38 80% 60%;
     --warning-foreground: 0 0% 100%;
     --info: 262 60% 58%;
     --info-foreground: 0 0% 100%;
+    --info-text: 262 70% 74%; /* AA-safe info text in dark mode — main --info (L 58%) fails AA on self-tinted bg-info/10 (2.63:1) and on page bg (3.95:1); this brighter variant passes AA on both (4.97:1 tint, 7.47:1 page) */
     --border: 320 8% 20%;
     --input: 320 8% 20%;
     --ring: 335 90% 52%;

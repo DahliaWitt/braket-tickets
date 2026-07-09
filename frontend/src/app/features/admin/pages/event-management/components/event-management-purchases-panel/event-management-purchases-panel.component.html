@@ -87,7 +87,7 @@
                 [class.text-muted-foreground]="purchase.status === 'completed'"
                 [class.border-border]="purchase.status === 'completed'"
                 [class.bg-destructive/10]="purchase.status === 'refunded'"
-                [class.text-destructive]="purchase.status === 'refunded'"
+                [class.text-destructive-text]="purchase.status === 'refunded'"
                 [class.border-destructive/30]="purchase.status === 'refunded'"
                 data-testid="purchase-status"
                 [attr.data-purchase-id]="purchase.id"
@@ -165,7 +165,7 @@
                 [attr.aria-busy]="isRefunding() === purchase.id"
                 data-testid="refund-payment-action"
                 [attr.data-purchase-id]="purchase.id"
-                class="ml-1 text-destructive hover:bg-destructive/10"
+                class="ml-1 text-destructive-text hover:bg-destructive/10"
                 [attr.aria-label]="
                   (purchase.amount === 0
                     ? 'Cancel tickets for '
@@ -188,7 +188,7 @@
                   [attr.aria-busy]="isRefunding() === purchase.id"
                   data-testid="force-refund-all-action"
                   [attr.data-purchase-id]="purchase.id"
-                  class="ml-1 text-destructive hover:bg-destructive/10"
+                  class="ml-1 text-destructive-text hover:bg-destructive/10"
                   [attr.aria-label]="
                     'Force refund all tickets for ' + buyerActionLabel(purchase)
                   "
@@ -235,7 +235,7 @@
                           [class.bg-destructive/10]="
                             ticket.status === 'refunded'
                           "
-                          [class.text-destructive]="
+                          [class.text-destructive-text]="
                             ticket.status === 'refunded'
                           "
                           [class.border-destructive/30]="
@@ -266,7 +266,7 @@
                           [zDisabled]="isPurchaseRefunding(purchase.id)"
                           [attr.aria-busy]="isRefundingTicket() === ticket.id"
                           [attr.data-testid]="'refund-ticket-' + ticket.id"
-                          class="border-destructive/30 text-destructive hover:bg-destructive/10"
+                          class="border-destructive/30 text-destructive-text hover:bg-destructive/10"
                           [attr.aria-label]="
                             'Refund ticket ' +
                             (index + 1) +
@@ -321,7 +321,7 @@
               </div>
               <div
                 class="uppercase"
-                [class.text-destructive]="purchase.status === 'refunded'"
+                [class.text-destructive-text]="purchase.status === 'refunded'"
                 [class.font-bold]="purchase.status === 'refunded'"
                 data-testid="purchase-status"
                 [attr.data-purchase-id]="purchase.id"
@@ -406,7 +406,9 @@
                         [class.text-muted-foreground]="ticket.status === 'used'"
                         [class.border-border]="ticket.status === 'used'"
                         [class.bg-destructive/10]="ticket.status === 'refunded'"
-                        [class.text-destructive]="ticket.status === 'refunded'"
+                        [class.text-destructive-text]="
+                          ticket.status === 'refunded'
+                        "
                         [class.border-destructive/30]="
                           ticket.status === 'refunded'
                         "
@@ -428,7 +430,7 @@
                         [zDisabled]="isPurchaseRefunding(purchase.id)"
                         [attr.aria-busy]="isRefundingTicket() === ticket.id"
                         [attr.data-testid]="'mobile-refund-ticket-' + ticket.id"
-                        class="border-destructive/30 text-destructive hover:bg-destructive/10"
+                        class="border-destructive/30 text-destructive-text hover:bg-destructive/10"
                         [attr.aria-label]="
                           'Refund ticket ' +
                           (index + 1) +
@@ -492,7 +494,7 @@
               "
               data-testid="refund-payment-action"
               [attr.data-purchase-id]="purchase.id"
-              class="flex-1 border-destructive/30 text-destructive hover:bg-destructive/10"
+              class="flex-1 border-destructive/30 text-destructive-text hover:bg-destructive/10"
             >
               @if (isRefunding() === purchase.id) {
                 <z-icon zType="loader-circle" class="animate-spin" />
@@ -510,7 +512,7 @@
                 [attr.aria-busy]="isRefunding() === purchase.id"
                 data-testid="force-refund-all-action"
                 [attr.data-purchase-id]="purchase.id"
-                class="w-full border-destructive/30 text-destructive hover:bg-destructive/10"
+                class="w-full border-destructive/30 text-destructive-text hover:bg-destructive/10"
                 [attr.aria-label]="
                   'Force refund all tickets for ' + buyerActionLabel(purchase)
                 "

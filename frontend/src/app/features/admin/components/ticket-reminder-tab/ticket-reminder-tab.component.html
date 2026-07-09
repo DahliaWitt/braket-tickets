@@ -59,7 +59,7 @@
 
     @if (hasReminderLengthErrors()) {
       <p
-        class="font-mono text-xs text-destructive"
+        class="font-mono text-xs text-destructive-text"
         data-testid="ticket-reminder-length-error"
       >
         Subject or message exceeds allowed length.
@@ -75,7 +75,7 @@
       </p>
     } @else if (reminderAudienceError()) {
       <p
-        class="font-mono text-xs text-destructive"
+        class="font-mono text-xs text-destructive-text"
         data-testid="ticket-reminder-audience-error"
       >
         {{ reminderAudienceError() }}

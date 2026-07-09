@@ -7,8 +7,9 @@ export const statusBadgeVariants = cva(
       status: {
         success: 'border-success/20 bg-success/10 text-success',
         warning: 'border-warning/20 bg-warning/10 text-warning',
-        destructive: 'border-destructive/20 bg-destructive/10 text-destructive',
-        info: 'border-info/20 bg-info/10 text-info',
+        destructive:
+          'border-destructive/20 bg-destructive/10 text-destructive-text',
+        info: 'border-info/20 bg-info/10 text-info-text',
         muted: 'border-border bg-muted text-muted-foreground',
         primary: 'border-primary/20 bg-primary/10 text-primary',
         secondary: 'border-secondary/20 bg-secondary/10 text-secondary',
