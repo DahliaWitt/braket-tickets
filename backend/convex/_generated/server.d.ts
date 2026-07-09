@@ -27,6 +27,7 @@ import type { DataModel } from "./dataModel.js";
 type Env = {
   readonly ALLOW_LOCALHOST_CORS: string | undefined;
   readonly AUTH_BASE_URL: string | undefined;
+  readonly AUTH_HIBP_DISABLED: string | undefined;
   readonly BETTER_AUTH_SECRET: string | undefined;
   readonly DEV_SEED: string | undefined;
   readonly DEV_SEED_EXPIRES_AT: string | undefined;

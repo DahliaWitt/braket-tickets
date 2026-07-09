@@ -1,6 +1,7 @@
 import {describe, it, expect, afterEach, vi} from 'vitest';
 import {
   isDevSeedEnvironment,
+  isHibpPasswordCheckDisabled,
   isSeedAuthorized,
   isTestEnvironment,
   isUnitTestRuntime,
@@ -257,6 +258,31 @@ describe('isUnitTestRuntime', () => {
     process.env['VITEST'] = 'false';
     process.env['NODE_ENV'] = 'test';
     expect(isUnitTestRuntime()).toBe(false);
+  });
+});
+
+describe('isHibpPasswordCheckDisabled', () => {
+  const originalEnv = {...process.env};
+
+  afterEach(() => {
+    process.env = {...originalEnv};
+  });
+
+  it('returns false when AUTH_HIBP_DISABLED is unset', () => {
+    delete process.env['AUTH_HIBP_DISABLED'];
+    expect(isHibpPasswordCheckDisabled()).toBe(false);
+  });
+
+  it('returns true only for the exact string "true"', () => {
+    process.env['AUTH_HIBP_DISABLED'] = 'true';
+    expect(isHibpPasswordCheckDisabled()).toBe(true);
+  });
+
+  it('does not treat other truthy-looking values as disabled', () => {
+    process.env['AUTH_HIBP_DISABLED'] = '1';
+    expect(isHibpPasswordCheckDisabled()).toBe(false);
+    process.env['AUTH_HIBP_DISABLED'] = 'TRUE';
+    expect(isHibpPasswordCheckDisabled()).toBe(false);
   });
 });
 

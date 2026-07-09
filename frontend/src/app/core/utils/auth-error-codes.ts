@@ -66,27 +66,33 @@ export function extractBetterAuthErrorCode(error: unknown): string | null {
 export function collectAuthErrorText(error: unknown): string {
   const parts: string[] = [];
 
-  const visit = (value: unknown): void => {
+  const visit = (value: unknown, depth: number): void => {
+    if (depth > MAX_ERROR_VISIT_DEPTH) return;
+
     if (isRecord(value)) {
       if (typeof value['message'] === 'string') parts.push(value['message']);
       if (typeof value['code'] === 'string') parts.push(value['code']);
       if (typeof value['statusText'] === 'string') {
         parts.push(value['statusText']);
       }
-      if (value['cause'] !== undefined) visit(value['cause']);
+      // Same nesting points as extractBetterAuthErrorCode, so a code shadowed
+      // by an outer non-matching code still surfaces in the fallback text.
+      for (const key of ['error', 'body', 'cause'] as const) {
+        if (value[key] !== undefined) visit(value[key], depth + 1);
+      }
       return;
     }
 
     if (value instanceof Error) {
       parts.push(value.message);
-      if (value.cause !== undefined) visit(value.cause);
+      if (value.cause !== undefined) visit(value.cause, depth + 1);
       return;
     }
 
     parts.push(extractErrorMessage(value));
   };
 
-  visit(error);
+  visit(error, 0);
   return parts.join(' ').toLowerCase();
 }
 
@@ -113,6 +119,30 @@ export function isVerificationRequiredError(error: unknown): boolean {
   // Fallback for older/wrapped errors without a machine code.
   const text = collectAuthErrorText(error);
   return text.includes('verif') || text.includes('not verified');
+}
+
+/**
+ * Better Auth code from the haveIBeenPwned plugin: the submitted password
+ * appears in a known breach.
+ */
+const COMPROMISED_PASSWORD_CODES = new Set<string>(['PASSWORD_COMPROMISED']);
+
+/**
+ * Returns true when a Better Auth error means the submitted password was
+ * found in a known breach (haveIBeenPwned plugin). Safe to surface to the
+ * user — it reveals nothing about the account, only about the password.
+ */
+export function isCompromisedPasswordError(error: unknown): boolean {
+  const code = extractBetterAuthErrorCode(error);
+  if (code && COMPROMISED_PASSWORD_CODES.has(code)) {
+    return true;
+  }
+
+  // Fallback for older/wrapped errors without a machine code.
+  const text = collectAuthErrorText(error);
+  return (
+    text.includes('password_compromised') || text.includes('known data breach')
+  );
 }
 
 export function isDuplicateSignupError(error: unknown): boolean {
