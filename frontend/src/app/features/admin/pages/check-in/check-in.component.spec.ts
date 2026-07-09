@@ -357,7 +357,9 @@ describe('CheckInComponent', () => {
     await fixture.whenStable();
 
     expect(hapticSpy).toHaveBeenCalled();
-    expect(checkInSpy).toHaveBeenCalledWith('ticket-123');
+    // Scan data is forwarded along with the selected event context (undefined
+    // here since no event is selected in this test) for the external fallback.
+    expect(checkInSpy).toHaveBeenCalledWith('ticket-123', undefined);
   });
 
   it('should clean up service on destroy', () => {

@@ -925,6 +925,39 @@ describe('eventBroadcasts.send dedup', () => {
     }
   });
 
+  it('returns already_sent (not no_recipients) when a committed broadcast later has an empty audience', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminAndEvent(t);
+    await seedGuest(t, eventId, {name: 'Solo', email: 'solo@example.com'});
+
+    const first = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Only Send',
+      message: 'Hi',
+    });
+    expect(first.success).toBe(true);
+
+    // Remove the only recipient so the audience is now empty on retry.
+    const guestId = await t.run(
+      async (ctx) =>
+        (await ctx.db
+          .query('guests')
+          .withIndex('by_event', (q) => q.eq('eventId', eventId))
+          .first())!._id,
+    );
+    await asAdmin.mutation(api.events.guests.remove, {id: guestId});
+
+    const retry = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Only Send',
+      message: 'Hi',
+    });
+    // A committed broadcast whose audience later emptied is a retry, not a
+    // never-sent empty event.
+    expect(retry.success).toBe(false);
+    if (!retry.success) expect(retry.error).toBe('already_sent');
+  });
+
   it('allows sending to different events', async () => {
     const t = convexTest();
     const {asAdmin} = await seedAdminAndEvent(t);
@@ -992,5 +1025,298 @@ describe('eventBroadcasts.send dedup', () => {
         .collect(),
     );
     expect(broadcasts).toHaveLength(1);
+  });
+});
+
+// ── external ticket-holder inclusion ─────────────────────────────────
+
+describe('eventBroadcasts — external ticket holders', () => {
+  async function seedAdminEventWithOrg(t: TestHarness) {
+    const adminId = await t.mutation(api.testing.users.createUserDirectly, {
+      name: 'Admin',
+      email: `ext-broadcast-admin-${Date.now()}-${Math.random()}@braket.gay`,
+      isRootAdmin: true,
+    });
+    const organizerId = await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {name: 'Ext Broadcast Org', slug: `ext-bc-${Date.now()}`},
+    );
+    const eventId = await t.mutation(api.testing.events.seedEvent, {
+      ...EVENT_SEED_BASE,
+      organizerId,
+    });
+    return {
+      adminId,
+      organizerId,
+      eventId,
+      asAdmin: t.withIdentity({subject: adminId}),
+    };
+  }
+
+  it('getAudience reports the reachable/unreachable split for imported entries', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminEventWithOrg(t);
+
+    await asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId,
+      batchKey: 'bc-split-1',
+      dedupMode: 'skip',
+      rows: [
+        {name: 'Reachable One', email: 'ext1@example.com', externalRef: 'X1'},
+        {name: 'Reachable Two', email: 'ext2@example.com', externalRef: 'X2'},
+        {name: 'No Email', externalRef: 'X3'},
+      ],
+    });
+
+    const result = await asAdmin.query(api.events.broadcasts.getAudience, {
+      eventId,
+    });
+    expect(result.importedReachableCount).toBe(2);
+    expect(result.importedUnreachableCount).toBe(1);
+    // Default ON: the 2 reachable imported entries join the audience.
+    expect(result.recipientCount).toBe(2);
+  });
+
+  it('toggle ON includes imported entries with email; OFF excludes them', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminEventWithOrg(t);
+
+    await seedTicketHolder(t, eventId, 'native@example.com');
+    await asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId,
+      batchKey: 'bc-toggle-1',
+      dedupMode: 'skip',
+      rows: [
+        {name: 'Imported Emailed', email: 'imp@example.com', externalRef: 'T1'},
+        {name: 'Imported NoEmail', externalRef: 'T2'},
+      ],
+    });
+
+    const on = await asAdmin.query(api.events.broadcasts.getAudience, {
+      eventId,
+      includeExternalTicketHolders: true,
+    });
+    // native + 1 reachable imported.
+    expect(on.recipientCount).toBe(2);
+
+    const off = await asAdmin.query(api.events.broadcasts.getAudience, {
+      eventId,
+      includeExternalTicketHolders: false,
+    });
+    // native only.
+    expect(off.recipientCount).toBe(1);
+    // The split is reported regardless of the toggle.
+    expect(off.importedReachableCount).toBe(1);
+    expect(off.importedUnreachableCount).toBe(1);
+  });
+
+  it('send with toggle ON delivers to imported-with-email; OFF delivers to none of them', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminEventWithOrg(t);
+
+    await asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId,
+      batchKey: 'bc-send-on',
+      dedupMode: 'skip',
+      rows: [
+        {
+          name: 'Ext Recipient',
+          email: 'extsend@example.com',
+          externalRef: 'S1',
+        },
+      ],
+    });
+
+    const on = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Doors',
+      message: 'Doors open at 9pm',
+      includeExternalTicketHolders: true,
+    });
+    expect(on.success).toBe(true);
+    if (on.success) expect(on.recipientCount).toBe(1);
+
+    const captured = await t.query(api.testing.email.getSentEmails, {
+      to: 'extsend@example.com',
+    });
+    expect(captured).toHaveLength(1);
+
+    // A second event: same import, toggle OFF → no recipients at all.
+    const second = await seedAdminEventWithOrg(t);
+    await second.asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId: second.eventId,
+      batchKey: 'bc-send-off',
+      dedupMode: 'skip',
+      rows: [
+        {name: 'Ext Only', email: 'extoff@example.com', externalRef: 'S2'},
+      ],
+    });
+    const off = await second.asAdmin.mutation(api.events.broadcasts.send, {
+      eventId: second.eventId,
+      subject: 'Doors',
+      message: 'Doors open at 9pm',
+      includeExternalTicketHolders: false,
+    });
+    // Only imported entries exist and they are excluded → no_recipients.
+    expect(off.success).toBe(false);
+    if (!off.success) expect(off.error).toBe('no_recipients');
+
+    const capturedOff = await t.query(api.testing.email.getSentEmails, {
+      to: 'extoff@example.com',
+    });
+    expect(capturedOff).toHaveLength(0);
+  });
+
+  it('broadening a same-subject retry (external off -> on) reaches only the newly included external holders', async () => {
+    const t = convexTest();
+    const {adminId, eventId, asAdmin} = await seedAdminEventWithOrg(t);
+
+    await seedTicketHolder(t, eventId, 'native@example.com');
+    await asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId,
+      batchKey: 'broaden-1',
+      dedupMode: 'skip',
+      rows: [{name: 'Ext', email: 'external@example.com', externalRef: 'B1'}],
+    });
+
+    // First send excludes external holders: only the native holder is emailed.
+    const first = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Set time',
+      message: 'Set time change',
+      includeExternalTicketHolders: false,
+    });
+    expect(first.success).toBe(true);
+    if (first.success) expect(first.recipientCount).toBe(1);
+    expect(
+      await t.query(api.testing.email.getSentEmails, {
+        to: 'external@example.com',
+      }),
+    ).toHaveLength(0);
+
+    // The broadcast rate limit is 1 per 5 min per (admin, event); reset it to
+    // simulate the elapsed window before the legitimate broadening resend.
+    await t.mutation(api.testing.utilities.resetRateLimit, {
+      name: 'broadcastEmail',
+      key: `${adminId}:${eventId}`,
+    });
+
+    // Retry the SAME subject with external holders included: the external
+    // recipient is reached, and the native holder is NOT re-emailed.
+    const broadened = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Set time',
+      message: 'Set time change',
+      includeExternalTicketHolders: true,
+    });
+    expect(broadened.success).toBe(true);
+    if (broadened.success) expect(broadened.recipientCount).toBe(1);
+    expect(
+      await t.query(api.testing.email.getSentEmails, {
+        to: 'external@example.com',
+      }),
+    ).toHaveLength(1);
+    // Native holder still has exactly one email from the first send.
+    expect(
+      await t.query(api.testing.email.getSentEmails, {
+        to: 'native@example.com',
+      }),
+    ).toHaveLength(1);
+
+    // A third send of the same subject with external on has nothing left.
+    const third = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Set time',
+      message: 'Set time change',
+      includeExternalTicketHolders: true,
+    });
+    expect(third.success).toBe(false);
+    if (!third.success) expect(third.error).toBe('already_sent');
+  });
+
+  it('a full send then a narrowing retry short-circuits as already_sent (no duplicate native email)', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminEventWithOrg(t);
+
+    await seedTicketHolder(t, eventId, 'native2@example.com');
+    await asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId,
+      batchKey: 'narrow-1',
+      dedupMode: 'skip',
+      rows: [{name: 'Ext', email: 'external2@example.com', externalRef: 'N1'}],
+    });
+
+    // First send includes everyone (default toggle on).
+    const first = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'All out',
+      message: 'Goes to everyone',
+    });
+    expect(first.success).toBe(true);
+    if (first.success) expect(first.recipientCount).toBe(2);
+
+    // Retry the same subject with external OFF: the native segment was already
+    // sent, so there is nothing new — never a duplicate to the native holder.
+    const narrowed = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'All out',
+      message: 'Goes to everyone',
+      includeExternalTicketHolders: false,
+    });
+    expect(narrowed.success).toBe(false);
+    if (!narrowed.success) expect(narrowed.error).toBe('already_sent');
+    expect(
+      await t.query(api.testing.email.getSentEmails, {
+        to: 'native2@example.com',
+      }),
+    ).toHaveLength(1);
+  });
+
+  it('an email present as both native purchaser and imported entry receives exactly one send', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminEventWithOrg(t);
+
+    const sharedEmail = 'shared@example.com';
+    await seedTicketHolder(t, eventId, sharedEmail);
+    await asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId,
+      batchKey: 'bc-dedup-1',
+      dedupMode: 'skip',
+      rows: [
+        // Same email as the native purchaser (different case to prove
+        // normalized-email dedup), plus a distinct imported recipient.
+        {name: 'Dup', email: sharedEmail.toUpperCase(), externalRef: 'D1'},
+        {name: 'Distinct', email: 'distinct@example.com', externalRef: 'D2'},
+      ],
+    });
+
+    const result = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Once',
+      message: 'You should see this once',
+    });
+    expect(result.success).toBe(true);
+    // native(shared) + distinct = 2 unique; the imported shared collides.
+    if (result.success) expect(result.recipientCount).toBe(2);
+
+    const capturedShared = await t.query(api.testing.email.getSentEmails, {
+      to: sharedEmail,
+    });
+    expect(capturedShared).toHaveLength(1);
+  });
+
+  it('leaves native + guest recipients unaffected by imported inclusion', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminEventWithOrg(t);
+
+    await seedTicketHolder(t, eventId, 'nativeholder@example.com');
+    await seedGuest(t, eventId, {name: 'A Guest', email: 'guest@example.com'});
+    // No imported entries at all — the toggle path must not disturb the base.
+    const result = await asAdmin.query(api.events.broadcasts.getAudience, {
+      eventId,
+    });
+    expect(result.recipientCount).toBe(2);
+    expect(result.importedReachableCount).toBe(0);
+    expect(result.importedUnreachableCount).toBe(0);
   });
 });
