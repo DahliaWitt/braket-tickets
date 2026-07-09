@@ -57,7 +57,7 @@ When troubleshooting automatic deploys, start from the parent `CI` run on the br
 
 Hosted runners are ephemeral, so jobs restore caches explicitly: the shared composite action [`.github/actions/setup-node-pnpm`](../../.github/actions/setup-node-pnpm/action.yml) installs pnpm plus the `.nvmrc` Node version and restores the pnpm store (`actions/setup-node` with `cache: pnpm`); the `build` and `e2e` jobs restore the Angular build cache at `frontend/.angular/cache` via `actions/cache`, and `e2e` also caches the Playwright browsers (`~/.cache/ms-playwright`, keyed on the resolved Playwright version). The Angular CLI disables its build cache when it detects CI, so the `build` and `e2e` jobs enable it at runtime with `ng config cli.cache.environment all` — scoped to those jobs on purpose; a global `angular.json` setting would also switch the self-hosted deploy builds to persistent incremental caching on the Whiterose disk.
 
-The `e2e-check` gate intentionally has no `needs:` on `lint`/`test`/`build`: E2E starts in parallel with the fan-out, so PR wall-clock is `max(fan-out, e2e)` instead of their sum. A PR push that fails lint can waste one hosted E2E run, bounded by the `cancel-in-progress` concurrency group on re-push (`cancel-in-progress` applies to `pull_request` events only, not branch pushes). Wasted runs on `develop`/`main` pushes should be rare because the strict up-to-date requirement means the merged state already passed full CI on the PR. `stripe-contracts` keeps `needs: [lint]` to conserve Stripe sandbox API quota.
+The `e2e-check` gate intentionally has no `needs:` on `lint`/`test`/`build`: E2E starts in parallel with the fan-out, so PR wall-clock is `max(fan-out, e2e)` instead of their sum. A PR push that fails lint can waste one hosted E2E run, bounded by the `cancel-in-progress` concurrency group on re-push (`cancel-in-progress` applies to `pull_request` events only, not branch pushes). Wasted runs on `main` pushes should be rare because its strict up-to-date requirement means the merged state already passed full CI on the PR; `develop` is not strict (see [Auto-merge and branch updates](#auto-merge-and-branch-updates)), so a `develop` push may run CI on a state that differs from the PR's last green run. `stripe-contracts` keeps `needs: [lint]` to conserve Stripe sandbox API quota.
 
 Branch protection on both `develop` and `main` requires these CI checks before merge:
 
@@ -88,13 +88,14 @@ done
 
 ## Auto-merge and branch updates
 
-The repository has GitHub auto-merge enabled, and `develop` requires branches to be up to date with the base before merging (`required_status_checks.strict: true`, matching `main`). The intended PR flow:
+The repository has GitHub auto-merge enabled. `main` requires branches to be up to date with the base before merging (`required_status_checks.strict: true`); `develop` does **not** (`strict: false`). The intended PR flow on `develop`:
 
 1. Open the PR and enable auto-merge: `gh pr merge --auto --squash <number>`.
-2. The PR merges automatically once all required checks pass and the branch is up to date.
-3. When another PR merges first, open PRs become out of date and auto-merge waits. Update them one at a time with `gh pr update-branch <number>` — serial updates avoid re-running CI on every open PR after every merge.
+2. The PR merges automatically once all required checks pass. Because `develop` is not strict, the branch does **not** need to be up to date first, so the "This branch is out-of-date with the base branch" block never appears and no `gh pr update-branch` step is required — for human or Dependabot PRs alike.
 
-Each update re-runs CI, but the fan-out jobs run on free GitHub-hosted runners and `e2e` only runs when affected (see `scripts/run-affected-e2e.ts`), so the marginal cost is small. GitHub does not update out-of-date branches automatically, and pushes made by `GITHUB_TOKEN` automation do not trigger `pull_request` workflows — a bot-driven branch updater would leave PRs stuck with checks that never report. Keep branch updates on a user token (`gh pr update-branch`).
+`strict` was disabled on `develop` on 2026-07-09 to remove the manual `Update branch` click. GitHub has no native, config-only way to auto-update a PR branch: the `Update branch` button is always manual and only appears while `strict` (or "always suggest updating branches") is on, and Dependabot's default rebasing only resolves conflicts, not "behind" branches. The only way to keep `strict` _and_ auto-update branches is a custom GitHub Actions workflow that calls the `update-branch` API with a user PAT (e.g. `RELEASE_PLEASE_TOKEN`) — `GITHUB_TOKEN` pushes do not re-trigger `pull_request` checks, so a `GITHUB_TOKEN`-driven updater leaves PRs stuck with checks that never report.
+
+**Tradeoff of `strict: false` on `develop`:** two independently-green PRs can merge into a red `develop` via a semantic conflict that does not textually conflict. This is caught by post-merge CI on the `develop` push, and only the dev preview deploys from `develop` (never production). `main` keeps `strict: true` so releases still require a fully up-to-date, re-tested branch. If `develop` starts going red from stale merges often enough to hurt, re-enable strict (`gh api --method PATCH .../branches/develop/protection/required_status_checks -F strict=true`) and add the update-branch workflow described above.
 
 Verify the live settings with:
 
