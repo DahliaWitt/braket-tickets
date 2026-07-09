@@ -185,6 +185,16 @@ After a successful sync, the backend can still require a signup-completion step.
 - completion clears `socialSignupCompletionRequired`
 - completion also sets `termsAcceptedAt` if the field is missing
 
+The gate is enforced server-side, not just by the frontend redirect:
+
+- auth sync (`backend/convex/auth/_impl/sync.ts`) only clears
+  `socialSignupCompletionRequired` for an existing user when `termsAcceptedAt`
+  is already set. A credential account appearing on the Better Auth side (for
+  example through a password reset) no longer ends the gate on its own.
+- `auth.public.setPassword` refuses with `AUTH_SET_PASSWORD_FAILED` while
+  `socialSignupCompletionRequired` is `true`, so a direct API call cannot
+  create a credential account to skip terms acceptance.
+
 If a user returns to the completion screen repeatedly:
 
 1. Check the `users` row for `socialSignupCompletionRequired`.
