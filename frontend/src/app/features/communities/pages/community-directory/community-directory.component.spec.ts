@@ -10,6 +10,8 @@ import {CONVEX} from 'convex-angular';
 import {provideRouter} from '@angular/router';
 import {provideZonelessChangeDetection, signal} from '@angular/core';
 import {vi, describe, it, expect, beforeEach} from 'vitest';
+import {api} from '@convex/_generated/api';
+import {functionReferenceMatches} from '@/testing/convex-reference-matchers';
 import {
   createMockConvexClient,
   type MockConvexClient,
@@ -45,13 +47,9 @@ const mockCommunities = [
 // ---------------------------------------------------------------------------
 
 /**
- * The community directory component subscribes via injectQueries in this order:
- *   1. list               (authenticated only)
- *   2. getUserApprovals   (authenticated only)
- *   3. getMyApplications  (authenticated only)
- *
- * The order relies on injectQueries preserving Object.keys insertion order of
- * the definition record (communities -> approvals -> myApplications).
+ * Routes each subscription to its payload by function reference, so the mock
+ * is independent of the order in which injectQueries registers its keys
+ * (communities / approvals / myApplications).
  */
 function createConvexMock(options: {
   communities?: unknown[];
@@ -65,13 +63,12 @@ function createConvexMock(options: {
     applications = [],
     listError = null,
   } = options;
-  let callIndex = 0;
   const convexMock = createMockConvexClient();
   const onUpdate = vi
     .fn()
     .mockImplementation(
       (
-        _query: unknown,
+        query: unknown,
         _args: unknown,
         onData: (data: unknown) => void,
         onError?: (error: Error) => void,
@@ -80,18 +77,26 @@ function createConvexMock(options: {
         // registers the active subscription only after onUpdate returns, and its
         // settle/fail guard drops any emission that arrives before that. A
         // synchronous onData/onError here would be silently discarded.
-        const idx = callIndex++;
-        if (idx === 0) {
-          if (listError) {
-            queueMicrotask(() => onError?.(listError));
-          } else {
-            queueMicrotask(() => onData(communities));
+        queueMicrotask(() => {
+          if (functionReferenceMatches(query, api.communities.list.list)) {
+            if (listError) onError?.(listError);
+            else onData(communities);
+          } else if (
+            functionReferenceMatches(
+              query,
+              api.communities.trust_links.getUserApprovals,
+            )
+          ) {
+            onData(approvals);
+          } else if (
+            functionReferenceMatches(
+              query,
+              api.communities.applications.getMyApplications,
+            )
+          ) {
+            onData(applications);
           }
-        } else if (idx === 1) {
-          queueMicrotask(() => onData(approvals));
-        } else {
-          queueMicrotask(() => onData(applications));
-        }
+        });
         return () => void 0;
       },
     );

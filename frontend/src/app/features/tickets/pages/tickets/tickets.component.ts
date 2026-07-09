@@ -36,12 +36,7 @@ import {BrowserPlatformService} from '@/core/services/browser-platform.service';
 import {formatUsdCents} from '@shared/pricing/pricing-summary';
 import {EventDatePipe} from '@/utils/event-date.pipe';
 import {EventEndTimePipe} from '@/utils/event-end-time.pipe';
-
-/**
- * Max event ids per getBatchAvailability call. Mirrors the backend
- * `eventIds` array cap; the service's copy is not exported, so define locally.
- */
-const MAX_EVENT_IDS_PER_BATCH = 50;
+import {MAX_EVENT_IDS_PER_BATCH} from '@/core/models/event.types';
 
 /** Resale listing data mapped to a ticket */
 interface TicketResaleInfo {

@@ -171,7 +171,13 @@ export class CommunitySelectorComponent {
     return requests;
   });
 
-  /** Options array for the dropdown; empty while names are still loading. */
+  /**
+   * Options array for the dropdown; entries appear as their names resolve.
+   * Pending per-ID loads (results entry still undefined) are excluded so a
+   * placeholder name is never published to setResolvedNames() or rendered in
+   * the header. A resolved-but-null community (deleted/no access) does get an
+   * 'Unknown' entry — that state is final, not transitional.
+   */
   protected readonly options = computed<CommunityOption[]>(() => {
     const ids = this.idsToResolve();
     if (this.isListMode()) {
@@ -182,14 +188,17 @@ export class CommunitySelectorComponent {
         .map((c) => ({id: c._id, name: c.name, slug: c.slug ?? null}));
     }
     const results = this.nameQueries.results();
-    return ids.map((id) => {
+    const options: CommunityOption[] = [];
+    for (const id of ids) {
       const community = results[id];
-      return {
+      if (community === undefined) continue;
+      options.push({
         id,
         name: community?.name ?? 'Unknown',
         slug: community?.slug ?? null,
-      };
-    });
+      });
+    }
+    return options;
   });
 
   protected readonly showDefaultPreference = computed(

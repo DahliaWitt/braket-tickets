@@ -23,6 +23,7 @@ import {BraDialogService} from '@ui/components/composites/dialog/dialog.service'
 import {toast} from 'ngx-sonner';
 import {api} from '@convex/_generated/api';
 import {type Id} from '@convex/_generated/dataModel';
+import {logger} from '@/utils/logger';
 
 type OutgoingTrustLink = TrustLink & {direction: 'outgoing'};
 
@@ -337,24 +338,40 @@ export class SharedVettingTableComponent {
    *  - communities: unconditional list for the selector + create dialog
    *  - outgoing/incoming: keyed on the effective organizer, skipped until one exists
    */
-  private readonly queries = injectQueries(() => {
-    const orgId = this.effectiveOrganizerId();
-    return {
-      communities: {query: api.communities.list.list, args: {}},
-      outgoing: orgId
-        ? {
-            query: api.communities.trust_links.list,
-            args: {organizerId: orgId, direction: 'outgoing' as const},
-          }
-        : skipToken,
-      incoming: orgId
-        ? {
-            query: api.communities.trust_links.list,
-            args: {organizerId: orgId, direction: 'incoming' as const},
-          }
-        : skipToken,
-    };
-  });
+  private readonly queries = injectQueries(
+    () => {
+      const orgId = this.effectiveOrganizerId();
+      return {
+        communities: {query: api.communities.list.list, args: {}},
+        outgoing: orgId
+          ? {
+              query: api.communities.trust_links.list,
+              args: {organizerId: orgId, direction: 'outgoing' as const},
+            }
+          : skipToken,
+        incoming: orgId
+          ? {
+              query: api.communities.trust_links.list,
+              args: {organizerId: orgId, direction: 'incoming' as const},
+            }
+          : skipToken,
+      };
+    },
+    {
+      onError: (key, error) => {
+        if (key === 'communities') {
+          logger.error('Failed to load communities', error);
+          toast.error('Failed to load communities');
+        } else if (key === 'outgoing') {
+          logger.error('Failed to load outgoing trust links', error);
+          toast.error('Failed to load outgoing trust links');
+        } else {
+          logger.error('Failed to load incoming trust links', error);
+          toast.error('Failed to load incoming trust links');
+        }
+      },
+    },
+  );
   readonly allOrganizers = computed(
     () => this.queries.results().communities ?? [],
   );

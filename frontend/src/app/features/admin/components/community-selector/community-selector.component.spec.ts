@@ -62,6 +62,8 @@ async function setup(options: {
     name: string;
     slug?: string | null;
   }[];
+  /** Per-ID lookups that never emit — the subscription stays pending. */
+  pendingIds?: string[];
   userRole?: 'root_admin' | 'community_admin';
   isSelectedDefault?: boolean;
 }) {
@@ -97,6 +99,7 @@ async function setup(options: {
       ) => {
         queueMicrotask(() => {
           if (args && 'id' in args) {
+            if (options.pendingIds?.includes(String(args.id))) return;
             onData(namesById[String(args.id)] ?? null);
           } else {
             onData(listData);
@@ -228,6 +231,28 @@ describe('CommunitySelectorComponent', () => {
       });
 
       expect(await harness.isStaticNameVisible()).toBe(false);
+    });
+
+    it('keeps pending name lookups out of options and resolved names', async () => {
+      const {ctxMock} = await setup({
+        communities: [communityA, communityB],
+        selectedId: communityA,
+        selectedName: null,
+        hasMultiple: true,
+        communityNamesById: {[communityA]: {name: 'Alpha Crew'}},
+        pendingIds: [communityB],
+      });
+
+      // Only the resolved community is published; the still-loading one must
+      // not surface as an 'Unknown' placeholder in the shared context (it
+      // feeds selectedCommunityName() and the header label).
+      const published = ctxMock.setResolvedNames.mock.lastCall?.[0] as Map<
+        string,
+        string
+      >;
+      expect(published.get(communityA)).toBe('Alpha Crew');
+      expect(published.has(communityB)).toBe(false);
+      expect([...published.values()]).not.toContain('Unknown');
     });
 
     it('calls selectCommunity on dropdown change', async () => {

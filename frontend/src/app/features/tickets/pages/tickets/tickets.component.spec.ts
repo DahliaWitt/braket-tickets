@@ -132,13 +132,17 @@ describe('TicketsComponent', () => {
         const source = isBatchAvailabilityQuery(query)
           ? availabilityByKey
           : resaleListingsByKey;
-        if (!eventIds || eventIds.length === 0) {
-          onData({});
-          return () => void 0;
-        }
-
-        const key = [...eventIds].sort().join(',');
-        onData(source[key] ?? {});
+        // Emit on a microtask to mirror the real Convex client: injectQueries
+        // registers the active subscription only after onUpdate returns, so a
+        // synchronous first emission would be silently discarded.
+        queueMicrotask(() => {
+          if (!eventIds || eventIds.length === 0) {
+            onData({});
+            return;
+          }
+          const key = [...eventIds].sort().join(',');
+          onData(source[key] ?? {});
+        });
         return () => void 0;
       },
     );

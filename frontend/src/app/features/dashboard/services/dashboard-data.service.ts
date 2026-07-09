@@ -10,15 +10,12 @@ import {
   CommunitiesService,
   type Community,
 } from '@/core/services/communities.service';
-import {type UpcomingEvent} from '@/core/models/event.types';
+import {
+  MAX_EVENT_IDS_PER_BATCH,
+  type UpcomingEvent,
+} from '@/core/models/event.types';
 import {logger} from '@/utils/logger';
 import {safeResourceValue} from '@/utils/resource';
-
-/**
- * Max event ids per getBatchAvailability call. Mirrors the backend `eventIds`
- * array cap; the service's copy is not exported, so define locally.
- */
-const MAX_EVENT_IDS_PER_BATCH = 50;
 
 export interface EventAvailability {
   isSoldOut: boolean;
