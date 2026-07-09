@@ -555,7 +555,7 @@
                 data-testid="checkout-free-ticket"
                 (click)="freeTicketClaimed.emit()"
                 [zDisabled]="isGuest() && !termsAccepted()"
-                class="w-full border-none bg-success py-6 font-display tracking-widest uppercase shadow-[0_0_20px_-5px_hsl(var(--success)/0.4)] hover:bg-success/90"
+                class="w-full border-none bg-success py-6 font-display tracking-widest text-success-foreground uppercase shadow-[0_0_20px_-5px_hsl(var(--success)/0.4)] hover:bg-success/90"
               >
                 GET TICKET
               </z-button>

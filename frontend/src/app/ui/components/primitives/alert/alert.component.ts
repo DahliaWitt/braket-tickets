@@ -6,7 +6,7 @@ import {
   ViewEncapsulation,
 } from '@angular/core';
 
-import type { ClassValue } from 'clsx';
+import type {ClassValue} from 'clsx';
 
 import {
   alertVariants,
@@ -14,9 +14,9 @@ import {
   type ZardAlertTypeVariants,
   type ZardAlertAppearanceVariants,
 } from './alert.variants';
-import { mergeClasses } from '@ui/utils/merge-classes';
-import { ZardIconComponent } from '@ui/components/primitives/icon/icon.component';
-import type { ZardIcon } from '@ui/components/primitives/icon/icons';
+import {mergeClasses} from '@ui/utils/merge-classes';
+import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
+import type {ZardIcon} from '@ui/components/primitives/icon/icons';
 
 const typeIconMap: Record<ZardAlertTypeVariants, ZardIcon> = {
   default: 'info',
@@ -31,14 +31,20 @@ const typeIconMap: Record<ZardAlertTypeVariants, ZardIcon> = {
   imports: [ZardIconComponent],
   template: `
     @if (!hideIcon()) {
-      <z-icon [zType]="iconName()" class="shrink-0 self-start text-base mt-0.5" aria-hidden="true" />
+      <z-icon
+        [zType]="iconName()"
+        class="mt-0.5 shrink-0 self-start text-base"
+        aria-hidden="true"
+      />
     }
     <div class="flex-1">
       @if (zTitle()) {
         <div data-alert-title [class]="titleClasses()">{{ zTitle() }}</div>
       }
       @if (zDescription()) {
-        <div data-alert-description [class]="descriptionClasses()">{{ zDescription() }}</div>
+        <div data-alert-description [class]="descriptionClasses()">
+          {{ zDescription() }}
+        </div>
       }
       <ng-content />
     </div>
@@ -65,16 +71,21 @@ export class ZardAlertComponent {
 
   protected readonly classes = computed(() =>
     mergeClasses(
-      alertVariants({ zType: this.zType(), zAppearance: this.zAppearance() }),
+      alertVariants({zType: this.zType(), zAppearance: this.zAppearance()}),
       this.class(),
     ),
   );
 
-  protected readonly titleClasses = computed(() => 'font-medium tracking-tight leading-none');
+  protected readonly titleClasses = computed(
+    () => 'font-medium tracking-tight leading-none',
+  );
 
   protected readonly descriptionClasses = computed(() =>
     mergeClasses(
-      alertDescriptionVariants({ zType: this.zType() }),
+      alertDescriptionVariants({
+        zType: this.zType(),
+        zAppearance: this.zAppearance(),
+      }),
       this.zTitle() ? 'mt-1' : '',
     ),
   );

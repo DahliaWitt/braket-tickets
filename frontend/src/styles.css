@@ -104,9 +104,9 @@
     --destructive-foreground: 0 0% 98%;
     --destructive-text: 0 84% 70%; /* AA-safe destructive text in dark mode — main --destructive (L 30.6%) is invisible as text (1.98:1 on page bg); this brighter variant passes AA on self-tinted bg-destructive/10 (5.02:1) and on the page background (7.04:1) */
     --success: 160 72% 45%;
-    --success-foreground: 0 0% 100%;
+    --success-foreground: 160 90% 8%; /* Dark ink on the bright dark-mode fill — white fails AA on bg-success (2.22:1); this passes on the solid fill (7.26:1) and on hover bg-success/90 over the page bg (5.96:1). Light mode keeps white (deep fill, 6.88:1). */
     --warning: 38 80% 60%;
-    --warning-foreground: 0 0% 100%;
+    --warning-foreground: 38 90% 10%; /* Dark ink on the bright dark-mode fill — white fails AA on bg-warning (1.96:1); this passes on the solid fill (8.05:1) and on hover bg-warning/90 over the page bg (6.60:1). Light mode keeps white (deep fill, 6.70:1). */
     --info: 262 60% 58%;
     --info-foreground: 0 0% 100%;
     --info-text: 262 70% 74%; /* AA-safe info text in dark mode — main --info (L 58%) fails AA on self-tinted bg-info/10 (2.63:1) and on page bg (3.95:1); this brighter variant passes AA on both (4.97:1 tint, 7.47:1 page) */
