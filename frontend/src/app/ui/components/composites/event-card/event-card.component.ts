@@ -145,7 +145,7 @@ export interface EventCardData {
         @if (isSoldOut()) {
           <span
             data-testid="event-card-sold-out"
-            class="mb-3 inline-block rounded-full border border-destructive px-2 py-0.5 font-mono text-xs tracking-widest text-destructive uppercase"
+            class="mb-3 inline-block rounded-full border border-destructive px-2 py-0.5 font-mono text-xs tracking-widest text-destructive-text uppercase"
           >
             SOLD OUT
           </span>

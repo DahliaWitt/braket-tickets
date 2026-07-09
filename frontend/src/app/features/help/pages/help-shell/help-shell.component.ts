@@ -9,27 +9,32 @@ import {
   type ElementRef,
   viewChild,
 } from '@angular/core';
-import { Router, RouterOutlet, NavigationEnd } from '@angular/router';
-import { toSignal } from '@angular/core/rxjs-interop';
-import { filter, map, startWith } from 'rxjs';
-import { HelpManifestService } from '../../services/help-manifest.service';
-import { HelpSearchService } from '../../services/help-search.service';
-import { HelpSidebarComponent } from '../../components/help-sidebar/help-sidebar.component';
-import { HelpSearchComponent } from '../../components/help-search/help-search.component';
-import { AuthService } from '@/core/services/auth.service';
-import { type HelpArticle } from '../../models/help.models';
-import { ZardIconComponent } from '@ui/components/primitives/icon/icon.component';
-import { safeResourceValue } from '@/utils/resource';
+import {Router, RouterOutlet, NavigationEnd} from '@angular/router';
+import {toSignal} from '@angular/core/rxjs-interop';
+import {filter, map, startWith} from 'rxjs';
+import {HelpManifestService} from '../../services/help-manifest.service';
+import {HelpSearchService} from '../../services/help-search.service';
+import {HelpSidebarComponent} from '../../components/help-sidebar/help-sidebar.component';
+import {HelpSearchComponent} from '../../components/help-search/help-search.component';
+import {AuthService} from '@/core/services/auth.service';
+import {type HelpArticle} from '../../models/help.models';
+import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
+import {safeResourceValue} from '@/utils/resource';
 
 @Component({
   selector: 'app-help-shell',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, HelpSidebarComponent, HelpSearchComponent, ZardIconComponent],
+  imports: [
+    RouterOutlet,
+    HelpSidebarComponent,
+    HelpSearchComponent,
+    ZardIconComponent,
+  ],
   template: `
-    <div class="grow flex flex-col md:flex-row">
+    <div class="flex grow flex-col md:flex-row">
       <!-- Mobile header -->
       <div
-        class="md:hidden flex items-center justify-between px-4 pt-1 pb-3 border-b border-border bg-background"
+        class="flex items-center justify-between border-b border-border bg-background px-4 pt-1 pb-3 md:hidden"
       >
         <button
           type="button"
@@ -57,18 +62,24 @@ import { safeResourceValue } from '@/utils/resource';
         data-testid="help-sidebar-nav"
         [class.translate-x-0]="sidebarOpen()"
         [class.-translate-x-full]="!sidebarOpen()"
-        class="fixed inset-y-0 left-0 z-40 w-72 bg-background border-r border-border overflow-y-auto transition-transform duration-200
-               md:translate-x-0 md:static md:z-0"
+        class="fixed inset-y-0 left-0 z-40 w-72 overflow-y-auto border-r border-border bg-background transition-transform duration-200 md:static md:z-0 md:translate-x-0"
       >
         <div class="p-4">
           <app-help-search />
         </div>
         @if (hasLoadError()) {
-          <p class="text-destructive text-sm p-4" data-testid="help-shell-error-state" role="alert">
+          <p
+            class="p-4 text-sm text-destructive-text"
+            data-testid="help-shell-error-state"
+            role="alert"
+          >
             couldn't load articles — try refreshing
           </p>
         } @else {
-          <app-help-sidebar [articles]="accessibleArticles()" [activeSection]="activeSection()" />
+          <app-help-sidebar
+            [articles]="accessibleArticles()"
+            [activeSection]="activeSection()"
+          />
         }
       </aside>
 
@@ -84,7 +95,7 @@ import { safeResourceValue } from '@/utils/resource';
 
       <!-- Main content -->
       <main
-        class="flex-1 min-w-0 px-4 py-6 md:px-8 md:py-8 max-w-4xl mx-auto w-full"
+        class="mx-auto w-full max-w-4xl min-w-0 flex-1 px-4 py-6 md:px-8 md:py-8"
         [attr.inert]="sidebarOpen() || null"
       >
         <router-outlet />
@@ -99,7 +110,8 @@ export class HelpShellComponent {
   private readonly router = inject(Router);
 
   readonly sidebarOpen = signal(false);
-  private readonly sidebarPanel = viewChild<ElementRef<HTMLElement>>('sidebarPanel');
+  private readonly sidebarPanel =
+    viewChild<ElementRef<HTMLElement>>('sidebarPanel');
 
   toggleSidebar(): void {
     const opening = !this.sidebarOpen();
@@ -129,7 +141,7 @@ export class HelpShellComponent {
         return 'users' as const;
       }),
     ),
-    { initialValue: 'users' as const },
+    {initialValue: 'users' as const},
   );
 
   // Load manifest using resource() (not ngOnInit per project conventions)
@@ -137,7 +149,9 @@ export class HelpShellComponent {
     loader: () => this.manifest.loadManifest(),
   });
 
-  readonly hasLoadError = computed<boolean>(() => this.manifestResource.error() != null);
+  readonly hasLoadError = computed<boolean>(
+    () => this.manifestResource.error() != null,
+  );
 
   // Derive accessible articles as a computed signal — pure derivation, no side effects
   readonly accessibleArticles = computed<HelpArticle[]>(() => {

@@ -1,14 +1,14 @@
-import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
+import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
 import {
   ChangeDetectionStrategy,
   Component,
   provideZonelessChangeDetection,
   signal,
 } from '@angular/core';
-import { type ComponentFixture, TestBed } from '@angular/core/testing';
-import { ConfirmationStateComponent } from './confirmation-state.component';
-import { ConfirmationStateHarness } from './confirmation-state.component.harness';
-import type { ZardIcon } from '@ui/components/primitives/icon/icons';
+import {type ComponentFixture, TestBed} from '@angular/core/testing';
+import {ConfirmationStateComponent} from './confirmation-state.component';
+import {ConfirmationStateHarness} from './confirmation-state.component.harness';
+import type {ZardIcon} from '@ui/components/primitives/icon/icons';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -33,7 +33,9 @@ class TestHostComponent {
   readonly icon = signal<ZardIcon>('check');
   readonly title = signal('Test Title');
   readonly description = signal<string | undefined>(undefined);
-  readonly variant = signal<'loading' | 'success' | 'error' | 'warning' | 'info'>('info');
+  readonly variant = signal<
+    'loading' | 'success' | 'error' | 'warning' | 'info'
+  >('info');
   readonly loading = signal(false);
   readonly iconId = signal<string | undefined>(undefined);
   readonly descriptionId = signal<string | undefined>(undefined);
@@ -92,7 +94,7 @@ describe('ConfirmationStateComponent', () => {
     host.description.set('Something went wrong');
     fixture.detectChanges();
     const classes = await harness.getDescriptionClasses();
-    expect(classes).toContain('text-destructive');
+    expect(classes).toContain('text-destructive-text');
   });
 
   it('should use muted-foreground for non-error description', async () => {

@@ -1,6 +1,11 @@
-import { Component, ChangeDetectionStrategy, computed, input } from '@angular/core';
-import { ZardIconComponent } from '@ui/components/primitives/icon/icon.component';
-import type { ZardIcon } from '@ui/components/primitives/icon/icons';
+import {
+  Component,
+  ChangeDetectionStrategy,
+  computed,
+  input,
+} from '@angular/core';
+import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
+import type {ZardIcon} from '@ui/components/primitives/icon/icons';
 
 /**
  * Variant-to-style mapping for the confirmation state display.
@@ -9,11 +14,11 @@ import type { ZardIcon } from '@ui/components/primitives/icon/icons';
  * "warning" covers the accent-colored "pending" states used in email-change flows.
  */
 const VARIANT_STYLES = {
-  loading: { bg: 'bg-primary/20', color: 'text-primary' },
-  success: { bg: 'bg-secondary/10', color: 'text-secondary' },
-  error: { bg: 'bg-destructive/20', color: 'text-destructive' },
-  warning: { bg: 'bg-accent/20', color: 'text-accent' },
-  info: { bg: 'bg-primary/20', color: 'text-primary' },
+  loading: {bg: 'bg-primary/20', color: 'text-primary'},
+  success: {bg: 'bg-secondary/10', color: 'text-secondary'},
+  error: {bg: 'bg-destructive/20', color: 'text-destructive-text'},
+  warning: {bg: 'bg-accent/20', color: 'text-accent'},
+  info: {bg: 'bg-primary/20', color: 'text-primary'},
 } as const;
 
 type ConfirmationVariant = keyof typeof VARIANT_STYLES;
@@ -31,7 +36,7 @@ type ConfirmationVariant = keyof typeof VARIANT_STYLES;
           <z-icon [zType]="icon()" [class]="iconClass()" />
         }
       </div>
-      <h2 class="text-xl font-display uppercase tracking-wide text-foreground">
+      <h2 class="font-display text-xl tracking-wide text-foreground uppercase">
         {{ title() }}
       </h2>
       @if (description()) {
@@ -70,19 +75,28 @@ export class ConfirmationStateComponent {
     return this.loading() ? `${base} animate-pulse` : base;
   });
 
-  readonly iconColorClass = computed(() => VARIANT_STYLES[this.variant()].color);
-
-  readonly iconContainerClass = computed(
-    () => `w-16 h-16 mx-auto rounded-full flex items-center justify-center ${this.iconBgClass()}`,
+  readonly iconColorClass = computed(
+    () => VARIANT_STYLES[this.variant()].color,
   );
 
-  readonly loadingIconClass = computed(() => `w-8 h-8 animate-spin ${this.iconColorClass()}`);
+  readonly iconContainerClass = computed(
+    () =>
+      `w-16 h-16 mx-auto rounded-full flex items-center justify-center ${this.iconBgClass()}`,
+  );
+
+  readonly loadingIconClass = computed(
+    () => `w-8 h-8 animate-spin ${this.iconColorClass()}`,
+  );
 
   readonly iconClass = computed(() => `w-8 h-8 ${this.iconColorClass()}`);
 
   readonly descriptionClass = computed(() =>
-    this.variant() === 'error' ? 'text-destructive' : 'text-muted-foreground',
+    this.variant() === 'error'
+      ? 'text-destructive-text'
+      : 'text-muted-foreground',
   );
 
-  readonly descriptionTextClass = computed(() => `text-sm font-sans ${this.descriptionClass()}`);
+  readonly descriptionTextClass = computed(
+    () => `text-sm font-sans ${this.descriptionClass()}`,
+  );
 }

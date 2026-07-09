@@ -330,7 +330,7 @@ export class EventEditorComponent implements HasUnsavedChanges {
   readonly inputClasses =
     'font-sans border rounded-sm px-3 py-2 bg-background border-border text-foreground w-full focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors placeholder:text-muted-foreground/40 disabled:opacity-50 disabled:cursor-not-allowed';
   readonly errorClasses =
-    'border-destructive/50 text-destructive focus:ring-destructive/50';
+    'border-destructive/50 text-destructive-text focus:ring-destructive/50';
 
   readonly isCreateMode = computed(() => !this.id());
 

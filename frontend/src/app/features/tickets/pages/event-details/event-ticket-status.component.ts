@@ -24,7 +24,7 @@ export type EventTicketSalesStatus = 'active' | 'paused' | 'ended' | null;
         role="status"
         aria-live="polite"
         data-testid="resale-available-banner"
-        class="border border-primary/30 bg-primary/10 px-4 py-3 rounded text-primary font-mono text-xs uppercase tracking-wider flex items-center gap-2"
+        class="flex items-center gap-2 rounded border border-primary/30 bg-primary/10 px-4 py-3 font-mono text-xs tracking-wider text-primary uppercase"
       >
         <z-icon zType="repeat" />
         <div>
@@ -41,12 +41,12 @@ export type EventTicketSalesStatus = 'active' | 'paused' | 'ended' | null;
         <div
           role="status"
           aria-live="polite"
-          class="rounded border border-destructive/25 bg-destructive/10 px-4 py-4 text-destructive"
+          class="rounded border border-destructive/25 bg-destructive/10 px-4 py-4 text-destructive-text"
         >
           <div class="flex items-start gap-3">
             <z-icon zType="circle-alert" class="mt-0.5 h-4 w-4 shrink-0" />
             <div class="min-w-0 flex-1">
-              <p class="font-mono text-xs uppercase tracking-widest">
+              <p class="font-mono text-xs tracking-widest uppercase">
                 Sold Out
               </p>
               <p class="mt-1 text-sm leading-relaxed text-foreground/75">
@@ -62,7 +62,7 @@ export type EventTicketSalesStatus = 'active' | 'paused' | 'ended' | null;
             data-testid="resale-notify-btn"
             z-button
             zType="outline"
-            class="group w-full min-h-12 justify-between border-primary/45 bg-primary/5 px-4 py-3 text-primary hover:border-primary/70 hover:bg-primary/10 font-display uppercase tracking-wider text-sm"
+            class="group min-h-12 w-full justify-between border-primary/45 bg-primary/5 px-4 py-3 font-display text-sm tracking-wider text-primary uppercase hover:border-primary/70 hover:bg-primary/10"
             (click)="subscribeRequested.emit()"
             [zDisabled]="isSubscribing() || isSubscribedToResale()"
             [attr.aria-busy]="isSubscribing()"
@@ -90,10 +90,10 @@ export type EventTicketSalesStatus = 'active' | 'paused' | 'ended' | null;
           <div
             role="status"
             data-testid="resale-notify-subscribed"
-            class="rounded border border-success/30 bg-success/10 px-4 py-3 text-success flex items-center justify-between gap-3"
+            class="flex items-center justify-between gap-3 rounded border border-success/30 bg-success/10 px-4 py-3 text-success"
           >
             <span
-              class="flex min-w-0 flex-1 items-center gap-2 font-mono text-xs uppercase tracking-wider"
+              class="flex min-w-0 flex-1 items-center gap-2 font-mono text-xs tracking-wider uppercase"
             >
               <z-icon zType="bell-ring" />
               You'll be notified when a resale ticket becomes available
@@ -103,7 +103,7 @@ export type EventTicketSalesStatus = 'active' | 'paused' | 'ended' | null;
               z-button
               zType="ghost"
               zSize="sm"
-              class="text-success hover:text-destructive hover:bg-destructive/10 shrink-0"
+              class="shrink-0 text-success hover:bg-destructive/10 hover:text-destructive-text"
               (click)="unsubscribeRequested.emit()"
               [zDisabled]="isUnsubscribing()"
               [attr.aria-busy]="isUnsubscribing()"
@@ -121,22 +121,22 @@ export type EventTicketSalesStatus = 'active' | 'paused' | 'ended' | null;
       </div>
     } @else if (ticketSalesStatus() === 'paused') {
       <div
-        class="border border-warning/40 bg-warning/10 px-4 py-3 rounded"
+        class="rounded border border-warning/40 bg-warning/10 px-4 py-3"
         data-testid="paused-sales-banner"
       >
         <div
-          class="text-foreground dark:text-warning font-mono text-xs uppercase tracking-wider flex items-center gap-2"
+          class="flex items-center gap-2 font-mono text-xs tracking-wider text-foreground uppercase dark:text-warning"
         >
           <z-icon zType="clock" />
           Ticket Sales Are Paused
         </div>
-        <p class="text-muted-foreground text-xs mt-1">
+        <p class="mt-1 text-xs text-muted-foreground">
           Sales temporarily paused by the organizer
         </p>
       </div>
     } @else if (ticketSalesStatus() === 'ended') {
       <div
-        class="border border-destructive/20 bg-destructive/10 px-4 py-3 rounded text-destructive font-mono text-xs uppercase tracking-wider flex items-center gap-2"
+        class="flex items-center gap-2 rounded border border-destructive/20 bg-destructive/10 px-4 py-3 font-mono text-xs tracking-wider text-destructive-text uppercase"
       >
         <z-icon zType="circle-alert" />
         Ticket Sales Have Ended

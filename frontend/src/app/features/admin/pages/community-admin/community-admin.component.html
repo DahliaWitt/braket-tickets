@@ -126,9 +126,11 @@
       <div
         class="rounded-full border border-destructive/30 bg-destructive/10 p-4"
       >
-        <z-icon zType="circle-alert" class="h-8 w-8 text-destructive" />
+        <z-icon zType="circle-alert" class="h-8 w-8 text-destructive-text" />
       </div>
-      <p class="mono-label text-2xs text-destructive">COMMUNITY NOT FOUND</p>
+      <p class="mono-label text-2xs text-destructive-text">
+        COMMUNITY NOT FOUND
+      </p>
       <p class="max-w-md text-center text-muted-foreground">
         Could not find a community matching
         <strong>{{ unresolvedCommunitySlug() }}</strong
@@ -221,7 +223,7 @@
             class="flex-1 [&>z-icon]:mt-0 [&>z-icon]:self-center [&>z-icon_svg]:size-5"
             data-testid="magic-links-info"
           >
-            <p class="mt-1 text-sm text-info/80">
+            <p class="mt-1 text-sm text-info-text">
               A shortcut past the application process. Share one with someone
               and they're vetted into your community when they open it. Each
               link keeps count of how many people have used it.
@@ -581,7 +583,7 @@
                               'Delete link ' + getLinkIdentifier(link)
                             "
                             [zTooltip]="'Delete permanently — cannot be undone'"
-                            class="text-muted-foreground hover:text-destructive"
+                            class="text-muted-foreground hover:text-destructive-text"
                           >
                             <z-icon zType="trash" class="h-4 w-4" />
                           </button>
@@ -782,7 +784,7 @@
                       z-button
                       zType="outline"
                       zSize="sm"
-                      class="min-w-0 justify-center border-destructive/30 px-2 text-destructive hover:bg-destructive/10"
+                      class="min-w-0 justify-center border-destructive/30 px-2 text-destructive-text hover:bg-destructive/10"
                       (click)="confirmDelete(link._id, link.label)"
                       [attr.aria-label]="
                         'Delete link ' + getLinkIdentifier(link)

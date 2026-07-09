@@ -111,7 +111,7 @@
           class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-destructive/10"
         >
           <svg
-            class="h-10 w-10 text-destructive"
+            class="h-10 w-10 text-destructive-text"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -126,7 +126,7 @@
           </svg>
         </div>
         <h2
-          class="mb-4 font-display text-2xl font-bold tracking-tight text-destructive uppercase md:text-3xl"
+          class="mb-4 font-display text-2xl font-bold tracking-tight text-destructive-text uppercase md:text-3xl"
         >
           status unavailable
         </h2>
@@ -229,7 +229,7 @@
         >
           <div class="mb-4 flex items-center justify-center">
             <svg
-              class="h-10 w-10 text-destructive"
+              class="h-10 w-10 text-destructive-text"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -244,7 +244,7 @@
             </svg>
           </div>
           <h2
-            class="mb-3 font-display text-2xl font-bold tracking-tight text-destructive uppercase md:text-3xl"
+            class="mb-3 font-display text-2xl font-bold tracking-tight text-destructive-text uppercase md:text-3xl"
           >
             your application was not accepted
           </h2>
@@ -343,7 +343,7 @@
                 >
                   {{ q.label }}
                   @if (q.required) {
-                    <span class="ml-1 text-destructive" aria-hidden="true"
+                    <span class="ml-1 text-destructive-text" aria-hidden="true"
                       >*</span
                     >
                     <span class="sr-only">(required)</span>
@@ -507,7 +507,7 @@
                   hasError(field, 'required')
                 ) {
                   <p
-                    class="pt-1 text-xs text-destructive uppercase"
+                    class="pt-1 text-xs text-destructive-text uppercase"
                     [id]="q.id + '-required-error'"
                   >
                     This field is required
@@ -519,7 +519,7 @@
                   hasError(field, 'minLength')
                 ) {
                   <p
-                    class="pt-1 text-xs text-destructive uppercase"
+                    class="pt-1 text-xs text-destructive-text uppercase"
                     [id]="q.id + '-minlength-error'"
                   >
                     Tell us a bit more (min {{ q.minLength }} chars)
@@ -531,7 +531,7 @@
                   hasError(field, 'maxLength')
                 ) {
                   <p
-                    class="pt-1 text-xs text-destructive uppercase"
+                    class="pt-1 text-xs text-destructive-text uppercase"
                     [id]="q.id + '-maxlength-error'"
                   >
                     Answer must be
@@ -577,7 +577,7 @@
                 </label>
                 @if (isFieldInvalid(conductField, false)) {
                   <p
-                    class="mt-2 ml-8 text-xs text-destructive uppercase"
+                    class="mt-2 ml-8 text-xs text-destructive-text uppercase"
                     id="conduct-error"
                   >
                     You must agree to continue
@@ -589,7 +589,7 @@
 
           @if (errorMsg()) {
             <div
-              class="border border-destructive/50 bg-destructive/10 p-4 text-sm tracking-widest text-destructive uppercase"
+              class="border border-destructive/50 bg-destructive/10 p-4 text-sm tracking-widest text-destructive-text uppercase"
               id="form-error"
               role="alert"
               aria-live="assertive"

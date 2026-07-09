@@ -81,7 +81,7 @@
           </div>
           @if (data().revenue.refundedCents > 0) {
             <div
-              class="flex items-center justify-between text-destructive"
+              class="flex items-center justify-between text-destructive-text"
               data-testid="revenue-refunds"
             >
               <span>Refunds</span>
@@ -215,7 +215,7 @@
             >
           } @else if (ticketSalesStatus() === 'ended') {
             <span
-              class="rounded-full border border-destructive/30 bg-destructive/10 px-2 py-0.5 font-mono text-2xs text-destructive uppercase"
+              class="rounded-full border border-destructive/30 bg-destructive/10 px-2 py-0.5 font-mono text-2xs text-destructive-text uppercase"
               >Ended</span
             >
           }
@@ -273,7 +273,7 @@
             type="button"
             z-button
             zType="outline"
-            class="border-destructive/50 text-destructive hover:bg-destructive/10"
+            class="border-destructive/50 text-destructive-text hover:bg-destructive/10"
             [zDisabled]="isUpdatingStatus()"
             (click)="updateTicketSalesStatus.emit('ended')"
             aria-label="End ticket sales permanently"
