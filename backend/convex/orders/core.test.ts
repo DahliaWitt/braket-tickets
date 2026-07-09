@@ -4,6 +4,7 @@ import type {Id} from '../_generated/dataModel';
 import type {EventVisibility} from '@shared/domain/event-visibility';
 import {convexTest, finishAllScheduledFunctions} from '../setup.testing';
 import {ORDER_RELEASE_GRACE_MS} from '../lib/constants';
+import {LEGAL_TERMS_VERSION} from '@shared/constants';
 
 async function createUser(
   t: ReturnType<typeof convexTest>,
@@ -462,6 +463,7 @@ describe('orders', () => {
       quantity: 1,
       tier: 'regular',
       totalAmount: 2500,
+      termsAccepted: true,
     });
 
     const order = await t.run(async (ctx) =>
@@ -682,12 +684,14 @@ describe('orders', () => {
       eventId: firstEvent.eventId,
       quantity: 1,
       tier: 'regular',
+      termsAccepted: true,
     });
     await t.mutation(api.orders.core.claimFreeTicketAsGuest, {
       sessionToken,
       eventId: secondEvent.eventId,
       quantity: 1,
       tier: 'regular',
+      termsAccepted: true,
     });
 
     await expect(
@@ -696,14 +700,197 @@ describe('orders', () => {
         eventId: blockedEvent.eventId,
         quantity: 1,
         tier: 'regular',
+        termsAccepted: true,
       }),
-    ).rejects.toThrow();
+    ).rejects.toThrow('RateLimited');
 
     const blockedInventory = await t.run(async (ctx) =>
       ctx.db.get('event_inventory', blockedEvent.inventoryId),
     );
     expect(blockedInventory?.soldCount).toBe(0);
     expect(blockedInventory?.heldCount).toBe(0);
+  });
+
+  describe('ToS assent evidence (BRA-455)', () => {
+    it('openForGuest rejects the order when terms are not accepted', async () => {
+      const t = convexTest();
+      const {eventId} = await createEventWithInventory(t);
+      const {sessionId, sessionToken} = await createGuestSession(t);
+
+      await expect(
+        t.mutation(api.orders.core.openForGuest, {
+          sessionToken,
+          eventId,
+          quantity: 1,
+          tier: 'regular',
+          totalAmount: 2500,
+          termsAccepted: false,
+        }),
+      ).rejects.toThrow('accept the terms of service');
+
+      const orders = await t.run(async (ctx) =>
+        ctx.db
+          .query('ticket_orders')
+          .withIndex('by_owner_guest_event_state', (q) =>
+            q.eq('guestSessionId', sessionId).eq('eventId', eventId),
+          )
+          .collect(),
+      );
+      expect(orders).toHaveLength(0);
+    });
+
+    it('openForGuest stamps ToS assent evidence when terms are accepted', async () => {
+      const t = convexTest();
+      const {eventId} = await createEventWithInventory(t);
+      const {sessionToken} = await createGuestSession(t);
+      const before = Date.now();
+
+      const result = await t.mutation(api.orders.core.openForGuest, {
+        sessionToken,
+        eventId,
+        quantity: 1,
+        tier: 'regular',
+        totalAmount: 2500,
+        termsAccepted: true,
+      });
+
+      const order = await t.run(async (ctx) =>
+        ctx.db.get('ticket_orders', result.orderId),
+      );
+
+      expect(typeof order?.tosAcceptedAt).toBe('number');
+      expect(order!.tosAcceptedAt!).toBeGreaterThanOrEqual(before);
+      expect(order!.tosAcceptedAt!).toBeLessThanOrEqual(Date.now());
+      expect(order?.tosVersion).toBe(LEGAL_TERMS_VERSION);
+    });
+
+    it('claimFreeTicketAsGuest rejects the claim when terms are not accepted', async () => {
+      const t = convexTest();
+      const {eventId} = await createEventWithInventory(t, {price: 0});
+      const {sessionId, sessionToken} = await createGuestSession(t);
+
+      await expect(
+        t.mutation(api.orders.core.claimFreeTicketAsGuest, {
+          sessionToken,
+          eventId,
+          quantity: 1,
+          tier: 'regular',
+          termsAccepted: false,
+        }),
+      ).rejects.toThrow('accept the terms of service');
+
+      const orders = await t.run(async (ctx) =>
+        ctx.db
+          .query('ticket_orders')
+          .withIndex('by_owner_guest_event_state', (q) =>
+            q.eq('guestSessionId', sessionId).eq('eventId', eventId),
+          )
+          .collect(),
+      );
+      expect(orders).toHaveLength(0);
+    });
+
+    it('claimFreeTicketAsGuest stamps ToS assent evidence when terms are accepted', async () => {
+      const t = convexTest();
+      const {eventId} = await createEventWithInventory(t, {price: 0});
+      const {sessionToken} = await createGuestSession(t);
+      const before = Date.now();
+
+      const result = await t.mutation(api.orders.core.claimFreeTicketAsGuest, {
+        sessionToken,
+        eventId,
+        quantity: 1,
+        tier: 'regular',
+        termsAccepted: true,
+      });
+
+      const order = await t.run(async (ctx) =>
+        ctx.db.get('ticket_orders', result.orderId),
+      );
+
+      expect(order?.state).toBe('completed');
+      expect(typeof order?.tosAcceptedAt).toBe('number');
+      expect(order!.tosAcceptedAt!).toBeGreaterThanOrEqual(before);
+      expect(order!.tosAcceptedAt!).toBeLessThanOrEqual(Date.now());
+      expect(order?.tosVersion).toBe(LEGAL_TERMS_VERSION);
+    });
+
+    it('claimFreeTicketAsGuest replays the existing completed order without re-checking terms', async () => {
+      const t = convexTest();
+      const {eventId} = await createEventWithInventory(t, {price: 0});
+      const {sessionToken} = await createGuestSession(t);
+
+      const first = await t.mutation(api.orders.core.claimFreeTicketAsGuest, {
+        sessionToken,
+        eventId,
+        quantity: 1,
+        tier: 'regular',
+        termsAccepted: true,
+      });
+
+      // Idempotent replay must short-circuit on the existing completed order
+      // BEFORE the terms check, so a stale/false client value on retry does
+      // not fail an already-completed claim.
+      const second = await t.mutation(api.orders.core.claimFreeTicketAsGuest, {
+        sessionToken,
+        eventId,
+        quantity: 1,
+        tier: 'regular',
+        termsAccepted: false,
+      });
+
+      expect(second.success).toBe(true);
+      expect(second.orderId).toBe(first.orderId);
+    });
+
+    it('open (signed-in) creates an order without ToS assent fields', async () => {
+      const t = convexTest();
+      const userId = await createUser(
+        t,
+        'Signed In Buyer',
+        'signed-in-buyer@example.com',
+      );
+      const {eventId} = await createEventWithInventory(t);
+      const asUser = t.withIdentity({subject: userId});
+
+      const result = await asUser.mutation(api.orders.core.open, {
+        eventId,
+        quantity: 1,
+        tier: 'regular',
+        totalAmount: 2500,
+      });
+
+      const order = await t.run(async (ctx) =>
+        ctx.db.get('ticket_orders', result.orderId),
+      );
+
+      expect(order?.tosAcceptedAt).toBeUndefined();
+      expect(order?.tosVersion).toBeUndefined();
+    });
+
+    it('claimFreeTicket (signed-in) creates an order without ToS assent fields', async () => {
+      const t = convexTest();
+      const userId = await createUser(
+        t,
+        'Signed In Free Buyer',
+        'signed-in-free-buyer@example.com',
+      );
+      const {eventId} = await createEventWithInventory(t, {price: 0});
+      const asUser = t.withIdentity({subject: userId});
+
+      const result = await asUser.mutation(api.orders.core.claimFreeTicket, {
+        eventId,
+        quantity: 1,
+        tier: 'regular',
+      });
+
+      const order = await t.run(async (ctx) =>
+        ctx.db.get('ticket_orders', result.orderId),
+      );
+
+      expect(order?.tosAcceptedAt).toBeUndefined();
+      expect(order?.tosVersion).toBeUndefined();
+    });
   });
 
   it('does not apply the free-claim rate limit to paid checkout opens', async () => {
@@ -795,6 +982,7 @@ describe('orders', () => {
       quantity: 1,
       tier: 'regular',
       totalAmount: 2500,
+      termsAccepted: true,
     });
     const secondOrder = await t.mutation(api.orders.core.openForGuest, {
       sessionToken: secondSession.sessionToken,
@@ -802,6 +990,7 @@ describe('orders', () => {
       quantity: 1,
       tier: 'regular',
       totalAmount: 2500,
+      termsAccepted: true,
     });
 
     const inventory = await t.run(async (ctx) =>

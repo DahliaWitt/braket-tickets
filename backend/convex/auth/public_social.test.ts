@@ -1,4 +1,6 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
+import {APIError} from 'better-auth/api';
+import {ConvexError} from 'convex/values';
 
 const adapterFindManyMock = vi.hoisted(() => vi.fn());
 
@@ -22,6 +24,27 @@ type BetterAuthUser = NonNullable<
   Awaited<ReturnType<typeof authComponent.safeGetAuthUser>>
 >;
 
+/**
+ * convex-test serializes a thrown `ConvexError`'s structured `data` to a JSON
+ * string across the mutation boundary (the real Convex client deserializes it
+ * back to an object for the frontend). Normalize both shapes for assertions.
+ */
+function parseAppErrorData(error: unknown): {code: string; message: string} {
+  const raw: unknown = (error as {data?: unknown}).data;
+  const parsed: unknown = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  if (
+    typeof parsed !== 'object' ||
+    parsed === null ||
+    typeof (parsed as {code?: unknown}).code !== 'string' ||
+    typeof (parsed as {message?: unknown}).message !== 'string'
+  ) {
+    throw new Error(
+      `Unexpected ConvexError data shape: ${JSON.stringify(raw)}`,
+    );
+  }
+  return parsed as {code: string; message: string};
+}
+
 describe('social auth public flows', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -32,6 +55,92 @@ describe('social auth public flows', () => {
     vi.restoreAllMocks();
     delete process.env.AUTH_BASE_URL;
     delete process.env.SITE_URL;
+  });
+
+  it('maps a last-account unlink APIError by machine code', async () => {
+    const t = convexTest();
+    const userId = (await t.mutation(api.testing.users.createUserDirectly, {
+      email: 'linked@example.com',
+      name: 'Linked User',
+      betterAuthUserId: 'ba-user-linked',
+      authEmailVerified: true,
+    })) as Id<'users'>;
+
+    const unlinkAccountMock = vi.fn().mockRejectedValue(
+      // Real code from better-auth account.mjs unlink-account; message rewritten
+      // to prove routing is by code, not substring.
+      APIError.from('BAD_REQUEST', {
+        code: 'FAILED_TO_UNLINK_LAST_ACCOUNT',
+        message: 'wording that would not match any legacy substring',
+      }),
+    );
+    vi.spyOn(authComponent, 'getAuth').mockResolvedValue({
+      auth: {api: {unlinkAccount: unlinkAccountMock}} as never,
+      headers: new Headers(),
+    });
+
+    const asUser = t.withIdentity({
+      subject: userId,
+      email: 'linked@example.com',
+      name: 'Linked User',
+    });
+
+    let caught: unknown;
+    try {
+      await asUser.mutation(api.auth.public.unlinkSocialAccount, {
+        provider: 'google',
+      });
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeInstanceOf(ConvexError);
+    const data = parseAppErrorData(caught);
+    expect(data.code).toBe('AUTH_UNLINK_ACCOUNT_FAILED');
+    expect(data.message).toBe('Cannot remove the last login method.');
+  });
+
+  it('maps an already-linked link APIError by machine code', async () => {
+    const t = convexTest();
+    const userId = (await t.mutation(api.testing.users.createUserDirectly, {
+      email: 'linked@example.com',
+      name: 'Linked User',
+      betterAuthUserId: 'ba-user-linked',
+      authEmailVerified: true,
+    })) as Id<'users'>;
+
+    const linkSocialAccountMock = vi.fn().mockRejectedValue(
+      APIError.from('BAD_REQUEST', {
+        code: 'SOCIAL_ACCOUNT_ALREADY_LINKED',
+        message: 'rewritten message with no matching substring',
+      }),
+    );
+    vi.spyOn(authComponent, 'getAuth').mockResolvedValue({
+      auth: {api: {linkSocialAccount: linkSocialAccountMock}} as never,
+      headers: new Headers(),
+    });
+
+    const asUser = t.withIdentity({
+      subject: userId,
+      email: 'linked@example.com',
+      name: 'Linked User',
+    });
+
+    let caught: unknown;
+    try {
+      await asUser.mutation(api.auth.public.linkSocialAccount, {
+        provider: 'google',
+      });
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeInstanceOf(ConvexError);
+    const data = parseAppErrorData(caught);
+    expect(data.code).toBe('AUTH_LINK_ACCOUNT_FAILED');
+    expect(data.message).toBe(
+      'This provider cannot be connected to this account right now.',
+    );
   });
 
   it('does not rewrite emailVerificationTime during normal verified sign-in sync', async () => {

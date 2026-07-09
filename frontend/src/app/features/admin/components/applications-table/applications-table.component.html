@@ -168,7 +168,9 @@
                         } @else if (isBoolean(item.value)) {
                           <span
                             [class]="
-                              item.value ? 'text-success' : 'text-destructive'
+                              item.value
+                                ? 'text-success'
+                                : 'text-destructive-text'
                             "
                             >{{ item.value ? 'YES' : 'NO' }}</span
                           >
@@ -230,7 +232,7 @@
                       [class.text-success]="app.status === 'approved'"
                       [class.border-success/20]="app.status === 'approved'"
                       [class.bg-destructive/10]="app.status === 'rejected'"
-                      [class.text-destructive]="app.status === 'rejected'"
+                      [class.text-destructive-text]="app.status === 'rejected'"
                       [class.border-destructive/20]="app.status === 'rejected'"
                       [class.bg-muted-foreground/10]="app.status === 'revoked'"
                       [class.text-muted-foreground]="app.status === 'revoked'"
@@ -324,7 +326,7 @@
                   [class.text-success]="app.status === 'approved'"
                   [class.border-success/20]="app.status === 'approved'"
                   [class.bg-destructive/10]="app.status === 'rejected'"
-                  [class.text-destructive]="app.status === 'rejected'"
+                  [class.text-destructive-text]="app.status === 'rejected'"
                   [class.border-destructive/20]="app.status === 'rejected'"
                   [class.bg-muted-foreground/10]="app.status === 'revoked'"
                   [class.text-muted-foreground]="app.status === 'revoked'"
@@ -365,7 +367,7 @@
                   <span
                     [class]="
                       'font-bold ' +
-                      (item.value ? 'text-success' : 'text-destructive')
+                      (item.value ? 'text-success' : 'text-destructive-text')
                     "
                     >{{ item.value ? 'YES' : 'NO' }}</span
                   >

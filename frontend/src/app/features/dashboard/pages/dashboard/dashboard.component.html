@@ -36,7 +36,7 @@
           class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-destructive/20"
         >
           <svg
-            class="h-10 w-10 text-destructive"
+            class="h-10 w-10 text-destructive-text"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -51,7 +51,7 @@
           </svg>
         </div>
         <h2
-          class="mb-4 font-display text-2xl font-bold tracking-tight text-destructive uppercase md:text-3xl"
+          class="mb-4 font-display text-2xl font-bold tracking-tight text-destructive-text uppercase md:text-3xl"
         >
           hit a snag
         </h2>
@@ -252,7 +252,7 @@
             class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
           >
             <div class="min-w-0">
-              <p class="mono-label mb-2 text-2xs text-destructive/80">
+              <p class="mono-label mb-2 text-2xs text-destructive-text/80">
                 Vetting update
               </p>
               <h2
@@ -410,7 +410,7 @@
                 <div class="mt-auto flex items-center justify-between gap-3">
                   <bra-status-badge
                     status="destructive"
-                    class="w-fit text-destructive/80"
+                    class="w-fit text-destructive-text/80"
                     >Rejected</bra-status-badge
                   >
                   @if (entry.canResubmit) {

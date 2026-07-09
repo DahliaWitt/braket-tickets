@@ -31,6 +31,7 @@ export class CheckoutStore {
   readonly activeCheckoutSessionId = signal<string | null>(null);
   readonly activeConnectedAccountId = signal<string | null>(null);
   readonly stripeResetKey = signal<number>(0);
+  readonly guestTermsAccepted = signal<boolean>(false);
 
   readonly event = computed(() => this.sources()?.event() ?? null);
   readonly isResalePurchase = computed(
@@ -93,6 +94,10 @@ export class CheckoutStore {
     this.guestSessionToken.set(sessionToken);
   }
 
+  setGuestTermsAccepted(accepted: boolean): void {
+    this.guestTermsAccepted.set(accepted);
+  }
+
   resetPaymentForm(): void {
     const evt = this.event();
     if (!evt) return;
@@ -107,6 +112,7 @@ export class CheckoutStore {
     this.activeConnectedAccountId.set(null);
     this.guestEmail.set(null);
     this.guestSessionToken.set(null);
+    this.guestTermsAccepted.set(false);
   }
 
   resetSidebarState(): void {
@@ -117,6 +123,7 @@ export class CheckoutStore {
     this.activeOrderId.set(null);
     this.activeCheckoutSessionId.set(null);
     this.activeConnectedAccountId.set(null);
+    this.guestTermsAccepted.set(false);
   }
 
   closeCheckout(): void {
@@ -125,6 +132,7 @@ export class CheckoutStore {
     this.activeOrderId.set(null);
     this.activeCheckoutSessionId.set(null);
     this.activeConnectedAccountId.set(null);
+    this.guestTermsAccepted.set(false);
     this.stripeResetKey.update((k) => k + 1);
   }
 

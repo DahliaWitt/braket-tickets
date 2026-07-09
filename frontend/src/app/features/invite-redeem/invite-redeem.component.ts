@@ -104,7 +104,7 @@ const POLISHED_REDEEM_ERROR_MESSAGES = new Set([
           <div class="space-y-4" data-testid="redeem-error">
             <z-icon
               zType="circle-x"
-              class="mx-auto h-12 w-12 text-destructive"
+              class="mx-auto h-12 w-12 text-destructive-text"
             />
             <h1
               class="font-display text-2xl font-bold text-foreground uppercase"

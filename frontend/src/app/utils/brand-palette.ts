@@ -42,7 +42,7 @@ export const BRAND_THEME_PALETTE = {
     muted: '#2f282d',
     border: '#372f34',
     destructive: '#7f1d1d',
-    destructiveText: '#f23154',
+    destructiveText: '#f37272',
     white: '#ffffff',
   },
 } as const;

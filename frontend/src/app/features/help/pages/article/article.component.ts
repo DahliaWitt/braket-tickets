@@ -27,15 +27,15 @@ import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
     <nav
       aria-label="Breadcrumb"
       data-testid="help-breadcrumb"
-      class="flex items-center gap-2 text-sm text-muted-foreground mb-6"
+      class="mb-6 flex items-center gap-2 text-sm text-muted-foreground"
     >
-      <a routerLink="/help" class="hover:text-foreground transition-colors"
+      <a routerLink="/help" class="transition-colors hover:text-foreground"
         >Help</a
       >
       <span>/</span>
       <a
         [routerLink]="['/help', section()]"
-        class="hover:text-foreground transition-colors capitalize"
+        class="capitalize transition-colors hover:text-foreground"
       >
         {{ sectionLabel() }}
       </a>
@@ -49,27 +49,29 @@ import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
 
     @if (hasLoadError()) {
       <div
-        class="w-full max-w-xl mx-auto flex flex-col items-center justify-center text-center py-16 animate-in fade-in zoom-in duration-500"
+        class="animate-in fade-in zoom-in mx-auto flex w-full max-w-xl flex-col items-center justify-center py-16 text-center duration-500"
         data-testid="article-error-state"
         role="alert"
         aria-live="assertive"
       >
         <div
-          class="w-20 h-20 mb-6 rounded-full bg-destructive/20 flex items-center justify-center"
+          class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-destructive/20"
         >
-          <span class="text-destructive text-4xl" aria-hidden="true">!</span>
+          <span class="text-4xl text-destructive-text" aria-hidden="true"
+            >!</span
+          >
         </div>
         <h2
-          class="text-2xl md:text-3xl font-bold uppercase tracking-tight mb-4 text-destructive font-display"
+          class="mb-4 font-display text-2xl font-bold tracking-tight text-destructive-text uppercase md:text-3xl"
         >
           hit a snag
         </h2>
-        <p class="text-muted-foreground text-lg mb-8 font-sans">
+        <p class="mb-8 font-sans text-lg text-muted-foreground">
           couldn't load this article — try again later
         </p>
         <a
           routerLink="/help"
-          class="text-sm uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors font-mono"
+          class="font-mono text-sm tracking-widest text-muted-foreground uppercase transition-colors hover:text-foreground"
         >
           Back to Help Center
         </a>
@@ -78,11 +80,11 @@ import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
       @if (canAccess()) {
         <article
           data-testid="help-article-content"
-          class="prose dark:prose-invert max-w-none font-sans prose-headings:font-display prose-h1:font-sans prose-h1:text-3xl prose-h1:font-bold prose-h2:text-xl prose-h3:text-lg prose-p:text-muted-foreground prose-a:text-primary prose-code:text-primary prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none prose-pre:bg-card prose-pre:border prose-pre:border-border"
+          class="prose max-w-none font-sans dark:prose-invert prose-headings:font-display prose-h1:font-sans prose-h1:text-3xl prose-h1:font-bold prose-h2:text-xl prose-h3:text-lg prose-p:text-muted-foreground prose-a:text-primary prose-code:rounded prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:text-primary prose-code:before:content-none prose-code:after:content-none prose-pre:border prose-pre:border-border prose-pre:bg-card"
         >
           @if (markdownContent.isLoading()) {
             <p
-              class="text-muted-foreground animate-pulse"
+              class="animate-pulse text-muted-foreground"
               data-testid="article-loading-state"
             >
               Loading article...
@@ -98,7 +100,7 @@ import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
             @if (prevArticle()) {
               <a
                 [routerLink]="['/help', section(), prevArticle()!.slug]"
-                class="group flex min-w-0 flex-auto items-center gap-3 text-sm hover:text-foreground transition-colors text-muted-foreground"
+                class="group flex min-w-0 flex-auto items-center gap-3 text-sm text-muted-foreground transition-colors hover:text-foreground"
                 data-testid="prev-article-link"
               >
                 <span
@@ -112,11 +114,11 @@ import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
                   />
                 </span>
                 <span class="flex min-w-0 flex-col gap-1">
-                  <span class="font-mono text-2xs uppercase tracking-widest"
+                  <span class="font-mono text-2xs tracking-widest uppercase"
                     >Previous</span
                   >
                   <span
-                    class="line-clamp-2 max-w-full whitespace-normal break-words font-medium leading-snug"
+                    class="line-clamp-2 max-w-full leading-snug font-medium break-words whitespace-normal"
                     data-testid="prev-article-title"
                   >
                     {{ prevArticle()!.title }}
@@ -128,15 +130,15 @@ import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
             @if (nextArticle()) {
               <a
                 [routerLink]="['/help', section(), nextArticle()!.slug]"
-                class="group flex min-w-0 flex-auto items-center justify-end gap-3 text-right text-sm hover:text-foreground transition-colors text-muted-foreground"
+                class="group flex min-w-0 flex-auto items-center justify-end gap-3 text-right text-sm text-muted-foreground transition-colors hover:text-foreground"
                 data-testid="next-article-link"
               >
                 <span class="flex min-w-0 flex-col gap-1">
-                  <span class="font-mono text-2xs uppercase tracking-widest"
+                  <span class="font-mono text-2xs tracking-widest uppercase"
                     >Next</span
                   >
                   <span
-                    class="line-clamp-2 max-w-full whitespace-normal break-words font-medium leading-snug"
+                    class="line-clamp-2 max-w-full leading-snug font-medium break-words whitespace-normal"
                     data-testid="next-article-title"
                   >
                     {{ nextArticle()!.title }}
@@ -161,16 +163,16 @@ import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
           data-testid="help-login-prompt"
           class="rounded border border-border p-8 text-center"
         >
-          <h2 class="text-xl font-display font-semibold mb-2">
+          <h2 class="mb-2 font-display text-xl font-semibold">
             Sign in to access this article
           </h2>
-          <p class="text-muted-foreground mb-6">
+          <p class="mb-6 text-muted-foreground">
             This article is restricted to {{ accessLevelLabel() }} members.
           </p>
           <a
             routerLink="/login"
             [queryParams]="{returnUrl: '/help/' + section() + '/' + slug()}"
-            class="inline-flex items-center px-4 py-2 rounded bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
+            class="inline-flex items-center rounded bg-primary px-4 py-2 font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
             Sign in
           </a>
@@ -178,11 +180,11 @@ import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
       }
     } @else {
       <div class="text-muted-foreground">
-        <h1 class="text-2xl font-display font-bold mb-4">Article not found</h1>
+        <h1 class="mb-4 font-display text-2xl font-bold">Article not found</h1>
         <p>The article you're looking for doesn't exist or has been moved.</p>
         <a
           [routerLink]="['/help', section()]"
-          class="text-primary hover:underline mt-4 inline-block"
+          class="mt-4 inline-block text-primary hover:underline"
         >
           Back to {{ sectionLabel() }}
         </a>

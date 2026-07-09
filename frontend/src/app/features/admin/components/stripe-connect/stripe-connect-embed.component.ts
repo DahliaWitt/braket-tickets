@@ -127,7 +127,7 @@ interface ConnectOnboardingLikeElement extends HTMLElement {
       @if (error(); as err) {
         <p
           data-testid="stripe-connect-embed-error"
-          class="text-sm text-destructive"
+          class="text-sm text-destructive-text"
         >
           {{ err }}
         </p>
