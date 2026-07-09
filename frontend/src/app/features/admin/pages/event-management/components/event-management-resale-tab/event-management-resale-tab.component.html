@@ -158,7 +158,7 @@
                   <span
                     class="rounded border px-2 py-0.5 font-mono text-2xs tracking-widest uppercase"
                     [class.bg-info/10]="listing.status === 'listed'"
-                    [class.text-info]="listing.status === 'listed'"
+                    [class.text-info-text]="listing.status === 'listed'"
                     [class.border-info/30]="listing.status === 'listed'"
                     [class.bg-warning/10]="listing.status === 'pending'"
                     [class.text-warning]="listing.status === 'pending'"
@@ -186,7 +186,7 @@
                       zSize="sm"
                       (click)="adminCancelListing(listing._id)"
                       [zDisabled]="isCancellingListing() === listing._id"
-                      class="text-destructive hover:bg-destructive/10"
+                      class="text-destructive-text hover:bg-destructive/10"
                       aria-label="Cancel this resale listing"
                       [zTooltip]="'Cancel listing'"
                     >
@@ -233,7 +233,7 @@
                 <span
                   class="shrink-0 rounded border px-2 py-0.5 font-mono text-2xs tracking-widest uppercase"
                   [class.bg-info/10]="listing.status === 'listed'"
-                  [class.text-info]="listing.status === 'listed'"
+                  [class.text-info-text]="listing.status === 'listed'"
                   [class.border-info/30]="listing.status === 'listed'"
                   [class.bg-warning/10]="listing.status === 'pending'"
                   [class.text-warning]="listing.status === 'pending'"
@@ -267,7 +267,7 @@
                     zSize="sm"
                     (click)="adminCancelListing(listing._id)"
                     [zDisabled]="isCancellingListing() === listing._id"
-                    class="min-h-11 border-destructive/30 text-destructive hover:bg-destructive/10"
+                    class="min-h-11 border-destructive/30 text-destructive-text hover:bg-destructive/10"
                     aria-label="Cancel this resale listing"
                     [zTooltip]="'Cancel listing'"
                   >
@@ -346,7 +346,7 @@
           </span>
         </div>
         <div
-          class="flex items-center justify-between text-destructive"
+          class="flex items-center justify-between text-destructive-text"
           data-testid="resale-lost-processing-fees"
         >
           <span>Lost processing fees</span>

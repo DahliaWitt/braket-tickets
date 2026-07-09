@@ -102,7 +102,7 @@ interface TicketResaleInfo {
               class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-destructive/20"
             >
               <svg
-                class="h-10 w-10 text-destructive"
+                class="h-10 w-10 text-destructive-text"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -117,7 +117,7 @@ interface TicketResaleInfo {
               </svg>
             </div>
             <h2
-              class="mb-4 font-display text-2xl font-bold tracking-tight text-destructive uppercase md:text-3xl"
+              class="mb-4 font-display text-2xl font-bold tracking-tight text-destructive-text uppercase md:text-3xl"
             >
               hit a snag
             </h2>
@@ -190,7 +190,7 @@ interface TicketResaleInfo {
                         @case ('listed') {
                           <span
                             data-testid="ticket-status-badge"
-                            class="rounded border border-info/30 bg-info/10 px-2 py-0.5 font-mono text-2xs text-info"
+                            class="rounded border border-info/30 bg-info/10 px-2 py-0.5 font-mono text-2xs text-info-text"
                           >
                             LISTED
                           </span>
@@ -322,17 +322,17 @@ interface TicketResaleInfo {
                             <div class="flex items-start gap-2">
                               <z-icon
                                 zType="info"
-                                class="mt-0.5 shrink-0 text-info"
+                                class="mt-0.5 shrink-0 text-info-text"
                               />
                               <p
-                                class="font-mono text-xs leading-relaxed text-info/80"
+                                class="font-mono text-xs leading-relaxed text-info-text/80"
                               >
                                 Your ticket is queued for resale. It becomes
                                 available for purchase when the event sells out.
                               </p>
                             </div>
                             <p
-                              class="ml-6 font-mono text-2xs tracking-widest text-info/60 uppercase"
+                              class="ml-6 font-mono text-2xs tracking-widest text-info-text uppercase"
                             >
                               {{ getResaleQueueCount(ticket.eventId) }}
                               listing{{
@@ -349,7 +349,7 @@ interface TicketResaleInfo {
                           type="button"
                           z-button
                           zType="outline"
-                          class="mt-3 min-h-11 w-full border-destructive/30 font-mono text-xs tracking-widest text-destructive uppercase hover:bg-destructive/10"
+                          class="mt-3 min-h-11 w-full border-destructive/30 font-mono text-xs tracking-widest text-destructive-text uppercase hover:bg-destructive/10"
                           aria-label="Cancel resale listing"
                           (click)="
                             cancelResaleListing(resale.listingId, ticket._id)

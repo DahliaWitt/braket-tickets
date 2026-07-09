@@ -55,7 +55,7 @@ export class MainLayoutComponent {
         label: 'ADMIN PORTAL ACCESS',
         routerLink: '/admin',
         class:
-          'font-mono text-xs uppercase tracking-widest text-[hsl(var(--secondary-text))] hover:text-[hsl(var(--secondary-text))] border border-secondary/50 hover:border-secondary hover:bg-secondary/15',
+          'font-mono text-xs uppercase tracking-widest text-secondary-text hover:text-secondary-text border border-secondary/50 hover:border-secondary hover:bg-secondary/15',
       });
     }
 
@@ -64,7 +64,7 @@ export class MainLayoutComponent {
         label: 'TICKET SCANNER',
         routerLink: '/scanner',
         class:
-          'font-mono text-xs uppercase tracking-widest text-[hsl(var(--secondary-text))] hover:text-[hsl(var(--secondary-text))] border border-secondary/50 hover:border-secondary/70 hover:bg-secondary/15',
+          'font-mono text-xs uppercase tracking-widest text-secondary-text hover:text-secondary-text border border-secondary/50 hover:border-secondary/70 hover:bg-secondary/15',
       });
     }
 
@@ -79,7 +79,7 @@ export class MainLayoutComponent {
           ? {community: defaultCommunity}
           : undefined,
         class:
-          'font-mono text-xs uppercase tracking-widest text-[hsl(var(--secondary-text))] hover:text-[hsl(var(--secondary-text))] border border-secondary/50 hover:border-secondary/70 hover:bg-secondary/15',
+          'font-mono text-xs uppercase tracking-widest text-secondary-text hover:text-secondary-text border border-secondary/50 hover:border-secondary/70 hover:bg-secondary/15',
       });
     }
 

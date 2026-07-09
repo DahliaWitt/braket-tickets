@@ -81,7 +81,7 @@
               ) {
                 <p
                   data-testid="profile-name-required"
-                  class="mono-label text-2xs text-destructive"
+                  class="mono-label text-2xs text-destructive-text"
                 >
                   DISPLAY NAME IS REQUIRED
                 </p>
@@ -92,7 +92,7 @@
               ) {
                 <p
                   data-testid="profile-name-maxlength"
-                  class="mono-label text-2xs text-destructive"
+                  class="mono-label text-2xs text-destructive-text"
                 >
                   DISPLAY NAME MUST BE AT MOST 100 CHARACTERS
                 </p>
@@ -121,7 +121,7 @@
             </div>
             <div role="alert" aria-live="assertive">
               @if (profileError()) {
-                <p class="mono-label mt-2 text-2xs text-destructive">
+                <p class="mono-label mt-2 text-2xs text-destructive-text">
                   {{ profileError() }}
                 </p>
               }
@@ -182,14 +182,14 @@
                 [zLoading]="cancelEmailLoading()"
                 [zDisabled]="cancelEmailLoading()"
                 (click)="onCancelEmailChange()"
-                class="font-mono text-2xs text-destructive hover:text-destructive"
+                class="font-mono text-2xs text-destructive-text hover:text-destructive-text"
               >
                 CANCEL REQUEST
               </button>
               @if (cancelEmailError()) {
                 <p
                   data-testid="cancel-email-error"
-                  class="mono-label text-2xs text-destructive"
+                  class="mono-label text-2xs text-destructive-text"
                 >
                   {{ cancelEmailError() }}
                 </p>
@@ -226,7 +226,7 @@
                   ) {
                     <p
                       data-testid="email-required"
-                      class="mono-label text-2xs text-destructive"
+                      class="mono-label text-2xs text-destructive-text"
                     >
                       EMAIL IS REQUIRED
                     </p>
@@ -237,7 +237,7 @@
                   ) {
                     <p
                       data-testid="email-invalid"
-                      class="mono-label text-2xs text-destructive"
+                      class="mono-label text-2xs text-destructive-text"
                     >
                       ENTER A VALID EMAIL ADDRESS
                     </p>
@@ -249,7 +249,7 @@
                   ) {
                     <p
                       data-testid="email-same-as-current"
-                      class="mono-label text-2xs text-destructive"
+                      class="mono-label text-2xs text-destructive-text"
                     >
                       NEW EMAIL MUST BE DIFFERENT FROM YOUR CURRENT EMAIL
                     </p>
@@ -282,7 +282,7 @@
                 </div>
                 <div role="alert" aria-live="assertive">
                   @if (emailError()) {
-                    <p class="mono-label mt-2 text-2xs text-destructive">
+                    <p class="mono-label mt-2 text-2xs text-destructive-text">
                       {{ emailError() }}
                     </p>
                   }
@@ -312,7 +312,7 @@
           @if (providerWarning()) {
             <p
               data-testid="provider-warning"
-              class="mono-label text-2xs text-destructive"
+              class="mono-label text-2xs text-destructive-text"
             >
               {{ providerWarning() }}
             </p>
@@ -363,7 +363,7 @@
                     providerStatusFor(provider.provider).state === 'error'
                   ) {
                     <p
-                      class="provider-message-text mt-1 font-mono text-xs text-destructive"
+                      class="provider-message-text mt-1 font-mono text-xs text-destructive-text"
                       [attr.data-testid]="
                         'provider-message-' + provider.provider
                       "
@@ -504,7 +504,7 @@
                 ) {
                   <p
                     data-testid="old-password-required"
-                    class="mono-label text-2xs text-destructive"
+                    class="mono-label text-2xs text-destructive-text"
                   >
                     CURRENT PASSWORD IS REQUIRED
                   </p>
@@ -553,7 +553,7 @@
                 ) {
                   <p
                     data-testid="new-password-required"
-                    class="mono-label text-2xs text-destructive"
+                    class="mono-label text-2xs text-destructive-text"
                   >
                     NEW PASSWORD IS REQUIRED
                   </p>
@@ -564,7 +564,7 @@
                 ) {
                   <p
                     data-testid="new-password-validation"
-                    class="mono-label text-2xs text-destructive"
+                    class="mono-label text-2xs text-destructive-text"
                   >
                     PASSWORD MUST BE AT LEAST 8 CHARACTERS
                   </p>
@@ -575,7 +575,7 @@
                 ) {
                   <p
                     data-testid="new-password-maxlength-validation"
-                    class="mono-label text-2xs text-destructive"
+                    class="mono-label text-2xs text-destructive-text"
                   >
                     PASSWORD MUST BE AT MOST 72 CHARACTERS
                   </p>
@@ -627,7 +627,7 @@
                 ) {
                   <p
                     data-testid="confirm-password-required"
-                    class="mono-label text-2xs text-destructive"
+                    class="mono-label text-2xs text-destructive-text"
                   >
                     CONFIRM PASSWORD IS REQUIRED
                   </p>
@@ -635,7 +635,7 @@
                 @if (passwordsMismatch()) {
                   <p
                     data-testid="password-mismatch"
-                    class="mono-label text-2xs text-destructive"
+                    class="mono-label text-2xs text-destructive-text"
                   >
                     PASSWORDS DO NOT MATCH
                   </p>
@@ -657,7 +657,7 @@
             @if (passwordSubmitBlockerMessage()) {
               <p
                 data-testid="password-submit-blocker"
-                class="mono-label text-2xs text-destructive"
+                class="mono-label text-2xs text-destructive-text"
               >
                 {{ passwordSubmitBlockerMessage() }}
               </p>
@@ -666,7 +666,7 @@
               @if (passwordError()) {
                 <p
                   data-testid="password-error"
-                  class="mono-label mt-2 text-2xs text-destructive"
+                  class="mono-label mt-2 text-2xs text-destructive-text"
                 >
                   {{ passwordError() }}
                 </p>
@@ -727,7 +727,7 @@
                 ) {
                   <p
                     data-testid="set-password-required"
-                    class="mono-label text-2xs text-destructive"
+                    class="mono-label text-2xs text-destructive-text"
                   >
                     PASSWORD IS REQUIRED
                   </p>
@@ -738,7 +738,7 @@
                 ) {
                   <p
                     data-testid="set-password-minlength"
-                    class="mono-label text-2xs text-destructive"
+                    class="mono-label text-2xs text-destructive-text"
                   >
                     PASSWORD MUST BE AT LEAST 8 CHARACTERS
                   </p>
@@ -749,7 +749,7 @@
                 ) {
                   <p
                     data-testid="set-password-maxlength"
-                    class="mono-label text-2xs text-destructive"
+                    class="mono-label text-2xs text-destructive-text"
                   >
                     PASSWORD MUST BE AT MOST 72 CHARACTERS
                   </p>
@@ -804,7 +804,7 @@
                 ) {
                   <p
                     data-testid="set-password-confirm-required"
-                    class="mono-label text-2xs text-destructive"
+                    class="mono-label text-2xs text-destructive-text"
                   >
                     CONFIRM PASSWORD IS REQUIRED
                   </p>
@@ -812,7 +812,7 @@
                 @if (setPasswordPasswordsMismatch()) {
                   <p
                     data-testid="set-password-mismatch"
-                    class="mono-label text-2xs text-destructive"
+                    class="mono-label text-2xs text-destructive-text"
                   >
                     PASSWORDS DO NOT MATCH
                   </p>
@@ -839,7 +839,7 @@
             @if (setPasswordSubmitBlockerMessage()) {
               <p
                 data-testid="set-password-submit-blocker"
-                class="mono-label text-2xs text-destructive"
+                class="mono-label text-2xs text-destructive-text"
               >
                 {{ setPasswordSubmitBlockerMessage() }}
               </p>
@@ -859,7 +859,7 @@
               @if (setPasswordError()) {
                 <p
                   data-testid="set-password-error"
-                  class="mono-label mt-2 text-2xs text-destructive"
+                  class="mono-label mt-2 text-2xs text-destructive-text"
                 >
                   {{ setPasswordError() }}
                 </p>
@@ -1021,7 +1021,7 @@
               zSize="sm"
               (click)="unsubscribeFromAll()"
               [zLoading]="unsubAllLoading()"
-              class="text-destructive hover:text-destructive"
+              class="text-destructive-text hover:text-destructive-text"
               data-testid="unsub-all-btn"
             >
               Unsubscribe from all

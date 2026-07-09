@@ -1,25 +1,33 @@
-import { Component, ChangeDetectionStrategy, input, output, signal, computed, inject } from '@angular/core';
-import { toast } from 'ngx-sonner';
-import { ZardIconComponent } from '@ui/components/primitives/icon/icon.component';
+import {
+  Component,
+  ChangeDetectionStrategy,
+  input,
+  output,
+  signal,
+  computed,
+  inject,
+} from '@angular/core';
+import {toast} from 'ngx-sonner';
+import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
 import {
   ACCEPTED_IMAGE_FILE_INPUT,
   getAcceptedImageFormatsMessage,
   getUnsupportedImageTypeMessage,
   isAcceptedImageMimeType,
 } from '@/features/admin/utils/image-upload-policy';
-import { BrowserPlatformService } from '@/core/services/browser-platform.service';
+import {BrowserPlatformService} from '@/core/services/browser-platform.service';
 
 @Component({
   selector: 'app-event-poster-uploader',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [ZardIconComponent],
   template: `
-    <div class="flex flex-col sm:flex-row gap-6 items-start">
+    <div class="flex flex-col items-start gap-6 sm:flex-row">
       <!-- Upload zone / preview pane -->
       <div
         data-testid="poster-upload-zone"
         [class]="
-          'w-48 aspect-4/5 rounded-sm overflow-hidden flex-none relative cursor-pointer ' +
+          'relative aspect-4/5 w-48 flex-none cursor-pointer overflow-hidden rounded-sm ' +
           'border-2 transition-colors duration-150 ' +
           'focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2 ' +
           uploadZoneClasses()
@@ -54,7 +62,7 @@ import { BrowserPlatformService } from '@/core/services/browser-platform.service
               data-testid="poster-preview-image"
               [src]="posterPreviewUrl()!"
               alt="Selected poster preview"
-              class="w-full h-full object-cover"
+              class="h-full w-full object-cover"
             />
           } @else {
             <img
@@ -63,7 +71,7 @@ import { BrowserPlatformService } from '@/core/services/browser-platform.service
               loading="lazy"
               decoding="async"
               alt="Current Poster"
-              class="absolute inset-0 w-full h-full object-cover"
+              class="absolute inset-0 h-full w-full object-cover"
             />
           }
 
@@ -71,38 +79,41 @@ import { BrowserPlatformService } from '@/core/services/browser-platform.service
           @if (!isDragging()) {
             <div
               data-testid="poster-hover-overlay"
-              class="absolute inset-0 flex flex-col items-center justify-center gap-1.5
-                     bg-background/0 hover:bg-background/60
-                     text-foreground/0 hover:text-foreground
-                     transition-all duration-150"
+              class="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-background/0 text-foreground/0 transition-all duration-150 hover:bg-background/60 hover:text-foreground"
             >
-              <z-icon zType="upload-cloud" class="w-6 h-6" />
-              <span class="text-2xs font-mono uppercase tracking-widest">Change poster</span>
+              <z-icon zType="upload-cloud" class="h-6 w-6" />
+              <span class="font-mono text-2xs tracking-widest uppercase"
+                >Change poster</span
+              >
             </div>
           }
         } @else {
           <!-- Empty state -->
           <div
             data-testid="poster-empty"
-            class="w-full h-full flex flex-col items-center justify-center gap-2 p-4 text-center"
+            class="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-center"
           >
             <z-icon
               zType="upload-cloud"
               [class]="
-                'w-8 h-8 transition-transform duration-150 ' +
-                (isDragOver() ? 'scale-110 text-primary' : 'text-muted-foreground')
+                'h-8 w-8 transition-transform duration-150 ' +
+                (isDragOver()
+                  ? 'scale-110 text-primary'
+                  : 'text-muted-foreground')
               "
             />
             <span
               [class]="
-                'text-2xs font-mono uppercase tracking-widest leading-tight ' +
+                'font-mono text-2xs leading-tight tracking-widest uppercase ' +
                 (isDragOver() ? 'text-primary' : 'text-muted-foreground')
               "
             >
               {{ isDragOver() ? 'Release to upload' : 'Drop poster here' }}
             </span>
             @if (!isDragOver()) {
-              <span class="text-2xs text-muted-foreground/60 font-mono">or click to browse</span>
+              <span class="font-mono text-2xs text-muted-foreground/60"
+                >or click to browse</span
+              >
             }
           </div>
         }
@@ -111,7 +122,7 @@ import { BrowserPlatformService } from '@/core/services/browser-platform.service
         @if (isDragOver()) {
           <div
             data-testid="drag-over-overlay"
-            class="absolute inset-0 pointer-events-none rounded-sm border-2 border-primary"
+            class="pointer-events-none absolute inset-0 rounded-sm border-2 border-primary"
           ></div>
         }
 
@@ -119,36 +130,44 @@ import { BrowserPlatformService } from '@/core/services/browser-platform.service
         @if (uploadProgress() !== null) {
           <div
             data-testid="upload-progress-overlay"
-            class="absolute inset-0 bg-background/80 flex flex-col items-center justify-center gap-2"
+            class="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/80"
           >
-            <span class="text-xs font-mono text-foreground uppercase tracking-widest"
+            <span
+              class="font-mono text-xs tracking-widest text-foreground uppercase"
               >Uploading...</span
             >
-            <div class="w-3/4 h-1.5 bg-foreground/20 rounded-full overflow-hidden">
+            <div
+              class="h-1.5 w-3/4 overflow-hidden rounded-full bg-foreground/20"
+            >
               <div
-                class="h-full bg-primary rounded-full transition-[width] duration-200"
+                class="h-full rounded-full bg-primary transition-[width] duration-200"
                 [style.width.%]="uploadProgress()"
               ></div>
             </div>
-            <span class="text-2xs font-mono text-foreground/70">{{ uploadProgress() }}%</span>
+            <span class="font-mono text-2xs text-foreground/70"
+              >{{ uploadProgress() }}%</span
+            >
           </div>
         }
       </div>
 
       <!-- Controls -->
-      <div class="space-y-4 grow">
+      <div class="grow space-y-4">
         <div class="space-y-2">
-          <span class="block text-xs font-mono text-muted-foreground uppercase tracking-wider"
+          <span
+            class="block font-mono text-xs tracking-wider text-muted-foreground uppercase"
             >Replace Flyer</span
           >
           <div class="flex items-center gap-4">
             <label
               for="posterUpload"
-              class="px-4 py-2 bg-muted border border-border rounded-sm text-foreground/80 text-xs font-mono uppercase tracking-widest cursor-pointer hover:bg-accent/10 hover:border-primary/30 transition-colors"
+              class="cursor-pointer rounded-sm border border-border bg-muted px-4 py-2 font-mono text-xs tracking-widest text-foreground/80 uppercase transition-colors hover:border-primary/30 hover:bg-accent/10"
             >
               [ choose file ]
             </label>
-            <span class="text-xs text-muted-foreground font-mono truncate max-w-[200px]">
+            <span
+              class="max-w-[200px] truncate font-mono text-xs text-muted-foreground"
+            >
               {{ fileName() || 'no file selected' }}
             </span>
             @if (fileName()) {
@@ -156,17 +175,17 @@ import { BrowserPlatformService } from '@/core/services/browser-platform.service
                 type="button"
                 data-testid="poster-clear-btn"
                 (click)="clearFile(); $event.stopPropagation()"
-                class="text-destructive hover:text-destructive/80 text-xs uppercase font-mono"
+                class="font-mono text-xs text-destructive-text uppercase hover:text-destructive-text/80"
                 aria-label="Cancel file upload"
               >
                 [ cancel ]
               </button>
             }
           </div>
-          <p class="text-2xs text-muted-foreground font-mono italic">
+          <p class="font-mono text-2xs text-muted-foreground italic">
             Recommended: 4:5 or 1:1 ratio, max 5MB
           </p>
-          <p class="text-2xs text-muted-foreground font-mono">
+          <p class="font-mono text-2xs text-muted-foreground">
             {{ acceptedImageFormatsMessage }}
           </p>
         </div>
@@ -178,7 +197,8 @@ export class EventPosterUploaderComponent {
   private readonly browser = inject(BrowserPlatformService);
 
   protected readonly acceptedImageFileInput = ACCEPTED_IMAGE_FILE_INPUT;
-  protected readonly acceptedImageFormatsMessage = getAcceptedImageFormatsMessage();
+  protected readonly acceptedImageFormatsMessage =
+    getAcceptedImageFormatsMessage();
 
   /** Existing poster URL from the event record (shown when no local preview is selected). */
   readonly currentPosterUrl = input<string | null>(null);
@@ -202,7 +222,9 @@ export class EventPosterUploaderComponent {
   readonly isDragging = computed(() => this.isDragOver());
 
   /** Displays the local preview when available, otherwise falls back to the server URL. */
-  readonly effectivePosterUrl = computed(() => this.posterPreviewUrl() || this.currentPosterUrl());
+  readonly effectivePosterUrl = computed(
+    () => this.posterPreviewUrl() || this.currentPosterUrl(),
+  );
 
   /** CSS classes applied to the upload zone based on current state. */
   protected readonly uploadZoneClasses = computed(() => {

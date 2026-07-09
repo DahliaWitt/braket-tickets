@@ -1,5 +1,6 @@
 import {test as setup, expect} from '@playwright/test';
 import {ConvexTestingHelper} from 'convex-helpers/testing';
+import {parseSetCookieHeader, type CookieAttributes} from 'better-auth/cookies';
 import path from 'path';
 import {api} from '@convex/_generated/api';
 import {pollUntil, retryWithDelays} from './helpers/async-control';
@@ -22,6 +23,27 @@ const _SITE_URL = process.env.SITE_URL || 'http://127.0.0.1:4201';
 
 function isLocalUrl(url: string): boolean {
   return /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/|$)/i.test(url);
+}
+
+/**
+ * Maps Better Auth's lowercase `samesite` attribute onto the capitalized form
+ * Playwright's cookie API expects. `parseSetCookieHeader` normalizes the
+ * attribute to lowercase, whereas Playwright's `sameSite` field is the union
+ * `'Strict' | 'Lax' | 'None'`; anything else (absent/unknown) is omitted.
+ */
+function toPlaywrightSameSite(
+  samesite: CookieAttributes['samesite'],
+): 'Strict' | 'Lax' | 'None' | undefined {
+  switch (samesite) {
+    case 'strict':
+      return 'Strict';
+    case 'lax':
+      return 'Lax';
+    case 'none':
+      return 'None';
+    default:
+      return undefined;
+  }
 }
 
 function assertLocalConvexTargetsForE2E(): void {
@@ -354,8 +376,7 @@ async function signUpWithBetterAuth(
   if (setCookieHeaders.length === 0) {
     response.headers.forEach((value, key) => {
       if (key.toLowerCase() === 'set-cookie') {
-        const parts = value.split(/,(?=\s*(?:__Secure-)?better-auth\.)/);
-        setCookieHeaders.push(...parts);
+        setCookieHeaders.push(value);
       }
     });
   }
@@ -363,8 +384,7 @@ async function signUpWithBetterAuth(
   if (setCookieHeaders.length === 0) {
     const singleHeader = response.headers.get('set-cookie');
     if (singleHeader) {
-      const parts = singleHeader.split(/,(?=\s*(?:__Secure-)?better-auth\.)/);
-      setCookieHeaders.push(...parts);
+      setCookieHeaders.push(singleHeader);
     } else {
       throw new Error('No session cookies returned from sign up');
     }
@@ -374,34 +394,29 @@ async function signUpWithBetterAuth(
     `Global Setup: Raw Set-Cookie headers count: ${setCookieHeaders.length}`,
   );
 
-  // Parse cookies from Set-Cookie headers
-  const cookies = setCookieHeaders.map((setCookie) => {
-    const [nameValue, ...attributes] = setCookie.split(';');
-    const [cookieName, ...valueParts] = nameValue.trim().split('=');
-    const value = valueParts.join('='); // Handle values with = in them
-
-    let domain = '127.0.0.1';
-    let cookiePath = '/';
-    let sameSite: 'Strict' | 'Lax' | 'None' | undefined = undefined;
-    let httpOnly = false;
-
-    for (const attr of attributes) {
-      const [key, val] = attr.trim().split('=');
-      const keyLower = key.toLowerCase();
-      if (keyLower === 'domain' && val) {
-        domain = val.replace(/^\./, '');
-      } else if (keyLower === 'path' && val) {
-        cookiePath = val;
-      } else if (keyLower === 'samesite' && val) {
-        sameSite = val as 'Strict' | 'Lax' | 'None';
-      } else if (keyLower === 'httponly') {
-        httpOnly = true;
-      }
+  // Parse cookies via Better Auth's own parser. It splits comma-joined
+  // multi-cookie headers, tolerates '=' inside values, and normalizes every
+  // attribute (value, max-age, path, httponly, secure, samesite, domain,
+  // expires) — replacing the hand-rolled regex split + attribute loop.
+  // Later headers win for a repeated cookie name (Map.set overwrite).
+  const parsedCookies = new Map<string, CookieAttributes>();
+  for (const header of setCookieHeaders) {
+    for (const [name, attrs] of parseSetCookieHeader(header)) {
+      parsedCookies.set(name, attrs);
     }
+  }
+
+  const cookies = [...parsedCookies.entries()].map(([name, attrs]) => {
+    // Preserve prior defaults: bare 127.0.0.1 host, root path, leading-dot
+    // stripped from any Domain attribute.
+    const domain = attrs.domain ? attrs.domain.replace(/^\./, '') : '127.0.0.1';
+    const cookiePath = attrs.path ?? '/';
+    const sameSite = toPlaywrightSameSite(attrs.samesite);
+    const httpOnly = attrs.httponly === true;
 
     return {
-      name: cookieName.trim(),
-      value: value.trim(),
+      name,
+      value: attrs.value,
       domain,
       path: cookiePath,
       ...(sameSite && {sameSite}),
@@ -652,7 +667,9 @@ setup('global setup', async ({page, context, browser}) => {
   ]);
 
   // --- Set up browser auth for both users in parallel (separate contexts) ---
-  console.log('Global Setup: Setting up browser auth for both users in parallel...');
+  console.log(
+    'Global Setup: Setting up browser auth for both users in parallel...',
+  );
   await Promise.all([
     (async () => {
       await setupBrowserAuth(page, context, userAuth);

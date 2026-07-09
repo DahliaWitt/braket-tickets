@@ -2,90 +2,83 @@
 
 ## [0.1.16](https://github.com/DahliaWitt/braket-tickets/compare/v0.1.15...v0.1.16) (2026-07-08)
 
-
 ### Features
 
-* **admin:** add default community admin landing ([#95](https://github.com/DahliaWitt/braket-tickets/issues/95)) ([037e230](https://github.com/DahliaWitt/braket-tickets/commit/037e230e5748795de28c3ed0bd73fffc17464afb))
-* **admin:** edit guestlist entries in event management ([670984d](https://github.com/DahliaWitt/braket-tickets/commit/670984d35ff05ba0799cd5abe1693c22a5766e08))
-* **admin:** edit guestlist entries in event management ([#130](https://github.com/DahliaWitt/braket-tickets/issues/130)) ([8ec55a4](https://github.com/DahliaWitt/braket-tickets/commit/8ec55a4596727b5d45e35327d462c45dd58fc3c5))
-* **community-admin:** search members when assigning door staff ([#131](https://github.com/DahliaWitt/braket-tickets/issues/131)) ([9b8951b](https://github.com/DahliaWitt/braket-tickets/commit/9b8951b8f02c2e59d9629160acdad222a95155b2))
-* CSV import — guest bulk-add & external ticket-holder import ([#137](https://github.com/DahliaWitt/braket-tickets/issues/137)) ([a97d104](https://github.com/DahliaWitt/braket-tickets/commit/a97d1040aa59dd250c91ba1280fb399f3615a31f))
-* **dashboard:** fill poster letterbox with ambient poster glow ([933e10f](https://github.com/DahliaWitt/braket-tickets/commit/933e10f6740d7ce2564d17ec5ee634c423c1f6a5))
-* **dashboard:** flyer-wall poster frames — full poster, no crop, no letterbox ([#128](https://github.com/DahliaWitt/braket-tickets/issues/128)) ([734d1e6](https://github.com/DahliaWitt/braket-tickets/commit/734d1e6185c94bbcd8504683cc23d52e667b4382))
-* **dashboard:** flyer-wall poster frames sized by poster aspect ratio ([60ce341](https://github.com/DahliaWitt/braket-tickets/commit/60ce341d55ef7e185be75487ad43cdce08cb4def))
-* **dashboard:** guest send-all + idempotent ticket sends + spinner orbit fix ([#134](https://github.com/DahliaWitt/braket-tickets/issues/134)) ([fc66b54](https://github.com/DahliaWitt/braket-tickets/commit/fc66b54fe9afc64be798448b8060e5055ee3e35a))
-* **events:** optional event endDate — gating, discovery, display, payouts ([#136](https://github.com/DahliaWitt/braket-tickets/issues/136)) ([be1e028](https://github.com/DahliaWitt/braket-tickets/commit/be1e028f655508b210814c3165f34dda28f346a4))
-* **frontend:** gate help center ([#87](https://github.com/DahliaWitt/braket-tickets/issues/87)) ([#88](https://github.com/DahliaWitt/braket-tickets/issues/88)) ([910c9c6](https://github.com/DahliaWitt/braket-tickets/commit/910c9c6d2533c412a5144e0ae7e9557a5dddf61f))
-* **frontend:** gate help center shipping ([#87](https://github.com/DahliaWitt/braket-tickets/issues/87)) ([2a29f22](https://github.com/DahliaWitt/braket-tickets/commit/2a29f2253abf5ef582ac642a448ef7d05893b5b5))
-* **frontend:** upgrade Angular 21 to 22 with TypeScript 6 ([d234a80](https://github.com/DahliaWitt/braket-tickets/commit/d234a806e89af61d3fb9fbea0488328dd5cd9fd8))
-* **frontend:** upgrade to Angular 22 with TypeScript 6 ([#126](https://github.com/DahliaWitt/braket-tickets/issues/126)) ([5f8346c](https://github.com/DahliaWitt/braket-tickets/commit/5f8346c1ed56253818fd7b90f52ae011bc5d8a46))
-* **stripe:** ingest external payouts and self-recover stuck batches ([c7c44a7](https://github.com/DahliaWitt/braket-tickets/commit/c7c44a7e3951feeec16464f8e532208af3096cb9))
-
+- **admin:** add default community admin landing ([#95](https://github.com/DahliaWitt/braket-tickets/issues/95)) ([037e230](https://github.com/DahliaWitt/braket-tickets/commit/037e230e5748795de28c3ed0bd73fffc17464afb))
+- **admin:** edit guestlist entries in event management ([670984d](https://github.com/DahliaWitt/braket-tickets/commit/670984d35ff05ba0799cd5abe1693c22a5766e08))
+- **admin:** edit guestlist entries in event management ([#130](https://github.com/DahliaWitt/braket-tickets/issues/130)) ([8ec55a4](https://github.com/DahliaWitt/braket-tickets/commit/8ec55a4596727b5d45e35327d462c45dd58fc3c5))
+- **community-admin:** search members when assigning door staff ([#131](https://github.com/DahliaWitt/braket-tickets/issues/131)) ([9b8951b](https://github.com/DahliaWitt/braket-tickets/commit/9b8951b8f02c2e59d9629160acdad222a95155b2))
+- CSV import — guest bulk-add & external ticket-holder import ([#137](https://github.com/DahliaWitt/braket-tickets/issues/137)) ([a97d104](https://github.com/DahliaWitt/braket-tickets/commit/a97d1040aa59dd250c91ba1280fb399f3615a31f))
+- **dashboard:** fill poster letterbox with ambient poster glow ([933e10f](https://github.com/DahliaWitt/braket-tickets/commit/933e10f6740d7ce2564d17ec5ee634c423c1f6a5))
+- **dashboard:** flyer-wall poster frames — full poster, no crop, no letterbox ([#128](https://github.com/DahliaWitt/braket-tickets/issues/128)) ([734d1e6](https://github.com/DahliaWitt/braket-tickets/commit/734d1e6185c94bbcd8504683cc23d52e667b4382))
+- **dashboard:** flyer-wall poster frames sized by poster aspect ratio ([60ce341](https://github.com/DahliaWitt/braket-tickets/commit/60ce341d55ef7e185be75487ad43cdce08cb4def))
+- **dashboard:** guest send-all + idempotent ticket sends + spinner orbit fix ([#134](https://github.com/DahliaWitt/braket-tickets/issues/134)) ([fc66b54](https://github.com/DahliaWitt/braket-tickets/commit/fc66b54fe9afc64be798448b8060e5055ee3e35a))
+- **events:** optional event endDate — gating, discovery, display, payouts ([#136](https://github.com/DahliaWitt/braket-tickets/issues/136)) ([be1e028](https://github.com/DahliaWitt/braket-tickets/commit/be1e028f655508b210814c3165f34dda28f346a4))
+- **frontend:** gate help center ([#87](https://github.com/DahliaWitt/braket-tickets/issues/87)) ([#88](https://github.com/DahliaWitt/braket-tickets/issues/88)) ([910c9c6](https://github.com/DahliaWitt/braket-tickets/commit/910c9c6d2533c412a5144e0ae7e9557a5dddf61f))
+- **frontend:** gate help center shipping ([#87](https://github.com/DahliaWitt/braket-tickets/issues/87)) ([2a29f22](https://github.com/DahliaWitt/braket-tickets/commit/2a29f2253abf5ef582ac642a448ef7d05893b5b5))
+- **frontend:** upgrade Angular 21 to 22 with TypeScript 6 ([d234a80](https://github.com/DahliaWitt/braket-tickets/commit/d234a806e89af61d3fb9fbea0488328dd5cd9fd8))
+- **frontend:** upgrade to Angular 22 with TypeScript 6 ([#126](https://github.com/DahliaWitt/braket-tickets/issues/126)) ([5f8346c](https://github.com/DahliaWitt/braket-tickets/commit/5f8346c1ed56253818fd7b90f52ae011bc5d8a46))
+- **stripe:** ingest external payouts and self-recover stuck batches ([c7c44a7](https://github.com/DahliaWitt/braket-tickets/commit/c7c44a7e3951feeec16464f8e532208af3096cb9))
 
 ### Bug Fixes
 
-* **admin:** repair guest ticket actions ([f578552](https://github.com/DahliaWitt/braket-tickets/commit/f5785521b408aa35ef2f1f496f47e622fbcbec96))
-* **admin:** repair guest ticket actions ([#89](https://github.com/DahliaWitt/braket-tickets/issues/89)) ([9b0c0be](https://github.com/DahliaWitt/braket-tickets/commit/9b0c0be96bb42196bc459ad5c2c30ec454171715))
-* **admin:** scope magic links to selected community ([#85](https://github.com/DahliaWitt/braket-tickets/issues/85)) ([4729e62](https://github.com/DahliaWitt/braket-tickets/commit/4729e62b2e7ec223768c8f8e7cf80fe1386fc231))
-* **admin:** surface mobile event manage action ([#94](https://github.com/DahliaWitt/braket-tickets/issues/94)) ([b8dc710](https://github.com/DahliaWitt/braket-tickets/commit/b8dc710e1e7a8b66211c99fb352bf167bd84be42))
-* **broadcasts:** deliver missed event broadcasts to late ticket buyers ([#129](https://github.com/DahliaWitt/braket-tickets/issues/129)) ([64e7d50](https://github.com/DahliaWitt/braket-tickets/commit/64e7d50d7fafe0b1cab09d2550f9cf24a11ec035))
-* **ci:** flip release PR autorelease label after publishing release ([ccaf066](https://github.com/DahliaWitt/braket-tickets/commit/ccaf0661b07332cbdc25873be358a5927cfebb9d))
-* **ci:** repair dependabot config for pnpm workspace and grouping bugs ([86062cd](https://github.com/DahliaWitt/braket-tickets/commit/86062cde78b6745e786107fbb5cd4ea27fc40799))
-* **ci:** restore automatic release-please PR + warn on stale release publish ([183dc77](https://github.com/DahliaWitt/braket-tickets/commit/183dc770906d8d66558ee15ab0e682d54818baec))
-* **ci:** restore workflow-run deploy triggers ([#96](https://github.com/DahliaWitt/braket-tickets/issues/96)) ([f1e8a1d](https://github.com/DahliaWitt/braket-tickets/commit/f1e8a1dc8f0a0f568ad9cd385fb8f0ba25faddc2))
-* **ci:** wire deploy promotion workflows ([#83](https://github.com/DahliaWitt/braket-tickets/issues/83)) ([577486a](https://github.com/DahliaWitt/braket-tickets/commit/577486a4ed18a2c91c980015ebcd3a7b87971504))
-* **community:** show all community magic links to admins ([#119](https://github.com/DahliaWitt/braket-tickets/issues/119)) ([0e0eb8d](https://github.com/DahliaWitt/braket-tickets/commit/0e0eb8d95f154218b31964df7fcedfa995679dff))
-* **dashboard:** clamp measured poster ratios to supported range ([1fb0d92](https://github.com/DahliaWitt/braket-tickets/commit/1fb0d928337d66fea33137ba219f399166adade3))
-* **email:** logo survives Gmail dark-mode inversion ([#133](https://github.com/DahliaWitt/braket-tickets/issues/133)) ([0d47e95](https://github.com/DahliaWitt/braket-tickets/commit/0d47e95ab2cb41f36770986db60de54b964a5a8e))
-* **events:** harden event time handling ([#93](https://github.com/DahliaWitt/braket-tickets/issues/93)) ([1831470](https://github.com/DahliaWitt/braket-tickets/commit/183147022fb6f1762e9f09db01e6e1a2b5fd2b43))
-* **frontend:** improve initial load shell ([#91](https://github.com/DahliaWitt/braket-tickets/issues/91)) ([c8f97ae](https://github.com/DahliaWitt/braket-tickets/commit/c8f97aebd9bc878b4d6923e2150fd4a145b628bc))
-* **frontend:** refine startup loading shell ([#113](https://github.com/DahliaWitt/braket-tickets/issues/113)) ([ae662f4](https://github.com/DahliaWitt/braket-tickets/commit/ae662f4e359fe94b6679eb8305633ae6c17bafa8))
-* **frontend:** restore error-level extended diagnostics clobbered by v22 migration ([c734e35](https://github.com/DahliaWitt/braket-tickets/commit/c734e350c98dd372e83780878f9193c570eb8301))
-* **lint:** register no-sequential-db-queries plugin in root eslint config ([fa1f8f6](https://github.com/DahliaWitt/braket-tickets/commit/fa1f8f6277f32260e66d4a91b21dfde6d39d73f6))
-* **ops:** derive convex CLI version from workspace manifest in ops image ([ce68a7a](https://github.com/DahliaWitt/braket-tickets/commit/ce68a7a16d7ff46f3ad50ab0989fe1e276b00f80))
-* **stripe:** add payout trust gate and ledger-derived settlement ([28567be](https://github.com/DahliaWitt/braket-tickets/commit/28567beea1d71a4d686dfc65032fba179e64be43))
-* **stripe:** address PR review findings ([50d3072](https://github.com/DahliaWitt/braket-tickets/commit/50d307295d323013c137a0bcd093fb75f5a7c090))
-* **stripe:** avoid checkout balance transaction race ([#116](https://github.com/DahliaWitt/braket-tickets/issues/116)) ([e3c02b1](https://github.com/DahliaWitt/braket-tickets/commit/e3c02b10d53cc3095333c6cf54bf5f97d100e7e9))
-* **stripe:** batch db reads in payout ingestion and backfill scan ([55fd05c](https://github.com/DahliaWitt/braket-tickets/commit/55fd05c431dd1ea9d27b02ebb8f9fd5fc1c5e66b))
-* **stripe:** page payout discovery to completion — no account starvation ([55505bf](https://github.com/DahliaWitt/braket-tickets/commit/55505bf77386cc8621161e12a519e2ff7de1fcf1))
-* **stripe:** payout accounting hardening — trust gate, external ingestion, batch recovery ([#125](https://github.com/DahliaWitt/braket-tickets/issues/125)) ([eda69c3](https://github.com/DahliaWitt/braket-tickets/commit/eda69c3d25224cb18e820bf606b457520de45565))
-* **stripe:** record resale refund net, add payout repair tooling ([9929eae](https://github.com/DahliaWitt/braket-tickets/commit/9929eae77126517407c33302f9eb563fb7659c5f))
-* **ui:** stabilize loading spinner icons ([#92](https://github.com/DahliaWitt/braket-tickets/issues/92)) ([054d478](https://github.com/DahliaWitt/braket-tickets/commit/054d4785e15f6cbd9e7bdd11c6c79885fa207ccb))
-
+- **admin:** repair guest ticket actions ([f578552](https://github.com/DahliaWitt/braket-tickets/commit/f5785521b408aa35ef2f1f496f47e622fbcbec96))
+- **admin:** repair guest ticket actions ([#89](https://github.com/DahliaWitt/braket-tickets/issues/89)) ([9b0c0be](https://github.com/DahliaWitt/braket-tickets/commit/9b0c0be96bb42196bc459ad5c2c30ec454171715))
+- **admin:** scope magic links to selected community ([#85](https://github.com/DahliaWitt/braket-tickets/issues/85)) ([4729e62](https://github.com/DahliaWitt/braket-tickets/commit/4729e62b2e7ec223768c8f8e7cf80fe1386fc231))
+- **admin:** surface mobile event manage action ([#94](https://github.com/DahliaWitt/braket-tickets/issues/94)) ([b8dc710](https://github.com/DahliaWitt/braket-tickets/commit/b8dc710e1e7a8b66211c99fb352bf167bd84be42))
+- **broadcasts:** deliver missed event broadcasts to late ticket buyers ([#129](https://github.com/DahliaWitt/braket-tickets/issues/129)) ([64e7d50](https://github.com/DahliaWitt/braket-tickets/commit/64e7d50d7fafe0b1cab09d2550f9cf24a11ec035))
+- **ci:** flip release PR autorelease label after publishing release ([ccaf066](https://github.com/DahliaWitt/braket-tickets/commit/ccaf0661b07332cbdc25873be358a5927cfebb9d))
+- **ci:** repair dependabot config for pnpm workspace and grouping bugs ([86062cd](https://github.com/DahliaWitt/braket-tickets/commit/86062cde78b6745e786107fbb5cd4ea27fc40799))
+- **ci:** restore automatic release-please PR + warn on stale release publish ([183dc77](https://github.com/DahliaWitt/braket-tickets/commit/183dc770906d8d66558ee15ab0e682d54818baec))
+- **ci:** restore workflow-run deploy triggers ([#96](https://github.com/DahliaWitt/braket-tickets/issues/96)) ([f1e8a1d](https://github.com/DahliaWitt/braket-tickets/commit/f1e8a1dc8f0a0f568ad9cd385fb8f0ba25faddc2))
+- **ci:** wire deploy promotion workflows ([#83](https://github.com/DahliaWitt/braket-tickets/issues/83)) ([577486a](https://github.com/DahliaWitt/braket-tickets/commit/577486a4ed18a2c91c980015ebcd3a7b87971504))
+- **community:** show all community magic links to admins ([#119](https://github.com/DahliaWitt/braket-tickets/issues/119)) ([0e0eb8d](https://github.com/DahliaWitt/braket-tickets/commit/0e0eb8d95f154218b31964df7fcedfa995679dff))
+- **dashboard:** clamp measured poster ratios to supported range ([1fb0d92](https://github.com/DahliaWitt/braket-tickets/commit/1fb0d928337d66fea33137ba219f399166adade3))
+- **email:** logo survives Gmail dark-mode inversion ([#133](https://github.com/DahliaWitt/braket-tickets/issues/133)) ([0d47e95](https://github.com/DahliaWitt/braket-tickets/commit/0d47e95ab2cb41f36770986db60de54b964a5a8e))
+- **events:** harden event time handling ([#93](https://github.com/DahliaWitt/braket-tickets/issues/93)) ([1831470](https://github.com/DahliaWitt/braket-tickets/commit/183147022fb6f1762e9f09db01e6e1a2b5fd2b43))
+- **frontend:** improve initial load shell ([#91](https://github.com/DahliaWitt/braket-tickets/issues/91)) ([c8f97ae](https://github.com/DahliaWitt/braket-tickets/commit/c8f97aebd9bc878b4d6923e2150fd4a145b628bc))
+- **frontend:** refine startup loading shell ([#113](https://github.com/DahliaWitt/braket-tickets/issues/113)) ([ae662f4](https://github.com/DahliaWitt/braket-tickets/commit/ae662f4e359fe94b6679eb8305633ae6c17bafa8))
+- **frontend:** restore error-level extended diagnostics clobbered by v22 migration ([c734e35](https://github.com/DahliaWitt/braket-tickets/commit/c734e350c98dd372e83780878f9193c570eb8301))
+- **lint:** register no-sequential-db-queries plugin in root eslint config ([fa1f8f6](https://github.com/DahliaWitt/braket-tickets/commit/fa1f8f6277f32260e66d4a91b21dfde6d39d73f6))
+- **ops:** derive convex CLI version from workspace manifest in ops image ([ce68a7a](https://github.com/DahliaWitt/braket-tickets/commit/ce68a7a16d7ff46f3ad50ab0989fe1e276b00f80))
+- **stripe:** add payout trust gate and ledger-derived settlement ([28567be](https://github.com/DahliaWitt/braket-tickets/commit/28567beea1d71a4d686dfc65032fba179e64be43))
+- **stripe:** address PR review findings ([50d3072](https://github.com/DahliaWitt/braket-tickets/commit/50d307295d323013c137a0bcd093fb75f5a7c090))
+- **stripe:** avoid checkout balance transaction race ([#116](https://github.com/DahliaWitt/braket-tickets/issues/116)) ([e3c02b1](https://github.com/DahliaWitt/braket-tickets/commit/e3c02b10d53cc3095333c6cf54bf5f97d100e7e9))
+- **stripe:** batch db reads in payout ingestion and backfill scan ([55fd05c](https://github.com/DahliaWitt/braket-tickets/commit/55fd05c431dd1ea9d27b02ebb8f9fd5fc1c5e66b))
+- **stripe:** page payout discovery to completion — no account starvation ([55505bf](https://github.com/DahliaWitt/braket-tickets/commit/55505bf77386cc8621161e12a519e2ff7de1fcf1))
+- **stripe:** payout accounting hardening — trust gate, external ingestion, batch recovery ([#125](https://github.com/DahliaWitt/braket-tickets/issues/125)) ([eda69c3](https://github.com/DahliaWitt/braket-tickets/commit/eda69c3d25224cb18e820bf606b457520de45565))
+- **stripe:** record resale refund net, add payout repair tooling ([9929eae](https://github.com/DahliaWitt/braket-tickets/commit/9929eae77126517407c33302f9eb563fb7659c5f))
+- **ui:** stabilize loading spinner icons ([#92](https://github.com/DahliaWitt/braket-tickets/issues/92)) ([054d478](https://github.com/DahliaWitt/braket-tickets/commit/054d4785e15f6cbd9e7bdd11c6c79885fa207ccb))
 
 ### Performance
 
-* **frontend:** optimize buyer initial page load ([#135](https://github.com/DahliaWitt/braket-tickets/issues/135)) ([0a87cfe](https://github.com/DahliaWitt/braket-tickets/commit/0a87cfefac324ca961b514eeca6beef102933507))
-
+- **frontend:** optimize buyer initial page load ([#135](https://github.com/DahliaWitt/braket-tickets/issues/135)) ([0a87cfe](https://github.com/DahliaWitt/braket-tickets/commit/0a87cfefac324ca961b514eeca6beef102933507))
 
 ### Code Refactoring
 
-* **admin:** address guest-edit code review findings ([8f370c5](https://github.com/DahliaWitt/braket-tickets/commit/8f370c55267c028d07b28fee448b6e56a46e16df))
-* **dashboard:** address review nits in poster harness and spec ([aeb4baf](https://github.com/DahliaWitt/braket-tickets/commit/aeb4bafe79a83de04f83794d79e4b637ccd09317))
-* **frontend:** adopt v22 fetch default, drop dead diagnostic suppressions and touch special-case ([1d3a034](https://github.com/DahliaWitt/braket-tickets/commit/1d3a034b3875d6dd4909ba657408ff413d8d1591))
-* **frontend:** resolve v22 safe-navigation and markAsTouched fallout ([e05fa7e](https://github.com/DahliaWitt/braket-tickets/commit/e05fa7e7d41c553ee99c433e6c0d9cf3f4fef823))
-
+- **admin:** address guest-edit code review findings ([8f370c5](https://github.com/DahliaWitt/braket-tickets/commit/8f370c55267c028d07b28fee448b6e56a46e16df))
+- **dashboard:** address review nits in poster harness and spec ([aeb4baf](https://github.com/DahliaWitt/braket-tickets/commit/aeb4bafe79a83de04f83794d79e4b637ccd09317))
+- **frontend:** adopt v22 fetch default, drop dead diagnostic suppressions and touch special-case ([1d3a034](https://github.com/DahliaWitt/braket-tickets/commit/1d3a034b3875d6dd4909ba657408ff413d8d1591))
+- **frontend:** resolve v22 safe-navigation and markAsTouched fallout ([e05fa7e](https://github.com/DahliaWitt/braket-tickets/commit/e05fa7e7d41c553ee99c433e6c0d9cf3f4fef823))
 
 ### Documentation
 
-* align readme and ci runbook with angular 22 upgrade ([bd830d3](https://github.com/DahliaWitt/braket-tickets/commit/bd830d359f1a450876d8038299a515ce178f787b))
-* correct storybook breakage rationale and branch-protection behavior ([b08d905](https://github.com/DahliaWitt/braket-tickets/commit/b08d9053d4743893facbf5dbfada0c4f67d1c692))
-* fix storybook version fact and consolidate disable rationale into runbook ([dc31e52](https://github.com/DahliaWitt/braket-tickets/commit/dc31e52c3f13c993c4556ef1a362ff2fcac8122c))
-* **readme:** remove local badge from screenshots ([#81](https://github.com/DahliaWitt/braket-tickets/issues/81)) ([b46f67b](https://github.com/DahliaWitt/braket-tickets/commit/b46f67bd6c6b94d3611c704e71ebd24ac231a510))
-* reference .nvmrc and Dockerfile for runner Node version instead of hard-coded patch ([b30a075](https://github.com/DahliaWitt/braket-tickets/commit/b30a075eb806505c4413c982e8e66805f9980dc9))
-
+- align readme and ci runbook with angular 22 upgrade ([bd830d3](https://github.com/DahliaWitt/braket-tickets/commit/bd830d359f1a450876d8038299a515ce178f787b))
+- correct storybook breakage rationale and branch-protection behavior ([b08d905](https://github.com/DahliaWitt/braket-tickets/commit/b08d9053d4743893facbf5dbfada0c4f67d1c692))
+- fix storybook version fact and consolidate disable rationale into runbook ([dc31e52](https://github.com/DahliaWitt/braket-tickets/commit/dc31e52c3f13c993c4556ef1a362ff2fcac8122c))
+- **readme:** remove local badge from screenshots ([#81](https://github.com/DahliaWitt/braket-tickets/issues/81)) ([b46f67b](https://github.com/DahliaWitt/braket-tickets/commit/b46f67bd6c6b94d3611c704e71ebd24ac231a510))
+- reference .nvmrc and Dockerfile for runner Node version instead of hard-coded patch ([b30a075](https://github.com/DahliaWitt/braket-tickets/commit/b30a075eb806505c4413c982e8e66805f9980dc9))
 
 ### Tests
 
-* **admin:** align export download cleanup expectation ([0b53e51](https://github.com/DahliaWitt/braket-tickets/commit/0b53e514c77371e3ed2aa08109de5e40c8338d2a))
-
+- **admin:** align export download cleanup expectation ([0b53e51](https://github.com/DahliaWitt/braket-tickets/commit/0b53e514c77371e3ed2aa08109de5e40c8338d2a))
 
 ### CI/CD
 
-* fix Codecov upload on hosted runners (PyPI CLI) + make it non-blocking ([#158](https://github.com/DahliaWitt/braket-tickets/issues/158)) ([ca32d47](https://github.com/DahliaWitt/braket-tickets/commit/ca32d472c20f45552b9e0e6a04b1b87997491fbd))
-* install Node 22.22.3 on self-hosted runners for Angular 22 ([b99a80c](https://github.com/DahliaWitt/braket-tickets/commit/b99a80c7adec2fe004777d4ec7ae1d7edda9a4c9))
-* route fan-out jobs to GitHub-hosted runners and start E2E in parallel ([#149](https://github.com/DahliaWitt/braket-tickets/issues/149)) ([2eff960](https://github.com/DahliaWitt/braket-tickets/commit/2eff960c0b6c8e0aa38896ba7136523411bb1870))
-* stop Playwright browser-GC thrash on shared self-hosted E2E volume ([#159](https://github.com/DahliaWitt/braket-tickets/issues/159)) ([9a87071](https://github.com/DahliaWitt/braket-tickets/commit/9a870715fe3e393efc7cedc266dc114c23283719))
+- fix Codecov upload on hosted runners (PyPI CLI) + make it non-blocking ([#158](https://github.com/DahliaWitt/braket-tickets/issues/158)) ([ca32d47](https://github.com/DahliaWitt/braket-tickets/commit/ca32d472c20f45552b9e0e6a04b1b87997491fbd))
+- install Node 22.22.3 on self-hosted runners for Angular 22 ([b99a80c](https://github.com/DahliaWitt/braket-tickets/commit/b99a80c7adec2fe004777d4ec7ae1d7edda9a4c9))
+- route fan-out jobs to GitHub-hosted runners and start E2E in parallel ([#149](https://github.com/DahliaWitt/braket-tickets/issues/149)) ([2eff960](https://github.com/DahliaWitt/braket-tickets/commit/2eff960c0b6c8e0aa38896ba7136523411bb1870))
+- stop Playwright browser-GC thrash on shared self-hosted E2E volume ([#159](https://github.com/DahliaWitt/braket-tickets/issues/159)) ([9a87071](https://github.com/DahliaWitt/braket-tickets/commit/9a870715fe3e393efc7cedc266dc114c23283719))
 
 ## [0.1.15](https://github.com/DahliaWitt/braket-tickets/compare/v0.1.14...v0.1.15) (2026-05-16)
 

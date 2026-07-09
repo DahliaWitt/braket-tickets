@@ -72,7 +72,7 @@
 
       @if (hasBroadcastLengthErrors()) {
         <p
-          class="font-mono text-xs text-destructive"
+          class="font-mono text-xs text-destructive-text"
           data-testid="broadcast-length-error"
         >
           Subject or message exceeds allowed length.
@@ -88,14 +88,14 @@
         </p>
       } @else if (broadcastAudienceError()) {
         <p
-          class="font-mono text-xs text-destructive"
+          class="font-mono text-xs text-destructive-text"
           data-testid="broadcast-audience-error"
         >
           {{ broadcastAudienceError() }}
         </p>
       } @else if (broadcastExceedsCap()) {
         <p
-          class="font-mono text-xs text-destructive"
+          class="font-mono text-xs text-destructive-text"
           data-testid="broadcast-exceeds-cap"
         >
           {{ broadcastRecipientCount() }} recipients exceeds the 500 limit.
@@ -171,7 +171,7 @@
         <p
           class="font-mono text-xs"
           data-testid="broadcast-send-feedback"
-          [class.text-destructive]="feedback.kind === 'error'"
+          [class.text-destructive-text]="feedback.kind === 'error'"
           [class.text-success]="feedback.kind === 'success'"
           [attr.role]="feedback.kind === 'error' ? 'alert' : 'status'"
         >
@@ -195,7 +195,7 @@
 
       @if (broadcastHistoryError()) {
         <p
-          class="text-sm text-destructive"
+          class="text-sm text-destructive-text"
           data-testid="broadcast-history-error-state"
           role="alert"
         >

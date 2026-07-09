@@ -102,7 +102,7 @@ import {
             remaining
           </span>
         } @else {
-          <span class="text-destructive">sold out</span>
+          <span class="text-destructive-text">sold out</span>
         }
         @if (heldCount() > 0) {
           <span class="text-muted-foreground/60 select-none" aria-hidden="true"

@@ -79,7 +79,9 @@ export class EventEditorHarness extends ComponentHarness {
   private getFileInput = this.locatorFor('input[type="file"]');
   private getSelectFileLabel = this.locatorFor('label.cursor-pointer');
   private getFileNameText = this.locatorFor('span.truncate');
-  private getClearFileButton = this.locatorFor('button.text-destructive');
+  private getClearFileButton = this.locatorFor(
+    '[data-testid="poster-clear-btn"]',
+  );
   private getTotalTicketsInput = this.locatorFor('input#totalTickets');
   private getSlidingScaleCheckbox = this.locatorFor(
     'input#slidingScaleEnabled',
@@ -193,7 +195,9 @@ export class EventEditorHarness extends ComponentHarness {
   }
 
   async hasClearFileButton() {
-    const btn = await this.locatorForOptional('button.text-destructive')();
+    const btn = await this.locatorForOptional(
+      '[data-testid="poster-clear-btn"]',
+    )();
     return !!btn;
   }
 
@@ -252,7 +256,9 @@ export class EventEditorHarness extends ComponentHarness {
   }
 
   async getErrorText() {
-    const error = await this.locatorForOptional('p.text-destructive')();
+    const error = await this.locatorForOptional(
+      '[data-testid="event-editor-error"]',
+    )();
     return error ? error.text() : null;
   }
 

@@ -40,18 +40,18 @@ export interface InviteAdminDialogCloseResult {
   template: `
     @if (sent()) {
       <div
-        class="flex flex-col items-center justify-center space-y-6 text-center py-4"
+        class="flex flex-col items-center justify-center space-y-6 py-4 text-center"
         data-testid="invite-success-state"
         aria-live="polite"
       >
         <div
-          class="w-16 h-16 rounded-full bg-secondary/10 border border-secondary/20 flex items-center justify-center"
+          class="flex h-16 w-16 items-center justify-center rounded-full border border-secondary/20 bg-secondary/10"
         >
-          <z-icon zType="circle-check" class="text-secondary w-8 h-8" />
+          <z-icon zType="circle-check" class="h-8 w-8 text-secondary" />
         </div>
         <div class="space-y-2">
           <h3
-            class="font-display uppercase text-xl text-secondary tracking-tight"
+            class="font-display text-xl tracking-tight text-secondary uppercase"
           >
             Invite Sent
           </h3>
@@ -75,12 +75,12 @@ export interface InviteAdminDialogCloseResult {
         @if (!isHostedInDialog) {
           <div class="space-y-1">
             <h2
-              class="font-display uppercase text-2xl font-bold tracking-tight text-foreground"
+              class="font-display text-2xl font-bold tracking-tight text-foreground uppercase"
               data-testid="invite-dialog-title"
             >
               Invite Admin
             </h2>
-            <p class="text-sm text-muted-foreground font-mono">
+            <p class="font-mono text-sm text-muted-foreground">
               Create a new community and send an invite to its admin.
             </p>
           </div>
@@ -94,7 +94,7 @@ export interface InviteAdminDialogCloseResult {
           <div class="space-y-2">
             <label
               for="communityName"
-              class="text-sm mono-label text-muted-foreground"
+              class="mono-label text-sm text-muted-foreground"
             >
               Community Name
             </label>
@@ -108,7 +108,7 @@ export interface InviteAdminDialogCloseResult {
             />
             @if (isFieldInvalid(f.communityName)) {
               <p
-                class="text-xs text-destructive font-mono"
+                class="font-mono text-xs text-destructive-text"
                 data-testid="community-name-error"
               >
                 Community name is required.
@@ -119,7 +119,7 @@ export interface InviteAdminDialogCloseResult {
           <div class="space-y-2">
             <label
               for="inviteEmail"
-              class="text-sm mono-label text-muted-foreground"
+              class="mono-label text-sm text-muted-foreground"
             >
               Admin Email
             </label>
@@ -133,7 +133,7 @@ export interface InviteAdminDialogCloseResult {
             />
             @if (isFieldInvalid(f.email)) {
               <p
-                class="text-xs text-destructive font-mono"
+                class="font-mono text-xs text-destructive-text"
                 data-testid="invite-email-error"
               >
                 @if (hasError(f.email, 'required')) {
