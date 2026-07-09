@@ -27,6 +27,7 @@ Jump to:
 - [Restore missing social buttons](#restore-missing-social-buttons)
 - [Repair password reset delivery or confirmation](#repair-password-reset-delivery-or-confirmation)
 - [Fix password creation or password-change failures](#fix-password-creation-or-password-change-failures)
+- [Handle breached-password rejections or an HIBP outage](#handle-breached-password-rejections-or-an-hibp-outage)
 - [Repair email-change requests or confirmation](#repair-email-change-requests-or-confirmation)
 - [Handle blocked social sign-in](#handle-blocked-social-sign-in)
 - [Repair auth sync after sign-in](#repair-auth-sync-after-sign-in)
@@ -103,6 +104,49 @@ Use this checklist:
 4. Check Convex logs for repeated `changePassword` or `setPassword` failures if the UI keeps retrying.
 
 `changePassword` currently passes `revokeOtherSessions: true`, so session churn after a successful password change is expected.
+
+## Handle breached-password rejections or an HIBP outage
+
+New passwords on sign-up and password reset are checked against the
+HaveIBeenPwned range API through the Better Auth `haveIBeenPwned` plugin,
+registered in `backend/convex/lib/better_auth.ts` (`HIBP_CHECKED_PATHS`).
+The check uses k-anonymity: only the first five characters of the password's
+SHA-1 hash are sent to `https://api.pwnedpasswords.com/range/<prefix>`.
+
+Scope:
+
+- Checked: `/sign-up/email` and `/reset-password` (Better Auth HTTP routes,
+  which run as Convex httpActions where outbound fetch is permitted).
+- Not checked: `auth.public.changePassword` and `auth.public.setPassword`.
+  Both call Better Auth from Convex mutation context, where outbound fetch is
+  prohibited, so they are deliberately excluded from `HIBP_CHECKED_PATHS`.
+- Disabled entirely when `IS_TEST=true` (E2E and local test runs never call
+  the external API) and when the `AUTH_HIBP_DISABLED` kill switch is set.
+
+Expected rejection behavior: a breached password fails with HTTP 400 and the
+user sees the shared copy from `COMPROMISED_PASSWORD_MESSAGE` in
+`shared/constants.ts` on the signup and reset forms. This is working as
+intended — ask the user to pick a different password.
+
+Failure mode — the plugin fails closed. If the HIBP API is down or
+unreachable, sign-up and password reset fail with HTTP 500 and the message
+`Failed to check password`. Symptoms: a spike of failed sign-ups and reset
+confirmations while sign-in, password change, and social auth keep working.
+Confirm in Convex logs by filtering for `Failed to check password` on the
+auth HTTP routes.
+
+To disable the check during an HIBP outage:
+
+1. Set `AUTH_HIBP_DISABLED=true` in the affected Doppler config.
+2. Sync it to the deployment: `pnpm sync:env:dev` for the dev deployment, or
+   the production sync flow (`DOPPLER_CONFIG=prd pnpm sync:env:prod`, or the
+   GitHub Actions path) for production. `backend/scripts/sync-env.ts` lists
+   the key.
+3. No code deploy is needed; the flag is read on each auth request.
+
+To re-enable after the outage, set `AUTH_HIBP_DISABLED=false` (or any value
+other than `true`) and sync again. Only the exact string `true` disables the
+check (`isHibpPasswordCheckDisabled` in `backend/convex/lib/environment.ts`).
 
 ## Repair email-change requests or confirmation
 

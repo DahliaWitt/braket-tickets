@@ -3,7 +3,11 @@ import {injectConvex} from 'convex-angular';
 import {api} from '@convex/_generated/api';
 import {logger} from '@/utils/logger';
 import {retryWithDelays} from '@/utils/async-control';
-import {isRetryableAuthBackendError} from '@/core/utils/auth.utils';
+import {
+  isCompromisedPasswordError,
+  isRetryableAuthBackendError,
+} from '@/core/utils/auth.utils';
+import {COMPROMISED_PASSWORD_MESSAGE} from '@shared/constants';
 import {AUTH_CLIENT} from './auth-client.token';
 import {BrowserPlatformService} from './browser-platform.service';
 
@@ -62,6 +66,9 @@ export class PasswordService {
 
     if (error) {
       logger.error('Password reset confirmation failed:', error);
+      if (isCompromisedPasswordError(error)) {
+        throw new Error(COMPROMISED_PASSWORD_MESSAGE, {cause: error});
+      }
       const message = error.message || '';
       if (
         message.toLowerCase().includes('expired') ||

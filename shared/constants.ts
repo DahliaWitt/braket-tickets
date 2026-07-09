@@ -28,3 +28,12 @@ export const MAX_EVENT_DURATION_MS =
  */
 export const PAYOUT_DELAY_DAYS = 3;
 export const PAYOUT_DELAY_MS = PAYOUT_DELAY_DAYS * 24 * 60 * 60 * 1000;
+
+/**
+ * User-facing copy when a password is rejected by the HaveIBeenPwned breach
+ * check (Better Auth haveIBeenPwned plugin). Shared so the server-side
+ * plugin message and the frontend error mapping cannot drift.
+ * Lowercase per brand voice.
+ */
+export const COMPROMISED_PASSWORD_MESSAGE =
+  'this password has appeared in a known data breach, so it cannot keep your account safe. please choose a different password.';

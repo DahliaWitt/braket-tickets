@@ -180,3 +180,16 @@ export function requireSeedAuthorization(
 export function isUnitTestRuntime(): boolean {
   return process.env['VITEST'] === 'true';
 }
+
+/**
+ * Incident kill switch for the Better Auth haveIBeenPwned breach check.
+ *
+ * The plugin fails closed: if the HIBP range API is unreachable, sign-up and
+ * password reset are blocked with an INTERNAL_SERVER_ERROR. During an HIBP
+ * outage, set AUTH_HIBP_DISABLED=true on the affected Convex deployment to
+ * skip the check entirely — an env-only change, no code deploy required.
+ * See docs/runbooks/auth-incidents.md.
+ */
+export function isHibpPasswordCheckDisabled(): boolean {
+  return process.env['AUTH_HIBP_DISABLED'] === 'true';
+}

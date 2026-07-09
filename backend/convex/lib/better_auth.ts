@@ -7,6 +7,8 @@ import {convex, crossDomain} from '@convex-dev/better-auth/plugins';
 import {betterAuth, type BetterAuthPlugin} from 'better-auth';
 import {createAuthMiddleware} from 'better-auth/api';
 import {generateRandomString} from 'better-auth/crypto';
+import {haveIBeenPwned} from 'better-auth/plugins';
+import {COMPROMISED_PASSWORD_MESSAGE} from '@shared/constants';
 
 import {components, internal} from '../_generated/api';
 import type {DataModel, Doc} from '../_generated/dataModel';
@@ -32,7 +34,7 @@ import {hasConfiguredCriticalEmailCredentials} from './email_delivery_mode';
 import {resolveSiteUrl} from './site_url';
 import {normalizeEmail, sanitizeName} from './validation';
 import {logger} from './logger';
-import {isTestEnvironment} from './environment';
+import {isHibpPasswordCheckDisabled, isTestEnvironment} from './environment';
 
 type EmailSendPayload = {
   to: string;
@@ -483,6 +485,17 @@ function getAuthConfig() {
 }
 
 /**
+ * Better Auth paths guarded by the haveIBeenPwned breach check.
+ *
+ * Both are served through Better Auth HTTP routes registered as Convex
+ * httpActions (backend/convex/http.ts), so the plugin's outbound fetch to
+ * the HIBP range API is permitted. Mutation-context password flows
+ * (/change-password, /set-password) must never appear here: Convex
+ * mutations cannot fetch, and the plugin fails closed.
+ */
+export const HIBP_CHECKED_PATHS = ['/sign-up/email', '/reset-password'];
+
+/**
  * Creates a Better Auth instance with Convex integration.
  */
 export const createAuth = (ctx: GenericCtx<DataModel>) => {
@@ -598,6 +611,26 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
       }),
       ...(isE2ETest ? [] : [crossDomain({siteUrl: FRONTEND_URL})]),
       ...(isE2ETest ? [] : [verifyEmailOttPlugin()]),
+      // Breached-password check via the HIBP range API (k-anonymity; only a
+      // 5-char SHA-1 prefix leaves the deployment). Excluded in E2E/local
+      // test runs so tests never depend on an external service, and behind
+      // AUTH_HIBP_DISABLED as an incident kill switch because the plugin
+      // fails closed when the HIBP API is unreachable.
+      ...(isE2ETest || isHibpPasswordCheckDisabled()
+        ? []
+        : [
+            haveIBeenPwned({
+              // Only paths served through Better Auth HTTP routes (Convex
+              // httpActions, where outbound fetch is permitted). Deliberately
+              // NOT the plugin defaults: /change-password and /set-password
+              // run through Convex mutations (auth.public.changePassword /
+              // setPassword call auth.api.* in mutation context), where
+              // fetch is prohibited — including them would hard-fail every
+              // password change because the plugin fails closed.
+              paths: HIBP_CHECKED_PATHS,
+              customPasswordCompromisedMessage: COMPROMISED_PASSWORD_MESSAGE,
+            }),
+          ]),
     ],
   });
 };
