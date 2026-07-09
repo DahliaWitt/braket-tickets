@@ -37,6 +37,7 @@ const PAYMENT_ERROR_MESSAGES = {
     'Tickets are unavailable — the organizer\u2019s payment account onboarding is incomplete. Please contact the organizer.',
   ORDER_CONNECTED_ACCOUNT_MISMATCH:
     'Checkout configuration changed. Please close the checkout and try again.',
+  TERMS_NOT_ACCEPTED: 'Please accept the terms of service to continue',
 } satisfies Record<PaymentErrorCode, string>;
 
 function mapPaymentErrorCode(code: string): string {

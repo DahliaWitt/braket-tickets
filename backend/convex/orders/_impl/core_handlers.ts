@@ -41,6 +41,7 @@ import {
 } from '../../lib/payments/refunds';
 import {loadOrderFinancial} from '../../lib/orders/financial_reporting';
 import {ORDER_RELEASE_GRACE_MS} from '../../lib/constants';
+import {LEGAL_TERMS_VERSION} from '@shared/constants';
 
 type CheckoutFailureStage =
   | 'account_setup'
@@ -54,10 +55,16 @@ type OpenArgs = {
   totalAmount: number;
 };
 
-type OpenForGuestArgs = OpenArgs & {sessionToken: string};
+type OpenForGuestArgs = OpenArgs & {
+  sessionToken: string;
+  termsAccepted: boolean;
+};
 type OpenResaleArgs = Omit<OpenArgs, 'quantity'>;
 type ClaimFreeTicketArgs = Omit<OpenArgs, 'totalAmount'>;
-type ClaimFreeTicketAsGuestArgs = ClaimFreeTicketArgs & {sessionToken: string};
+type ClaimFreeTicketAsGuestArgs = ClaimFreeTicketArgs & {
+  sessionToken: string;
+  termsAccepted: boolean;
+};
 
 type StartCheckoutArgs = {
   orderId: Id<'ticket_orders'>;
@@ -318,6 +325,13 @@ export async function openForGuestHandler(
     throwOrderError('FORBIDDEN', 'Guest session required');
   }
 
+  if (args.termsAccepted !== true) {
+    throwOrderError(
+      'TERMS_NOT_ACCEPTED',
+      'You must accept the terms of service to continue',
+    );
+  }
+
   await rateLimiter.limit(ctx, 'orderOpenForGuest', {
     key: `${identity.guestOwnerKey}:${args.eventId}`,
     throws: true,
@@ -329,6 +343,8 @@ export async function openForGuestHandler(
     quantity: args.quantity,
     tier: args.tier,
     amountCents: args.totalAmount,
+    tosAcceptedAt: Date.now(),
+    tosVersion: LEGAL_TERMS_VERSION,
   });
 
   return toOpenOrderResult(order);
@@ -413,6 +429,13 @@ export async function claimFreeTicketAsGuestHandler(
     return {success: true, orderId: existingCompletedOrder._id};
   }
 
+  if (args.termsAccepted !== true) {
+    throwOrderError(
+      'TERMS_NOT_ACCEPTED',
+      'You must accept the terms of service to continue',
+    );
+  }
+
   await rateLimiter.limit(ctx, 'orderClaimFreeTicketForGuest', {
     key: identity.guestOwnerKey,
     throws: true,
@@ -424,6 +447,8 @@ export async function claimFreeTicketAsGuestHandler(
     quantity: args.quantity,
     tier: args.tier,
     amountCents: 0,
+    tosAcceptedAt: Date.now(),
+    tosVersion: LEGAL_TERMS_VERSION,
   });
   await completePrimaryOrderState(ctx, {
     orderId: order._id,
