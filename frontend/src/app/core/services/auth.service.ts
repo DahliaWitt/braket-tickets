@@ -24,11 +24,11 @@ import {logger} from '@/utils/logger';
 import {retryWithDelays} from '@/utils/async-control';
 import {
   extractErrorMessage,
-  isCompromisedPasswordError,
   isRetryableAuthBackendError,
 } from '@/core/utils/auth.utils';
 import {COMPROMISED_PASSWORD_MESSAGE} from '@shared/constants';
 import {
+  isCompromisedPasswordError,
   isDuplicateSignupError,
   isVerificationRequiredError,
 } from '@/core/utils/auth-error-codes';

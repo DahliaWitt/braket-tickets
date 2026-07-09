@@ -3,10 +3,8 @@ import {injectConvex} from 'convex-angular';
 import {api} from '@convex/_generated/api';
 import {logger} from '@/utils/logger';
 import {retryWithDelays} from '@/utils/async-control';
-import {
-  isCompromisedPasswordError,
-  isRetryableAuthBackendError,
-} from '@/core/utils/auth.utils';
+import {isRetryableAuthBackendError} from '@/core/utils/auth.utils';
+import {isCompromisedPasswordError} from '@/core/utils/auth-error-codes';
 import {COMPROMISED_PASSWORD_MESSAGE} from '@shared/constants';
 import {AUTH_CLIENT} from './auth-client.token';
 import {BrowserPlatformService} from './browser-platform.service';
