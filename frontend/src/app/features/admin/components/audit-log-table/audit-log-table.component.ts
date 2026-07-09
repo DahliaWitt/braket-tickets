@@ -11,6 +11,7 @@ import {type FunctionReturnType} from 'convex/server';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
 import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton.component';
+import {EmptyStateComponent} from '@ui/components/primitives/empty-state/empty-state.component';
 import {type ZardIcon} from '@ui/components/primitives/icon/icons';
 import {api} from '@convex/_generated/api';
 import {type Id} from '@convex/_generated/dataModel';
@@ -257,6 +258,7 @@ const TIME_WINDOW_OPTIONS = [
     ZardIconComponent,
     ZardSkeletonComponent,
     RouterLink,
+    EmptyStateComponent,
   ],
   styles: [
     `

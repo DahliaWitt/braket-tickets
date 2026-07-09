@@ -13,6 +13,7 @@ import {injectQuery} from 'convex-angular';
 import {type Application} from '@/features/vetting/models/application.model';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 import {ZardInputDirective} from '@ui/components/primitives/input/input.directive';
+import {EmptyStateComponent} from '@ui/components/primitives/empty-state/empty-state.component';
 import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton.component';
 import {BraDialogService} from '@ui/components/composites/dialog/dialog.service';
 import {ReasonDialogComponent} from '@/features/admin/components/reason-dialog/reason-dialog.component';
@@ -34,6 +35,7 @@ interface VettingAnswer {
     ZardButtonComponent,
     ZardInputDirective,
     ZardSkeletonComponent,
+    EmptyStateComponent,
   ],
   templateUrl: './applications-table.component.html',
 })
@@ -71,6 +73,13 @@ export class AdminApplicationsTableComponent {
   });
 
   readonly searchQuery = signal('');
+
+  readonly emptyStateMessage = computed(() => {
+    const query = this.searchQuery();
+    return query
+      ? `NO RESULTS FOR “${query}”`
+      : `NO ${this.tableType()} APPLICATIONS FOUND`;
+  });
 
   readonly filteredApplications = computed<Application[]>(() => {
     const apps = this.allApplications();

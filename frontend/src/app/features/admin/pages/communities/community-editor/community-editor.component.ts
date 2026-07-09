@@ -34,6 +34,7 @@ import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton
 import {ZardSelectComponent} from '@ui/components/primitives/select/select.component';
 import {ZardSelectItemComponent} from '@ui/components/primitives/select/select-item.component';
 import {ZardInputDirective} from '@ui/components/primitives/input/input.directive';
+import {EmptyStateComponent} from '@ui/components/primitives/empty-state/empty-state.component';
 import {type Doc, type Id} from '@convex/_generated/dataModel';
 import {api} from '@convex/_generated/api';
 import type {CommunityPublicationStatus} from '@shared/domain/community-publication-status';
@@ -89,6 +90,7 @@ const COMMUNITY_SLUG_ERROR =
     ZardSelectItemComponent,
     ZardInputDirective,
     StripeConnectEmbedComponent,
+    EmptyStateComponent,
   ],
   templateUrl: './community-editor.component.html',
 })

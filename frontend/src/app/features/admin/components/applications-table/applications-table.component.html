@@ -272,17 +272,13 @@
             </tr>
           } @empty {
             <tr data-testid="empty-state">
-              <td
-                colspan="3"
-                class="p-16 text-center font-mono tracking-widest text-muted-foreground uppercase"
-              >
-                @if (searchQuery()) {
-                  <span data-testid="no-results-empty-state"
-                    >NO RESULTS FOR &ldquo;{{ searchQuery() }}&rdquo;</span
-                  >
-                } @else {
-                  NO {{ tableType() }} APPLICATIONS FOUND
-                }
+              <td colspan="3">
+                <app-empty-state
+                  [title]="emptyStateMessage()"
+                  [attr.data-testid]="
+                    searchQuery() ? 'no-results-empty-state' : null
+                  "
+                />
               </td>
             </tr>
           }
@@ -444,18 +440,12 @@
         }
       </div>
     } @empty {
-      <div
-        data-testid="empty-state"
-        class="mono-label rounded-lg border border-dashed border-border py-12 text-center text-sm text-muted-foreground"
-      >
-        @if (searchQuery()) {
-          <span data-testid="no-results-empty-state"
-            >NO RESULTS FOR &ldquo;{{ searchQuery() }}&rdquo;</span
-          >
-        } @else {
-          NO {{ tableType() }} APPLICATIONS FOUND
-        }
-      </div>
+      <app-empty-state
+        [title]="emptyStateMessage()"
+        [attr.data-testid]="
+          searchQuery() ? 'no-results-empty-state' : 'empty-state'
+        "
+      />
     }
   </div>
 }
