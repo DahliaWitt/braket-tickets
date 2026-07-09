@@ -230,6 +230,13 @@ export async function openPrimaryOrderState(
     tier: TicketTier;
     amountCents: number;
     now?: number;
+    /**
+     * ToS assent evidence for guest purchases (BRA-455). Server-derived only
+     * — callers must never pass a client-supplied timestamp or version.
+     * Signed-in callers omit these; evidence is account-level for them.
+     */
+    tosAcceptedAt?: number;
+    tosVersion?: string;
   },
 ): Promise<Doc<'ticket_orders'>> {
   assertPositiveInteger(args.quantity, 'Quantity');
@@ -310,6 +317,10 @@ export async function openPrimaryOrderState(
     trustSource: trust.trustSource,
     trustViaOrganizerId: trust.trustViaOrganizerId,
     ...(connectedAccountId !== undefined ? {connectedAccountId} : {}),
+    ...(args.tosAcceptedAt !== undefined
+      ? {tosAcceptedAt: args.tosAcceptedAt}
+      : {}),
+    ...(args.tosVersion !== undefined ? {tosVersion: args.tosVersion} : {}),
   });
 
   await ctx.scheduler.runAfter(

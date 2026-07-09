@@ -895,6 +895,7 @@ describe('guest_sessions', () => {
           eventId,
           quantity: 1,
           tier: 'regular',
+          termsAccepted: true,
         }),
       ).rejects.toThrow('Unauthenticated');
     });

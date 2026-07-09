@@ -62,6 +62,15 @@ export class CheckoutSidebarHarness extends ComponentHarness {
   private _freeTicket = this.locatorForOptional(
     '[data-testid="checkout-free-ticket"]',
   );
+  private _termsCheckbox = this.locatorForOptional(
+    '[data-testid="checkout-terms-checkbox"]',
+  );
+  private _termsLink = this.locatorForOptional(
+    '[data-testid="checkout-terms-link"]',
+  );
+  private _privacyLink = this.locatorForOptional(
+    '[data-testid="checkout-privacy-link"]',
+  );
   private _viewTickets = this.locatorForOptional(
     '[data-testid="checkout-view-tickets"]',
   );
@@ -275,10 +284,56 @@ export class CheckoutSidebarHarness extends ComponentHarness {
     return el !== null;
   }
 
+  async isFreeTicketEnabled(): Promise<boolean> {
+    const btn = await this._freeTicket();
+    if (!btn) return false;
+    // ZardButton reflects zDisabled via the data-disabled host attribute
+    // (empty string when disabled, absent when enabled).
+    return (await btn.getAttribute('data-disabled')) === null;
+  }
+
   async claimFreeTicket(): Promise<void> {
     const btn = await this._freeTicket();
     if (!btn) throw new Error('Free ticket button not found');
     await btn.click();
+  }
+
+  // --- Guest ToS assent (BRA-455) ---
+  async isTermsCheckboxVisible(): Promise<boolean> {
+    const el = await this._termsCheckbox();
+    return el !== null;
+  }
+
+  async isTermsChecked(): Promise<boolean> {
+    const el = await this._termsCheckbox();
+    if (!el) return false;
+    return (await el.getProperty<boolean>('checked')) ?? false;
+  }
+
+  async acceptTerms(): Promise<void> {
+    const el = await this._termsCheckbox();
+    if (!el) throw new Error('Terms checkbox not found');
+    if (await this.isTermsChecked()) return;
+    await this.toggleTerms();
+  }
+
+  async toggleTerms(): Promise<void> {
+    const el = await this._termsCheckbox();
+    if (!el) throw new Error('Terms checkbox not found');
+    await el.click();
+    await el.dispatchEvent('change');
+  }
+
+  async getTermsLinkHrefs(): Promise<{
+    terms: string | null;
+    privacy: string | null;
+  }> {
+    const termsEl = await this._termsLink();
+    const privacyEl = await this._privacyLink();
+    return {
+      terms: termsEl ? await termsEl.getAttribute('href') : null,
+      privacy: privacyEl ? await privacyEl.getAttribute('href') : null,
+    };
   }
 
   // --- Post-payment ---

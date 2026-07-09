@@ -230,6 +230,7 @@ export class PaymentService {
     quantity: number,
     tier: TicketTier,
     sessionToken: string,
+    termsAccepted: boolean,
   ): Promise<{success: boolean}> {
     const convexEventId = toEventId(eventId);
     logger.info('[claimFreeTicketAsGuest] Claiming', {eventId, quantity, tier});
@@ -241,6 +242,7 @@ export class PaymentService {
           quantity,
           tier,
           sessionToken,
+          termsAccepted,
         },
       );
       logger.info('[claimFreeTicketAsGuest] Claimed', {
@@ -289,6 +291,7 @@ export class PaymentService {
     totalAmount: number,
     sessionToken: string,
     checkoutTheme: CheckoutTheme,
+    termsAccepted: boolean,
   ): Promise<CheckoutSessionResponse> {
     const convexEventId = toEventId(eventId);
     logger.group('Checkout Session (Guest)');
@@ -308,6 +311,7 @@ export class PaymentService {
           quantity,
           tier,
           totalAmount,
+          termsAccepted,
         }),
       checkoutTheme,
       sessionToken,

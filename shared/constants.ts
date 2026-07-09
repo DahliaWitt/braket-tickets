@@ -37,3 +37,24 @@ export const PAYOUT_DELAY_MS = PAYOUT_DELAY_DAYS * 24 * 60 * 60 * 1000;
  */
 export const COMPROMISED_PASSWORD_MESSAGE =
   'this password has appeared in a known data breach, so it cannot keep your account safe. please choose a different password.';
+
+/**
+ * Legal document versions stamped on guest ToS assent evidence (BRA-455).
+ *
+ * These must be bumped whenever the corresponding "last updated" / "effective
+ * date" line in the legal page changes, so a new version is recorded on every
+ * order created after the document changes. The LINT.IfChange/LINT.ThenChange
+ * pairs below couple each constant to its legal HTML page bidirectionally, so a
+ * change to either side flags the other.
+ *
+ * - LEGAL_TERMS_VERSION mirrors "Last Updated: May 11, 2026" in
+ *   frontend/src/app/features/legal/pages/terms-of-service/terms-of-service.html
+ * - LEGAL_PRIVACY_VERSION mirrors "Effective Date: May 15, 2026" in
+ *   frontend/src/app/features/legal/pages/privacy-policy/privacy-policy.html
+ */
+// LINT.IfChange
+export const LEGAL_TERMS_VERSION = '2026-05-11';
+// LINT.ThenChange('../frontend/src/app/features/legal/pages/terms-of-service/terms-of-service.html')
+// LINT.IfChange
+export const LEGAL_PRIVACY_VERSION = '2026-05-15';
+// LINT.ThenChange('../frontend/src/app/features/legal/pages/privacy-policy/privacy-policy.html')
