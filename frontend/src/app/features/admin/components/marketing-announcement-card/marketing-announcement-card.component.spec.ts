@@ -81,32 +81,36 @@ describe('MarketingAnnouncementCardComponent', () => {
     createHarness?: boolean;
   } = {}) => {
     convexMock = createMockConvexClient();
-    const queryMock = vi.fn((queryRef: unknown) => {
-      if (
-        functionReferenceMatches(
-          queryRef,
-          api.marketing.emails.getAnnouncementStatus,
-        )
-      ) {
-        return announcementStatusQuery();
-      }
-      if (
-        functionReferenceMatches(
-          queryRef,
-          api.marketing.emails.getRecipientCount,
-        )
-      ) {
-        return Promise.resolve(recipientCount);
-      }
-      if (
-        functionReferenceMatches(queryRef, api.communities.trust_links.list)
-      ) {
-        return Promise.resolve(trustLinks);
-      }
-      return Promise.resolve(null);
-    });
-    convexMock.query = queryMock;
-    convexMock.client.query = convexMock.query;
+    const onUpdate = vi.fn(
+      (queryRef: unknown, _args: unknown, onData: (value: unknown) => void) => {
+        // injectQueries only registers the subscription in its internal map
+        // AFTER convex.onUpdate returns, and its settle callback drops any
+        // emission that arrives before that. Emit asynchronously (microtask)
+        // so onData runs once the subscription is live.
+        if (
+          functionReferenceMatches(
+            queryRef,
+            api.marketing.emails.getAnnouncementStatus,
+          )
+        ) {
+          void announcementStatusQuery().then((value) => onData(value));
+        } else if (
+          functionReferenceMatches(
+            queryRef,
+            api.marketing.emails.getRecipientCount,
+          )
+        ) {
+          void Promise.resolve().then(() => onData(recipientCount));
+        } else if (
+          functionReferenceMatches(queryRef, api.communities.trust_links.list)
+        ) {
+          void Promise.resolve().then(() => onData(trustLinks));
+        }
+        return () => undefined;
+      },
+    );
+    convexMock.onUpdate = onUpdate;
+    convexMock.client.onUpdate = onUpdate;
     convexMock.mutation.mockResolvedValue('record-1');
     convexMock.client.mutation = convexMock.mutation;
 

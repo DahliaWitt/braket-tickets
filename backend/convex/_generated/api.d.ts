@@ -5042,9 +5042,7 @@ export declare const internal: {
         "internal",
         {
           auditAction?:
-            | "payment.refund"
-            | "payment.force-refund-all"
-            | "ticket.refund";
+            "payment.refund" | "payment.force-refund-all" | "ticket.refund";
           auditSource?: string;
           connectedAccountNetCents?: number;
           ledgerRefundAmountCents?: number;
@@ -5297,9 +5295,7 @@ export declare const internal: {
         {
           errorCode?: string;
           failureStage?:
-            | "account_setup"
-            | "checkout_session"
-            | "payment_intent";
+            "account_setup" | "checkout_session" | "payment_intent";
           orderId: Id<"ticket_orders">;
         },
         null

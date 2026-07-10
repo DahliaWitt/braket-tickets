@@ -279,11 +279,7 @@ export type DataModel = {
       _creationTime: number;
     };
     fieldPaths:
-      | "_creationTime"
-      | "_id"
-      | "confirmedAt"
-      | "storageId"
-      | "uploaderUserId";
+      "_creationTime" | "_id" | "confirmedAt" | "storageId" | "uploaderUserId";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
@@ -1106,10 +1102,7 @@ export type DataModel = {
       _creationTime: number;
     };
     fieldPaths:
-      | "_creationTime"
-      | "_id"
-      | "trustedOrganizerId"
-      | "trustingOrganizerId";
+      "_creationTime" | "_id" | "trustedOrganizerId" | "trustingOrganizerId";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
@@ -1139,10 +1132,7 @@ export type DataModel = {
       applicationReason?: string;
       applicationStatus?: "pending" | "approved" | "rejected" | "revoked";
       communityAccessSource?:
-        | "approved_application"
-        | "magic_link"
-        | "direct_member"
-        | "shared";
+        "approved_application" | "magic_link" | "direct_member" | "shared";
       isCommunityAdmin?: boolean;
       organizerId: Id<"organizers">;
       sortTime: number;
@@ -1447,12 +1437,7 @@ export type DataModel = {
       _creationTime: number;
     };
     fieldPaths:
-      | "_creationTime"
-      | "_id"
-      | "email"
-      | "eventId"
-      | "notifiedAt"
-      | "userId";
+      "_creationTime" | "_id" | "email" | "eventId" | "notifiedAt" | "userId";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];

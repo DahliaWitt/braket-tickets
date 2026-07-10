@@ -1,4 +1,8 @@
 import {Injectable, inject, resource, computed, signal} from '@angular/core';
+import {injectQueries} from 'convex-angular';
+import {api} from '@convex/_generated/api';
+import {type FunctionArgs} from 'convex/server';
+import {type Id} from '@convex/_generated/dataModel';
 import {AuthService} from '@/core/services/auth.service';
 import {EventsService} from '@/features/admin/services/events.service';
 import {ApplicationsService} from '@/features/vetting/services/applications.service';
@@ -6,7 +10,10 @@ import {
   CommunitiesService,
   type Community,
 } from '@/core/services/communities.service';
-import {type UpcomingEvent} from '@/core/models/event.types';
+import {
+  MAX_EVENT_IDS_PER_BATCH,
+  type UpcomingEvent,
+} from '@/core/models/event.types';
 import {logger} from '@/utils/logger';
 import {safeResourceValue} from '@/utils/resource';
 
@@ -26,7 +33,6 @@ export interface DashboardData {
   applicationReason: string | null;
   events: UpcomingEvent[];
   communities: Community[];
-  eventAvailability: Record<string, EventAvailability>;
 }
 
 /**
@@ -84,7 +90,6 @@ export class DashboardDataService {
           applicationReason: null,
           events: [],
           communities: [],
-          eventAvailability: {},
         };
       }
 
@@ -107,37 +112,14 @@ export class DashboardDataService {
         communityCount: communities.length,
       });
 
-      // Load availability for each event in a single batch request for efficiency
-      const eventAvailability: Record<string, EventAvailability> = {};
-      try {
-        const eventIds = events.map((e) => e._id);
-        if (eventIds.length > 0) {
-          const availabilities =
-            await this.eventsService.getBatchAvailability(eventIds);
-
-          for (const [eventId, availability] of Object.entries(
-            availabilities,
-          )) {
-            if (availability) {
-              eventAvailability[eventId] = {
-                isSoldOut: availability.isSoldOut,
-                userTicketCount: availability.userTicketCount ?? 0,
-                ticketSalesStatus: availability.ticketSalesStatus ?? 'active',
-                purchaseAccess: availability.purchaseAccess,
-              };
-            }
-          }
-        }
-      } catch (e) {
-        logger.error('Failed to load event availabilities', e);
-      }
+      // Event availability is subscribed to live via injectQueries below, so
+      // sold-out / sales-status changes stream in without a resource refetch.
 
       const result = {
         applicationStatus: app?.status ?? null,
         applicationReason: app?.denyReason ?? app?.reason ?? null,
         events,
         communities,
-        eventAvailability,
       };
 
       logger.timeEnd('dashboard-total');
@@ -154,8 +136,6 @@ export class DashboardDataService {
 
   /** Resource value, error-safe — returns undefined while loading or in error state. */
   readonly data = computed(() => safeResourceValue(this.dashboardResource));
-  /** Loading state signal indicating if any part of the aggregation is pending. */
-  readonly isLoading = this.dashboardResource.isLoading;
   /** Error state — true when the resource is in an error state. */
   readonly hasLoadError = computed(
     () => this.dashboardResource.error() != null,
@@ -170,7 +150,84 @@ export class DashboardDataService {
   );
   readonly events = computed(() => this.data()?.events ?? []);
   readonly communities = computed(() => this.data()?.communities ?? []);
-  readonly eventAvailability = computed(
-    () => this.data()?.eventAvailability ?? {},
+
+  /**
+   * Live availability subscriptions, one per chunk of event ids. `now` is
+   * frozen at subscribe time (Date.now() is not a signal), mirroring
+   * event-details' availabilityQuery and tickets.component: the callback
+   * re-runs only when the event id set changes, so there is no minute-timer
+   * resubscribe. Returning `{}` (not skipToken) when there are no events keeps
+   * zero active queries, so isLoading() stays false on the logged-out path.
+   *
+   * The service is providedIn:'root', so this subscription lives for the app
+   * session; it self-clears on logout because the resource returns no events,
+   * the definitions collapse to `{}`, and injectQueries drops every key.
+   */
+  private readonly availabilityQueries = injectQueries(
+    () => {
+      const eventIds = this.events().map((e) => e._id);
+      if (eventIds.length === 0) return {};
+      const now = Math.floor(Date.now() / 60000) * 60000;
+      const defs: Record<
+        string,
+        {
+          query: typeof api.events.public.getBatchAvailability;
+          args: FunctionArgs<typeof api.events.public.getBatchAvailability>;
+        }
+      > = {};
+      for (let i = 0; i < eventIds.length; i += MAX_EVENT_IDS_PER_BATCH) {
+        const chunk = eventIds.slice(
+          i,
+          i + MAX_EVENT_IDS_PER_BATCH,
+        ) as Id<'events'>[];
+        defs[`chunk_${i / MAX_EVENT_IDS_PER_BATCH}`] = {
+          query: api.events.public.getBatchAvailability,
+          args: {eventIds: chunk, now},
+        };
+      }
+      return defs;
+    },
+    {
+      onError: (_key, err) =>
+        logger.error('Failed to load event availabilities', err),
+    },
+  );
+
+  /**
+   * Merged availability map across all chunk subscriptions, applying the same
+   * defaulting the old resource loader used. An errored chunk simply drops out
+   * of the map (graceful degradation, matching the old try/catch behavior).
+   */
+  readonly eventAvailability = computed<Record<string, EventAvailability>>(
+    () => {
+      const merged: Record<string, EventAvailability> = {};
+      for (const chunk of Object.values(this.availabilityQueries.results())) {
+        if (!chunk) continue;
+        for (const [eventId, availability] of Object.entries(chunk)) {
+          if (!availability) continue;
+          merged[eventId] = {
+            isSoldOut: availability.isSoldOut,
+            userTicketCount: availability.userTicketCount ?? 0,
+            ticketSalesStatus: availability.ticketSalesStatus ?? 'active',
+            purchaseAccess: availability.purchaseAccess,
+          };
+        }
+      }
+      return merged;
+    },
+  );
+
+  /**
+   * Loading state — true while the resource loads OR while any availability
+   * chunk awaits its first result, so the dashboard skeleton stays up until
+   * availability arrives. When events()=[] the definitions collapse to `{}`
+   * (no active queries → false), and an errored chunk stops awaiting → false,
+   * so neither the logged-out path nor an availability failure hangs the
+   * skeleton.
+   */
+  readonly isLoading = computed(
+    () =>
+      this.dashboardResource.isLoading() ||
+      this.availabilityQueries.isLoading(),
   );
 }

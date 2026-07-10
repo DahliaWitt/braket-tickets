@@ -180,6 +180,10 @@ jobs:
     env:
       ALLOW_LOCALHOST_CORS: ${{ secrets.ALLOW_LOCALHOST_CORS }}
       AUTH_BASE_URL: ${{ secrets.AUTH_BASE_URL }}
+      # HIBP kill switch (docs/runbooks/auth-incidents.md). A GitHub
+      # environment variable, not a secret: incident responders flip it and
+      # re-run this job; sync-env.ts skips it when unset.
+      AUTH_HIBP_DISABLED: ${{ vars.AUTH_HIBP_DISABLED }}
       BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
       CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
       CONVEX_SITE_URL: ${{ secrets.CONVEX_SITE_URL }}

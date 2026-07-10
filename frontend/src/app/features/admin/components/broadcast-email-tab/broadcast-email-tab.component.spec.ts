@@ -28,31 +28,32 @@ describe('BroadcastEmailTabComponent', () => {
   beforeEach(async () => {
     convexMock = createMockConvexClient();
     const onUpdate = vi.fn(
-      (_query: unknown, _args: unknown, onData: (v: unknown) => void) => {
-        onData({
-          recipientCount: 2,
-          exceedsCap: false,
-          importedReachableCount: 0,
-          importedUnreachableCount: 0,
-        });
+      (queryFn: unknown, _args: unknown, onData: (v: unknown) => void) => {
+        // Emit asynchronously to mirror the real Convex client: injectQueries
+        // registers the active subscription only after onUpdate returns, and its
+        // settle guard drops any emission that arrives before that. A synchronous
+        // onData here would be silently discarded.
+        if (
+          functionReferenceMatches(queryFn, api.events.broadcasts.getAudience)
+        ) {
+          queueMicrotask(() =>
+            onData({
+              recipientCount: 2,
+              exceedsCap: false,
+              importedReachableCount: 0,
+              importedUnreachableCount: 0,
+            }),
+          );
+        } else if (
+          functionReferenceMatches(queryFn, api.events.broadcasts.listHistory)
+        ) {
+          queueMicrotask(() => onData([]));
+        }
         return () => undefined;
       },
     );
     convexMock.onUpdate = onUpdate;
     convexMock.client.onUpdate = onUpdate;
-    convexMock.query = vi.fn((queryFn: unknown) => {
-      if (
-        functionReferenceMatches(queryFn, api.events.broadcasts.getAudience)
-      ) {
-        return Promise.resolve({recipientCount: 2, exceedsCap: false});
-      }
-      if (
-        functionReferenceMatches(queryFn, api.events.broadcasts.listHistory)
-      ) {
-        return Promise.resolve([]);
-      }
-      return Promise.resolve(null);
-    });
     convexMock.mutation = vi
       .fn()
       .mockResolvedValue({success: true, recipientCount: 2});
@@ -113,6 +114,20 @@ describe('BroadcastEmailTabComponent', () => {
     expect(component.broadcastForm().invalid()).toBe(true);
   });
 
+  it('skips both queries when eventId is empty', async () => {
+    const skippedFixture = TestBed.createComponent(BroadcastEmailTabComponent);
+    const skippedComponent = skippedFixture.componentInstance;
+    skippedFixture.componentRef.setInput('eventId', '');
+    skippedFixture.componentRef.setInput('communityId', 'community-1');
+    skippedFixture.detectChanges();
+    await skippedFixture.whenStable();
+
+    expect(skippedComponent.queries.statuses().audience).toBe('skipped');
+    expect(skippedComponent.queries.statuses().history).toBe('skipped');
+    expect(skippedComponent.broadcastAudience()).toBeNull();
+    expect(skippedComponent.broadcastHistory()).toEqual([]);
+  });
+
   it('shows the include-external toggle, defaulting ON, even at zero imported', async () => {
     expect(await harness.isIncludeExternalToggleVisible()).toBe(true);
     expect(await harness.isIncludeExternalToggled()).toBe(true);
@@ -130,35 +145,31 @@ describe('BroadcastEmailTabComponent', () => {
   });
 
   it('renders reachable and unreachable imported counts', async () => {
-    const onData = (_q: unknown, _a: unknown, cb: (v: unknown) => void) => {
-      cb({
-        recipientCount: 5,
-        exceedsCap: false,
-        importedReachableCount: 3,
-        importedUnreachableCount: 2,
-      });
-      return () => undefined;
-    };
-    convexMock.onUpdate = onData as never;
-    convexMock.client.onUpdate = onData as never;
-    convexMock.query = vi.fn((queryFn: unknown) => {
-      if (
-        functionReferenceMatches(queryFn, api.events.broadcasts.getAudience)
-      ) {
-        return Promise.resolve({
-          recipientCount: 5,
-          exceedsCap: false,
-          importedReachableCount: 3,
-          importedUnreachableCount: 2,
-        });
-      }
-      if (
-        functionReferenceMatches(queryFn, api.events.broadcasts.listHistory)
-      ) {
-        return Promise.resolve([]);
-      }
-      return Promise.resolve(null);
-    });
+    // Route by function reference and emit on a microtask — same contract as
+    // the beforeEach mock (injectQueries drops synchronous emissions).
+    const onUpdate = vi.fn(
+      (queryFn: unknown, _args: unknown, cb: (v: unknown) => void) => {
+        if (
+          functionReferenceMatches(queryFn, api.events.broadcasts.getAudience)
+        ) {
+          queueMicrotask(() =>
+            cb({
+              recipientCount: 5,
+              exceedsCap: false,
+              importedReachableCount: 3,
+              importedUnreachableCount: 2,
+            }),
+          );
+        } else if (
+          functionReferenceMatches(queryFn, api.events.broadcasts.listHistory)
+        ) {
+          queueMicrotask(() => cb([]));
+        }
+        return () => undefined;
+      },
+    );
+    convexMock.onUpdate = onUpdate;
+    convexMock.client.onUpdate = onUpdate;
 
     fixture = TestBed.createComponent(BroadcastEmailTabComponent);
     fixture.componentRef.setInput('eventId', 'event-1');

@@ -26,7 +26,9 @@ import {
   extractErrorMessage,
   isRetryableAuthBackendError,
 } from '@/core/utils/auth.utils';
+import {COMPROMISED_PASSWORD_MESSAGE} from '@shared/constants';
 import {
+  isCompromisedPasswordError,
   isDuplicateSignupError,
   isVerificationRequiredError,
 } from '@/core/utils/auth-error-codes';
@@ -908,8 +910,16 @@ export class AuthService implements ConvexAuthProvider {
           return;
         }
 
-        logger.error('Signup failed', error);
-        registrationError = new Error('Registration failed', {cause: error});
+        if (isCompromisedPasswordError(error)) {
+          // haveIBeenPwned plugin rejected the password. Safe to surface —
+          // reveals nothing about the account, only about the password.
+          registrationError = new Error(COMPROMISED_PASSWORD_MESSAGE, {
+            cause: error,
+          });
+        } else {
+          logger.error('Signup failed', error);
+          registrationError = new Error('Registration failed', {cause: error});
+        }
       } else {
         // If signup returned session data and user is verified, sync to app
         // With requireEmailVerification: true, user won't be verified yet
@@ -950,8 +960,14 @@ export class AuthService implements ConvexAuthProvider {
         return;
       }
 
-      logger.error('Signup failed', err);
-      registrationError = new Error('Registration failed', {cause: err});
+      if (isCompromisedPasswordError(err)) {
+        registrationError = new Error(COMPROMISED_PASSWORD_MESSAGE, {
+          cause: err,
+        });
+      } else {
+        logger.error('Signup failed', err);
+        registrationError = new Error('Registration failed', {cause: err});
+      }
     }
 
     if (registrationError) {

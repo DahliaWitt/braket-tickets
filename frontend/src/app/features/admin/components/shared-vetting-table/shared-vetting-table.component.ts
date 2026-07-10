@@ -9,8 +9,9 @@ import {
   type TemplateRef,
   ViewContainerRef,
   viewChild,
+  type Signal,
 } from '@angular/core';
-import {injectQuery, skipToken} from 'convex-angular';
+import {injectQueries, skipToken} from 'convex-angular';
 import {
   VettingTrustLinksService,
   type TrustLink,
@@ -22,6 +23,7 @@ import {BraDialogService} from '@ui/components/composites/dialog/dialog.service'
 import {toast} from 'ngx-sonner';
 import {api} from '@convex/_generated/api';
 import {type Id} from '@convex/_generated/dataModel';
+import {logger} from '@/utils/logger';
 
 type OutgoingTrustLink = TrustLink & {direction: 'outgoing'};
 
@@ -331,12 +333,48 @@ export class SharedVettingTableComponent {
     TemplateRef<unknown>
   >('createTrustLinkContent');
 
-  /** All communities — needed for both the selector dropdown and the create dialog */
-  private readonly communitiesQuery = injectQuery(
-    api.communities.list.list,
-    () => ({}),
+  /**
+   * All three subscriptions in one place:
+   *  - communities: unconditional list for the selector + create dialog
+   *  - outgoing/incoming: keyed on the effective organizer, skipped until one exists
+   */
+  private readonly queries = injectQueries(
+    () => {
+      const orgId = this.effectiveOrganizerId();
+      return {
+        communities: {query: api.communities.list.list, args: {}},
+        outgoing: orgId
+          ? {
+              query: api.communities.trust_links.list,
+              args: {organizerId: orgId, direction: 'outgoing' as const},
+            }
+          : skipToken,
+        incoming: orgId
+          ? {
+              query: api.communities.trust_links.list,
+              args: {organizerId: orgId, direction: 'incoming' as const},
+            }
+          : skipToken,
+      };
+    },
+    {
+      onError: (key, error) => {
+        if (key === 'communities') {
+          logger.error('Failed to load communities', error);
+          toast.error('Failed to load communities');
+        } else if (key === 'outgoing') {
+          logger.error('Failed to load outgoing trust links', error);
+          toast.error('Failed to load outgoing trust links');
+        } else {
+          logger.error('Failed to load incoming trust links', error);
+          toast.error('Failed to load incoming trust links');
+        }
+      },
+    },
   );
-  readonly allOrganizers = computed(() => this.communitiesQuery.data() ?? []);
+  readonly allOrganizers = computed(
+    () => this.queries.results().communities ?? [],
+  );
 
   /** Currently selected community, auto-selects first when list loads.
    *  Uses source/computation form so the selection only resets when the
@@ -357,10 +395,14 @@ export class SharedVettingTableComponent {
     },
   });
 
-  /** The active organizer: external input (community admin) takes priority over internal dropdown */
-  readonly effectiveOrganizerId = computed<Id<'organizers'> | null>(() => {
-    return this.organizerId() ?? this.selectedOrganizerId();
-  });
+  /** The active organizer: external input (community admin) takes priority over internal dropdown.
+   *  Explicit property annotation breaks the type-inference cycle
+   *  queries → effectiveOrganizerId → selectedOrganizerId → allOrganizers → queries. */
+  readonly effectiveOrganizerId: Signal<Id<'organizers'> | null> = computed(
+    () => {
+      return this.organizerId() ?? this.selectedOrganizerId();
+    },
+  );
 
   /** Handle community selection change from the dropdown */
   onOrganizerChange(event: Event): void {
@@ -374,31 +416,21 @@ export class SharedVettingTableComponent {
     this.selectedOrgForTrust.set(value as Id<'organizers'>);
   }
 
-  /** Outgoing trust links query - links created BY the selected organizer */
-  private readonly outgoingQuery = injectQuery(
-    api.communities.trust_links.list,
-    () => {
-      const orgId = this.effectiveOrganizerId();
-      if (!orgId) return skipToken;
-      return {organizerId: orgId, direction: 'outgoing' as const};
-    },
-  );
+  /** Outgoing trust links - links created BY the selected organizer */
   readonly outgoingLinks = computed(
-    () => (this.outgoingQuery.data() ?? []) as OutgoingTrustLink[],
+    () => (this.queries.results().outgoing ?? []) as OutgoingTrustLink[],
   );
-  outgoingLoading = this.outgoingQuery.isLoading;
+  readonly outgoingLoading = computed(
+    () => this.queries.statuses().outgoing === 'pending',
+  );
 
-  /** Incoming trust links query - links trusting THIS organizer */
-  private readonly incomingQuery = injectQuery(
-    api.communities.trust_links.list,
-    () => {
-      const orgId = this.effectiveOrganizerId();
-      if (!orgId) return skipToken;
-      return {organizerId: orgId, direction: 'incoming' as const};
-    },
+  /** Incoming trust links - links trusting THIS organizer */
+  readonly incomingLinks = computed(
+    () => this.queries.results().incoming ?? [],
   );
-  readonly incomingLinks = computed(() => this.incomingQuery.data() ?? []);
-  incomingLoading = this.incomingQuery.isLoading;
+  readonly incomingLoading = computed(
+    () => this.queries.statuses().incoming === 'pending',
+  );
 
   /** Organizers available for creating new trust links (excludes self + already linked) */
   readonly availableOrganizers = computed(() => {

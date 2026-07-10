@@ -2,7 +2,7 @@ import {computed, inject, Injectable, resource} from '@angular/core';
 import {PublicCommunitiesService} from '@/core/services/public-communities.service';
 import {safeResourceValue} from '@/utils/resource';
 import {api} from '@convex/_generated/api';
-import {injectQuery} from 'convex-angular';
+import {injectQueries} from 'convex-angular';
 import type {FunctionReturnType} from 'convex/server';
 
 export type DashboardApproval = FunctionReturnType<
@@ -16,25 +16,32 @@ export type DashboardApplication = FunctionReturnType<
 export class DashboardPageDataService {
   private readonly publicCommunitiesService = inject(PublicCommunitiesService);
 
-  // Community approvals — realtime subscription for dashboard status links.
-  private readonly approvalsQuery = injectQuery(
-    api.communities.trust_links.getUserApprovals,
-    () => ({}),
-  );
-  readonly approvals = computed<DashboardApproval[]>(
-    () => this.approvalsQuery.data() ?? [],
-  );
-  readonly approvalsLoading = this.approvalsQuery.isLoading;
+  // Community approvals + all user applications — one realtime multi-query
+  // subscription for dashboard status links and pending/rejected state.
+  private readonly relationshipQueries = injectQueries(() => ({
+    approvals: {
+      query: api.communities.trust_links.getUserApprovals,
+      args: {},
+    },
+    myApplications: {
+      query: api.communities.applications.getMyApplications,
+      args: {},
+    },
+  }));
 
-  // All user applications — realtime subscription for pending/rejected status.
-  private readonly myApplicationsQuery = injectQuery(
-    api.communities.applications.getMyApplications,
-    () => ({}),
+  readonly approvals = computed<DashboardApproval[]>(
+    () => this.relationshipQueries.results().approvals ?? [],
   );
+  readonly approvalsLoading = computed(
+    () => this.relationshipQueries.statuses().approvals === 'pending',
+  );
+
   readonly myApplications = computed<DashboardApplication[]>(
-    () => this.myApplicationsQuery.data() ?? [],
+    () => this.relationshipQueries.results().myApplications ?? [],
   );
-  readonly myApplicationsLoading = this.myApplicationsQuery.isLoading;
+  readonly myApplicationsLoading = computed(
+    () => this.relationshipQueries.statuses().myApplications === 'pending',
+  );
 
   private readonly publicCommunitiesResource = resource({
     params: () => ({}),
