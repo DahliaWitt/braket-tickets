@@ -576,13 +576,13 @@ describe('DashboardComponent', () => {
         _id: '10' as Id<'events'>,
         title: 'Later Event',
         date: '2025-06-01',
-      } as never;
+      };
       const earlierEvent: UpcomingEvent = {
         ...mockEvent,
         _id: '11' as Id<'events'>,
         title: 'Earlier Event',
         date: '2024-01-01',
-      } as never;
+      };
       setup({
         approvals: mockApprovals,
         events: [laterEvent, earlierEvent],
@@ -599,7 +599,7 @@ describe('DashboardComponent', () => {
       const posterEvent: UpcomingEvent = {
         ...mockEvent,
         posterUrl: 'https://example.com/poster.jpg',
-      } as never;
+      };
       setup({
         approvals: mockApprovals,
         events: [posterEvent],
@@ -616,7 +616,7 @@ describe('DashboardComponent', () => {
       const posterEvent: UpcomingEvent = {
         ...mockEvent,
         posterUrl: 'https://example.com/poster.jpg',
-      } as never;
+      };
       setup({
         approvals: mockApprovals,
         events: [posterEvent],
@@ -642,7 +642,7 @@ describe('DashboardComponent', () => {
       const posterEvent: UpcomingEvent = {
         ...mockEvent,
         posterUrl: 'https://example.com/poster.jpg',
-      } as never;
+      };
       setup({
         approvals: mockApprovals,
         events: [posterEvent],
@@ -668,7 +668,7 @@ describe('DashboardComponent', () => {
       const posterEvent: UpcomingEvent = {
         ...mockEvent,
         posterUrl: 'https://example.com/poster.jpg',
-      } as never;
+      };
       setup({
         approvals: mockApprovals,
         events: [posterEvent],
@@ -881,7 +881,7 @@ describe('DashboardComponent', () => {
         title: 'Approved Later',
         date: '2024-06-01',
         organizerId: ORG_ID_A,
-      } as never;
+      };
       const openAccessEvent: UpcomingEvent = {
         ...mockEvent,
         _id: 'e-open' as Id<'events'>,
@@ -921,13 +921,13 @@ describe('DashboardComponent', () => {
         _id: 'e-early' as Id<'events'>,
         title: 'Earlier',
         date: '2024-01-01',
-      } as never;
+      };
       const later: UpcomingEvent = {
         ...mockEvent,
         _id: 'e-late' as Id<'events'>,
         title: 'Later',
         date: '2024-06-01',
-      } as never;
+      };
       setup({
         approvals: mockApprovals,
         events: [later, earlier],
@@ -1002,7 +1002,7 @@ describe('DashboardComponent', () => {
       const viewableFromApprovedOrg: UpcomingEvent = {
         ...mockViewableEvent,
         organizerId: ORG_ID_B,
-      } as never;
+      };
       setup({
         approvals: [],
         events: [viewableFromApprovedOrg],

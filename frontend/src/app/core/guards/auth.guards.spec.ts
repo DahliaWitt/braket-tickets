@@ -7,7 +7,6 @@ import {
   UrlTree,
   type ActivatedRouteSnapshot,
   type CanMatchFn,
-  type Route,
   type RouterStateSnapshot,
   type UrlSegment,
 } from '@angular/router';
@@ -60,7 +59,7 @@ function configure(peek: CachedSessionPeek, settled = false) {
 // them, so empty stubs suffice. Typed via Parameters to stay lockstep with the
 // Angular signature.
 const matchArgs: Parameters<CanMatchFn> = [
-  {} as Route,
+  {},
   [] as UrlSegment[],
   {} as Parameters<CanMatchFn>[2],
 ];

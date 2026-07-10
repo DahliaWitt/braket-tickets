@@ -147,7 +147,7 @@ export class EventDetailsComponent {
     () => {
       const evt = this.event();
       const user = this.auth.user();
-      const organizerId = evt?.organizerId as Id<'organizers'> | undefined;
+      const organizerId = evt?.organizerId;
 
       if (!evt || !user?._id || !organizerId) {
         return null;
@@ -197,7 +197,7 @@ export class EventDetailsComponent {
       if (event?.visibility === EVENT_VISIBILITY.PUBLIC) return skipToken;
       if (!user?._id || !event) return skipToken;
       return {
-        organizerId: event.organizerId as Id<'organizers'>,
+        organizerId: event.organizerId,
       };
     },
   );

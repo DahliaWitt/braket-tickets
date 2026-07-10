@@ -82,7 +82,7 @@ describe('DashboardDataService', () => {
       posterUrl: null,
       visibility: 'public',
       ...overrides,
-    }) as UpcomingEvent;
+    });
 
   const mockEvents: UpcomingEvent[] = [
     makeUpcomingEvent({

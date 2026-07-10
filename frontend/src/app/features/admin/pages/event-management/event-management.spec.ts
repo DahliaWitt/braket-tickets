@@ -270,9 +270,9 @@ describe('EventManagement', () => {
 
   beforeEach(async () => {
     vi.restoreAllMocks();
-    vi.spyOn(toast, 'success').mockImplementation(() => '' as string & number);
-    vi.spyOn(toast, 'error').mockImplementation(() => '' as string & number);
-    vi.spyOn(toast, 'info').mockImplementation(() => '' as string & number);
+    vi.spyOn(toast, 'success').mockImplementation(() => '');
+    vi.spyOn(toast, 'error').mockImplementation(() => '');
+    vi.spyOn(toast, 'info').mockImplementation(() => '');
 
     marketingAnnouncementStatus = null;
     marketingRecipientCount = {

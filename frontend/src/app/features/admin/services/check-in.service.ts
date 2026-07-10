@@ -94,7 +94,7 @@ export class CheckInService {
     try {
       const res = await (ticketId
         ? this.convex.mutation(api.events.check_in.checkIn, {
-            ticketId: ticketId as Id<'tickets'>,
+            ticketId: ticketId,
             ...(eventId ? {eventId} : {}),
           })
         : this.convex.mutation(api.events.check_in.checkIn, {
@@ -129,7 +129,7 @@ export class CheckInService {
 
     try {
       const res = await this.convex.mutation(api.events.check_in.checkIn, {
-        guestId: guestId as Id<'guests'>,
+        guestId: guestId,
       });
       this.lastResult.set(res);
 

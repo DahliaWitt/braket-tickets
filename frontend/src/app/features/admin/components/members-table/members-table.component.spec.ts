@@ -75,7 +75,7 @@ describe('AdminMembersTableComponent', () => {
       name: 'testuser',
       email: 'test@example.com',
       _creationTime: 1234567890,
-    } as Doc<'users'>,
+    },
     application: {
       _id: 'a1' as Id<'applications'>,
       status: 'pending',
@@ -90,7 +90,7 @@ describe('AdminMembersTableComponent', () => {
       name: 'approved-member',
       email: 'trust@example.com',
       _creationTime: 1234567890,
-    } as Doc<'users'>,
+    },
     application: {
       _id: 'a2' as Id<'applications'>,
       status: 'approved',
@@ -106,7 +106,7 @@ describe('AdminMembersTableComponent', () => {
       name: 'rejected-user',
       email: 'rejected@example.com',
       _creationTime: 1234567890,
-    } as Doc<'users'>,
+    },
     application: {
       _id: 'a4' as Id<'applications'>,
       status: 'rejected',
@@ -120,10 +120,10 @@ describe('AdminMembersTableComponent', () => {
     vi.clearAllMocks();
     toastSuccessSpy = vi
       .spyOn(toast, 'success')
-      .mockImplementation(() => '' as string & number);
+      .mockImplementation(() => '');
     toastErrorSpy = vi
       .spyOn(toast, 'error')
-      .mockImplementation(() => '' as string & number);
+      .mockImplementation(() => '');
 
     mockMembersService = {
       revokeMembership: vi.fn().mockResolvedValue({}),
@@ -138,9 +138,9 @@ describe('AdminMembersTableComponent', () => {
     const userSignal: WritableSignal<Doc<'users'> | undefined> = signal({
       _id: 'admin1' as Id<'users'>,
       _creationTime: 1234567890,
-    } as Doc<'users'>);
+    });
     mockAuthService = {
-      user: userSignal as Signal<Doc<'users'> | undefined>,
+      user: userSignal,
       currentUser: computed(() => userSignal() ?? null),
     };
 
@@ -237,7 +237,7 @@ describe('AdminMembersTableComponent', () => {
         name: 'shared-user',
         email: 'shared@example.com',
         _creationTime: 1234567890,
-      } as Doc<'users'>,
+      },
       application: null,
       communityAccessSource: 'shared',
       trustedViaOrganizerName: 'Partner Community',
@@ -312,7 +312,7 @@ describe('AdminMembersTableComponent', () => {
         name: 'magic-user',
         email: 'magic@example.com',
         _creationTime: 1234567890,
-      } as Doc<'users'>,
+      },
       application: null,
       communityAccessSource: 'magic_link',
     };
@@ -371,7 +371,7 @@ describe('AdminMembersTableComponent', () => {
         name: 'direct-user',
         email: 'direct@example.com',
         _creationTime: 1234567890,
-      } as Doc<'users'>,
+      },
       application: null,
       communityAccessSource: 'direct_member',
     };
@@ -381,7 +381,7 @@ describe('AdminMembersTableComponent', () => {
   });
 
   it('should pass organizerId to query when input is set', async () => {
-    fixture.componentRef.setInput('organizerId', 'org42' as unknown);
+    fixture.componentRef.setInput('organizerId', 'org42');
     fixture.detectChanges();
     await fixture.whenStable();
 
@@ -533,7 +533,7 @@ describe('AdminMembersTableComponent', () => {
   });
 
   it('should pass organizerId to revokeMembership when member has no application', async () => {
-    fixture.componentRef.setInput('organizerId', 'org1' as unknown);
+    fixture.componentRef.setInput('organizerId', 'org1');
     fixture.detectChanges();
 
     const memberNoApp: MemberWithApplication = {
@@ -542,7 +542,7 @@ describe('AdminMembersTableComponent', () => {
         name: 'noapp',
         email: 'no@app.com',
         _creationTime: 0,
-      } as Doc<'users'>,
+      },
       application: null,
       communityAccessSource: 'direct_member',
     };
@@ -788,7 +788,7 @@ describe('AdminMembersTableComponent', () => {
           name: 'current-admin',
           email: 'admin@example.com',
           _creationTime: 1234567890,
-        } as Doc<'users'>,
+        },
         application: {
           _id: 'a99' as Id<'applications'>,
           status: 'approved',
@@ -804,7 +804,7 @@ describe('AdminMembersTableComponent', () => {
           name: 'other-member',
           email: 'other@example.com',
           _creationTime: 1234567890,
-        } as Doc<'users'>,
+        },
         application: null,
         communityAccessSource: 'magic_link',
       };
@@ -867,7 +867,7 @@ describe('AdminMembersTableComponent', () => {
           _id: 'u5' as Id<'users'>,
           name: 'no-email-user',
           _creationTime: 1234567890,
-        } as Doc<'users'>,
+        },
         application: null,
         communityAccessSource: 'magic_link',
       };
@@ -937,7 +937,7 @@ describe('AdminMembersTableComponent', () => {
         name: 'Alice Wonderland',
         email: 'alice@example.com',
         _creationTime: 1234567890,
-      } as Doc<'users'>,
+      },
       application: null,
       communityAccessSource: 'approved_application',
     };
@@ -948,7 +948,7 @@ describe('AdminMembersTableComponent', () => {
         name: 'Bob Builder',
         email: 'bob@builder.org',
         _creationTime: 1234567890,
-      } as Doc<'users'>,
+      },
       application: null,
       communityAccessSource: 'direct_member',
     };
@@ -959,7 +959,7 @@ describe('AdminMembersTableComponent', () => {
         name: 'Charlie Shared',
         email: 'charlie@shared.com',
         _creationTime: 1234567890,
-      } as Doc<'users'>,
+      },
       application: null,
       communityAccessSource: 'shared',
       trustedViaOrganizerName: 'Partner Org',
