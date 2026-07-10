@@ -343,6 +343,7 @@ describe('PaymentService', () => {
           eventId: 'event_1',
           quantity: 1,
           tier: 'regular',
+          idempotencyKey: expect.any(String),
         },
       );
       expect(result.success).toBe(true);
@@ -370,6 +371,7 @@ describe('PaymentService', () => {
           tier: 'notaflof',
           sessionToken: 'guest_token',
           termsAccepted: true,
+          idempotencyKey: expect.any(String),
         },
       );
       expect(result.success).toBe(true);

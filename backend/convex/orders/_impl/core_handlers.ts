@@ -60,7 +60,9 @@ type OpenForGuestArgs = OpenArgs & {
   termsAccepted: boolean;
 };
 type OpenResaleArgs = Omit<OpenArgs, 'quantity'>;
-type ClaimFreeTicketArgs = Omit<OpenArgs, 'totalAmount'>;
+type ClaimFreeTicketArgs = Omit<OpenArgs, 'totalAmount'> & {
+  idempotencyKey: string;
+};
 type ClaimFreeTicketAsGuestArgs = ClaimFreeTicketArgs & {
   sessionToken: string;
   termsAccepted: boolean;
@@ -216,45 +218,46 @@ function toCheckoutStatus(order: {
   };
 }
 
-async function findCompletedFreeOrderForIdentity(
+/**
+ * Look up a prior free-ticket claim that carries this exact idempotency key.
+ *
+ * The key is minted per claim attempt on the frontend and reused verbatim
+ * across the Convex client's automatic mutation retries, so a match here is a
+ * genuine retry of an already-completed claim — replay it instead of issuing a
+ * second ticket. A deliberate new claim arrives with a fresh key, finds no
+ * match, and proceeds to create a new order (subject to `assertTicketLimit`).
+ *
+ * Scoped to the caller (userId / guestSessionId) as defense in depth; the key
+ * itself is globally unique, but scoping guarantees one owner can never replay
+ * another's order even in the astronomically unlikely event of a collision.
+ */
+async function findClaimByIdempotencyKey(
   ctx: MutationCtx,
   identity:
     | {type: 'user'; userId: Id<'users'>}
     | {type: 'guest'; guestSessionId: Id<'guest_sessions'>},
-  args: ClaimFreeTicketArgs,
+  idempotencyKey: string,
 ): Promise<Doc<'ticket_orders'> | null> {
-  const query =
+  const existing =
     identity.type === 'user'
-      ? ctx.db
+      ? await ctx.db
           .query('ticket_orders')
-          .withIndex(
-            'by_owner_user_event_state_kind_amountCents_tier_quantity',
-            (q) =>
-              q
-                .eq('userId', identity.userId)
-                .eq('eventId', args.eventId)
-                .eq('state', 'completed')
-                .eq('kind', 'primary')
-                .eq('amountCents', 0)
-                .eq('tier', args.tier)
-                .eq('quantity', args.quantity),
+          .withIndex('by_owner_user_idempotencyKey', (q) =>
+            q
+              .eq('userId', identity.userId)
+              .eq('idempotencyKey', idempotencyKey),
           )
-      : ctx.db
+          .first()
+      : await ctx.db
           .query('ticket_orders')
-          .withIndex(
-            'by_owner_guest_event_state_kind_amountCents_tier_quantity',
-            (q) =>
-              q
-                .eq('guestSessionId', identity.guestSessionId)
-                .eq('eventId', args.eventId)
-                .eq('state', 'completed')
-                .eq('kind', 'primary')
-                .eq('amountCents', 0)
-                .eq('tier', args.tier)
-                .eq('quantity', args.quantity),
-          );
+          .withIndex('by_owner_guest_idempotencyKey', (q) =>
+            q
+              .eq('guestSessionId', identity.guestSessionId)
+              .eq('idempotencyKey', idempotencyKey),
+          )
+          .first();
 
-  return await query.first();
+  return existing;
 }
 
 async function resolveOrderCallerForQuery(
@@ -383,13 +386,13 @@ export async function claimFreeTicketHandler(
     throwOrderError('FORBIDDEN', 'Authentication is required');
   }
 
-  const existingCompletedOrder = await findCompletedFreeOrderForIdentity(
+  const existingClaim = await findClaimByIdempotencyKey(
     ctx,
     identity,
-    args,
+    args.idempotencyKey,
   );
-  if (existingCompletedOrder) {
-    return {success: true, orderId: existingCompletedOrder._id};
+  if (existingClaim) {
+    return {success: true, orderId: existingClaim._id};
   }
 
   await rateLimiter.limit(ctx, 'orderClaimFreeTicket', {
@@ -403,6 +406,7 @@ export async function claimFreeTicketHandler(
     quantity: args.quantity,
     tier: args.tier,
     amountCents: 0,
+    idempotencyKey: args.idempotencyKey,
   });
   await completePrimaryOrderState(ctx, {
     orderId: order._id,
@@ -420,13 +424,13 @@ export async function claimFreeTicketAsGuestHandler(
     throwOrderError('FORBIDDEN', 'Guest session required');
   }
 
-  const existingCompletedOrder = await findCompletedFreeOrderForIdentity(
+  const existingClaim = await findClaimByIdempotencyKey(
     ctx,
     identity,
-    args,
+    args.idempotencyKey,
   );
-  if (existingCompletedOrder) {
-    return {success: true, orderId: existingCompletedOrder._id};
+  if (existingClaim) {
+    return {success: true, orderId: existingClaim._id};
   }
 
   if (args.termsAccepted !== true) {
@@ -449,6 +453,7 @@ export async function claimFreeTicketAsGuestHandler(
     amountCents: 0,
     tosAcceptedAt: Date.now(),
     tosVersion: LEGAL_TERMS_VERSION,
+    idempotencyKey: args.idempotencyKey,
   });
   await completePrimaryOrderState(ctx, {
     orderId: order._id,

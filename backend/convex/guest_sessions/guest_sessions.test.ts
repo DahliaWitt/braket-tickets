@@ -896,6 +896,7 @@ describe('guest_sessions', () => {
           quantity: 1,
           tier: 'regular',
           termsAccepted: true,
+          idempotencyKey: 'idem-converted-order',
         }),
       ).rejects.toThrow('Unauthenticated');
     });

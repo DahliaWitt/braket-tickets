@@ -651,26 +651,22 @@ const schemaTables = {
     // ToS assent evidence for guest purchases (BRA-455)
     tosAcceptedAt: v.optional(v.number()),
     tosVersion: v.optional(v.string()),
+    /**
+     * Client-supplied idempotency key for free-ticket claims. A fresh key is
+     * minted per claim attempt on the frontend and reused verbatim across the
+     * Convex client's automatic mutation retries, so a genuine network retry
+     * replays the same completed order while a deliberate new claim (a new
+     * attempt, hence a new key) issues a fresh ticket. Absent on paid checkout
+     * orders and on rows created before this field existed.
+     */
+    idempotencyKey: v.optional(v.string()),
   })
     .index('by_owner_user_event_state', ['userId', 'eventId', 'state'])
     .index('by_owner_guest_event_state', ['guestSessionId', 'eventId', 'state'])
-    .index('by_owner_user_event_state_kind_amountCents_tier_quantity', [
-      'userId',
-      'eventId',
-      'state',
-      'kind',
-      'amountCents',
-      'tier',
-      'quantity',
-    ])
-    .index('by_owner_guest_event_state_kind_amountCents_tier_quantity', [
+    .index('by_owner_user_idempotencyKey', ['userId', 'idempotencyKey'])
+    .index('by_owner_guest_idempotencyKey', [
       'guestSessionId',
-      'eventId',
-      'state',
-      'kind',
-      'amountCents',
-      'tier',
-      'quantity',
+      'idempotencyKey',
     ])
     .index('by_event_and_state', ['eventId', 'state'])
     .index('by_stripeCheckoutSessionId', ['stripeCheckoutSessionId'])

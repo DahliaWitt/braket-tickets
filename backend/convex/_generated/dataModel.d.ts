@@ -1526,6 +1526,7 @@ export type DataModel = {
       eventId: Id<"events">;
       expiresAt: number;
       guestSessionId?: Id<"guest_sessions">;
+      idempotencyKey?: string;
       kind: "primary" | "resale";
       quantity: number;
       releaseReason?:
@@ -1559,6 +1560,7 @@ export type DataModel = {
       | "eventId"
       | "expiresAt"
       | "guestSessionId"
+      | "idempotencyKey"
       | "kind"
       | "quantity"
       | "releasedAt"
@@ -1584,14 +1586,9 @@ export type DataModel = {
         "state",
         "_creationTime",
       ];
-      by_owner_guest_event_state_kind_amountCents_tier_quantity: [
+      by_owner_guest_idempotencyKey: [
         "guestSessionId",
-        "eventId",
-        "state",
-        "kind",
-        "amountCents",
-        "tier",
-        "quantity",
+        "idempotencyKey",
         "_creationTime",
       ];
       by_owner_user_event_state: [
@@ -1600,14 +1597,9 @@ export type DataModel = {
         "state",
         "_creationTime",
       ];
-      by_owner_user_event_state_kind_amountCents_tier_quantity: [
+      by_owner_user_idempotencyKey: [
         "userId",
-        "eventId",
-        "state",
-        "kind",
-        "amountCents",
-        "tier",
-        "quantity",
+        "idempotencyKey",
         "_creationTime",
       ];
       by_stripeCheckoutSessionId: ["stripeCheckoutSessionId", "_creationTime"];

@@ -237,6 +237,12 @@ export async function openPrimaryOrderState(
      */
     tosAcceptedAt?: number;
     tosVersion?: string;
+    /**
+     * Client idempotency key for free-ticket claims. Stored on the order so a
+     * retry of the same claim attempt can replay it instead of issuing a new
+     * ticket. Omitted for paid checkout opens.
+     */
+    idempotencyKey?: string;
   },
 ): Promise<Doc<'ticket_orders'>> {
   assertPositiveInteger(args.quantity, 'Quantity');
@@ -321,6 +327,9 @@ export async function openPrimaryOrderState(
       ? {tosAcceptedAt: args.tosAcceptedAt}
       : {}),
     ...(args.tosVersion !== undefined ? {tosVersion: args.tosVersion} : {}),
+    ...(args.idempotencyKey !== undefined
+      ? {idempotencyKey: args.idempotencyKey}
+      : {}),
   });
 
   await ctx.scheduler.runAfter(
