@@ -21,6 +21,7 @@ import {
 } from '@shared/constants';
 import { ZardButtonComponent } from '@ui/components/primitives/button/button.component';
 import { ZardCardComponent } from '@ui/components/primitives/card/card.component';
+import { ZardInputDirective } from '@ui/components/primitives/input/input.directive';
 import { BraDialogService } from '@ui/components/composites/dialog/dialog.service';
 import { ZardIconComponent } from '@ui/components/primitives/icon/icon.component';
 import { logger } from '@/utils/logger';
@@ -31,7 +32,7 @@ type TicketReminderAudience = FunctionReturnType<typeof api.events.reminders.get
 @Component({
   selector: 'app-ticket-reminder-tab',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormField, ZardButtonComponent, ZardCardComponent, ZardIconComponent],
+  imports: [FormField, ZardButtonComponent, ZardCardComponent, ZardInputDirective, ZardIconComponent],
   templateUrl: './ticket-reminder-tab.component.html',
 })
 export class TicketReminderTabComponent {

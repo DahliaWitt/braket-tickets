@@ -37,9 +37,9 @@
           <input
             id="broadcast-subject"
             type="text"
+            zInput
             [formField]="broadcastForm.subject"
             data-testid="broadcast-subject"
-            class="w-full rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             placeholder="Email subject"
           />
           <p class="font-mono text-2xs text-muted-foreground">
@@ -57,10 +57,10 @@
           </label>
           <textarea
             id="broadcast-message"
+            zInput
             [formField]="broadcastForm.message"
             data-testid="broadcast-message"
             rows="5"
-            class="w-full rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             placeholder="Write your broadcast message..."
           ></textarea>
           <p class="font-mono text-2xs text-muted-foreground">

@@ -20,6 +20,7 @@ import {
 import {injectConvex} from 'convex-angular';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 import {ZardCardComponent} from '@ui/components/primitives/card/card.component';
+import {ZardInputDirective} from '@ui/components/primitives/input/input.directive';
 import {BraDialogService} from '@ui/components/composites/dialog/dialog.service';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
 import {ZardSwitchComponent} from '@ui/components/primitives/switch/switch.component';
@@ -35,6 +36,7 @@ import {safeResourceValue} from '@/utils/resource';
     FormField,
     ZardButtonComponent,
     ZardCardComponent,
+    ZardInputDirective,
     ZardIconComponent,
     ZardSwitchComponent,
   ],
