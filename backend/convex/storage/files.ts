@@ -360,10 +360,11 @@ export const _cleanupOrphanedUploads = internalMutation({
     // advances instead of restarting from the head each run. Absent on the
     // initial cron-triggered invocation (defaults to 0 = scan from the head).
     afterCreationTime: v.optional(v.number()),
-    // Fixed "now" reference so a rescheduled sweep uses one stable cutoff and
-    // tests can age stored files deterministically. Production omits it and
-    // each batch recomputes Date.now() (drift is sub-second and only moves the
-    // cutoff forward, never skipping candidates).
+    // Fixed "now" reference so every batch of a sweep shares one stable
+    // cutoff. The initial cron invocation omits it (resolves to Date.now());
+    // that resolved value is then threaded through every self-rescheduled
+    // continuation so the cutoff cannot drift forward mid-sweep. Tests pass it
+    // to age stored files deterministically.
     nowMs: v.optional(v.number()),
   },
   returns: v.null(),
@@ -412,7 +413,10 @@ export const _cleanupOrphanedUploads = internalMutation({
       await ctx.scheduler.runAfter(
         0,
         internal.storage.files._cleanupOrphanedUploads,
-        {afterCreationTime: lastScannedCreationTime, nowMs: args.nowMs},
+        // Thread the resolved `now`, not `args.nowMs`, so a cron-started sweep
+        // (which omits nowMs) freezes its cutoff at the first batch instead of
+        // recomputing Date.now() and drifting forward across continuations.
+        {afterCreationTime: lastScannedCreationTime, nowMs: now},
       );
     }
 
