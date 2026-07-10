@@ -1291,7 +1291,7 @@ describe('CommunityAdminComponent', () => {
       const confirmSpy = vi
         .spyOn(alertDialogService, 'confirm')
         .mockImplementation((config) => {
-          config.zOnOk?.(undefined as never);
+          config.zOnOk?.(undefined);
           return {} as ReturnType<BraAlertDialogService['confirm']>;
         });
       const successSpy = vi
@@ -1556,7 +1556,7 @@ describe('CommunityAdminComponent', () => {
       });
       const alertDialogService = TestBed.inject(BraAlertDialogService);
       vi.spyOn(alertDialogService, 'confirm').mockImplementation((config) => {
-        config.zOnOk?.(undefined as never);
+        config.zOnOk?.(undefined);
         return {} as ReturnType<BraAlertDialogService['confirm']>;
       });
       const errorSpy = vi
@@ -1790,7 +1790,7 @@ describe('CommunityAdminComponent', () => {
       const confirmSpy = vi
         .spyOn(alertDialogService, 'confirm')
         .mockImplementation((config) => {
-          config.zOnOk?.(undefined as never);
+          config.zOnOk?.(undefined);
           return {} as ReturnType<BraAlertDialogService['confirm']>;
         });
 
@@ -1816,7 +1816,7 @@ describe('CommunityAdminComponent', () => {
       const {fixture} = await setup({tab: 'settings'});
       const alertDialogService = TestBed.inject(BraAlertDialogService);
       vi.spyOn(alertDialogService, 'confirm').mockImplementation((config) => {
-        config.zOnCancel?.(undefined as never);
+        config.zOnCancel?.(undefined);
         return {} as ReturnType<BraAlertDialogService['confirm']>;
       });
 

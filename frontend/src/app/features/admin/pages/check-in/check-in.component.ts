@@ -112,7 +112,7 @@ export class CheckInComponent implements OnInit {
   );
 
   // Signals
-  readonly checkInModel = signal({eventId: '' as string, filter: ''});
+  readonly checkInModel = signal({eventId: '', filter: ''});
   f = form(this.checkInModel);
 
   readonly selectedEventId = computed(

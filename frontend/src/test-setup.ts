@@ -204,7 +204,7 @@ if (typeof globalThis.BroadcastChannel === 'undefined') {
     dispatchEvent() {
       return true;
     }
-  } as unknown as typeof BroadcastChannel;
+  };
 }
 
 // Initialize Angular test environment only if not already initialized

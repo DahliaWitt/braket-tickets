@@ -299,8 +299,19 @@ export async function setPasswordHandler(
 ): Promise<null> {
   validateStringLength(args.newPassword, 'New password', MAX_PASSWORD_LENGTH);
 
-  const {_id: userId} = await requireUser(ctx);
+  const {_id: userId, socialSignupCompletionRequired} = await requireUser(ctx);
   await rateLimiter.limit(ctx, 'setPassword', {key: userId, throws: true});
+
+  // Adding a credential account fires the Better Auth account.onCreate
+  // trigger, whose sync treats "credential account exists" as onboarding
+  // complete. Refuse until completeSocialSignupOnboarding has stamped terms
+  // acceptance, so a direct API call cannot skip the terms gate.
+  if (socialSignupCompletionRequired === true) {
+    throwAppError(
+      'AUTH_SET_PASSWORD_FAILED',
+      'Finish signing up before adding a password.',
+    );
+  }
 
   try {
     const {auth, headers} = await authComponent.getAuth(createAuth, ctx);

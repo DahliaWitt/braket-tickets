@@ -667,7 +667,7 @@ describe('CommunityAdminSettingsComponent', () => {
     it('stripeOnboardingReturn=1 calls checkAccountStatus with community param as organizerId then clears URL', async () => {
       const {fixture, convexMock, routerNavigateSpy} = await setup({
         queryParams: {
-          community: FAKE_ORG_ID as string,
+          community: FAKE_ORG_ID,
           stripeOnboardingReturn: '1',
         },
         organizerData: {

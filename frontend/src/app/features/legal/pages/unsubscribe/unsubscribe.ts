@@ -194,6 +194,7 @@ export class UnsubscribeComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly preferencesService = inject(UnsubscribePreferencesService);
   private readonly queryParams = toSignal(this.route.queryParams, {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- types the signal as Params so queryParams()['token'|'error'|'done'] index access typechecks (ng build)
     initialValue: {} as Params,
   });
 

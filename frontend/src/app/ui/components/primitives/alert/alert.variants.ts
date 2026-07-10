@@ -104,9 +104,29 @@ export const alertDescriptionVariants = cva(
         error: 'text-destructive-text/90',
         info: 'text-info-text/90',
       },
+      zAppearance: {
+        outline: '',
+        soft: '',
+        fill: '',
+      },
     },
+    // On fill the per-type text color would sit on its own fill color
+    // (text-success/90 on bg-success ≈ 1:1) — use the paired -foreground
+    // token at full opacity; /90 over the dark success fill drops below AA.
+    compoundVariants: [
+      {zType: 'default', zAppearance: 'fill', class: 'text-background/90'},
+      {zType: 'success', zAppearance: 'fill', class: 'text-success-foreground'},
+      {zType: 'warning', zAppearance: 'fill', class: 'text-warning-foreground'},
+      {
+        zType: 'error',
+        zAppearance: 'fill',
+        class: 'text-destructive-foreground',
+      },
+      {zType: 'info', zAppearance: 'fill', class: 'text-info-foreground'},
+    ],
     defaultVariants: {
       zType: 'default',
+      zAppearance: 'outline',
     },
   },
 );

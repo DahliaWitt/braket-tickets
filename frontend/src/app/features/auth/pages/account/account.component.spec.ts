@@ -86,10 +86,10 @@ function createEmailPrefsConvexMock(
     (_queryFn: unknown, _args: unknown, onData: (v: unknown) => void) => {
       const index = callCount++;
       if (index === 1) {
-        globalOptOutOnData = onData as (value: boolean) => void;
+        globalOptOutOnData = onData;
         onData(globalOptOut);
       } else {
-        preferencesOnData = onData as (value: unknown[]) => void;
+        preferencesOnData = onData;
         onData(prefs);
       }
       return () => undefined;

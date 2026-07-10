@@ -41,10 +41,9 @@ import {
  */
 const StorageImage = Image.extend({
   addAttributes() {
-    // Preserve the base extension's attributes (src, alt, title, …). `parent`
-    // is loosely typed by TipTap, so narrow it before spreading.
-    const parentAttributes: Record<string, unknown> =
-      (this.parent?.() as Record<string, unknown> | undefined) ?? {};
+    // Preserve the base extension's attributes (src, alt, title, …). TipTap
+    // types `parent` as the attribute map (or undefined), so no cast is needed.
+    const parentAttributes: Record<string, unknown> = this.parent?.() ?? {};
     return {
       ...parentAttributes,
       storageId: {

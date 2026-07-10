@@ -56,7 +56,7 @@ describe('CheckInService', () => {
         load: vi.fn(),
       };
       audioInstances.push(audio);
-      return audio as unknown as HTMLAudioElement;
+      return audio;
     });
 
     vi.stubGlobal('Audio', AudioMock);

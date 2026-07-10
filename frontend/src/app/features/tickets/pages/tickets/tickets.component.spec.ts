@@ -57,7 +57,7 @@ describe('TicketsComponent', () => {
   const authSettledSignal = signal(true);
   const authServiceMock = {
     user: signal({_id: 'U1', name: 'Test User'}),
-    userRole: signal('user' as string | null),
+    userRole: signal('user'),
     authSettled: authSettledSignal,
     isScannerStaff: signal(false),
     isCommunityAdmin: signal(false),
@@ -123,8 +123,8 @@ describe('TicketsComponent', () => {
     paymentServiceMock.getMyTicketPdf.mockResolvedValue(
       'data:application/pdf;base64,abc123',
     );
-    vi.spyOn(toast, 'success').mockImplementation(() => '' as string & number);
-    vi.spyOn(toast, 'error').mockImplementation(() => '' as string & number);
+    vi.spyOn(toast, 'success').mockImplementation(() => '');
+    vi.spyOn(toast, 'error').mockImplementation(() => '');
 
     convexClientMock.onUpdate = vi.fn(
       (query: unknown, args: unknown, onData: (value: unknown) => void) => {

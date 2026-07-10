@@ -59,8 +59,8 @@ describe('EventManagementPurchasesPanelComponent — imported entries', () => {
 
   beforeEach(async () => {
     vi.restoreAllMocks();
-    vi.spyOn(toast, 'success').mockImplementation(() => '' as string & number);
-    vi.spyOn(toast, 'error').mockImplementation(() => '' as string & number);
+    vi.spyOn(toast, 'success').mockImplementation(() => '');
+    vi.spyOn(toast, 'error').mockImplementation(() => '');
     vi.spyOn(logger, 'error').mockImplementation(() => undefined);
 
     adminEventsServiceMock = {

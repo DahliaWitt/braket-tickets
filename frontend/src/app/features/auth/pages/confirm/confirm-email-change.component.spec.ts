@@ -45,7 +45,7 @@ describe('ConfirmEmailChangeComponent', () => {
       navigate: vi.fn().mockResolvedValue(true),
       createUrlTree: vi.fn().mockReturnValue({}),
       serializeUrl: vi.fn().mockReturnValue('/mock-url'),
-      events: of({}) as never,
+      events: of({}),
     };
     authServiceMock = {
       handleOAuthCallback: vi.fn().mockResolvedValue(undefined),
