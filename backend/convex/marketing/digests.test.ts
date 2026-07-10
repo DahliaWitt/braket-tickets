@@ -1,4 +1,4 @@
-import {convexTest} from '../setup.testing';
+import {convexTest, finishAllScheduledFunctions} from '../setup.testing';
 import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest';
 import type {FunctionArgs} from 'convex/server';
 import {api, internal} from '../_generated/api';
@@ -201,29 +201,33 @@ describe('notification_digests.sendDailyDigests', () => {
     expect(dedupKeys).toHaveLength(2);
   });
 
-  it('freezes the time window so a continuation crossing an hour+day boundary keeps a valid cursor', async () => {
-    // digestHour 23: run starts at 23:59:59 UTC on Jan 15, the continuation
-    // fires at 00:00:00 UTC on Jan 16 — flipping BOTH the UTC hour (23 → 0)
-    // and the calendar day. Before the fix the continuation recomputed
-    // `getUTCHours()` (= 0) and resumed the digestHour-23 cursor against the
-    // digestHour-0 index range, which `.paginate()` rejects as an invalid
-    // cursor — throwing and silently dropping every admin past page 1. The
-    // frozen `windowStartMs` threaded through the continuation must keep the
-    // hour (23) and date (2026-01-15) constant for the whole run.
+  it('freezes the time window across every continuation page over an hour+day boundary', async () => {
+    // digestHour 23: the run starts at 23:59:59 UTC on Jan 15, but its
+    // continuations are driven at 00:00:05 UTC on Jan 16 — flipping BOTH the
+    // UTC hour (23 → 0) and the calendar day. Before the fix each continuation
+    // recomputed `getUTCHours()` (= 0) and resumed the digestHour-23 cursor
+    // against the digestHour-0 index range, which drops every admin past page 1
+    // (Convex rejects the mismatched cursor; the per-day dedup key blocks any
+    // same-day retry). The frozen `windowStartMs` threaded through every
+    // self-scheduled page must keep the hour (23) and date (2026-01-15)
+    // constant for the whole multi-page run.
     const digestHour = 23;
-    vi.setSystemTime(new Date('2026-01-15T23:59:59Z'));
+    const startMs = Date.parse('2026-01-15T23:59:59Z');
+    vi.setSystemTime(new Date(startMs));
 
     const t = convexTest();
     const orgId = await t.mutation(api.testing.communities.seedOrganizer, {
       name: 'Boundary Community',
     });
 
-    // 101 admins → two pages of 100. Only the first (page 1) and last (page 2)
-    // admin have an email so each page sends exactly one digest, mirroring the
+    // 201 admins → THREE pages of 100/100/1, forcing two self-scheduled
+    // continuation hops (page 1→2 and page 2→3) so the "every page" claim is
+    // covered directly, not just the first hop. Only admins 0, 100, and 200
+    // have an email, so each page sends exactly one digest — mirroring the
     // batch test above and avoiding the convex-test parallel-mutation race.
-    for (let i = 0; i < 101; i += 1) {
-      const adminWithEmail = i === 0 || i === 100;
-      const adminUserId = adminWithEmail
+    const emailAdminIndexes = new Set([0, 100, 200]);
+    for (let i = 0; i < 201; i += 1) {
+      const adminUserId = emailAdminIndexes.has(i)
         ? await t.mutation(api.testing.users.createUserDirectly, {
             name: `Admin ${i}`,
             email: `boundary-admin-${i}@test.com`,
@@ -253,40 +257,39 @@ describe('notification_digests.sendDailyDigests', () => {
       });
     }
 
-    // Page 1 runs at 23:59:59 and self-schedules the continuation.
+    // Page 1 runs at 23:59:59 and self-schedules the next page.
     await t.mutation(internal.marketing.digests.sendDailyDigests, {});
 
-    // Capture the exact args the production handler scheduled — this is what
-    // proves the fix: the frozen window must ride along on the continuation.
+    // Advance past midnight, then let the real Convex scheduler drive the
+    // remaining pages exactly as production would. This exercises the actual
+    // continuation-threading path, not a hand-fed replay.
+    vi.setSystemTime(new Date('2026-01-16T00:00:05Z'));
+    await finishAllScheduledFunctions(t);
+
+    // Every self-scheduled continuation must carry the SAME frozen epoch — this
+    // is what keeps the digestHour cursor valid and the cutoff/today stable on
+    // every hop. Asserting exact equality (not just "defined") also pins the
+    // 24h application cutoff, which is derived from the same epoch.
     const scheduled = await t.run(async (ctx) =>
       ctx.db.system.query('_scheduled_functions').collect(),
     );
-    const continuation = scheduled.find((job) =>
+    const continuations = scheduled.filter((job) =>
       JSON.stringify(job).includes('sendDailyDigests'),
     );
-    expect(continuation).toBeDefined();
-    const continuationArgs = (continuation as {args: unknown[]})
-      .args[0] as FunctionArgs<
-      typeof internal.marketing.digests.sendDailyDigests
-    >;
-    // The continuation must carry the frozen window, not just the cursor.
-    expect(continuationArgs.windowStartMs).toBeDefined();
-
-    // The clock crosses the hour AND day boundary before the continuation runs.
-    vi.setSystemTime(new Date('2026-01-16T00:00:00Z'));
-
-    // Replay the scheduled continuation exactly as the Convex scheduler would.
-    // Without the frozen window this throws an invalid-cursor error.
-    await t.mutation(
-      internal.marketing.digests.sendDailyDigests,
-      continuationArgs,
-    );
+    // Two continuation hops: page 1→2 and page 2→3.
+    expect(continuations.length).toBeGreaterThanOrEqual(2);
+    for (const job of continuations) {
+      const jobArgs = (job as {args: unknown[]}).args[0] as FunctionArgs<
+        typeof internal.marketing.digests.sendDailyDigests
+      >;
+      expect(jobArgs.windowStartMs).toBe(startMs);
+    }
 
     const dedupKeys = await t.run(async (ctx) =>
       ctx.db.query('emailDedup').collect(),
     );
-    // Both pages delivered: no cursor crash, no dropped digests.
-    expect(dedupKeys).toHaveLength(2);
+    // All three pages delivered: no cursor crash, no dropped digests.
+    expect(dedupKeys).toHaveLength(3);
     // Every dedup key uses the frozen start date (Jan 15), never the post-flip
     // date (Jan 16) — proving `today` stayed constant across the midnight run.
     for (const row of dedupKeys) {
