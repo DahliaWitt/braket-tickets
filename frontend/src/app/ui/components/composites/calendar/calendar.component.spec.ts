@@ -278,6 +278,24 @@ describe('BraCalendarComponent', () => {
     expect(await _calendarHarness.getRenderedGridMonthYear()).toBe('January 2027');
   });
 
+  it('should render February, not roll over, when year navigation lands a leap-day selection on a non-leap year', async () => {
+    host.value.set(new Date(2024, 1, 29)); // Feb 29 2024 (leap day)
+    fixture.detectChanges();
+
+    const calendarApi = getCalendarApi();
+    const grid = getGrid();
+    expect(calendarApi.currentMonthValue()).toBe('1');
+    expect(calendarApi.currentYearValue()).toBe('2024');
+
+    grid.nextYear.emit(); // navigateYear(1) -> February 2025 (non-leap)
+    fixture.detectChanges();
+
+    expect(calendarApi.currentMonthValue()).toBe('1');
+    expect(calendarApi.currentYearValue()).toBe('2025');
+    // Feb 2025 has no 29th; pre-fix this rolled the grid to March 2025.
+    expect(await _calendarHarness.getRenderedGridMonthYear()).toBe('February 2025');
+  });
+
   it('should update disabled state through ControlValueAccessor', () => {
     const calendar = getCalendar();
     calendar.setDisabledState(true);
