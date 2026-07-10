@@ -1,6 +1,8 @@
 import type {Doc, Id} from '../../_generated/dataModel';
 import type {MutationCtx, QueryCtx} from '../../_generated/server';
 import type {PaginationOptions, PaginationResult} from 'convex/server';
+import {stream} from 'convex-helpers/server/stream';
+import schema from '../../schema';
 import {ADMIN_AUDIT_ACTIONS} from '../../lib/admin_audit_actions';
 import {insertAdminAuditLog} from '../../lib/admin_audit_log';
 import {getAuthUserId} from '../../lib/auth_identity';
@@ -254,40 +256,35 @@ export async function searchEventAttendeesPage(
   const {isDoorStaff} = await requireAnalyticsAccess(ctx, args.eventId);
 
   const normalizedQuery = normalizeRosterText(args.query);
-  const matches: Array<Doc<'tickets'>> = [];
-  let cursor = args.paginationOpts.cursor;
-  let isDone = false;
 
-  while (matches.length < args.paginationOpts.numItems && !isDone) {
-    const remainingItems = args.paginationOpts.numItems - matches.length;
-    const result = await paginateRosterTickets(ctx, {
-      eventId: args.eventId,
-      includeRefunded: args.includeRefunded,
-      paginationOpts: {
-        ...args.paginationOpts,
-        numItems: remainingItems,
-        cursor,
-      },
-    });
+  // Convex allows only one `.paginate()` per function execution, so we cannot
+  // loop over roster pages to fill a search page. Instead, use a single
+  // convex-helpers stream that reads across as many underlying rows as needed,
+  // applying the substring filter inside the stream.
+  const ticketStream = args.includeRefunded
+    ? stream(ctx.db, schema)
+        .query('tickets')
+        .withIndex('by_event_and_roster_sort', (q) =>
+          q.eq('eventId', args.eventId),
+        )
+    : stream(ctx.db, schema)
+        .query('tickets')
+        .withIndex('by_event_and_roster_active_and_sort', (q) =>
+          q.eq('eventId', args.eventId).eq('rosterIsActive', true),
+        );
 
-    for (const ticket of result.page) {
-      if (
-        ticketMatchesRosterSubstringSearch(ticket, normalizedQuery, isDoorStaff)
-      ) {
-        matches.push(ticket);
-      }
-    }
-
-    cursor = result.continueCursor;
-    isDone = result.isDone;
-  }
+  const result = await ticketStream
+    .filterWith(async (ticket) =>
+      ticketMatchesRosterSubstringSearch(ticket, normalizedQuery, isDoorStaff),
+    )
+    .paginate(args.paginationOpts);
 
   return {
-    page: matches.map((ticket) =>
+    page: result.page.map((ticket) =>
       rosterRowFromProjectedTicket(ticket, isDoorStaff),
     ),
-    isDone,
-    continueCursor: cursor ?? '',
+    isDone: result.isDone,
+    continueCursor: result.continueCursor,
   };
 }
 

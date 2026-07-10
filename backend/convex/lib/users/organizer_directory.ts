@@ -13,6 +13,8 @@ import {
 import {batchGetUsers} from '../../lib/batch_utils';
 import {collectAllQueryUnsafe} from '../../lib/query_scan';
 import {assertTrustLinkLimit} from '../../lib/trust_links';
+import {stream} from 'convex-helpers/server/stream';
+import schema from '../../schema';
 
 type DirectoryCtx = QueryCtx | MutationCtx;
 
@@ -522,35 +524,46 @@ export async function loadUserApplicationPageForOrganizerFromDirectory(
     };
   }
 
-  const activeEntries: DirectoryEntryFields[] = [];
-  let cursor = paginationOpts.cursor;
-  let isDone = false;
-  let continueCursor = '';
-
-  while (activeEntries.length < paginationOpts.numItems && !isDone) {
-    const remainingItems = paginationOpts.numItems - activeEntries.length;
-    const result = await ctx.db
+  // Convex's native `.paginate()` is limited to one call per function
+  // execution, so we cannot loop over directory pages to skip inactive rows.
+  // A convex-helpers stream reads across as many rows as needed in a single
+  // pass, keeping only entries that still resolve as active.
+  const activeDirectoryStream = () =>
+    stream(ctx.db, schema)
       .query('organizer_user_directory')
       .withIndex('by_organizer_and_sortTime_and_user', (query) =>
         query.eq('organizerId', organizerId),
       )
       .order('desc')
-      .paginate({
-        cursor,
-        numItems: remainingItems,
-      });
+      .filterWith(
+        async (entry) =>
+          (await resolveActiveDirectoryEntry(ctx, entry)) !== null,
+      );
 
-    const resolvedEntries = await Promise.all(
+  const result = await activeDirectoryStream().paginate({
+    cursor: paginationOpts.cursor,
+    numItems: paginationOpts.numItems,
+  });
+
+  const activeEntries = (
+    await Promise.all(
       result.page.map((entry) => resolveActiveDirectoryEntry(ctx, entry)),
-    );
-    activeEntries.push(
-      ...resolvedEntries.filter(
-        (entry): entry is DirectoryEntryFields => entry !== null,
-      ),
-    );
-    isDone = result.isDone;
-    continueCursor = result.continueCursor;
-    cursor = result.continueCursor;
+    )
+  ).filter((entry): entry is DirectoryEntryFields => entry !== null);
+
+  const continueCursor = result.continueCursor;
+
+  // The stream reports `isDone: false` whenever it fills the page exactly, even
+  // when the underlying index is exhausted. Peek one active entry past the page
+  // to restore the native "no more results" signal instead of forcing callers
+  // into an extra empty fetch.
+  let isDone = result.isDone;
+  if (!isDone) {
+    const nextActive = await activeDirectoryStream().paginate({
+      cursor: continueCursor,
+      numItems: 1,
+    });
+    isDone = nextActive.page.length === 0;
   }
 
   const usersById = await batchGetUsers(
