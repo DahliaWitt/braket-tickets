@@ -2,7 +2,7 @@ import type {Doc, Id} from '../../_generated/dataModel';
 import {internal} from '../../_generated/api';
 import type {MutationCtx, QueryCtx} from '../../_generated/server';
 import {getLatestApplicationForOrganizer} from '../applications/read_models';
-import {stripSensitiveUserFields} from './helpers';
+import {stripSensitiveUserFields, takeUsersByEmailPrefix} from './helpers';
 import {
   isCommunityAdmin,
   isCommunityMember,
@@ -438,7 +438,7 @@ export async function searchUserApplicationsInDirectory(
   ctx: DirectoryCtx,
   organizerId: Id<'organizers'>,
   searchTerm: string,
-  options?: {scopedLimit?: number},
+  options?: {scopedLimit?: number; emailScanLimit?: number},
 ): Promise<UserApplicationPage> {
   const lowerTerm = searchTerm.toLowerCase();
   const scopedLimit = options?.scopedLimit ?? 50;
@@ -478,13 +478,18 @@ export async function searchUserApplicationsInDirectory(
     await tryAddUser(user);
   }
 
-  // Stream email prefix matches from regular index.
+  // Scan a bounded window of email-prefix matches from the regular index
+  // (parity with the name branch's ~1024 search-index cap) and scope-filter as
+  // we go. Bounding the scan stops a short/common term from draining the entire
+  // global email range while still counting only *scoped* members toward the
+  // result cap.
   if (entries.length < scopedLimit) {
-    for await (const user of ctx.db
-      .query('users')
-      .withIndex('email', (q) =>
-        q.gte('email', lowerTerm).lt('email', lowerTerm + '\uffff'),
-      )) {
+    const emailCandidates = await takeUsersByEmailPrefix(
+      ctx.db,
+      lowerTerm,
+      options?.emailScanLimit,
+    );
+    for (const user of emailCandidates) {
       if (entries.length >= scopedLimit) break;
       if (!user.email?.toLowerCase().includes(lowerTerm)) continue;
       await tryAddUser(user);

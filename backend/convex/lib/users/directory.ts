@@ -2,7 +2,11 @@ import type {Doc, Id} from '../../_generated/dataModel';
 import type {MutationCtx, QueryCtx} from '../../_generated/server';
 import {getCommunityMembers} from '../../lib/authz';
 import {getLatestApplicationForOrganizer} from '../applications/read_models';
-import {stripCommunityAdminFields, stripSensitiveUserFields} from './helpers';
+import {
+  stripCommunityAdminFields,
+  stripSensitiveUserFields,
+  takeUsersByEmailPrefix,
+} from './helpers';
 
 type UsersDirectoryCtx = QueryCtx | MutationCtx;
 type UsersDirectoryDb = QueryCtx['db'] | MutationCtx['db'];
@@ -70,12 +74,15 @@ async function searchApprovedOrganizerMembersByNameOrEmail(
   db: UsersDirectoryDb,
   organizerId: OrganizerId,
   query: string,
+  emailScanLimit?: number,
 ) {
   const lowerQuery = query.toLowerCase();
   const matches: Doc<'users'>[] = [];
   const seen = new Set<Doc<'users'>['_id']>();
 
-  const pushApprovedMatches = async (users: AsyncIterable<Doc<'users'>>) => {
+  const pushApprovedMatches = async (
+    users: AsyncIterable<Doc<'users'>> | Iterable<Doc<'users'>>,
+  ) => {
     for await (const user of users) {
       if (seen.has(user._id)) {
         continue;
@@ -107,14 +114,12 @@ async function searchApprovedOrganizerMembersByNameOrEmail(
   );
 
   if (matches.length < 50) {
+    // Bound the email-prefix scan (parity with the name branch's ~1024
+    // search-index cap) instead of streaming the entire global email range,
+    // which grows with total platform users and amplifies reads via the
+    // per-user application lookup in `pushApprovedMatches`.
     await pushApprovedMatches(
-      db
-        .query('users')
-        .withIndex('email', (emailQuery) =>
-          emailQuery
-            .gte('email', lowerQuery)
-            .lt('email', lowerQuery + '\uffff'),
-        ),
+      await takeUsersByEmailPrefix(db, lowerQuery, emailScanLimit),
     );
   }
 
@@ -126,6 +131,12 @@ export async function searchUsersForAdminScope(
   args: {
     query: string;
     organizerId: OrganizerId | null;
+    /**
+     * Overrides the default {@link DIRECTORY_EMAIL_PREFIX_SCAN_LIMIT} for the
+     * organizer-scoped email branch. Intended for tests that assert the scan is
+     * bounded; production callers should omit it to use the default cap.
+     */
+    emailScanLimit?: number;
   },
 ) {
   const query = args.query.trim();
@@ -136,6 +147,7 @@ export async function searchUsersForAdminScope(
         db,
         args.organizerId,
         query,
+        args.emailScanLimit,
       )
     : await searchUsersByNameOrEmail(db, query);
 

@@ -3,7 +3,56 @@ import type {MutationCtx, QueryCtx} from '../../_generated/server';
 import {requireManageCommunity} from '../../lib/access';
 import {getUserCommunities} from '../../lib/authz';
 import {batchGetUsers} from '../../lib/batch_utils';
+import {takeFromQuery} from '../query_scan';
 import {throwAppError} from '../errors';
+
+type UsersDb = QueryCtx['db'] | MutationCtx['db'];
+
+/**
+ * Hard cap on how many global `users` rows a directory email-prefix search may
+ * scan before stopping.
+ *
+ * Directory searches match a term against two indexes on the global `users`
+ * table: the `search_name_email` search index (name branch) and the `email`
+ * btree index (email branch). Convex caps full-text search results at ~1024, so
+ * the name branch is implicitly bounded. The email btree range has no such cap:
+ * a raw prefix stream (e.g. term `"a"`) walks every platform user whose email
+ * starts with the term, which grows without bound as the users table grows and
+ * can exceed Convex's per-query document-read limit — breaking the search.
+ *
+ * Bounding the email branch to the same order as the search index keeps the two
+ * branches symmetric: both perform a bounded, best-effort top-N scan of the
+ * global table and then scope-filter to the caller's community. Callers MUST
+ * still apply their own membership/scoping filter — this only bounds the scan;
+ * it does not by itself scope results to a community.
+ */
+export const DIRECTORY_EMAIL_PREFIX_SCAN_LIMIT = 1024;
+
+/**
+ * Reads a bounded window of global users whose (lowercased) email starts with
+ * `lowerTerm`, capped at `scanLimit`. Returns at most `scanLimit` users in
+ * ascending email order.
+ *
+ * This replaces the unbounded email-prefix `for await` streams that previously
+ * drained the entire global email range in directory searches (using the same
+ * `gte(term)..lt(term + '\uffff')` prefix bounds). Callers still apply their
+ * own community/membership filter to the returned users. See
+ * {@link DIRECTORY_EMAIL_PREFIX_SCAN_LIMIT}.
+ */
+export async function takeUsersByEmailPrefix(
+  db: UsersDb,
+  lowerTerm: string,
+  scanLimit: number = DIRECTORY_EMAIL_PREFIX_SCAN_LIMIT,
+): Promise<Doc<'users'>[]> {
+  return await takeFromQuery(
+    db
+      .query('users')
+      .withIndex('email', (q) =>
+        q.gte('email', lowerTerm).lt('email', lowerTerm + '\uffff'),
+      ),
+    scanLimit,
+  );
+}
 
 /**
  * Represents a user row in community admin/scanner lists.
