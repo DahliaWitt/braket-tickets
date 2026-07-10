@@ -7,7 +7,7 @@ import {
   loadAllTicketsByGuestSession,
   magicLinkRedemptionsByGuestSessionQuery,
 } from '../../lib/indexed_loaders';
-import {upsertMarketingPreference} from '../marketing_emails/preferences';
+import {carryOverAddressMarketingPreferenceToUser} from '../marketing_emails/preferences';
 
 type SessionMigrationArgs = {
   sessionId: Id<'guest_sessions'>;
@@ -65,7 +65,10 @@ export async function migrateOneGuestSessionToUser(
     ),
   );
 
-  // Carry over any address-level marketing opt-out so unsubscribes are not lost.
+  // Carry over address-level marketing signals without ever re-subscribing a
+  // user. An address row defaults to optedIn:true on first send, so a blind
+  // upsert would silently flip a user's explicit opt-out back on. The helper
+  // only creates a new preference or propagates an unsubscribe (CAN-SPAM).
   const addressPreferences = await collectAllQueryUnsafe(
     ctx.db
       .query('emailAddressMarketingPreferences')
@@ -73,10 +76,10 @@ export async function migrateOneGuestSessionToUser(
   );
   await Promise.all(
     addressPreferences.map((preference) =>
-      upsertMarketingPreference(ctx.db, {
+      carryOverAddressMarketingPreferenceToUser(ctx.db, {
         userId: args.userId,
         organizerId: preference.organizerId,
-        optedIn: preference.optedIn,
+        addressOptedIn: preference.optedIn,
       }),
     ),
   );

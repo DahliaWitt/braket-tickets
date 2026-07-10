@@ -163,6 +163,59 @@ export async function upsertMarketingPreference(
   });
 }
 
+/**
+ * Carry a guest address-level marketing preference onto a user's per-organizer
+ * preference during guest→user migration.
+ *
+ * Consent invariant (CAN-SPAM): migration may create a preference or preserve an
+ * opt-out, but it must NEVER re-subscribe a user who has already made a choice.
+ *
+ * - No existing user preference: mirror the address row. This carries over both a
+ *   genuine unsubscribe and the opt-in default minted on first send, matching the
+ *   prior behavior for users with no marketing history.
+ * - Existing user preference: only an address-level opt-OUT is propagated (turning
+ *   the preference off). An address-level opt-in is just the lazy `optedIn: true`
+ *   default created on first send — not an explicit consent signal — so it must
+ *   never flip an existing user preference back on. This protects a user who
+ *   explicitly opted out before buying a guest ticket with the same email.
+ */
+export async function carryOverAddressMarketingPreferenceToUser(
+  db: MarketingPreferenceWriter,
+  args: {
+    organizerId: Id<'organizers'>;
+    userId: Id<'users'>;
+    addressOptedIn: boolean;
+    updatedAt?: number;
+    createToken?: () => string;
+  },
+): Promise<void> {
+  const existing = await findMarketingPreferenceByUserAndOrganizer(db, {
+    userId: args.userId,
+    organizerId: args.organizerId,
+  });
+
+  if (!existing) {
+    await ensureMarketingPreferenceExists(db, {
+      organizerId: args.organizerId,
+      userId: args.userId,
+      optedIn: args.addressOptedIn,
+      updatedAt: args.updatedAt,
+      createToken: args.createToken,
+    });
+    return;
+  }
+
+  // Existing explicit user preference: never re-enable via migration. Only an
+  // address-level opt-out may turn an opted-in preference off so unsubscribes
+  // captured against the guest email are not lost.
+  if (existing.optedIn && !args.addressOptedIn) {
+    await db.patch('marketingEmailPreferences', existing._id, {
+      optedIn: false,
+      updatedAt: args.updatedAt ?? Date.now(),
+    });
+  }
+}
+
 export async function unsubscribeAllMarketingPreferencesForUser(
   db: Pick<DatabaseWriter, 'patch' | 'query'>,
   args: {
