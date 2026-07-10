@@ -159,7 +159,7 @@ Event visibility is enforced centrally by `backend/convex/lib/access.ts`. Do not
 | `public_viewable` | anonymous users can view         | vetted users only                |
 | `public`          | anonymous users can view         | no vetting required              |
 
-Draft, cancelled, and draft-community events are visible only to callers with scoped `event:view` access. Public event list queries and event detail queries should agree because they both route through the same access helper.
+Draft, cancelled, and draft-community events are visible only to organizers who can modify the event — scoped `event:manage`/`event:edit`, held by community admins and root admins. Members and door-staff scanners hold neither, so they cannot read unpublished or cancelled events (a scanner denied a published private event must not gain access to its draft). Public event list queries and event detail queries should agree because they both route through the same access helper.
 
 ## Explain why a user still cannot access a trusted community
 

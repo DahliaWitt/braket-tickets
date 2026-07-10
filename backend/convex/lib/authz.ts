@@ -15,7 +15,6 @@ export const PERMISSIONS = definePermissions({
   platform: {admin: true},
   community: {view: true, members: true, admin: true},
   event: {
-    view: true,
     purchase: true,
     roster: true,
     create: true,
@@ -25,23 +24,42 @@ export const PERMISSIONS = definePermissions({
   },
 });
 
+// There is no `event:view` permission. Read access to an event is NOT a single
+// grant: publicly visible published events need no permission; published
+// private events in live communities resolve through `event:purchase` (see
+// `resolvePurchaseAccessForUser`); and restricted-visibility events (draft,
+// cancelled, orphaned, or in an unpublished community) are gated in
+// `canViewEvent` on `event:manage`/`event:edit` — i.e. only organizers who can
+// modify the event (community admins, and root admins via the global fallback).
+//
+// This deliberately withholds restricted-event reads from `member` and
+// `community_scanner`. An earlier design granted those roles an `event:view`
+// permission that was consulted only by the restricted branch, which let every
+// vetted member and door-staff scanner read the full detail of a community's
+// unpublished/cancelled events — inverting the visibility ladder (a scanner is
+// already denied a published *private* event, yet gained the strictly-less-
+// public draft). Gating on manage/edit closes that leak and, unlike a view
+// permission, cannot be reopened by stale materialized permission rows: members
+// and scanners never held manage/edit. Scanners still work *published* events
+// via `event:roster`/`event:scan`, both lifecycle-gated to `published` in
+// `canViewEventRoster`/`canScanEvent`.
 export const ROLES = defineRoles(PERMISSIONS, {
   root_admin: {
     platform: ['admin'],
     community: ['view', 'members', 'admin'],
-    event: ['view', 'purchase', 'roster', 'create', 'edit', 'manage', 'scan'],
+    event: ['purchase', 'roster', 'create', 'edit', 'manage', 'scan'],
   },
   community_admin: {
     community: ['view', 'members', 'admin'],
-    event: ['view', 'purchase', 'roster', 'create', 'edit', 'manage', 'scan'],
+    event: ['purchase', 'roster', 'create', 'edit', 'manage', 'scan'],
   },
   community_scanner: {
     community: ['view'],
-    event: ['view', 'roster', 'scan'],
+    event: ['roster', 'scan'],
   },
   member: {
     community: ['view'],
-    event: ['view', 'purchase'],
+    event: ['purchase'],
   },
 });
 
