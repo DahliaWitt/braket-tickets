@@ -89,17 +89,12 @@
         }
       } @else if (results().length === 0) {
         <tr>
-          <td colspan="4" class="p-0">
-            <div
+          <td colspan="4">
+            <app-empty-state
               data-testid="empty-state"
-              class="mono-label p-16 text-center text-sm text-muted-foreground"
-            >
-              NO ACTIVITY RECORDED
-              <p class="mt-2 text-sm text-muted-foreground">
-                Actions taken by community admins will appear here — event
-                changes, application reviews, check-ins, and more.
-              </p>
-            </div>
+              title="NO ACTIVITY RECORDED"
+              description="Actions taken by community admins will appear here — event changes, application reviews, check-ins, and more."
+            />
           </td>
         </tr>
       } @else {
@@ -345,16 +340,11 @@
       </div>
     }
   } @else if (results().length === 0) {
-    <div
+    <app-empty-state
       data-testid="empty-state"
-      class="mono-label rounded-xl border border-border/50 p-8 text-center text-sm text-muted-foreground"
-    >
-      NO ACTIVITY RECORDED
-      <p class="mt-2 text-sm text-muted-foreground">
-        Actions taken by community admins will appear here — event changes,
-        application reviews, check-ins, and more.
-      </p>
-    </div>
+      title="NO ACTIVITY RECORDED"
+      description="Actions taken by community admins will appear here — event changes, application reviews, check-ins, and more."
+    />
   } @else {
     @for (entry of results(); track entry._id; let i = $index) {
       <!-- Outer container is not interactive — avoids nested-interactive axe violation -->

@@ -394,12 +394,10 @@
               </div>
             </div>
           } @empty {
-            <div
-              class="mono-label rounded-lg border border-dashed border-border py-12 text-center text-sm text-muted-foreground"
+            <app-empty-state
               data-testid="vetting-empty"
-            >
-              no questions added yet
-            </div>
+              title="no questions added yet"
+            />
           }
         </div>
       </z-card>
