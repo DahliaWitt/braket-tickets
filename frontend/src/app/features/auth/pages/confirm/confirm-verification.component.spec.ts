@@ -1,5 +1,6 @@
 import {type ComponentFixture, TestBed} from '@angular/core/testing';
 import {provideZonelessChangeDetection, signal} from '@angular/core';
+import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
 import {
   ActivatedRoute,
   Router,
@@ -9,6 +10,7 @@ import {
 import {of} from 'rxjs';
 import {describe, expect, it, vi} from 'vitest';
 import {ConfirmVerificationComponent} from './confirm-verification.component';
+import {ConfirmVerificationComponentHarness} from './confirm-verification.component.harness';
 import {AuthService} from '@/core/services/auth.service';
 
 describe('ConfirmVerificationComponent', () => {
@@ -94,6 +96,13 @@ describe('ConfirmVerificationComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
     await fixture.whenStable();
+  }
+
+  function getHarness() {
+    return TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      ConfirmVerificationComponentHarness,
+    );
   }
 
   it('uses the OTT callback path when present', async () => {
@@ -187,5 +196,76 @@ describe('ConfirmVerificationComponent', () => {
     await renderAndSettle();
 
     expect(routerMock.navigateByUrl).toHaveBeenCalledWith('/');
+  });
+
+  it('renders the expired error state (not success) for an expired verification callback', async () => {
+    // Better Auth redirects an expired-JWT verification link to the callback
+    // with `?error=TOKEN_EXPIRED` and no ott/token.
+    await setupComponent({error: 'TOKEN_EXPIRED', returnUrl: '/'});
+    await renderAndSettle();
+
+    const harness = await getHarness();
+    expect(await harness.isError()).toBe(true);
+    expect(await harness.isSuccess()).toBe(false);
+    expect(await harness.getErrorText()).toContain('expired');
+    expect(component.state()).toBe('error');
+    expect(authServiceMock.confirmVerification).not.toHaveBeenCalled();
+    expect(authServiceMock.handleOAuthCallback).not.toHaveBeenCalled();
+    expect(routerMock.navigateByUrl).not.toHaveBeenCalled();
+  });
+
+  it('renders a generic error state (not success) for an invalid-token callback', async () => {
+    await setupComponent({error: 'INVALID_TOKEN'});
+    await renderAndSettle();
+
+    const harness = await getHarness();
+    expect(await harness.isError()).toBe(true);
+    expect(await harness.isSuccess()).toBe(false);
+    expect(await harness.getErrorText()).toContain('invalid or has expired');
+    expect(component.state()).toBe('error');
+  });
+
+  it('does not leak account existence for a USER_NOT_FOUND callback error', async () => {
+    await setupComponent({error: 'USER_NOT_FOUND'});
+    await renderAndSettle();
+
+    const harness = await getHarness();
+    expect(await harness.isError()).toBe(true);
+    const errorText = (await harness.getErrorText()) ?? '';
+    // Folds into the generic message — never reveals whether the email exists.
+    expect(errorText).toContain('invalid or has expired');
+    expect(errorText.toLowerCase()).not.toContain('not found');
+    expect(errorText.toLowerCase()).not.toContain('user');
+  });
+
+  it('matches redirect error codes case-insensitively', async () => {
+    await setupComponent({error: 'token_expired'});
+    await renderAndSettle();
+
+    const harness = await getHarness();
+    expect(await harness.isError()).toBe(true);
+    expect(await harness.getErrorText()).toContain('expired');
+  });
+
+  it('prefers a callback error over a stale token, never showing success', async () => {
+    // A stale link could carry both a token and an error param; the failure
+    // signal must win so the user is never told a failed verification succeeded.
+    await setupComponent({error: 'INVALID_TOKEN', token: 'stale-token'});
+    await renderAndSettle();
+
+    const harness = await getHarness();
+    expect(await harness.isError()).toBe(true);
+    expect(await harness.isSuccess()).toBe(false);
+    expect(authServiceMock.confirmVerification).not.toHaveBeenCalled();
+  });
+
+  it('still shows "Email Verified!" success for a genuine token verification', async () => {
+    await setupComponent({token: 'verify-token'});
+    await renderAndSettle();
+
+    const harness = await getHarness();
+    expect(await harness.isSuccess()).toBe(true);
+    expect(await harness.isError()).toBe(false);
+    expect(component.state()).toBe('success');
   });
 });

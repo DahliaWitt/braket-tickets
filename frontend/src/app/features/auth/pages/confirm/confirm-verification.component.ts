@@ -111,6 +111,7 @@ export class ConfirmVerificationComponent {
       const alreadyInitialized = untracked(() => this.initialized());
       const paramMap = this.paramMap();
       const queryParamMap = this.queryParamMap();
+      const callbackError = queryParamMap.get('error') ?? undefined;
       const ott = queryParamMap.get('ott') ?? undefined;
       const token =
         paramMap.get('token') ??
@@ -122,7 +123,7 @@ export class ConfirmVerificationComponent {
       }
 
       this.initialized.set(true);
-      void this.confirmEmailVerification(ott, token);
+      void this.confirmEmailVerification(callbackError, ott, token);
     });
 
     effect(() => {
@@ -178,9 +179,21 @@ export class ConfirmVerificationComponent {
   }
 
   private async confirmEmailVerification(
+    callbackError: string | undefined,
     ott: string | undefined,
     token: string | undefined,
   ): Promise<void> {
+    // Better Auth's server-side /verify-email endpoint redirects to this
+    // callback with `?error=CODE` (and no ott/token) when the verification JWT
+    // is expired, already consumed, or otherwise invalid. Surface that as an
+    // error state before falling through to the no-token "success" branch —
+    // otherwise a failed verification is misreported as "Email Verified!".
+    if (callbackError) {
+      this.error.set(this.mapCallbackError(callbackError));
+      this.state.set('error');
+      return;
+    }
+
     if (ott) {
       const outcome = await resolveConfirmOAuthCallback({
         auth: this.auth,
@@ -228,6 +241,25 @@ export class ConfirmVerificationComponent {
         err instanceof Error ? err.message : 'Verification failed',
       );
       this.state.set('error');
+    }
+  }
+
+  /**
+   * Maps a Better Auth `/verify-email` redirect error code (query param
+   * `?error=CODE`) to user-facing copy. Better Auth 1.6.23 emits uppercase
+   * codes via `redirectOnError` — TOKEN_EXPIRED for an expired JWT and
+   * INVALID_TOKEN for a malformed/consumed one (plus USER_NOT_FOUND /
+   * INVALID_USER on later checks). Matching is case-insensitive so the mapping
+   * is resilient to code casing. Every non-expiry code — including
+   * USER_NOT_FOUND, INVALID_USER, and anything unrecognized — folds into one
+   * generic message so the copy never reveals whether an email is registered.
+   */
+  private mapCallbackError(errorCode: string): string {
+    switch (errorCode.toUpperCase()) {
+      case 'TOKEN_EXPIRED':
+        return 'This verification link has expired. Sign in to request a new one.';
+      default:
+        return 'This verification link is invalid or has expired. Sign in to request a new one.';
     }
   }
 }
