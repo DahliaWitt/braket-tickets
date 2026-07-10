@@ -13,9 +13,36 @@
  * ctx step the security spine (`rich_text_validator.ts`) deliberately keeps out
  * of the structural validator.
  */
-import type {Id} from '../../_generated/dataModel';
+import type {Doc, Id} from '../../_generated/dataModel';
 import type {MutationCtx, QueryCtx} from '../../_generated/server';
 import type {RichBodyDoc, RichTextNode} from './rich_text_validator';
+
+/**
+ * Finds the `richEmailImages` registry row for a storage id, or null.
+ *
+ * This single lookup is the source of truth for "this file was PUBLISHED in a
+ * sent rich email": a row is written only by a send handler AFTER the
+ * confirmed-upload + sender-ownership checks pass. Every consumer keys off this
+ * one helper so their notions of "published" can never diverge — the public
+ * image-serve gate ({@link getPublishedEmailImage}) uses it to permit
+ * unauthenticated access, upload-cleanup pinning uses it to protect delivered
+ * emails, and the send path uses it for insert idempotency.
+ *
+ * A malformed id string can make the index comparison throw; callers that face
+ * untrusted ids (e.g. the public route) should wrap this in try/catch and fail
+ * closed.
+ */
+export async function findPublishedEmailImage(
+  ctx: QueryCtx | MutationCtx,
+  storageId: string,
+): Promise<Doc<'richEmailImages'> | null> {
+  return await ctx.db
+    .query('richEmailImages')
+    .withIndex('by_storageId', (q) =>
+      q.eq('storageId', storageId as Id<'_storage'>),
+    )
+    .first();
+}
 
 /**
  * Collects every image-node `storageId` (in document order, may contain
@@ -95,10 +122,7 @@ export async function recordPublishedEmailImages(
   await Promise.all(
     [...new Set(storageIds)].map(async (raw) => {
       const storageId = raw as Id<'_storage'>;
-      const existing = await ctx.db
-        .query('richEmailImages')
-        .withIndex('by_storageId', (q) => q.eq('storageId', storageId))
-        .first();
+      const existing = await findPublishedEmailImage(ctx, storageId);
       if (existing === null) {
         await ctx.db.insert('richEmailImages', {
           storageId,

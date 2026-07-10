@@ -150,6 +150,9 @@ export class TicketReminderTabComponent {
     () =>
       !this.eventId() ||
       this.isSendingTicketReminder() ||
+      // Block send while an inline image is still uploading, so the send can't
+      // race ahead of (and drop) the image the organizer just added.
+      (this.bodyEditor()?.isUploadingImage() ?? false) ||
       this.isLoadingReminderAudience() ||
       !!this.reminderAudienceError() ||
       this.reminderMissingCommunity() ||
@@ -220,7 +223,9 @@ export class TicketReminderTabComponent {
 
   /** Clears the editor document and compose fields after a successful send. */
   private resetComposeState(): void {
-    this.bodyEditor()?.getEditor()?.commands.clearContent(true);
+    // reset() also invalidates any in-flight image upload so a late insert
+    // cannot land in the cleared draft.
+    this.bodyEditor()?.reset();
     this.reminderFormModel.set({subject: '', message: '', bodyJson: ''});
   }
 }

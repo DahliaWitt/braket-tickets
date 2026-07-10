@@ -46,6 +46,11 @@ async function fillRichTextBody(
   const debugEl = fixture.debugElement.query(
     By.css(`${hostSelector} app-rich-text-editor`),
   );
+  if (!debugEl) {
+    throw new Error(
+      `fillRichTextBody: no <app-rich-text-editor> found under "${hostSelector}"`,
+    );
+  }
   const editor = debugEl.componentInstance as RichTextEditorComponent;
   editor.getEditor()?.commands.insertContent(text);
   fixture.detectChanges();

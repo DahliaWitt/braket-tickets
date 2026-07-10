@@ -233,6 +233,43 @@ describe('RichTextEditorComponent', () => {
       expect(host.lastJson).toContain(storageId);
     });
 
+    it('drops a late upload insert when the document is reset mid-upload', async () => {
+      let resolveUpload!: (value: {
+        storageId: string;
+        previewUrl: string;
+      }) => void;
+      const uploadFn = vi.fn<RichTextImageUploadFn>(
+        () =>
+          new Promise((resolve) => {
+            resolveUpload = resolve;
+          }),
+      );
+      const {component, harness, fixture} = await setup({
+        imageUpload: uploadFn,
+      });
+
+      const file = new File(['bytes'], 'poster.png', {type: 'image/png'});
+      // Start the upload but leave it pending on the deferred promise.
+      const uploadDone = component.onImageFileSelected(makeFileEvent(file));
+      await flush(fixture);
+      expect(component.isUploadingImage()).toBe(true);
+
+      // A send/reset clears the draft while the upload is still in flight.
+      component.reset();
+
+      // The upload now resolves — its insert must be dropped, not applied to
+      // the freshly reset draft.
+      resolveUpload({
+        storageId: 'kg2confirmedstorageid',
+        previewUrl: 'https://cdn.example.com/poster.png',
+      });
+      await uploadDone;
+      await flush(fixture);
+
+      expect(await harness.getSerializedJson()).not.toContain('"type":"image"');
+      expect(component.isUploadingImage()).toBe(false);
+    });
+
     it('rejects an unsupported file type before uploading', async () => {
       const uploadFn = vi.fn<RichTextImageUploadFn>();
       const {component, harness, fixture} = await setup({

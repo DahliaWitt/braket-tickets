@@ -14,6 +14,7 @@ import {
   ViewEncapsulation,
 } from '@angular/core';
 import {Editor, type JSONContent} from '@tiptap/core';
+import {cva} from 'class-variance-authority';
 import {toast} from 'ngx-sonner';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
 import {logger} from '@/utils/logger';
@@ -48,6 +49,20 @@ export type RichTextImageUploadFn = (
   file: File,
   onProgress: (percent: number) => void,
 ) => Promise<{storageId: string; previewUrl: string}>;
+
+/** Toolbar button styling, keyed on whether its formatting mark is active. */
+const toolbarButtonVariants = cva(
+  'rounded-sm px-2 py-1 text-2xs font-mono uppercase tracking-wider transition-colors disabled:cursor-not-allowed disabled:opacity-40',
+  {
+    variants: {
+      active: {
+        true: 'bg-primary/15 text-primary',
+        false: 'text-foreground/70 hover:bg-accent/10 hover:text-foreground',
+      },
+    },
+    defaultVariants: {active: false},
+  },
+);
 
 /**
  * Standalone, zoneless rich-text editor for HTML email bodies (broadcasts +
@@ -362,6 +377,14 @@ export class RichTextEditorComponent {
   readonly isUploadingImage = signal(false);
   readonly uploadProgress = signal<number | null>(null);
 
+  /**
+   * Monotonic token bumped whenever the document is reset. An in-flight image
+   * upload captures the token before awaiting; if it changes before the upload
+   * resolves (a send/reset cleared the draft), the late `insertContent` is
+   * dropped so it can never inject an image into a freshly reset draft.
+   */
+  private uploadGeneration = 0;
+
   constructor() {
     afterNextRender(() => this.initEditor());
 
@@ -386,17 +409,24 @@ export class RichTextEditorComponent {
     return this.editor;
   }
 
+  /**
+   * Clears the document and invalidates any in-flight image upload. Consumers
+   * MUST call this instead of reaching into `getEditor().commands.clearContent`
+   * when resetting after a send/cancel: bumping the upload generation ensures a
+   * late-resolving upload drops its insert rather than mutating the new draft
+   * (see {@link uploadAndInsertImage}).
+   */
+  reset(): void {
+    this.uploadGeneration++;
+    this.editor?.commands.clearContent(true);
+  }
+
   protected isImageButtonDisabled(): boolean {
     return this.disabled() || !this.imageUpload() || this.isUploadingImage();
   }
 
   protected toolbarBtnClass(active: boolean): string {
-    const base =
-      'rounded-sm px-2 py-1 text-2xs font-mono uppercase tracking-wider transition-colors ' +
-      'disabled:cursor-not-allowed disabled:opacity-40 ';
-    return active
-      ? base + 'bg-primary/15 text-primary'
-      : base + 'text-foreground/70 hover:bg-accent/10 hover:text-foreground';
+    return toolbarButtonVariants({active});
   }
 
   private initEditor(): void {
@@ -562,12 +592,16 @@ export class RichTextEditorComponent {
       return;
     }
 
+    const generation = this.uploadGeneration;
     this.isUploadingImage.set(true);
     this.uploadProgress.set(0);
     try {
       const {storageId, previewUrl} = await upload(file, (percent) =>
         this.uploadProgress.set(percent),
       );
+      // A send/reset cleared the draft while this upload was in flight; drop the
+      // stale insert (and its toast) so it can't mutate the new draft.
+      if (generation !== this.uploadGeneration) return;
       // Defensive UX guard on the signed preview url. The storageId is the
       // load-bearing reference; the backend re-derives a durable src from it.
       if (!isAllowedImageUrl(previewUrl)) {

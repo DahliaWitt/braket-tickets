@@ -6,10 +6,10 @@ import {
   mutation,
 } from '../_generated/server';
 import {internal} from '../_generated/api';
-import type {Id} from '../_generated/dataModel';
 import {getAuthUserId, requireUser} from '../lib/auth_identity';
 import {getAppErrorMessage, throwUnauthenticated} from '../lib/errors';
 import {rateLimiter} from '../lib/rate_limits';
+import {findPublishedEmailImage} from '../lib/email/rich_text_images';
 
 // Allowed MIME types for file uploads
 const ALLOWED_MIME_TYPES = [
@@ -371,16 +371,14 @@ export const getPublishedEmailImage = internalQuery({
     }),
   ),
   handler: async (ctx, args) => {
-    // A malformed id string can make the index comparison throw; treat any throw
-    // as "not found" so a forged id fails closed (404) rather than 500s.
+    // The published-image gate is centralized in `findPublishedEmailImage` so
+    // this serve route, upload-cleanup pinning, and the send path can never
+    // diverge on what counts as "published". A malformed id string can make the
+    // index comparison throw; treat any throw as "not found" so a forged id
+    // fails closed (404) rather than 500s.
     let published;
     try {
-      published = await ctx.db
-        .query('richEmailImages')
-        .withIndex('by_storageId', (q) =>
-          q.eq('storageId', args.storageId as Id<'_storage'>),
-        )
-        .first();
+      published = await findPublishedEmailImage(ctx, args.storageId);
     } catch {
       return null;
     }

@@ -3,6 +3,57 @@ import {convexTest} from '../setup.testing';
 import {api} from '../_generated/api';
 import {loadTicketReminderRecipients} from './_impl/reminders';
 
+/**
+ * Seeds the common send-path setup shared by the rich-body reminder tests: a
+ * root admin sender, an organizer community, a recipient user with an approved
+ * application (so they qualify as an `approved_no_ticket` recipient), and a
+ * published public event. Returns the seeded ids plus an admin-identity handle.
+ * Each test supplies its own unique emails/title/date and asserts its own
+ * body/persistence behavior.
+ */
+async function seedApprovedRecipientFixture(
+  t: ReturnType<typeof convexTest>,
+  opts: {
+    adminEmail: string;
+    recipientEmail: string;
+    eventTitle: string;
+    eventDate: string;
+  },
+) {
+  const adminId = await t.mutation(api.testing.users.createUserDirectly, {
+    name: 'Admin',
+    email: opts.adminEmail,
+    isRootAdmin: true,
+  });
+  const organizerId = await t.mutation(api.testing.communities.seedOrganizer, {
+    name: 'Community',
+  });
+  const recipientUserId = await t.mutation(
+    api.testing.users.createUserDirectly,
+    {name: 'Recipient User', email: opts.recipientEmail},
+  );
+  const eventId = await t.mutation(api.testing.events.seedEvent, {
+    title: opts.eventTitle,
+    date: opts.eventDate,
+    price: 3000,
+    totalTickets: 80,
+    status: 'published',
+    visibility: 'public',
+    organizerId,
+  });
+  await t.run(async (ctx) =>
+    // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- no production composite for applications
+    ctx.db.insert('applications', {
+      userId: recipientUserId,
+      organizerId,
+      status: 'approved',
+      answers: {},
+    }),
+  );
+  const asAdmin = t.withIdentity({subject: adminId});
+  return {adminId, organizerId, recipientUserId, eventId, asAdmin};
+}
+
 describe('Event Ticket Reminder Audience', () => {
   it('returns all approved community members without completed/refunded purchases for selected event', async () => {
     const t = convexTest();
@@ -449,38 +500,12 @@ describe('Event Ticket Reminder Audience', () => {
   it('validates + renders bodyJson, stores it, derives plain text, and sends rich HTML', async () => {
     const t = convexTest();
 
-    const adminId = await t.mutation(api.testing.users.createUserDirectly, {
-      name: 'Admin',
-      email: 'admin-send-rich@test-reminders.com',
-      isRootAdmin: true,
+    const {eventId, asAdmin} = await seedApprovedRecipientFixture(t, {
+      adminEmail: 'admin-send-rich@test-reminders.com',
+      recipientEmail: 'rich-recipient@example.com',
+      eventTitle: 'Rich Reminder Event',
+      eventDate: '2026-06-04T02:00:00.000Z',
     });
-    const organizerId = await t.mutation(
-      api.testing.communities.seedOrganizer,
-      {name: 'Community'},
-    );
-    const recipientUserId = await t.mutation(
-      api.testing.users.createUserDirectly,
-      {name: 'Recipient User', email: 'rich-recipient@example.com'},
-    );
-    const eventId = await t.mutation(api.testing.events.seedEvent, {
-      title: 'Rich Reminder Event',
-      date: '2026-06-04T02:00:00.000Z',
-      price: 3000,
-      totalTickets: 80,
-      status: 'published',
-      visibility: 'public',
-      organizerId,
-    });
-
-    await t.run(async (ctx) =>
-      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- no production composite for applications
-      ctx.db.insert('applications', {
-        userId: recipientUserId,
-        organizerId,
-        status: 'approved',
-        answers: {},
-      }),
-    );
 
     const bodyJson = JSON.stringify({
       type: 'doc',
@@ -495,7 +520,6 @@ describe('Event Ticket Reminder Audience', () => {
       ],
     });
 
-    const asAdmin = t.withIdentity({subject: adminId});
     const result = await asAdmin.mutation(
       api.events.reminders.sendTicketPurchaseReminder,
       {
@@ -534,40 +558,13 @@ describe('Event Ticket Reminder Audience', () => {
   it('throws for a forged image src with no storageId (arbitrary remote host)', async () => {
     const t = convexTest();
 
-    const adminId = await t.mutation(api.testing.users.createUserDirectly, {
-      name: 'Admin',
-      email: 'admin-send-rich-bad@test-reminders.com',
-      isRootAdmin: true,
-    });
-    const organizerId = await t.mutation(
-      api.testing.communities.seedOrganizer,
-      {name: 'Community'},
-    );
-    const recipientUserId = await t.mutation(
-      api.testing.users.createUserDirectly,
-      {name: 'Recipient User', email: 'rich-bad-recipient@example.com'},
-    );
-    const eventId = await t.mutation(api.testing.events.seedEvent, {
-      title: 'Rich Reminder Bad Event',
-      date: '2026-06-05T02:00:00.000Z',
-      price: 3000,
-      totalTickets: 80,
-      status: 'published',
-      visibility: 'public',
-      organizerId,
+    const {eventId, asAdmin} = await seedApprovedRecipientFixture(t, {
+      adminEmail: 'admin-send-rich-bad@test-reminders.com',
+      recipientEmail: 'rich-bad-recipient@example.com',
+      eventTitle: 'Rich Reminder Bad Event',
+      eventDate: '2026-06-05T02:00:00.000Z',
     });
 
-    await t.run(async (ctx) =>
-      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- no production composite for applications
-      ctx.db.insert('applications', {
-        userId: recipientUserId,
-        organizerId,
-        status: 'approved',
-        answers: {},
-      }),
-    );
-
-    const asAdmin = t.withIdentity({subject: adminId});
     await expect(
       asAdmin.mutation(api.events.reminders.sendTicketPurchaseReminder, {
         eventId,
@@ -597,37 +594,12 @@ describe('Event Ticket Reminder Audience', () => {
   it('throws for an image whose storageId is not a confirmed upload', async () => {
     const t = convexTest();
 
-    const adminId = await t.mutation(api.testing.users.createUserDirectly, {
-      name: 'Admin',
-      email: 'admin-send-unconfirmed@test-reminders.com',
-      isRootAdmin: true,
+    const {eventId, asAdmin} = await seedApprovedRecipientFixture(t, {
+      adminEmail: 'admin-send-unconfirmed@test-reminders.com',
+      recipientEmail: 'unconfirmed-recipient@example.com',
+      eventTitle: 'Unconfirmed Image Event',
+      eventDate: '2026-06-06T02:00:00.000Z',
     });
-    const organizerId = await t.mutation(
-      api.testing.communities.seedOrganizer,
-      {name: 'Community'},
-    );
-    const recipientUserId = await t.mutation(
-      api.testing.users.createUserDirectly,
-      {name: 'Recipient User', email: 'unconfirmed-recipient@example.com'},
-    );
-    const eventId = await t.mutation(api.testing.events.seedEvent, {
-      title: 'Unconfirmed Image Event',
-      date: '2026-06-06T02:00:00.000Z',
-      price: 3000,
-      totalTickets: 80,
-      status: 'published',
-      visibility: 'public',
-      organizerId,
-    });
-    await t.run(async (ctx) =>
-      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- no production composite for applications
-      ctx.db.insert('applications', {
-        userId: recipientUserId,
-        organizerId,
-        status: 'approved',
-        answers: {},
-      }),
-    );
 
     // A stored-but-never-confirmed storage id must be rejected.
     const unconfirmed = await t.run(async (ctx) => {
@@ -638,7 +610,6 @@ describe('Event Ticket Reminder Audience', () => {
       return await ctx.storage.store(blob);
     });
 
-    const asAdmin = t.withIdentity({subject: adminId});
     await expect(
       asAdmin.mutation(api.events.reminders.sendTicketPurchaseReminder, {
         eventId,
@@ -663,39 +634,13 @@ describe('Event Ticket Reminder Audience', () => {
   it('renders a confirmed image through the durable /api/images route', async () => {
     const t = convexTest();
 
-    const adminId = await t.mutation(api.testing.users.createUserDirectly, {
-      name: 'Admin',
-      email: 'admin-send-confirmed@test-reminders.com',
-      isRootAdmin: true,
+    const {eventId, asAdmin} = await seedApprovedRecipientFixture(t, {
+      adminEmail: 'admin-send-confirmed@test-reminders.com',
+      recipientEmail: 'confirmed-recipient@example.com',
+      eventTitle: 'Confirmed Image Event',
+      eventDate: '2026-06-07T02:00:00.000Z',
     });
-    const organizerId = await t.mutation(
-      api.testing.communities.seedOrganizer,
-      {name: 'Community'},
-    );
-    const recipientUserId = await t.mutation(
-      api.testing.users.createUserDirectly,
-      {name: 'Recipient User', email: 'confirmed-recipient@example.com'},
-    );
-    const eventId = await t.mutation(api.testing.events.seedEvent, {
-      title: 'Confirmed Image Event',
-      date: '2026-06-07T02:00:00.000Z',
-      price: 3000,
-      totalTickets: 80,
-      status: 'published',
-      visibility: 'public',
-      organizerId,
-    });
-    await t.run(async (ctx) =>
-      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- no production composite for applications
-      ctx.db.insert('applications', {
-        userId: recipientUserId,
-        organizerId,
-        status: 'approved',
-        answers: {},
-      }),
-    );
 
-    const asAdmin = t.withIdentity({subject: adminId});
     const storageId = await t.run(async (ctx) => {
       const blob = new Blob(
         [
@@ -770,39 +715,13 @@ describe('Event Ticket Reminder Audience', () => {
   it('throws for a body that renders past the amplification cap', async () => {
     const t = convexTest();
 
-    const adminId = await t.mutation(api.testing.users.createUserDirectly, {
-      name: 'Admin',
-      email: 'admin-send-amplified@test-reminders.com',
-      isRootAdmin: true,
+    const {eventId, asAdmin} = await seedApprovedRecipientFixture(t, {
+      adminEmail: 'admin-send-amplified@test-reminders.com',
+      recipientEmail: 'amplified-recipient@example.com',
+      eventTitle: 'Amplified Reminder Event',
+      eventDate: '2026-06-09T02:00:00.000Z',
     });
-    const organizerId = await t.mutation(
-      api.testing.communities.seedOrganizer,
-      {name: 'Community'},
-    );
-    const recipientUserId = await t.mutation(
-      api.testing.users.createUserDirectly,
-      {name: 'Recipient User', email: 'amplified-recipient@example.com'},
-    );
-    const eventId = await t.mutation(api.testing.events.seedEvent, {
-      title: 'Amplified Reminder Event',
-      date: '2026-06-09T02:00:00.000Z',
-      price: 3000,
-      totalTickets: 80,
-      status: 'published',
-      visibility: 'public',
-      organizerId,
-    });
-    await t.run(async (ctx) =>
-      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- no production composite for applications
-      ctx.db.insert('applications', {
-        userId: recipientUserId,
-        organizerId,
-        status: 'approved',
-        answers: {},
-      }),
-    );
 
-    const asAdmin = t.withIdentity({subject: adminId});
     await expect(
       asAdmin.mutation(api.events.reminders.sendTicketPurchaseReminder, {
         eventId,
@@ -830,37 +749,12 @@ describe('Event Ticket Reminder Audience', () => {
   it('throws for an image confirmed by a different user (ownership)', async () => {
     const t = convexTest();
 
-    const adminId = await t.mutation(api.testing.users.createUserDirectly, {
-      name: 'Admin',
-      email: 'admin-send-owned@test-reminders.com',
-      isRootAdmin: true,
+    const {eventId, asAdmin} = await seedApprovedRecipientFixture(t, {
+      adminEmail: 'admin-send-owned@test-reminders.com',
+      recipientEmail: 'owned-recipient@example.com',
+      eventTitle: 'Owned Image Event',
+      eventDate: '2026-06-08T02:00:00.000Z',
     });
-    const organizerId = await t.mutation(
-      api.testing.communities.seedOrganizer,
-      {name: 'Community'},
-    );
-    const recipientUserId = await t.mutation(
-      api.testing.users.createUserDirectly,
-      {name: 'Recipient User', email: 'owned-recipient@example.com'},
-    );
-    const eventId = await t.mutation(api.testing.events.seedEvent, {
-      title: 'Owned Image Event',
-      date: '2026-06-08T02:00:00.000Z',
-      price: 3000,
-      totalTickets: 80,
-      status: 'published',
-      visibility: 'public',
-      organizerId,
-    });
-    await t.run(async (ctx) =>
-      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- no production composite for applications
-      ctx.db.insert('applications', {
-        userId: recipientUserId,
-        organizerId,
-        status: 'approved',
-        answers: {},
-      }),
-    );
 
     // A DIFFERENT user confirms the upload; the admin sender does not own it.
     const otherId = await t.mutation(api.testing.users.createUserDirectly, {
@@ -884,7 +778,6 @@ describe('Event Ticket Reminder Audience', () => {
     });
     expect(confirm.valid).toBe(true);
 
-    const asAdmin = t.withIdentity({subject: adminId});
     await expect(
       asAdmin.mutation(api.events.reminders.sendTicketPurchaseReminder, {
         eventId,

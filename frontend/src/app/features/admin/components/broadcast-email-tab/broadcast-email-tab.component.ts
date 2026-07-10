@@ -205,6 +205,9 @@ export class BroadcastEmailTabComponent {
     () =>
       !this.eventId() ||
       this.isSendingBroadcast() ||
+      // Block send while an inline image is still uploading, so the send can't
+      // race ahead of (and drop) the image the organizer just added.
+      (this.bodyEditor()?.isUploadingImage() ?? false) ||
       this.isLoadingBroadcastAudience() ||
       !!this.broadcastAudienceError() ||
       this.broadcastRecipientCount() === 0 ||
@@ -300,7 +303,9 @@ export class BroadcastEmailTabComponent {
 
   /** Clears the editor document and compose fields after a successful send. */
   private resetComposeState(): void {
-    this.bodyEditor()?.getEditor()?.commands.clearContent(true);
+    // reset() also invalidates any in-flight image upload so a late insert
+    // cannot land in the cleared draft.
+    this.bodyEditor()?.reset();
     this.broadcastFormModel.set({subject: '', message: '', bodyJson: ''});
   }
 }

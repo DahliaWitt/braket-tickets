@@ -6,6 +6,7 @@ import type {MutationCtx} from '../_generated/server';
 import type {Id} from '../_generated/dataModel';
 import {throwAppError} from './errors';
 import {logger} from './logger';
+import {findPublishedEmailImage} from './email/rich_text_images';
 
 /**
  * Verifies that a storageId was validated by confirmUpload.
@@ -61,10 +62,7 @@ export async function cleanupReplacedUpload(
   oldStorageId: Id<'_storage'>,
 ): Promise<void> {
   try {
-    const published = await ctx.db
-      .query('richEmailImages')
-      .withIndex('by_storageId', (q) => q.eq('storageId', oldStorageId))
-      .first();
+    const published = await findPublishedEmailImage(ctx, oldStorageId);
     if (published !== null) {
       logger.info(
         'storage',
