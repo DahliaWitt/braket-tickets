@@ -41,7 +41,7 @@
         role="listbox"
         [attr.aria-activedescendant]="focusedItemId()"
         [attr.data-state]="'open'"
-        (keydown.{arrowdown,arrowup,enter,space,escape,home,end}.prevent)="
+        (keydown.{arrowdown,arrowup,enter,space,escape,home,end}.prevent-with-stop)="
           onDropdownKeydown($event)
         "
         tabindex="-1"
