@@ -219,7 +219,7 @@ function toCheckoutStatus(order: {
 }
 
 /**
- * Look up a prior free-ticket claim that carries this exact idempotency key.
+ * Resolve a prior free-ticket claim that this exact idempotency key may replay.
  *
  * The key is minted per claim attempt on the frontend and reused verbatim
  * across the Convex client's automatic mutation retries, so a match here is a
@@ -230,13 +230,19 @@ function toCheckoutStatus(order: {
  * Scoped to the caller (userId / guestSessionId) as defense in depth; the key
  * itself is globally unique, but scoping guarantees one owner can never replay
  * another's order even in the astronomically unlikely event of a collision.
+ *
+ * A key that resolves to an order whose shape does not match the current claim
+ * (different event/tier/quantity, or not a completed free primary order) is a
+ * client contract violation — the same key was sent for a different claim.
+ * Reject it loudly rather than silently replaying the wrong order or issuing no
+ * ticket, which is the exact silent-drop failure this fix exists to prevent.
  */
-async function findClaimByIdempotencyKey(
+async function resolveReplayableFreeClaim(
   ctx: MutationCtx,
   identity:
     | {type: 'user'; userId: Id<'users'>}
     | {type: 'guest'; guestSessionId: Id<'guest_sessions'>},
-  idempotencyKey: string,
+  args: ClaimFreeTicketArgs,
 ): Promise<Doc<'ticket_orders'> | null> {
   const existing =
     identity.type === 'user'
@@ -245,7 +251,7 @@ async function findClaimByIdempotencyKey(
           .withIndex('by_owner_user_idempotencyKey', (q) =>
             q
               .eq('userId', identity.userId)
-              .eq('idempotencyKey', idempotencyKey),
+              .eq('idempotencyKey', args.idempotencyKey),
           )
           .first()
       : await ctx.db
@@ -253,9 +259,28 @@ async function findClaimByIdempotencyKey(
           .withIndex('by_owner_guest_idempotencyKey', (q) =>
             q
               .eq('guestSessionId', identity.guestSessionId)
-              .eq('idempotencyKey', idempotencyKey),
+              .eq('idempotencyKey', args.idempotencyKey),
           )
           .first();
+
+  if (!existing) {
+    return null;
+  }
+
+  const matchesClaim =
+    existing.state === 'completed' &&
+    existing.kind === 'primary' &&
+    existing.amountCents === 0 &&
+    existing.eventId === args.eventId &&
+    existing.tier === args.tier &&
+    existing.quantity === args.quantity;
+
+  if (!matchesClaim) {
+    throwOrderError(
+      'INVALID_STATE',
+      'This idempotency key was already used for a different claim',
+    );
+  }
 
   return existing;
 }
@@ -386,11 +411,7 @@ export async function claimFreeTicketHandler(
     throwOrderError('FORBIDDEN', 'Authentication is required');
   }
 
-  const existingClaim = await findClaimByIdempotencyKey(
-    ctx,
-    identity,
-    args.idempotencyKey,
-  );
+  const existingClaim = await resolveReplayableFreeClaim(ctx, identity, args);
   if (existingClaim) {
     return {success: true, orderId: existingClaim._id};
   }
@@ -424,11 +445,7 @@ export async function claimFreeTicketAsGuestHandler(
     throwOrderError('FORBIDDEN', 'Guest session required');
   }
 
-  const existingClaim = await findClaimByIdempotencyKey(
-    ctx,
-    identity,
-    args.idempotencyKey,
-  );
+  const existingClaim = await resolveReplayableFreeClaim(ctx, identity, args);
   if (existingClaim) {
     return {success: true, orderId: existingClaim._id};
   }

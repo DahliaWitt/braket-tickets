@@ -590,6 +590,90 @@ describe('orders', () => {
     expect(tickets).toHaveLength(2);
   });
 
+  it('issues a fresh ticket for a legitimate second guest free claim (new key) under maxTicketsPerUser > 1', async () => {
+    const t = convexTest();
+    const {eventId, inventoryId} = await createEventWithInventory(t, {
+      price: 0,
+      maxTicketsPerUser: 4,
+    });
+    const {sessionId, sessionToken} = await createGuestSession(t);
+
+    const first = await t.mutation(api.orders.core.claimFreeTicketAsGuest, {
+      sessionToken,
+      eventId,
+      quantity: 1,
+      tier: 'regular',
+      termsAccepted: true,
+      idempotencyKey: 'idem-guest-first-claim',
+    });
+    const second = await t.mutation(api.orders.core.claimFreeTicketAsGuest, {
+      sessionToken,
+      eventId,
+      quantity: 1,
+      tier: 'regular',
+      termsAccepted: true,
+      idempotencyKey: 'idem-guest-second-claim',
+    });
+
+    const [inventory, tickets] = await t.run(async (ctx) =>
+      Promise.all([
+        ctx.db.get('event_inventory', inventoryId),
+        ctx.db
+          .query('tickets')
+          .withIndex('by_guestSession_event', (q) =>
+            q.eq('guestSessionId', sessionId).eq('eventId', eventId),
+          )
+          .collect(),
+      ]),
+    );
+    expect(second.orderId).not.toBe(first.orderId);
+    expect(inventory?.soldCount).toBe(2);
+    expect(tickets).toHaveLength(2);
+  });
+
+  it('rejects an idempotency key reused for a different claim instead of silently replaying', async () => {
+    const t = convexTest();
+    const userId = await createUser(
+      t,
+      'Free Key Reuse Buyer',
+      'free-key-reuse-buyer@example.com',
+    );
+    const firstEvent = await createEventWithInventory(t, {
+      title: 'Key Reuse Event 1',
+      price: 0,
+    });
+    const secondEvent = await createEventWithInventory(t, {
+      title: 'Key Reuse Event 2',
+      price: 0,
+    });
+    const asUser = t.withIdentity({subject: userId});
+
+    const sharedKey = 'idem-shared-across-claims';
+    await asUser.mutation(api.orders.core.claimFreeTicket, {
+      eventId: firstEvent.eventId,
+      quantity: 1,
+      tier: 'regular',
+      idempotencyKey: sharedKey,
+    });
+
+    // Same key, different event: this is a client contract violation and must
+    // be rejected loudly, not silently replay the first event's order (which
+    // would return success while issuing no ticket for the second event).
+    await expect(
+      asUser.mutation(api.orders.core.claimFreeTicket, {
+        eventId: secondEvent.eventId,
+        quantity: 1,
+        tier: 'regular',
+        idempotencyKey: sharedKey,
+      }),
+    ).rejects.toThrow();
+
+    const secondInventory = await t.run(async (ctx) =>
+      ctx.db.get('event_inventory', secondEvent.inventoryId),
+    );
+    expect(secondInventory?.soldCount).toBe(0);
+  });
+
   it('rate limits authenticated free claims before inventory side effects', async () => {
     const t = convexTest();
     const userId = await createUser(

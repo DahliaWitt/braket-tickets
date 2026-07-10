@@ -275,6 +275,18 @@ export async function openPrimaryOrderState(
         amountCents: args.amountCents,
       })
     ) {
+      // If a free claim dedups onto a pre-existing open hold, persist the
+      // claim's idempotency key so the completed order remains discoverable on
+      // retry. Without this, a retry would miss the key and double-issue.
+      if (
+        args.idempotencyKey !== undefined &&
+        order.idempotencyKey !== args.idempotencyKey
+      ) {
+        await ctx.db.patch('ticket_orders', order._id, {
+          idempotencyKey: args.idempotencyKey,
+        });
+        return {...order, idempotencyKey: args.idempotencyKey};
+      }
       return order;
     }
   }
