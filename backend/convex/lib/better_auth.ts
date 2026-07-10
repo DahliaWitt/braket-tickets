@@ -289,22 +289,35 @@ export function sanitizeFrontendCallbackUrl(
     return fallback;
   }
 
-  if (rawValue.startsWith('/')) {
-    if (rawValue.startsWith('//')) {
-      return fallback;
-    }
-    return new URL(rawValue, frontendUrl).toString();
+  // Reject backslashes outright. The WHATWG URL parser (and every browser)
+  // normalizes `\` to `/` for http/https, so inputs like `/\evil.com`,
+  // `/\/evil.com`, or `\/\/evil.com` resolve to a protocol-relative external
+  // origin and slip past a naive `startsWith('//')` guard. No legitimate
+  // in-app callback path contains a backslash.
+  if (rawValue.includes('\\')) {
+    return fallback;
   }
 
+  // Resolve the value against the frontend origin and accept it only when the
+  // fully-resolved origin is on the allowlist. Resolving first, then checking
+  // the origin, uniformly rejects protocol-relative (`//host`),
+  // absolute-external, userinfo (`user@host`), and opaque-scheme
+  // (`javascript:`/`data:`, whose origin is "null") URLs regardless of how they
+  // are spelled, while preserving same-origin relative paths and trusted
+  // absolute URLs. The origin — not a string prefix — is authoritative for
+  // where the browser will navigate.
+  let resolved: URL;
   try {
-    const parsed = new URL(rawValue);
-    if (!allowedOrigins.has(parsed.origin)) {
-      return fallback;
-    }
-    return parsed.toString();
+    resolved = new URL(rawValue, frontendUrl);
   } catch {
     return fallback;
   }
+
+  if (!allowedOrigins.has(resolved.origin)) {
+    return fallback;
+  }
+
+  return resolved.toString();
 }
 
 export function buildFrontendCallbackUrl(

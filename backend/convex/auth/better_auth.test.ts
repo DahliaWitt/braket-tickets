@@ -383,6 +383,36 @@ describe('buildFrontendCallbackUrl', () => {
       ),
     ).toBe('https://app.example.com/confirm/social-link');
   });
+
+  it('preserves a same-origin relative callback path', () => {
+    expect(
+      buildFrontendCallbackUrl(
+        '/confirm/social-link?provider=google',
+        '/confirm/social-link',
+      ),
+    ).toBe('https://app.example.com/confirm/social-link?provider=google');
+  });
+
+  // Open-redirect allowlist bypass regression: the WHATWG URL parser treats `\`
+  // as `/` for http/https, so a backslash-prefixed value resolves to an
+  // external protocol-relative origin. Each of these must fall back, never
+  // redirect off-origin.
+  it.each([
+    '/\\evil.com',
+    '/\\/evil.com',
+    '\\/\\/evil.com',
+    '\\\\evil.com',
+    '//evil.com',
+    '/\\/\\evil.com',
+    'https://evil.com',
+    'https://evil.com/confirm/social-link?provider=google',
+    'https://app.example.com@evil.com',
+    'javascript:alert(document.domain)',
+  ])('rejects open-redirect payload %j and falls back to SITE_URL', (payload) => {
+    expect(buildFrontendCallbackUrl(payload, '/confirm/social-link')).toBe(
+      'https://app.example.com/confirm/social-link',
+    );
+  });
 });
 
 describe('haveIBeenPwned plugin registration', () => {
