@@ -325,33 +325,70 @@ export const _markUploadConfirmed = internalMutation({
 });
 
 const ORPHAN_AGE_THRESHOLD_MS = 60 * 60 * 1000; // 1 hour
-const ORPHAN_DELETE_BATCH_SIZE = 50;
-const ORPHAN_SCAN_LIMIT = 500;
+// Files examined per transaction. Bounds reads (~2x this, counting the
+// per-file confirmedUploads lookup) and writes (at most this many deletes)
+// so a single mutation stays well within Convex transaction limits.
+const ORPHAN_SCAN_PAGE_SIZE = 200;
 
 /**
  * Deletes stored files that were never confirmed via confirmUpload.
  *
- * Iterates _storage entries older than 1 hour in ascending creation order.
+ * Walks _storage entries older than 1 hour in ascending creation order.
  * Files without a matching confirmedUploads record are orphans — uploaded
  * but never confirmed (abandoned uploads, client crashes, failed flows).
  *
- * Scans up to ORPHAN_SCAN_LIMIT entries and deletes at most
- * ORPHAN_DELETE_BATCH_SIZE orphans per run, so confirmed files don't
- * exhaust the batch budget. Registered as an hourly cron.
+ * Forward-progress design: confirmed files (event posters, community logos)
+ * are permanent and accumulate at the head of the creation-time ordering.
+ * A fixed from-the-head scan budget would be exhausted by that confirmed
+ * backlog and never reach newer orphans. Instead this scans a bounded page
+ * via the `by_creation_time` index starting strictly after `afterCreationTime`
+ * and, when a full page of aged files is consumed, reschedules itself with the
+ * cursor advanced to the last scanned file. The cursor is monotonically
+ * increasing (Convex `_creationTime` is unique and ordered within a table), so
+ * the sweep advances past any confirmed backlog and provably reaches every
+ * aged orphan. It terminates because the set of files older than `cutoff` is
+ * finite and fixed at sweep start — newly uploaded files have `_creationTime`
+ * at/after `now`, which is beyond `cutoff`, so they cannot extend the sweep.
+ *
+ * The initial (hourly cron) invocation passes no args: `afterCreationTime`
+ * defaults to 0 (scan from the head) and `nowMs` defaults to `Date.now()`.
  */
 export const _cleanupOrphanedUploads = internalMutation({
-  args: {},
+  args: {
+    // Creation-time cursor. Only files created strictly after this timestamp
+    // are scanned. Threaded across self-rescheduled continuations so the sweep
+    // advances instead of restarting from the head each run. Absent on the
+    // initial cron-triggered invocation (defaults to 0 = scan from the head).
+    afterCreationTime: v.optional(v.number()),
+    // Fixed "now" reference so a rescheduled sweep uses one stable cutoff and
+    // tests can age stored files deterministically. Production omits it and
+    // each batch recomputes Date.now() (drift is sub-second and only moves the
+    // cutoff forward, never skipping candidates).
+    nowMs: v.optional(v.number()),
+  },
   returns: v.null(),
-  handler: async (ctx) => {
-    const cutoff = Date.now() - ORPHAN_AGE_THRESHOLD_MS;
-    let deleted = 0;
-    let scanned = 0;
+  handler: async (ctx, args) => {
+    const now = args.nowMs ?? Date.now();
+    const cutoff = now - ORPHAN_AGE_THRESHOLD_MS;
+    const afterCreationTime = args.afterCreationTime ?? 0;
 
-    for await (const file of ctx.db.system.query('_storage')) {
-      if (file._creationTime >= cutoff) break;
-      if (deleted >= ORPHAN_DELETE_BATCH_SIZE) break;
-      if (scanned >= ORPHAN_SCAN_LIMIT) break;
-      scanned++;
+    const files = await ctx.db.system
+      .query('_storage')
+      .withIndex('by_creation_time', (q) =>
+        q.gt('_creationTime', afterCreationTime),
+      )
+      .take(ORPHAN_SCAN_PAGE_SIZE);
+
+    let lastScannedCreationTime = afterCreationTime;
+    let reachedYoungFile = false;
+
+    for (const file of files) {
+      // Ascending creation order: the first file at/after the cutoff means
+      // every remaining file is also too young. Stop the sweep here.
+      if (file._creationTime >= cutoff) {
+        reachedYoungFile = true;
+        break;
+      }
 
       const confirmed = await ctx.db
         .query('confirmedUploads')
@@ -360,8 +397,23 @@ export const _cleanupOrphanedUploads = internalMutation({
 
       if (!confirmed) {
         await ctx.storage.delete(file._id);
-        deleted++;
       }
+
+      lastScannedCreationTime = file._creationTime;
+    }
+
+    // Continue only when this page was full of aged files: more aged
+    // candidates may remain past the cursor. Advancing the cursor guarantees
+    // the next run makes forward progress instead of rescanning the head.
+    const shouldContinue =
+      !reachedYoungFile && files.length === ORPHAN_SCAN_PAGE_SIZE;
+
+    if (shouldContinue) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.storage.files._cleanupOrphanedUploads,
+        {afterCreationTime: lastScannedCreationTime, nowMs: args.nowMs},
+      );
     }
 
     return null;

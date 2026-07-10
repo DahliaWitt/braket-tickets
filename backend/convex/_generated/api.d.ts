@@ -5451,7 +5451,7 @@ export declare const internal: {
       _cleanupOrphanedUploads: FunctionReference<
         "mutation",
         "internal",
-        {},
+        { afterCreationTime?: number; nowMs?: number },
         null
       >;
       _deleteStoredFile: FunctionReference<
