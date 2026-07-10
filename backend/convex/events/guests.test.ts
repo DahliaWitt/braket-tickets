@@ -587,6 +587,33 @@ describe('guests.update', () => {
     expect(afterUpdate?.emailSendLockedAt).toBeNull();
   });
 
+  it('leaves a never-claimed send lock absent after an update', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Never Sent',
+      type: 'guest',
+    });
+
+    const beforeUpdate = await t.run(async (ctx) => ctx.db.get(guestId));
+    expect(beforeUpdate?.emailSendLockedAt).toBeUndefined();
+
+    await asAdmin.mutation(api.events.guests.update, {
+      id: guestId,
+      name: 'Never Sent (renamed)',
+      type: 'guest',
+    });
+
+    // Carrying an absent lock through replace must not resurrect the field.
+    const afterUpdate = await t.run(async (ctx) => ctx.db.get(guestId));
+    expect(afterUpdate?.emailSendLockedAt).toBeUndefined();
+  });
+
   it('rejects non-admin users', async () => {
     const t = convexTest();
 
