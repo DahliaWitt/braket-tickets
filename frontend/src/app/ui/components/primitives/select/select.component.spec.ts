@@ -430,4 +430,74 @@ describe('ZardSelectComponent dropdown Escape propagation', () => {
     await fixture.whenStable();
     expect(await select.isOpen()).toBe(false);
   });
+
+  it('stops Escape from the focused trigger while the dropdown is open', async () => {
+    const select = await loader.getHarness(ZardSelectHarness);
+    await select.clickTrigger();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(await select.isOpen()).toBe(true);
+
+    const trigger = (
+      fixture.nativeElement as HTMLElement
+    ).querySelector<HTMLElement>('button');
+    expect(trigger).not.toBeNull();
+
+    let ancestorReceivedEscape = false;
+    const ancestorListener = (event: Event) => {
+      if ((event as KeyboardEvent).key === 'Escape') {
+        ancestorReceivedEscape = true;
+      }
+    };
+    document.body.addEventListener('keydown', ancestorListener);
+    try {
+      trigger?.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'Escape',
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    } finally {
+      document.body.removeEventListener('keydown', ancestorListener);
+    }
+
+    expect(ancestorReceivedEscape).toBe(false);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(await select.isOpen()).toBe(false);
+  });
+
+  it('lets Escape propagate from the trigger when the dropdown is closed', async () => {
+    const select = await loader.getHarness(ZardSelectHarness);
+    expect(await select.isOpen()).toBe(false);
+
+    const trigger = (
+      fixture.nativeElement as HTMLElement
+    ).querySelector<HTMLElement>('button');
+    expect(trigger).not.toBeNull();
+
+    // A closed select must not swallow Escape — a host dialog still needs to
+    // close on Escape when focus rests on the (closed) select trigger.
+    let ancestorReceivedEscape = false;
+    const ancestorListener = (event: Event) => {
+      if ((event as KeyboardEvent).key === 'Escape') {
+        ancestorReceivedEscape = true;
+      }
+    };
+    document.body.addEventListener('keydown', ancestorListener);
+    try {
+      trigger?.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'Escape',
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    } finally {
+      document.body.removeEventListener('keydown', ancestorListener);
+    }
+
+    expect(ancestorReceivedEscape).toBe(true);
+  });
 });

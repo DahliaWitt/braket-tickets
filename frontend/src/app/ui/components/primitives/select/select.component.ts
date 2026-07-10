@@ -261,6 +261,12 @@ export class ZardSelectComponent implements ControlValueAccessor, OnDestroy {
       case 'Escape':
         if (this.isOpen()) {
           this.close();
+          // The open dropdown consumed the Escape, so stop it from bubbling to
+          // the CDK keyboard dispatcher on <body> where a host dialog would
+          // otherwise treat it as its own Escape and close. When the select is
+          // already closed we deliberately let Escape propagate so it can close
+          // an enclosing dialog.
+          event.stopPropagation();
         }
         break;
     }
