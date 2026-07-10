@@ -19,6 +19,7 @@ import {
 } from '@shared/constants';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 import {ZardCardComponent} from '@ui/components/primitives/card/card.component';
+import {ZardInputDirective} from '@ui/components/primitives/input/input.directive';
 import {BraDialogService} from '@ui/components/composites/dialog/dialog.service';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
 import {logger} from '@/utils/logger';
@@ -30,6 +31,7 @@ import {logger} from '@/utils/logger';
     FormField,
     ZardButtonComponent,
     ZardCardComponent,
+    ZardInputDirective,
     ZardIconComponent,
   ],
   templateUrl: './ticket-reminder-tab.component.html',
