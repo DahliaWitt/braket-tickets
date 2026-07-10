@@ -6,6 +6,7 @@ import type {CheckoutThemeMode} from '../../lib/orders/validators';
 // eslint-disable-next-line @convex-dev/import-wrong-runtime -- importer is 'use node'; plugin heuristic misses that. Same pattern as stripe/actions.ts.
 import {getStripeClient} from '../../lib/stripe_node';
 import {PLATFORM_FEE_PERCENT, calculatePlatformFee} from '../../lib/stripe';
+import {generateStripeIdempotencyKey} from '../../lib/payments/refunds';
 import {sanitizeStatementDescriptor} from './constants';
 
 type CheckoutSessionCreateParams = NonNullable<
@@ -185,7 +186,9 @@ function buildCheckoutIdempotencyKey(
     stripeAccount: requestOptions.stripeAccount ?? null,
   });
   const digest = createHash('sha256').update(fingerprint).digest('hex');
-  return `braket-checkout-${orderId}-${digest.slice(0, 32)}`;
+  // Reuse the shared key builder so the checkout key stays on the same
+  // `braket-${operation}-${subjectId}-${suffix}` convention as refunds/payouts.
+  return generateStripeIdempotencyKey(orderId, 'checkout', digest.slice(0, 32));
 }
 
 function buildTicketLineItem(args: {
