@@ -150,15 +150,27 @@ async function insertUserScopedAuditLog(
 }
 
 function resolveExistingUserSocialSignupCompletion(
-  existingValue: boolean | undefined,
+  existingUser: Pick<
+    Doc<'users'>,
+    'socialSignupCompletionRequired' | 'termsAcceptedAt'
+  >,
   incomingValue: boolean | undefined,
 ): {
   requiresSocialSignupCompletion: boolean;
   updates: Partial<Pick<Doc<'users'>, 'socialSignupCompletionRequired'>>;
 } {
-  const existingRequiresSocialSignupCompletion = existingValue === true;
+  const existingRequiresSocialSignupCompletion =
+    existingUser.socialSignupCompletionRequired === true;
+  // socialSignupCompletionRequired gates terms acceptance, and sync is not a
+  // terms-accepting flow: `incomingValue === false` only means a credential
+  // account now exists on the Better Auth side (setPassword, password reset),
+  // not that the user went through onboarding. Only clear the flag once
+  // termsAcceptedAt is stamped; completeSocialSignupOnboarding stamps it and
+  // clears the flag for users who still need onboarding.
   const shouldClearSocialSignupCompletion =
-    incomingValue === false && existingRequiresSocialSignupCompletion;
+    incomingValue === false &&
+    existingRequiresSocialSignupCompletion &&
+    existingUser.termsAcceptedAt !== undefined;
 
   return {
     requiresSocialSignupCompletion: shouldClearSocialSignupCompletion
@@ -206,7 +218,7 @@ export async function syncUserHandler(
     });
     const socialSignupCompletionState =
       resolveExistingUserSocialSignupCompletion(
-        betterAuthMatch.user.socialSignupCompletionRequired,
+        betterAuthMatch.user,
         args.socialSignupCompletionRequired,
       );
 
@@ -294,7 +306,7 @@ export async function syncUserHandler(
     });
     const socialSignupCompletionState =
       resolveExistingUserSocialSignupCompletion(
-        emailMatch.user.socialSignupCompletionRequired,
+        emailMatch.user,
         args.socialSignupCompletionRequired,
       );
 

@@ -405,7 +405,7 @@ describe('auth_sync', () => {
       });
     });
 
-    it('returns cleared social signup completion for an existing Better Auth-linked user', async () => {
+    it('returns cleared social signup completion for an existing Better Auth-linked user with accepted terms', async () => {
       const t = convexTest();
 
       const userId = (await t.mutation(api.testing.users.createUserDirectly, {
@@ -414,6 +414,7 @@ describe('auth_sync', () => {
         betterAuthUserId: 'ba-user-linked',
         authEmailVerified: true,
         socialSignupCompletionRequired: true,
+        termsAcceptedAt: 1720000000000,
       })) as Id<'users'>;
 
       const result = await t.mutation(internal.auth.sync.syncUser, {
@@ -433,7 +434,66 @@ describe('auth_sync', () => {
       });
     });
 
-    it('returns cleared social signup completion when linking an existing local user by email', async () => {
+    it('keeps social signup completion for a Better Auth-linked user without accepted terms', async () => {
+      const t = convexTest();
+
+      const userId = (await t.mutation(api.testing.users.createUserDirectly, {
+        email: 'linked@example.com',
+        name: 'Linked User',
+        betterAuthUserId: 'ba-user-linked',
+        authEmailVerified: true,
+        socialSignupCompletionRequired: true,
+      })) as Id<'users'>;
+
+      const result = await t.mutation(internal.auth.sync.syncUser, {
+        betterAuthUserId: 'ba-user-linked',
+        email: 'linked@example.com',
+        authEmailVerified: true,
+        socialSignupCompletionRequired: false,
+      });
+
+      expect(result.userId).toBe(userId);
+      expect(result.created).toBe(false);
+      expect(result.requiresSocialSignupCompletion).toBe(true);
+
+      await t.run(async (ctx) => {
+        const user = await ctx.db.get(userId);
+        expect(user?.socialSignupCompletionRequired).toBe(true);
+        expect(user?.termsAcceptedAt).toBeUndefined();
+      });
+    });
+
+    it('returns cleared social signup completion when linking an existing local user by email with accepted terms', async () => {
+      const t = convexTest();
+
+      const userId = (await t.mutation(api.testing.users.createUserDirectly, {
+        email: 'legacy@example.com',
+        name: 'Legacy User',
+        authEmailVerified: true,
+        socialSignupCompletionRequired: true,
+        termsAcceptedAt: 1720000000000,
+      })) as Id<'users'>;
+
+      const result = await t.mutation(internal.auth.sync.syncUser, {
+        betterAuthUserId: 'ba-user-legacy',
+        email: 'legacy@example.com',
+        name: 'Legacy User',
+        authEmailVerified: true,
+        socialSignupCompletionRequired: false,
+      });
+
+      expect(result.userId).toBe(userId);
+      expect(result.created).toBe(false);
+      expect(result.requiresSocialSignupCompletion).toBe(false);
+
+      await t.run(async (ctx) => {
+        const user = await ctx.db.get(userId);
+        expect(user?.betterAuthUserId).toBe('ba-user-legacy');
+        expect(user?.socialSignupCompletionRequired).toBe(false);
+      });
+    });
+
+    it('keeps social signup completion when linking an existing local user by email without accepted terms', async () => {
       const t = convexTest();
 
       const userId = (await t.mutation(api.testing.users.createUserDirectly, {
@@ -453,12 +513,13 @@ describe('auth_sync', () => {
 
       expect(result.userId).toBe(userId);
       expect(result.created).toBe(false);
-      expect(result.requiresSocialSignupCompletion).toBe(false);
+      expect(result.requiresSocialSignupCompletion).toBe(true);
 
       await t.run(async (ctx) => {
         const user = await ctx.db.get(userId);
         expect(user?.betterAuthUserId).toBe('ba-user-legacy');
-        expect(user?.socialSignupCompletionRequired).toBe(false);
+        expect(user?.socialSignupCompletionRequired).toBe(true);
+        expect(user?.termsAcceptedAt).toBeUndefined();
       });
     });
   });
