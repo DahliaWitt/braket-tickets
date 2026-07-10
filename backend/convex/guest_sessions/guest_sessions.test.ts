@@ -1622,5 +1622,60 @@ describe('guest_sessions', () => {
       expect(userPref).not.toBeNull();
       expect(userPref!.optedIn).toBe(false);
     });
+
+    test('address opt-out wins over a later user opt-in (recency-independent suppression)', async () => {
+      const t = convexTest();
+      const userId = await createUser(t, 'unsub-then-optin@test.com');
+      const asUser = t.withIdentity({subject: userId});
+
+      const prefOrgId = await t.mutation(
+        api.testing.communities.seedOrganizer,
+        {
+          name: 'Unsub Then Opt In Org',
+          slug: 'test-org-unsub-then-optin',
+        },
+      );
+
+      // Guest unsubscribe is recorded first (address-level opt-out).
+      await t.mutation(api.testing.marketing.seedAddressMarketingPreference, {
+        email: 'unsub-then-optin@test.com',
+        organizerId: prefOrgId,
+        optedIn: false,
+        unsubToken: 'unsub-then-optin-address-token',
+      });
+
+      // The user later opts in at the user level (more recent updatedAt).
+      await asUser.mutation(api.marketing.emails.updateMarketingPreference, {
+        organizerId: prefOrgId,
+        optedIn: true,
+      });
+
+      const sessionId = await t.mutation(
+        api.testing.guest_sessions.seedGuestSession,
+        {
+          email: 'unsub-then-optin@test.com',
+          sessionToken: 'migrate-unsub-then-optin-token',
+        },
+      );
+
+      await t.mutation(internal.guest_sessions.core.migrateOneSession, {
+        sessionId,
+        userId,
+      });
+
+      const userPref = await t.run(async (ctx) =>
+        ctx.db
+          .query('marketingEmailPreferences')
+          .withIndex('by_user_and_organizer', (q) =>
+            q.eq('userId', userId).eq('organizerId', prefOrgId),
+          )
+          .unique(),
+      );
+      // Deliberate consent-first precedence: a recorded unsubscribe suppresses
+      // regardless of which signal is newer. Suppression carries no legal risk;
+      // emailing an unsubscriber does.
+      expect(userPref).not.toBeNull();
+      expect(userPref!.optedIn).toBe(false);
+    });
   });
 });

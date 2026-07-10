@@ -178,6 +178,14 @@ export async function upsertMarketingPreference(
  *   default created on first send — not an explicit consent signal — so it must
  *   never flip an existing user preference back on. This protects a user who
  *   explicitly opted out before buying a guest ticket with the same email.
+ *
+ * The opt-out carry-over is deliberately recency-independent: a recorded address
+ * unsubscribe always suppresses, even over an existing user opt-in. A user
+ * `optedIn: true` row is not necessarily explicit consent (community approval
+ * seeds one as a default), whereas an address opt-out is an unsubscribe click.
+ * Emailing someone who unsubscribed carries legal exposure; over-suppressing an
+ * opt-in does not — so we bias toward suppression rather than comparing
+ * timestamps across the two tables.
  */
 export async function carryOverAddressMarketingPreferenceToUser(
   db: MarketingPreferenceWriter,
