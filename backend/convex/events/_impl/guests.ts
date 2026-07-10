@@ -95,6 +95,11 @@ export async function update(
     type: args.type,
     notes: args.notes,
     emailedAt: guest.emailedAt,
+    // Carry the in-flight ticket-send lock through the replace. Omitting it
+    // would drop the field (replace overwrites the whole document), silently
+    // clearing a lock a concurrent `sendTicket` action is holding and allowing
+    // a duplicate ticket email. See `beginGuestTicketSend` for the lock's role.
+    emailSendLockedAt: guest.emailSendLockedAt,
     checkedInAt: guest.checkedInAt,
     checkedInBy: guest.checkedInBy,
   });
