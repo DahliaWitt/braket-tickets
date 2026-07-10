@@ -313,6 +313,14 @@ export function sanitizeFrontendCallbackUrl(
     return fallback;
   }
 
+  // Only http(s) redirect targets are valid in-app navigations. A value such as
+  // `blob:https://app.example.com/<uuid>` resolves to a trusted `origin` and
+  // would otherwise pass the allowlist, yet it is not a real page navigation.
+  // The frontend allowlist itself only ever contains http/https origins.
+  if (resolved.protocol !== 'https:' && resolved.protocol !== 'http:') {
+    return fallback;
+  }
+
   if (!allowedOrigins.has(resolved.origin)) {
     return fallback;
   }
