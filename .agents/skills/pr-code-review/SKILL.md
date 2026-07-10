@@ -10,6 +10,7 @@ Autonomous multi-agent PR review. Combines general code quality (bugs, CLAUDE.md
 ## Input
 
 PR number as argument, or auto-detect from current branch:
+
 ```bash
 PR_NUMBER=${ARG:-$(gh pr view --json number -q .number 2>/dev/null)}
 ```
@@ -55,6 +56,7 @@ Execute every step in order. Do not skip steps. Do not merge steps.
 ### Step 1 — Eligibility + Summary (Haiku agent)
 
 Dispatch a Haiku agent that:
+
 1. Checks eligibility — stop if the PR is (a) closed, (b) a draft, (c) trivially automated / obviously fine, or (d) already has a review comment from you.
 2. If eligible, returns:
    - One-paragraph summary of the change
@@ -67,13 +69,13 @@ This must complete before Step 2 because context gathering depends on which laye
 
 Use the `touchesConvex` / `touchesFrontend` flags from Step 1 to decide which agents to launch.
 
-**Agent A — CLAUDE.md Discovery** *(always runs):*
+**Agent A — CLAUDE.md Discovery** _(always runs):_
 List all `CLAUDE.md` and `AGENTS.md` files relevant to the changed paths. Always include root. Include `convex/CLAUDE.md` and `frontend/CLAUDE.md` if those layers are touched.
 
-**Agent B — Convex Guidelines** *(skip if `touchesConvex` is false):*
+**Agent B — Convex Guidelines** _(skip if `touchesConvex` is false):_
 Read `convex/_generated/ai/guidelines.md` and `convex/CLAUDE.md`. Return key rules as a compact checklist.
 
-**Agent C — Angular Best Practices** *(skip if `touchesFrontend` is false):*
+**Agent C — Angular Best Practices** _(skip if `touchesFrontend` is false):_
 Call `angular-cli` MCP `get_best_practices` with the workspace path from `list_projects`. Also read `frontend/CLAUDE.md`. Return combined checklist.
 
 ### Step 3 — Parallel Review (up to 7 Sonnet agents)
@@ -95,7 +97,7 @@ Check previous PRs touching these files (`gh pr list --search`). Flag issues rai
 **Agent 5 — Code Comment Compliance:**
 Read comments (`TODO`, `HACK`, `IMPORTANT`, `WARNING`, `NOTE`) in modified files. Flag changes that violate guidance in those comments.
 
-**Agent 6 — Convex Backend Review** *(skip if `touchesConvex` is false):*
+**Agent 6 — Convex Backend Review** _(skip if `touchesConvex` is false):_
 Review against the checklist from Step 2B plus these rules:
 
 - Public endpoints use `queryWithRLS()` / `mutationWithRLS()` from `convex/lib/rls.ts`
@@ -106,12 +108,12 @@ Review against the checklist from Step 2B plus these rules:
 - Error messages sanitized — no internal state leaks to clients
 - RBAC checks present for protected operations
 - No N+1 patterns (sequential `db.get()` in loops — use batch or index scan)
-- `patch()` with `undefined` does NOT clear fields — handle explicitly
+- `patch()` REMOVES fields set to `undefined` — flag possibly-undefined values passed through that could clear fields unintentionally; prefer explicit `null` (repo convention: `v.null()` over relying on `undefined`)
 - Rate limiting on public-facing mutations
 - TypeScript strict — no `any`, use `unknown` + narrowing
 - Return validators updated when spreading docs with new schema fields
 
-**Agent 7 — Angular Frontend Review** *(skip if `touchesFrontend` is false):*
+**Agent 7 — Angular Frontend Review** _(skip if `touchesFrontend` is false):_
 Review against the checklist from Step 2C plus these rules:
 
 - Standalone components (no NgModules, do not set `standalone: true`)
@@ -130,19 +132,20 @@ Review against the checklist from Step 2C plus these rules:
 ### Step 4 — Confidence Scoring (parallel Haiku agents)
 
 For EACH issue from Step 4, dispatch a Haiku agent with:
+
 - The PR diff via `gh pr diff` (**not** local files — local files read `develop`, not the feature branch)
 - The issue description and originating agent
 - Relevant CLAUDE.md content
 
 Score 0–100:
 
-| Score | Criteria |
-|-------|----------|
-| 0 | False positive, doesn't survive scrutiny, pre-existing issue |
-| 25 | Might be real, unverified. Stylistic issue not in CLAUDE.md |
-| 50 | Verified real, but nitpick or rarely hit in practice |
-| 75 | Verified, impacts functionality, or violates a documented rule |
-| 100 | Confirmed, frequent in practice, direct evidence in diff |
+| Score | Criteria                                                       |
+| ----- | -------------------------------------------------------------- |
+| 0     | False positive, doesn't survive scrutiny, pre-existing issue   |
+| 25    | Might be real, unverified. Stylistic issue not in CLAUDE.md    |
+| 50    | Verified real, but nitpick or rarely hit in practice           |
+| 75    | Verified, impacts functionality, or violates a documented rule |
+| 100   | Confirmed, frequent in practice, direct evidence in diff       |
 
 **Domain scoring guidance:** For Convex/Angular issues (Agents 6–7), score higher if the violated rule appears verbatim in `convex/CLAUDE.md`, `frontend/CLAUDE.md`, or `convex/_generated/ai/guidelines.md`. A violation of a documented project rule scores ≥75. A general best-practice suggestion without project-level documentation scores ≤50.
 
@@ -176,10 +179,12 @@ Found N issues:
    https://github.com/OWNER/REPO/blob/FULL_SHA/path/file.ts#L30-L35
 
 ---
+
 **Reviewed:** bugs, CLAUDE.md compliance, git history, Convex patterns, Angular best practices
 ```
 
 If zero issues:
+
 ```markdown
 ### Code review
 
@@ -187,6 +192,7 @@ No issues found. Reviewed for bugs, CLAUDE.md compliance, Convex patterns, and A
 ```
 
 **Link format requirements:**
+
 - Full git SHA (not abbreviated, not `$(git rev-parse HEAD)`)
 - `#L{start}-L{end}` with 1 line context above and below
 - Repo name matching the PR's repository
@@ -198,6 +204,7 @@ No issues found. Reviewed for bugs, CLAUDE.md compliance, Convex patterns, and A
 Give this verbatim to ALL review agents (Step 4) and scoring agents (Step 5):
 
 **Not an issue (do NOT flag):**
+
 - Pre-existing problems not introduced by this PR
 - Issues a linter, typechecker, or CI would catch (imports, types, formatting)
 - General code quality without a specific documented rule violation
@@ -208,6 +215,7 @@ Give this verbatim to ALL review agents (Step 4) and scoring agents (Step 5):
 - Missing tests unless CLAUDE.md explicitly requires them for this change type
 
 **Real issues (DO flag):**
+
 - RLS bypass on a public endpoint
 - Missing or incomplete validators
 - `any` in a TypeScript strict codebase
@@ -220,12 +228,12 @@ Give this verbatim to ALL review agents (Step 4) and scoring agents (Step 5):
 
 ## Red Flags — You Are About to Shortcut
 
-| Thought | Do this instead |
-|---------|----------------|
-| "I'll review it myself" | Dispatch the agents. They have checklists you'll forget. |
-| "I'll merge Convex and Angular into one agent" | Separate domains prevent cross-contamination. Two agents. |
-| "Small PR, skip scoring" | One false positive erodes trust. Always score. |
-| "Only frontend files but I'll run Convex agent too" | Respect skip logic. False domain matches are noise. |
-| "Scoring agents can just read local files" | Local files = `develop` branch. Use `gh pr diff`. |
-| "I'll batch all issues into one scoring call" | One Haiku per issue. Batching degrades accuracy. |
-| "PR looks fine, I'll post 'no issues' directly" | Run all steps. That's the point of automation. |
+| Thought                                             | Do this instead                                           |
+| --------------------------------------------------- | --------------------------------------------------------- |
+| "I'll review it myself"                             | Dispatch the agents. They have checklists you'll forget.  |
+| "I'll merge Convex and Angular into one agent"      | Separate domains prevent cross-contamination. Two agents. |
+| "Small PR, skip scoring"                            | One false positive erodes trust. Always score.            |
+| "Only frontend files but I'll run Convex agent too" | Respect skip logic. False domain matches are noise.       |
+| "Scoring agents can just read local files"          | Local files = `develop` branch. Use `gh pr diff`.         |
+| "I'll batch all issues into one scoring call"       | One Haiku per issue. Batching degrades accuracy.          |
+| "PR looks fine, I'll post 'no issues' directly"     | Run all steps. That's the point of automation.            |
