@@ -789,9 +789,12 @@ const schemaTables = {
     /**
      * Timestamp of the most recent claim. Reclaim path refreshes this when a
      * stale pending row is taken over by a subsequent delivery. The transient
-     * retry path (`releaseWebhookClaimForRetry`) zeroes this so the next
-     * Stripe retry reclaims immediately instead of waiting for the stale
-     * threshold.
+     * retry path (`releaseWebhookClaimForRetry`) backdates this by exactly
+     * `STALE_CLAIM_THRESHOLD_MS` so the next Stripe retry reclaims immediately
+     * — while keeping the row recent enough that the failure reaper
+     * (`REAPER_FAILURE_TIMEOUT_MS`) does not poison it. It must NOT be zeroed:
+     * `claimedAt: 0` reads as "ancient" to the reaper and gets promoted to
+     * `failed`, short-circuiting Stripe's pending retries.
      */
     claimedAt: v.number(),
     completedAt: v.optional(v.number()),

@@ -113,7 +113,7 @@ crons.interval(
  * Reap Stale Stripe Webhook Claims
  *
  * Runs every 30 minutes to promote `stripe_webhook_events` rows that have
- * been stuck in `pending` past REAPER_FAILURE_TIMEOUT_MS (24h) to `failed`.
+ * been stuck in `pending` past REAPER_FAILURE_TIMEOUT_MS (96h) to `failed`.
  * This bounds the lifetime of claims abandoned by crashed actions whose
  * Stripe retries also exhausted, surfacing them for operator inspection.
  *
