@@ -857,13 +857,18 @@ export class EventEditorComponent implements HasUnsavedChanges {
         formValue.slidingScaleMax,
       );
 
+      // Always send an explicit slider config so disabling sliding scale
+      // persists. Sending `undefined` when the toggle is off is a silent no-op
+      // on the backend (lib/events/writes.ts skips the slidingScale* fields when
+      // `sliderConfig === undefined`), which would flip NOTAFLOF back on after a
+      // seemingly successful save.
       const sliderConfig = formValue.slidingScaleEnabled
         ? {
             enabled: true,
             ...(slidingScaleMin !== undefined ? {min: slidingScaleMin} : {}),
             ...(slidingScaleMax !== undefined ? {max: slidingScaleMax} : {}),
           }
-        : undefined;
+        : {enabled: false};
 
       const endDateArg =
         formValue.endDate && formValue.endTime
@@ -912,8 +917,7 @@ export class EventEditorComponent implements HasUnsavedChanges {
             // Explicit null clears a previously stored end date.
             ...(endDateArg === undefined ? {endDate: null} : {}),
             organizerId: (formValue.organizerId || undefined) as
-              | Id<'organizers'>
-              | undefined,
+              Id<'organizers'> | undefined,
           },
           this.posterFile() || undefined,
           (pct) => this.uploadProgress.set(pct),
