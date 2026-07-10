@@ -4817,6 +4817,7 @@ export declare const internal: {
             maximumRowsRead?: number;
             numItems: number;
           };
+          windowStartMs?: number;
         },
         null
       >;
