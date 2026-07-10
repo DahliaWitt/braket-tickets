@@ -20,7 +20,7 @@ import {api} from '@convex/_generated/api';
 import type {Id} from '@convex/_generated/dataModel';
 import {AuthService} from '@/core/services/auth.service';
 import {CommunitiesService} from '@/core/services/communities.service';
-import {injectConvex, injectQuery, skipToken} from 'convex-angular';
+import {injectConvex, injectQueries, skipToken} from 'convex-angular';
 import {
   DashboardShellComponent,
   type DashboardTab,
@@ -130,30 +130,57 @@ export class CommunityAdminComponent implements HasUnsavedChanges {
   );
   private readonly lastHandledCommunityParam = signal<string | null>(null);
 
-  private readonly isMemberOfQuery = injectQuery(
-    api.communities.admins.isMemberOf,
+  private readonly communityQueries = injectQueries(
     () => {
       const id = this.communityCtx.selectedCommunityId();
-      return id ? {organizerId: id} : skipToken;
+      const isMagicLinks = this.activeTab() === 'magic-links';
+      return {
+        isMemberOf: id
+          ? {query: api.communities.admins.isMemberOf, args: {organizerId: id}}
+          : skipToken,
+        community: id
+          ? {query: api.communities.public.get, args: {id}}
+          : skipToken,
+        links:
+          isMagicLinks && id
+            ? {
+                query: api.communities.invite_links.listMyLinks,
+                args: {organizerId: id},
+              }
+            : skipToken,
+        linksPast:
+          isMagicLinks && id
+            ? {
+                query: api.communities.invite_links.listPastMyLinks,
+                args: {organizerId: id},
+              }
+            : skipToken,
+      };
+    },
+    {
+      onError: (key, error) => {
+        if (key === 'links') {
+          logger.error('Failed to load magic links', error);
+          toast.error('Failed to load your magic links');
+        } else if (key === 'linksPast') {
+          logger.error('Failed to load past magic links', error);
+          toast.error('Failed to load past magic links');
+        }
+      },
     },
   );
 
   readonly isAdminOverride = computed(() => {
     return (
       this.auth.userRole() === 'root_admin' &&
-      this.isMemberOfQuery.data() === false
+      this.communityQueries.results().isMemberOf === false
     );
   });
 
   /** Full community document for the selected community (logo, status, etc.) */
-  private readonly communityQuery = injectQuery(
-    api.communities.public.get,
-    () => {
-      const id = this.communityCtx.selectedCommunityId();
-      return id ? {id} : skipToken;
-    },
+  readonly communityDoc = computed(
+    () => this.communityQueries.results().community ?? null,
   );
-  readonly communityDoc = computed(() => this.communityQuery.data() ?? null);
   readonly communityName = computed(
     () =>
       this.communityDoc()?.name ?? this.communityCtx.selectedCommunityName(),
@@ -272,44 +299,16 @@ export class CommunityAdminComponent implements HasUnsavedChanges {
     });
   }
 
-  private readonly linksQuery = injectQuery(
-    api.communities.invite_links.listMyLinks,
-    () => {
-      const organizerId = this.communityCtx.selectedCommunityId();
-      return this.activeTab() === 'magic-links' && organizerId
-        ? {organizerId}
-        : skipToken;
-    },
-    {
-      onError: (error) => {
-        logger.error('Failed to load magic links', error);
-        toast.error('Failed to load your magic links');
-      },
-    },
-  );
-
-  private readonly linksPastQuery = injectQuery(
-    api.communities.invite_links.listPastMyLinks,
-    () => {
-      const organizerId = this.communityCtx.selectedCommunityId();
-      return this.activeTab() === 'magic-links' && organizerId
-        ? {organizerId}
-        : skipToken;
-    },
-    {
-      onError: (error) => {
-        logger.error('Failed to load past magic links', error);
-        toast.error('Failed to load past magic links');
-      },
-    },
-  );
-
   /** Raw query data or empty array while loading */
-  readonly links = computed(() => this.linksQuery.data() ?? []);
-  isLoading = this.linksQuery.isLoading;
+  readonly links = computed(() => this.communityQueries.results().links ?? []);
+  readonly isLoading = computed(
+    () => this.communityQueries.statuses().links === 'pending',
+  );
 
   readonly linksFilter = signal<'active' | 'past'>('active');
-  readonly pastLinks = computed(() => this.linksPastQuery.data() ?? []);
+  readonly pastLinks = computed(
+    () => this.communityQueries.results().linksPast ?? [],
+  );
   readonly pastLinksCount = computed(() => this.pastLinks().length);
 
   /** Summary stats */

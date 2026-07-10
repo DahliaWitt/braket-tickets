@@ -16,6 +16,7 @@ import {
 } from '../../../testing/mock-types';
 import {AUTH_CLIENT, type AuthClient} from './auth-client.token';
 import {AUTH_SETTLE_TIMEOUT_MS} from './auth.service.helpers';
+import {COMPROMISED_PASSWORD_MESSAGE} from '@shared/constants';
 import {BraToastService} from '@ui/components/composites/toast/toast.service';
 
 const authClient = {
@@ -639,6 +640,33 @@ describe('AuthService', () => {
       expect(routerSpy.navigate).toHaveBeenCalledWith(['/login'], {
         queryParams: {registered: 'true'},
       });
+    });
+
+    it('maps a compromised-password rejection to the shared brand-voice message', async () => {
+      vi.mocked(authClient.signUp.email).mockResolvedValue({
+        data: null,
+        error: {
+          message: 'The password you entered has been compromised.',
+          code: 'PASSWORD_COMPROMISED',
+        } as Error & {code: string},
+      });
+
+      await expect(
+        service.signup('test@e.com', 'breached-pass', 'breached-pass', 'Name'),
+      ).rejects.toThrow(COMPROMISED_PASSWORD_MESSAGE);
+      expect(routerSpy.navigate).not.toHaveBeenCalled();
+    });
+
+    it('maps a thrown compromised-password rejection from the auth client', async () => {
+      vi.mocked(authClient.signUp.email).mockRejectedValueOnce(
+        Object.assign(new Error('Password compromised'), {
+          code: 'PASSWORD_COMPROMISED',
+        }),
+      );
+
+      await expect(
+        service.signup('test@e.com', 'breached-pass', 'breached-pass', 'Name'),
+      ).rejects.toThrow(COMPROMISED_PASSWORD_MESSAGE);
     });
 
     it('navigates to success page when duplicate signup throws from the auth client', async () => {

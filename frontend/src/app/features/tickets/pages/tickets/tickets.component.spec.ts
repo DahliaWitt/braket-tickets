@@ -4,7 +4,12 @@ import {PaymentService} from '@/features/tickets/services/payment.service';
 import {AuthService} from '@/core/services/auth.service';
 import {ResaleService} from '@/features/tickets/services/resale.service';
 import {CONVEX} from 'convex-angular';
-import {EventsService} from '@/features/admin/services/events.service';
+import {api} from '@convex/_generated/api';
+import {
+  getFunctionName,
+  type FunctionArgs,
+  type FunctionReference,
+} from 'convex/server';
 import {signal} from '@angular/core';
 import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
 import {ZardTicketsHarness} from './tickets.component.harness';
@@ -16,6 +21,15 @@ import {
   createMockConvexClient,
   type MockConvexClient,
 } from '@/testing/mock-types';
+
+// The Convex `api` proxy returns a fresh reference object on every property
+// access, so identity comparison never holds. Compare by stable function name.
+const BATCH_AVAILABILITY_NAME = getFunctionName(
+  api.events.public.getBatchAvailability,
+);
+const isBatchAvailabilityQuery = (query: unknown): boolean =>
+  getFunctionName(query as FunctionReference<'query'>) ===
+  BATCH_AVAILABILITY_NAME;
 
 describe('TicketsComponent', () => {
   let component: TicketsComponent;
@@ -60,13 +74,6 @@ describe('TicketsComponent', () => {
     string,
     Record<string, {_id: string; ticketId: string; status: string}[]>
   >;
-
-  const eventsServiceMock = {
-    getBatchAvailability: vi.fn(async (eventIds: string[]) => {
-      const key = [...eventIds].sort().join(',');
-      return availabilityByKey[key] ?? {};
-    }),
-  };
 
   const convexClientMock: MockConvexClient = createMockConvexClient();
   const browserPlatformMock = {
@@ -120,15 +127,22 @@ describe('TicketsComponent', () => {
     vi.spyOn(toast, 'error').mockImplementation(() => '');
 
     convexClientMock.onUpdate = vi.fn(
-      (_query: unknown, args: unknown, onData: (value: unknown) => void) => {
+      (query: unknown, args: unknown, onData: (value: unknown) => void) => {
         const eventIds = (args as {eventIds?: string[]} | undefined)?.eventIds;
-        if (!eventIds || eventIds.length === 0) {
-          onData({});
-          return () => void 0;
-        }
-
-        const key = [...eventIds].sort().join(',');
-        onData(resaleListingsByKey[key] ?? {});
+        const source = isBatchAvailabilityQuery(query)
+          ? availabilityByKey
+          : resaleListingsByKey;
+        // Emit on a microtask to mirror the real Convex client: injectQueries
+        // registers the active subscription only after onUpdate returns, so a
+        // synchronous first emission would be silently discarded.
+        queueMicrotask(() => {
+          if (!eventIds || eventIds.length === 0) {
+            onData({});
+            return;
+          }
+          const key = [...eventIds].sort().join(',');
+          onData(source[key] ?? {});
+        });
         return () => void 0;
       },
     );
@@ -141,7 +155,6 @@ describe('TicketsComponent', () => {
         {provide: AuthService, useValue: authServiceMock},
         {provide: ResaleService, useValue: resaleServiceMock},
         {provide: CONVEX, useValue: convexClientMock},
-        {provide: EventsService, useValue: eventsServiceMock},
         {provide: BrowserPlatformService, useValue: browserPlatformMock},
         provideRouter([]),
       ],
@@ -201,10 +214,16 @@ describe('TicketsComponent', () => {
     fixture.detectChanges();
     await fixture.whenStable();
 
-    expect(eventsServiceMock.getBatchAvailability).toHaveBeenCalledWith([
-      'E1',
-      'E2',
-    ]);
+    const call: unknown[] | undefined =
+      convexClientMock.onUpdate.mock.calls.find(([q]: unknown[]) =>
+        isBatchAvailabilityQuery(q),
+      );
+    expect(call).toBeDefined();
+    const args = call![1] as FunctionArgs<
+      typeof api.events.public.getBatchAvailability
+    >;
+    expect(args.eventIds).toEqual(['E1', 'E2']);
+    expect(typeof args.now).toBe('number');
   });
 
   it('should copy ticket ID', () => {
@@ -464,6 +483,42 @@ describe('TicketsComponent', () => {
 
       expect(component.tickets()).toEqual([]);
       expect(component.hasLoadError()).toBe(true);
+    });
+
+    it('should set hasLoadError when an availability chunk subscription errors', async () => {
+      // Route the getBatchAvailability subscription to its error callback while
+      // leaving resale subscriptions healthy — a single errored chunk must
+      // surface the branded error state. Emit on a microtask so injectQueries
+      // has registered the active subscription (real Convex never emits
+      // synchronously from onUpdate).
+      convexClientMock.onUpdate = vi.fn(
+        (
+          query: unknown,
+          _args: unknown,
+          onData: (value: unknown) => void,
+          onError?: (err: Error) => void,
+        ) => {
+          if (isBatchAvailabilityQuery(query)) {
+            queueMicrotask(() =>
+              onError?.(new Error('availability sync failed')),
+            );
+            return () => void 0;
+          }
+          onData({});
+          return () => void 0;
+        },
+      );
+      convexClientMock.client.onUpdate = convexClientMock.onUpdate;
+
+      ticketsValue.set([makeTicket()]);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(component.hasLoadError()).toBe(true);
+      expect(await harness.hasErrorState()).toBe(true);
+      expect(await harness.getTicketCount()).toBe(0);
     });
   });
 });

@@ -10,6 +10,8 @@ import {CONVEX} from 'convex-angular';
 import {provideRouter} from '@angular/router';
 import {provideZonelessChangeDetection, signal} from '@angular/core';
 import {vi, describe, it, expect, beforeEach} from 'vitest';
+import {api} from '@convex/_generated/api';
+import {functionReferenceMatches} from '@/testing/convex-reference-matchers';
 import {
   createMockConvexClient,
   type MockConvexClient,
@@ -45,10 +47,9 @@ const mockCommunities = [
 // ---------------------------------------------------------------------------
 
 /**
- * The community directory component calls injectQuery in this order:
- *   1. list               (authenticated only)
- *   2. getUserApprovals   (authenticated only)
- *   3. getMyApplications  (authenticated only)
+ * Routes each subscription to its payload by function reference, so the mock
+ * is independent of the order in which injectQueries registers its keys
+ * (communities / approvals / myApplications).
  */
 function createConvexMock(options: {
   communities?: unknown[];
@@ -62,29 +63,40 @@ function createConvexMock(options: {
     applications = [],
     listError = null,
   } = options;
-  let callIndex = 0;
   const convexMock = createMockConvexClient();
   const onUpdate = vi
     .fn()
     .mockImplementation(
       (
-        _query: unknown,
+        query: unknown,
         _args: unknown,
         onData: (data: unknown) => void,
         onError?: (error: Error) => void,
       ) => {
-        const idx = callIndex++;
-        if (idx === 0) {
-          if (listError) {
-            onError?.(listError);
-          } else {
-            onData(communities);
+        // Emit asynchronously to mirror the real Convex client: injectQueries
+        // registers the active subscription only after onUpdate returns, and its
+        // settle/fail guard drops any emission that arrives before that. A
+        // synchronous onData/onError here would be silently discarded.
+        queueMicrotask(() => {
+          if (functionReferenceMatches(query, api.communities.list.list)) {
+            if (listError) onError?.(listError);
+            else onData(communities);
+          } else if (
+            functionReferenceMatches(
+              query,
+              api.communities.trust_links.getUserApprovals,
+            )
+          ) {
+            onData(approvals);
+          } else if (
+            functionReferenceMatches(
+              query,
+              api.communities.applications.getMyApplications,
+            )
+          ) {
+            onData(applications);
           }
-        } else if (idx === 1) {
-          onData(approvals);
-        } else {
-          onData(applications);
-        }
+        });
         return () => void 0;
       },
     );
@@ -296,8 +308,11 @@ async function setupRelationshipLoading() {
     .fn()
     .mockImplementation(
       (_query: unknown, _args: unknown, onData: (data: unknown) => void) => {
+        // Only the communities query (idx 0) emits; approvals/applications stay
+        // pending. Emit asynchronously so injectQueries' settle guard accepts it
+        // (see createConvexMock note).
         if (callIndex++ === 0) {
-          onData(mockCommunities);
+          queueMicrotask(() => onData(mockCommunities));
         }
         return () => void 0;
       },
@@ -327,6 +342,9 @@ async function setupRelationshipLoading() {
 
   const fixture = TestBed.createComponent(CommunityDirectoryComponent);
   fixture.detectChanges();
+  // Flush the queued communities emission so the cards render; approvals and
+  // applications remain pending (never emit), keeping the relationship CTA gated.
+  await fixture.whenStable();
 
   return {fixture};
 }
@@ -346,11 +364,13 @@ async function setupRelationshipError() {
         onData: (data: unknown) => void,
         onError?: (error: Error) => void,
       ) => {
+        // Emit asynchronously (see createConvexMock note): synchronous
+        // onData/onError would be dropped by injectQueries' settle/fail guard.
         const idx = callIndex++;
         if (idx === 0) {
-          onData(mockCommunities);
+          queueMicrotask(() => onData(mockCommunities));
         } else {
-          onError?.(relationshipError);
+          queueMicrotask(() => onError?.(relationshipError));
         }
         return () => void 0;
       },
@@ -911,27 +931,16 @@ describe('CommunityDirectoryComponent', () => {
     it('refetches the authenticated directory queries when retrying a signed-in failure', async () => {
       const {fixture, harness} = await setupAuthenticatedError();
       const component = fixture.componentInstance as unknown as {
-        allCommunitiesQuery: {refetch: () => void};
-        approvalsQuery: {refetch: () => void};
-        myApplicationsQuery: {refetch: () => void};
+        queries: {refetch: () => void};
       };
-      const allCommunitiesRefetch = vi.spyOn(
-        component.allCommunitiesQuery,
-        'refetch',
-      );
-      const approvalsRefetch = vi.spyOn(component.approvalsQuery, 'refetch');
-      const applicationsRefetch = vi.spyOn(
-        component.myApplicationsQuery,
-        'refetch',
-      );
+      const refetchSpy = vi.spyOn(component.queries, 'refetch');
       const retryButton = await harness.getRetryButton();
       expect(retryButton).toBeTruthy();
 
       await retryButton?.click();
 
-      expect(allCommunitiesRefetch).toHaveBeenCalledTimes(1);
-      expect(approvalsRefetch).toHaveBeenCalledTimes(1);
-      expect(applicationsRefetch).toHaveBeenCalledTimes(1);
+      // A single injectQueries refetch resubscribes all three keyed queries.
+      expect(refetchSpy).toHaveBeenCalledTimes(1);
     });
   });
 

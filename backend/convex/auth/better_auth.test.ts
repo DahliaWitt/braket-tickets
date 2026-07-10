@@ -384,3 +384,84 @@ describe('buildFrontendCallbackUrl', () => {
     ).toBe('https://app.example.com/confirm/social-link');
   });
 });
+
+describe('haveIBeenPwned plugin registration', () => {
+  const originalEnv = {...process.env};
+
+  interface PluginShape {
+    id?: string;
+    options?: {
+      paths?: string[];
+      customPasswordCompromisedMessage?: string;
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.AUTH_BASE_URL = 'http://127.0.0.1:3210';
+    delete process.env.IS_TEST;
+    delete process.env.AUTH_HIBP_DISABLED;
+  });
+
+  afterEach(() => {
+    process.env = {...originalEnv};
+  });
+
+  async function buildPlugins(): Promise<PluginShape[]> {
+    const {createAuth} =
+      await vi.importActual<typeof import('../lib/better_auth')>(
+        '../lib/better_auth',
+      );
+    const config = createAuth({runAction: runActionMock} as never) as {
+      plugins?: PluginShape[];
+    };
+    return config.plugins ?? [];
+  }
+
+  it('registers the plugin outside test environments', async () => {
+    const plugins = await buildPlugins();
+    const hibp = plugins.find((p) => p.id === 'have-i-been-pwned');
+    expect(hibp).toBeDefined();
+  });
+
+  it('checks only HTTP-route paths, never mutation-context password flows', async () => {
+    const {HIBP_CHECKED_PATHS} =
+      await vi.importActual<typeof import('../lib/better_auth')>(
+        '../lib/better_auth',
+      );
+    const plugins = await buildPlugins();
+    const hibp = plugins.find((p) => p.id === 'have-i-been-pwned');
+
+    // /change-password and /set-password run through Convex mutations,
+    // where outbound fetch is prohibited and the fail-closed check would
+    // break every password change.
+    expect(hibp?.options?.paths).toEqual(HIBP_CHECKED_PATHS);
+    expect(HIBP_CHECKED_PATHS).toEqual(['/sign-up/email', '/reset-password']);
+    expect(hibp?.options?.paths).not.toContain('/change-password');
+    expect(hibp?.options?.paths).not.toContain('/set-password');
+  });
+
+  it('uses the shared brand-voice compromised-password message', async () => {
+    const {COMPROMISED_PASSWORD_MESSAGE} =
+      await vi.importActual<typeof import('@shared/constants')>(
+        '@shared/constants',
+      );
+    const plugins = await buildPlugins();
+    const hibp = plugins.find((p) => p.id === 'have-i-been-pwned');
+    expect(hibp?.options?.customPasswordCompromisedMessage).toBe(
+      COMPROMISED_PASSWORD_MESSAGE,
+    );
+  });
+
+  it('omits the plugin in E2E/test environments so tests never call HIBP', async () => {
+    process.env.IS_TEST = 'true';
+    const plugins = await buildPlugins();
+    expect(plugins.some((p) => p.id === 'have-i-been-pwned')).toBe(false);
+  });
+
+  it('omits the plugin when the AUTH_HIBP_DISABLED kill switch is set', async () => {
+    process.env.AUTH_HIBP_DISABLED = 'true';
+    const plugins = await buildPlugins();
+    expect(plugins.some((p) => p.id === 'have-i-been-pwned')).toBe(false);
+  });
+});

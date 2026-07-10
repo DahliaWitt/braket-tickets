@@ -12,10 +12,30 @@ import {
   CommunitiesService,
   type Community,
 } from '@/core/services/communities.service';
+import {CONVEX} from 'convex-angular';
+import {api} from '@convex/_generated/api';
+import {
+  getFunctionName,
+  type FunctionArgs,
+  type FunctionReference,
+} from 'convex/server';
+import {
+  createMockConvexClient,
+  type MockConvexClient,
+} from '@/testing/mock-types';
 import {type UserModel} from '@/testing/user-model';
 import {type UpcomingEvent} from '@/core/models/event.types';
 import {type Application} from '@/features/vetting/models/application.model';
 import {type Id} from '@convex/_generated/dataModel';
+
+// The Convex `api` proxy returns a fresh reference object on every property
+// access, so identity comparison never holds. Compare by stable function name.
+const BATCH_AVAILABILITY_NAME = getFunctionName(
+  api.events.public.getBatchAvailability,
+);
+const isBatchAvailabilityQuery = (query: unknown): boolean =>
+  getFunctionName(query as FunctionReference<'query'>) ===
+  BATCH_AVAILABILITY_NAME;
 
 describe('DashboardDataService', () => {
   let service: DashboardDataService;
@@ -24,7 +44,6 @@ describe('DashboardDataService', () => {
   };
   let eventsServiceMock: {
     getUpcoming: Mock;
-    getBatchAvailability: Mock;
   };
   let applicationsServiceMock: {
     getMyApplication: Mock;
@@ -32,6 +51,15 @@ describe('DashboardDataService', () => {
   let communitiesServiceMock: {
     list: Mock;
   };
+  let convexClientMock: MockConvexClient;
+
+  // Availability results keyed by sorted eventIds join, mirroring the live
+  // getBatchAvailability subscription: onUpdate receives the WHOLE chunk map
+  // (eventId -> availability), so seed the full per-chunk map here.
+  let availabilityByKey: Record<
+    string,
+    Record<string, EventAvailability | null>
+  >;
 
   const mockUser: UserModel = {
     _id: 'user-1' as Id<'users'>,
@@ -114,7 +142,6 @@ describe('DashboardDataService', () => {
 
     eventsServiceMock = {
       getUpcoming: vi.fn().mockResolvedValue(mockEvents),
-      getBatchAvailability: vi.fn().mockResolvedValue(mockBatchAvailability),
     };
 
     applicationsServiceMock = {
@@ -125,6 +152,31 @@ describe('DashboardDataService', () => {
       list: vi.fn().mockResolvedValue(mockCommunities),
     };
 
+    // Default availability wiring: the batch subscription resolves per-chunk
+    // using the sorted-eventIds key. Two events -> key 'event-1,event-2'.
+    availabilityByKey = {'event-1,event-2': mockBatchAvailability};
+
+    convexClientMock = createMockConvexClient();
+    // Emissions are deferred to a microtask: injectQueries registers a
+    // subscription in its active-key map only after onUpdate() returns, so a
+    // synchronous emission is dropped by its staleness guard (the real client
+    // never emits synchronously either).
+    convexClientMock.onUpdate = vi.fn(
+      (query: unknown, args: unknown, onData: (value: unknown) => void) => {
+        const eventIds = (args as {eventIds?: string[]} | undefined)?.eventIds;
+        queueMicrotask(() => {
+          if (!eventIds || eventIds.length === 0) {
+            onData({});
+            return;
+          }
+          const key = [...eventIds].sort().join(',');
+          onData(availabilityByKey[key] ?? {});
+        });
+        return () => void 0;
+      },
+    );
+    convexClientMock.client.onUpdate = convexClientMock.onUpdate;
+
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
@@ -133,6 +185,7 @@ describe('DashboardDataService', () => {
         {provide: EventsService, useValue: eventsServiceMock},
         {provide: ApplicationsService, useValue: applicationsServiceMock},
         {provide: CommunitiesService, useValue: communitiesServiceMock},
+        {provide: CONVEX, useValue: convexClientMock},
       ],
     });
 
@@ -158,9 +211,12 @@ describe('DashboardDataService', () => {
             applicationReason: null,
             events: [],
             communities: [],
-            eventAvailability: {},
           });
         });
+
+        // Availability field is no longer part of DashboardData; the merged
+        // map is empty because there are no events to subscribe to.
+        expect(service.eventAvailability()).toEqual({});
       });
 
       it('should not call any services when user is null', async () => {
@@ -194,27 +250,38 @@ describe('DashboardDataService', () => {
         });
       });
 
-      it('should fetch batch availability for all events', async () => {
-        TestBed.tick();
-
+      it('should subscribe to batch availability for all events', async () => {
         await vi.waitFor(() => {
-          expect(eventsServiceMock.getBatchAvailability).toHaveBeenCalledWith([
-            'event-1',
-            'event-2',
-          ]);
+          TestBed.tick();
+          const call: unknown[] | undefined =
+            convexClientMock.onUpdate.mock.calls.find(([q]: unknown[]) =>
+              isBatchAvailabilityQuery(q),
+            );
+          expect(call).toBeDefined();
+          const args = call![1] as FunctionArgs<
+            typeof api.events.public.getBatchAvailability
+          >;
+          expect(args.eventIds).toEqual(['event-1', 'event-2']);
+          expect(typeof args.now).toBe('number');
         });
       });
 
-      it('should not call getBatchAvailability when there are no events', async () => {
+      it('should not subscribe to batch availability when there are no events', async () => {
         eventsServiceMock.getUpcoming.mockResolvedValue([]);
 
-        TestBed.tick();
-
         await vi.waitFor(() => {
+          TestBed.tick();
           expect(eventsServiceMock.getUpcoming).toHaveBeenCalled();
+          expect(service.events()).toEqual([]);
         });
 
-        expect(eventsServiceMock.getBatchAvailability).not.toHaveBeenCalled();
+        // Definitions collapse to {} for an empty event set, so no
+        // availability subscription is ever opened.
+        expect(
+          convexClientMock.onUpdate.mock.calls.some(([q]: unknown[]) =>
+            isBatchAvailabilityQuery(q),
+          ),
+        ).toBe(false);
       });
     });
   });
@@ -296,51 +363,74 @@ describe('DashboardDataService', () => {
     });
 
     it('should map event availability with default values', async () => {
-      const availabilityWithNulls: Record<string, EventAvailability | null> = {
+      // Single event -> chunk key is just 'event-1'. Missing userTicketCount /
+      // ticketSalesStatus must default to 0 / 'active' in the merged map.
+      availabilityByKey = {
         'event-1': {
-          isSoldOut: false,
-          userTicketCount: undefined,
-          ticketSalesStatus: undefined,
-          purchaseAccess: {allowed: true, source: 'direct'},
+          'event-1': {
+            isSoldOut: false,
+            userTicketCount: undefined,
+            ticketSalesStatus: undefined,
+            purchaseAccess: {allowed: true, source: 'direct'},
+          },
         },
       };
-      eventsServiceMock.getBatchAvailability.mockResolvedValue(
-        availabilityWithNulls,
-      );
       eventsServiceMock.getUpcoming.mockResolvedValue([mockEvents[0]]);
 
-      TestBed.tick();
-
       await vi.waitFor(() => {
-        const data = service.data();
-        const availability = data?.eventAvailability['event-1'];
+        TestBed.tick();
+        const availability = service.eventAvailability()['event-1'];
         expect(availability?.userTicketCount).toBe(0);
         expect(availability?.ticketSalesStatus).toBe('active');
       });
     });
   });
 
-  describe('error handling', () => {
+  describe('availability error handling', () => {
     beforeEach(() => {
       authServiceMock.user.set(mockUser);
     });
 
-    it('should handle failed batch availability fetch gracefully', async () => {
+    it('should degrade gracefully when a batch availability chunk errors', async () => {
       const consoleSpy = vi
         .spyOn(console, 'error')
         .mockImplementation(() => undefined);
-      eventsServiceMock.getBatchAvailability.mockRejectedValue(
-        new Error('Network error'),
-      );
 
-      TestBed.tick();
+      // Drive the availability subscription into its error channel while the
+      // rest of the dashboard resource resolves normally.
+      convexClientMock.onUpdate = vi.fn(
+        (
+          query: unknown,
+          _args: unknown,
+          onData: (value: unknown) => void,
+          onError?: (err: Error) => void,
+        ) => {
+          // Deferred past onUpdate's return so injectQueries' staleness guard
+          // (registration happens after onUpdate) accepts the emission.
+          queueMicrotask(() => {
+            if (isBatchAvailabilityQuery(query)) {
+              onError?.(new Error('Network error'));
+              return;
+            }
+            onData({});
+          });
+          return () => void 0;
+        },
+      );
+      convexClientMock.client.onUpdate = convexClientMock.onUpdate;
 
       await vi.waitFor(() => {
-        const data = service.data();
-        // Data should still be returned with empty availability
-        expect(data?.events).toHaveLength(2);
-        expect(data?.eventAvailability).toEqual({});
+        TestBed.tick();
+        // Core dashboard data still renders...
+        expect(service.events()).toHaveLength(2);
+        // ...while the errored chunk simply drops out of the map.
+        expect(service.eventAvailability()).toEqual({});
       });
+
+      // An availability failure must not hang the loading skeleton.
+      expect(service.isLoading()).toBe(false);
+      // The resource itself never errored — availability errors are swallowed.
+      expect(service.hasLoadError()).toBe(false);
 
       expect(consoleSpy).toHaveBeenCalledWith(
         '%c[ERROR]%c Failed to load event availabilities',
@@ -353,25 +443,22 @@ describe('DashboardDataService', () => {
     });
 
     it('should skip null availability entries', async () => {
-      const availabilityWithNull: Record<string, EventAvailability | null> = {
-        'event-1': {
-          isSoldOut: false,
-          userTicketCount: 1,
-          ticketSalesStatus: 'active',
-          purchaseAccess: {allowed: true, source: 'direct'},
+      availabilityByKey = {
+        'event-1,event-2': {
+          'event-1': {
+            isSoldOut: false,
+            userTicketCount: 1,
+            ticketSalesStatus: 'active',
+            purchaseAccess: {allowed: true, source: 'direct'},
+          },
+          'event-2': null,
         },
-        'event-2': null,
       };
-      eventsServiceMock.getBatchAvailability.mockResolvedValue(
-        availabilityWithNull,
-      );
-
-      TestBed.tick();
 
       await vi.waitFor(() => {
-        const data = service.data();
-        expect(data?.eventAvailability['event-1']).toBeDefined();
-        expect(data?.eventAvailability['event-2']).toBeUndefined();
+        TestBed.tick();
+        expect(service.eventAvailability()['event-1']).toBeDefined();
+        expect(service.eventAvailability()['event-2']).toBeUndefined();
       });
     });
   });
@@ -406,11 +493,9 @@ describe('DashboardDataService', () => {
     });
 
     it('should provide eventAvailability computed signal', async () => {
-      TestBed.tick();
-
       await vi.waitFor(() => {
-        const availability = service.eventAvailability();
-        expect(availability['event-1']?.isSoldOut).toBe(false);
+        TestBed.tick();
+        expect(service.eventAvailability()['event-1']?.isSoldOut).toBe(false);
       });
     });
 
@@ -426,7 +511,8 @@ describe('DashboardDataService', () => {
   });
 
   describe('isLoading signal', () => {
-    it('should expose the settled loading state from dashboardResource', async () => {
+    it('should be false once the resource settles with no events to load', async () => {
+      authServiceMock.user.set(null);
       TestBed.tick();
 
       await vi.waitFor(() => {
@@ -434,6 +520,40 @@ describe('DashboardDataService', () => {
       });
 
       expect(service.isLoading()).toBe(false);
+    });
+
+    it('should stay true while an availability chunk awaits its first result', async () => {
+      // Capture but never invoke onData so the chunk stays pending.
+      let deliver: ((value: unknown) => void) | undefined;
+      convexClientMock.onUpdate = vi.fn(
+        (query: unknown, _args: unknown, onData: (value: unknown) => void) => {
+          if (isBatchAvailabilityQuery(query)) {
+            deliver = onData;
+            return () => void 0;
+          }
+          onData({});
+          return () => void 0;
+        },
+      );
+      convexClientMock.client.onUpdate = convexClientMock.onUpdate;
+
+      authServiceMock.user.set(mockUser);
+
+      // Resource resolves and the pending availability chunk keeps loading true.
+      await vi.waitFor(() => {
+        TestBed.tick();
+        expect(service.events()).toHaveLength(2);
+        expect(deliver).toBeDefined();
+        expect(service.isLoading()).toBe(true);
+      });
+
+      // First availability result arrives -> loading resolves.
+      deliver!(mockBatchAvailability);
+
+      await vi.waitFor(() => {
+        TestBed.tick();
+        expect(service.isLoading()).toBe(false);
+      });
     });
   });
 

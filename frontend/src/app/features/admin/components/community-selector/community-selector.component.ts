@@ -4,16 +4,20 @@ import {
   computed,
   effect,
   inject,
-  resource,
   signal,
 } from '@angular/core';
 import {ActivatedRoute, Router} from '@angular/router';
 import {CommunityContextService} from '../../services/community-context.service';
-import {CommunitiesService} from '@/core/services/communities.service';
 import {AuthService} from '@/core/services/auth.service';
 import type {Id} from '@convex/_generated/dataModel';
 import {readInputValue} from '@ui/utils/dom-event';
-import {safeResourceValue} from '@/utils/resource';
+import {
+  injectQuery,
+  injectQueries,
+  skipToken,
+  type QueryRequest,
+} from 'convex-angular';
+import {api} from '@convex/_generated/api';
 import {CommunityAdminDefaultService} from '@/features/admin/services/community-admin-default.service';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
@@ -35,9 +39,12 @@ interface CommunityOption {
  * - Multiple communities: renders a styled `<select>` dropdown that calls
  *   `CommunityContextService.selectCommunity()` on change.
  *
- * The component uses `resource()` to fetch human-readable names for each
- * community ID. A separate effect propagates resolved names back to
- * `CommunityContextService` so the loader remains read-only.
+ * The component subscribes to Convex queries to resolve human-readable names
+ * for each community ID (batched via `communities.list.list` for root admins,
+ * per-ID via `communities.public.get` otherwise). A separate effect propagates
+ * resolved names back to `CommunityContextService` so the loader remains
+ * read-only. Because these are live subscriptions, names update in real time
+ * when organizer documents change.
  */
 @Component({
   selector: 'app-community-selector',
@@ -113,7 +120,6 @@ interface CommunityOption {
 })
 export class CommunitySelectorComponent {
   protected readonly ctx = inject(CommunityContextService);
-  private readonly communitiesService = inject(CommunitiesService);
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -121,59 +127,79 @@ export class CommunitySelectorComponent {
   protected readonly isSavingDefault = signal(false);
 
   /**
-   * Fetches the display name for each community ID whenever the community list
-   * changes. After resolution, it also pushes the names back to the service so
-   * that `selectedCommunityName()` is populated for the single-community label.
+   * Which community IDs need display names resolved.
    *
-   * In admin-override mode the params include only the override community ID so
-   * its name is resolved and shown in the static label (the dropdown is hidden).
-   *
-   * Root admins use a single batch fetch of all communities to avoid N+1 queries.
-   * Community admins (1-5 communities) use individual fetches.
+   * Override mode: only the override community. Otherwise: the user's admin
+   * communities. In admin-override mode the override community is resolved so
+   * its name shows in the static label (the dropdown is hidden).
    */
-  private readonly namesResource = resource<
-    CommunityOption[],
-    Id<'organizers'>[]
-  >({
-    params: () => {
-      const overrideId = this.ctx.selectedCommunityId();
-      if (this.ctx.isAdminOverride() && overrideId !== null) {
-        // Override mode: only resolve the override community's name.
-        return [overrideId];
-      }
-      return this.ctx.communities();
-    },
-    loader: async ({params: ids}): Promise<CommunityOption[]> => {
-      if (
-        this.auth.userRole() === 'root_admin' &&
-        !this.ctx.isAdminOverride()
-      ) {
-        // Root admin (non-override): batch fetch all communities in one query
-        const allCommunities = await this.communitiesService.list();
-        const idSet = new Set(ids.map(String));
-        return allCommunities
-          .filter((c) => idSet.has(String(c._id)))
-          .map((c) => ({id: c._id, name: c.name, slug: c.slug ?? null}));
-      }
-
-      // Community admin or override mode: individual fetches
-      return Promise.all(
-        ids.map(async (id) => {
-          const community = await this.communitiesService.get(id);
-          return {
-            id,
-            name: community?.name ?? 'Unknown',
-            slug: community?.slug ?? null,
-          };
-        }),
-      );
-    },
+  private readonly idsToResolve = computed<Id<'organizers'>[]>(() => {
+    const overrideId = this.ctx.selectedCommunityId();
+    if (this.ctx.isAdminOverride() && overrideId !== null) {
+      return [overrideId];
+    }
+    return this.ctx.communities();
   });
 
-  /** Options array for the dropdown, falls back to empty while loading. */
-  protected readonly options = computed<CommunityOption[]>(
-    () => safeResourceValue(this.namesResource) ?? [],
+  /**
+   * Root admins (non-override) batch-fetch every community once to avoid N+1
+   * queries; community admins and override mode resolve names per-ID.
+   */
+  private readonly isListMode = computed(
+    () => this.auth.userRole() === 'root_admin' && !this.ctx.isAdminOverride(),
   );
+
+  /** Batch source (root-admin, non-override). Skipped otherwise. */
+  private readonly listQuery = injectQuery(api.communities.list.list, () =>
+    this.isListMode() ? {} : skipToken,
+  );
+
+  /**
+   * Per-ID source (community admin / override). Empty (no active
+   * subscriptions) in list mode.
+   */
+  private readonly nameQueries = injectQueries(() => {
+    const requests: Record<
+      string,
+      QueryRequest<typeof api.communities.public.get>
+    > = {};
+    if (!this.isListMode()) {
+      for (const id of this.idsToResolve()) {
+        requests[id] = {query: api.communities.public.get, args: {id}};
+      }
+    }
+    return requests;
+  });
+
+  /**
+   * Options array for the dropdown; entries appear as their names resolve.
+   * Pending per-ID loads (results entry still undefined) are excluded so a
+   * placeholder name is never published to setResolvedNames() or rendered in
+   * the header. A resolved-but-null community (deleted/no access) does get an
+   * 'Unknown' entry — that state is final, not transitional.
+   */
+  protected readonly options = computed<CommunityOption[]>(() => {
+    const ids = this.idsToResolve();
+    if (this.isListMode()) {
+      const all = this.listQuery.data() ?? [];
+      const idSet = new Set(ids.map(String));
+      return all
+        .filter((c) => idSet.has(String(c._id)))
+        .map((c) => ({id: c._id, name: c.name, slug: c.slug ?? null}));
+    }
+    const results = this.nameQueries.results();
+    const options: CommunityOption[] = [];
+    for (const id of ids) {
+      const community = results[id];
+      if (community === undefined) continue;
+      options.push({
+        id,
+        name: community?.name ?? 'Unknown',
+        slug: community?.slug ?? null,
+      });
+    }
+    return options;
+  });
 
   protected readonly showDefaultPreference = computed(
     () => !this.ctx.isAdminOverride() && this.ctx.communities().length > 1,

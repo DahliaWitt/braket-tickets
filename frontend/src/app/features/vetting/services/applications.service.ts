@@ -26,7 +26,7 @@ export class ApplicationsService {
    * @param doc - Raw document from Convex
    * @returns The mapped Application or null if invalid
    */
-  private mapToApp(doc: unknown): Application | null {
+  mapToApp(doc: unknown): Application | null {
     if (!this.isValidApplicationDocument(doc)) return null;
 
     return {
