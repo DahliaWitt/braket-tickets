@@ -230,11 +230,10 @@ type CommunityListItem = FunctionReturnType<
                           size="md"
                           >rejected</bra-status-badge
                         >
-                        @if (
-                          community.status === 'published' &&
-                          latestApplicationStatusMap().get(community._id) ===
-                            'rejected'
-                        ) {
+                        <!-- statusMap only yields 'rejected' when the newest
+                             application is rejected (revoked maps to its own
+                             branch), so publication is the only gate here. -->
+                        @if (community.status === 'published') {
                           <a
                             data-testid="cta-revise"
                             [routerLink]="[
@@ -401,22 +400,6 @@ export class CommunityDirectoryComponent {
       return map;
     },
   );
-
-  readonly latestApplicationStatusMap = computed(() => {
-    const map = new Map<
-      string,
-      'pending' | 'approved' | 'rejected' | 'revoked'
-    >();
-    if (!this.auth.isAuthenticated()) return map;
-
-    const applications = this.queries.results().myApplications ?? [];
-    for (const app of applications) {
-      if (!app.organizerId || map.has(app.organizerId)) continue;
-      map.set(app.organizerId, app.status);
-    }
-
-    return map;
-  });
 
   protected retryDirectoryLoad(): void {
     if (this.auth.isAuthenticated()) {
