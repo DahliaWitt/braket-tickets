@@ -383,6 +383,51 @@ describe('buildFrontendCallbackUrl', () => {
       ),
     ).toBe('https://app.example.com/confirm/social-link');
   });
+
+  it('preserves a same-origin relative callback path', () => {
+    expect(
+      buildFrontendCallbackUrl(
+        '/confirm/social-link?provider=google',
+        '/confirm/social-link',
+      ),
+    ).toBe('https://app.example.com/confirm/social-link?provider=google');
+  });
+
+  // Open-redirect allowlist bypass regression: the WHATWG URL parser treats `\`
+  // as `/` for http/https, so a backslash-prefixed value resolves to an
+  // external protocol-relative origin. Each of these must fall back, never
+  // redirect off-origin.
+  it.each([
+    '/\\evil.com',
+    '/\\/evil.com',
+    '\\/\\/evil.com',
+    '\\\\evil.com',
+    '//evil.com',
+    '/\\/\\evil.com',
+    '  //evil.com', // leading whitespace is stripped by the URL parser
+    '\t//evil.com', // leading control char is stripped by the URL parser
+    'https://evil.com',
+    'HTTPS://evil.com', // uppercase scheme
+    'https://evil.com/confirm/social-link?provider=google',
+    'https://app.example.com@evil.com', // userinfo trick
+    'https://app.example.com.evil.com', // suffix-lookalike host
+    'https://localhost.evil.com', // trusted-substring lookalike host
+    'javascript:alert(document.domain)',
+    'data:text/html,<script>alert(1)</script>',
+    'blob:https://app.example.com/1234-5678', // same-origin but non-http(s)
+  ])('rejects open-redirect payload %j and falls back to SITE_URL', (payload) => {
+    expect(buildFrontendCallbackUrl(payload, '/confirm/social-link')).toBe(
+      'https://app.example.com/confirm/social-link',
+    );
+  });
+
+  it('keeps percent-encoded separators on the same origin path', () => {
+    // %2F%2F is not re-decoded into an authority by the URL parser, so it stays
+    // a same-origin path rather than becoming a protocol-relative redirect.
+    expect(
+      buildFrontendCallbackUrl('/%2F%2Fevil.com', '/confirm/social-link'),
+    ).toBe('https://app.example.com/%2F%2Fevil.com');
+  });
 });
 
 describe('haveIBeenPwned plugin registration', () => {

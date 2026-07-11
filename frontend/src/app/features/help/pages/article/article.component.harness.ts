@@ -1,19 +1,47 @@
-import { ComponentHarness } from '@angular/cdk/testing';
+import {ComponentHarness} from '@angular/cdk/testing';
 
 export class ArticleComponentHarness extends ComponentHarness {
   static hostSelector = 'app-article';
 
-  private getBreadcrumb = this.locatorForOptional('[data-testid="help-breadcrumb"]');
-  private getArticleContent = this.locatorForOptional('[data-testid="help-article-content"]');
-  private getLoadingState = this.locatorForOptional('[data-testid="article-loading-state"]');
-  private getErrorState = this.locatorForOptional('[data-testid="article-error-state"]');
-  private getLoginPrompt = this.locatorForOptional('[data-testid="help-login-prompt"]');
-  private getPrevLink = this.locatorForOptional('[data-testid="prev-article-link"]');
-  private getNextLink = this.locatorForOptional('[data-testid="next-article-link"]');
-  private getPrevTitle = this.locatorForOptional('[data-testid="prev-article-title"]');
-  private getNextTitle = this.locatorForOptional('[data-testid="next-article-title"]');
-  private getPrevIcon = this.locatorForOptional('[data-testid="prev-article-link"] z-icon');
-  private getNextIcon = this.locatorForOptional('[data-testid="next-article-link"] z-icon');
+  private getBreadcrumb = this.locatorForOptional(
+    '[data-testid="help-breadcrumb"]',
+  );
+  private getArticleContent = this.locatorForOptional(
+    '[data-testid="help-article-content"]',
+  );
+  private getLoadingState = this.locatorForOptional(
+    '[data-testid="article-loading-state"]',
+  );
+  private getErrorState = this.locatorForOptional(
+    '[data-testid="article-error-state"]',
+  );
+  private getNotFoundState = this.locatorForOptional(
+    '[data-testid="article-not-found-state"]',
+  );
+  private getManifestLoadingState = this.locatorForOptional(
+    '[data-testid="article-manifest-loading-state"]',
+  );
+  private getLoginPrompt = this.locatorForOptional(
+    '[data-testid="help-login-prompt"]',
+  );
+  private getPrevLink = this.locatorForOptional(
+    '[data-testid="prev-article-link"]',
+  );
+  private getNextLink = this.locatorForOptional(
+    '[data-testid="next-article-link"]',
+  );
+  private getPrevTitle = this.locatorForOptional(
+    '[data-testid="prev-article-title"]',
+  );
+  private getNextTitle = this.locatorForOptional(
+    '[data-testid="next-article-title"]',
+  );
+  private getPrevIcon = this.locatorForOptional(
+    '[data-testid="prev-article-link"] z-icon',
+  );
+  private getNextIcon = this.locatorForOptional(
+    '[data-testid="next-article-link"] z-icon',
+  );
   private getPrevIconWrapper = this.locatorForOptional(
     '[data-testid="prev-article-icon-wrapper"]',
   );
@@ -43,6 +71,28 @@ export class ArticleComponentHarness extends ComponentHarness {
     return (await this.getErrorState()) !== null;
   }
 
+  async isNotFoundStateVisible(): Promise<boolean> {
+    return (await this.getNotFoundState()) !== null;
+  }
+
+  async getNotFoundStateText(): Promise<string> {
+    const notFound = await this.getNotFoundState();
+    if (!notFound) return '';
+    return (await notFound.text()).trim();
+  }
+
+  async isManifestLoadingVisible(): Promise<boolean> {
+    return (await this.getManifestLoadingState()) !== null;
+  }
+
+  async getSignInLinkAttribute(attribute: string): Promise<string | null> {
+    const signInLink = await this.locatorForOptional(
+      '[data-testid="help-login-prompt"] a',
+    )();
+    if (!signInLink) return null;
+    return signInLink.getAttribute(attribute);
+  }
+
   async isLoginPromptVisible(): Promise<boolean> {
     return (await this.getLoginPrompt()) !== null;
   }
@@ -54,7 +104,9 @@ export class ArticleComponentHarness extends ComponentHarness {
   }
 
   async clickSignIn(): Promise<void> {
-    const signInLink = await this.locatorForOptional('[data-testid="help-login-prompt"] a')();
+    const signInLink = await this.locatorForOptional(
+      '[data-testid="help-login-prompt"] a',
+    )();
     if (!signInLink) throw new Error('Sign in link is not visible');
     await signInLink.click();
   }
@@ -88,13 +140,17 @@ export class ArticleComponentHarness extends ComponentHarness {
   async clickBackToHelp(): Promise<void> {
     const errorState = await this.getErrorState();
     if (errorState) {
-      const backLink = await this.locatorForOptional('[data-testid="article-error-state"] a')();
+      const backLink = await this.locatorForOptional(
+        '[data-testid="article-error-state"] a',
+      )();
       if (backLink) {
         await backLink.click();
         return;
       }
     }
-    const notFoundBackLink = await this.locatorForOptional('div.text-muted-foreground > a')();
+    const notFoundBackLink = await this.locatorForOptional(
+      'div.text-muted-foreground > a',
+    )();
     if (notFoundBackLink) {
       await notFoundBackLink.click();
       return;
@@ -106,7 +162,9 @@ export class ArticleComponentHarness extends ComponentHarness {
     const content = await this.getArticleContent();
     if (!content) return [];
     // Return heading elements text from the prose content
-    const h2Elements = await this.locatorForAll('[data-testid="help-article-content"] h2')();
+    const h2Elements = await this.locatorForAll(
+      '[data-testid="help-article-content"] h2',
+    )();
     const texts: string[] = [];
     for (const h of h2Elements) {
       texts.push((await h.text()).trim());

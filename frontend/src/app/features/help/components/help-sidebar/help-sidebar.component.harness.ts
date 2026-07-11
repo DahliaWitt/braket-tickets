@@ -1,13 +1,23 @@
-import { ComponentHarness } from '@angular/cdk/testing';
+import {ComponentHarness} from '@angular/cdk/testing';
 
 export class HelpSidebarComponentHarness extends ComponentHarness {
   static hostSelector = 'app-help-sidebar';
 
-  private getSectionLinks = this.locatorForAll('[data-testid="help-section-link"]');
-  private getCategoryGroups = this.locatorForAll('[data-testid="help-category-group"]');
-  private getCategoryToggles = this.locatorForAll('[data-testid="help-category-toggle"]');
-  private getCategoryPanels = this.locatorForAll('[data-testid="help-category-panel"]');
-  private getArticleLinks = this.locatorForAll('[data-testid="help-article-link"]');
+  private getSectionLinks = this.locatorForAll(
+    '[data-testid="help-section-link"]',
+  );
+  private getCategoryGroups = this.locatorForAll(
+    '[data-testid="help-category-group"]',
+  );
+  private getCategoryToggles = this.locatorForAll(
+    '[data-testid="help-category-toggle"]',
+  );
+  private getCategoryPanels = this.locatorForAll(
+    '[data-testid="help-category-panel"]',
+  );
+  private getArticleLinks = this.locatorForAll(
+    '[data-testid="help-article-link"]',
+  );
 
   async getSectionLinkTexts(): Promise<string[]> {
     const links = await this.getSectionLinks();
@@ -99,7 +109,8 @@ export class HelpSidebarComponentHarness extends ComponentHarness {
   async toggleCategory(name: string): Promise<void> {
     const toggles = await this.getCategoryToggles();
     for (const toggle of toggles) {
-      if ((await toggle.text()).trim().toLowerCase().includes(name.toLowerCase())) {
+      const label = (await toggle.getAttribute('aria-label')) ?? '';
+      if (label.toLowerCase().includes(name.toLowerCase())) {
         await toggle.click();
         return;
       }
@@ -110,11 +121,26 @@ export class HelpSidebarComponentHarness extends ComponentHarness {
   async isCategoryExpanded(name: string): Promise<boolean> {
     const toggles = await this.getCategoryToggles();
     for (const toggle of toggles) {
-      if ((await toggle.text()).trim().toLowerCase().includes(name.toLowerCase())) {
+      const label = (await toggle.getAttribute('aria-label')) ?? '';
+      if (label.toLowerCase().includes(name.toLowerCase())) {
         return (await toggle.getAttribute('aria-expanded')) === 'true';
       }
     }
     throw new Error(`Category toggle with name "${name}" not found`);
+  }
+
+  async hasChevronIcon(name: string): Promise<boolean> {
+    const toggles = await this.getCategoryToggles();
+    for (const toggle of toggles) {
+      const label = (await toggle.getAttribute('aria-label')) ?? '';
+      if (label.toLowerCase().includes(name.toLowerCase())) {
+        const icons = await this.locatorForAll(
+          '[data-testid="help-category-toggle"] z-icon',
+        )();
+        return icons.length > 0;
+      }
+    }
+    return false;
   }
 
   async getExpandedPanelCount(): Promise<number> {

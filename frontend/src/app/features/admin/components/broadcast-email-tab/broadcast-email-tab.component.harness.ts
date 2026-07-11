@@ -1,4 +1,5 @@
 import {ComponentHarness} from '@angular/cdk/testing';
+import {RichTextEditorHarness} from '../rich-text-editor/rich-text-editor.component.harness';
 
 export class BroadcastEmailTabComponentHarness extends ComponentHarness {
   static hostSelector = 'app-broadcast-email-tab';
@@ -6,9 +7,7 @@ export class BroadcastEmailTabComponentHarness extends ComponentHarness {
   private getSubjectInput = this.locatorFor(
     '[data-testid="broadcast-subject"]',
   );
-  private getMessageTextarea = this.locatorFor(
-    '[data-testid="broadcast-message"]',
-  );
+  private getMessageEditor = this.locatorFor(RichTextEditorHarness);
   private getSendButton = this.locatorFor('[data-testid="send-broadcast"]');
   private getComposeCard = this.locatorFor(
     '[data-testid="broadcast-email-card"]',
@@ -64,15 +63,24 @@ export class BroadcastEmailTabComponentHarness extends ComponentHarness {
     return input.getProperty<string>('value');
   }
 
-  async setMessage(value: string): Promise<void> {
-    const textarea = await this.getMessageTextarea();
-    await textarea.clear();
-    await textarea.sendKeys(value);
+  /** Returns the CDK harness for the embedded rich-text message editor. */
+  async getMessageEditorHarness(): Promise<RichTextEditorHarness> {
+    return this.getMessageEditor();
   }
 
-  async getMessageValue(): Promise<string> {
-    const textarea = await this.getMessageTextarea();
-    return textarea.getProperty<string>('value');
+  /** True when the rich-text message editor is rendered in the compose form. */
+  async hasMessageEditor(): Promise<boolean> {
+    try {
+      await this.getMessageEditor();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Serialized ProseMirror JSON currently held by the message editor. */
+  async getMessageJson(): Promise<string> {
+    return (await this.getMessageEditor()).getSerializedJson();
   }
 
   async isSendButtonDisabled(): Promise<boolean> {

@@ -41,4 +41,15 @@ export class PopoverContentHarness extends ComponentHarness {
     const host = await this.host();
     return host.text();
   }
+
+  /**
+   * Simulates a real pointer interaction (pointerdown + click) originating from
+   * inside the popover content. The CDK outside-click dispatcher treats these as
+   * inside-overlay events and must NOT dismiss the popover.
+   */
+  async clickContent(): Promise<void> {
+    const host = await this.host();
+    await host.dispatchEvent('pointerdown');
+    await host.dispatchEvent('click');
+  }
 }

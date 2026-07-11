@@ -71,10 +71,15 @@ export async function saveCommunityProfile(
   await convex.mutation(api.communities.profile.update, {
     id: communityId,
     name: profile.name,
-    email: profile.email || undefined,
-    contactInfo: profile.contactInfo || undefined,
-    description: profile.description || undefined,
-    website: profile.website || undefined,
+    // `null` explicitly clears the field; `|| undefined` would omit it and the
+    // backend would treat that as "leave unchanged", so cleared values never
+    // persisted. This is always an update of an existing community.
+    email: profile.email || null,
+    contactInfo: profile.contactInfo || null,
+    description: profile.description || null,
+    website: profile.website || null,
+    // slug is not clearable (it is the public URL key); a blank value is a
+    // no-op. `|| undefined` leaves the stored slug unchanged.
     slug: profile.slug || undefined,
     status: profile.status,
     isPublicDirectory: profile.isPublicDirectory,

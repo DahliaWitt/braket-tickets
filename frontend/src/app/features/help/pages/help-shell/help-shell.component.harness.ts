@@ -1,15 +1,19 @@
-import { ComponentHarness } from '@angular/cdk/testing';
+import {ComponentHarness} from '@angular/cdk/testing';
 
 export class HelpShellComponentHarness extends ComponentHarness {
   static hostSelector = 'app-help-shell';
 
-  private getSidebarNav = this.locatorForOptional('[data-testid="help-sidebar-nav"]');
-  private getMobileMenuButton = this.locatorForOptional('button[aria-label="Toggle sidebar"]');
-  private getErrorState = this.locatorForOptional('[data-testid="help-shell-error-state"]');
-  private getMainContent = this.locatorForOptional('main');
-  private getSidebarOverlay = this.locatorForOptional(
-    'div.fixed.inset-0.z-30',
+  private getSidebarNav = this.locatorForOptional(
+    '[data-testid="help-sidebar-nav"]',
   );
+  private getMobileMenuButton = this.locatorForOptional(
+    'button[aria-label="Toggle sidebar"]',
+  );
+  private getErrorState = this.locatorForOptional(
+    '[data-testid="help-shell-error-state"]',
+  );
+  private getMainContent = this.locatorForOptional('main');
+  private getSidebarOverlay = this.locatorForOptional('div.fixed.inset-0.z-30');
 
   async isSidebarNavVisible(): Promise<boolean> {
     return (await this.getSidebarNav()) !== null;
@@ -40,6 +44,42 @@ export class HelpShellComponentHarness extends ComponentHarness {
 
   async isOverlayVisible(): Promise<boolean> {
     return (await this.getSidebarOverlay()) !== null;
+  }
+
+  async isOverlayAriaHidden(): Promise<boolean> {
+    const overlay = await this.getSidebarOverlay();
+    if (!overlay) return false;
+    return (await overlay.getAttribute('aria-hidden')) === 'true';
+  }
+
+  async getOverlayTabindex(): Promise<string | null> {
+    const overlay = await this.getSidebarOverlay();
+    if (!overlay) return null;
+    return overlay.getAttribute('tabindex');
+  }
+
+  async getSidebarRole(): Promise<string | null> {
+    const nav = await this.getSidebarNav();
+    if (!nav) return null;
+    return nav.getAttribute('role');
+  }
+
+  async getSidebarAriaModal(): Promise<string | null> {
+    const nav = await this.getSidebarNav();
+    if (!nav) return null;
+    return nav.getAttribute('aria-modal');
+  }
+
+  async isSidebarInert(): Promise<boolean> {
+    const nav = await this.getSidebarNav();
+    if (!nav) return false;
+    return (await nav.getAttribute('inert')) !== null;
+  }
+
+  async sendEscapeToSidebar(): Promise<void> {
+    const nav = await this.getSidebarNav();
+    if (!nav) throw new Error('Sidebar panel is not present');
+    await nav.dispatchEvent('keydown', {key: 'Escape'});
   }
 
   async isErrorStateVisible(): Promise<boolean> {

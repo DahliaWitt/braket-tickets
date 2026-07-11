@@ -17,11 +17,19 @@ import {AuthService} from '@/core/services/auth.service';
 import {highlightArticleCode} from './article-highlighter';
 import {safeResourceValue} from '@/utils/resource';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
+import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
+import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton.component';
 
 @Component({
   selector: 'app-article',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, MarkdownComponent, ZardIconComponent],
+  imports: [
+    RouterLink,
+    MarkdownComponent,
+    ZardIconComponent,
+    ZardButtonComponent,
+    ZardSkeletonComponent,
+  ],
   template: `
     <!-- Breadcrumb -->
     <nav
@@ -30,12 +38,12 @@ import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
       class="mb-6 flex items-center gap-2 text-sm text-muted-foreground"
     >
       <a routerLink="/help" class="transition-colors hover:text-foreground"
-        >Help</a
+        >help</a
       >
       <span>/</span>
       <a
         [routerLink]="['/help', section()]"
-        class="capitalize transition-colors hover:text-foreground"
+        class="transition-colors hover:text-foreground"
       >
         {{ sectionLabel() }}
       </a>
@@ -73,22 +81,32 @@ import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
           routerLink="/help"
           class="font-mono text-sm tracking-widest text-muted-foreground uppercase transition-colors hover:text-foreground"
         >
-          Back to Help Center
+          back to help center
         </a>
       </div>
     } @else if (article()) {
       @if (canAccess()) {
         <article
           data-testid="help-article-content"
-          class="prose max-w-none font-sans dark:prose-invert prose-headings:font-display prose-h1:font-sans prose-h1:text-3xl prose-h1:font-bold prose-h2:text-xl prose-h3:text-lg prose-p:text-muted-foreground prose-a:text-primary prose-code:rounded prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:text-primary prose-code:before:content-none prose-code:after:content-none prose-pre:border prose-pre:border-border prose-pre:bg-card"
+          class="prose max-w-none font-sans dark:prose-invert prose-headings:font-display prose-h1:text-3xl prose-h1:font-bold prose-h2:text-xl prose-h3:text-lg prose-p:text-muted-foreground prose-a:text-primary prose-code:rounded prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:text-primary prose-code:before:content-none prose-code:after:content-none prose-pre:border prose-pre:border-border prose-pre:bg-card"
         >
           @if (markdownContent.isLoading()) {
-            <p
-              class="animate-pulse text-muted-foreground"
+            <div
+              class="not-prose space-y-4"
               data-testid="article-loading-state"
+              aria-hidden="true"
             >
-              Loading article...
-            </p>
+              <z-skeleton class="h-9 w-2/3" />
+              <div class="space-y-2 pt-4">
+                <z-skeleton class="h-4 w-full" />
+                <z-skeleton class="h-4 w-11/12" />
+                <z-skeleton class="h-4 w-4/5" />
+              </div>
+              <div class="space-y-2 pt-4">
+                <z-skeleton class="h-4 w-full" />
+                <z-skeleton class="h-4 w-3/4" />
+              </div>
+            </div>
           } @else if (markdownContentValue(); as md) {
             <markdown [data]="md" (ready)="enhanceMarkdown()" />
           }
@@ -115,7 +133,7 @@ import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
                 </span>
                 <span class="flex min-w-0 flex-col gap-1">
                   <span class="font-mono text-2xs tracking-widest uppercase"
-                    >Previous</span
+                    >previous</span
                   >
                   <span
                     class="line-clamp-2 max-w-full leading-snug font-medium break-words whitespace-normal"
@@ -135,7 +153,7 @@ import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
               >
                 <span class="flex min-w-0 flex-col gap-1">
                   <span class="font-mono text-2xs tracking-widest uppercase"
-                    >Next</span
+                    >next</span
                   >
                   <span
                     class="line-clamp-2 max-w-full leading-snug font-medium break-words whitespace-normal"
@@ -164,29 +182,49 @@ import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
           class="rounded border border-border p-8 text-center"
         >
           <h2 class="mb-2 font-display text-xl font-semibold">
-            Sign in to access this article
+            sign in to access this article
           </h2>
           <p class="mb-6 text-muted-foreground">
-            This article is restricted to {{ accessLevelLabel() }} members.
+            this article is restricted to {{ accessLevelLabel() }} members.
           </p>
           <a
+            z-button
             routerLink="/login"
             [queryParams]="{returnUrl: '/help/' + section() + '/' + slug()}"
-            class="inline-flex items-center rounded bg-primary px-4 py-2 font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
-            Sign in
+            sign in
           </a>
         </div>
       }
+    } @else if (!manifestLoaded()) {
+      <!-- Deep link while the manifest is still loading — skeleton, not a false not-found -->
+      <div
+        class="space-y-4"
+        data-testid="article-manifest-loading-state"
+        aria-hidden="true"
+      >
+        <z-skeleton class="h-9 w-2/3" />
+        <div class="space-y-2 pt-4">
+          <z-skeleton class="h-4 w-full" />
+          <z-skeleton class="h-4 w-11/12" />
+          <z-skeleton class="h-4 w-4/5" />
+        </div>
+      </div>
     } @else {
-      <div class="text-muted-foreground">
-        <h1 class="mb-4 font-display text-2xl font-bold">Article not found</h1>
-        <p>The article you're looking for doesn't exist or has been moved.</p>
+      <div
+        class="text-muted-foreground"
+        data-testid="article-not-found-state"
+        role="status"
+      >
+        <h1 class="mb-4 font-display text-2xl font-bold tracking-tight">
+          article not found
+        </h1>
+        <p>this article doesn't exist or has moved.</p>
         <a
           [routerLink]="['/help', section()]"
-          class="mt-4 inline-block text-primary hover:underline"
+          class="mt-4 inline-block font-mono text-sm tracking-widest text-muted-foreground uppercase transition-colors hover:text-foreground"
         >
-          Back to {{ sectionLabel() }}
+          back to {{ sectionLabel() }}
         </a>
       </div>
     }
@@ -209,24 +247,32 @@ export class ArticleComponent {
     const s = this.section();
     switch (s) {
       case 'users':
-        return 'User Guide';
+        return 'user guide';
       case 'admins':
-        return 'Admin Guide';
+        return 'admin guide';
       case 'developers':
-        return 'Developer Guide';
+        return 'developer guide';
       default:
         return s;
     }
   });
 
+  readonly manifestLoaded = computed(() => this.manifest.isLoaded());
+
+  // undefined until the manifest resolves the article — keeps the resource
+  // idle so unknown slugs surface as not-found instead of a fetch error.
   private readonly articlePath = computed(() => {
     const a = this.article();
-    const relPath = a?.path ?? `${this.slug()}.md`;
+    if (!a) return undefined;
+    const relPath = a.path ?? `${this.slug()}.md`;
     return `/docs/${this.section()}/${relPath}`;
   });
 
   readonly markdownContent = resource({
-    params: () => ({path: this.articlePath()}),
+    params: () => {
+      const path = this.articlePath();
+      return path === undefined ? undefined : {path};
+    },
     loader: async ({params}) => {
       const raw = await firstValueFrom(
         this.http.get(params.path, {responseType: 'text'}),
@@ -236,7 +282,7 @@ export class ArticleComponent {
   });
 
   readonly hasLoadError = computed<boolean>(
-    () => this.markdownContent.error() != null,
+    () => this.markdownContent.error() != null || this.manifest.loadFailed(),
   );
   readonly markdownContentValue = computed(() =>
     safeResourceValue(this.markdownContent),

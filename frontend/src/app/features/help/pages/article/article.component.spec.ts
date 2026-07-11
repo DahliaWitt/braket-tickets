@@ -1,19 +1,22 @@
-import { TestBed } from '@angular/core/testing';
-import { provideZonelessChangeDetection, signal, computed } from '@angular/core';
-import { provideHttpClient } from '@angular/common/http';
-import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
-import { provideRouter } from '@angular/router';
-import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
-import { By } from '@angular/platform-browser';
-import { describe, it, expect, afterEach } from 'vitest';
-import { ArticleComponent } from './article.component';
-import { ArticleComponentHarness } from './article.component.harness';
-import { HelpManifestService } from '../../services/help-manifest.service';
-import { type HelpArticle } from '../../models/help.models';
-import { type ComponentFixture } from '@angular/core/testing';
-import { provideMarkdown } from 'ngx-markdown';
-import { HttpClient } from '@angular/common/http';
-import { AuthService } from '@/core/services/auth.service';
+import {TestBed} from '@angular/core/testing';
+import {provideZonelessChangeDetection, signal, computed} from '@angular/core';
+import {provideHttpClient} from '@angular/common/http';
+import {
+  provideHttpClientTesting,
+  HttpTestingController,
+} from '@angular/common/http/testing';
+import {provideRouter} from '@angular/router';
+import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
+import {By} from '@angular/platform-browser';
+import {describe, it, expect, afterEach} from 'vitest';
+import {ArticleComponent} from './article.component';
+import {ArticleComponentHarness} from './article.component.harness';
+import {HelpManifestService} from '../../services/help-manifest.service';
+import {type HelpArticle} from '../../models/help.models';
+import {type ComponentFixture} from '@angular/core/testing';
+import {provideMarkdown} from 'ngx-markdown';
+import {HttpClient} from '@angular/common/http';
+import {AuthService} from '@/core/services/auth.service';
 
 const MOCK_ARTICLES: HelpArticle[] = [
   {
@@ -50,7 +53,9 @@ const MOCK_ARTICLES: HelpArticle[] = [
 
 function makeAuthServiceMock(isAuthenticated: boolean) {
   const isAuthSignal = signal(isAuthenticated);
-  const userRoleSignal = signal<'root_admin' | 'community_admin' | 'user'>('user');
+  const userRoleSignal = signal<'root_admin' | 'community_admin' | 'user'>(
+    'user',
+  );
   return {
     isAuthenticated: computed(() => isAuthSignal()),
     userRole: computed(() => userRoleSignal()),
@@ -78,9 +83,9 @@ describe('ArticleComponent', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         provideRouter([]),
-        provideMarkdown({ loader: HttpClient }),
+        provideMarkdown({loader: HttpClient}),
         HelpManifestService,
-        { provide: AuthService, useValue: authMock },
+        {provide: AuthService, useValue: authMock},
       ],
     }).compileComponents();
 
@@ -116,31 +121,47 @@ describe('ArticleComponent', () => {
 
   it('renders article content area for a public article', async () => {
     await setup('users', 'getting-started', false);
-    const contentArea = fixture.debugElement.query(By.css('[data-testid="help-article-content"]'));
+    const contentArea = fixture.debugElement.query(
+      By.css('[data-testid="help-article-content"]'),
+    );
     expect(contentArea).toBeTruthy();
   });
 
   it('renders breadcrumb', async () => {
     await setup('users', 'getting-started', false);
-    const breadcrumb = fixture.debugElement.query(By.css('[data-testid="help-breadcrumb"]'));
+    const breadcrumb = fixture.debugElement.query(
+      By.css('[data-testid="help-breadcrumb"]'),
+    );
     expect(breadcrumb).toBeTruthy();
-    expect((breadcrumb.nativeElement as HTMLElement).textContent).toContain('Help');
-    expect((breadcrumb.nativeElement as HTMLElement).textContent).toContain('User Guide');
-    expect((breadcrumb.nativeElement as HTMLElement).textContent).toContain('Getting Started');
+    expect((breadcrumb.nativeElement as HTMLElement).textContent).toContain(
+      'help',
+    );
+    expect((breadcrumb.nativeElement as HTMLElement).textContent).toContain(
+      'user guide',
+    );
+    expect((breadcrumb.nativeElement as HTMLElement).textContent).toContain(
+      'Getting Started',
+    );
   });
 
   it('shows login prompt for admin-gated article when unauthenticated', async () => {
     await setup('admins', 'admin-only', false);
-    const loginPrompt = fixture.debugElement.query(By.css('[data-testid="help-login-prompt"]'));
+    const loginPrompt = fixture.debugElement.query(
+      By.css('[data-testid="help-login-prompt"]'),
+    );
     expect(loginPrompt).toBeTruthy();
 
-    const contentArea = fixture.debugElement.query(By.css('[data-testid="help-article-content"]'));
+    const contentArea = fixture.debugElement.query(
+      By.css('[data-testid="help-article-content"]'),
+    );
     expect(contentArea).toBeNull();
   });
 
   it('does not show error state when article loads successfully', async () => {
     await setup('users', 'getting-started', false);
-    const errorEl = fixture.debugElement.query(By.css('[data-testid="article-error-state"]'));
+    const errorEl = fixture.debugElement.query(
+      By.css('[data-testid="article-error-state"]'),
+    );
     expect(errorEl).toBeNull();
   });
 
@@ -157,24 +178,81 @@ describe('ArticleComponent', () => {
       '```typescript\nconst total = 1;\n```',
     );
 
-    const highlightedBlock = fixture.debugElement.query(By.css('pre code.hljs.language-typescript'));
+    const highlightedBlock = fixture.debugElement.query(
+      By.css('pre code.hljs.language-typescript'),
+    );
     expect(highlightedBlock).toBeTruthy();
   });
 
   it('disables typography-generated inline code backticks', async () => {
-    await setup('users', 'getting-started', false, 'Use `injectQuery()` for live reads.');
+    await setup(
+      'users',
+      'getting-started',
+      false,
+      'Use `injectQuery()` for live reads.',
+    );
 
-    const contentArea = fixture.debugElement.query(By.css('[data-testid="help-article-content"]'));
+    const contentArea = fixture.debugElement.query(
+      By.css('[data-testid="help-article-content"]'),
+    );
     const classes = (contentArea.nativeElement as HTMLElement).className;
 
     expect(classes).toContain('prose-code:before:content-none');
     expect(classes).toContain('prose-code:after:content-none');
   });
 
+  it('lets the article h1 render in the display font (no font-sans override)', async () => {
+    await setup('users', 'getting-started', false);
+
+    const contentArea = fixture.debugElement.query(
+      By.css('[data-testid="help-article-content"]'),
+    );
+    const classes = (contentArea.nativeElement as HTMLElement).className;
+
+    expect(classes).toContain('prose-headings:font-display');
+    expect(classes).not.toContain('prose-h1:font-sans');
+  });
+
+  it('renders the sign-in CTA as a z-button anchor with a focus-visible style', async () => {
+    await setup('admins', 'admin-only', false);
+
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      ArticleComponentHarness,
+    );
+
+    expect(await harness.isLoginPromptVisible()).toBe(true);
+    expect(await harness.getSignInLinkAttribute('z-button')).not.toBeNull();
+  });
+
+  it('shows the branded not-found state for an unknown slug once the manifest is loaded', async () => {
+    await setup('users', 'does-not-exist', false);
+
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      ArticleComponentHarness,
+    );
+
+    expect(await harness.isNotFoundStateVisible()).toBe(true);
+    expect(await harness.getNotFoundStateText()).toContain('article not found');
+    expect(await harness.isErrorStateVisible()).toBe(false);
+    expect(await harness.isManifestLoadingVisible()).toBe(false);
+  });
+
+  it('does not fetch markdown for an unknown slug', async () => {
+    await setup('users', 'does-not-exist', false);
+    expect(httpController.match('/docs/users/does-not-exist.md').length).toBe(
+      0,
+    );
+  });
+
   it('lets prev/next navigation titles use the full link width instead of a 45 percent cap', async () => {
     await setup('users', 'getting-started', false);
 
-    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, ArticleComponentHarness);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      ArticleComponentHarness,
+    );
 
     expect(await harness.hasNextNavigation()).toBe(true);
     expect(await harness.getNextLinkClasses()).toContain('flex-auto');
@@ -188,14 +266,24 @@ describe('ArticleComponent', () => {
       article.slug === 'buying-tickets'
         ? {
             ...article,
-            title: 'Deploying the E2E Environment Setup for Long Developer Article Titles',
+            title:
+              'Deploying the E2E Environment Setup for Long Developer Article Titles',
           }
         : article,
     );
 
-    await setup('users', 'getting-started', false, undefined, longTitleArticles);
+    await setup(
+      'users',
+      'getting-started',
+      false,
+      undefined,
+      longTitleArticles,
+    );
 
-    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, ArticleComponentHarness);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      ArticleComponentHarness,
+    );
     const nextTitleClasses = await harness.getNextTitleClasses();
 
     expect(nextTitleClasses).toContain('line-clamp-2');
@@ -208,7 +296,10 @@ describe('ArticleComponent', () => {
   it('renders directional icons in prev/next navigation', async () => {
     await setup('users', 'getting-started', false);
 
-    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, ArticleComponentHarness);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      ArticleComponentHarness,
+    );
     const nextIconWrapperClasses = await harness.getNextIconWrapperClasses();
 
     expect(await harness.hasNextIcon()).toBe(true);
@@ -219,11 +310,85 @@ describe('ArticleComponent', () => {
   it('distinguishes prev and next navigation when only one footer link is present', async () => {
     await setup('users', 'buying-tickets', false);
 
-    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, ArticleComponentHarness);
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      ArticleComponentHarness,
+    );
 
     expect(await harness.hasPrevNavigation()).toBe(true);
     expect(await harness.hasNextNavigation()).toBe(false);
     expect(await harness.hasPrevIcon()).toBe(true);
+  });
+});
+
+describe('ArticleComponent — deep link while manifest is loading', () => {
+  let fixture: ComponentFixture<ArticleComponent>;
+  let httpController: HttpTestingController;
+  let manifestService: HelpManifestService;
+
+  beforeEach(async () => {
+    const authMock = makeAuthServiceMock(false);
+
+    await TestBed.configureTestingModule({
+      imports: [ArticleComponent],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        provideMarkdown({loader: HttpClient}),
+        HelpManifestService,
+        {provide: AuthService, useValue: authMock},
+      ],
+    }).compileComponents();
+
+    httpController = TestBed.inject(HttpTestingController);
+    manifestService = TestBed.inject(HelpManifestService);
+
+    // Component created BEFORE the manifest resolves — the deep-link case
+    fixture = TestBed.createComponent(ArticleComponent);
+    fixture.componentRef.setInput('section', 'users');
+    fixture.componentRef.setInput('slug', 'getting-started');
+    await fixture.whenStable();
+  });
+
+  afterEach(() => {
+    httpController.match(() => true);
+    httpController.verify();
+    TestBed.resetTestingModule();
+  });
+
+  it('shows a skeleton instead of not-found while the manifest loads', async () => {
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      ArticleComponentHarness,
+    );
+
+    expect(await harness.isManifestLoadingVisible()).toBe(true);
+    expect(await harness.isNotFoundStateVisible()).toBe(false);
+  });
+
+  it('resolves to the article once the manifest loads', async () => {
+    const loadPromise = manifestService.loadManifest();
+    httpController.expectOne('/docs/manifest.json').flush(MOCK_ARTICLES);
+    await loadPromise;
+
+    // The markdown resource kicks in once the article resolves — flush its
+    // request before whenStable() so change detection can settle.
+    await new Promise((r) => setTimeout(r, 0));
+    const mdRequest = httpController.match('/docs/users/getting-started.md');
+    if (mdRequest.length) {
+      mdRequest[0].flush('# Test Content');
+    }
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      ArticleComponentHarness,
+    );
+    expect(await harness.isManifestLoadingVisible()).toBe(false);
+    expect(await harness.isArticleContentVisible()).toBe(true);
   });
 });
 
@@ -246,9 +411,9 @@ describe('ArticleComponent — markdown fetch error', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         provideRouter([]),
-        provideMarkdown({ loader: HttpClient }),
+        provideMarkdown({loader: HttpClient}),
         HelpManifestService,
-        { provide: AuthService, useValue: authMock },
+        {provide: AuthService, useValue: authMock},
       ],
     }).compileComponents();
 
@@ -268,7 +433,7 @@ describe('ArticleComponent — markdown fetch error', () => {
     await new Promise((r) => setTimeout(r, 0));
     const mdRequest = httpController.match(`/docs/${section}/${slug}.md`);
     if (mdRequest.length) {
-      mdRequest[0].flush('Not Found', { status: 404, statusText: 'Not Found' });
+      mdRequest[0].flush('Not Found', {status: 404, statusText: 'Not Found'});
     }
     await fixture.whenStable();
   }
@@ -281,14 +446,20 @@ describe('ArticleComponent — markdown fetch error', () => {
 
   it('shows error state when markdown fetch fails', async () => {
     await setupWithError('users', 'getting-started', false);
-    const errorEl = fixture.debugElement.query(By.css('[data-testid="article-error-state"]'));
+    const errorEl = fixture.debugElement.query(
+      By.css('[data-testid="article-error-state"]'),
+    );
     expect(errorEl).toBeTruthy();
   });
 
   it('error state contains error heading', async () => {
     await setupWithError('users', 'getting-started', false);
-    const errorEl = fixture.debugElement.query(By.css('[data-testid="article-error-state"]'));
-    expect((errorEl.nativeElement as HTMLElement).textContent).toContain('hit a snag');
+    const errorEl = fixture.debugElement.query(
+      By.css('[data-testid="article-error-state"]'),
+    );
+    expect((errorEl.nativeElement as HTMLElement).textContent).toContain(
+      'hit a snag',
+    );
   });
 
   it('error state contains link back to help center', async () => {
@@ -297,12 +468,16 @@ describe('ArticleComponent — markdown fetch error', () => {
       By.css('[data-testid="article-error-state"] a[routerLink]'),
     );
     expect(backLink).toBeTruthy();
-    expect((backLink.nativeElement as HTMLElement).textContent).toContain('Back to Help Center');
+    expect((backLink.nativeElement as HTMLElement).textContent).toContain(
+      'back to help center',
+    );
   });
 
   it('does not render article content area when markdown fetch fails', async () => {
     await setupWithError('users', 'getting-started', false);
-    const contentArea = fixture.debugElement.query(By.css('[data-testid="help-article-content"]'));
+    const contentArea = fixture.debugElement.query(
+      By.css('[data-testid="help-article-content"]'),
+    );
     expect(contentArea).toBeNull();
   });
 

@@ -120,16 +120,15 @@ export class ZardPopoverDirective {
 
     toObservable(this.zTrigger)
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((trigger) => {
+      .subscribe(() => {
         if (this.listeners.length) {
           this.unlistenAll();
         }
         this.setupTriggers();
-        this.overlayRefSubscription?.unsubscribe();
-        this.overlayRefSubscription = undefined;
-        if (trigger === 'click') {
-          this.subscribeToOverlayRef();
-        }
+        // Re-establish outside-click dismissal for the current trigger.
+        // This is a no-op until the overlay exists — createOverlay() calls
+        // subscribeToOverlayRef() once the overlayRef has been created.
+        this.subscribeToOverlayRef();
       });
 
     afterNextRender(() => {
@@ -196,6 +195,13 @@ export class ZardPopoverDirective {
 
   private createOverlay() {
     if (isPlatformBrowser(this.platformId)) {
+      // Guard against duplicate creation: afterNextRender and a lazy show()
+      // can both reach here. A second overlay would orphan the first (and its
+      // attached portal) and stack outside-click subscriptions.
+      if (this.overlayRef) {
+        return;
+      }
+
       const positionStrategy = this.overlayPositionBuilder
         .flexibleConnectedTo(this.nativeElement)
         .withPositions(this.getPositions())
@@ -208,12 +214,21 @@ export class ZardPopoverDirective {
         hasBackdrop: false,
         scrollStrategy: this.overlay.scrollStrategies.reposition(),
       });
+
+      // The overlay ref now exists, so the outside-click subscription can
+      // finally attach. subscribeToOverlayRef() was a no-op during the first
+      // change-detection pass (before the overlay was created).
+      this.subscribeToOverlayRef();
     }
   }
 
   private subscribeToOverlayRef(): void {
+    // Always tear down any existing subscription first so trigger changes and
+    // repeated createOverlay/subscribe calls never stack duplicate listeners.
+    this.overlayRefSubscription?.unsubscribe();
+    this.overlayRefSubscription = undefined;
+
     if (
-      this.zOverlayClickable() &&
       this.zTrigger() === 'click' &&
       isPlatformBrowser(this.platformId) &&
       this.overlayRef
@@ -221,6 +236,9 @@ export class ZardPopoverDirective {
       this.overlayRefSubscription = this.overlayRef
         .outsidePointerEvents()
         .pipe(
+          // Evaluate zOverlayClickable() per-event so consumers can toggle
+          // outside-click dismissal at runtime, not just at subscribe time.
+          filter(() => this.zOverlayClickable()),
           filter((event) => {
             const target = event.target;
             if (!(target instanceof Node)) return true;

@@ -21,7 +21,7 @@ test.describe('Footer feedback', () => {
     await expect(
       authedPage
         .getByText('What should we know?')
-        .or(authedPage.getByText('Feedback is unavailable right now.')),
+        .or(authedPage.getByText('feedback is unavailable right now')),
     ).toBeVisible();
   });
 });

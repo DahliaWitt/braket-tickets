@@ -61,8 +61,13 @@ const US_PHONE_PATTERN =
 const CARD_NUMBER_CANDIDATE_PATTERN = /\b(?:\d[ -]?){12,18}\d\b/g;
 const STRIPE_SECRET_PATTERN = /\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9_]+\b/g;
 const STRIPE_WEBHOOK_SECRET_PATTERN = /\bwhsec_[A-Za-z0-9_]+\b/g;
+// Separator matches either a `:`/`=` delimiter (with optional surrounding
+// whitespace, as in `token=abc`, `token:abc`, and URL query strings) or
+// whitespace alone (as in `Bearer abc`). Requiring a delimiter OR whitespace —
+// rather than mandatory trailing whitespace — is what lets URL/query/header
+// secrets like `?token=<value>` and `authorization:<value>` get redacted.
 const LABELED_SECRET_VALUE_PATTERN =
-  /\b(token|secret|api[_ -]?key|authorization|bearer)(\s*[:=]?\s+)([A-Za-z0-9._~+/=-]{8,})\b/gi;
+  /\b(token|secret|api[_ -]?key|authorization|bearer)(\s*[:=]\s*|\s+)([A-Za-z0-9._~+/=-]{8,})\b/gi;
 
 const NORMALIZED_SENSITIVE_FIELD_PATTERNS = SENSITIVE_FIELD_PATTERNS.map(
   (pattern) => normalizeKeyParts(pattern),

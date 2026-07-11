@@ -886,3 +886,107 @@ describe('LoginComponent', () => {
     });
   });
 });
+
+// This block deliberately provides a mock Router (instead of `provideRouter`)
+// so the ActivatedRoute mock actually delivers query params to the component —
+// `provideRouter` supplies its own root ActivatedRoute that shadows the mock.
+describe('LoginComponent query-param routing', () => {
+  let routerMock: {
+    navigate: ReturnType<typeof vi.fn>;
+    navigateByUrl: ReturnType<typeof vi.fn>;
+  };
+
+  async function createWithQueryParams(
+    queryParams: Record<string, string>,
+  ): Promise<void> {
+    const authServiceMock = {
+      loginWithPassword: vi.fn().mockResolvedValue(undefined),
+      signup: vi.fn().mockResolvedValue(undefined),
+      requestPasswordReset: vi.fn().mockResolvedValue(undefined),
+      loginWithSocial: vi.fn().mockResolvedValue(undefined),
+      requestVerificationEmail: vi.fn().mockResolvedValue(undefined),
+      currentUser: vi.fn(() => null),
+      userRole: vi.fn(() => 'user'),
+      authInitialized: vi.fn(() => false),
+      isAuthenticated: vi.fn(() => false),
+      user: vi.fn(() => null),
+    };
+    routerMock = {
+      navigate: vi.fn().mockResolvedValue(true),
+      navigateByUrl: vi.fn().mockResolvedValue(true),
+    };
+
+    await TestBed.configureTestingModule({
+      imports: [LoginComponent],
+      providers: [
+        provideZonelessChangeDetection(),
+        {provide: AuthService, useValue: authServiceMock},
+        {provide: PasswordService, useValue: authServiceMock},
+        {provide: Router, useValue: routerMock},
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            get queryParams() {
+              return of({...queryParams});
+            },
+            get queryParamMap() {
+              return of(createQueryParamMap(queryParams));
+            },
+          },
+        },
+      ],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(LoginComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+  }
+
+  it('routes a bare verification-callback error to the verification page, not social sign-in', async () => {
+    // Better Auth redirects an expired resend-verification link to
+    // `/login?error=TOKEN_EXPIRED` (no OAuth ott/code/state). It must land on
+    // the verification-outcome page, not the social sign-in error page, and
+    // must forward the callback params (error + any returnUrl) intact.
+    await createWithQueryParams({
+      error: 'TOKEN_EXPIRED',
+      returnUrl: '/tickets',
+    });
+
+    expect(routerMock.navigate).toHaveBeenCalledWith(['/confirm/verification'], {
+      queryParams: {error: 'TOKEN_EXPIRED', returnUrl: '/tickets'},
+      replaceUrl: true,
+    });
+    expect(routerMock.navigate).not.toHaveBeenCalledWith(
+      ['/confirm/social-signin'],
+      expect.anything(),
+    );
+  });
+
+  it('routes a genuine OAuth callback (code/state) to the social sign-in page', async () => {
+    await createWithQueryParams({code: 'oauth-code', state: 'oauth-state'});
+
+    expect(routerMock.navigate).toHaveBeenCalledWith(
+      ['/confirm/social-signin'],
+      expect.objectContaining({replaceUrl: true}),
+    );
+    expect(routerMock.navigate).not.toHaveBeenCalledWith(
+      ['/confirm/verification'],
+      expect.anything(),
+    );
+  });
+
+  it('routes an OAuth error accompanied by a one-time token to the social sign-in page', async () => {
+    // A failed cross-domain OAuth exchange carries `ott` alongside `error`; it is
+    // still an OAuth callback and must not be reclassified as a verification error.
+    await createWithQueryParams({error: 'access_denied', ott: 'one-time-token'});
+
+    expect(routerMock.navigate).toHaveBeenCalledWith(
+      ['/confirm/social-signin'],
+      expect.objectContaining({replaceUrl: true}),
+    );
+    expect(routerMock.navigate).not.toHaveBeenCalledWith(
+      ['/confirm/verification'],
+      expect.anything(),
+    );
+  });
+});

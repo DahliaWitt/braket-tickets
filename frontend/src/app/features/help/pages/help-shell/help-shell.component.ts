@@ -1,6 +1,7 @@
 import {
   Component,
   ChangeDetectionStrategy,
+  DestroyRef,
   inject,
   signal,
   effect,
@@ -9,6 +10,7 @@ import {
   type ElementRef,
   viewChild,
 } from '@angular/core';
+import {DOCUMENT} from '@angular/common';
 import {Router, RouterOutlet, NavigationEnd} from '@angular/router';
 import {toSignal} from '@angular/core/rxjs-interop';
 import {filter, map, startWith} from 'rxjs';
@@ -37,6 +39,7 @@ import {safeResourceValue} from '@/utils/resource';
         class="flex items-center justify-between border-b border-border bg-background px-4 pt-1 pb-3 md:hidden"
       >
         <button
+          #sidebarToggle
           type="button"
           (click)="toggleSidebar()"
           class="p-3 text-muted-foreground hover:text-foreground"
@@ -47,19 +50,22 @@ import {safeResourceValue} from '@/utils/resource';
           <z-icon zType="menu" aria-hidden="true" />
         </button>
         <span class="mono-label text-2xs text-muted-foreground"
-          >Help Center</span
+          >help center</span
         >
         <div class="w-10"></div>
       </div>
 
-      <!-- Sidebar -->
+      <!-- Sidebar: static column on desktop, modal overlay panel on mobile -->
       <aside
         #sidebarPanel
         id="help-sidebar-panel"
-        role="dialog"
-        aria-modal="true"
+        [attr.role]="isMobileOverlay() ? 'dialog' : null"
+        [attr.aria-modal]="isMobileOverlay() ? 'true' : null"
         aria-label="Help navigation"
         data-testid="help-sidebar-nav"
+        [attr.inert]="isHiddenMobilePanel() ? '' : null"
+        tabindex="-1"
+        (keydown.escape)="onSidebarEscape()"
         [class.translate-x-0]="sidebarOpen()"
         [class.-translate-x-full]="!sidebarOpen()"
         class="fixed inset-y-0 left-0 z-40 w-72 overflow-y-auto border-r border-border bg-background transition-transform duration-200 md:static md:z-0 md:translate-x-0"
@@ -84,12 +90,11 @@ import {safeResourceValue} from '@/utils/resource';
       </aside>
 
       @if (sidebarOpen()) {
+        <!-- Decorative backdrop — click-to-dismiss only; Escape is handled on the dialog panel -->
         <div
           class="fixed inset-0 z-30 bg-background/80 md:hidden"
-          (click)="sidebarOpen.set(false)"
-          (keydown.enter)="sidebarOpen.set(false)"
-          (keydown.space)="sidebarOpen.set(false); $event.preventDefault()"
-          tabindex="0"
+          (click)="closeSidebar()"
+          aria-hidden="true"
         ></div>
       }
 
@@ -108,10 +113,30 @@ export class HelpShellComponent {
   private readonly search = inject(HelpSearchService);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly document = inject(DOCUMENT);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly desktopQuery =
+    this.document.defaultView?.matchMedia('(min-width: 768px)');
 
   readonly sidebarOpen = signal(false);
   private readonly sidebarPanel =
     viewChild<ElementRef<HTMLElement>>('sidebarPanel');
+  private readonly sidebarToggle =
+    viewChild<ElementRef<HTMLElement>>('sidebarToggle');
+
+  // Tracks the md breakpoint so dialog semantics only apply to the mobile
+  // overlay — on desktop the same element is a plain static sidebar.
+  private readonly isDesktop = signal(this.desktopQuery?.matches ?? false);
+
+  /** Mobile overlay state: the sidebar acts as a modal dialog. */
+  readonly isMobileOverlay = computed(
+    () => !this.isDesktop() && this.sidebarOpen(),
+  );
+
+  /** Closed mobile panel: visually off-canvas, must not be tab-reachable. */
+  readonly isHiddenMobilePanel = computed(
+    () => !this.isDesktop() && !this.sidebarOpen(),
+  );
 
   toggleSidebar(): void {
     const opening = !this.sidebarOpen();
@@ -128,6 +153,17 @@ export class HelpShellComponent {
         });
       }
     }
+  }
+
+  closeSidebar(): void {
+    this.sidebarOpen.set(false);
+  }
+
+  onSidebarEscape(): void {
+    if (!this.isMobileOverlay()) return;
+    this.closeSidebar();
+    // The closed panel becomes inert, so move focus back to the trigger
+    this.sidebarToggle()?.nativeElement.focus();
   }
 
   readonly activeSection = toSignal(
@@ -167,5 +203,17 @@ export class HelpShellComponent {
       const articles = this.accessibleArticles();
       this.search.buildIndex(articles);
     });
+
+    // Keep dialog semantics in sync when the viewport crosses the md breakpoint
+    const query = this.desktopQuery;
+    if (query) {
+      const onChange = (event: MediaQueryListEvent): void => {
+        this.isDesktop.set(event.matches);
+      };
+      query.addEventListener('change', onChange);
+      this.destroyRef.onDestroy(() => {
+        query.removeEventListener('change', onChange);
+      });
+    }
   }
 }
