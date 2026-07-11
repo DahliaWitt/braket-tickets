@@ -303,6 +303,109 @@ describe('BraDropdownService', () => {
     activeFixture.destroy();
   });
 
+  describe('hover interaction', () => {
+    const GRACE_MS = 30;
+
+    const openViaHover = (grace = GRACE_MS) =>
+      service.openHover(
+        component.trigger()!,
+        component.menu()!,
+        component.viewContainerRef,
+        'menu-hover',
+        'trigger-hover',
+        grace,
+      );
+
+    const getPane = () =>
+      document.querySelector('.cdk-overlay-pane') as HTMLElement;
+
+    it('should open on hover enter', () => {
+      openViaHover();
+
+      expect(service.isOpen()).toBe(true);
+      expect(service.activeTrigger()).toBe(component.trigger()!.nativeElement);
+    });
+
+    it('should stay open while the pointer moves from the trigger into the menu', async () => {
+      openViaHover();
+
+      // Pointer leaves the trigger toward the menu → grace close scheduled.
+      service.scheduleHoverClose();
+      // Pointer reaches the menu panel → grace close cancelled.
+      getPane().dispatchEvent(new MouseEvent('mouseenter'));
+
+      await wait(GRACE_MS + 20);
+
+      expect(service.isOpen()).toBe(true);
+    });
+
+    it('should close when the pointer leaves both the trigger and the menu', async () => {
+      openViaHover();
+
+      service.scheduleHoverClose();
+
+      await wait(GRACE_MS + 20);
+
+      expect(service.isOpen()).toBe(false);
+      expect(document.querySelector('[role="menu"]')).toBeFalsy();
+    });
+
+    it('should close after leaving the menu panel', async () => {
+      openViaHover();
+      const pane = getPane();
+
+      // Enter the panel (cancel any pending close), then leave it.
+      pane.dispatchEvent(new MouseEvent('mouseenter'));
+      pane.dispatchEvent(new MouseEvent('mouseleave'));
+
+      await wait(GRACE_MS + 20);
+
+      expect(service.isOpen()).toBe(false);
+    });
+
+    it('should keep the menu open when the trigger is re-entered before the grace elapses', async () => {
+      openViaHover();
+
+      service.scheduleHoverClose();
+      // Re-entering the trigger opens-hover again, cancelling the pending close.
+      openViaHover();
+
+      await wait(GRACE_MS + 20);
+
+      expect(service.isOpen()).toBe(true);
+    });
+
+    it('should cancel the pending grace timer on close so it cannot fire later', async () => {
+      openViaHover();
+      service.scheduleHoverClose();
+
+      service.close();
+      expect(service.isOpen()).toBe(false);
+
+      // If the timer leaked, this would throw or reopen; it must stay closed.
+      await wait(GRACE_MS + 20);
+      expect(service.isOpen()).toBe(false);
+    });
+
+    it('should not attach hover keep-alive in click mode', async () => {
+      service.toggle(
+        component.trigger()!,
+        component.menu()!,
+        component.viewContainerRef,
+        'menu-click',
+        'trigger-click',
+      );
+      expect(service.isOpen()).toBe(true);
+
+      // A click-mode overlay has no hover listeners: leaving it must not close.
+      getPane().dispatchEvent(new MouseEvent('mouseleave'));
+
+      await wait(GRACE_MS + 20);
+
+      expect(service.isOpen()).toBe(true);
+    });
+  });
+
   describe('multi-trigger isolation', () => {
     it('should track activeTrigger per element, not globally', () => {
       const triggerA = component.trigger()!;

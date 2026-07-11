@@ -17,6 +17,10 @@ class BraDropdownServiceStub {
   readonly activeTrigger = signal<HTMLElement | null>(null);
   readonly isOpen = vi.fn(() => this.activeTrigger() !== null);
   readonly toggle = vi.fn();
+  readonly openHover = vi.fn();
+  readonly scheduleHoverClose = vi.fn();
+  readonly cancelHoverClose = vi.fn();
+  readonly close = vi.fn();
 }
 
 @Component({
@@ -187,15 +191,73 @@ describe('BraDropdownDirective', () => {
     expect(dropdownService.toggle).toHaveBeenCalledTimes(1);
   });
 
-  it('should toggle on hover only when hover trigger is active', () => {
+  it('should open on hover enter and schedule a grace close on hover leave in hover mode', () => {
     component.trigger.set('hover');
     fixture.detectChanges();
-    const directive = getDirective() as unknown as {onHoverToggle(): void};
+    const directive = getDirective();
+    const hoverDirective = directive as unknown as {
+      onHoverEnter(): void;
+      onHoverLeave(): void;
+    };
 
-    directive.onHoverToggle();
-    directive.onHoverToggle();
+    hoverDirective.onHoverEnter();
+    expect(dropdownService.openHover).toHaveBeenCalledTimes(1);
+    expect(dropdownService.openHover).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      directive.menuId,
+      directive.triggerId,
+      200,
+    );
+    expect(dropdownService.toggle).not.toHaveBeenCalled();
 
-    expect(dropdownService.toggle).toHaveBeenCalledTimes(2);
+    hoverDirective.onHoverLeave();
+    expect(dropdownService.scheduleHoverClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('should ignore hover enter/leave in click mode', () => {
+    // default trigger is 'click'
+    const hoverDirective = getDirective() as unknown as {
+      onHoverEnter(): void;
+      onHoverLeave(): void;
+    };
+
+    hoverDirective.onHoverEnter();
+    hoverDirective.onHoverLeave();
+
+    expect(dropdownService.openHover).not.toHaveBeenCalled();
+    expect(dropdownService.scheduleHoverClose).not.toHaveBeenCalled();
+  });
+
+  it('should not open on hover enter when disabled', () => {
+    component.trigger.set('hover');
+    component.disabled.set(true);
+    fixture.detectChanges();
+    const hoverDirective = getDirective() as unknown as {onHoverEnter(): void};
+
+    hoverDirective.onHoverEnter();
+
+    expect(dropdownService.openHover).not.toHaveBeenCalled();
+  });
+
+  it('should close the open menu when the trigger is destroyed while expanded', () => {
+    const triggerNativeElement = fixture.debugElement.query(
+      By.directive(BraDropdownDirective),
+    ).nativeElement as HTMLElement;
+
+    dropdownService.activeTrigger.set(triggerNativeElement);
+    fixture.detectChanges();
+
+    fixture.destroy();
+
+    expect(dropdownService.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('should not close on destroy when this trigger is not expanded', () => {
+    fixture.destroy();
+
+    expect(dropdownService.close).not.toHaveBeenCalled();
   });
 
   it('should ignore toggle actions when disabled', () => {
