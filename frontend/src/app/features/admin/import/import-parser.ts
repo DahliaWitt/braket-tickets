@@ -84,9 +84,13 @@ function extractFirstLogicalLine(input: string): string {
  * unquoted ones (the spec calls for trimming cells).
  */
 /**
- * Tokenize CSV/paste text into records. When `maxRecords` is set, parsing stops
- * once that many records are collected — so a pathologically large paste never
- * tokenizes end-to-end just to be rejected by the row cap later.
+ * Tokenize CSV/paste text into records. Fully blank lines are dropped as they
+ * are produced and never stored. When `maxRecords` is set, parsing stops once
+ * that many NON-BLANK records are collected — so a pathologically large paste
+ * never tokenizes end-to-end just to be rejected by the row cap later, and
+ * blank lines never consume cap slots (which would silently truncate real data
+ * rows or defeat over-cap detection). A blank line INSIDE a quoted field is not
+ * a record separator, so it is preserved as field content and never dropped.
  */
 function tokenize(
   input: string,
@@ -111,6 +115,13 @@ function tokenize(
   };
   const pushRecord = (): void => {
     pushField();
+    // Drop fully blank lines here so they never count toward `maxRecords`.
+    // Counting blanks against the cap would truncate trailing real rows and
+    // let genuinely over-cap files slip past over-cap detection downstream.
+    if (isBlankRecord(record)) {
+      record = [];
+      return;
+    }
     records.push(record);
     record = [];
   };
@@ -195,8 +206,9 @@ export interface ParseOptions {
   readonly manualMapping?: ReadonlyMap<number, ImportFieldKey | null>;
   /**
    * Max data rows the target accepts. When set, tokenization stops at
-   * `maxRows + 1` data rows (enough to still flag over-cap) instead of parsing a
-   * huge paste in full. Omit to parse without a bound.
+   * `maxRows + 1` NON-BLANK data rows (enough to still flag over-cap) instead of
+   * parsing a huge paste in full. Blank lines do not count toward this bound.
+   * Omit to parse without a bound.
    */
   readonly maxRows?: number;
 }
@@ -204,8 +216,8 @@ export interface ParseOptions {
 /**
  * Parse pasted text or file contents into structured, header-mapped rows.
  *
- * Pipeline: strip BOM → detect delimiter → tokenize (RFC quoting) → drop blank
- * lines → map headers to canonical fields → build typed rows. Returns a typed
+ * Pipeline: strip BOM → detect delimiter → tokenize (RFC quoting, blank lines
+ * dropped) → map headers to canonical fields → build typed rows. Returns a typed
  * error for empty/header-only input, duplicate headers, or (unless a manual
  * mapping supplies a name) no mappable name column. Duplicate headers and a
  * missing name column set `requiresManualMapping` when a manual mapping was NOT
@@ -225,13 +237,14 @@ export function parseImportText(
 
   const delimiterName = detectDelimiter(cleaned);
   const delimiter = DELIMITER_CHAR[delimiterName];
-  // Cap tokenization at header + maxRows + 1 rows: enough to still detect an
-  // over-cap paste, without tokenizing a huge input end-to-end.
+  // Cap tokenization at header + maxRows + 1 NON-BLANK records: enough to still
+  // detect an over-cap paste, without tokenizing a huge input end-to-end. Blank
+  // lines are dropped inside tokenize() and never count toward this cap, so
+  // interspersed blanks can neither truncate real data rows nor mask an
+  // over-cap file.
   const maxRecords =
     options.maxRows !== undefined ? options.maxRows + 2 : undefined;
-  const records = tokenize(cleaned, delimiter, maxRecords).filter(
-    (record) => !isBlankRecord(record),
-  );
+  const records = tokenize(cleaned, delimiter, maxRecords);
 
   if (records.length === 0) {
     return {
