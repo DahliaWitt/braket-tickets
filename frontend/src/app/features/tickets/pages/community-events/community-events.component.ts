@@ -102,7 +102,19 @@ import {queryLoadState} from '@/utils/resource';
                   }
                 </div>
               } @else {
-                <app-empty-state title="No communities found" />
+                <app-empty-state
+                  data-testid="community-picker-empty"
+                  title="no communities yet"
+                  description="nothing's listed right now — check back soon"
+                >
+                  <a
+                    routerLink="/"
+                    data-testid="community-picker-empty-home"
+                    class="mt-2 inline-flex min-h-6 items-center gap-1 font-mono text-xs tracking-widest text-primary uppercase transition-colors hover:text-primary/80"
+                  >
+                    &larr; back home
+                  </a>
+                </app-empty-state>
               }
             </div>
           }
@@ -211,7 +223,19 @@ import {queryLoadState} from '@/utils/resource';
               </div>
             }
             <div data-testid="community-events-empty">
-              <app-empty-state title="No upcoming events found" />
+              <app-empty-state
+                title="no upcoming events"
+                description="nothing on the calendar yet — check back soon"
+              >
+                <a
+                  routerLink="/events"
+                  data-testid="community-events-empty-browse"
+                  class="mt-2 inline-flex min-h-6 items-center gap-1 font-mono text-xs tracking-widest text-primary uppercase transition-colors hover:text-primary/80"
+                >
+                  browse other communities
+                  <span aria-hidden="true">&rarr;</span>
+                </a>
+              </app-empty-state>
             </div>
           }
 
