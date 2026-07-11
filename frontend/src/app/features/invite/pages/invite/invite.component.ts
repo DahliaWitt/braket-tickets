@@ -15,13 +15,15 @@ import {injectConvex, injectQuery, skipToken} from 'convex-angular';
 import {api} from '@convex/_generated/api';
 import {toast} from 'ngx-sonner';
 import {logger} from '@/utils/logger';
+import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
+import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
 
 type ViewState = 'loading' | 'error' | 'options' | 'redeeming' | 'success';
 
 @Component({
   selector: 'app-invite',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink],
+  imports: [RouterLink, ZardButtonComponent, ZardIconComponent],
   template: `
     @switch (viewState()) {
       @case ('loading') {
@@ -30,9 +32,10 @@ type ViewState = 'loading' | 'error' | 'options' | 'redeeming' | 'success';
           class="flex min-h-screen items-center justify-center"
         >
           <div role="status">
-            <div
-              class="h-8 w-8 animate-spin rounded-full border-t-2 border-b-2 border-primary"
-            ></div>
+            <z-icon
+              zType="loader-circle"
+              class="h-8 w-8 animate-spin text-primary"
+            />
             <span class="sr-only">Loading...</span>
           </div>
         </div>
@@ -45,7 +48,7 @@ type ViewState = 'loading' | 'error' | 'options' | 'redeeming' | 'success';
           <div
             class="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10"
           >
-            <span class="text-2xl text-destructive-text">&#x2715;</span>
+            <z-icon zType="x" class="h-8 w-8 text-destructive-text" />
           </div>
           <h1
             class="text-center font-display text-2xl font-bold tracking-tight uppercase sm:text-3xl"
@@ -60,9 +63,9 @@ type ViewState = 'loading' | 'error' | 'options' | 'redeeming' | 'success';
           </p>
           <a
             routerLink="/"
-            class="mt-4 font-mono text-sm tracking-wider text-primary uppercase hover:underline"
+            class="mt-4 inline-flex min-h-11 items-center gap-2 font-mono text-sm tracking-wider text-primary uppercase hover:underline"
           >
-            &larr; Back to Home
+            <z-icon zType="arrow-left" class="h-4 w-4" /> Back to Home
           </a>
         </div>
       }
@@ -103,7 +106,8 @@ type ViewState = 'loading' | 'error' | 'options' | 'redeeming' | 'success';
               data-testid="invite-sign-in"
               [routerLink]="['/login']"
               [queryParams]="{returnUrl: '/invite/' + token()}"
-              class="inline-flex w-full items-center justify-center rounded-md bg-primary px-6 py-3 font-mono text-sm tracking-wider text-primary-foreground uppercase transition-colors hover:bg-primary/90 sm:w-auto"
+              z-button
+              class="w-full font-mono text-sm tracking-wider uppercase sm:w-auto"
             >
               Sign In
             </a>
@@ -111,7 +115,9 @@ type ViewState = 'loading' | 'error' | 'options' | 'redeeming' | 'success';
               data-testid="invite-create-account"
               [routerLink]="['/login']"
               [queryParams]="{signup: 'true', returnUrl: '/invite/' + token()}"
-              class="inline-flex w-full items-center justify-center rounded-md border border-border px-6 py-3 font-mono text-sm tracking-wider text-foreground uppercase transition-colors hover:bg-accent sm:w-auto"
+              z-button
+              zType="outline"
+              class="w-full font-mono text-sm tracking-wider uppercase sm:w-auto"
             >
               Create Account
             </a>
@@ -124,9 +130,10 @@ type ViewState = 'loading' | 'error' | 'options' | 'redeeming' | 'success';
           class="flex min-h-screen flex-col items-center justify-center gap-4"
         >
           <div role="status" class="flex flex-col items-center gap-4">
-            <div
-              class="h-8 w-8 animate-spin rounded-full border-t-2 border-b-2 border-primary"
-            ></div>
+            <z-icon
+              zType="loader-circle"
+              class="h-8 w-8 animate-spin text-primary"
+            />
             <span class="sr-only">Verifying access...</span>
           </div>
           <p
@@ -143,9 +150,9 @@ type ViewState = 'loading' | 'error' | 'options' | 'redeeming' | 'success';
           class="flex min-h-screen flex-col items-center justify-center gap-6 px-6"
         >
           <div
-            class="flex h-16 w-16 items-center justify-center rounded-full bg-secondary/10"
+            class="flex h-16 w-16 items-center justify-center rounded-full bg-success/10"
           >
-            <span class="text-2xl text-secondary">&#x2713;</span>
+            <z-icon zType="check" class="h-8 w-8 text-success" />
           </div>
           <h1
             class="font-display text-2xl font-bold tracking-tight uppercase sm:text-3xl"
@@ -155,9 +162,9 @@ type ViewState = 'loading' | 'error' | 'options' | 'redeeming' | 'success';
           <p class="mono-label text-xs text-muted-foreground">access granted</p>
           <a
             routerLink="/"
-            class="mt-4 font-mono text-sm tracking-wider text-primary uppercase hover:underline"
+            class="mt-4 inline-flex min-h-11 items-center gap-2 font-mono text-sm tracking-wider text-primary uppercase hover:underline"
           >
-            Go to Home &rarr;
+            Go to Home <z-icon zType="arrow-right" class="h-4 w-4" />
           </a>
         </div>
       }
@@ -297,7 +304,7 @@ export class InviteComponent {
       } else if (result.alreadyRedeemed) {
         toast.success("You've already used this link");
       } else {
-        toast.success('Welcome! You are now part of the community.');
+        toast.success("you're in — welcome to the community");
       }
 
       // Redirect to home after a brief delay so the user sees the success state

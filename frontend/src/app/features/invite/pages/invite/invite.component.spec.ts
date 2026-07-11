@@ -125,7 +125,7 @@ describe('InviteComponent', () => {
     );
 
     expect(vi.mocked(toast.success)).toHaveBeenCalledWith(
-      'Welcome! You are now part of the community.',
+      "you're in — welcome to the community",
     );
 
     fixture.destroy();
