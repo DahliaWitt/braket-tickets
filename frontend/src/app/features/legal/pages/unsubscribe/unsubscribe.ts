@@ -53,8 +53,8 @@ import {
               Invalid unsubscribe link
             </p>
             <p class="text-sm text-muted-foreground">
-              This link may have expired or already been used. Sign in to
-              manage your preferences, or contact support if you need help.
+              This link may have expired or already been used. Sign in to manage
+              your preferences, or contact support if you need help.
             </p>
             <a
               routerLink="/account"
@@ -117,8 +117,8 @@ import {
                     >.
                   </p>
                   <p class="mt-1 font-sans text-sm text-muted-foreground">
-                    You'll still receive transactional emails for tickets
-                    you've purchased.
+                    You'll still receive transactional emails for tickets you've
+                    purchased.
                   </p>
                 </div>
               } @else {

@@ -55,7 +55,9 @@ export class UnsubscribeHarness extends ComponentHarness {
 
   /** Resolved z-button variant of the unsubscribe-all action. */
   async getUnsubscribeAllButtonType(): Promise<string | null> {
-    const btn = await this.locatorForOptional('[data-testid="unsub-all-btn"]')();
+    const btn = await this.locatorForOptional(
+      '[data-testid="unsub-all-btn"]',
+    )();
     return btn ? btn.getAttribute('data-type') : null;
   }
 

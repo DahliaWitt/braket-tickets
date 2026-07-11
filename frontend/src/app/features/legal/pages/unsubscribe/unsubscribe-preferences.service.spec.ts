@@ -121,10 +121,7 @@ describe('UnsubscribePreferencesService', () => {
     const req = httpMock.expectOne(
       `${apiBaseUrl}/api/unsubscribe-preferences?token=dead-token`,
     );
-    req.flush(
-      {error: 'invalid_token'},
-      {status: 404, statusText: 'Not Found'},
-    );
+    req.flush({error: 'invalid_token'}, {status: 404, statusText: 'Not Found'});
 
     await expect(promise).resolves.toBeNull();
   });
