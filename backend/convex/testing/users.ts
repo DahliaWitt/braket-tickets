@@ -259,6 +259,28 @@ export const seedAppUser = testingMutation({
 });
 
 /**
+ * Seeds an app-level user record that has NO email address.
+ *
+ * The digest-pagination tests need a large population of admins where only a
+ * handful have emails, so most admins bail out before `enqueueEmailDelivery`
+ * and avoid the convex-test parallel-mutation race. `createUserDirectly` and
+ * `seedAppUser` both require an email, and the production signup flow always
+ * assigns one, so there is no production mutation that produces an emailless
+ * user — this bootstrap-only helper fills that gap.
+ * PROTECTED: Only callable when IS_TEST env var is set.
+ */
+export const seedEmaillessUser = testingMutation({
+  args: {
+    name: v.string(),
+  },
+  returns: v.id('users'),
+  handler: async ({db}, {name}) => {
+    // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Bootstrap: emailless user has no production signup path
+    return await db.insert('users', {name});
+  },
+});
+
+/**
  * Sets root-admin status for a user, bypassing RLS.
  * PROTECTED: Only callable when IS_TEST env var is set.
  * Used for E2E test setup to promote users to root_admin.
