@@ -89,6 +89,12 @@ Check these items in order:
 5. If an opted-out inbox still received a bulk email, inspect the organizer-scoped preference row in:
    - `marketingEmailPreferences` for user-backed inboxes
    - `emailAddressMarketingPreferences` for guest-only inboxes
+   - Guest→user migration (`backend/convex/lib/guest_sessions/migration.ts`)
+     carries a guest-address opt-out onto the user's `marketingEmailPreferences`
+     but never re-enables an existing user preference: an address row defaults to
+     `optedIn: true` on first send, so migration only creates a new preference or
+     propagates an unsubscribe. A user's explicit opt-out therefore survives a
+     later same-email guest purchase.
 
 Unsubscribe and tracking tokens are bearer credentials. App-owned tables store
 only purpose-scoped digests for new tokens:
