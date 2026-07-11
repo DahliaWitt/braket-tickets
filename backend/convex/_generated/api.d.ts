@@ -2634,6 +2634,12 @@ export declare const api: {
         },
         Id<"organizers">
       >;
+      seedOrganizerMemberRolesAtScale: FunctionReference<
+        "mutation",
+        "public",
+        { count: number; organizerId: Id<"organizers"> },
+        null
+      >;
       seedOrganizerNoVetting: FunctionReference<
         "mutation",
         "public",

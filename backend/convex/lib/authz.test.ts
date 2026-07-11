@@ -28,24 +28,19 @@ let userCounter = 0;
 const MEMBER_CAP_SEED_TEST_TIMEOUT_MS = 120000;
 
 /**
- * Seed `count` member-role assignments on an organizer using synthetic user id
- * strings. Avoids creating `count` real user documents when a test only needs to
- * exercise the member-cap threshold.
+ * Seed `count` member-role assignments on an organizer via the dedicated
+ * `api.testing.communities` helper. Avoids creating `count` real user documents
+ * when a test only needs to exercise the member-cap threshold, and keeps role
+ * assignment out of the test file per `backend/convex/testing/AGENTS.md`.
  */
 async function seedMembers(
   t: ReturnType<typeof convexTest>,
   organizerId: Id<'organizers'>,
   count: number,
 ): Promise<void> {
-  await t.run(async (ctx) => {
-    for (let index = 0; index < count; index += 1) {
-      await authz.assignRole(
-        ctx,
-        `cap-user-${organizerId}-${index}`,
-        'member',
-        {type: 'organizer', id: organizerId as string},
-      );
-    }
+  await t.mutation(api.testing.communities.seedOrganizerMemberRolesAtScale, {
+    organizerId,
+    count,
   });
 }
 

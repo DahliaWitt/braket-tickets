@@ -21,24 +21,19 @@ import {MAX_TRUST_LINKS} from '../lib/trust_links';
 const MEMBER_CAP_SEED_TEST_TIMEOUT_MS = 120000;
 
 /**
- * Seed `count` member-role assignments on an organizer using synthetic user id
- * strings, so a test can reach the member cap without creating that many real
- * user documents.
+ * Seed `count` member-role assignments on an organizer via the dedicated
+ * `api.testing.communities` helper, so a test can reach the member cap without
+ * creating that many real user documents. Role assignment stays out of the test
+ * file per `backend/convex/testing/AGENTS.md`.
  */
 async function seedMembers(
   t: ReturnType<typeof convexTest>,
   organizerId: Id<'organizers'>,
   count: number,
 ): Promise<void> {
-  await t.run(async (ctx) => {
-    for (let index = 0; index < count; index += 1) {
-      await authz.assignRole(
-        ctx,
-        `cap-user-${organizerId}-${index}`,
-        'member',
-        {type: 'organizer', id: organizerId as string},
-      );
-    }
+  await t.mutation(api.testing.communities.seedOrganizerMemberRolesAtScale, {
+    organizerId,
+    count,
   });
 }
 
@@ -141,10 +136,7 @@ describe('trust_links', () => {
     async () => {
       const t = convexTest();
       const trustingOrganizerId = await createOrganizer(t, 'Trusting Org');
-      const bigTrustedOrganizerId = await createOrganizer(
-        t,
-        'Big Trusted Org',
-      );
+      const bigTrustedOrganizerId = await createOrganizer(t, 'Big Trusted Org');
       const smallTrustedOrganizerId = await createOrganizer(
         t,
         'Small Trusted Org',
