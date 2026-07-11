@@ -1,4 +1,4 @@
-import {ComponentHarness} from '@angular/cdk/testing';
+import { ComponentHarness } from '@angular/cdk/testing';
 
 export class PopoverTriggerHarness extends ComponentHarness {
   static hostSelector = 'button';
@@ -10,7 +10,7 @@ export class PopoverTriggerHarness extends ComponentHarness {
 
   async keydown(key: string): Promise<void> {
     const host = await this.host();
-    await host.dispatchEvent('keydown', {key});
+    await host.dispatchEvent('keydown', { key });
   }
 
   async mouseEnter(): Promise<void> {

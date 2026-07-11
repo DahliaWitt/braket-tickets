@@ -98,7 +98,9 @@ export function parseStrictUsdCents(value: string): StrictUsdParseResult {
   return {valid: true, cents: dollars * 100 + cents};
 }
 
-export function parseOptionalStrictUsdCents(value: string): number | undefined {
+export function parseOptionalStrictUsdCents(
+  value: string,
+): number | undefined {
   const parsed = parseStrictUsdCents(value);
   return parsed.valid ? parsed.cents : undefined;
 }
@@ -180,7 +182,9 @@ export function buildEventFormModel(evt: EditableEvent): EventFormModel {
         ? String(evt.supporterDefaultPrice / 100)
         : '',
     maxTicketsPerUser:
-      evt.maxTicketsPerUser !== undefined ? String(evt.maxTicketsPerUser) : '',
+      evt.maxTicketsPerUser !== undefined
+        ? String(evt.maxTicketsPerUser)
+        : '',
     organizerId: evt.organizerId ?? '',
     visibility: evt.visibility ?? 'private',
   };

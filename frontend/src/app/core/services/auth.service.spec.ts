@@ -882,7 +882,8 @@ describe('AuthService', () => {
         session: {id: 'session-123'},
       };
       let resolveGetSession:
-        ((value: {data: typeof staleSession; error: null}) => void) | undefined;
+        | ((value: {data: typeof staleSession; error: null}) => void)
+        | undefined;
       const pendingGetSession = new Promise<{
         data: typeof staleSession;
         error: null;

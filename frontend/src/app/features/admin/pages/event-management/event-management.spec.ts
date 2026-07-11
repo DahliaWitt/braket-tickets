@@ -765,7 +765,8 @@ describe('EventManagement', () => {
         -1,
       ) as unknown[] | undefined;
       const confirmOptions = lastConfirmCall?.[0] as
-        {zDescription?: string} | undefined;
+        | {zDescription?: string}
+        | undefined;
       expect(confirmOptions?.zDescription).toContain('$25.00');
     });
   });

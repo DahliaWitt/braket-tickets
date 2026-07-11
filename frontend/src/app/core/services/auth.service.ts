@@ -68,7 +68,8 @@ export class UnverifiedEmailError extends Error {
 export class SocialAuthBlockedError extends Error {
   constructor(
     public readonly reason:
-      'provider_email_missing' | 'provider_email_unverified',
+      | 'provider_email_missing'
+      | 'provider_email_unverified',
   ) {
     super(
       reason === 'provider_email_missing'
@@ -429,7 +430,7 @@ export class AuthService implements ConvexAuthProvider {
     }
 
     const originalQuery = convex.query;
-    convex.query = async <Query extends FunctionReference<'query'>>(
+    convex.query = (async <Query extends FunctionReference<'query'>>(
       query: Query,
       args: Query['_args'],
     ): Promise<Awaited<Query['_returnType']>> => {
@@ -439,10 +440,10 @@ export class AuthService implements ConvexAuthProvider {
         this.handleFatalConvexAuthError(err);
         throw err;
       }
-    };
+    });
 
     const originalMutation = convex.mutation;
-    convex.mutation = async <Mutation extends FunctionReference<'mutation'>>(
+    convex.mutation = (async <Mutation extends FunctionReference<'mutation'>>(
       mutation: Mutation,
       args: FunctionArgs<Mutation>,
       options?: MutationOptions,
@@ -453,10 +454,10 @@ export class AuthService implements ConvexAuthProvider {
         this.handleFatalConvexAuthError(err);
         throw err;
       }
-    };
+    });
 
     const originalAction = convex.action;
-    convex.action = async <Action extends FunctionReference<'action'>>(
+    convex.action = (async <Action extends FunctionReference<'action'>>(
       action: Action,
       args: FunctionArgs<Action>,
     ): Promise<Awaited<FunctionReturnType<Action>>> => {
@@ -466,18 +467,18 @@ export class AuthService implements ConvexAuthProvider {
         this.handleFatalConvexAuthError(err);
         throw err;
       }
-    };
+    });
 
     const originalOnUpdate = convex.onUpdate.bind(convex);
-    convex.onUpdate = (query, args, onResult, onError) =>
+    convex.onUpdate = ((query, args, onResult, onError) =>
       originalOnUpdate(query, args, onResult, (err) => {
         this.handleFatalConvexAuthError(err);
         onError?.(err);
-      });
+      }));
 
     const originalOnPaginatedUpdate =
       convex.onPaginatedUpdate_experimental.bind(convex);
-    convex.onPaginatedUpdate_experimental = (
+    convex.onPaginatedUpdate_experimental = ((
       query,
       args,
       options,
@@ -487,7 +488,7 @@ export class AuthService implements ConvexAuthProvider {
       originalOnPaginatedUpdate(query, args, options, onResult, (err) => {
         this.handleFatalConvexAuthError(err);
         onError?.(err);
-      });
+      }));
 
     Object.defineProperty(convex, '__braketAuthWrapped', {
       configurable: false,

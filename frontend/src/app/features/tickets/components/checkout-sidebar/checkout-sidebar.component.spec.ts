@@ -423,10 +423,7 @@ describe('CheckoutSidebarComponent — logarithmic supporter slider', () => {
       fixture.componentRef.setInput('selectedTier', 'notaflof');
       fixture.componentRef.setInput('customAmount', 0);
       fixture.componentRef.setInput('totalAmount', 0);
-      fixture.componentRef.setInput(
-        'slidingScaleError',
-        'Minimum amount is $5.00',
-      );
+      fixture.componentRef.setInput('slidingScaleError', 'Minimum amount is $5.00');
       fixture.detectChanges();
 
       expect(await harness.isFreeTicketVisible()).toBe(false);

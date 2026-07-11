@@ -159,9 +159,7 @@ describe('PasswordService', () => {
       // error redirect would be misrouted to the social sign-in error page).
       expect(authClient.sendVerificationEmail).toHaveBeenCalledWith({
         email: 'user@example.com',
-        callbackURL: expect.stringContaining(
-          '/confirm/verification',
-        ) as unknown,
+        callbackURL: expect.stringContaining('/confirm/verification') as unknown,
       });
     });
   });

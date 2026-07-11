@@ -62,7 +62,9 @@ describe('sanitizeString labeled-secret redaction', () => {
 
   describe('does not over-redact benign content', () => {
     it('leaves non-sensitive key=value pairs untouched', () => {
-      expect(sanitizeString('a=b in normal prose')).toBe('a=b in normal prose');
+      expect(sanitizeString('a=b in normal prose')).toBe(
+        'a=b in normal prose',
+      );
       expect(sanitizeString('price=100 and count=5')).toBe(
         'price=100 and count=5',
       );

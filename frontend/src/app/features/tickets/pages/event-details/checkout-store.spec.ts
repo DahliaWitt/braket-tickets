@@ -60,9 +60,7 @@ describe('CheckoutStore', () => {
       // ($10) must be rejected exactly as the backend validator rejects it.
       store.updateCustomAmountFromSlider(15); // $15 > $10 max
 
-      expect(store.slidingScaleError()).toBe(
-        'Maximum for community tier is $10.00',
-      );
+      expect(store.slidingScaleError()).toBe('Maximum for community tier is $10.00');
       expect(store.customAmount()).toBe(1500);
     });
 
@@ -74,9 +72,7 @@ describe('CheckoutStore', () => {
       // Regression guard: the slider path used to unconditionally clear the
       // error. It must not resurrect a submittable state for an invalid amount.
       store.updateCustomAmountFromSlider(15);
-      expect(store.slidingScaleError()).toBe(
-        'Maximum for community tier is $10.00',
-      );
+      expect(store.slidingScaleError()).toBe('Maximum for community tier is $10.00');
     });
 
     it('blocks a below-min slider amount', () => {
@@ -101,9 +97,7 @@ describe('CheckoutStore', () => {
       store.selectTier('notaflof');
       store.updateCustomAmountFromInput('12');
 
-      expect(store.slidingScaleError()).toBe(
-        'Maximum for community tier is $10.00',
-      );
+      expect(store.slidingScaleError()).toBe('Maximum for community tier is $10.00');
       expect(store.customAmount()).toBe(1200);
     });
 
@@ -197,7 +191,9 @@ describe('CheckoutStore', () => {
       // supporterDefaultPrice ($5) sits below the regular price ($20): the
       // backend floor is max(supporterDefaultPrice, price + 1) = $20.01, so the
       // frontend must reject anything below the regular-price + $1 floor.
-      event.set(stubEvent({price: 2000, supporterDefaultPrice: 500}));
+      event.set(
+        stubEvent({price: 2000, supporterDefaultPrice: 500}),
+      );
     });
 
     it('rejects a supporter amount at supporterDefaultPrice when it is below the regular-price floor', () => {

@@ -45,7 +45,9 @@ import {ORDER_RELEASE_GRACE_MS} from '../../lib/constants';
 import {LEGAL_TERMS_VERSION} from '@shared/constants';
 
 type CheckoutFailureStage =
-  'account_setup' | 'checkout_session' | 'payment_intent';
+  | 'account_setup'
+  | 'checkout_session'
+  | 'payment_intent';
 
 type OpenArgs = {
   eventId: Id<'events'>;

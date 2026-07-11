@@ -133,7 +133,8 @@ describe('auth password reset callback', () => {
       to: 'reset@example.com',
     });
     const runActionPayload = runActionMock.mock.calls[0]?.[1] as
-      {subject?: string; html?: string} | undefined;
+      | {subject?: string; html?: string}
+      | undefined;
     expect(runActionPayload?.subject).toMatch(/reset/i);
     expect(runActionPayload?.html).toContain(
       'https://example.com/confirm/password-reset/token-123',
@@ -414,14 +415,11 @@ describe('buildFrontendCallbackUrl', () => {
     'javascript:alert(document.domain)',
     'data:text/html,<script>alert(1)</script>',
     'blob:https://app.example.com/1234-5678', // same-origin but non-http(s)
-  ])(
-    'rejects open-redirect payload %j and falls back to SITE_URL',
-    (payload) => {
-      expect(buildFrontendCallbackUrl(payload, '/confirm/social-link')).toBe(
-        'https://app.example.com/confirm/social-link',
-      );
-    },
-  );
+  ])('rejects open-redirect payload %j and falls back to SITE_URL', (payload) => {
+    expect(buildFrontendCallbackUrl(payload, '/confirm/social-link')).toBe(
+      'https://app.example.com/confirm/social-link',
+    );
+  });
 
   it('keeps percent-encoded separators on the same origin path', () => {
     // %2F%2F is not re-decoded into an authority by the URL parser, so it stays

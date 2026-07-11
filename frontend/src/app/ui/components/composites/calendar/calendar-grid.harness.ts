@@ -1,4 +1,4 @@
-import {ComponentHarness, type TestElement} from '@angular/cdk/testing';
+import { ComponentHarness, type TestElement } from '@angular/cdk/testing';
 
 export class BraCalendarGridComponentHarness extends ComponentHarness {
   static hostSelector = 'bra-calendar-grid';
@@ -68,9 +68,7 @@ export class BraCalendarGridComponentHarness extends ComponentHarness {
   async clickDayByIndex(index: number): Promise<void> {
     const buttons = await this.getDayButtons();
     if (index < 0 || index >= buttons.length) {
-      throw new Error(
-        `Day button index ${index} out of range (0-${buttons.length - 1})`,
-      );
+      throw new Error(`Day button index ${index} out of range (0-${buttons.length - 1})`);
     }
     await buttons[index].click();
   }

@@ -689,7 +689,8 @@ describe('EventDetailsComponent', () => {
     await harness.clickContactCommunityButton();
 
     const config = mockDialogService.create.mock.calls.at(-1)?.[0] as
-      ContactDialogConfigForEventDetails | undefined;
+      | ContactDialogConfigForEventDetails
+      | undefined;
 
     expect(config).toMatchObject({
       zTitle: 'Contact Void Collective',
@@ -719,7 +720,8 @@ describe('EventDetailsComponent', () => {
     component.contactOrganizer();
 
     const config = mockDialogService.create.mock.calls.at(-1)?.[0] as
-      ContactDialogConfigForEventDetails | undefined;
+      | ContactDialogConfigForEventDetails
+      | undefined;
 
     expect(config).toMatchObject({
       zTitle: 'Contact Org Name',
@@ -745,7 +747,8 @@ describe('EventDetailsComponent', () => {
     component.contactOrganizer();
 
     const config = mockDialogService.create.mock.calls.at(-1)?.[0] as
-      ContactDialogConfigForEventDetails | undefined;
+      | ContactDialogConfigForEventDetails
+      | undefined;
 
     expect(config).toMatchObject({
       zTitle: 'Contact Org Name',

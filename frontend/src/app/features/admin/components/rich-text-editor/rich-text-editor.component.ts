@@ -52,7 +52,7 @@ export type RichTextImageUploadFn = (
 
 /** Toolbar button styling, keyed on whether its formatting mark is active. */
 const toolbarButtonVariants = cva(
-  'rounded-sm px-2 py-1 font-mono text-2xs tracking-wider uppercase transition-colors disabled:cursor-not-allowed disabled:opacity-40',
+  'rounded-sm px-2 py-1 text-2xs font-mono uppercase tracking-wider transition-colors disabled:cursor-not-allowed disabled:opacity-40',
   {
     variants: {
       active: {
