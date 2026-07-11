@@ -9,7 +9,9 @@ export class EventManagementGuestsTabHarness extends ComponentHarness {
   static hostSelector = 'app-event-management-guests-tab';
 
   private readonly getAddGuestButton = this.locatorFor(
-    ZardButtonComponentHarness.with({text: /Add Guest/}),
+    ZardButtonComponentHarness.with({
+      selector: '[data-testid="add-guest-button"]',
+    }),
   );
   private readonly getImportButton = this.locatorFor(
     '[data-testid="import-guests-button"]',

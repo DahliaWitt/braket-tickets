@@ -16,12 +16,14 @@ import {
 } from '@/features/admin/models/event-management.model';
 import {ResaleService} from '@/features/tickets/services/resale.service';
 import {extractErrorMessage} from '@/core/utils/error-message.utils';
+import {BraAlertDialogService} from '@ui/components/composites/alert-dialog/alert-dialog.service';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 import {ZardCardComponent} from '@ui/components/primitives/card/card.component';
-import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
 import {ZardTooltipDirective} from '@ui/components/primitives/tooltip/tooltip';
+import {EmptyStateComponent} from '@ui/components/primitives/empty-state/empty-state.component';
 import {logger} from '@/utils/logger';
 import {readInputValue} from '@ui/utils/dom-event';
+import {ADMIN_DATETIME} from '@/features/admin/utils/date-formats';
 
 @Component({
   selector: 'app-event-management-resale-tab',
@@ -31,14 +33,18 @@ import {readInputValue} from '@ui/utils/dom-event';
     DatePipe,
     ZardButtonComponent,
     ZardCardComponent,
-    ZardIconComponent,
     ZardTooltipDirective,
+    EmptyStateComponent,
   ],
   templateUrl: './event-management-resale-tab.component.html',
 })
 export class EventManagementResaleTabComponent {
   private readonly adminEventsService = inject(AdminEventsService);
   private readonly resaleService = inject(ResaleService);
+  private readonly alertDialog = inject(BraAlertDialogService);
+
+  /** Shared admin datetime format for both desktop and mobile timestamps. */
+  protected readonly ADMIN_DATETIME = ADMIN_DATETIME;
 
   readonly eventId = input.required<string>();
   readonly resaleListings = input<ResaleListing[]>([]);
@@ -71,11 +77,11 @@ export class EventManagementResaleTabComponent {
       await this.adminEventsService.updateResaleSettings(this.eventId(), {
         resaleEnabled: newValue,
       });
-      toast.success(newValue ? 'Resale enabled' : 'Resale disabled');
+      toast.success(newValue ? 'resale enabled' : 'resale disabled');
       this.dataChanged.emit();
     } catch (error) {
       logger.error('Failed to update resale settings', error);
-      toast.error('Failed to update resale settings');
+      toast.error('failed to update resale settings');
     } finally {
       this.isUpdatingResaleSettings.set(false);
     }
@@ -96,19 +102,39 @@ export class EventManagementResaleTabComponent {
       this.dataChanged.emit();
     } catch (error) {
       logger.error('Failed to update resale fee', error);
-      toast.error('Failed to update resale fee');
+      toast.error('failed to update resale fee');
     } finally {
       this.isUpdatingResaleSettings.set(false);
     }
   }
 
-  async adminCancelListing(listingId: string): Promise<void> {
+  /**
+   * Cancelling a listing acts on a third party's (the seller's) intent, so it
+   * always confirms first, naming the seller.
+   */
+  adminCancelListing(listing: ResaleListing): void {
+    if (this.isCancellingListing()) return;
+
+    const seller = listing.sellerName || 'this seller';
+    this.alertDialog.confirm({
+      zTitle: 'cancel resale listing',
+      zDescription: `take ${seller}'s ticket off the resale queue? they keep their ticket, but it will no longer be offered for resale.`,
+      zOkText: 'cancel listing',
+      zCancelText: 'keep listing',
+      zOkDestructive: true,
+      zMaskClosable: false,
+      // Returning the promise lets tests (and future callers) await the work.
+      zOnOk: () => this.performCancelListing(listing._id),
+    });
+  }
+
+  private async performCancelListing(listingId: string): Promise<void> {
     if (this.isCancellingListing()) return;
 
     this.isCancellingListing.set(listingId);
     try {
       await this.resaleService.cancelResaleListing(listingId);
-      toast.success('Resale listing cancelled');
+      toast.success('resale listing cancelled');
       this.dataChanged.emit();
     } catch (error) {
       logger.error('Failed to cancel resale listing', error);

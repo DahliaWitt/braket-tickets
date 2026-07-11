@@ -128,7 +128,7 @@ import type {
 
             @if (parseErrorMessage(); as message) {
               <p
-                class="text-sm text-destructive"
+                class="text-sm text-destructive-text"
                 role="alert"
                 data-testid="import-parse-error"
               >
@@ -198,7 +198,7 @@ import type {
 
             @if (mappingErrorMessage(); as message) {
               <p
-                class="text-sm text-destructive"
+                class="text-sm text-destructive-text"
                 role="alert"
                 data-testid="import-mapping-error"
               >
@@ -242,7 +242,7 @@ import type {
                 {{ previewCounts().valid }} valid
               </span>
               <span
-                class="mono-label text-2xs text-destructive"
+                class="mono-label text-2xs text-destructive-text"
                 data-testid="import-count-invalid"
               >
                 {{ previewCounts().invalid }} invalid
@@ -293,7 +293,7 @@ import type {
 
             @if (overCap()) {
               <p
-                class="text-sm text-destructive"
+                class="text-sm text-destructive-text"
                 role="alert"
                 data-testid="import-overcap-error"
               >
@@ -302,7 +302,7 @@ import type {
             }
 
             <div
-              class="max-h-[50vh] overflow-auto rounded-xl border border-border"
+              class="max-h-[50vh] overflow-auto rounded-lg border border-border"
               data-testid="import-preview-scroll"
               tabindex="0"
               role="region"
@@ -353,7 +353,9 @@ import type {
                       <td
                         class="px-3 py-2"
                         [class.text-success]="row.partition === 'valid'"
-                        [class.text-destructive]="row.partition === 'invalid'"
+                        [class.text-destructive-text]="
+                          row.partition === 'invalid'
+                        "
                         [class.text-warning]="row.partition === 'duplicate'"
                       >
                         <span class="mono-label text-2xs">{{
@@ -405,7 +407,7 @@ import type {
             @if (report(); as result) {
               @if (result.errorMessage) {
                 <p
-                  class="text-sm text-destructive"
+                  class="text-sm text-destructive-text"
                   role="alert"
                   data-testid="import-report-error"
                 >
@@ -427,7 +429,7 @@ import type {
                   </span>
                   @if (result.failed) {
                     <span
-                      class="mono-label text-2xs text-destructive"
+                      class="mono-label text-2xs text-destructive-text"
                       data-testid="import-report-failed"
                     >
                       {{ result.failed }} failed

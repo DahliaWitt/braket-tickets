@@ -13,6 +13,7 @@ import {takeUntilDestroyed} from '@angular/core/rxjs-interop';
 import {toast} from 'ngx-sonner';
 import {AdminEventsService} from '@/features/admin/services/admin-events.service';
 import {type Guest} from '@/features/admin/models/event-management.model';
+import {BraAlertDialogService} from '@ui/components/composites/alert-dialog/alert-dialog.service';
 import {BraDialogService} from '@ui/components/composites/dialog/dialog.service';
 import {
   AddGuestDialogComponent,
@@ -24,6 +25,7 @@ import {ZardCardComponent} from '@ui/components/primitives/card/card.component';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
 import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton.component';
 import {ZardTooltipDirective} from '@ui/components/primitives/tooltip/tooltip';
+import {EmptyStateComponent} from '@ui/components/primitives/empty-state/empty-state.component';
 import {logger} from '@/utils/logger';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
 import {GUEST_IMPORT_CONFIG} from '@/features/admin/import/import-config';
@@ -101,6 +103,7 @@ function isAddGuestDialogResult(value: unknown): value is AddGuestDialogResult {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     BraStatusBadgeComponent,
+    EmptyStateComponent,
     ImportSurfaceComponent,
     ZardButtonComponent,
     ZardCardComponent,
@@ -113,6 +116,7 @@ function isAddGuestDialogResult(value: unknown): value is AddGuestDialogResult {
 export class EventManagementGuestsTabComponent {
   private readonly adminEventsService = inject(AdminEventsService);
   private readonly dialogService = inject(BraDialogService);
+  private readonly alertDialog = inject(BraAlertDialogService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly browser = inject(BrowserPlatformService);
 
@@ -225,11 +229,11 @@ export class EventManagementGuestsTabComponent {
 
     try {
       await this.adminEventsService.addGuest(this.eventId(), result);
-      toast.success('Guest added');
+      toast.success('guest added');
       this.dataChanged.emit();
     } catch (error) {
       logger.error('Failed to add guest', error);
-      toast.error('Failed to add guest');
+      toast.error('failed to add guest');
     }
   }
 
@@ -268,24 +272,36 @@ export class EventManagementGuestsTabComponent {
 
     try {
       await this.adminEventsService.updateGuest(guestId, result);
-      toast.success('Guest updated');
+      toast.success('guest updated');
       this.dataChanged.emit();
     } catch (error) {
       logger.error('Failed to update guest', error);
-      toast.error('Failed to update guest');
+      toast.error('failed to update guest');
     }
   }
 
-  async removeGuest(guestId: string): Promise<void> {
-    if (!confirm('Are you sure you want to remove this guest?')) return;
+  removeGuest(guest: Guest): void {
+    const name = guest.name || guest.email || 'this guest';
+    this.alertDialog.confirm({
+      zTitle: 'remove guest',
+      zDescription: `remove ${name} from the guest list? their ticket stops working. this can't be undone.`,
+      zOkText: 'remove guest',
+      zCancelText: 'keep them',
+      zOkDestructive: true,
+      zMaskClosable: false,
+      // Returning the promise lets tests (and future callers) await the work.
+      zOnOk: () => this.performRemoveGuest(guest._id),
+    });
+  }
 
+  private async performRemoveGuest(guestId: string): Promise<void> {
     try {
       await this.adminEventsService.removeGuest(guestId);
-      toast.success('Guest removed');
+      toast.success('guest removed');
       this.dataChanged.emit();
     } catch (error) {
       logger.error('Failed to remove guest', error);
-      toast.error('Failed to remove guest');
+      toast.error('failed to remove guest');
     }
   }
 
@@ -297,16 +313,16 @@ export class EventManagementGuestsTabComponent {
     // sends, which surfaces here as 'skipped'.
     const outcome = await this.dispatchSendTicket(guestId, false);
     if (outcome === 'sent') {
-      toast.success('Ticket sent successfully');
+      toast.success('ticket sent');
       this.dataChanged.emit();
     } else if (outcome === 'skipped') {
-      toast.info('This ticket is already being sent');
+      toast.info('this ticket is already being sent');
     } else {
-      toast.error('Failed to send guest ticket');
+      toast.error('failed to send guest ticket');
     }
   }
 
-  async sendAllTickets(): Promise<void> {
+  sendAllTickets(): void {
     if (this.isSendingAll()) return;
 
     const targets = this.pendingSendGuests().filter(
@@ -315,7 +331,21 @@ export class EventManagementGuestsTabComponent {
     if (targets.length === 0) return;
 
     const noun = targets.length === 1 ? 'guest' : 'guests';
-    if (!confirm(`Send tickets to ${targets.length} ${noun}?`)) return;
+    this.alertDialog.confirm({
+      zTitle: 'send all tickets',
+      zDescription: `email tickets to ${targets.length} ${noun} who haven't received one yet?`,
+      zOkText: `send ${targets.length === 1 ? 'ticket' : 'tickets'}`,
+      zCancelText: 'not yet',
+      zMaskClosable: false,
+      // Returning the promise lets tests (and future callers) await the batch.
+      zOnOk: () => this.performSendAllTickets(targets),
+    });
+  }
+
+  private async performSendAllTickets(
+    targets: readonly Guest[],
+  ): Promise<void> {
+    if (this.isSendingAll()) return;
 
     this.isSendingAll.set(true);
     try {
@@ -335,16 +365,16 @@ export class EventManagementGuestsTabComponent {
       ).length;
       const failed = outcomes.filter((outcome) => outcome === 'failed').length;
       if (sent > 0) {
-        toast.success(`Sent ${sent} ticket${sent === 1 ? '' : 's'}`);
+        toast.success(`sent ${sent} ticket${sent === 1 ? '' : 's'}`);
       }
       if (skipped > 0) {
         toast.info(
-          `Skipped ${skipped} already-sent guest${skipped === 1 ? '' : 's'}`,
+          `skipped ${skipped} already-sent guest${skipped === 1 ? '' : 's'}`,
         );
       }
       if (failed > 0) {
         toast.error(
-          `Failed to send ${failed} ticket${failed === 1 ? '' : 's'}`,
+          `failed to send ${failed} ticket${failed === 1 ? '' : 's'}`,
         );
       }
       // Reconcile the roster whenever server state advanced — sends we made or
@@ -386,10 +416,10 @@ export class EventManagementGuestsTabComponent {
         pdfDataUrlToBlob(pdfDataUrl),
         `guest-ticket-${guestId}.pdf`,
       );
-      toast.success('Guest ticket download started.');
+      toast.success('guest ticket download started');
     } catch (error) {
       logger.error('Failed to download guest ticket', error);
-      toast.error('Failed to download guest ticket.');
+      toast.error('failed to download guest ticket');
     } finally {
       this.updateIdSet(this.generatingPdfIds, guestId, false);
     }
