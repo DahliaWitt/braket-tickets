@@ -89,6 +89,9 @@ export class EventEditorHarness extends ComponentHarness {
   private getSlidingScaleMaxInput = this.locatorForOptional(
     'input#slidingScaleMax',
   );
+  private getSupporterPriceInput = this.locatorFor(
+    'input#supporterDefaultPrice',
+  );
   private getMaxTicketsPerUserInput = this.locatorFor(
     'input#maxTicketsPerUser',
   );
@@ -141,6 +144,23 @@ export class EventEditorHarness extends ComponentHarness {
     await input.clear();
     await input.sendKeys(value);
     await input.blur();
+  }
+
+  /**
+   * Types into the supporter-price field via real key events, so the native
+   * `(input)` handler (which marks the field user-edited) fires exactly as it
+   * would for a user.
+   */
+  async setSupporterPrice(value: string) {
+    const input = await this.getSupporterPriceInput();
+    await input.clear();
+    await input.sendKeys(value);
+    await input.blur();
+  }
+
+  async getSupporterPrice(): Promise<string> {
+    const input = await this.getSupporterPriceInput();
+    return input.getProperty('value');
   }
 
   async setDate(_value: string) {

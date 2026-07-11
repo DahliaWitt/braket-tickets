@@ -143,10 +143,14 @@ export class BraCalendarComponent
 
   protected readonly calendarDays = computed(() => {
     const currentDate = this.currentDate();
+    // Anchor the navigation date to the first of the month. Only the year and
+    // month drive the rendered grid, and passing the selected day-of-month here
+    // (e.g. the 31st) makes `new Date(year, month, day)` roll over into a later
+    // month for shorter months, so the grid would disagree with the header.
     const navigationDate = makeSafeDate(
       Number.parseInt(this.currentYearValue()),
       Number.parseInt(this.currentMonthValue()),
-      currentDate.getDate(),
+      1,
     );
     const selectedDate = Number.isNaN(navigationDate.getTime()) ? currentDate : navigationDate;
 
