@@ -78,7 +78,9 @@ export async function saveCommunityProfile(
     contactInfo: profile.contactInfo || null,
     description: profile.description || null,
     website: profile.website || null,
-    slug: profile.slug || null,
+    // slug is not clearable (it is the public URL key); a blank value is a
+    // no-op. `|| undefined` leaves the stored slug unchanged.
+    slug: profile.slug || undefined,
     status: profile.status,
     isPublicDirectory: profile.isPublicDirectory,
     codeOfConduct: profile.codeOfConduct,

@@ -627,7 +627,7 @@ export declare const api: {
           isPublicDirectory?: boolean;
           logoStorageId?: Id<"_storage"> | null;
           name?: string;
-          slug?: string | null;
+          slug?: string;
           status?: "draft" | "published";
           vettingQuestions?: Array<{
             id: string;

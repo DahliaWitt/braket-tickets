@@ -38,12 +38,9 @@ import {
 import {
   formatDateYmd,
   isDateDirty,
-  formatEventTimeInput,
-  parseEventDateInEventTimeZone,
   combineLocalEventDateTime,
   isLocalEventDateTimeValid,
 } from '@/features/admin/utils/event-date.utils';
-import {type EditableEvent} from '@/core/models/event.types';
 import {type Id} from '@convex/_generated/dataModel';
 import {
   EVENT_VISIBILITY,
@@ -58,217 +55,32 @@ import {extractConvexErrorMessage} from '@/core/utils/error-message.utils';
 import {toast} from 'ngx-sonner';
 import {logger} from '@/utils/logger';
 import {safeResourceValue} from '@/utils/resource';
-import {getTodayInEventTimeZone} from '@/utils/event-date-format';
 import {
   isSignalFormFieldInvalid,
   signalFormFieldHasError,
   signalFormFieldErrorMessage,
   notBlank,
 } from '@/utils/signal-form';
-
-interface EventFormModel {
-  title: string;
-  date: Date | null;
-  time: string;
-  endDate: Date | null;
-  endTime: string;
-  location: string;
-  description: string;
-  price: string; // String for input compatibility
-  totalTickets: string; // String for input compatibility
-  slidingScaleEnabled: boolean;
-  slidingScaleMin: string;
-  slidingScaleMax: string;
-  supporterDefaultPrice: string;
-  maxTicketsPerUser: string;
-  organizerId: string;
-  visibility: EventVisibility;
-}
-
-interface LoadedEventState {
-  event: EditableEvent;
-  currentPosterUrl: string | null;
-  eventModel: EventFormModel;
-}
-
-interface EventEditorSourceState {
-  id: string | undefined;
-  loadedState: LoadedEventState | undefined;
-  createOrganizerId: string;
-}
+import {
+  type EventFormModel,
+  type LoadedEventState,
+  type EventEditorSourceState,
+  DEFAULT_NOTAFLOF_MAX_AMOUNT,
+  startOfToday,
+  parseStrictUsdCents,
+  parseOptionalStrictUsdCents,
+  requireStrictUsdCents,
+  parseOptionalWholeNumber,
+  invalidUsdAmountError,
+  invalidOptionalUsdAmountError,
+  buildEventFormModel,
+  resolveFormModelFromSource,
+  humanizeSaveError,
+} from './event-editor.form-model';
 
 interface ResolvedCreateCommunityScope {
   id: Id<'organizers'>;
   name: string;
-}
-
-const DEFAULT_NOTAFLOF_MAX_AMOUNT = '10';
-const STRICT_USD_AMOUNT_PATTERN = /^(?:\d+|\d+\.\d{1,2}|\.\d{1,2})$/;
-const INVALID_USD_AMOUNT_MESSAGE = 'Use a dollar amount like 20 or 20.00';
-
-type StrictUsdParseResult =
-  | {valid: true; cents: number}
-  | {valid: false; reason: 'blank' | 'negative' | 'invalid'};
-
-function startOfToday(): Date {
-  return getTodayInEventTimeZone();
-}
-
-function createEmptyEventFormModel(organizerId = ''): EventFormModel {
-  return {
-    title: '',
-    date: null,
-    time: '20:00',
-    endDate: null,
-    endTime: '',
-    location: '',
-    description: '',
-    price: '0',
-    totalTickets: '100',
-    slidingScaleEnabled: false,
-    slidingScaleMin: '0',
-    slidingScaleMax: DEFAULT_NOTAFLOF_MAX_AMOUNT,
-    supporterDefaultPrice: '5',
-    maxTicketsPerUser: '4',
-    organizerId,
-    visibility: 'private',
-  };
-}
-
-function parseStrictUsdCents(value: string): StrictUsdParseResult {
-  const trimmed = value.trim();
-  if (trimmed === '') {
-    return {valid: false, reason: 'blank'};
-  }
-
-  if (trimmed.startsWith('-')) {
-    return {valid: false, reason: 'negative'};
-  }
-
-  if (!STRICT_USD_AMOUNT_PATTERN.test(trimmed)) {
-    return {valid: false, reason: 'invalid'};
-  }
-
-  const [dollarsPart, centsPart = ''] = trimmed.split('.');
-  const dollars = dollarsPart === '' ? 0 : Number(dollarsPart);
-  const cents = Number(centsPart.padEnd(2, '0'));
-  return {valid: true, cents: dollars * 100 + cents};
-}
-
-function parseOptionalStrictUsdCents(value: string): number | undefined {
-  const parsed = parseStrictUsdCents(value);
-  return parsed.valid ? parsed.cents : undefined;
-}
-
-function invalidUsdAmountError(
-  value: string,
-): {kind: string; message: string} | null {
-  const parsed = parseStrictUsdCents(value);
-  if (parsed.valid || parsed.reason === 'blank') {
-    return null;
-  }
-
-  if (parsed.reason === 'negative') {
-    return {
-      kind: 'negativePrice',
-      message: 'Price cannot be negative',
-    };
-  }
-
-  return {
-    kind: 'invalidDecimal',
-    message: INVALID_USD_AMOUNT_MESSAGE,
-  };
-}
-
-function invalidOptionalUsdAmountError(
-  value: string,
-): {kind: string; message: string} | null {
-  const parsed = parseStrictUsdCents(value);
-  return parsed.valid || parsed.reason === 'blank'
-    ? null
-    : {
-        kind: 'invalidDecimal',
-        message: INVALID_USD_AMOUNT_MESSAGE,
-      };
-}
-
-function requireStrictUsdCents(value: string, field: string): number {
-  const parsed = parseStrictUsdCents(value);
-  if (!parsed.valid) {
-    throw new Error(`Invalid ${field}`);
-  }
-  return parsed.cents;
-}
-
-function parseOptionalWholeNumber(value: string): number | undefined {
-  const trimmed = value.trim();
-  return trimmed === '' ? undefined : Math.trunc(Number(trimmed));
-}
-
-function buildEventFormModel(evt: EditableEvent): EventFormModel {
-  const parsedDate = parseEventDateInEventTimeZone(evt.date);
-
-  if (!parsedDate) {
-    logger.warn(
-      '[EventEditor] Event date could not be parsed, form will be invalid:',
-      evt.date,
-    );
-  }
-
-  return {
-    title: evt.title,
-    date: parsedDate,
-    time: formatEventTimeInput(evt.date),
-    endDate: evt.endDate ? parseEventDateInEventTimeZone(evt.endDate) : null,
-    endTime: evt.endDate ? formatEventTimeInput(evt.endDate) : '',
-    location: evt.location || '',
-    description: evt.description || '',
-    price: String((evt.price || 0) / 100),
-    totalTickets: String(evt.totalTickets ?? 100),
-    slidingScaleEnabled: evt.slidingScaleEnabled || false,
-    slidingScaleMin: String((evt.slidingScaleMin || 0) / 100),
-    slidingScaleMax: String((evt.slidingScaleMax || 0) / 100),
-    supporterDefaultPrice: String((evt.supporterDefaultPrice || 0) / 100),
-    maxTicketsPerUser: String(evt.maxTicketsPerUser ?? 4),
-    organizerId: evt.organizerId ?? '',
-    visibility: evt.visibility ?? 'private',
-  };
-}
-
-function resolveFormModelFromSource(
-  source: EventEditorSourceState,
-  previous?: {source: EventEditorSourceState; value: EventFormModel},
-): EventFormModel {
-  if (source.loadedState) {
-    return source.loadedState.eventModel;
-  }
-
-  if (!source.id) {
-    if (!previous || previous.source.id !== undefined) {
-      return createEmptyEventFormModel(source.createOrganizerId);
-    }
-
-    if (
-      previous.source.createOrganizerId !== source.createOrganizerId &&
-      source.createOrganizerId
-    ) {
-      return {...previous.value, organizerId: source.createOrganizerId};
-    }
-
-    return previous.value;
-  }
-
-  return previous?.value ?? createEmptyEventFormModel(source.createOrganizerId);
-}
-
-function humanizeSaveError(message: string | null): string | null {
-  const knownMessages: Record<string, string> = {
-    scheduled_too_far: 'Choose a send time within the next 90 days.',
-    scheduled_too_soon: 'Choose a send time at least 1 minute from now.',
-  };
-
-  return message ? (knownMessages[message] ?? message) : null;
 }
 
 @Component({
@@ -739,6 +551,18 @@ export class EventEditorComponent implements HasUnsavedChanges {
           supporterDefaultPrice: String(priceResult.cents / 100 + 5),
         }));
       }
+    });
+
+    // Re-enable supporter-price auto-fill whenever a fresh create form appears,
+    // including an in-place edit -> create reset (the route id being cleared),
+    // which would otherwise inherit a stale "touched" flag.
+    let wasCreateMode = false;
+    effect(() => {
+      const isCreate = this.isCreateMode();
+      if (isCreate && !wasCreateMode) {
+        untracked(() => this.supporterPriceTouched.set(false));
+      }
+      wasCreateMode = isCreate;
     });
   }
 

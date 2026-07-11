@@ -1722,6 +1722,26 @@ describe('EventEditorComponent - Create Mode', () => {
     await fixture.whenStable();
     expect(component.eventModel().supporterDefaultPrice).toBe('1');
   });
+
+  it('keeps a DOM-typed supporter price when the base price later changes (pins the (input) binding)', async () => {
+    component.eventModel.update((m) => ({...m, price: '20'}));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(component.eventModel().supporterDefaultPrice).toBe('25');
+
+    // Type a low value through the real input element — this fires the native
+    // (input) handler that marks the field user-edited. If that binding is
+    // removed, the later price change below re-seeds over this value.
+    await harness.setSupporterPrice('1');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(component.eventModel().supporterDefaultPrice).toBe('1');
+
+    component.eventModel.update((m) => ({...m, price: '30'}));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(component.eventModel().supporterDefaultPrice).toBe('1');
+  });
 });
 
 describe('EventEditorComponent - Create Mode Community Query Scope', () => {

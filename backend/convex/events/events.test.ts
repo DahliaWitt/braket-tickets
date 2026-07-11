@@ -3391,4 +3391,34 @@ describe('Event update clearable optional fields', () => {
     expect(after?.description).toBe('Old description');
     expect(after?.maxTicketsPerUser).toBe(4);
   });
+
+  it('is a safe no-op when clearing a field that was never set', async () => {
+    const t = convexTest();
+    const adminId = await createRootAdmin(t, 'Clear Admin');
+    const organizerId = await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {name: 'Clear Org'},
+    );
+    const asAdmin = t.withIdentity({subject: adminId});
+    const eventId = await asAdmin.mutation(api.events.management.create, {
+      title: 'No Optionals Event',
+      date: '2027-06-01T20:00:00.000Z',
+      price: 2000,
+      totalTickets: 20,
+      status: 'draft',
+      visibility: 'public',
+      organizerId,
+      // location / supporterDefaultPrice intentionally omitted (never set).
+    });
+
+    await asAdmin.mutation(api.events.management.update, {
+      id: eventId,
+      location: null,
+      supporterDefaultPrice: null,
+    });
+
+    const after = await t.run(async (ctx) => ctx.db.get('events', eventId));
+    expect(after?.location).toBeUndefined();
+    expect(after?.supporterDefaultPrice).toBeUndefined();
+  });
 });

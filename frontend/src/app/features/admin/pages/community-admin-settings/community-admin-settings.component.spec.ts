@@ -948,7 +948,9 @@ describe('CommunityAdminSettingsComponent', () => {
       expect(callArgs).toHaveProperty('contactInfo', null);
       expect(callArgs).toHaveProperty('description', null);
       expect(callArgs).toHaveProperty('website', null);
-      expect(callArgs).toHaveProperty('slug', null);
+      // slug is intentionally NOT clearable (public URL key): a blank value is
+      // sent as undefined so the backend leaves the stored slug unchanged.
+      expect(callArgs['slug']).toBeUndefined();
     });
 
     it('save button becomes enabled after user edits profile name', async () => {

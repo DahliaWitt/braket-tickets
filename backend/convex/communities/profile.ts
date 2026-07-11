@@ -50,7 +50,11 @@ export const update = mutation({
     website: v.optional(v.union(v.string(), v.null())),
     isPublicDirectory: v.optional(v.boolean()),
     logoStorageId: v.optional(v.union(v.id('_storage'), v.null())),
-    slug: v.optional(v.union(v.string(), v.null())),
+    // slug is intentionally NOT clearable: it is the community's public URL key
+    // (organizers.by_slug drives public pages, the directory, and event
+    // lookups) and create always assigns one. A blank slug is a no-op, not a
+    // clear. Reassigning to a new slug is still supported.
+    slug: v.optional(v.string()),
     codeOfConduct: v.optional(v.string()),
   },
   returns: v.null(),

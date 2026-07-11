@@ -17,7 +17,7 @@ export function applyClearableField<Obj extends object, K extends keyof Obj>(
   patch: Obj,
   key: K,
   value: Obj[K] | null | undefined,
-  currentValue?: Obj[K],
+  currentValue: Obj[K] | undefined,
 ): void {
   if (value === undefined) {
     // Field omitted by the caller — leave the stored value untouched.

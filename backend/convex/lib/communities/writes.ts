@@ -57,7 +57,8 @@ export type CommunityUpdateFields = {
   website?: string | null;
   isPublicDirectory?: boolean;
   logoStorageId?: Id<'_storage'> | null;
-  slug?: string | null;
+  // slug is not clearable — see the note on api.communities.profile.update.
+  slug?: string;
   codeOfConduct?: string;
 };
 
@@ -320,10 +321,7 @@ export async function buildCommunityUpdatePatch(
     updates.logoStorageId = args.logoStorageId;
   }
 
-  if (args.slug === null) {
-    // Explicit clear: drop the manual slug. No format/uniqueness check applies.
-    applyClearableField(updates, 'slug', null, currentOrganizer.slug);
-  } else if (args.slug !== undefined) {
+  if (args.slug !== undefined) {
     const slugValue = validateManualCommunitySlug(args.slug);
     validateStringLength(slugValue, 'Slug', MAX_COMMUNITY_SLUG_LENGTH);
 

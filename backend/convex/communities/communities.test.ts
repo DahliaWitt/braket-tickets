@@ -2292,7 +2292,7 @@ describe('Community update clearable optional fields', () => {
     return {organizerId, adminId};
   }
 
-  it('removes email, contactInfo, description, website, and slug when passed null', async () => {
+  it('removes email, contactInfo, description, and website when passed null (slug is preserved)', async () => {
     const t = convexTest();
     const {organizerId, adminId} = await seedClearableCommunity(t);
     const admin = t.withIdentity({subject: adminId});
@@ -2312,7 +2312,6 @@ describe('Community update clearable optional fields', () => {
       contactInfo: null,
       description: null,
       website: null,
-      slug: null,
     });
 
     const after = await t.run(async (ctx) =>
@@ -2322,7 +2321,8 @@ describe('Community update clearable optional fields', () => {
     expect(after?.contactInfo).toBeUndefined();
     expect(after?.description).toBeUndefined();
     expect(after?.website).toBeUndefined();
-    expect(after?.slug).toBeUndefined();
+    // slug is not clearable — it stays as the community's public URL key.
+    expect(after?.slug).toBe('old-slug');
   });
 
   it('leaves clearable fields unchanged when their keys are omitted', async () => {
