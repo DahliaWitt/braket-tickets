@@ -138,7 +138,7 @@ describe('EventCardComponent', () => {
     });
 
     const harness = await loader.getHarness(EventCardHarness);
-    expect((await harness.getBuyText()).trim()).toBe('Tickets');
+    expect((await harness.getBuyText()).trim()).toBe('tickets');
   });
 
   it('uses an action-only buy button accessible name', async () => {
