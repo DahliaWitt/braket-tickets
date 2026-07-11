@@ -64,6 +64,7 @@ function createEmailPrefsConvexMock(
     prefs?: unknown[];
     globalOptOut?: boolean;
     mutation?: ReturnType<typeof vi.fn>;
+    prefsError?: Error;
   } = {},
 ) {
   const baseConvex = createMockConvexClient();
@@ -83,11 +84,18 @@ function createEmailPrefsConvexMock(
   // fail loudly (not silently), surfacing the mismatch.
   let callCount = 0;
   const onUpdate = vi.fn(
-    (_queryFn: unknown, _args: unknown, onData: (v: unknown) => void) => {
+    (
+      _queryFn: unknown,
+      _args: unknown,
+      onData: (v: unknown) => void,
+      onError?: (err: Error) => void,
+    ) => {
       const index = callCount++;
       if (index === 1) {
         globalOptOutOnData = onData;
         onData(globalOptOut);
+      } else if (options.prefsError) {
+        onError?.(options.prefsError);
       } else {
         preferencesOnData = onData;
         onData(prefs);
@@ -366,7 +374,7 @@ describe('AccountComponent', () => {
       await fixture.whenStable();
 
       expect(toastSuccess).toHaveBeenCalledWith(
-        'Password updated successfully. Please log in again.',
+        'password updated — log in again',
       );
     });
 
@@ -820,7 +828,7 @@ describe('AccountComponent', () => {
         (authServiceMock as {updateProfile: ReturnType<typeof vi.fn>})
           .updateProfile,
       ).toHaveBeenCalledWith({name: 'Updated Profile Name'});
-      expect(component.profileMessage()).toBe('Profile updated successfully!');
+      expect(component.profileMessage()).toBe('profile updated');
       expect(component.profileError()).toBe('');
     });
 
@@ -1007,6 +1015,37 @@ describe('AccountComponent', () => {
 
       const msg = await localHarness.getNoPrefsMessage();
       expect(msg).toContain("You're not a member of any communities yet");
+    });
+
+    it('should render the branded error state (not the empty state) when the prefs query fails', async () => {
+      const convexWithPrefsError = createEmailPrefsConvexMock({
+        prefsError: new Error('Server Error'),
+      });
+
+      await TestBed.resetTestingModule();
+      await TestBed.configureTestingModule({
+        imports: [AccountComponent],
+        providers: [
+          provideZonelessChangeDetection(),
+          {provide: AuthService, useValue: authServiceMock},
+          {provide: CONVEX, useValue: convexWithPrefsError},
+          provideRouter([]),
+        ],
+      }).compileComponents();
+
+      const localFixture = TestBed.createComponent(AccountComponent);
+      localFixture.detectChanges();
+      await localFixture.whenStable();
+      const localHarness = await TestbedHarnessEnvironment.harnessForFixture(
+        localFixture,
+        AccountComponentHarness,
+      );
+
+      const errorText = await localHarness.getEmailPrefsErrorText();
+      expect(errorText).toContain('hit a snag');
+      expect(errorText).toContain("couldn't load your email preferences");
+      expect(await localHarness.getNoPrefsMessage()).toBeNull();
+      expect(await localHarness.getEmailPrefsList()).toBeNull();
     });
 
     it('should show prefs list when data is available', async () => {
