@@ -674,6 +674,128 @@ describe('orders', () => {
     expect(secondInventory?.soldCount).toBe(0);
   });
 
+  it('issues a ticket for an old client that omits the idempotency key, still bounded by maxTicketsPerUser', async () => {
+    const t = convexTest();
+    const userId = await createUser(
+      t,
+      'Legacy Client Buyer',
+      'legacy-client-buyer@example.com',
+    );
+    const {eventId, inventoryId} = await createEventWithInventory(t, {
+      price: 0,
+      // Only one ticket allowed per user: the old-client fresh-claim path must
+      // still enforce the per-user limit on a second attempt.
+      maxTicketsPerUser: 1,
+    });
+    const asUser = t.withIdentity({subject: userId});
+
+    // Old website tab loaded before this deploy: no idempotencyKey in args.
+    // Convex still runs the call exactly once, so it is a fresh claim.
+    const first = await asUser.mutation(api.orders.core.claimFreeTicket, {
+      eventId,
+      quantity: 1,
+      tier: 'regular',
+    });
+
+    const [order, inventoryAfterFirst] = await t.run(async (ctx) =>
+      Promise.all([
+        ctx.db.get('ticket_orders', first.orderId),
+        ctx.db.get('event_inventory', inventoryId),
+      ]),
+    );
+    expect(first.success).toBe(true);
+    expect(order?.state).toBe('completed');
+    expect(order?.idempotencyKey).toBeUndefined();
+    expect(inventoryAfterFirst?.soldCount).toBe(1);
+
+    // A second keyless claim is a fresh claim too, so it must be bounded by the
+    // per-user limit rather than silently replaying — the ticket limit rejects.
+    await expect(
+      asUser.mutation(api.orders.core.claimFreeTicket, {
+        eventId,
+        quantity: 1,
+        tier: 'regular',
+      }),
+    ).rejects.toThrow();
+
+    const inventoryAfterSecond = await t.run(async (ctx) =>
+      ctx.db.get('event_inventory', inventoryId),
+    );
+    expect(inventoryAfterSecond?.soldCount).toBe(1);
+  });
+
+  it('issues a ticket for an old guest client that omits the idempotency key', async () => {
+    const t = convexTest();
+    const {eventId, inventoryId} = await createEventWithInventory(t, {
+      price: 0,
+      maxTicketsPerUser: 1,
+    });
+    const {sessionToken} = await createGuestSession(t);
+
+    const result = await t.mutation(api.orders.core.claimFreeTicketAsGuest, {
+      sessionToken,
+      eventId,
+      quantity: 1,
+      tier: 'regular',
+      termsAccepted: true,
+    });
+
+    const [order, inventory] = await t.run(async (ctx) =>
+      Promise.all([
+        ctx.db.get('ticket_orders', result.orderId),
+        ctx.db.get('event_inventory', inventoryId),
+      ]),
+    );
+    expect(result.success).toBe(true);
+    expect(order?.state).toBe('completed');
+    expect(order?.idempotencyKey).toBeUndefined();
+    expect(inventory?.soldCount).toBe(1);
+  });
+
+  it('rejects a blank, over-long, or malformed idempotency key before any persistence', async () => {
+    const t = convexTest();
+    const userId = await createUser(
+      t,
+      'Bad Key Buyer',
+      'bad-key-buyer@example.com',
+    );
+    const {eventId, inventoryId} = await createEventWithInventory(t, {
+      price: 0,
+      maxTicketsPerUser: 4,
+    });
+    const asUser = t.withIdentity({subject: userId});
+
+    // 65 chars: one over the 64-char cap. A direct (non-browser) caller could
+    // otherwise write an arbitrarily large value onto every order and index it.
+    const overLongKey = 'a'.repeat(65);
+    const malformedKey = 'has spaces and *!# punctuation';
+
+    for (const badKey of ['', '   ', overLongKey, malformedKey]) {
+      await expect(
+        asUser.mutation(api.orders.core.claimFreeTicket, {
+          eventId,
+          quantity: 1,
+          tier: 'regular',
+          idempotencyKey: badKey,
+        }),
+      ).rejects.toThrow();
+    }
+
+    const [inventory, orders] = await t.run(async (ctx) =>
+      Promise.all([
+        ctx.db.get('event_inventory', inventoryId),
+        ctx.db
+          .query('ticket_orders')
+          .withIndex('by_owner_user_event_state', (q) => q.eq('userId', userId))
+          .collect(),
+      ]),
+    );
+    // Nothing persisted: no hold, no order, no inventory movement.
+    expect(inventory?.soldCount).toBe(0);
+    expect(inventory?.heldCount).toBe(0);
+    expect(orders).toHaveLength(0);
+  });
+
   it('rate limits authenticated free claims before inventory side effects', async () => {
     const t = convexTest();
     const userId = await createUser(

@@ -1940,7 +1940,7 @@ export declare const api: {
         "public",
         {
           eventId: Id<"events">;
-          idempotencyKey: string;
+          idempotencyKey?: string;
           quantity: number;
           tier: "regular" | "notaflof" | "supporter";
         },
@@ -1951,7 +1951,7 @@ export declare const api: {
         "public",
         {
           eventId: Id<"events">;
-          idempotencyKey: string;
+          idempotencyKey?: string;
           quantity: number;
           sessionToken: string;
           termsAccepted: boolean;

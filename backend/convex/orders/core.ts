@@ -94,7 +94,11 @@ export const claimFreeTicket = mutation({
     eventId: v.id('events'),
     quantity: v.number(),
     tier: tierValidator,
-    idempotencyKey: v.string(),
+    // Optional for rollout backward-compat: Convex deploys the backend before
+    // the frontend, so already-open old tabs keep calling without this arg
+    // until refreshed. An absent key behaves as a fresh claim (Convex still
+    // runs each client call exactly once) while a new client supplies a UUID.
+    idempotencyKey: v.optional(v.string()),
   },
   returns: v.object({success: v.boolean(), orderId: v.id('ticket_orders')}),
   handler: claimFreeTicketHandler,
@@ -107,7 +111,8 @@ export const claimFreeTicketAsGuest = mutation({
     quantity: v.number(),
     tier: tierValidator,
     termsAccepted: v.boolean(),
-    idempotencyKey: v.string(),
+    // Optional for rollout backward-compat (see claimFreeTicket above).
+    idempotencyKey: v.optional(v.string()),
   },
   returns: v.object({success: v.boolean(), orderId: v.id('ticket_orders')}),
   handler: claimFreeTicketAsGuestHandler,

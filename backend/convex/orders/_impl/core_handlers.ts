@@ -33,7 +33,11 @@ import {
   repairPrimaryHeldInventoryCount,
 } from '../../lib/orders/inventory_reconciliation';
 import {releaseOrderState} from '../../lib/orders/release';
-import {getOrderForCaller, throwOrderError} from '../../lib/orders/access';
+import {
+  assertValidIdempotencyKey,
+  getOrderForCaller,
+  throwOrderError,
+} from '../../lib/orders/access';
 import {resolveStripeConnectInfo} from '../../lib/payments/refund_processing';
 import {
   calculateRefundedTicketCount,
@@ -61,7 +65,9 @@ type OpenForGuestArgs = OpenArgs & {
 };
 type OpenResaleArgs = Omit<OpenArgs, 'quantity'>;
 type ClaimFreeTicketArgs = Omit<OpenArgs, 'totalAmount'> & {
-  idempotencyKey: string;
+  // Optional for rollout backward-compat: old website clients loaded before
+  // this deploy call without the key. Absent behaves as a fresh claim.
+  idempotencyKey?: string;
 };
 type ClaimFreeTicketAsGuestArgs = ClaimFreeTicketArgs & {
   sessionToken: string;
@@ -227,6 +233,14 @@ function toCheckoutStatus(order: {
  * second ticket. A deliberate new claim arrives with a fresh key, finds no
  * match, and proceeds to create a new order (subject to `assertTicketLimit`).
  *
+ * The key is absent for old website clients that were loaded before this
+ * version deployed (Convex ships the backend ahead of the frontend). Convex
+ * still executes each client mutation call exactly once, so a missing key is
+ * treated as a fresh claim: skip the replay lookup and fall through to a
+ * normal order create, which `assertTicketLimit` still bounds. A present key
+ * is validated and length-bounded before it is used for an index lookup or
+ * persisted, since these are public, attacker-reachable mutations.
+ *
  * Scoped to the caller (userId / guestSessionId) as defense in depth; the key
  * itself is globally unique, but scoping guarantees one owner can never replay
  * another's order even in the astronomically unlikely event of a collision.
@@ -244,6 +258,14 @@ async function resolveReplayableFreeClaim(
     | {type: 'guest'; guestSessionId: Id<'guest_sessions'>},
   args: ClaimFreeTicketArgs,
 ): Promise<Doc<'ticket_orders'> | null> {
+  // Old client (arg predates this deploy): behave as a fresh claim. Querying
+  // the index with an `undefined` key would match every keyless order, so the
+  // lookup must be skipped entirely, not run with an empty value.
+  if (args.idempotencyKey === undefined) {
+    return null;
+  }
+  assertValidIdempotencyKey(args.idempotencyKey);
+
   const existing =
     identity.type === 'user'
       ? await ctx.db
