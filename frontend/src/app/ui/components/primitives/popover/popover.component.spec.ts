@@ -202,7 +202,7 @@ describe('ZardPopoverDirective', () => {
     expect(await getOverlayCount()).toBe(1);
   });
 
-  it('should establish exactly one outside-click subscription across reopen (no stacking)', async () => {
+  it('should keep the outside-click subscription alive across close and reopen', async () => {
     const hideSpy = vi.spyOn(getApi(), 'hide');
     const trigger = await loader.getHarness(PopoverTriggerHarness);
 
@@ -216,7 +216,8 @@ describe('ZardPopoverDirective', () => {
     expect(await getOverlayCount()).toBe(0);
     expect(hideSpy).toHaveBeenCalledTimes(1);
 
-    // Reopen, dismiss again. A stacked subscription would call hide() twice.
+    // Reopen: the subscription established at overlay-creation time must still
+    // dismiss on outside click (it persists across detach/attach cycles).
     await trigger.click();
     fixture.detectChanges();
     await fixture.whenStable();
@@ -226,6 +227,80 @@ describe('ZardPopoverDirective', () => {
     expect(await getOverlayCount()).toBe(0);
     expect(hideSpy).toHaveBeenCalledTimes(2);
     expect(host.visibleChanges()).toEqual([true, false, true, false]);
+  });
+
+  it('should tear down and restore outside-click dismissal across runtime trigger changes without stacking', async () => {
+    const trigger = await loader.getHarness(PopoverTriggerHarness);
+
+    // Switch to hover: the click-mode outside-click subscription must be torn
+    // down. Open via focus (hover mode) and confirm an outside pointer event
+    // does NOT dismiss — dismissal in hover mode is via blur/mouseleave only.
+    host.trigger.set('hover');
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    await trigger.focus();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(await getOverlayCount()).toBe(1);
+
+    const hideSpy = vi.spyOn(getApi(), 'hide');
+    dispatchOutsidePointer(document.body);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(await getOverlayCount()).toBe(1);
+    expect(hideSpy).not.toHaveBeenCalled();
+
+    await trigger.blur();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(await getOverlayCount()).toBe(0);
+
+    // Switch back to click: outside-click dismissal must be restored, with
+    // exactly one live subscription (no stacking from the trigger churn).
+    host.trigger.set('click');
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    hideSpy.mockClear();
+    await trigger.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(await getOverlayCount()).toBe(1);
+
+    dispatchOutsidePointer(document.body);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(await getOverlayCount()).toBe(0);
+    expect(hideSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('should honor runtime zOverlayClickable toggling while open', async () => {
+    const trigger = await loader.getHarness(PopoverTriggerHarness);
+
+    await trigger.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(await getOverlayCount()).toBe(1);
+
+    // Disable outside-click dismissal at runtime: the outside pointer event is
+    // filtered out per-event, so the popover stays open.
+    host.overlayClickable.set(false);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    dispatchOutsidePointer(document.body);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(await getOverlayCount()).toBe(1);
+
+    // Re-enable: the same subscription now dismisses on outside click.
+    host.overlayClickable.set(true);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    dispatchOutsidePointer(document.body);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(await getOverlayCount()).toBe(0);
   });
 
   it('should tear down the outside-click subscription on destroy', async () => {
