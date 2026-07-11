@@ -19,6 +19,15 @@ import {
 let userCounter = 0;
 
 /**
+ * Per-test timeout for cases that seed up to AUTHZ_RELATION_QUERY_CAP member
+ * relations. Each assignRole round-trips through the authz component, which is
+ * CPU-bound and irreducible in convex-test (~12s locally for 1000 members and
+ * several times slower under CI coverage + shared-runner contention), so these
+ * tests need headroom over the 30s global timeout.
+ */
+const MEMBER_CAP_SEED_TEST_TIMEOUT_MS = 120000;
+
+/**
  * Seed `count` member-role assignments on an organizer using synthetic user id
  * strings. Avoids creating `count` real user documents when a test only needs to
  * exercise the member-cap threshold.
@@ -176,22 +185,26 @@ describe('convex/lib/authz', () => {
     expect(count).toBe(3);
   });
 
-  it('clamps the member count to the cap without throwing when at the cap', async () => {
-    const t = convexTest();
-    const organizerId = await createOrganizer(t, 'Large Org');
-    await seedMembers(t, organizerId, AUTHZ_RELATION_QUERY_CAP);
+  it(
+    'clamps the member count to the cap without throwing when at the cap',
+    async () => {
+      const t = convexTest();
+      const organizerId = await createOrganizer(t, 'Large Org');
+      await seedMembers(t, organizerId, AUTHZ_RELATION_QUERY_CAP);
 
-    // listOrganizerMembers refuses to enumerate an at-cap organizer...
-    await expect(
-      t.run(async (ctx) => listOrganizerMembers(ctx, organizerId)),
-    ).rejects.toThrow(/results are truncated/);
+      // listOrganizerMembers refuses to enumerate an at-cap organizer...
+      await expect(
+        t.run(async (ctx) => listOrganizerMembers(ctx, organizerId)),
+      ).rejects.toThrow(/results are truncated/);
 
-    // ...but countOrganizerMembers returns a clamped count instead of throwing.
-    const count = await t.run(async (ctx) =>
-      countOrganizerMembers(ctx, organizerId),
-    );
-    expect(count).toBe(AUTHZ_RELATION_QUERY_CAP);
-  });
+      // ...but countOrganizerMembers returns a clamped count instead of throwing.
+      const count = await t.run(async (ctx) =>
+        countOrganizerMembers(ctx, organizerId),
+      );
+      expect(count).toBe(AUTHZ_RELATION_QUERY_CAP);
+    },
+    MEMBER_CAP_SEED_TEST_TIMEOUT_MS,
+  );
 
   it('keeps membership idempotent across repeated addMember calls', async () => {
     const t = convexTest();
