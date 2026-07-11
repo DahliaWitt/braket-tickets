@@ -7,6 +7,7 @@ import {rateLimiter} from '../../lib/rate_limits';
 import {
   isActiveTicketStatus,
   isRefundedTicketStatus,
+  isValidTicketStatus,
   type OrderFinancialEventKind,
   type TicketOrderKind,
   type TicketOrderState,
@@ -864,6 +865,19 @@ export async function applyExternalRefundHandler(
   const ticketsToRefund = ticketIdsToRefundSet
     ? activeTickets.filter((ticket) => ticketIdsToRefundSet.has(ticket._id))
     : (() => {
+        // Auto-selection path (external/dashboard refunds with no explicit
+        // ticket list, e.g. the Stripe `charge.refunded` webhook). Only
+        // `valid` tickets may be invalidated here — `used` (checked-in)
+        // tickets are preserved to keep attendance records intact and to
+        // avoid freeing physically-occupied inventory, mirroring the admin
+        // refund path in payments/refunds.ts. Slicing from valid-only tickets
+        // also caps the selection when the refunded amount exceeds the value
+        // of the remaining valid tickets, so a `used` ticket is never
+        // invalidated to "fill" the refund (that is only ever done via the
+        // explicit forceRefundAll path, which passes ticketIdsToRefund).
+        const validTickets = activeTickets.filter((ticket) =>
+          isValidTicketStatus(ticket.status),
+        );
         const refundableTicketCount = calculateRefundedTicketCount(
           order.amountCents,
           order.quantity,
@@ -873,7 +887,7 @@ export async function applyExternalRefundHandler(
           0,
           refundableTicketCount - alreadyRefundedCount,
         );
-        return activeTickets.slice(0, newlyRefundableCount);
+        return validTickets.slice(0, newlyRefundableCount);
       })();
 
   for (const ticket of ticketsToRefund) {

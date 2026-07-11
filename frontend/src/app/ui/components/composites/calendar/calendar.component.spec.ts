@@ -227,6 +227,75 @@ describe('BraCalendarComponent', () => {
     expect(calendarApi.currentYearValue()).toBe('2027');
   });
 
+  it('should render the selected month, not roll over, when a 31st is selected and the month dropdown changes', async () => {
+    // Regression: value on the 31st + dropdown to a shorter month used to make
+    // the grid roll into a later month while the header showed the picked month.
+    host.value.set(new Date(2026, 0, 31)); // Jan 31 2026
+    fixture.detectChanges();
+
+    const calendarApi = getCalendarApi();
+    calendarApi.onMonthChange('1'); // pick February
+    fixture.detectChanges();
+
+    // Header state advanced to February...
+    expect(calendarApi.currentMonthValue()).toBe('1');
+    expect(calendarApi.currentYearValue()).toBe('2026');
+    // ...and the rendered grid must agree (would be "March 2026" before the fix).
+    expect(await _calendarHarness.getRenderedGridMonthYear()).toBe('February 2026');
+  });
+
+  it('should render February, not roll over, when the previous-month chevron lands on a shorter month', async () => {
+    host.value.set(new Date(2026, 2, 31)); // Mar 31 2026
+    fixture.detectChanges();
+
+    const calendarApi = getCalendarApi();
+    const navigation = getNavigation();
+    expect(calendarApi.currentMonthValue()).toBe('2'); // starts on March
+
+    navigation.previousMonth.emit(); // go to February
+    fixture.detectChanges();
+
+    expect(calendarApi.currentMonthValue()).toBe('1');
+    expect(calendarApi.currentYearValue()).toBe('2026');
+    // Grid must render February, not roll over to March (pre-fix behavior).
+    expect(await _calendarHarness.getRenderedGridMonthYear()).toBe('February 2026');
+  });
+
+  it('should keep the grid in sync with the header across a year boundary when a 31st is selected', async () => {
+    host.value.set(new Date(2026, 11, 31)); // Dec 31 2026
+    fixture.detectChanges();
+
+    const calendarApi = getCalendarApi();
+    const navigation = getNavigation();
+    expect(calendarApi.currentMonthValue()).toBe('11');
+    expect(calendarApi.currentYearValue()).toBe('2026');
+
+    navigation.nextMonth.emit(); // roll over to January of the next year
+    fixture.detectChanges();
+
+    expect(calendarApi.currentMonthValue()).toBe('0');
+    expect(calendarApi.currentYearValue()).toBe('2027');
+    expect(await _calendarHarness.getRenderedGridMonthYear()).toBe('January 2027');
+  });
+
+  it('should render February, not roll over, when year navigation lands a leap-day selection on a non-leap year', async () => {
+    host.value.set(new Date(2024, 1, 29)); // Feb 29 2024 (leap day)
+    fixture.detectChanges();
+
+    const calendarApi = getCalendarApi();
+    const grid = getGrid();
+    expect(calendarApi.currentMonthValue()).toBe('1');
+    expect(calendarApi.currentYearValue()).toBe('2024');
+
+    grid.nextYear.emit(); // navigateYear(1) -> February 2025 (non-leap)
+    fixture.detectChanges();
+
+    expect(calendarApi.currentMonthValue()).toBe('1');
+    expect(calendarApi.currentYearValue()).toBe('2025');
+    // Feb 2025 has no 29th; pre-fix this rolled the grid to March 2025.
+    expect(await _calendarHarness.getRenderedGridMonthYear()).toBe('February 2025');
+  });
+
   it('should update disabled state through ControlValueAccessor', () => {
     const calendar = getCalendar();
     calendar.setDisabledState(true);

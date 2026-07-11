@@ -49,20 +49,20 @@
         </div>
 
         <div class="space-y-1 md:col-span-2">
-          <label
-            for="broadcast-message"
+          <span
+            id="broadcast-message-label"
             class="font-mono text-xs tracking-widest text-muted-foreground uppercase"
           >
             Message
-          </label>
-          <textarea
-            id="broadcast-message"
-            zInput
-            [formField]="broadcastForm.message"
+          </span>
+          <app-rich-text-editor
             data-testid="broadcast-message"
-            rows="5"
-            placeholder="Write your broadcast message..."
-          ></textarea>
+            ariaLabelledby="broadcast-message-label"
+            [disabled]="isSendingBroadcast()"
+            [imageUpload]="imageUpload"
+            (jsonChange)="onBodyJsonChange($event)"
+            (textChange)="onBodyTextChange($event)"
+          />
           <p class="font-mono text-2xs text-muted-foreground">
             {{ broadcastMessageLength() }} /
             {{ maxTicketReminderMessageLength }}

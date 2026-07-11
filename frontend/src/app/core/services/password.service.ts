@@ -143,11 +143,18 @@ export class PasswordService {
 
   /**
    * Requests a new verification email for an unverified account.
+   *
+   * The callback targets `/confirm/verification` (matching the signup flow in
+   * AuthService.signup) so that Better Auth's `/verify-email` redirect lands on
+   * the page built to explain verification outcomes. Using `/login` here caused
+   * expired/invalid-token redirects (`/login?error=TOKEN_EXPIRED`) to be
+   * misclassified as OAuth callbacks and forwarded to the social sign-in error
+   * page, which shows the wrong error context.
    */
   async requestVerificationEmail(email: string): Promise<void> {
     const {error} = await this.authClient.sendVerificationEmail({
       email,
-      callbackURL: this.browser.absoluteUrl('/login'),
+      callbackURL: this.browser.absoluteUrl('/confirm/verification'),
     });
 
     if (error) {

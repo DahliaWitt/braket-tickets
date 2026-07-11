@@ -4,24 +4,43 @@
          was admitted on a cached credential, so keep the skeleton up until the
          profile-keyed resources start instead of flashing an empty dashboard. -->
     @if (!auth.authSettled() || approvalsLoading() || isLoading()) {
-      <!-- Loading skeleton -->
-      <div class="fade-in space-y-6 py-6">
-        <z-skeleton class="h-3 w-40" />
+      <!-- Loading skeleton, shaped like the vetted-user layout:
+           "Your Communities" label row + community-cell grid, then the
+           "What's Coming Up" label + a poster/details event row. -->
+      <div class="fade-in py-6">
+        <div class="flex items-center justify-between px-1 py-3">
+          <z-skeleton class="h-3 w-32" />
+          <z-skeleton class="h-3 w-20" />
+        </div>
         <div
-          class="grid grid-cols-2 gap-px border border-border md:grid-cols-3"
+          class="grid gap-3 pt-3"
+          style="grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr))"
         >
           @for (_ of [1, 2, 3]; track $index) {
-            <div class="space-y-2 p-4">
-              <z-skeleton class="h-4 w-24" />
-              <z-skeleton class="h-3 w-16" />
+            <div class="flex flex-col gap-2 bg-card/40 p-4">
+              <div class="flex items-center gap-2.5">
+                <z-skeleton class="h-8 w-8" />
+                <z-skeleton class="h-4 w-24" />
+              </div>
+              <z-skeleton class="h-3 w-32" />
+              <z-skeleton class="h-4 w-16" />
             </div>
           }
         </div>
-        <z-skeleton class="h-3 w-32" />
-        <div class="space-y-3 border border-border p-6">
-          <z-skeleton class="h-6 w-3/4" />
-          <z-skeleton class="h-4 w-1/2" />
-          <z-skeleton class="h-20 w-full" />
+        <div class="mt-10 border-t border-border pt-6">
+          <div class="px-1 pb-4">
+            <z-skeleton class="h-3 w-32" />
+          </div>
+          <div
+            class="grid grid-cols-1 border-t border-b border-border md:grid-cols-[auto_1fr]"
+          >
+            <z-skeleton class="hidden h-56 w-44 rounded-none md:block" />
+            <div class="space-y-3 px-5 py-5 md:px-6 md:py-6">
+              <z-skeleton class="h-6 w-3/4" />
+              <z-skeleton class="h-3 w-1/2" />
+              <z-skeleton class="h-8 w-36" />
+            </div>
+          </div>
         </div>
       </div>
     } @else if (hasLoadError()) {
@@ -107,13 +126,13 @@
                     {{ community.name }}
                   </p>
                   @if (community.description) {
-                    <p class="mt-0.5 truncate text-xs text-muted-foreground/50">
+                    <p class="mt-0.5 truncate text-2xs text-muted-foreground">
                       {{ community.description }}
                     </p>
                   }
                 </div>
                 <span
-                  class="flex-shrink-0 border border-primary px-4 py-1.5 font-mono text-2xs tracking-widest text-foreground uppercase transition-colors group-hover:bg-primary group-hover:text-white"
+                  class="flex-shrink-0 border border-primary px-4 py-1.5 font-mono text-2xs tracking-widest text-foreground uppercase transition-colors group-hover:bg-primary group-hover:text-primary-foreground"
                 >
                   Apply
                 </span>
@@ -164,7 +183,7 @@
                   >
                     {{ event.title }}
                   </h3>
-                  <p class="mono-label text-2xs text-muted-foreground/60">
+                  <p class="mono-label text-2xs text-muted-foreground">
                     {{ event.date | eventDate: 'mediumDate' }},
                     {{ event.date | eventDate: 'shortTime'
                     }}{{ event.endDate | eventEndTime: event.date }}
@@ -176,9 +195,7 @@
             }
           </div>
         } @else {
-          <p
-            class="py-8 text-center font-mono text-sm text-muted-foreground/50"
-          >
+          <p class="py-8 text-center font-mono text-sm text-muted-foreground">
             no events right now — check back soon
           </p>
         }
@@ -188,10 +205,10 @@
       @if (viewableEvents().length > 0) {
         <section class="fade-in fade-in-delay-3 mt-6">
           <div class="px-1 py-3">
-            <h2 class="mono-label text-2xs text-muted-foreground/50">
+            <h2 class="mono-label text-2xs text-muted-foreground">
               More Events
             </h2>
-            <p class="mt-1 text-2xs text-muted-foreground/40 italic">
+            <p class="mt-1 text-2xs text-muted-foreground italic">
               the good stuff's behind the door — get vetted to see more
             </p>
           </div>
@@ -201,22 +218,42 @@
             @for (event of viewableEvents().slice(0, 4); track event._id) {
               <a
                 [routerLink]="['/events', event._id]"
-                class="flex w-56 flex-1 flex-shrink-0 flex-col border-r border-border opacity-60 transition-opacity last:border-r-0 hover:opacity-80 md:w-auto"
+                class="flex w-56 flex-1 flex-shrink-0 flex-col border-r border-border transition-colors last:border-r-0 hover:bg-foreground/[0.02] md:w-auto"
                 [attr.aria-label]="
                   'View details for ' + event.title + ' (vetting required)'
                 "
               >
                 <div class="relative aspect-video overflow-hidden bg-card">
                   @if (event.posterUrl) {
+                    <!-- Muted poster treatment signals gated access; the copy
+                         and lock badge carry the message at full contrast. -->
                     <img
                       [ngSrc]="event.posterUrl"
                       [alt]="event.title + ' poster'"
                       fill
                       ngSrcset="320w, 640w"
                       sizes="(min-width: 768px) 25vw, 224px"
-                      class="object-cover"
+                      class="object-cover opacity-70 saturate-50"
                     />
                   }
+                  <span
+                    data-testid="dashboard-vetting-lock"
+                    aria-hidden="true"
+                    class="absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded bg-background/80 text-muted-foreground"
+                  >
+                    <svg
+                      class="h-3.5 w-3.5"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      viewBox="0 0 24 24"
+                    >
+                      <rect width="18" height="11" x="3" y="11" rx="2" />
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </svg>
+                  </span>
                 </div>
                 <div class="min-w-0 space-y-1 overflow-hidden p-3 md:p-4">
                   <h3
@@ -225,7 +262,7 @@
                   >
                     {{ event.title }}
                   </h3>
-                  <p class="mono-label text-2xs text-muted-foreground/60">
+                  <p class="mono-label text-2xs text-muted-foreground">
                     {{ event.date | eventDate: 'mediumDate' }},
                     {{ event.date | eventDate: 'shortTime'
                     }}{{ event.endDate | eventEndTime: event.date }}
@@ -252,7 +289,7 @@
             class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
           >
             <div class="min-w-0">
-              <p class="mono-label mb-2 text-2xs text-destructive-text/80">
+              <p class="mono-label mb-2 text-2xs text-destructive-text">
                 Vetting update
               </p>
               <h2
@@ -268,7 +305,7 @@
               </p>
               @if (resubmit.reason) {
                 <p
-                  class="mt-3 max-w-2xl font-sans text-xs leading-relaxed break-words text-muted-foreground/70"
+                  class="mt-3 max-w-2xl font-sans text-xs leading-relaxed break-words text-muted-foreground"
                 >
                   Reason: {{ resubmit.reason }}
                 </p>
@@ -335,9 +372,7 @@
                   nextEventByOrganizer().get(entry.organizerId);
                   as nextEvt
                 ) {
-                  <p
-                    class="truncate font-mono text-2xs text-muted-foreground/50"
-                  >
+                  <p class="truncate font-mono text-2xs text-muted-foreground">
                     {{ nextEvt.date | eventDate: 'mediumDate' }},
                     {{ nextEvt.date | eventDate: 'shortTime'
                     }}{{ nextEvt.endDate | eventEndTime: nextEvt.date }}
@@ -351,7 +386,7 @@
                   >
                   @if (entry.source === 'shared' && entry.viaOrganizerName) {
                     <p
-                      class="truncate font-mono text-2xs text-muted-foreground/50"
+                      class="truncate font-mono text-2xs text-muted-foreground"
                     >
                       via {{ entry.viaOrganizerName }}
                     </p>
@@ -371,7 +406,7 @@
                     muted
                   />
                   <span
-                    class="truncate font-display text-base font-bold text-muted-foreground/70"
+                    class="truncate font-display text-base font-bold text-muted-foreground"
                   >
                     {{ entry.organizerName }}
                   </span>
@@ -397,20 +432,18 @@
                     muted
                   />
                   <span
-                    class="truncate font-display text-base font-bold text-muted-foreground/70"
+                    class="truncate font-display text-base font-bold text-muted-foreground"
                   >
                     {{ entry.organizerName }}
                   </span>
                 </div>
                 @if (entry.reason) {
-                  <p class="truncate text-2xs text-muted-foreground/60">
+                  <p class="truncate text-2xs text-muted-foreground">
                     {{ entry.reason }}
                   </p>
                 }
                 <div class="mt-auto flex items-center justify-between gap-3">
-                  <bra-status-badge
-                    status="destructive"
-                    class="w-fit text-destructive-text/80"
+                  <bra-status-badge status="destructive" class="w-fit"
                     >Rejected</bra-status-badge
                   >
                   @if (entry.canResubmit) {
@@ -471,15 +504,13 @@
                     {{ community.name }}
                   </p>
                   @if (community.description) {
-                    <p
-                      class="mt-0.5 truncate text-2xs text-muted-foreground/50"
-                    >
+                    <p class="mt-0.5 truncate text-2xs text-muted-foreground">
                       {{ community.description }}
                     </p>
                   }
                 </div>
                 <span
-                  class="flex-shrink-0 border border-primary px-3 py-1 font-mono text-2xs tracking-widest text-foreground uppercase transition-colors group-hover:bg-primary group-hover:text-white"
+                  class="flex-shrink-0 border border-primary px-3 py-1 font-mono text-2xs tracking-widest text-foreground uppercase transition-colors group-hover:bg-primary group-hover:text-primary-foreground"
                 >
                   Apply
                 </span>
@@ -592,22 +623,25 @@
                         [routerLink]="['/events', event._id]"
                         [queryParams]="{buy: 'true'}"
                         data-testid="dashboard-get-tickets"
-                        class="inline-block border-2 border-primary px-6 py-2 font-mono text-2xs tracking-widest text-foreground uppercase transition-colors hover:bg-primary hover:text-white"
+                        class="inline-block border-2 border-primary px-6 py-2 font-mono text-2xs tracking-widest text-foreground uppercase transition-colors hover:bg-primary hover:text-primary-foreground"
                         [attr.aria-label]="'Get tickets for ' + event.title"
                       >
                         Get Tickets &rarr;
                       </a>
                     } @else {
-                      <span
-                        class="font-mono text-2xs tracking-widest text-primary uppercase"
+                      <a
+                        [routerLink]="['/events', event._id]"
+                        data-testid="dashboard-view-event"
+                        class="inline-flex min-h-6 items-center font-mono text-2xs tracking-widest text-primary uppercase transition-colors hover:text-primary/80"
+                        [attr.aria-label]="'View event ' + event.title"
                       >
                         View Event &rarr;
-                      </span>
+                      </a>
                     }
                   </div>
                   @if (event.description) {
                     <p
-                      class="line-clamp-2 max-w-prose text-sm leading-relaxed text-muted-foreground/60"
+                      class="line-clamp-2 max-w-prose text-sm leading-relaxed text-muted-foreground"
                     >
                       {{ event.description }}
                     </p>
@@ -620,7 +654,7 @@
       } @else {
         <!-- No events empty state -->
         <div class="fade-in fade-in-delay-2 py-12 text-center">
-          <p class="font-mono text-sm text-muted-foreground/50">
+          <p class="font-mono text-sm text-muted-foreground">
             nothing on the calendar yet — keep an eye out
           </p>
         </div>

@@ -24,6 +24,12 @@ export class MarketingAnnouncementCardHarness extends ComponentHarness {
   private getScheduleTimeInput = this.locatorForOptional(
     '[data-testid="marketing-schedule-time"]',
   );
+  private getScheduleDateLabel = this.locatorForOptional(
+    '[data-testid="marketing-schedule-date-label"]',
+  );
+  private getScheduleTimeLabel = this.locatorForOptional(
+    '[data-testid="marketing-schedule-time-label"]',
+  );
   private getScheduleSubmitButton = this.locatorForOptional(
     '[data-testid="marketing-schedule-submit"]',
   );
@@ -79,6 +85,36 @@ export class MarketingAnnouncementCardHarness extends ComponentHarness {
   async getScheduleDateValue(): Promise<string | null> {
     const input = await this.getScheduleDateInput();
     return input ? input.getProperty('value') : null;
+  }
+
+  async getScheduleDateLabelText(): Promise<string | null> {
+    const label = await this.getScheduleDateLabel();
+    return label ? (await label.text()).trim() : null;
+  }
+
+  async getScheduleTimeLabelText(): Promise<string | null> {
+    const label = await this.getScheduleTimeLabel();
+    return label ? (await label.text()).trim() : null;
+  }
+
+  /** True when the date label's `for` points at the date input's id. */
+  async isScheduleDateLabelAssociated(): Promise<boolean> {
+    const label = await this.getScheduleDateLabel();
+    const input = await this.getScheduleDateInput();
+    if (!label || !input) return false;
+    const forAttr = await label.getAttribute('for');
+    const inputId = await input.getAttribute('id');
+    return forAttr !== null && forAttr === inputId;
+  }
+
+  /** True when the time label's `for` points at the time input's id. */
+  async isScheduleTimeLabelAssociated(): Promise<boolean> {
+    const label = await this.getScheduleTimeLabel();
+    const input = await this.getScheduleTimeInput();
+    if (!label || !input) return false;
+    const forAttr = await label.getAttribute('for');
+    const inputId = await input.getAttribute('id');
+    return forAttr !== null && forAttr === inputId;
   }
 
   async getScheduleTimeValue(): Promise<string | null> {

@@ -6,48 +6,61 @@ import {
   input,
   signal,
 } from '@angular/core';
-import { Router, RouterLink, RouterLinkActive, NavigationEnd } from '@angular/router';
-import { toSignal } from '@angular/core/rxjs-interop';
-import { filter, map, startWith } from 'rxjs';
-import { AuthService } from '../../../../core/services/auth.service';
-import { type HelpArticle, type HelpCategory, type HelpSection } from '../../models/help.models';
-import { buildCategory, compareCategory } from '../../services/help-manifest.service';
+import {
+  Router,
+  RouterLink,
+  RouterLinkActive,
+  NavigationEnd,
+} from '@angular/router';
+import {toSignal} from '@angular/core/rxjs-interop';
+import {filter, map, startWith} from 'rxjs';
+import {AuthService} from '../../../../core/services/auth.service';
+import {
+  type HelpArticle,
+  type HelpCategory,
+  type HelpSection,
+} from '../../models/help.models';
+import {
+  buildCategory,
+  compareCategory,
+} from '../../services/help-manifest.service';
+import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
 
 @Component({
   selector: 'app-help-sidebar',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, RouterLinkActive],
+  imports: [RouterLink, RouterLinkActive, ZardIconComponent],
   template: `
     <nav>
       @if (sectionLinks().length > 1) {
         <!-- Section toggles -->
-        <div class="px-4 pb-2 pt-4 flex gap-2">
+        <div class="flex gap-2 px-4 pt-4 pb-2">
           <a
             routerLink="/help/users"
             routerLinkActive="text-foreground border-primary"
-            [routerLinkActiveOptions]="{ exact: false }"
-            class="flex-1 text-center py-1.5 text-xs border rounded font-mono uppercase tracking-wider text-muted-foreground border-border hover:text-foreground transition-colors"
+            [routerLinkActiveOptions]="{exact: false}"
+            class="flex-1 rounded border border-border py-1.5 text-center font-mono text-xs tracking-wider text-muted-foreground uppercase transition-colors hover:text-foreground"
             data-testid="help-section-link"
-            >User Guide</a
+            >user guide</a
           >
           @if (shouldShowAdminGuide()) {
             <a
               routerLink="/help/admins"
               routerLinkActive="text-foreground border-primary"
-              [routerLinkActiveOptions]="{ exact: false }"
-              class="flex-1 text-center py-1.5 text-xs border rounded font-mono uppercase tracking-wider text-muted-foreground border-border hover:text-foreground transition-colors"
+              [routerLinkActiveOptions]="{exact: false}"
+              class="flex-1 rounded border border-border py-1.5 text-center font-mono text-xs tracking-wider text-muted-foreground uppercase transition-colors hover:text-foreground"
               data-testid="help-section-link"
-              >Admin Guide</a
+              >admin guide</a
             >
           }
           @if (shouldShowDeveloperGuide()) {
             <a
               routerLink="/help/developers"
               routerLinkActive="text-foreground border-primary"
-              [routerLinkActiveOptions]="{ exact: false }"
-              class="flex-1 text-center py-1.5 text-xs border rounded font-mono uppercase tracking-wider text-muted-foreground border-border hover:text-foreground transition-colors"
+              [routerLinkActiveOptions]="{exact: false}"
+              class="flex-1 rounded border border-border py-1.5 text-center font-mono text-xs tracking-wider text-muted-foreground uppercase transition-colors hover:text-foreground"
               data-testid="help-section-link"
-              >Developer Guide</a
+              >developer guide</a
             >
           }
         </div>
@@ -55,17 +68,17 @@ import { buildCategory, compareCategory } from '../../services/help-manifest.ser
 
       @for (category of activeCategories(); track category.name) {
         <div class="px-4 py-2" data-testid="help-category-group">
-          <div class="flex items-center justify-between gap-1 mb-1">
+          <div class="mb-1 flex items-center justify-between gap-1">
             @if (category.indexArticle; as indexArticle) {
               <a
                 [routerLink]="['/help/' + activeSection(), indexArticle.slug]"
                 routerLinkActive="text-foreground"
-                class="mono-label text-2xs text-muted-foreground hover:text-foreground transition-colors flex-1 text-left"
+                class="mono-label flex-1 text-left text-2xs text-muted-foreground transition-colors hover:text-foreground"
                 data-testid="help-category-index-link"
                 >{{ category.name }}</a
               >
             } @else {
-              <span class="mono-label text-2xs text-muted-foreground flex-1">{{
+              <span class="mono-label flex-1 text-2xs text-muted-foreground">{{
                 category.name
               }}</span>
             }
@@ -75,26 +88,29 @@ import { buildCategory, compareCategory } from '../../services/help-manifest.ser
               [attr.aria-expanded]="isExpanded(category.name)"
               [attr.aria-controls]="categoryPanelId(category.name)"
               [attr.aria-label]="
-                (isExpanded(category.name) ? 'Collapse ' : 'Expand ') + category.name
+                (isExpanded(category.name) ? 'Collapse ' : 'Expand ') +
+                category.name
               "
-              class="p-1 text-muted-foreground hover:text-foreground transition-colors"
+              class="flex h-6 w-6 shrink-0 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
               data-testid="help-category-toggle"
             >
-              <span
-                class="text-2xs inline-block transition-transform duration-150"
+              <z-icon
+                zType="chevron-right"
+                class="size-3.5 transition-transform duration-150"
                 [class.rotate-90]="isExpanded(category.name)"
-                aria-hidden="true"
-                >▸</span
-              >
+              />
             </button>
           </div>
           @if (isExpanded(category.name)) {
-            <div [id]="categoryPanelId(category.name)" data-testid="help-category-panel">
+            <div
+              [id]="categoryPanelId(category.name)"
+              data-testid="help-category-panel"
+            >
               @for (article of category.articles; track article.slug) {
                 <a
                   [routerLink]="['/help/' + activeSection(), article.slug]"
                   routerLinkActive="text-foreground bg-muted"
-                  class="block py-1 px-2 rounded text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  class="block rounded px-2 py-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
                   data-testid="help-article-link"
                   >{{ article.title }}</a
                 >
@@ -121,7 +137,7 @@ export class HelpSidebarComponent {
       map(() => this.router.url),
       startWith(this.router.url),
     ),
-    { initialValue: this.router.url },
+    {initialValue: this.router.url},
   );
 
   private readonly activeCategoryName = computed<string | null>(() => {
@@ -130,7 +146,9 @@ export class HelpSidebarComponent {
     if (!match) return null;
     const slug = match[1];
     const section = this.activeSection();
-    const article = this.articles().find((a) => a.section === section && a.slug === slug);
+    const article = this.articles().find(
+      (a) => a.section === section && a.slug === slug,
+    );
     return article?.category ?? null;
   });
 
@@ -152,7 +170,9 @@ export class HelpSidebarComponent {
 
   readonly activeCategories = computed<HelpCategory[]>(() => {
     const section = this.activeSection();
-    return this.groupByCategory(this.articles().filter((a) => a.section === section));
+    return this.groupByCategory(
+      this.articles().filter((a) => a.section === section),
+    );
   });
 
   isExpanded(name: string): boolean {

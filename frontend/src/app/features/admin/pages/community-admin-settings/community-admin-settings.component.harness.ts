@@ -238,6 +238,15 @@ export class CommunityAdminSettingsHarness extends ComponentHarness {
   private _stripeError = this.locatorForOptional(
     '[data-testid="stripe-error"]',
   );
+  private _stripeChargesState = this.locatorForOptional(
+    '[data-testid="stripe-status-charges-state"]',
+  );
+  private _stripePayoutsState = this.locatorForOptional(
+    '[data-testid="stripe-status-payouts-state"]',
+  );
+  private _stripeUserStepsState = this.locatorForOptional(
+    '[data-testid="stripe-status-user-steps-state"]',
+  );
 
   async isStripeConnected(): Promise<boolean> {
     const el = await this._stripeConnectedStatus();
@@ -270,6 +279,24 @@ export class CommunityAdminSettingsHarness extends ComponentHarness {
 
   async getStripeError(): Promise<string | null> {
     const el = await this._stripeError();
+    return el ? (await el.text()).trim() : null;
+  }
+
+  /** Visible state word for the Stripe charges indicator ('enabled' | 'pending'). */
+  async getStripeChargesStateText(): Promise<string | null> {
+    const el = await this._stripeChargesState();
+    return el ? (await el.text()).trim() : null;
+  }
+
+  /** Visible state word for the Stripe payouts indicator ('enabled' | 'pending'). */
+  async getStripePayoutsStateText(): Promise<string | null> {
+    const el = await this._stripePayoutsState();
+    return el ? (await el.text()).trim() : null;
+  }
+
+  /** Visible state word for the Stripe user-steps indicator ('clear' | 'pending'). */
+  async getStripeUserStepsStateText(): Promise<string | null> {
+    const el = await this._stripeUserStepsState();
     return el ? (await el.text()).trim() : null;
   }
 

@@ -176,6 +176,15 @@ describe('MarketingAnnouncementCardComponent', () => {
     expect(await harness.usesEmailCardSpacingContract()).toBe(true);
   });
 
+  it('labels the schedule date and time inputs', async () => {
+    await createComponent();
+
+    expect(await harness.getScheduleDateLabelText()).toBe('send date');
+    expect(await harness.getScheduleTimeLabelText()).toBe('send time');
+    expect(await harness.isScheduleDateLabelAssociated()).toBe(true);
+    expect(await harness.isScheduleTimeLabelAssociated()).toBe(true);
+  });
+
   it('keeps management actions hidden while announcement status is loading', async () => {
     const deferred = createDeferred<typeof marketingStatus>();
     announcementStatusQuery = () => deferred.promise;

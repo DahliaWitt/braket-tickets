@@ -13,6 +13,7 @@ import {
 } from './http/_impl/events';
 import {resolveHttpEnvironmentConfig} from './http/_impl/config';
 import {handleHealthCheck} from './http/_impl/health';
+import {handlePublicImageGet} from './http/_impl/images';
 import {createMarketingTrackingHandlers} from './http/_impl/marketing_tracking';
 import {
   handleStripeConnectWebhook,
@@ -37,6 +38,14 @@ http.route({
   path: '/api/health',
   method: 'GET',
   handler: httpAction(handleHealthCheck),
+});
+
+// Durable, public inline-email image route. Serves only confirmed uploads by
+// storage id (see http/_impl/images.ts); unconfirmed/unknown ids return 404.
+http.route({
+  pathPrefix: '/api/images/',
+  method: 'GET',
+  handler: httpAction(handlePublicImageGet),
 });
 
 http.route({

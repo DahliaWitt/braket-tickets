@@ -1,6 +1,7 @@
 import {
   Component,
   ChangeDetectionStrategy,
+  ElementRef,
   inject,
   signal,
   computed,
@@ -16,33 +17,38 @@ import {readInputValue} from '@ui/utils/dom-event';
 @Component({
   selector: 'app-help-search',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: {
+    // focusout bubbles, so this catches focus leaving the input or a result
+    '(focusout)': 'onFocusOut($event)',
+  },
   template: `
     <div class="relative">
       <input
         id="help-search"
         name="help-search"
         type="search"
-        placeholder="Search help articles..."
+        placeholder="search help articles..."
         [value]="query()"
         (input)="onInput($event)"
         (keydown)="onKeydown($event)"
+        (focus)="onFocus()"
         data-testid="help-search-input"
-        class="w-full rounded border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+        class="w-full rounded border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:ring-1 focus:ring-primary focus:outline-none"
         aria-label="Search help articles"
         role="combobox"
         aria-autocomplete="list"
-        [attr.aria-expanded]="query().length > 0"
+        [attr.aria-expanded]="showResults()"
         aria-controls="help-search-listbox"
         [attr.aria-activedescendant]="activeDescendant()"
         autocomplete="off"
       />
 
-      @if (query().length > 0) {
+      @if (showResults()) {
         <div
           id="help-search-listbox"
           role="listbox"
           data-testid="help-search-results"
-          class="absolute left-0 right-0 top-full z-50 mt-1 rounded border border-border bg-background shadow-lg max-h-80 overflow-y-auto"
+          class="absolute top-full right-0 left-0 z-50 mt-1 max-h-80 overflow-y-auto rounded border border-border bg-background shadow-lg"
         >
           @for (
             result of results();
@@ -56,9 +62,9 @@ import {readInputValue} from '@ui/utils/dom-event';
               [attr.aria-selected]="activeIndex() === i"
               (click)="selectResult(result)"
               [class.bg-muted]="activeIndex() === i"
-              class="w-full text-left px-3 py-2 hover:bg-muted transition-colors border-b border-border last:border-b-0"
+              class="w-full border-b border-border px-3 py-2 text-left transition-colors last:border-b-0 hover:bg-muted"
             >
-              <div class="flex items-center gap-2 mb-0.5">
+              <div class="mb-0.5 flex items-center gap-2">
                 <span
                   class="mono-label text-2xs text-muted-foreground"
                   data-testid="help-search-result-badge"
@@ -69,18 +75,18 @@ import {readInputValue} from '@ui/utils/dom-event';
                   result.article.title
                 }}</span>
               </div>
-              <p class="text-xs text-muted-foreground line-clamp-2">
+              <p class="line-clamp-2 text-xs text-muted-foreground">
                 {{ result.snippet }}
               </p>
             </button>
           } @empty {
             <div
-              class="px-3 py-4 text-sm text-muted-foreground text-center"
+              class="px-3 py-4 text-center text-sm text-muted-foreground"
               data-testid="help-search-no-results"
               role="status"
               aria-live="polite"
             >
-              No matching articles found
+              no matching articles found
             </div>
           }
         </div>
@@ -91,12 +97,18 @@ import {readInputValue} from '@ui/utils/dom-event';
 export class HelpSearchComponent {
   private readonly searchService = inject(HelpSearchService);
   private readonly router = inject(Router);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly query = signal('');
   readonly results = computed<HelpSearchResult[]>(() =>
     this.searchService.search(this.query()),
   );
   readonly activeIndex = signal(-1);
+  private readonly dropdownOpen = signal(false);
+
+  readonly showResults = computed(
+    () => this.dropdownOpen() && this.query().length > 0,
+  );
 
   readonly activeDescendant = computed<string | null>(() => {
     const idx = this.activeIndex();
@@ -122,6 +134,25 @@ export class HelpSearchComponent {
     const value = readInputValue(event.target);
     if (value === null) return;
     this.query.set(value);
+    this.activeIndex.set(-1);
+    this.dropdownOpen.set(true);
+  }
+
+  onFocus(): void {
+    // Reopen the dropdown when the input regains focus with a query present
+    if (this.query().length > 0) {
+      this.dropdownOpen.set(true);
+    }
+  }
+
+  onFocusOut(event: FocusEvent): void {
+    // Ignore focus moving within the component (e.g. clicking a result) so
+    // the click still lands before the dropdown dismisses.
+    const next = event.relatedTarget;
+    if (next instanceof Node && this.host.nativeElement.contains(next)) {
+      return;
+    }
+    this.dropdownOpen.set(false);
     this.activeIndex.set(-1);
   }
 

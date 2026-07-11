@@ -245,9 +245,9 @@ function humanizeMarketingError(
 
         @if (hasTrustLinks()) {
           <fieldset class="space-y-2" data-testid="audience-scope-fieldset">
-            <legend class="text-plum-200 text-sm font-medium">Send to</legend>
+            <legend class="text-sm font-medium text-foreground">Send to</legend>
             <label
-              class="text-plum-300 flex cursor-pointer items-center gap-2 text-sm"
+              class="flex cursor-pointer items-center gap-2 text-sm text-foreground"
             >
               <input
                 type="radio"
@@ -255,12 +255,12 @@ function humanizeMarketingError(
                 value="community"
                 [checked]="audienceScope() === 'community'"
                 (change)="audienceScope.set('community')"
-                class="accent-amber-500"
+                class="accent-primary"
               />
               My community
             </label>
             <label
-              class="text-plum-300 flex cursor-pointer items-center gap-2 text-sm"
+              class="flex cursor-pointer items-center gap-2 text-sm text-foreground"
             >
               <input
                 type="radio"
@@ -268,7 +268,7 @@ function humanizeMarketingError(
                 value="community_and_trusted"
                 [checked]="audienceScope() === 'community_and_trusted'"
                 (change)="audienceScope.set('community_and_trusted')"
-                class="accent-amber-500"
+                class="accent-primary"
               />
               My community + trusted communities
             </label>
@@ -305,7 +305,7 @@ function humanizeMarketingError(
             audience.trustLinkedCount
           ) {
             <p
-              class="text-plum-400 text-xs"
+              class="text-xs text-muted-foreground"
               data-testid="marketing-recipient-breakdown"
             >
               {{ audience.directCount }} from your community +
@@ -316,20 +316,38 @@ function humanizeMarketingError(
 
         @if (canManageAnnouncement()) {
           <div class="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
-            <input
-              type="date"
-              [value]="scheduledDateIso()"
-              (change)="onScheduledDateChange($event)"
-              class="w-full rounded-md border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              data-testid="marketing-schedule-date"
-            />
-            <input
-              type="time"
-              [value]="scheduledTime()"
-              (input)="onScheduledTimeChange($event)"
-              class="w-full rounded-md border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              data-testid="marketing-schedule-time"
-            />
+            <div class="space-y-1.5">
+              <label
+                for="marketing-schedule-date"
+                class="mono-label block pl-1 text-2xs text-muted-foreground"
+                data-testid="marketing-schedule-date-label"
+                >send date</label
+              >
+              <input
+                id="marketing-schedule-date"
+                type="date"
+                [value]="scheduledDateIso()"
+                (change)="onScheduledDateChange($event)"
+                class="w-full rounded-md border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                data-testid="marketing-schedule-date"
+              />
+            </div>
+            <div class="space-y-1.5">
+              <label
+                for="marketing-schedule-time"
+                class="mono-label block pl-1 text-2xs text-muted-foreground"
+                data-testid="marketing-schedule-time-label"
+                >send time</label
+              >
+              <input
+                id="marketing-schedule-time"
+                type="time"
+                [value]="scheduledTime()"
+                (input)="onScheduledTimeChange($event)"
+                class="w-full rounded-md border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                data-testid="marketing-schedule-time"
+              />
+            </div>
             <button
               z-button
               zType="outline"
@@ -338,7 +356,7 @@ function humanizeMarketingError(
               (click)="scheduleForLater()"
               [zDisabled]="isScheduleDisabled()"
               data-testid="marketing-schedule-submit"
-              class="w-full border-primary/50 text-primary hover:bg-primary/10 md:w-auto"
+              class="w-full self-end border-primary/50 text-primary hover:bg-primary/10 md:w-auto"
             >
               {{ isScheduled() ? 'Reschedule' : 'Schedule' }}
             </button>

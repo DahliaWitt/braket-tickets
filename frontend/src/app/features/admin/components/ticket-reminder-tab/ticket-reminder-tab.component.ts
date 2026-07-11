@@ -6,11 +6,17 @@ import {
   input,
   output,
   signal,
+  viewChild,
 } from '@angular/core';
 import {form, FormField, maxLength, required} from '@angular/forms/signals';
+import {
+  RichTextEditorComponent,
+  type RichTextImageUploadFn,
+} from '../rich-text-editor/rich-text-editor.component';
 import {toast} from 'ngx-sonner';
 import {injectQuery, skipToken} from 'convex-angular';
 import {AdminEventsService} from '@/features/admin/services/admin-events.service';
+import {EventsService} from '@/features/admin/services/events.service';
 import {api} from '@convex/_generated/api';
 import type {Id} from '@convex/_generated/dataModel';
 import {
@@ -29,6 +35,7 @@ import {logger} from '@/utils/logger';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     FormField,
+    RichTextEditorComponent,
     ZardButtonComponent,
     ZardCardComponent,
     ZardInputDirective,
@@ -39,6 +46,21 @@ import {logger} from '@/utils/logger';
 export class TicketReminderTabComponent {
   private adminEventsService = inject(AdminEventsService);
   private dialogService = inject(BraDialogService);
+  private eventsService = inject(EventsService);
+
+  /**
+   * Inline-image uploader handed to the rich-text editor. Bound to this instance
+   * so the editor can enable its image button and stream uploads through Convex
+   * storage, resolving to the confirmed `storageId` (persisted into the email
+   * body) plus a signed preview url (display-only).
+   */
+  readonly imageUpload: RichTextImageUploadFn = async (file, onProgress) => {
+    const {storageId, url} = await this.eventsService.uploadRichTextImage(
+      file,
+      onProgress,
+    );
+    return {storageId, previewUrl: url};
+  };
 
   readonly eventId = input.required<string>();
   readonly communityId = input.required<string>();
@@ -47,9 +69,17 @@ export class TicketReminderTabComponent {
   readonly eventTitle = input<string>('');
   readonly dataChanged = output();
 
-  readonly reminderFormModel = signal({subject: '', message: ''});
+  /**
+   * Compose state. `subject` is bound to the subject input; `message` mirrors the
+   * rich-text editor's best-effort plaintext (drives required + length checks and
+   * is sent as the fallback text part); `bodyJson` is the serialized ProseMirror
+   * document the backend renders and re-derives its canonical plaintext from.
+   */
+  readonly reminderFormModel = signal({subject: '', message: '', bodyJson: ''});
   readonly maxTicketReminderSubjectLength = MAX_TICKET_REMINDER_SUBJECT_LENGTH;
   readonly maxTicketReminderMessageLength = MAX_TICKET_REMINDER_MESSAGE_LENGTH;
+
+  private readonly bodyEditor = viewChild(RichTextEditorComponent);
 
   readonly reminderForm = form(this.reminderFormModel, (f) => {
     required(f.subject);
@@ -61,6 +91,16 @@ export class TicketReminderTabComponent {
       message: `Message cannot exceed ${MAX_TICKET_REMINDER_MESSAGE_LENGTH} characters`,
     });
   });
+
+  /** Mirrors the editor's serialized ProseMirror JSON into the compose state. */
+  onBodyJsonChange(bodyJson: string): void {
+    this.reminderFormModel.update((model) => ({...model, bodyJson}));
+  }
+
+  /** Mirrors the editor's best-effort plaintext into the compose state. */
+  onBodyTextChange(message: string): void {
+    this.reminderFormModel.update((model) => ({...model, message}));
+  }
 
   readonly reminderAudienceQuery = injectQuery(
     api.events.reminders.getTicketReminderAudience,
@@ -110,6 +150,9 @@ export class TicketReminderTabComponent {
     () =>
       !this.eventId() ||
       this.isSendingTicketReminder() ||
+      // Block send while an inline image is still uploading, so the send can't
+      // race ahead of (and drop) the image the organizer just added.
+      (this.bodyEditor()?.isUploadingImage() ?? false) ||
       this.isLoadingReminderAudience() ||
       !!this.reminderAudienceError() ||
       this.reminderMissingCommunity() ||
@@ -149,18 +192,22 @@ export class TicketReminderTabComponent {
 
     const subject = this.reminderSubjectTrimmed();
     const message = this.reminderMessageTrimmed();
+    const bodyJson = this.reminderFormModel().bodyJson;
     if (!subject || !message) return;
 
     this.isSendingTicketReminder.set(true);
     try {
+      // Backend re-derives the canonical plaintext from bodyJson; the trimmed
+      // message is sent as a best-effort fallback for the text part.
       const result = await this.adminEventsService.sendTicketPurchaseReminder(
         eventId,
         subject,
         message,
+        bodyJson,
       );
       const label = result.recipientCount === 1 ? 'recipient' : 'recipients';
       toast.success(`Reminder sent to ${result.recipientCount} ${label}`);
-      this.reminderFormModel.set({subject: '', message: ''});
+      this.resetComposeState();
       this.dataChanged.emit();
     } catch (error) {
       logger.error('Failed to send ticket reminder', error);
@@ -172,5 +219,13 @@ export class TicketReminderTabComponent {
     } finally {
       this.isSendingTicketReminder.set(false);
     }
+  }
+
+  /** Clears the editor document and compose fields after a successful send. */
+  private resetComposeState(): void {
+    // reset() also invalidates any in-flight image upload so a late insert
+    // cannot land in the cleared draft.
+    this.bodyEditor()?.reset();
+    this.reminderFormModel.set({subject: '', message: '', bodyJson: ''});
   }
 }

@@ -6,21 +6,12 @@
 
 import {resolveSiteUrl} from '../lib/site_url';
 import {EVENT_DATE_TIME_ZONE} from '../lib/timezone';
+import {escapeHtml} from '../lib/email/escape_html';
 import {
   eventStartInstantMs,
   isEventOvernightWrap,
   parseUtcInstant,
 } from '@shared/event-time';
-
-/** Escapes HTML special characters to prevent XSS in email templates. */
-function escapeHtml(unsafe: string): string {
-  return unsafe
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
 
 // Base styles for email-safe CSS (inline everything)
 const baseStyles = {
@@ -455,6 +446,12 @@ export function ticketPurchaseReminderTemplate(args: {
   };
   organizer: {id: string; name: string};
   message: string;
+  /**
+   * Optional pre-rendered, inline-styled rich HTML fragment (from
+   * lib/email/rich_text_render.ts). When present, it replaces the plain-text
+   * body render; `message` is still used for the plain-text email part.
+   */
+  bodyHtml?: string;
   siteUrl: string;
   apiSiteUrl?: string;
   unsubToken: string;
@@ -464,6 +461,7 @@ export function ticketPurchaseReminderTemplate(args: {
     event,
     organizer,
     message,
+    bodyHtml,
     siteUrl,
     apiSiteUrl = siteUrl,
     unsubToken,
@@ -472,7 +470,14 @@ export function ticketPurchaseReminderTemplate(args: {
   const safeTitle = escapeHtml(event.title);
   const safeOrganizerName = escapeHtml(organizer.name);
   const safeLocation = event.location ? escapeHtml(event.location) : '';
-  const safeMessage = escapeAndFormatMultiline(message);
+  // Rich path injects trusted, already-sanitized HTML (block-level elements
+  // require a <div>, not the legacy <p>); plain path escapes + linebreaks.
+  const messageBlock =
+    bodyHtml !== undefined
+      ? `<div style="color: ${baseStyles.textMuted}; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">${bodyHtml}</div>`
+      : `<p style="margin: 0 0 16px 0; font-size: 16px; line-height: 1.6; color: ${baseStyles.textMuted};">
+          ${escapeAndFormatMultiline(message)}
+      </p>`;
   const ticketUrl = `${siteUrl}/events/${event._id}`;
   const unsubUrl = `${apiSiteUrl}/api/unsubscribe?token=${encodeURIComponent(unsubToken)}`;
   const oneClickUnsubUrl = `${apiSiteUrl}/api/unsubscribe/one-click?token=${encodeURIComponent(unsubToken)}`;
@@ -483,9 +488,7 @@ export function ticketPurchaseReminderTemplate(args: {
       <h2 style="margin: 0 0 16px 0; font-family: 'Syne', 'Chakra Petch', system-ui, sans-serif; font-size: 24px; line-height: 1.15; font-weight: 700; color: ${baseStyles.textLight};">
           Ticket reminder for ${safeTitle}
       </h2>
-      <p style="margin: 0 0 16px 0; font-size: 16px; line-height: 1.6; color: ${baseStyles.textMuted};">
-          ${safeMessage}
-      </p>
+      ${messageBlock}
       <div style="margin: 24px 0; padding: 20px 0; border-top: 1px solid ${baseStyles.border}; border-bottom: 1px solid ${baseStyles.border};">
           <p style="margin: 0 0 8px 0; font-size: 11px; color: ${baseStyles.textDim}; font-family: 'Space Mono', 'Courier New', monospace; text-transform: uppercase; letter-spacing: 1.5px;">EVENT DETAILS</p>
           <p style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: ${baseStyles.accentPink};">${safeTitle}</p>
@@ -652,6 +655,12 @@ export function eventBroadcastTemplate(args: {
   };
   organizer: {id: string; name: string};
   message: string;
+  /**
+   * Optional pre-rendered, inline-styled rich HTML fragment (from
+   * lib/email/rich_text_render.ts). When present, it replaces the plain-text
+   * body render; `message` is still used for the plain-text email part.
+   */
+  bodyHtml?: string;
   siteUrl: string;
   apiSiteUrl?: string;
   unsubToken: string;
@@ -661,6 +670,7 @@ export function eventBroadcastTemplate(args: {
     event,
     organizer,
     message,
+    bodyHtml,
     siteUrl,
     apiSiteUrl = siteUrl,
     unsubToken,
@@ -669,7 +679,10 @@ export function eventBroadcastTemplate(args: {
   const safeTitle = escapeHtml(event.title);
   const safeOrganizerName = escapeHtml(organizer.name);
   const safeLocation = event.location ? escapeHtml(event.location) : null;
-  const safeMessage = escapeAndFormatMultiline(message);
+  // Rich path injects trusted, already-sanitized HTML; plain path escapes +
+  // linebreaks. Both render inside the existing block-level <div> wrapper.
+  const messageBody =
+    bodyHtml !== undefined ? bodyHtml : escapeAndFormatMultiline(message);
   const eventDate = formatEventDateTime(event);
   const eventUrl = `${siteUrl}/events/${event._id}`;
   const unsubUrl = `${apiSiteUrl}/api/unsubscribe?token=${encodeURIComponent(unsubToken)}`;
@@ -684,7 +697,7 @@ export function eventBroadcastTemplate(args: {
       ${escapeHtml(eventDate)}${safeLocation ? ` · ${safeLocation}` : ''}
     </p>
     <div style="color: ${baseStyles.textLight}; font-size: 16px; line-height: 1.6; margin-bottom: 24px;">
-      ${safeMessage}
+      ${messageBody}
     </div>
     ${ctaButton(eventUrl, 'View Event')}
 
