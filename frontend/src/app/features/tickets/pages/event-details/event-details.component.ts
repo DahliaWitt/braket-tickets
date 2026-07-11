@@ -600,48 +600,59 @@ export class EventDetailsComponent {
     const amount = this.totalAmount();
     const checkoutTheme =
       this.darkMode.themeMode() === EDarkModes.DARK ? 'dark' : 'light';
-    if (!this.auth.user()) {
-      const sessionToken = this.guestSessionToken();
-      if (!sessionToken) throw new Error('Guest session not initialized');
 
-      const result = await this.paymentService.startGuestCheckoutSession(
-        this.event()!._id,
-        this.checkoutQuantity(),
-        tier,
-        amount,
-        sessionToken,
-        checkoutTheme,
-        this.guestTermsAccepted(),
-      );
+    // Lock the priced selection (quantity/tier/amount controls) the instant
+    // session creation starts so the buyer cannot drift it during the
+    // order-open + Stripe round trip. On success setActiveCheckoutSession keeps
+    // it locked via the active session id; the finally releases the in-flight
+    // flag either way so an error/cancel re-enables the controls.
+    this.checkoutStore.beginSessionCreation();
+    try {
+      if (!this.auth.user()) {
+        const sessionToken = this.guestSessionToken();
+        if (!sessionToken) throw new Error('Guest session not initialized');
+
+        const result = await this.paymentService.startGuestCheckoutSession(
+          this.event()!._id,
+          this.checkoutQuantity(),
+          tier,
+          amount,
+          sessionToken,
+          checkoutTheme,
+          this.guestTermsAccepted(),
+        );
+        this.checkoutStore.setActiveCheckoutSession(result);
+        return {
+          clientSecret: result.clientSecret,
+          connectedAccountId: result.connectedAccountId,
+          orderId: result.orderId,
+        };
+      }
+
+      const result = this.isResalePurchase()
+        ? await this.paymentService.startResaleCheckoutSession(
+            this.event()!._id,
+            tier,
+            amount,
+            checkoutTheme,
+          )
+        : await this.paymentService.startPrimaryCheckoutSession(
+            this.event()!._id,
+            this.checkoutQuantity(),
+            tier,
+            amount,
+            checkoutTheme,
+          );
+
       this.checkoutStore.setActiveCheckoutSession(result);
       return {
         clientSecret: result.clientSecret,
         connectedAccountId: result.connectedAccountId,
         orderId: result.orderId,
       };
+    } finally {
+      this.checkoutStore.endSessionCreation();
     }
-
-    const result = this.isResalePurchase()
-      ? await this.paymentService.startResaleCheckoutSession(
-          this.event()!._id,
-          tier,
-          amount,
-          checkoutTheme,
-        )
-      : await this.paymentService.startPrimaryCheckoutSession(
-          this.event()!._id,
-          this.checkoutQuantity(),
-          tier,
-          amount,
-          checkoutTheme,
-        );
-
-    this.checkoutStore.setActiveCheckoutSession(result);
-    return {
-      clientSecret: result.clientSecret,
-      connectedAccountId: result.connectedAccountId,
-      orderId: result.orderId,
-    };
   };
   async onStripePaymentConfirmed() {
     const orderId = this.activeOrderId();
@@ -696,6 +707,10 @@ export class EventDetailsComponent {
     await this.paymentGuard.guard(async () => {
       if (!this.event()) return;
       if (this.totalAmount() > 0) return;
+      // A below-minimum custom amount collapses totalAmount to 0 but leaves a
+      // validation error set. Never route that through the free-claim path —
+      // the backend rejects it as below the sliding-scale/supporter minimum.
+      if (this.slidingScaleError()) return;
 
       this.paymentStatus.set('processing');
 

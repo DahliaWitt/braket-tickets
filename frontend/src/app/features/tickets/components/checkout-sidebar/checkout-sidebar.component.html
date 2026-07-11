@@ -526,6 +526,30 @@
                 Tickets unavailable — payment setup incomplete
               </p>
             </div>
+          } @else if (slidingScaleError()) {
+            <!--
+              Invalid custom amount (below the tier minimum or above
+              slidingScaleMax). Show a disabled paid CTA with the validation
+              message — never the free "GET TICKET" claim path (which the
+              backend rejects) and never a live Stripe form for an amount the
+              server will refuse.
+            -->
+            <div class="space-y-4" data-testid="checkout-amount-invalid">
+              <z-button
+                data-testid="checkout-amount-invalid-cta"
+                [zDisabled]="true"
+                class="w-full border-none bg-primary py-6 font-display tracking-widest uppercase opacity-60 shadow-[0_0_20px_-5px_hsl(var(--primary)/0.4)]"
+              >
+                Continue to Secure Checkout
+              </z-button>
+              <p
+                role="alert"
+                data-testid="checkout-amount-invalid-message"
+                class="text-center font-mono text-xs tracking-wide text-destructive-text uppercase"
+              >
+                {{ slidingScaleError() }}
+              </p>
+            </div>
           } @else if (totalAmount() > 0) {
             <div class="relative z-10 space-y-4">
               @if (isGuest()) {
