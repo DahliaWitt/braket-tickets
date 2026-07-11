@@ -3031,6 +3031,15 @@ export declare const api: {
         },
         Id<"resale_listings">
       >;
+      setResaleListingStatus: FunctionReference<
+        "mutation",
+        "public",
+        {
+          listingId: Id<"resale_listings">;
+          status: "listed" | "pending" | "completed" | "cancelled";
+        },
+        null
+      >;
     };
     tickets: {
       seedTicket: FunctionReference<

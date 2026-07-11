@@ -73,6 +73,32 @@ export async function insertSeedResaleListing(
 }
 
 /**
+ * Forces a resale listing into a target status, simulating a state transition
+ * that happens outside the order-hold path (e.g. the listing settled/sold or was
+ * cancelled through another flow). Production code reaches these states through
+ * settlement/cancellation mutations that also mutate related tickets/orders; this
+ * helper sets only the listing status so tests can reproduce an intentionally
+ * inconsistent listing state without raw-mutating the DB in the test file.
+ * PROTECTED: Only callable when IS_TEST env var is set.
+ */
+export const setResaleListingStatus = testingMutation({
+  args: {
+    listingId: v.id('resale_listings'),
+    status: resaleListingStatusValidator,
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const listing = await ctx.db.get('resale_listings', args.listingId);
+    if (!listing) throw new Error('Resale listing not found');
+    // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed helper: simulate a resale listing leaving its prior status outside the order-hold path.
+    await ctx.db.patch('resale_listings', args.listingId, {
+      status: args.status,
+    });
+    return null;
+  },
+});
+
+/**
  * Seeds a resale listing directly in the database, bypassing RLS and validation.
  * PROTECTED: Only callable when IS_TEST env var is set.
  */

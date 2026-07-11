@@ -1296,11 +1296,9 @@ describe('orders', () => {
     // path) while the buyer's original order still exists. The resume path is
     // gated on the listing being pending, so the retry must not resurrect it —
     // and with no other `listed` listing the retry stays rejected.
-    await t.run(async (ctx) => {
-      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- simulates a resale listing that left `pending` outside the order-hold path
-      await ctx.db.patch('resale_listings', listingId, {
-        status: 'completed',
-      });
+    await t.mutation(api.testing.resale.setResaleListingStatus, {
+      listingId,
+      status: 'completed',
     });
 
     await expect(
