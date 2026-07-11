@@ -136,7 +136,9 @@ crons.interval(
  * Runs hourly to delete stored files that were never confirmed via
  * confirmUpload. Files older than 1 hour without a confirmedUploads
  * record are orphans from abandoned uploads or client crashes.
- * Scans up to 500 entries and deletes at most 50 per run.
+ * Sweeps the _storage creation-time index in bounded pages, advancing a
+ * cursor and self-rescheduling so the confirmed-file backlog cannot starve
+ * newer orphans.
  *
  * @see convex/storage/files.ts - _cleanupOrphanedUploads
  */
