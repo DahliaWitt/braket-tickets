@@ -30,6 +30,14 @@ export class CheckoutStore {
   readonly activeOrderId = signal<string | null>(null);
   readonly activeCheckoutSessionId = signal<string | null>(null);
   readonly activeConnectedAccountId = signal<string | null>(null);
+  /**
+   * True from the moment checkout-session creation starts (order open + Stripe
+   * session round trip) until it resolves or fails. The priced selection must
+   * lock the instant creation begins — not only once the session id lands —
+   * otherwise the buyer can change quantity/tier/amount mid-flight and the
+   * displayed "Total Due" diverges from what Stripe actually charges.
+   */
+  readonly sessionCreationInFlight = signal<boolean>(false);
   readonly stripeResetKey = signal<number>(0);
   readonly guestTermsAccepted = signal<boolean>(false);
 
@@ -53,7 +61,9 @@ export class CheckoutStore {
     return unitPrice * this.checkoutQuantity();
   });
   readonly checkoutLocked = computed(
-    () => this.activeCheckoutSessionId() !== null,
+    () =>
+      this.activeCheckoutSessionId() !== null ||
+      this.sessionCreationInFlight(),
   );
   readonly buyerEmail = computed(() => this.auth.email() ?? this.guestEmail());
   readonly maxTickets = computed(() => {
@@ -82,7 +92,15 @@ export class CheckoutStore {
   readonly communitySliderMax = computed(() => {
     const evt = this.event();
     if (!evt) return 100;
-    return (evt.price || 0) / 100;
+    const priceDollars = (evt.price || 0) / 100;
+    // The community/sliding-scale slider must never offer an amount the backend
+    // rejects. validateTierPricing (backend/convex/lib/payments/pricing.ts)
+    // throws when unitPrice > slidingScaleMax, so cap the slider at the
+    // configured max when one exists. slidingScaleMax is optional (undefined =
+    // no ceiling), mirroring the backend's `!== undefined` guard.
+    const maxCents = evt.slidingScaleMax;
+    if (maxCents === undefined) return priceDollars;
+    return Math.min(priceDollars, maxCents / 100);
   });
 
   bind(sources: CheckoutSources): void {
@@ -110,6 +128,7 @@ export class CheckoutStore {
     this.activeOrderId.set(null);
     this.activeCheckoutSessionId.set(null);
     this.activeConnectedAccountId.set(null);
+    this.sessionCreationInFlight.set(false);
     this.guestEmail.set(null);
     this.guestSessionToken.set(null);
     this.guestTermsAccepted.set(false);
@@ -123,6 +142,7 @@ export class CheckoutStore {
     this.activeOrderId.set(null);
     this.activeCheckoutSessionId.set(null);
     this.activeConnectedAccountId.set(null);
+    this.sessionCreationInFlight.set(false);
     this.guestTermsAccepted.set(false);
   }
 
@@ -132,6 +152,7 @@ export class CheckoutStore {
     this.activeOrderId.set(null);
     this.activeCheckoutSessionId.set(null);
     this.activeConnectedAccountId.set(null);
+    this.sessionCreationInFlight.set(false);
     this.guestTermsAccepted.set(false);
     this.stripeResetKey.update((k) => k + 1);
   }
@@ -141,6 +162,7 @@ export class CheckoutStore {
     this.activeOrderId.set(null);
     this.activeCheckoutSessionId.set(null);
     this.activeConnectedAccountId.set(null);
+    this.sessionCreationInFlight.set(false);
     this.stripeResetKey.update((k) => k + 1);
   }
 
@@ -150,6 +172,21 @@ export class CheckoutStore {
     this.activeOrderId.set(null);
     this.activeCheckoutSessionId.set(null);
     this.activeConnectedAccountId.set(null);
+    this.sessionCreationInFlight.set(false);
+  }
+
+  /**
+   * Engage the checkout lock as soon as session creation starts. Pair every
+   * call with {@link endSessionCreation} in a `finally` so the lock releases on
+   * error/cancel while a successful `setActiveCheckoutSession` keeps it locked
+   * via the active session id.
+   */
+  beginSessionCreation(): void {
+    this.sessionCreationInFlight.set(true);
+  }
+
+  endSessionCreation(): void {
+    this.sessionCreationInFlight.set(false);
   }
 
   setActiveCheckoutSession(result: {
@@ -195,45 +232,64 @@ export class CheckoutStore {
   }
 
   updateCustomAmountFromSlider(value: number): void {
-    const amountCents = Math.round(value * 100);
-    this.customAmount.set(amountCents);
-    this.slidingScaleError.set(null);
+    // The slider path previously set the amount and cleared the error
+    // unconditionally, so a slider whose range exceeded slidingScaleMax could
+    // submit an amount the backend rejects. Route it through the same
+    // validation as the typed input so min/max are always enforced.
+    this.applyCustomAmount(Math.round(value * 100));
   }
 
   updateCustomAmountFromInput(value: string): void {
     const val = parseFloat(value);
-    const eventData = this.event();
-    const tier = this.selectedTier();
 
-    if (!eventData) return;
+    if (!this.event()) return;
 
     if (isNaN(val) || val < 0) {
       this.slidingScaleError.set('Invalid amount');
       return;
     }
 
-    const amountCents = Math.round(val * 100);
+    this.applyCustomAmount(Math.round(val * 100));
+  }
+
+  /**
+   * Single source of truth for custom-amount (supporter / community) bounds
+   * validation, shared by the slider and the typed input. Mirrors the backend
+   * validator in backend/convex/lib/payments/pricing.ts:
+   * - community (notaflof): min = slidingScaleMin, max = slidingScaleMax
+   *   (a ceiling only applies when configured, matching the backend's
+   *   `slidingScaleMax !== undefined` guard).
+   * - supporter: min = supporterDefaultPrice, falling back to price + $1.00.
+   *
+   * On an out-of-range value it records the validation error AND stores the
+   * amount (so the field reflects what the user chose) without ever clearing a
+   * legitimate error — the createCheckoutSession guard then blocks submission.
+   */
+  private applyCustomAmount(amountCents: number): void {
+    const eventData = this.event();
+    if (!eventData) return;
+
+    const tier = this.selectedTier();
     let min: number;
-    let max = 0;
+    let max: number | null = null;
 
     if (tier === 'notaflof') {
       min = eventData.slidingScaleMin || 0;
-      max = eventData.slidingScaleMax || 0;
+      max = eventData.slidingScaleMax ?? null;
     } else if (tier === 'supporter') {
       min = eventData.supporterDefaultPrice || (eventData.price || 0) + 100;
     } else {
+      // Regular tier carries no editable custom amount.
       return;
     }
 
     if (amountCents < min) {
-      this.slidingScaleError.set(
-        `Minimum amount is $${(min / 100).toFixed(2)}`,
-      );
+      this.slidingScaleError.set(`Minimum amount is $${(min / 100).toFixed(2)}`);
       this.customAmount.set(amountCents);
       return;
     }
 
-    if (tier === 'notaflof' && max > 0 && amountCents > max) {
+    if (max !== null && amountCents > max) {
       this.slidingScaleError.set(
         `Maximum for community tier is $${(max / 100).toFixed(2)}`,
       );

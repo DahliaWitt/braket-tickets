@@ -207,7 +207,10 @@ describe('EventDetailsComponent', () => {
     totalTickets: 100,
     slidingScaleEnabled: true,
     slidingScaleMin: 500,
-    slidingScaleMax: 0,
+    // A defined slidingScaleMax is a real ceiling (backend pricing.ts enforces
+    // when `!== undefined`); "no max" is the field being absent, not 0. Use the
+    // realistic editor default ($10 = the event price) so $10 stays valid.
+    slidingScaleMax: 1000,
     supporterDefaultPrice: 4000,
     status: 'published',
     organizerId: 'org1',
@@ -1320,6 +1323,58 @@ describe('EventDetailsComponent', () => {
         3000,
         'light',
       );
+    });
+  });
+
+  describe('checkout selection lock during session creation (m25)', () => {
+    it('locks the priced selection the moment session creation starts and keeps it locked on success', async () => {
+      await fixture.whenStable();
+      expect(component.checkoutLocked()).toBe(false);
+
+      let resolveSession!: (value: {
+        orderId: string;
+        stripeCheckoutSessionId: string;
+        clientSecret: string;
+        connectedAccountId: string | null;
+      }) => void;
+      mockPaymentService.startPrimaryCheckoutSession.mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveSession = resolve;
+        }),
+      );
+
+      const pending = component.createCheckoutSession();
+      // In-flight: the lock must engage before the session id lands, so the
+      // buyer cannot drift quantity/tier/amount away from the opened order.
+      expect(component.checkoutLocked()).toBe(true);
+      expect(component.activeCheckoutSessionId()).toBeNull();
+
+      resolveSession({
+        orderId: 'order_123',
+        stripeCheckoutSessionId: 'cs_123',
+        clientSecret: 'secret_123',
+        connectedAccountId: null,
+      });
+      await pending;
+
+      // Still locked, now via the active session id.
+      expect(component.checkoutLocked()).toBe(true);
+      expect(component.activeCheckoutSessionId()).toBe('cs_123');
+    });
+
+    it('releases the lock when session creation fails so controls re-enable', async () => {
+      await fixture.whenStable();
+
+      mockPaymentService.startPrimaryCheckoutSession.mockRejectedValueOnce(
+        new Error('stripe unavailable'),
+      );
+
+      await expect(component.createCheckoutSession()).rejects.toThrow(
+        'stripe unavailable',
+      );
+
+      expect(component.checkoutLocked()).toBe(false);
+      expect(component.activeCheckoutSessionId()).toBeNull();
     });
   });
 
