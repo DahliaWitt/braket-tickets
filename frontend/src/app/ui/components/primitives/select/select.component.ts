@@ -156,11 +156,17 @@ export class ZardSelectComponent implements ControlValueAccessor, OnDestroy {
 
   protected readonly focusedItemId = computed(() => {
     const index = this.focusedIndex();
-    const items = this.selectItems();
-    if (index >= 0 && index < items.length) {
-      return items[index].id;
+    if (index < 0) {
+      return null;
     }
-    return null;
+    // focusedIndex is maintained in the enabled-only index space used by
+    // keyboard navigation: getSelectItems() filters out disabled options
+    // before navigating. aria-activedescendant must resolve against the same
+    // enabled-only list so it references the actually-highlighted option.
+    // Resolving against the full contentChildren list (which includes disabled
+    // items) shifts the announced id by one per preceding disabled option.
+    const enabledItems = this.selectItems().filter((item) => !item.zDisabled());
+    return enabledItems[index]?.id ?? null;
   });
 
   protected onFocus(): void {
