@@ -20,6 +20,21 @@ export type SessionChannelMessage = {type: 'LOGIN'} | {type: 'LOGOUT'};
 export const AUTH_SETTLE_TIMEOUT_MS = 15_000;
 
 /**
+ * Upper bound on how many times the missing-user repair loop will tolerate the
+ * current-user profile query being in an errored state before it gives up.
+ *
+ * The repair loop polls `getMissingUserRepairDecision` while the profile query
+ * settles. A transient query error (Convex re-evaluating a subscription) should
+ * be retried, but a *persistent* error leaves `data()` undefined forever — with
+ * no terminal state the loop would poll for the entire session lifetime and the
+ * repair mutation would never run. Counting errored decisions and bailing after
+ * this bound gives Convex several chances to recover while guaranteeing the loop
+ * terminates. Kept comfortably under `AUTH_SETTLE_TIMEOUT_MS` worth of backoff
+ * so the loop stops well before the auth-settle give-up latch fires.
+ */
+export const MISSING_USER_REPAIR_MAX_QUERY_ERRORS = 6;
+
+/**
  * Minimal shape auth guards and reconciliation need from the authenticated
  * user. Kept loose so individual callers can read other fields without a new
  * cast. Lives here (not auth.guards.ts) so AuthService can share the predicate

@@ -76,6 +76,7 @@ describe('AuthService', () => {
   let mutationMock: ReturnType<typeof vi.fn>;
   const userSignal = signal<UserModel | null>(null);
   const userLoadingSignal = signal(false);
+  const userErrorSignal = signal<Error | undefined>(undefined);
   const scannerStaffSignal = signal<boolean | undefined>(undefined);
   const scannerStaffLoadingSignal = signal(false);
 
@@ -115,11 +116,13 @@ describe('AuthService', () => {
         userQuery: {
           data: typeof userSignal;
           isLoading: typeof userLoadingSignal;
+          error: typeof userErrorSignal;
         };
       }
     ).userQuery = {
       data: userSignal,
       isLoading: userLoadingSignal,
+      error: userErrorSignal,
     };
     (
       target as unknown as {
@@ -204,6 +207,7 @@ describe('AuthService', () => {
     attachTestQueries(service);
     setSession(null);
     userLoadingSignal.set(false);
+    userErrorSignal.set(undefined);
     scannerStaffSignal.set(undefined);
     scannerStaffLoadingSignal.set(false);
   });
@@ -970,6 +974,86 @@ describe('AuthService', () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(mutationMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('terminates the repair loop instead of polling forever when the current-user query errors persistently', async () => {
+      vi.useFakeTimers();
+      try {
+        const session = {
+          user: {email: 'session@example.com', name: 'Session User'},
+          session: {id: 'session-123'},
+        };
+
+        vi.mocked(authClient.getSession).mockResolvedValue({
+          data: session,
+          error: null,
+        });
+        setAuthInitialized(true);
+        // `injectQuery` clears `isLoading` and leaves `data` undefined when a
+        // fresh subscription rejects — the exact stuck state that used to loop
+        // forever as 'pending'.
+        userLoadingSignal.set(false);
+        userSignal.set(undefined as unknown as UserModel | null);
+        userErrorSignal.set(new Error('profile query failed'));
+
+        await service.refreshSessionFromServer({syncUser: false});
+        // Backoff caps at 1s; advance well past the bounded retry budget.
+        await vi.advanceTimersByTimeAsync(10_000);
+
+        // Repair mutation is never attempted while the query is broken...
+        expect(mutationMock).not.toHaveBeenCalled();
+        // ...and the loop gives up rather than spinning for the session lifetime.
+        expect(logger.warn).toHaveBeenCalledWith(
+          expect.stringContaining('Abandoning missing app-user repair'),
+          expect.any(Error),
+        );
+
+        // Proof of termination: no further work happens after the bail-out.
+        vi.mocked(logger.warn).mockClear();
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(logger.warn).not.toHaveBeenCalled();
+        expect(mutationMock).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('still repairs a genuinely missing app user after a transient current-user query error clears', async () => {
+      vi.useFakeTimers();
+      try {
+        const session = {
+          user: {email: 'session@example.com', name: 'Session User'},
+          session: {id: 'session-123'},
+        };
+
+        vi.mocked(authClient.getSession).mockResolvedValue({
+          data: session,
+          error: null,
+        });
+        setAuthInitialized(true);
+        userLoadingSignal.set(false);
+        userSignal.set(undefined as unknown as UserModel | null);
+        userErrorSignal.set(new Error('transient blip'));
+
+        await service.refreshSessionFromServer({syncUser: false});
+        // A few errored polls, comfortably under the bail-out bound.
+        await vi.advanceTimersByTimeAsync(200);
+        expect(mutationMock).not.toHaveBeenCalled();
+
+        // Query recovers and confirms the app user is genuinely missing (null).
+        userErrorSignal.set(undefined);
+        userSignal.set(null);
+        await vi.advanceTimersByTimeAsync(1000);
+
+        expect(mutationMock).toHaveBeenCalledTimes(1);
+        expect(mutationMock.mock.calls.at(-1)?.[1]).toEqual({});
+        expect(logger.warn).not.toHaveBeenCalledWith(
+          expect.stringContaining('Abandoning missing app-user repair'),
+          expect.anything(),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 
