@@ -33,7 +33,7 @@ import {
 } from './slider.variants';
 
 import { mergeClasses } from '@ui/utils/merge-classes';
-import { clamp, convertValueToPercentage, roundToStepClamped } from '@ui/utils/number';
+import { clamp, convertValueToPercentage, roundToStep, roundToStepClamped } from '@ui/utils/number';
 import { ControlValueAccessorBase } from '@ui/utils/control-value-accessor.base';
 
 @Component({
@@ -316,12 +316,13 @@ export class ZardSliderComponent extends ControlValueAccessorBase<number> {
 
     const percent = this.percentValue();
     const rawValue = this.zMin() + ((this.zMax() - this.zMin()) * percent) / 100;
-    const currentValue = roundToStepClamped(
-      rawValue,
-      this.zMin(),
-      this.zMax(),
-      this.zStep(),
-    );
+    // Intentionally NOT clamped: roundToStep always lands on a step-grid point,
+    // so `currentValue ± zStep` stays grid-aligned. At an off-grid zMax the
+    // rounded value sits one grid point past the ceiling (e.g. 10 → 12), which
+    // makes ArrowLeft snap to the nearest grid value below the max (12-4 = 8),
+    // matching native <input type=range> step-down. The Math.max/Math.min bounds
+    // below already keep every emitted value within [zMin, zMax].
+    const currentValue = roundToStep(rawValue, this.zMin(), this.zStep());
 
     let newValue: number;
 
