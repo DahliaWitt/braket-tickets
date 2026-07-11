@@ -1115,6 +1115,45 @@ describe('CommunityAdminComponent', () => {
       expect(await newHarness.hasCreateDialog()).toBe(false);
     });
 
+    it('keeps the create-dialog backdrop non-focusable and hidden from assistive tech', async () => {
+      const {convexMock} = await setup({tab: 'magic-links'});
+
+      convexMock.client.onUpdate.mockImplementation(
+        (
+          _query: unknown,
+          _args: unknown,
+          onData: (data: unknown[]) => void,
+        ) => {
+          emitAsync(() => onData([]));
+          return () => void 0;
+        },
+      );
+
+      const newFixture = TestBed.createComponent(CommunityAdminComponent);
+      newFixture.componentRef.setInput('tab', 'magic-links');
+      newFixture.detectChanges();
+      await newFixture.whenStable();
+
+      newFixture.componentInstance.openCreateDialog();
+      newFixture.detectChanges();
+      await newFixture.whenStable();
+
+      const newHarness = await TestbedHarnessEnvironment.harnessForFixture(
+        newFixture,
+        CommunityAdminHarness,
+      );
+      expect(await newHarness.hasCreateDialog()).toBe(true);
+      // Decorative dismiss surface: out of the a11y tree and tab order.
+      expect(await newHarness.getDialogBackdropAriaHidden()).toBe('true');
+      expect(await newHarness.getDialogBackdropTabIndex()).toBeNull();
+
+      // Pointer dismissal still works.
+      await newHarness.clickDialogBackdrop();
+      newFixture.detectChanges();
+      await newFixture.whenStable();
+      expect(await newHarness.hasCreateDialog()).toBe(false);
+    });
+
     it('applies truncate class to desktop label cell to prevent overflow', async () => {
       const {convexMock} = await setup({tab: 'magic-links'});
 

@@ -230,16 +230,16 @@ describe('AdminCommunityListComponent', () => {
   });
 
   describe('status badge', () => {
-    it('shows "Published" for a community with no status field', async () => {
+    it('shows "published" for a community with no status field', async () => {
       const {harness} = await setup();
       // Default mock already has no status (undefined → treated as published)
       const texts = await harness.getStatusBadgeTexts();
       // 1 community × 2 layouts = 2 badges
       expect(texts).toHaveLength(2);
-      expect(texts.every((t) => t.trim() === 'Published')).toBe(true);
+      expect(texts.every((t) => t.trim() === 'published')).toBe(true);
     });
 
-    it('shows "Published" for a community with status: published', async () => {
+    it('shows "published" for a community with status: published', async () => {
       const {emit, fixture, harness} = await setup();
       emit([
         {
@@ -252,10 +252,10 @@ describe('AdminCommunityListComponent', () => {
       fixture.detectChanges();
 
       const texts = await harness.getStatusBadgeTexts();
-      expect(texts.every((t) => t.trim() === 'Published')).toBe(true);
+      expect(texts.every((t) => t.trim() === 'published')).toBe(true);
     });
 
-    it('shows "Draft" for a community with status: draft', async () => {
+    it('shows "draft" for a community with status: draft', async () => {
       const {emit, fixture, harness} = await setup();
       emit([
         {
@@ -268,7 +268,7 @@ describe('AdminCommunityListComponent', () => {
       fixture.detectChanges();
 
       const texts = await harness.getStatusBadgeTexts();
-      expect(texts.every((t) => t.trim() === 'Draft')).toBe(true);
+      expect(texts.every((t) => t.trim() === 'draft')).toBe(true);
     });
 
     it('renders correct badges when both published and draft communities are present', async () => {
@@ -292,8 +292,8 @@ describe('AdminCommunityListComponent', () => {
       const texts = await harness.getStatusBadgeTexts();
       // 2 communities × 2 layouts = 4 badges; order is desktop-first then mobile
       const normalised = texts.map((t) => t.trim());
-      expect(normalised.filter((t) => t === 'Published')).toHaveLength(2);
-      expect(normalised.filter((t) => t === 'Draft')).toHaveLength(2);
+      expect(normalised.filter((t) => t === 'published')).toHaveLength(2);
+      expect(normalised.filter((t) => t === 'draft')).toHaveLength(2);
     });
   });
 
