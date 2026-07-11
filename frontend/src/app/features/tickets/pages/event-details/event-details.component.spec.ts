@@ -1378,6 +1378,25 @@ describe('EventDetailsComponent', () => {
     });
   });
 
+  describe('free-claim guard for invalid amounts (m24)', () => {
+    it('does not claim a free ticket when a below-min amount leaves a validation error', async () => {
+      await fixture.whenStable();
+
+      // Paid event, community tier, buyer entered $0 → below the $5 min: total
+      // collapses to 0 but a validation error is set. The free-claim path must
+      // refuse rather than hard-fail against the backend minimum.
+      component.selectTier('notaflof');
+      component.customAmount.set(0);
+      component.slidingScaleError.set('Minimum amount is $5.00');
+      expect(component.totalAmount()).toBe(0);
+
+      await component.onFreeTicketClaimed();
+
+      expect(mockPaymentService.triggerRefresh).not.toHaveBeenCalled();
+      expect(component.paymentStatus()).toBe('idle');
+    });
+  });
+
   describe('checkout settlement', () => {
     it('polls checkout status until the backend reports completion', async () => {
       vi.useFakeTimers();

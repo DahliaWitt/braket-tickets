@@ -31,13 +31,22 @@ export class CheckoutStore {
   readonly activeCheckoutSessionId = signal<string | null>(null);
   readonly activeConnectedAccountId = signal<string | null>(null);
   /**
-   * True from the moment checkout-session creation starts (order open + Stripe
-   * session round trip) until it resolves or fails. The priced selection must
-   * lock the instant creation begins — not only once the session id lands —
-   * otherwise the buyer can change quantity/tier/amount mid-flight and the
-   * displayed "Total Due" diverges from what Stripe actually charges.
+   * Number of in-flight checkout-session creations (order open + Stripe session
+   * round trip). The priced selection must lock the instant creation begins —
+   * not only once the session id lands — otherwise the buyer can change
+   * quantity/tier/amount mid-flight and the displayed "Total Due" diverges from
+   * what Stripe actually charges.
+   *
+   * A counter (not a boolean) so an orphaned/stale creation's `endSession
+   * creation` cannot release the lock a newer, still-in-flight creation is
+   * holding (e.g. a remount via stripeResetKey while the previous fetch is
+   * pending). begin/end are the sole owners; every begin is paired with an end
+   * in a `finally`, so the counter self-balances.
    */
-  readonly sessionCreationInFlight = signal<boolean>(false);
+  private readonly sessionCreationCount = signal<number>(0);
+  readonly sessionCreationInFlight = computed(
+    () => this.sessionCreationCount() > 0,
+  );
   readonly stripeResetKey = signal<number>(0);
   readonly guestTermsAccepted = signal<boolean>(false);
 
@@ -128,7 +137,6 @@ export class CheckoutStore {
     this.activeOrderId.set(null);
     this.activeCheckoutSessionId.set(null);
     this.activeConnectedAccountId.set(null);
-    this.sessionCreationInFlight.set(false);
     this.guestEmail.set(null);
     this.guestSessionToken.set(null);
     this.guestTermsAccepted.set(false);
@@ -142,7 +150,6 @@ export class CheckoutStore {
     this.activeOrderId.set(null);
     this.activeCheckoutSessionId.set(null);
     this.activeConnectedAccountId.set(null);
-    this.sessionCreationInFlight.set(false);
     this.guestTermsAccepted.set(false);
   }
 
@@ -152,7 +159,6 @@ export class CheckoutStore {
     this.activeOrderId.set(null);
     this.activeCheckoutSessionId.set(null);
     this.activeConnectedAccountId.set(null);
-    this.sessionCreationInFlight.set(false);
     this.guestTermsAccepted.set(false);
     this.stripeResetKey.update((k) => k + 1);
   }
@@ -162,7 +168,6 @@ export class CheckoutStore {
     this.activeOrderId.set(null);
     this.activeCheckoutSessionId.set(null);
     this.activeConnectedAccountId.set(null);
-    this.sessionCreationInFlight.set(false);
     this.stripeResetKey.update((k) => k + 1);
   }
 
@@ -172,7 +177,6 @@ export class CheckoutStore {
     this.activeOrderId.set(null);
     this.activeCheckoutSessionId.set(null);
     this.activeConnectedAccountId.set(null);
-    this.sessionCreationInFlight.set(false);
   }
 
   /**
@@ -182,11 +186,11 @@ export class CheckoutStore {
    * via the active session id.
    */
   beginSessionCreation(): void {
-    this.sessionCreationInFlight.set(true);
+    this.sessionCreationCount.update((n) => n + 1);
   }
 
   endSessionCreation(): void {
-    this.sessionCreationInFlight.set(false);
+    this.sessionCreationCount.update((n) => Math.max(0, n - 1));
   }
 
   setActiveCheckoutSession(result: {
@@ -200,6 +204,13 @@ export class CheckoutStore {
   }
 
   updateQuantity(delta: number): void {
+    // Structural lock: the controls are disabled via checkoutLocked in the
+    // template, but a zoneless disabled-state race (a synthetic event landing
+    // before the disabled attribute applies) could still fire the handler once
+    // a session is being created. Refuse the mutation so the charged amount can
+    // never drift from the displayed total.
+    if (this.checkoutLocked()) return;
+
     if (this.isResalePurchase()) {
       this.ticketQuantity.set(1);
       return;
@@ -210,6 +221,7 @@ export class CheckoutStore {
   }
 
   selectTier(tier: TicketTier): void {
+    if (this.checkoutLocked()) return;
     if (this.selectedTier() === tier) {
       return;
     }
@@ -232,6 +244,7 @@ export class CheckoutStore {
   }
 
   updateCustomAmountFromSlider(value: number): void {
+    if (this.checkoutLocked()) return;
     // The slider path previously set the amount and cleared the error
     // unconditionally, so a slider whose range exceeded slidingScaleMax could
     // submit an amount the backend rejects. Route it through the same
@@ -240,6 +253,7 @@ export class CheckoutStore {
   }
 
   updateCustomAmountFromInput(value: string): void {
+    if (this.checkoutLocked()) return;
     const val = parseFloat(value);
 
     if (!this.event()) return;
@@ -277,7 +291,16 @@ export class CheckoutStore {
       min = eventData.slidingScaleMin || 0;
       max = eventData.slidingScaleMax ?? null;
     } else if (tier === 'supporter') {
-      min = eventData.supporterDefaultPrice || (eventData.price || 0) + 100;
+      // Mirror the backend floor exactly: max(supporterDefaultPrice, price + 1
+      // cent). Frontend uses price + $1 (stricter than the backend's +1 cent,
+      // so never submittable-but-rejected) and the Math.max guards the case
+      // where a configured supporterDefaultPrice sits at/below the regular
+      // price — without it the frontend would accept an amount the backend's
+      // validateTierPricing rejects. Matches selectTier's supporter floor.
+      min = Math.max(
+        eventData.supporterDefaultPrice || 0,
+        (eventData.price || 0) + 100,
+      );
     } else {
       // Regular tier carries no editable custom amount.
       return;

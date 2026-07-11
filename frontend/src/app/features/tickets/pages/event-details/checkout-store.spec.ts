@@ -140,18 +140,84 @@ describe('CheckoutStore', () => {
       expect(store.checkoutLocked()).toBe(false);
     });
 
-    it('clears the in-flight lock on error/reset paths', () => {
-      store.beginSessionCreation();
-      store.setPaymentError('boom');
+    it('keeps the lock held for a newer creation when a stale creation ends (counter, not boolean)', () => {
+      // A remount (stripeResetKey bump) can start a second creation while the
+      // first is still pending. The stale creation's endSessionCreation must NOT
+      // release the lock the newer creation is holding.
+      store.beginSessionCreation(); // A
+      store.beginSessionCreation(); // B
+      expect(store.checkoutLocked()).toBe(true);
+
+      store.endSessionCreation(); // A resolves
+      expect(store.checkoutLocked()).toBe(true);
+
+      store.endSessionCreation(); // B resolves
+      expect(store.checkoutLocked()).toBe(false);
+    });
+
+    it('never drops below zero when endSessionCreation is over-called', () => {
+      store.endSessionCreation();
+      store.endSessionCreation();
       expect(store.checkoutLocked()).toBe(false);
 
       store.beginSessionCreation();
-      store.retryPayment();
-      expect(store.checkoutLocked()).toBe(false);
+      expect(store.checkoutLocked()).toBe(true);
+    });
+  });
+
+  describe('m25 — structural mutation guards while locked', () => {
+    it('ignores quantity, tier, slider and input changes once creation is in flight', () => {
+      store.selectTier('notaflof');
+      store.updateCustomAmountFromInput('8'); // valid within [5,10]
+      const tierBefore = store.selectedTier();
+      const amountBefore = store.customAmount();
 
       store.beginSessionCreation();
-      store.closeCheckout();
-      expect(store.checkoutLocked()).toBe(false);
+      expect(store.checkoutLocked()).toBe(true);
+
+      store.updateQuantity(1);
+      store.selectTier('supporter');
+      store.updateCustomAmountFromSlider(9);
+      store.updateCustomAmountFromInput('7');
+
+      expect(store.ticketQuantity()).toBe(1);
+      expect(store.selectedTier()).toBe(tierBefore);
+      expect(store.customAmount()).toBe(amountBefore);
+    });
+  });
+
+  describe('m23 — supporter tier floor mirrors the backend', () => {
+    beforeEach(() => {
+      // supporterDefaultPrice ($5) sits below the regular price ($20): the
+      // backend floor is max(supporterDefaultPrice, price + 1) = $20.01, so the
+      // frontend must reject anything below the regular-price + $1 floor.
+      event.set(
+        stubEvent({price: 2000, supporterDefaultPrice: 500}),
+      );
+    });
+
+    it('rejects a supporter amount at supporterDefaultPrice when it is below the regular-price floor', () => {
+      store.selectTier('supporter');
+      store.updateCustomAmountFromInput('5'); // $5 == supporterDefaultPrice, < floor
+
+      expect(store.slidingScaleError()).toBe('Minimum amount is $21.00');
+      expect(store.customAmount()).toBe(500);
+    });
+
+    it('accepts a supporter amount above the regular-price + $1 floor', () => {
+      store.selectTier('supporter');
+      store.updateCustomAmountFromInput('25'); // $25 > $21 floor
+
+      expect(store.slidingScaleError()).toBeNull();
+      expect(store.customAmount()).toBe(2500);
+    });
+
+    it('honours a supporterDefaultPrice above the regular price as the floor', () => {
+      event.set(stubEvent({price: 2000, supporterDefaultPrice: 5000}));
+      store.selectTier('supporter');
+      store.updateCustomAmountFromInput('30'); // $30 < $50 default floor
+
+      expect(store.slidingScaleError()).toBe('Minimum amount is $50.00');
     });
   });
 });
