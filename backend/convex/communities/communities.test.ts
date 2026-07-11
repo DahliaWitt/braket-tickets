@@ -2270,3 +2270,98 @@ describe('update — cascade events on draft transition', () => {
     expect(event?.status).toBe('published');
   });
 });
+
+describe('Community update clearable optional fields', () => {
+  async function seedClearableCommunity(
+    t: ReturnType<typeof convexTest>,
+  ): Promise<{organizerId: Id<'organizers'>; adminId: Id<'users'>}> {
+    const adminId = await t.run(async (ctx) => createRootAdmin(ctx));
+    const admin = t.withIdentity({subject: adminId});
+    const organizerId = await admin.mutation(api.communities.profile.create, {
+      name: 'Clearable Community',
+      email: 'old@example.com',
+      contactInfo: 'Old contact',
+      description: 'Old description',
+      slug: 'old-slug',
+    });
+    // `website` is not a create arg; set it through the update path.
+    await admin.mutation(api.communities.profile.update, {
+      id: organizerId,
+      website: 'https://old.example.com',
+    });
+    return {organizerId, adminId};
+  }
+
+  it('removes email, contactInfo, description, and website when passed null (slug is preserved)', async () => {
+    const t = convexTest();
+    const {organizerId, adminId} = await seedClearableCommunity(t);
+    const admin = t.withIdentity({subject: adminId});
+
+    const before = await t.run(async (ctx) =>
+      ctx.db.get('organizers', organizerId),
+    );
+    expect(before?.email).toBe('old@example.com');
+    expect(before?.contactInfo).toBe('Old contact');
+    expect(before?.description).toBe('Old description');
+    expect(before?.website).toBe('https://old.example.com');
+    expect(before?.slug).toBe('old-slug');
+
+    await admin.mutation(api.communities.profile.update, {
+      id: organizerId,
+      email: null,
+      contactInfo: null,
+      description: null,
+      website: null,
+    });
+
+    const after = await t.run(async (ctx) =>
+      ctx.db.get('organizers', organizerId),
+    );
+    expect(after?.email).toBeUndefined();
+    expect(after?.contactInfo).toBeUndefined();
+    expect(after?.description).toBeUndefined();
+    expect(after?.website).toBeUndefined();
+    // slug is not clearable — it stays as the community's public URL key.
+    expect(after?.slug).toBe('old-slug');
+  });
+
+  it('leaves clearable fields unchanged when their keys are omitted', async () => {
+    const t = convexTest();
+    const {organizerId, adminId} = await seedClearableCommunity(t);
+    const admin = t.withIdentity({subject: adminId});
+
+    await admin.mutation(api.communities.profile.update, {
+      id: organizerId,
+      name: 'Renamed Community',
+    });
+
+    const after = await t.run(async (ctx) =>
+      ctx.db.get('organizers', organizerId),
+    );
+    expect(after?.name).toBe('Renamed Community');
+    expect(after?.email).toBe('old@example.com');
+    expect(after?.contactInfo).toBe('Old contact');
+    expect(after?.description).toBe('Old description');
+    expect(after?.website).toBe('https://old.example.com');
+    expect(after?.slug).toBe('old-slug');
+  });
+
+  it('updates a clearable field to a new value when a value is provided', async () => {
+    const t = convexTest();
+    const {organizerId, adminId} = await seedClearableCommunity(t);
+    const admin = t.withIdentity({subject: adminId});
+
+    await admin.mutation(api.communities.profile.update, {
+      id: organizerId,
+      email: 'new@example.com',
+    });
+
+    const after = await t.run(async (ctx) =>
+      ctx.db.get('organizers', organizerId),
+    );
+    expect(after?.email).toBe('new@example.com');
+    // Untouched clearable fields stay put.
+    expect(after?.contactInfo).toBe('Old contact');
+    expect(after?.website).toBe('https://old.example.com');
+  });
+});

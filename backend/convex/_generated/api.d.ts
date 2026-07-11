@@ -620,9 +620,9 @@ export declare const api: {
         "public",
         {
           codeOfConduct?: string;
-          contactInfo?: string;
-          description?: string;
-          email?: string;
+          contactInfo?: string | null;
+          description?: string | null;
+          email?: string | null;
           id: Id<"organizers">;
           isPublicDirectory?: boolean;
           logoStorageId?: Id<"_storage"> | null;
@@ -636,7 +636,7 @@ export declare const api: {
             required: boolean;
             type: "text" | "long_text" | "boolean" | "select" | "checkbox";
           }>;
-          website?: string;
+          website?: string | null;
         },
         null
       >;
@@ -1522,11 +1522,11 @@ export declare const api: {
             | { mode: "now" }
             | { mode: "scheduled"; scheduledFor: number };
           date?: string;
-          description?: string;
+          description?: string | null;
           endDate?: string | null;
           id: Id<"events">;
-          location?: string;
-          maxTicketsPerUser?: number;
+          location?: string | null;
+          maxTicketsPerUser?: number | null;
           organizerId?: Id<"organizers">;
           poster?: string;
           price?: number;
@@ -1537,7 +1537,7 @@ export declare const api: {
           slidingScaleMax?: number;
           slidingScaleMin?: number;
           status?: "draft" | "published" | "cancelled";
-          supporterDefaultPrice?: number;
+          supporterDefaultPrice?: number | null;
           ticketSalesStatus?: "active" | "paused" | "ended";
           title?: string;
           totalTickets?: number;
