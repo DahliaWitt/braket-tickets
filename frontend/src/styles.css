@@ -32,6 +32,7 @@
   --color-muted-foreground: hsl(var(--muted-foreground));
   --color-accent: hsl(var(--accent));
   --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-accent-text: hsl(var(--accent-text));
   --color-destructive: hsl(var(--destructive));
   --color-destructive-foreground: hsl(var(--destructive-foreground));
   --color-destructive-text: hsl(var(--destructive-text));
@@ -68,6 +69,7 @@
     --muted-foreground: 320 10% 25%;
     --accent: 25 80% 45%; /* Burnt Amber */
     --accent-foreground: 0 0% 100%;
+    --accent-text: 25 80% 32%; /* AA-safe accent text on self-tinted bg-accent/10 underlay (5.10:1 worst case on bg-muted); main --accent (L 45%) only reaches 2.94:1 there, so soft badges need this darker variant */
     --destructive: 0 84% 42%; /* Deep red — AA as text on white (5.5:1) and as button bg with white text (5.5:1); matches success/warning calibration */
     --destructive-foreground: 0 0% 98%;
     --destructive-text: 0 84% 38%; /* AA-safe destructive text on self-tinted bg-destructive/10 underlay (5.08:1 worst case on bg-muted); slightly darker than --destructive so soft badges/alerts pass AA */
@@ -100,6 +102,7 @@
     --muted-foreground: 320 6% 65%;
     --accent: 25 80% 50%; /* Burnt Amber */
     --accent-foreground: 0 0% 100%;
+    --accent-text: 25 80% 60%; /* AA-safe accent text in dark mode — main --accent (L 50%) fails AA on self-tinted bg-accent/10 (3.97:1); this brighter variant passes AA on both (5.00:1 tint worst case on bg-muted, 7.87:1 page) */
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
     --destructive-text: 0 84% 70%; /* AA-safe destructive text in dark mode — main --destructive (L 30.6%) is invisible as text (1.98:1 on page bg); this brighter variant passes AA on self-tinted bg-destructive/10 (5.02:1) and on the page background (7.04:1) */

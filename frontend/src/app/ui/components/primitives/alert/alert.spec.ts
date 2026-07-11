@@ -74,12 +74,26 @@ describe('ZardAlertComponent', () => {
     expect(await harness.descriptionHasClass('text-warning/90')).toBe(false);
   });
 
-  it('should keep the tinted description color on soft appearance', async () => {
+  it('should keep the tinted description color at full opacity on soft appearance', async () => {
     const harness = await setup(
       `<z-alert zType="success" zAppearance="soft" zTitle="Done" zDescription="Saved" />`,
     );
-    expect(await harness.descriptionHasClass('text-success/90')).toBe(true);
+    expect(await harness.descriptionHasClass('text-success')).toBe(true);
+    // AA-calibrated text tokens are never alpha-modified — /90 drops below AA
+    expect(await harness.descriptionHasClass('text-success/90')).toBe(false);
     expect(await harness.descriptionHasClass('text-success-foreground')).toBe(
+      false,
+    );
+  });
+
+  it('should keep the destructive text token at full opacity on error descriptions', async () => {
+    const harness = await setup(
+      `<z-alert zType="error" zTitle="Failed" zDescription="Try again" />`,
+    );
+    expect(await harness.descriptionHasClass('text-destructive-text')).toBe(
+      true,
+    );
+    expect(await harness.descriptionHasClass('text-destructive-text/90')).toBe(
       false,
     );
   });
