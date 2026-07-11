@@ -556,6 +556,36 @@ describe('CommunityAdminSettingsComponent', () => {
       expect(await harness.isStripeOnboardingIncomplete()).toBe(false);
     });
 
+    it('conveys Stripe charges/payouts/user-steps state as visible text, not dot color alone', async () => {
+      const {fixture, harness} = await setup({
+        organizerData: {
+          _id: FAKE_ORG_ID,
+          name: 'Test Community',
+          email: 'test@example.com',
+          contactInfo: 'Call us',
+          vettingQuestions: [],
+          stripeConnectedAccountId: 'acct_existing',
+          stripeOnboardingStatus: 'in_progress',
+          stripeChargesEnabled: true,
+          stripePayoutsEnabled: false,
+          organizerPaymentReady: false,
+        },
+      });
+
+      fixture.componentInstance.stripeStatus.set({
+        chargesEnabled: true,
+        payoutsEnabled: false,
+        userRequirementsClear: false,
+      });
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(await harness.getStripeChargesStateText()).toBe('enabled');
+      expect(await harness.getStripePayoutsStateText()).toBe('pending');
+      expect(await harness.getStripeUserStepsStateText()).toBe('pending');
+    });
+
     it('shows "Continue Setup on Stripe" CTA for connected-but-incomplete account (BRA-393)', async () => {
       const {fixture} = await setup({
         organizerData: {
