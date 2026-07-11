@@ -152,10 +152,9 @@ describe('notification_digests.sendDailyDigests', () => {
             name: `Admin ${i}`,
             email: `admin-${i}@test.com`,
           })
-        : await t.run(async (ctx) =>
-            // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- emailless admins intentionally bail before enqueueEmailDelivery; production mutation requires email
-            ctx.db.insert('users', {name: `Admin ${i}`}),
-          );
+        : await t.mutation(api.testing.users.seedEmaillessUser, {
+            name: `Admin ${i}`,
+          });
       const applicantUserId = await t.mutation(
         api.testing.users.createUserDirectly,
         {
@@ -232,10 +231,9 @@ describe('notification_digests.sendDailyDigests', () => {
             name: `Admin ${i}`,
             email: `boundary-admin-${i}@test.com`,
           })
-        : await t.run(async (ctx) =>
-            // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- emailless admins intentionally bail before enqueueEmailDelivery; production mutation requires email
-            ctx.db.insert('users', {name: `Admin ${i}`}),
-          );
+        : await t.mutation(api.testing.users.seedEmaillessUser, {
+            name: `Admin ${i}`,
+          });
       const applicantUserId = await t.mutation(
         api.testing.users.createUserDirectly,
         {

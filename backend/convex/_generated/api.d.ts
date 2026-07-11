@@ -3157,6 +3157,12 @@ export declare const api: {
         { email: string; name?: string },
         Id<"users">
       >;
+      seedEmaillessUser: FunctionReference<
+        "mutation",
+        "public",
+        { name: string },
+        Id<"users">
+      >;
       setRootAdminStatus: FunctionReference<
         "mutation",
         "public",
