@@ -1,5 +1,6 @@
 import {type ComponentFixture, TestBed} from '@angular/core/testing';
 import {provideZonelessChangeDetection, signal} from '@angular/core';
+import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
 import {
   ActivatedRoute,
   Router,
@@ -9,6 +10,7 @@ import {
 import {of} from 'rxjs';
 import {describe, expect, it, vi} from 'vitest';
 import {ConfirmVerificationComponent} from './confirm-verification.component';
+import {ConfirmVerificationComponentHarness} from './confirm-verification.component.harness';
 import {AuthService} from '@/core/services/auth.service';
 
 describe('ConfirmVerificationComponent', () => {
@@ -168,6 +170,38 @@ describe('ConfirmVerificationComponent', () => {
       'Verification did not create a signed-in session.',
     );
     expect(routerMock.navigateByUrl).not.toHaveBeenCalled();
+  });
+
+  it('shows an expired-link error for a TOKEN_EXPIRED callback without touching verification APIs', async () => {
+    await setupComponent({error: 'TOKEN_EXPIRED'});
+    await renderAndSettle();
+
+    expect(authServiceMock.confirmVerification).not.toHaveBeenCalled();
+    expect(authServiceMock.handleOAuthCallback).not.toHaveBeenCalled();
+    expect(component.state()).toBe('error');
+    expect(component.error()).toBe(
+      'This verification link has expired. Please sign in and request a new one.',
+    );
+    expect(routerMock.navigateByUrl).not.toHaveBeenCalled();
+
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      ConfirmVerificationComponentHarness,
+    );
+    expect(await harness.isError()).toBe(true);
+    expect(await harness.getErrorText()).toBe(
+      'This verification link has expired. Please sign in and request a new one.',
+    );
+  });
+
+  it('shows an invalid-link error for a non-expiry error code', async () => {
+    await setupComponent({error: 'INVALID_TOKEN'});
+    await renderAndSettle();
+
+    expect(component.state()).toBe('error');
+    expect(component.error()).toBe(
+      'This verification link is invalid or has already been used. Please sign in and request a new one.',
+    );
   });
 
   it('waits for authenticated user data before redirecting after verification', async () => {
