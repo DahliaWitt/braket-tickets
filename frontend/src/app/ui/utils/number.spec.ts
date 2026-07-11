@@ -1,4 +1,4 @@
-import { clamp, roundToStep, convertValueToPercentage } from './number';
+import { clamp, roundToStep, roundToStepClamped, convertValueToPercentage } from './number';
 
 describe('number utils', () => {
   describe('clamp', () => {
@@ -70,6 +70,31 @@ describe('number utils', () => {
     it('should return exact value when already on step', () => {
       expect(roundToStep(10, 0, 5)).toBe(10);
       expect(roundToStep(15, 5, 10)).toBe(15);
+    });
+
+    it('can overshoot max when the range is not a whole number of steps', () => {
+      // Documents the hazard roundToStepClamped exists to guard against.
+      expect(roundToStep(10, 0, 4)).toBe(12); // above max of 10
+    });
+  });
+
+  describe('roundToStepClamped', () => {
+    it('matches roundToStep when the rounded value stays in range', () => {
+      expect(roundToStepClamped(7, 0, 100, 5)).toBe(5);
+      expect(roundToStepClamped(8, 0, 100, 5)).toBe(10);
+      expect(roundToStepClamped(12, 5, 100, 10)).toBe(15);
+    });
+
+    it('clamps to max when step-rounding overshoots the top of the range', () => {
+      // (max - min) / step = 10 / 4 = 2.5 → rounds to 12, must clamp to 10.
+      expect(roundToStepClamped(10, 0, 10, 4)).toBe(10);
+      // Fractional checkout range: (25.5 - 10) / 1 = 15.5 → 26, clamp to 25.5.
+      expect(roundToStepClamped(25.5, 10, 25.5, 1)).toBe(25.5);
+    });
+
+    it('clamps to min when the value falls below the range', () => {
+      expect(roundToStepClamped(-3, 0, 10, 4)).toBe(0);
+      expect(roundToStepClamped(8, 10, 25.5, 1)).toBe(10);
     });
   });
 

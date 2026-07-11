@@ -220,6 +220,179 @@ describe('ZardSliderComponent', () => {
     expect(host.slideChanges()).toEqual([20, 80]);
   });
 
+  describe('when the range is not a whole number of steps', () => {
+    // (zMax - zMin) / zStep = 10 / 4 = 2.5, so rounding the top of the track
+    // (raw = 10) lands on step index 3 → 12, which overshoots zMax (10) unless
+    // the rounded value is clamped back into [zMin, zMax].
+    it('clamps a pointer drag to zMax instead of emitting an above-max value', async () => {
+      host.min.set(0);
+      host.max.set(10);
+      host.step.set(4);
+      mockSliderRect({ left: 0, top: 0, width: 200, height: 40 });
+      fixture.detectChanges();
+
+      const slider = getSliderComponent();
+      dispatchPointerEvent('pointerdown', slider.trackRef().nativeElement, {
+        clientX: 40,
+        clientY: 20,
+      });
+      // Drag past the right edge of the track (raw = zMax).
+      dispatchPointerEvent('pointermove', document, { clientX: 260, clientY: 20 });
+      dispatchPointerEvent('pointerup', document);
+      fixture.detectChanges();
+
+      const harness = await loader.getHarness(ZardSliderHarness);
+      const value = await harness.getValue();
+      const max = await harness.getMax();
+      const min = await harness.getMin();
+
+      expect(value).toBe(10); // zMax is reachable, not 12
+      expect(value).toBeLessThanOrEqual(max);
+      expect(value).toBeGreaterThanOrEqual(min);
+      // Every emitted value stays within [zMin, zMax].
+      for (const emitted of host.slideChanges()) {
+        expect(emitted).toBeLessThanOrEqual(10);
+        expect(emitted).toBeGreaterThanOrEqual(0);
+      }
+      // Thumb never renders past the end of the track (would be 120% pre-fix).
+      expect(slider.percentValue()).toBeLessThanOrEqual(100);
+    });
+
+    it('clamps a track click at the far end to zMax', async () => {
+      host.min.set(0);
+      host.max.set(10);
+      host.step.set(4);
+      mockSliderRect({ left: 0, top: 0, width: 200, height: 40 });
+      fixture.detectChanges();
+
+      const slider = getSliderComponent();
+      dispatchPointerEvent('pointerdown', slider.trackRef().nativeElement, {
+        clientX: 200,
+        clientY: 20,
+      });
+      fixture.detectChanges();
+
+      const harness = await loader.getHarness(ZardSliderHarness);
+      expect(await harness.getValue()).toBe(10);
+      expect(host.slideChanges()).toEqual([10]);
+      expect(slider.percentValue()).toBeLessThanOrEqual(100);
+    });
+
+    it('clamps rounded values in writeValue', () => {
+      host.min.set(0);
+      host.max.set(10);
+      host.step.set(4);
+      fixture.detectChanges();
+
+      const slider = getSliderComponent();
+      slider.writeValue(10);
+
+      expect(slider.lastEmittedValue()).toBe(10); // not 12
+      expect(slider.percentValue()).toBe(100); // not 120
+    });
+
+    it('keyboard stepping from an off-grid zMax snaps to the grid and stays in range', async () => {
+      host.min.set(0);
+      host.max.set(10);
+      host.step.set(4); // grid {0, 4, 8}; zMax (10) is off-grid
+      host.value.set(10);
+      fixture.detectChanges();
+
+      const slider = getSliderComponent();
+      const harness = await loader.getHarness(ZardSliderHarness);
+
+      // Thumb starts at zMax (10). ArrowLeft must snap to the nearest grid value
+      // below the ceiling (8), matching native <input type=range> step-down —
+      // never below zMin, never off-grid at 6.
+      slider.handleKeydown(new KeyboardEvent('keydown', { key: 'ArrowLeft' }));
+      fixture.detectChanges();
+      expect(await harness.getValue()).toBe(8);
+
+      // ArrowRight climbs back and clamps to zMax, which stays reachable.
+      slider.handleKeydown(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+      fixture.detectChanges();
+      expect(await harness.getValue()).toBe(10);
+
+      // Home/End reach the exact bounds.
+      slider.handleKeydown(new KeyboardEvent('keydown', { key: 'Home' }));
+      fixture.detectChanges();
+      expect(await harness.getValue()).toBe(0);
+      slider.handleKeydown(new KeyboardEvent('keydown', { key: 'End' }));
+      fixture.detectChanges();
+      expect(await harness.getValue()).toBe(10);
+
+      for (const emitted of host.slideChanges()) {
+        expect(emitted).toBeLessThanOrEqual(10);
+        expect(emitted).toBeGreaterThanOrEqual(0);
+      }
+    });
+
+    it('clamps a vertical drag to the top of the track to zMax', async () => {
+      host.orientation.set('vertical');
+      host.min.set(0);
+      host.max.set(10);
+      host.step.set(4);
+      mockSliderRect({ left: 0, top: 0, width: 40, height: 200 });
+      fixture.detectChanges();
+
+      const slider = getSliderComponent();
+      // clientY above the track top → percentage clamps to 1 (raw = zMax).
+      dispatchPointerEvent('pointerdown', slider.trackRef().nativeElement, {
+        clientX: 10,
+        clientY: -20,
+      });
+      fixture.detectChanges();
+
+      const harness = await loader.getHarness(ZardSliderHarness);
+      expect(await harness.getValue()).toBe(10);
+      expect(await harness.getValue()).toBeLessThanOrEqual(await harness.getMax());
+      expect(slider.percentValue()).toBeLessThanOrEqual(100);
+      expect(host.slideChanges()).toEqual([10]);
+    });
+
+    it('clamps to zMax for a fractional checkout range and respects zMin', async () => {
+      // Sliding-scale checkout: price $25.50, min $10, step $1.
+      // (25.5 - 10) / 1 = 15.5 → rounds to 26, above zMax without clamping.
+      host.min.set(10);
+      host.max.set(25.5);
+      host.step.set(1);
+      mockSliderRect({ left: 0, top: 0, width: 200, height: 40 });
+      fixture.detectChanges();
+
+      const slider = getSliderComponent();
+      const harness = await loader.getHarness(ZardSliderHarness);
+
+      // Far right → clamp to zMax (25.5), not 26.
+      dispatchPointerEvent('pointerdown', slider.trackRef().nativeElement, {
+        clientX: 200,
+        clientY: 20,
+      });
+      fixture.detectChanges();
+      expect(await harness.getValue()).toBe(25.5);
+      expect(await harness.getValue()).toBeLessThanOrEqual(await harness.getMax());
+      expect(slider.percentValue()).toBeLessThanOrEqual(100);
+
+      // Far left → clamp to zMin (10).
+      dispatchPointerEvent('pointerdown', slider.trackRef().nativeElement, {
+        clientX: 0,
+        clientY: 20,
+      });
+      fixture.detectChanges();
+      expect(await harness.getValue()).toBe(10);
+      expect(await harness.getValue()).toBeGreaterThanOrEqual(await harness.getMin());
+
+      // End reaches the exact (off-grid) zMax — the checkout price ceiling.
+      slider.handleKeydown(new KeyboardEvent('keydown', { key: 'End' }));
+      fixture.detectChanges();
+      expect(await harness.getValue()).toBe(25.5);
+
+      for (const emitted of host.slideChanges()) {
+        expect(emitted).toBeLessThanOrEqual(25.5);
+        expect(emitted).toBeGreaterThanOrEqual(10);
+      }
+    });
+  });
+
   it('should calculate vertical percentage from Y coordinate', async () => {
     host.orientation.set('vertical');
     host.step.set(5);

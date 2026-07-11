@@ -10,6 +10,16 @@ export class ZardSliderHarness extends ComponentHarness {
     return Number(await thumb.getAttribute('aria-valuenow'));
   }
 
+  async getMax(): Promise<number> {
+    const thumb = await this.thumb();
+    return Number(await thumb.getAttribute('aria-valuemax'));
+  }
+
+  async getMin(): Promise<number> {
+    const thumb = await this.thumb();
+    return Number(await thumb.getAttribute('aria-valuemin'));
+  }
+
   async isDisabled(): Promise<boolean> {
     const host = await this.host();
     return (await host.getAttribute('aria-disabled')) === 'true';
