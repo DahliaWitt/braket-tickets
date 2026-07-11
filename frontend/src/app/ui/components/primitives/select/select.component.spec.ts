@@ -7,7 +7,7 @@ import {
   signal,
 } from '@angular/core';
 import {type ComponentFixture, TestBed} from '@angular/core/testing';
-import {By} from '@angular/platform-browser';
+import {By, EVENT_MANAGER_PLUGINS} from '@angular/platform-browser';
 import {vi} from 'vitest';
 import {ZardSelectItemComponent} from './select-item.component';
 import {ZardSelectComponent} from './select.component';
@@ -15,6 +15,7 @@ import {
   ZardSelectHarness,
   ZardSelectItemHarness,
 } from './select.component.harness';
+import {BraEventManagerPlugin} from '@/ui/core/provider/event-manager-plugins/bra-event-manager-plugin';
 import {logger} from '@/utils/logger';
 
 @Component({
@@ -412,5 +413,112 @@ describe('ZardSelectComponent', () => {
       expect.any(HTMLElement),
     );
     expect(component.lastSelection()).toBeNull();
+  });
+});
+
+describe('ZardSelectComponent dropdown Escape propagation', () => {
+  let fixture: ComponentFixture<TestHostComponent>;
+  let loader: HarnessLoader;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [TestHostComponent],
+      providers: [
+        provideZonelessChangeDetection(),
+        // The `.prevent-with-stop` template modifier is applied by this plugin,
+        // so it must be registered for the real keydown binding to fire.
+        {
+          provide: EVENT_MANAGER_PLUGINS,
+          useClass: BraEventManagerPlugin,
+          multi: true,
+        },
+      ],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(TestHostComponent);
+    fixture.detectChanges();
+    loader = TestbedHarnessEnvironment.loader(fixture);
+  });
+
+  it('stops Escape from bubbling out of the open dropdown so a host dialog is not closed', async () => {
+    const select = await loader.getHarness(ZardSelectHarness);
+    await select.clickTrigger();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(await select.isOpen()).toBe(true);
+
+    // An ancestor (e.g. the host dialog's document-body-level Escape handling)
+    // must never observe an Escape that the open dropdown consumes. The panel
+    // carrying the keydown binding renders in the CDK overlay container, so the
+    // harness reaches it and dispatches Escape through `dispatchEscapeFromPanel`.
+    let ancestorReceivedEscape = false;
+    const ancestorListener = (event: Event) => {
+      if ((event as KeyboardEvent).key === 'Escape') {
+        ancestorReceivedEscape = true;
+      }
+    };
+    document.body.addEventListener('keydown', ancestorListener);
+    try {
+      await select.dispatchEscapeFromPanel();
+    } finally {
+      document.body.removeEventListener('keydown', ancestorListener);
+    }
+
+    expect(ancestorReceivedEscape).toBe(false);
+
+    // The dropdown still handles Escape locally and closes itself.
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(await select.isOpen()).toBe(false);
+  });
+
+  it('stops Escape from the focused trigger while the dropdown is open', async () => {
+    const select = await loader.getHarness(ZardSelectHarness);
+    await select.clickTrigger();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(await select.isOpen()).toBe(true);
+
+    // The focused trigger consumes Escape while the dropdown is open, so an
+    // ancestor Escape handler must not observe it.
+    let ancestorReceivedEscape = false;
+    const ancestorListener = (event: Event) => {
+      if ((event as KeyboardEvent).key === 'Escape') {
+        ancestorReceivedEscape = true;
+      }
+    };
+    document.body.addEventListener('keydown', ancestorListener);
+    try {
+      await select.dispatchEscapeFromTrigger();
+    } finally {
+      document.body.removeEventListener('keydown', ancestorListener);
+    }
+
+    expect(ancestorReceivedEscape).toBe(false);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(await select.isOpen()).toBe(false);
+  });
+
+  it('lets Escape propagate from the trigger when the dropdown is closed', async () => {
+    const select = await loader.getHarness(ZardSelectHarness);
+    expect(await select.isOpen()).toBe(false);
+
+    // A closed select must not swallow Escape — a host dialog still needs to
+    // close on Escape when focus rests on the (closed) select trigger.
+    let ancestorReceivedEscape = false;
+    const ancestorListener = (event: Event) => {
+      if ((event as KeyboardEvent).key === 'Escape') {
+        ancestorReceivedEscape = true;
+      }
+    };
+    document.body.addEventListener('keydown', ancestorListener);
+    try {
+      await select.dispatchEscapeFromTrigger();
+    } finally {
+      document.body.removeEventListener('keydown', ancestorListener);
+    }
+
+    expect(ancestorReceivedEscape).toBe(true);
   });
 });
