@@ -1,5 +1,5 @@
-import { OverlayModule } from '@angular/cdk/overlay';
-import { PortalModule } from '@angular/cdk/portal';
+import {OverlayModule} from '@angular/cdk/overlay';
+import {PortalModule} from '@angular/cdk/portal';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -7,12 +7,12 @@ import {
   type Renderer2,
   signal,
 } from '@angular/core';
-import { type ComponentFixture, TestBed } from '@angular/core/testing';
-import { By } from '@angular/platform-browser';
-import { Subject } from 'rxjs';
-import { vi } from 'vitest';
-import { ZardTooltipDirective } from './tooltip';
-import { type ZardTooltipPositionVariants } from './tooltip.variants';
+import {type ComponentFixture, TestBed} from '@angular/core/testing';
+import {By} from '@angular/platform-browser';
+import {Subject} from 'rxjs';
+import {vi} from 'vitest';
+import {ZardTooltipDirective} from './tooltip';
+import {type ZardTooltipPositionVariants} from './tooltip.variants';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -74,8 +74,12 @@ interface TooltipDirectiveTestApi {
 
 interface TooltipComponentRefStub {
   instance: {
-    setProps: (text: string, position: ZardTooltipPositionVariants, tooltipId?: string) => void;
-    state: { set: (state: 'closed' | 'opened') => void };
+    setProps: (
+      text: string,
+      position: ZardTooltipPositionVariants,
+      tooltipId?: string,
+    ) => void;
+    state: {set: (state: 'closed' | 'opened') => void};
   };
   onDestroy: (callback: () => void) => void;
 }
@@ -93,7 +97,8 @@ describe('ZardTooltipDirective', () => {
     getDirective() as unknown as TooltipDirectiveTestApi;
 
   const getTriggerButton = (): HTMLButtonElement =>
-    fixture.debugElement.query(By.css('button')).nativeElement as HTMLButtonElement;
+    fixture.debugElement.query(By.css('button'))
+      .nativeElement as HTMLButtonElement;
 
   const createOverlayStub = (
     hasAttached = false,
@@ -112,7 +117,7 @@ describe('ZardTooltipDirective', () => {
     const componentRef: TooltipComponentRefStub = {
       instance: {
         setProps: setPropsSpy,
-        state: { set: stateSetSpy },
+        state: {set: stateSetSpy},
       },
       onDestroy: (callback: () => void) => {
         onDestroyCallbacks.push(callback);
@@ -127,7 +132,7 @@ describe('ZardTooltipDirective', () => {
       outsidePointerEvents: vi.fn(() => new Subject<PointerEvent>()),
     };
 
-    return { overlayRef, componentRef, setPropsSpy, stateSetSpy, detachSpy };
+    return {overlayRef, componentRef, setPropsSpy, stateSetSpy, detachSpy};
   };
 
   beforeEach(async () => {
@@ -147,20 +152,38 @@ describe('ZardTooltipDirective', () => {
     vi.restoreAllMocks();
   });
 
+  it('should not force a pointer cursor for hover-triggered tooltips', () => {
+    host.trigger.set('hover');
+    fixture.detectChanges();
+
+    expect(getTriggerButton().style.cursor).toBe('');
+  });
+
+  it('should apply a pointer cursor for click-triggered tooltips', () => {
+    host.trigger.set('click');
+    fixture.detectChanges();
+
+    expect(getTriggerButton().style.cursor).toBe('pointer');
+  });
+
   it('should show tooltip content and set aria-describedby', () => {
     host.tooltip.set('  Helpful details  ');
     host.position.set('right');
     fixture.detectChanges();
 
     const api = getDirectiveApi();
-    const { overlayRef, setPropsSpy, stateSetSpy } = createOverlayStub();
+    const {overlayRef, setPropsSpy, stateSetSpy} = createOverlayStub();
     api.overlayRef = overlayRef;
 
     api.show();
     fixture.detectChanges();
 
     expect(overlayRef?.attach).toHaveBeenCalledTimes(1);
-    expect(setPropsSpy).toHaveBeenCalledWith('Helpful details', 'right', expect.any(String));
+    expect(setPropsSpy).toHaveBeenCalledWith(
+      'Helpful details',
+      'right',
+      expect.any(String),
+    );
     expect(stateSetSpy).toHaveBeenCalledWith('opened');
 
     const tooltipId = setPropsSpy.mock.calls[0]?.[2] as string;
@@ -170,7 +193,8 @@ describe('ZardTooltipDirective', () => {
 
   it('should hide tooltip, clear aria-describedby, and emit hide', () => {
     const api = getDirectiveApi();
-    const { overlayRef, componentRef, stateSetSpy, detachSpy } = createOverlayStub();
+    const {overlayRef, componentRef, stateSetSpy, detachSpy} =
+      createOverlayStub();
     api.overlayRef = overlayRef;
     api.componentRef = componentRef;
     getTriggerButton().setAttribute('aria-describedby', 'z-tooltip-test');
@@ -189,7 +213,7 @@ describe('ZardTooltipDirective', () => {
     fixture.detectChanges();
 
     const api = getDirectiveApi();
-    const { overlayRef } = createOverlayStub();
+    const {overlayRef} = createOverlayStub();
     api.overlayRef = overlayRef;
 
     api.show();
@@ -202,7 +226,7 @@ describe('ZardTooltipDirective', () => {
     fixture.detectChanges();
 
     const api = getDirectiveApi();
-    const { overlayRef } = createOverlayStub();
+    const {overlayRef} = createOverlayStub();
     api.overlayRef = overlayRef;
 
     api.show();
@@ -235,17 +259,19 @@ describe('ZardTooltipDirective', () => {
     fixture.detectChanges();
 
     const api = getDirectiveApi();
-    const { overlayRef } = createOverlayStub(false);
+    const {overlayRef} = createOverlayStub(false);
     const delaySpy = vi.spyOn(api, 'delay');
     api.overlayRef = overlayRef;
 
     let clickHandler: (() => void) | undefined;
-    vi.spyOn(api.renderer, 'listen').mockImplementation((_, eventName, callback) => {
-      if (eventName === 'click') {
-        clickHandler = callback as () => void;
-      }
-      return vi.fn();
-    });
+    vi.spyOn(api.renderer, 'listen').mockImplementation(
+      (_, eventName, callback) => {
+        if (eventName === 'click') {
+          clickHandler = callback as () => void;
+        }
+        return vi.fn();
+      },
+    );
 
     api.initClickListeners();
     clickHandler?.();
@@ -266,10 +292,12 @@ describe('ZardTooltipDirective', () => {
     const delaySpy = vi.spyOn(api, 'delay');
     const handlers: Record<string, () => void> = {};
 
-    vi.spyOn(api.renderer, 'listen').mockImplementation((_, eventName, callback) => {
-      handlers[eventName] = callback as () => void;
-      return vi.fn();
-    });
+    vi.spyOn(api.renderer, 'listen').mockImplementation(
+      (_, eventName, callback) => {
+        handlers[eventName] = callback as () => void;
+        return vi.fn();
+      },
+    );
 
     api.initHoverListeners();
     handlers.mouseenter?.();
@@ -302,12 +330,14 @@ describe('ZardTooltipDirective', () => {
     const delaySpy = vi.spyOn(api, 'delay');
     let scrollHandler: (() => void) | undefined;
 
-    vi.spyOn(api.renderer, 'listen').mockImplementation((_, eventName, callback) => {
-      if (eventName === 'scroll') {
-        scrollHandler = callback as () => void;
-      }
-      return vi.fn();
-    });
+    vi.spyOn(api.renderer, 'listen').mockImplementation(
+      (_, eventName, callback) => {
+        if (eventName === 'scroll') {
+          scrollHandler = callback as () => void;
+        }
+        return vi.fn();
+      },
+    );
 
     api.initScrollListener();
     expect(scrollHandler).toBeDefined();

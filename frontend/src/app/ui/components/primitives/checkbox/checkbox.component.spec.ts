@@ -51,6 +51,11 @@ describe('ZardCheckboxComponent', () => {
     expect(await harness.isChecked()).toBe(false);
   });
 
+  it('should not hardcode a name attribute on the native input', async () => {
+    // A shared "checkbox" name collides in native form serialization.
+    expect(await harness.getInputName()).toBeNull();
+  });
+
   it('should toggle state when clicked', async () => {
     await harness.toggle();
     expect(await harness.isChecked()).toBe(true);
