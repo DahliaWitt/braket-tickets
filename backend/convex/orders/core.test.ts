@@ -1165,6 +1165,151 @@ describe('orders', () => {
     ).rejects.toThrow('No resale tickets are available');
   });
 
+  it('resale checkout retry resumes the buyer own held listing instead of rejecting it', async () => {
+    const t = convexTest();
+    const sellerId = await createUser(
+      t,
+      'Resume Seller',
+      'resume-seller@example.com',
+    );
+    const buyerId = await createUser(
+      t,
+      'Resume Buyer',
+      'resume-buyer@example.com',
+    );
+    const {eventId} = await createEventWithInventory(t, {
+      totalTickets: 1,
+      resaleEnabled: true,
+    });
+    const listingId = await createResaleListing(t, {sellerId, eventId});
+    const asBuyer = t.withIdentity({subject: buyerId});
+
+    const first = await asBuyer.mutation(api.orders.core.openResale, {
+      eventId,
+      tier: 'regular',
+      totalAmount: 2500,
+    });
+
+    // Buyer re-enters checkout (reload / retry) while their own hold still
+    // pins the only listing to `pending`. Previously this threw
+    // LISTING_UNAVAILABLE; it must now resume the same order.
+    const second = await asBuyer.mutation(api.orders.core.openResale, {
+      eventId,
+      tier: 'regular',
+      totalAmount: 2500,
+    });
+
+    expect(second.orderId).toBe(first.orderId);
+
+    const listing = await t.run(async (ctx) =>
+      ctx.db.get('resale_listings', listingId),
+    );
+    expect(listing?.status).toBe('pending');
+    expect(listing?.pendingOrderId).toBe(first.orderId);
+    expect(listing?.buyerId).toBe(buyerId);
+
+    const openOrders = await t.run(async (ctx) =>
+      ctx.db
+        .query('ticket_orders')
+        .withIndex('by_owner_user_event_state', (q) =>
+          q.eq('userId', buyerId).eq('eventId', eventId).eq('state', 'open'),
+        )
+        .take(10),
+    );
+    expect(openOrders).toHaveLength(1);
+    expect(openOrders[0]?._id).toBe(first.orderId);
+  });
+
+  it('resale checkout rejects a different buyer while the sole listing is held', async () => {
+    const t = convexTest();
+    const sellerId = await createUser(
+      t,
+      'Contested Seller',
+      'contested-seller@example.com',
+    );
+    const firstBuyerId = await createUser(
+      t,
+      'First Buyer',
+      'first-buyer@example.com',
+    );
+    const secondBuyerId = await createUser(
+      t,
+      'Second Buyer',
+      'second-buyer@example.com',
+    );
+    const {eventId} = await createEventWithInventory(t, {
+      totalTickets: 1,
+      resaleEnabled: true,
+    });
+    const listingId = await createResaleListing(t, {sellerId, eventId});
+
+    const firstResult = await t
+      .withIdentity({subject: firstBuyerId})
+      .mutation(api.orders.core.openResale, {
+        eventId,
+        tier: 'regular',
+        totalAmount: 2500,
+      });
+
+    await expect(
+      t.withIdentity({subject: secondBuyerId}).mutation(
+        api.orders.core.openResale,
+        {
+          eventId,
+          tier: 'regular',
+          totalAmount: 2500,
+        },
+      ),
+    ).rejects.toThrow('No resale tickets are available');
+
+    // The first buyer's hold is untouched by the rejected contender.
+    const listing = await t.run(async (ctx) =>
+      ctx.db.get('resale_listings', listingId),
+    );
+    expect(listing?.status).toBe('pending');
+    expect(listing?.pendingOrderId).toBe(firstResult.orderId);
+    expect(listing?.buyerId).toBe(firstBuyerId);
+  });
+
+  it('resale checkout retry stays rejected when the held listing is no longer pending', async () => {
+    const t = convexTest();
+    const sellerId = await createUser(
+      t,
+      'Sold Seller',
+      'sold-seller@example.com',
+    );
+    const buyerId = await createUser(t, 'Sold Buyer', 'sold-buyer@example.com');
+    const {eventId} = await createEventWithInventory(t, {
+      totalTickets: 1,
+      resaleEnabled: true,
+    });
+    const listingId = await createResaleListing(t, {sellerId, eventId});
+    const asBuyer = t.withIdentity({subject: buyerId});
+
+    await asBuyer.mutation(api.orders.core.openResale, {
+      eventId,
+      tier: 'regular',
+      totalAmount: 2500,
+    });
+
+    // Simulate the listing leaving `pending` (e.g. it settled/sold to another
+    // path) while the buyer's original order still exists. The resume path is
+    // gated on the listing being pending, so the retry must not resurrect it —
+    // and with no other `listed` listing the retry stays rejected.
+    await t.mutation(api.testing.resale.setResaleListingStatus, {
+      listingId,
+      status: 'completed',
+    });
+
+    await expect(
+      asBuyer.mutation(api.orders.core.openResale, {
+        eventId,
+        tier: 'regular',
+        totalAmount: 2500,
+      }),
+    ).rejects.toThrow('No resale tickets are available');
+  });
+
   it('resale settlement issues the buyer ticket with the canonical order link', async () => {
     const t = convexTest();
     const sellerId = await createUser(
