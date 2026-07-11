@@ -203,6 +203,40 @@ Worst-case read budget: ~13,000 documents (well under 16,384 transaction limit).
 | Missing unsubscribe headers | Check `ticketPurchaseReminderTemplate` in `backend/convex/email/templates.ts` — should include `List-Unsubscribe` and `List-Unsubscribe-Post` headers.                 |
 | Send history missing        | Check `ticketReminderSends` table for the event. If empty, the mutation may have rolled back (rate limit or other error after dedup).                                  |
 
+## Rich email bodies and inline images
+
+**Symptom:** A broadcast or ticket-reminder send fails with a validation error, a delivered email shows a broken inline image, or `/api/images/*` returns unexpected 404s.
+
+Source of truth:
+
+- `backend/convex/lib/email/rich_text_validator.ts` — fail-closed structural validation of the client `bodyJson` (allowlisted nodes/marks, URL schemes, size/depth caps)
+- `backend/convex/lib/email/rich_text_render.ts` — pure-JS serializer to inline-styled email HTML (no DOM/TipTap at runtime; `rich_text_render.oracle.test.ts` pins it to TipTap's reference output)
+- `backend/convex/lib/email/rich_text_images.ts` — sender-ownership gate, publish registry writes, durable URL construction
+- `backend/convex/http/_impl/images.ts` — the public image route handler (registered in `backend/convex/http.ts`)
+- `shared/email/rich-text-schema.ts` — the node/mark/scheme allowlist shared by editor, validator, and renderer (drift-tested on both sides)
+
+### How inline images work
+
+1. The composer uploads through `generateUploadUrl` → `confirmUpload` (magic-byte validated); the editor stores the **storage id** in the document — never a URL. The signed `getUrl` result is composer-preview only.
+2. At send time the mutation verifies every image id is a confirmed upload **owned by the sender**, renders the body once, and registers each id in `richEmailImages` — all in the same transaction as the send.
+3. Emails reference images as `GET {api-site-base}/api/images/{storageId}` (the `CONVEX_SITE_URL` domain, same base as the unsubscribe routes). The route is public (email clients are unauthenticated) but serves **only** ids present in `richEmailImages`; everything else 404s. Content type is clamped to the image allowlist and served with `nosniff`.
+
+### Invariants
+
+- **Published images are pinned.** `cleanupReplacedUpload` (`backend/convex/lib/upload_validation.ts`) skips any storage id present in `richEmailImages`, so replacing an event poster/community logo that was also emailed never breaks a delivered email. Do not delete blobs referenced by `richEmailImages` manually; their lifecycle belongs to the (planned) email-image GC.
+- **Stored `bodyJson` is the sanitized document**, not the raw client string — signed preview URLs and stripped attributes are never persisted.
+- **Size caps:** `bodyJson` ≤ 32KB and rendered HTML ≤ 32KB (`MAX_RICH_EMAIL_BODY_JSON_BYTES` / `MAX_RICH_EMAIL_RENDERED_HTML_BYTES` in `shared/constants.ts`); extracted plain text ≤ 5000 chars. All enforced before the dedup slot burns, so a rejected send can be corrected and retried with the same subject.
+
+### Troubleshooting
+
+| Cause                                   | Fix                                                                                                                                                                                 |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Send rejected: "not a confirmed upload" | The body references a storage id without a `confirmedUploads` row owned by the sender. The composer must re-upload; hand-crafted `bodyJson` with foreign ids is rejected by design. |
+| Send rejected: "too large to send"      | The rendered HTML exceeded the 32KB cap (usually many near-empty blocks). Shorten the body; the cap protects the ×500 recipient fan-out and Gmail's ~102KB clipping limit.          |
+| `/api/images/{id}` 404 for a real image | Check `richEmailImages` for the id — only images published by an actual send are served. Posters, logos, and abandoned composer uploads 404 here by design (use signed URLs).       |
+| Broken image in a delivered email       | Verify the blob still exists (`_storage`) and has a `richEmailImages` row. If the blob is gone, something bypassed the pinning rule in `cleanupReplacedUpload`.                     |
+| Image renders as a download/blank       | The stored content type fell outside the jpeg/png/gif/webp allowlist and was clamped to `application/octet-stream` (polyglot defense in `getPublishedEmailImage`).                  |
+
 ## Investigate a bounce spike
 
 **Symptom:** The Resend dashboard shows a bounce spike, or Sentry shows repeated email delivery failures.
