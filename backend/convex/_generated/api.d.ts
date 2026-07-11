@@ -1946,6 +1946,7 @@ export declare const api: {
         "public",
         {
           eventId: Id<"events">;
+          idempotencyKey?: string;
           quantity: number;
           tier: "regular" | "notaflof" | "supporter";
         },
@@ -1956,6 +1957,7 @@ export declare const api: {
         "public",
         {
           eventId: Id<"events">;
+          idempotencyKey?: string;
           quantity: number;
           sessionToken: string;
           termsAccepted: boolean;
@@ -5126,6 +5128,7 @@ export declare const internal: {
           eventId: Id<"events">;
           expiresAt: number;
           guestSessionId?: Id<"guest_sessions">;
+          idempotencyKey?: string;
           kind: "primary" | "resale";
           quantity: number;
           releaseReason?:
@@ -5162,6 +5165,7 @@ export declare const internal: {
           eventId: Id<"events">;
           expiresAt: number;
           guestSessionId?: Id<"guest_sessions">;
+          idempotencyKey?: string;
           kind: "primary" | "resale";
           quantity: number;
           releaseReason?:
@@ -5211,6 +5215,7 @@ export declare const internal: {
           eventId: Id<"events">;
           expiresAt: number;
           guestSessionId?: Id<"guest_sessions">;
+          idempotencyKey?: string;
           kind: "primary" | "resale";
           quantity: number;
           releaseReason?:

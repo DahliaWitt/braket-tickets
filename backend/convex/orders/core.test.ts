@@ -491,6 +491,7 @@ describe('orders', () => {
       eventId,
       quantity: 1,
       tier: 'regular',
+      idempotencyKey: 'idem-normal-free-claim',
     });
 
     const [order, inventory] = await t.run(async (ctx) =>
@@ -506,7 +507,7 @@ describe('orders', () => {
     expect(inventory?.heldCount).toBe(0);
   });
 
-  it('returns the completed authenticated free order on retry without spending rate limit', async () => {
+  it('replays the completed authenticated free order when the same idempotency key retries, without spending rate limit', async () => {
     const t = convexTest();
     const userId = await createUser(
       t,
@@ -515,18 +516,25 @@ describe('orders', () => {
     );
     const {eventId, inventoryId} = await createEventWithInventory(t, {
       price: 0,
+      maxTicketsPerUser: 4,
     });
     const asUser = t.withIdentity({subject: userId});
 
+    // Same key models the Convex client re-sending an identical mutation after
+    // a transient network failure: it must replay the first order, not issue a
+    // second ticket.
+    const retryKey = 'idem-network-retry';
     const first = await asUser.mutation(api.orders.core.claimFreeTicket, {
       eventId,
       quantity: 1,
       tier: 'regular',
+      idempotencyKey: retryKey,
     });
     const second = await asUser.mutation(api.orders.core.claimFreeTicket, {
       eventId,
       quantity: 1,
       tier: 'regular',
+      idempotencyKey: retryKey,
     });
 
     const inventory = await t.run(async (ctx) =>
@@ -536,84 +544,256 @@ describe('orders', () => {
     expect(inventory?.soldCount).toBe(1);
   });
 
-  it('finds the completed authenticated free order after more than twenty nonmatching completed orders', async () => {
+  it('issues a fresh ticket for a legitimate second free claim (new key) under maxTicketsPerUser > 1', async () => {
     const t = convexTest();
     const userId = await createUser(
       t,
-      'Free Retry Deep Buyer',
-      'free-retry-deep-buyer@example.com',
+      'Free Cumulative Buyer',
+      'free-cumulative-buyer@example.com',
     );
     const {eventId, inventoryId} = await createEventWithInventory(t, {
       price: 0,
-      maxTicketsPerUser: 50,
-    });
-
-    const matchingOrderId = await t.run(async (ctx) => {
-      const now = Date.now();
-      for (let i = 0; i < 25; i++) {
-        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- regression fixture for idempotency lookup depth without issuing 50 real tickets
-        await ctx.db.insert('ticket_orders', {
-          userId,
-          eventId,
-          kind: 'primary',
-          quantity: 2,
-          tier: 'regular',
-          amountCents: 0,
-          currency: 'USD',
-          state: 'completed',
-          expiresAt: now + 15 * 60 * 1000,
-          completedAt: now + i,
-          trustSource: 'open_access',
-        });
-      }
-
-      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- matching completed order must be found past the old first-20 lookup cap
-      return await ctx.db.insert('ticket_orders', {
-        userId,
-        eventId,
-        kind: 'primary',
-        quantity: 1,
-        tier: 'regular',
-        amountCents: 0,
-        currency: 'USD',
-        state: 'completed',
-        expiresAt: now + 15 * 60 * 1000,
-        completedAt: now + 25,
-        trustSource: 'open_access',
-      });
+      maxTicketsPerUser: 4,
     });
     const asUser = t.withIdentity({subject: userId});
 
-    const result = await asUser.mutation(api.orders.core.claimFreeTicket, {
+    // First claim.
+    const first = await asUser.mutation(api.orders.core.claimFreeTicket, {
+      eventId,
+      quantity: 1,
+      tier: 'regular',
+      idempotencyKey: 'idem-first-claim',
+    });
+    // A deliberate new claim (e.g. one more for a friend) with an identical
+    // (event, tier, quantity) shape but a fresh key must create a new order
+    // and issue a real ticket — not silently replay the first.
+    const second = await asUser.mutation(api.orders.core.claimFreeTicket, {
+      eventId,
+      quantity: 1,
+      tier: 'regular',
+      idempotencyKey: 'idem-second-claim',
+    });
+
+    const [inventory, tickets] = await t.run(async (ctx) =>
+      Promise.all([
+        ctx.db.get('event_inventory', inventoryId),
+        ctx.db
+          .query('tickets')
+          .withIndex('by_user_event', (q) =>
+            q.eq('userId', userId).eq('eventId', eventId),
+          )
+          .collect(),
+      ]),
+    );
+    expect(second.orderId).not.toBe(first.orderId);
+    expect(inventory?.soldCount).toBe(2);
+    expect(tickets).toHaveLength(2);
+  });
+
+  it('issues a fresh ticket for a legitimate second guest free claim (new key) under maxTicketsPerUser > 1', async () => {
+    const t = convexTest();
+    const {eventId, inventoryId} = await createEventWithInventory(t, {
+      price: 0,
+      maxTicketsPerUser: 4,
+    });
+    const {sessionId, sessionToken} = await createGuestSession(t);
+
+    const first = await t.mutation(api.orders.core.claimFreeTicketAsGuest, {
+      sessionToken,
+      eventId,
+      quantity: 1,
+      tier: 'regular',
+      termsAccepted: true,
+      idempotencyKey: 'idem-guest-first-claim',
+    });
+    const second = await t.mutation(api.orders.core.claimFreeTicketAsGuest, {
+      sessionToken,
+      eventId,
+      quantity: 1,
+      tier: 'regular',
+      termsAccepted: true,
+      idempotencyKey: 'idem-guest-second-claim',
+    });
+
+    const [inventory, tickets] = await t.run(async (ctx) =>
+      Promise.all([
+        ctx.db.get('event_inventory', inventoryId),
+        ctx.db
+          .query('tickets')
+          .withIndex('by_guestSession_event', (q) =>
+            q.eq('guestSessionId', sessionId).eq('eventId', eventId),
+          )
+          .collect(),
+      ]),
+    );
+    expect(second.orderId).not.toBe(first.orderId);
+    expect(inventory?.soldCount).toBe(2);
+    expect(tickets).toHaveLength(2);
+  });
+
+  it('rejects an idempotency key reused for a different claim instead of silently replaying', async () => {
+    const t = convexTest();
+    const userId = await createUser(
+      t,
+      'Free Key Reuse Buyer',
+      'free-key-reuse-buyer@example.com',
+    );
+    const firstEvent = await createEventWithInventory(t, {
+      title: 'Key Reuse Event 1',
+      price: 0,
+    });
+    const secondEvent = await createEventWithInventory(t, {
+      title: 'Key Reuse Event 2',
+      price: 0,
+    });
+    const asUser = t.withIdentity({subject: userId});
+
+    const sharedKey = 'idem-shared-across-claims';
+    await asUser.mutation(api.orders.core.claimFreeTicket, {
+      eventId: firstEvent.eventId,
+      quantity: 1,
+      tier: 'regular',
+      idempotencyKey: sharedKey,
+    });
+
+    // Same key, different event: this is a client contract violation and must
+    // be rejected loudly, not silently replay the first event's order (which
+    // would return success while issuing no ticket for the second event).
+    await expect(
+      asUser.mutation(api.orders.core.claimFreeTicket, {
+        eventId: secondEvent.eventId,
+        quantity: 1,
+        tier: 'regular',
+        idempotencyKey: sharedKey,
+      }),
+    ).rejects.toThrow();
+
+    const secondInventory = await t.run(async (ctx) =>
+      ctx.db.get('event_inventory', secondEvent.inventoryId),
+    );
+    expect(secondInventory?.soldCount).toBe(0);
+  });
+
+  it('issues a ticket for an old client that omits the idempotency key, still bounded by maxTicketsPerUser', async () => {
+    const t = convexTest();
+    const userId = await createUser(
+      t,
+      'Legacy Client Buyer',
+      'legacy-client-buyer@example.com',
+    );
+    const {eventId, inventoryId} = await createEventWithInventory(t, {
+      price: 0,
+      // Only one ticket allowed per user: the old-client fresh-claim path must
+      // still enforce the per-user limit on a second attempt.
+      maxTicketsPerUser: 1,
+    });
+    const asUser = t.withIdentity({subject: userId});
+
+    // Old website tab loaded before this deploy: no idempotencyKey in args.
+    // Convex still runs the call exactly once, so it is a fresh claim.
+    const first = await asUser.mutation(api.orders.core.claimFreeTicket, {
       eventId,
       quantity: 1,
       tier: 'regular',
     });
 
-    const [inventory, matchingOrders] = await t.run(async (ctx) =>
+    const [order, inventoryAfterFirst] = await t.run(async (ctx) =>
+      Promise.all([
+        ctx.db.get('ticket_orders', first.orderId),
+        ctx.db.get('event_inventory', inventoryId),
+      ]),
+    );
+    expect(first.success).toBe(true);
+    expect(order?.state).toBe('completed');
+    expect(order?.idempotencyKey).toBeUndefined();
+    expect(inventoryAfterFirst?.soldCount).toBe(1);
+
+    // A second keyless claim is a fresh claim too, so it must be bounded by the
+    // per-user limit rather than silently replaying — the ticket limit rejects.
+    await expect(
+      asUser.mutation(api.orders.core.claimFreeTicket, {
+        eventId,
+        quantity: 1,
+        tier: 'regular',
+      }),
+    ).rejects.toThrow();
+
+    const inventoryAfterSecond = await t.run(async (ctx) =>
+      ctx.db.get('event_inventory', inventoryId),
+    );
+    expect(inventoryAfterSecond?.soldCount).toBe(1);
+  });
+
+  it('issues a ticket for an old guest client that omits the idempotency key', async () => {
+    const t = convexTest();
+    const {eventId, inventoryId} = await createEventWithInventory(t, {
+      price: 0,
+      maxTicketsPerUser: 1,
+    });
+    const {sessionToken} = await createGuestSession(t);
+
+    const result = await t.mutation(api.orders.core.claimFreeTicketAsGuest, {
+      sessionToken,
+      eventId,
+      quantity: 1,
+      tier: 'regular',
+      termsAccepted: true,
+    });
+
+    const [order, inventory] = await t.run(async (ctx) =>
+      Promise.all([
+        ctx.db.get('ticket_orders', result.orderId),
+        ctx.db.get('event_inventory', inventoryId),
+      ]),
+    );
+    expect(result.success).toBe(true);
+    expect(order?.state).toBe('completed');
+    expect(order?.idempotencyKey).toBeUndefined();
+    expect(inventory?.soldCount).toBe(1);
+  });
+
+  it('rejects a blank, over-long, or malformed idempotency key before any persistence', async () => {
+    const t = convexTest();
+    const userId = await createUser(
+      t,
+      'Bad Key Buyer',
+      'bad-key-buyer@example.com',
+    );
+    const {eventId, inventoryId} = await createEventWithInventory(t, {
+      price: 0,
+      maxTicketsPerUser: 4,
+    });
+    const asUser = t.withIdentity({subject: userId});
+
+    // 65 chars: one over the 64-char cap. A direct (non-browser) caller could
+    // otherwise write an arbitrarily large value onto every order and index it.
+    const overLongKey = 'a'.repeat(65);
+    const malformedKey = 'has spaces and *!# punctuation';
+
+    for (const badKey of ['', '   ', overLongKey, malformedKey]) {
+      await expect(
+        asUser.mutation(api.orders.core.claimFreeTicket, {
+          eventId,
+          quantity: 1,
+          tier: 'regular',
+          idempotencyKey: badKey,
+        }),
+      ).rejects.toThrow();
+    }
+
+    const [inventory, orders] = await t.run(async (ctx) =>
       Promise.all([
         ctx.db.get('event_inventory', inventoryId),
         ctx.db
           .query('ticket_orders')
-          .withIndex(
-            'by_owner_user_event_state_kind_amountCents_tier_quantity',
-            (q) =>
-              q
-                .eq('userId', userId)
-                .eq('eventId', eventId)
-                .eq('state', 'completed')
-                .eq('kind', 'primary')
-                .eq('amountCents', 0)
-                .eq('tier', 'regular')
-                .eq('quantity', 1),
-          )
+          .withIndex('by_owner_user_event_state', (q) => q.eq('userId', userId))
           .collect(),
       ]),
     );
-    expect(result.orderId).toBe(matchingOrderId);
-    expect(matchingOrders).toHaveLength(1);
+    // Nothing persisted: no hold, no order, no inventory movement.
     expect(inventory?.soldCount).toBe(0);
     expect(inventory?.heldCount).toBe(0);
+    expect(orders).toHaveLength(0);
   });
 
   it('rate limits authenticated free claims before inventory side effects', async () => {
@@ -641,11 +821,13 @@ describe('orders', () => {
       eventId: firstEvent.eventId,
       quantity: 1,
       tier: 'regular',
+      idempotencyKey: 'idem-rate-auth-1',
     });
     await asUser.mutation(api.orders.core.claimFreeTicket, {
       eventId: secondEvent.eventId,
       quantity: 1,
       tier: 'regular',
+      idempotencyKey: 'idem-rate-auth-2',
     });
 
     await expect(
@@ -653,6 +835,7 @@ describe('orders', () => {
         eventId: blockedEvent.eventId,
         quantity: 1,
         tier: 'regular',
+        idempotencyKey: 'idem-rate-auth-3',
       }),
     ).rejects.toThrow();
 
@@ -685,6 +868,7 @@ describe('orders', () => {
       quantity: 1,
       tier: 'regular',
       termsAccepted: true,
+      idempotencyKey: 'idem-rate-guest-1',
     });
     await t.mutation(api.orders.core.claimFreeTicketAsGuest, {
       sessionToken,
@@ -692,6 +876,7 @@ describe('orders', () => {
       quantity: 1,
       tier: 'regular',
       termsAccepted: true,
+      idempotencyKey: 'idem-rate-guest-2',
     });
 
     await expect(
@@ -701,6 +886,7 @@ describe('orders', () => {
         quantity: 1,
         tier: 'regular',
         termsAccepted: true,
+        idempotencyKey: 'idem-rate-guest-3',
       }),
     ).rejects.toThrow('RateLimited');
 
@@ -776,6 +962,7 @@ describe('orders', () => {
           quantity: 1,
           tier: 'regular',
           termsAccepted: false,
+          idempotencyKey: 'idem-guest-terms-rejected',
         }),
       ).rejects.toThrow('accept the terms of service');
 
@@ -802,6 +989,7 @@ describe('orders', () => {
         quantity: 1,
         tier: 'regular',
         termsAccepted: true,
+        idempotencyKey: 'idem-guest-tos-stamp',
       });
 
       const order = await t.run(async (ctx) =>
@@ -820,23 +1008,26 @@ describe('orders', () => {
       const {eventId} = await createEventWithInventory(t, {price: 0});
       const {sessionToken} = await createGuestSession(t);
 
+      const replayKey = 'idem-guest-replay';
       const first = await t.mutation(api.orders.core.claimFreeTicketAsGuest, {
         sessionToken,
         eventId,
         quantity: 1,
         tier: 'regular',
         termsAccepted: true,
+        idempotencyKey: replayKey,
       });
 
       // Idempotent replay must short-circuit on the existing completed order
-      // BEFORE the terms check, so a stale/false client value on retry does
-      // not fail an already-completed claim.
+      // (same key) BEFORE the terms check, so a stale/false client value on
+      // retry does not fail an already-completed claim.
       const second = await t.mutation(api.orders.core.claimFreeTicketAsGuest, {
         sessionToken,
         eventId,
         quantity: 1,
         tier: 'regular',
         termsAccepted: false,
+        idempotencyKey: replayKey,
       });
 
       expect(second.success).toBe(true);
@@ -882,6 +1073,7 @@ describe('orders', () => {
         eventId,
         quantity: 1,
         tier: 'regular',
+        idempotencyKey: 'idem-signed-in-no-tos',
       });
 
       const order = await t.run(async (ctx) =>

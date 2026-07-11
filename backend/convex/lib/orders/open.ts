@@ -295,6 +295,12 @@ export async function openPrimaryOrderState(
      */
     tosAcceptedAt?: number;
     tosVersion?: string;
+    /**
+     * Client idempotency key for free-ticket claims. Stored on the order so a
+     * retry of the same claim attempt can replay it instead of issuing a new
+     * ticket. Omitted for paid checkout opens.
+     */
+    idempotencyKey?: string;
   },
 ): Promise<Doc<'ticket_orders'>> {
   assertPositiveInteger(args.quantity, 'Quantity');
@@ -327,6 +333,18 @@ export async function openPrimaryOrderState(
         amountCents: args.amountCents,
       })
     ) {
+      // If a free claim dedups onto a pre-existing open hold, persist the
+      // claim's idempotency key so the completed order remains discoverable on
+      // retry. Without this, a retry would miss the key and double-issue.
+      if (
+        args.idempotencyKey !== undefined &&
+        order.idempotencyKey !== args.idempotencyKey
+      ) {
+        await ctx.db.patch('ticket_orders', order._id, {
+          idempotencyKey: args.idempotencyKey,
+        });
+        return {...order, idempotencyKey: args.idempotencyKey};
+      }
       return order;
     }
   }
@@ -379,6 +397,9 @@ export async function openPrimaryOrderState(
       ? {tosAcceptedAt: args.tosAcceptedAt}
       : {}),
     ...(args.tosVersion !== undefined ? {tosVersion: args.tosVersion} : {}),
+    ...(args.idempotencyKey !== undefined
+      ? {idempotencyKey: args.idempotencyKey}
+      : {}),
   });
 
   await ctx.scheduler.runAfter(

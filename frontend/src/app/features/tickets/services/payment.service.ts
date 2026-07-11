@@ -203,6 +203,11 @@ export class PaymentService {
     tier: TicketTier,
   ): Promise<{success: boolean}> {
     const convexEventId = toEventId(eventId);
+    // Fresh key per claim attempt. The Convex client reuses these identical
+    // args across its automatic mutation retries, so a network retry replays
+    // the same completed order while a deliberate new claim mints a new key
+    // and issues a fresh ticket.
+    const idempotencyKey = crypto.randomUUID();
     logger.info('[claimFreeTicket] Claiming free ticket', {
       eventId,
       quantity,
@@ -215,6 +220,7 @@ export class PaymentService {
           eventId: convexEventId,
           quantity,
           tier,
+          idempotencyKey,
         },
       );
       logger.info('[claimFreeTicket] Claimed', {success: result.success});
@@ -233,6 +239,9 @@ export class PaymentService {
     termsAccepted: boolean,
   ): Promise<{success: boolean}> {
     const convexEventId = toEventId(eventId);
+    // Fresh key per claim attempt; reused verbatim across the Convex client's
+    // automatic mutation retries so a network retry replays the same order.
+    const idempotencyKey = crypto.randomUUID();
     logger.info('[claimFreeTicketAsGuest] Claiming', {eventId, quantity, tier});
     try {
       const result = await this.convex.mutation(
@@ -243,6 +252,7 @@ export class PaymentService {
           tier,
           sessionToken,
           termsAccepted,
+          idempotencyKey,
         },
       );
       logger.info('[claimFreeTicketAsGuest] Claimed', {
