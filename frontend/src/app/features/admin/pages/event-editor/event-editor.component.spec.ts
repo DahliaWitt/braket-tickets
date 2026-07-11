@@ -882,6 +882,50 @@ describe('EventEditorComponent', () => {
     expect(component.isDirty()).toBe(false);
   });
 
+  it('sends an explicit disable so turning sliding scale off in edit mode persists', async () => {
+    // Turn NOTAFLOF on, then back off, then save. The submitted payload must
+    // carry `{enabled: false}`. Sending `undefined` is a silent backend no-op
+    // (lib/events/writes.ts skips slidingScale* when sliderConfig is undefined),
+    // which would leave sliding-scale pricing on after a "successful" save and
+    // flip the toggle back on when the form reloads.
+    await harness.setSlidingScaleEnabled(true);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(await harness.isSlidingScaleEnabled()).toBe(true);
+
+    await harness.setSlidingScaleEnabled(false);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(await harness.isSlidingScaleEnabled()).toBe(false);
+
+    await component.onSubmit('published');
+    await fixture.whenStable();
+
+    expect(eventsServiceMock.updateWithPoster).toHaveBeenCalledTimes(1);
+    const args = eventsServiceMock.updateWithPoster.mock.calls[0][0] as Record<
+      string,
+      unknown
+    >;
+    expect(args['sliderConfig']).toEqual({enabled: false});
+  });
+
+  it('still sends an explicit enable payload when sliding scale is turned on in edit mode', async () => {
+    await harness.setSlidingScaleEnabled(true);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(await harness.isSlidingScaleEnabled()).toBe(true);
+
+    await component.onSubmit('published');
+    await fixture.whenStable();
+
+    expect(eventsServiceMock.updateWithPoster).toHaveBeenCalledTimes(1);
+    const args = eventsServiceMock.updateWithPoster.mock.calls[0][0] as Record<
+      string,
+      unknown
+    >;
+    expect(args['sliderConfig']).toMatchObject({enabled: true});
+  });
+
   // ── Publish dialog ──────────────────────────────────────────────────
 
   it('shows publish dialog when save("published") is called', async () => {
