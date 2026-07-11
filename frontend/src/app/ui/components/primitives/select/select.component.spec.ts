@@ -392,18 +392,10 @@ describe('ZardSelectComponent dropdown Escape propagation', () => {
     await fixture.whenStable();
     expect(await select.isOpen()).toBe(true);
 
-    // The dropdown panel carries the keydown binding. It renders in the CDK
-    // overlay container, which has no harness, so query it directly like the
-    // existing overlay-content assertions in this spec.
-    const panel = (
-      fixture.nativeElement as HTMLElement
-    ).ownerDocument.querySelector<HTMLElement>(
-      '.cdk-overlay-container [role="listbox"]',
-    );
-    expect(panel).not.toBeNull();
-
     // An ancestor (e.g. the host dialog's document-body-level Escape handling)
-    // must never observe an Escape that the open dropdown consumes.
+    // must never observe an Escape that the open dropdown consumes. The panel
+    // carrying the keydown binding renders in the CDK overlay container, so the
+    // harness reaches it and dispatches Escape through `dispatchEscapeFromPanel`.
     let ancestorReceivedEscape = false;
     const ancestorListener = (event: Event) => {
       if ((event as KeyboardEvent).key === 'Escape') {
@@ -412,13 +404,7 @@ describe('ZardSelectComponent dropdown Escape propagation', () => {
     };
     document.body.addEventListener('keydown', ancestorListener);
     try {
-      panel?.dispatchEvent(
-        new KeyboardEvent('keydown', {
-          key: 'Escape',
-          bubbles: true,
-          cancelable: true,
-        }),
-      );
+      await select.dispatchEscapeFromPanel();
     } finally {
       document.body.removeEventListener('keydown', ancestorListener);
     }
@@ -438,11 +424,8 @@ describe('ZardSelectComponent dropdown Escape propagation', () => {
     await fixture.whenStable();
     expect(await select.isOpen()).toBe(true);
 
-    const trigger = (
-      fixture.nativeElement as HTMLElement
-    ).querySelector<HTMLElement>('button');
-    expect(trigger).not.toBeNull();
-
+    // The focused trigger consumes Escape while the dropdown is open, so an
+    // ancestor Escape handler must not observe it.
     let ancestorReceivedEscape = false;
     const ancestorListener = (event: Event) => {
       if ((event as KeyboardEvent).key === 'Escape') {
@@ -451,13 +434,7 @@ describe('ZardSelectComponent dropdown Escape propagation', () => {
     };
     document.body.addEventListener('keydown', ancestorListener);
     try {
-      trigger?.dispatchEvent(
-        new KeyboardEvent('keydown', {
-          key: 'Escape',
-          bubbles: true,
-          cancelable: true,
-        }),
-      );
+      await select.dispatchEscapeFromTrigger();
     } finally {
       document.body.removeEventListener('keydown', ancestorListener);
     }
@@ -472,11 +449,6 @@ describe('ZardSelectComponent dropdown Escape propagation', () => {
     const select = await loader.getHarness(ZardSelectHarness);
     expect(await select.isOpen()).toBe(false);
 
-    const trigger = (
-      fixture.nativeElement as HTMLElement
-    ).querySelector<HTMLElement>('button');
-    expect(trigger).not.toBeNull();
-
     // A closed select must not swallow Escape — a host dialog still needs to
     // close on Escape when focus rests on the (closed) select trigger.
     let ancestorReceivedEscape = false;
@@ -487,13 +459,7 @@ describe('ZardSelectComponent dropdown Escape propagation', () => {
     };
     document.body.addEventListener('keydown', ancestorListener);
     try {
-      trigger?.dispatchEvent(
-        new KeyboardEvent('keydown', {
-          key: 'Escape',
-          bubbles: true,
-          cancelable: true,
-        }),
-      );
+      await select.dispatchEscapeFromTrigger();
     } finally {
       document.body.removeEventListener('keydown', ancestorListener);
     }
