@@ -3,12 +3,21 @@ import {ComponentHarness} from '@angular/cdk/testing';
 export class AdminOverrideBannerHarness extends ComponentHarness {
   static hostSelector = 'app-admin-override-banner';
 
-  private getBanner = this.locatorForOptional('[data-testid="admin-override-banner"]');
-  private getCommunityName = this.locatorFor('[data-testid="override-community-name"]');
+  private getBanner = this.locatorForOptional(
+    '[data-testid="admin-override-banner"]',
+  );
+  private getCommunityName = this.locatorFor(
+    '[data-testid="override-community-name"]',
+  );
   private getPortalLink = this.locatorFor('[data-testid="admin-portal-link"]');
 
   async isVisible(): Promise<boolean> {
     return (await this.getBanner()) !== null;
+  }
+
+  async getBannerClass(): Promise<string | null> {
+    const banner = await this.getBanner();
+    return banner ? banner.getAttribute('class') : null;
   }
 
   async getCommunityNameText(): Promise<string> {

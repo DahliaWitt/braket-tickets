@@ -70,12 +70,12 @@ export class FooterComponent {
       .open()
       .then((opened) => {
         if (!opened) {
-          this.toast.error('Feedback is unavailable right now.');
+          this.toast.error('feedback is unavailable right now');
         }
       })
       .catch((error: unknown) => {
         logger.error('Failed to open Sentry feedback', error);
-        this.toast.error('Feedback is unavailable right now.');
+        this.toast.error('feedback is unavailable right now');
       });
   }
 }
