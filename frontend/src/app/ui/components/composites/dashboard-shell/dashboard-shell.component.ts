@@ -27,13 +27,12 @@ export interface DashboardTab {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RouterLink, RouterLinkActive],
   template: `
-    <div class="flex min-h-screen flex-col bg-background text-foreground">
+    <div class="flex flex-col bg-background text-foreground">
       <main
         id="main-content"
         class="min-w-0 grow space-y-8 overflow-clip p-6 font-sans selection:bg-primary/30 md:p-10"
-        [style.borderLeft]="
-          overrideBorder() ? '3px solid oklch(0.75 0.15 50)' : 'none'
-        "
+        [class.border-l-4]="overrideBorder()"
+        [class.border-warning/40]="overrideBorder()"
       >
         <!--
           Default title row. Hidden when showDefaultTitle is false.
@@ -46,15 +45,11 @@ export interface DashboardTab {
           >
             <div class="flex min-w-0 flex-col gap-2 overflow-hidden">
               <h1
-                class="min-w-0 truncate font-display text-xl font-bold tracking-tight text-foreground drop-shadow-[0_0_15px_rgba(255,255,255,0.1)] sm:text-3xl lg:text-4xl dark:drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]"
+                class="min-w-0 truncate font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl lg:text-4xl"
               >
                 <span data-testid="title-prefix">{{ titlePrefix() }}</span
                 >{{ ' '
-                }}<span
-                  data-testid="title-accent"
-                  class="bg-linear-to-r from-primary to-secondary bg-clip-text text-transparent"
-                  >{{ titleAccent() }}</span
-                >
+                }}<span data-testid="title-accent">{{ titleAccent() }}</span>
               </h1>
             </div>
             <div data-testid="actions-slot" class="shrink-0">
@@ -107,14 +102,15 @@ export interface DashboardTab {
                   (click)="onTabClick($event, tab)"
                   [title]="tab.label"
                   [attr.aria-label]="tab.label"
-                  class="relative block cursor-pointer truncate py-2.5 pl-4 font-display text-sm font-bold tracking-wider uppercase transition-colors first:pt-0"
+                  class="relative block cursor-pointer truncate py-2.5 pl-4 font-display text-sm font-bold tracking-wider uppercase transition-colors first:pt-0 hover:text-foreground"
                   [class.text-foreground]="isTabActive(tab)"
                   [class.text-muted-foreground]="!isTabActive(tab)"
                   [attr.aria-current]="isTabActive(tab) ? 'page' : null"
                 >
                   {{ tab.label }}
                   <div
-                    class="absolute top-0 left-0 h-full w-0.5 origin-top transform bg-linear-to-b from-primary to-secondary transition-transform duration-300"
+                    data-testid="tab-indicator"
+                    class="absolute top-0 left-0 h-full w-0.5 origin-top transform bg-primary transition-transform duration-300"
                     [class.scale-y-100]="isTabActive(tab)"
                     [class.scale-y-0]="!isTabActive(tab)"
                   ></div>
@@ -128,13 +124,14 @@ export interface DashboardTab {
                   [attr.aria-label]="tab.label"
                   routerLinkActive="text-foreground"
                   #rla="routerLinkActive"
-                  class="relative block cursor-pointer truncate py-2.5 pl-4 font-display text-sm font-bold tracking-wider uppercase transition-colors first:pt-0"
+                  class="relative block cursor-pointer truncate py-2.5 pl-4 font-display text-sm font-bold tracking-wider uppercase transition-colors first:pt-0 hover:text-foreground"
                   [class.text-muted-foreground]="!rla.isActive"
                   [attr.aria-current]="rla.isActive ? 'page' : null"
                 >
                   {{ tab.label }}
                   <div
-                    class="absolute top-0 left-0 h-full w-0.5 origin-top transform bg-linear-to-b from-primary to-secondary transition-transform duration-300"
+                    data-testid="tab-indicator"
+                    class="absolute top-0 left-0 h-full w-0.5 origin-top transform bg-primary transition-transform duration-300"
                     [class.scale-y-100]="rla.isActive"
                     [class.scale-y-0]="!rla.isActive"
                   ></div>

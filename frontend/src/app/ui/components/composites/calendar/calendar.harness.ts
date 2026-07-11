@@ -1,13 +1,15 @@
-import { ComponentHarness } from '@angular/cdk/testing';
+import {ComponentHarness} from '@angular/cdk/testing';
 
-import { BraCalendarGridComponentHarness } from './calendar-grid.harness';
-import { BraCalendarNavigationComponentHarness } from './calendar-navigation.component.harness';
+import {BraCalendarGridComponentHarness} from './calendar-grid.harness';
+import {BraCalendarNavigationComponentHarness} from './calendar-navigation.component.harness';
 
 export class BraCalendarComponentHarness extends ComponentHarness {
   static hostSelector = 'bra-calendar, [bra-calendar]';
 
   private getGrid = this.locatorFor(BraCalendarGridComponentHarness);
-  private getNavigation = this.locatorFor(BraCalendarNavigationComponentHarness);
+  private getNavigation = this.locatorFor(
+    BraCalendarNavigationComponentHarness,
+  );
 
   async getNavigationHarness(): Promise<BraCalendarNavigationComponentHarness> {
     return this.getNavigation();
@@ -45,6 +47,16 @@ export class BraCalendarComponentHarness extends ComponentHarness {
   async getEnabledDayLabels(): Promise<string[]> {
     const grid = await this.getGrid();
     return grid.getEnabledDayLabels();
+  }
+
+  /**
+   * Returns the month/year the grid is actually rendering (e.g. "February 2026"),
+   * derived from the in-month day cells. Use this to assert the rendered grid
+   * agrees with the navigation header — not just the header dropdown value.
+   */
+  async getRenderedGridMonthYear(): Promise<string | null> {
+    const grid = await this.getGrid();
+    return grid.getRenderedMonthYear();
   }
 
   /** Clicks a day button by its visible label (e.g. "15"). */

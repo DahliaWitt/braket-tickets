@@ -1,4 +1,8 @@
-import { type BaseHarnessFilters, ComponentHarness, HarnessPredicate } from '@angular/cdk/testing';
+import {
+  type BaseHarnessFilters,
+  ComponentHarness,
+  HarnessPredicate,
+} from '@angular/cdk/testing';
 
 export class ZardSelectHarness extends ComponentHarness {
   static hostSelector = 'z-select';
@@ -29,6 +33,28 @@ export class ZardSelectHarness extends ComponentHarness {
     const trigger = await this.trigger();
     return trigger.text();
   }
+
+  /**
+   * Reads `aria-activedescendant` from the open dropdown's listbox.
+   * The listbox renders in a CDK overlay, so it is resolved from the document root.
+   * Requires the dropdown to be open.
+   */
+  async getActiveDescendantId(): Promise<string | null> {
+    const listbox =
+      await this.documentRootLocatorFactory().locatorFor('[role="listbox"]')();
+    return listbox.getAttribute('aria-activedescendant');
+  }
+
+  /**
+   * Returns the DOM `id` of the option with the given value.
+   * Requires the dropdown to be open so the option is rendered in the overlay.
+   */
+  async getOptionId(value: string): Promise<string | null> {
+    const option = await this.documentRootLocatorFactory().locatorFor(
+      `z-select-item[value="${value}"]`,
+    )();
+    return option.getAttribute('id');
+  }
 }
 
 export interface ZardSelectItemHarnessFilters extends BaseHarnessFilters {
@@ -39,7 +65,9 @@ export interface ZardSelectItemHarnessFilters extends BaseHarnessFilters {
 export class ZardSelectItemHarness extends ComponentHarness {
   static hostSelector = 'z-select-item';
 
-  static with(options: ZardSelectItemHarnessFilters): HarnessPredicate<ZardSelectItemHarness> {
+  static with(
+    options: ZardSelectItemHarnessFilters,
+  ): HarnessPredicate<ZardSelectItemHarness> {
     return new HarnessPredicate(ZardSelectItemHarness, options)
       .addOption('text', options.text, async (harness, text) =>
         HarnessPredicate.stringMatches(harness.getText(), text),
@@ -81,13 +109,18 @@ export interface ZardSelectHarnessFilters extends BaseHarnessFilters {
 export class ZardSelectComponentHarness extends ComponentHarness {
   static hostSelector = 'z-select, [z-select]';
 
-  static with(options: ZardSelectHarnessFilters): HarnessPredicate<ZardSelectComponentHarness> {
+  static with(
+    options: ZardSelectHarnessFilters,
+  ): HarnessPredicate<ZardSelectComponentHarness> {
     return new HarnessPredicate(ZardSelectComponentHarness, options)
       .addOption(
         'placeholder',
         options.placeholder,
         async (harness, placeholder) =>
-          HarnessPredicate.stringMatches(harness.getPlaceholderText(), placeholder),
+          HarnessPredicate.stringMatches(
+            harness.getPlaceholderText(),
+            placeholder,
+          ),
       )
       .addOption('testId', options.testId, async (harness, testId) => {
         const host = await harness.host();
@@ -96,7 +129,9 @@ export class ZardSelectComponentHarness extends ComponentHarness {
   }
 
   private readonly triggerButton = this.locatorFor('button[type="button"]');
-  private readonly placeholderEl = this.locatorForOptional('.text-muted-foreground.truncate');
+  private readonly placeholderEl = this.locatorForOptional(
+    '.text-muted-foreground.truncate',
+  );
 
   async isOpen(): Promise<boolean> {
     const host = await this.host();
@@ -169,9 +204,13 @@ export class ZardSelectComponentHarness extends ComponentHarness {
   async selectOptionByValue(value: string): Promise<void> {
     await this.open();
     const rootLocator = this.documentRootLocatorFactory();
-    const elements = await rootLocator.locatorForAll(`z-select-item[value="${value}"]`)();
+    const elements = await rootLocator.locatorForAll(
+      `z-select-item[value="${value}"]`,
+    )();
     if (elements.length === 0) {
-      throw new Error(`Option with value "${value}" not found in z-select dropdown`);
+      throw new Error(
+        `Option with value "${value}" not found in z-select dropdown`,
+      );
     }
     await elements[0].click();
   }

@@ -313,14 +313,14 @@
             let i = $index
           ) {
             <div
-              class="group relative space-y-4 rounded-lg border border-border bg-muted/50 p-4"
+              class="relative space-y-4 rounded-lg border border-border bg-muted/50 p-4"
               data-testid="vetting-question"
             >
               <button
                 type="button"
                 (click)="removeQuestion(i)"
                 [attr.aria-label]="'Remove question ' + (i + 1)"
-                class="absolute top-2 right-2 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-destructive-text"
+                class="absolute top-2 right-2 p-1 text-muted-foreground transition-colors hover:text-destructive-text"
               >
                 <z-icon zType="x" class="h-4 w-4" aria-hidden="true" />
               </button>

@@ -14,15 +14,18 @@ import {
   viewChild,
   ViewEncapsulation,
 } from '@angular/core';
-import { outputFromObservable, outputToObservable } from '@angular/core/rxjs-interop';
-import { NG_VALUE_ACCESSOR, type ControlValueAccessor } from '@angular/forms';
+import {
+  outputFromObservable,
+  outputToObservable,
+} from '@angular/core/rxjs-interop';
+import {NG_VALUE_ACCESSOR, type ControlValueAccessor} from '@angular/forms';
 
-import type { ClassValue } from 'clsx';
-import { filter, map } from 'rxjs';
+import type {ClassValue} from 'clsx';
+import {filter, map} from 'rxjs';
 
-import { BraCalendarGridComponent } from './calendar-grid.component';
-import { BraCalendarNavigationComponent } from './calendar-navigation.component';
-import type { CalendarMode, CalendarValue } from './calendar.types';
+import {BraCalendarGridComponent} from './calendar-grid.component';
+import {BraCalendarNavigationComponent} from './calendar-navigation.component';
+import type {CalendarMode, CalendarValue} from './calendar.types';
 import {
   generateCalendarDays,
   getSelectedDatesArray,
@@ -30,13 +33,13 @@ import {
   makeSafeDate,
   normalizeCalendarValue,
 } from './calendar.utils';
-import { calendarVariants } from './calendar.variants';
+import {calendarVariants} from './calendar.variants';
 
-import { mergeClasses } from '@ui/utils/merge-classes';
-import { logger } from '@/utils/logger';
-import { ControlValueAccessorBase } from '@ui/utils/control-value-accessor.base';
+import {mergeClasses} from '@ui/utils/merge-classes';
+import {logger} from '@/utils/logger';
+import {ControlValueAccessorBase} from '@ui/utils/control-value-accessor.base';
 
-export type { CalendarDay, CalendarMode, CalendarValue } from './calendar.types';
+export type {CalendarDay, CalendarMode, CalendarValue} from './calendar.types';
 
 @Component({
   selector: 'bra-calendar, [bra-calendar]',
@@ -116,7 +119,9 @@ export class BraCalendarComponent
   protected override onTouched: () => void = () => undefined;
 
   // Internal state
-  private readonly normalizedValue = computed(() => normalizeCalendarValue(this.value()));
+  private readonly normalizedValue = computed(() =>
+    normalizeCalendarValue(this.value()),
+  );
   private readonly currentDate = computed(() => {
     const val = this.normalizedValue();
     const mode = this.zMode();
@@ -139,22 +144,33 @@ export class BraCalendarComponent
     this.currentDate().getFullYear().toString(),
   );
 
-  protected readonly classes = computed(() => mergeClasses(calendarVariants(), this.class()));
+  protected readonly classes = computed(() =>
+    mergeClasses(calendarVariants(), this.class()),
+  );
 
   protected readonly calendarDays = computed(() => {
     const currentDate = this.currentDate();
+    // Anchor the navigation date to the first of the month. Only the year and
+    // month drive the rendered grid, and passing the selected day-of-month here
+    // (e.g. the 31st) makes `new Date(year, month, day)` roll over into a later
+    // month for shorter months, so the grid would disagree with the header.
     const navigationDate = makeSafeDate(
       Number.parseInt(this.currentYearValue()),
       Number.parseInt(this.currentMonthValue()),
-      currentDate.getDate(),
+      1,
     );
-    const selectedDate = Number.isNaN(navigationDate.getTime()) ? currentDate : navigationDate;
+    const selectedDate = Number.isNaN(navigationDate.getTime())
+      ? currentDate
+      : navigationDate;
 
     return generateCalendarDays({
       year: selectedDate.getFullYear(),
       month: selectedDate.getMonth(),
       mode: this.zMode(),
-      selectedDates: getSelectedDatesArray(this.normalizedValue(), this.zMode()),
+      selectedDates: getSelectedDatesArray(
+        this.normalizedValue(),
+        this.zMode(),
+      ),
       minDate: this.minDate(),
       maxDate: this.maxDate(),
       disabled: this.disabled(),
@@ -177,7 +193,12 @@ export class BraCalendarComponent
 
     const parsedMonth = Number.parseInt(monthIndex, 10);
     if (Number.isNaN(parsedMonth) || parsedMonth < 0 || parsedMonth > 11) {
-      logger.warn('Invalid month value:', monthIndex, 'parsed as:', parsedMonth);
+      logger.warn(
+        'Invalid month value:',
+        monthIndex,
+        'parsed as:',
+        parsedMonth,
+      );
       return;
     }
 
@@ -251,28 +272,38 @@ export class BraCalendarComponent
     const current = this.currentDate();
     const selectedYear = Number.parseInt(this.currentYearValue(), 10);
     const selectedMonth = Number.parseInt(this.currentMonthValue(), 10);
-    const baseYear = Number.isNaN(selectedYear) ? current.getFullYear() : selectedYear;
-    const baseMonth = Number.isNaN(selectedMonth) ? current.getMonth() : selectedMonth;
+    const baseYear = Number.isNaN(selectedYear)
+      ? current.getFullYear()
+      : selectedYear;
+    const baseMonth = Number.isNaN(selectedMonth)
+      ? current.getMonth()
+      : selectedMonth;
     const newDate = makeSafeDate(baseYear + direction, baseMonth, 1);
     this.currentYearValue.set(newDate.getFullYear().toString());
     this.scheduleGridFocusAfterRender(() => this.gridRef().resetFocus());
   }
 
-  protected onGridPreviousMonth(event: { position: string; dayOfWeek: number }): void {
+  protected onGridPreviousMonth(event: {
+    position: string;
+    dayOfWeek: number;
+  }): void {
     this.previousMonth();
     this.scheduleGridFocusAfterRender(() =>
       this.resetFocusAfterNavigation(event.position, event.dayOfWeek),
     );
   }
 
-  protected onGridNextMonth(event: { position: string; dayOfWeek: number }): void {
+  protected onGridNextMonth(event: {
+    position: string;
+    dayOfWeek: number;
+  }): void {
     this.nextMonth();
     this.scheduleGridFocusAfterRender(() =>
       this.resetFocusAfterNavigation(event.position, event.dayOfWeek),
     );
   }
 
-  protected onDateSelect(event: { date: Date; index: number }): void {
+  protected onDateSelect(event: {date: Date; index: number}): void {
     this.selectDate(event.date);
   }
 
@@ -285,7 +316,9 @@ export class BraCalendarComponent
     if (mode === 'single') {
       this.value.set(date);
     } else if (mode === 'multiple') {
-      const selectedDates = Array.isArray(currentValue) ? [...currentValue] : [];
+      const selectedDates = Array.isArray(currentValue)
+        ? [...currentValue]
+        : [];
       const existingIndex = selectedDates.findIndex((d) => isSameDay(d, date));
 
       if (existingIndex >= 0) {
@@ -298,7 +331,9 @@ export class BraCalendarComponent
 
       this.value.set(selectedDates.length > 0 ? selectedDates : null);
     } else if (mode === 'range') {
-      const selectedDates = Array.isArray(currentValue) ? [...currentValue] : [];
+      const selectedDates = Array.isArray(currentValue)
+        ? [...currentValue]
+        : [];
 
       if (selectedDates.length === 0) {
         // First date selected - set as range start
@@ -326,7 +361,10 @@ export class BraCalendarComponent
     this.onTouched();
   }
 
-  private resetFocusAfterNavigation(position = 'default', dayOfWeek = -1): void {
+  private resetFocusAfterNavigation(
+    position = 'default',
+    dayOfWeek = -1,
+  ): void {
     const days = this.calendarDays();
     let targetIndex = -1;
 
@@ -354,15 +392,26 @@ export class BraCalendarComponent
         // Focus same day of week in last week
         if (dayOfWeek >= 0) {
           const lastWeekStart = Math.floor((days.length - 1) / 7) * 7;
-          const targetIdx = Math.min(lastWeekStart + dayOfWeek, days.length - 1);
-          targetIndex = this.findEnabledInRange(targetIdx, days.length - 1, days);
+          const targetIdx = Math.min(
+            lastWeekStart + dayOfWeek,
+            days.length - 1,
+          );
+          targetIndex = this.findEnabledInRange(
+            targetIdx,
+            days.length - 1,
+            days,
+          );
         }
         break;
       default: {
         // Default priority: selected > today > first enabled
         const selectedIndex = days.findIndex((day) => day.isSelected);
-        const todayIndex = days.findIndex((day) => day.isToday && day.isCurrentMonth);
-        const firstEnabledIndex = days.findIndex((day) => day.isCurrentMonth && !day.isDisabled);
+        const todayIndex = days.findIndex(
+          (day) => day.isToday && day.isCurrentMonth,
+        );
+        const firstEnabledIndex = days.findIndex(
+          (day) => day.isCurrentMonth && !day.isDisabled,
+        );
 
         targetIndex =
           selectedIndex >= 0
@@ -382,7 +431,7 @@ export class BraCalendarComponent
   private findEnabledInRange(
     start: number,
     fallback: number,
-    days: { isDisabled: boolean }[],
+    days: {isDisabled: boolean}[],
   ): number {
     const clampedStart = Math.max(0, Math.min(start, days.length - 1));
     const clampedFallback = Math.max(0, Math.min(fallback, days.length - 1));

@@ -112,6 +112,7 @@ export class ConfirmVerificationComponent {
       const paramMap = this.paramMap();
       const queryParamMap = this.queryParamMap();
       const ott = queryParamMap.get('ott') ?? undefined;
+      const callbackError = queryParamMap.get('error') ?? undefined;
       const token =
         paramMap.get('token') ??
         queryParamMap.get('token') ??
@@ -122,7 +123,7 @@ export class ConfirmVerificationComponent {
       }
 
       this.initialized.set(true);
-      void this.confirmEmailVerification(ott, token);
+      void this.confirmEmailVerification(ott, token, callbackError);
     });
 
     effect(() => {
@@ -177,10 +178,31 @@ export class ConfirmVerificationComponent {
     await this.router.navigateByUrl(this.returnUrl());
   }
 
+  /**
+   * Maps a Better Auth `/verify-email` error code (e.g. `TOKEN_EXPIRED`,
+   * `INVALID_TOKEN`) to a user-facing verification-failure message.
+   */
+  private verificationCallbackErrorMessage(code: string): string {
+    if (code.toUpperCase().includes('EXPIRED')) {
+      return 'This verification link has expired. Please sign in and request a new one.';
+    }
+    return 'This verification link is invalid or has already been used. Please sign in and request a new one.';
+  }
+
   private async confirmEmailVerification(
     ott: string | undefined,
     token: string | undefined,
+    callbackError?: string,
   ): Promise<void> {
+    // Better Auth redirects failed verifications to `${callbackURL}?error=<code>`
+    // with no usable token, so surface the failure instead of falling through to
+    // the no-token success branch below.
+    if (callbackError) {
+      this.error.set(this.verificationCallbackErrorMessage(callbackError));
+      this.state.set('error');
+      return;
+    }
+
     if (ott) {
       const outcome = await resolveConfirmOAuthCallback({
         auth: this.auth,

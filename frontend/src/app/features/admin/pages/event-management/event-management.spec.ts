@@ -2,7 +2,9 @@ import '../../../../../test-setup';
 import {type ComponentFixture, TestBed} from '@angular/core/testing';
 import {provideZonelessChangeDetection} from '@angular/core';
 import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
+import {By} from '@angular/platform-browser';
 import {ActivatedRoute, convertToParamMap} from '@angular/router';
+import type {RichTextEditorComponent} from '@/features/admin/components/rich-text-editor/rich-text-editor.component';
 import {ConvexError} from 'convex/values';
 import {of} from 'rxjs';
 import {vi, describe, it, expect, beforeEach, type Mock} from 'vitest';
@@ -29,6 +31,31 @@ import {
   type EventTierPricingStats,
   type TicketReminderAudience,
 } from '../../models/event-management.model';
+
+/**
+ * Fills a rich-text email editor rendered inside the given tab host. TipTap only
+ * mutates its document through its command API (synthetic DOM key events do not
+ * drive it under happy-dom), so we reach the component instance and insert
+ * content, which emits the same jsonChange/textChange the UI relies on.
+ */
+async function fillRichTextBody(
+  fixture: ComponentFixture<EventManagement>,
+  hostSelector: string,
+  text: string,
+): Promise<void> {
+  const debugEl = fixture.debugElement.query(
+    By.css(`${hostSelector} app-rich-text-editor`),
+  );
+  if (!debugEl) {
+    throw new Error(
+      `fillRichTextBody: no <app-rich-text-editor> found under "${hostSelector}"`,
+    );
+  }
+  const editor = debugEl.componentInstance as RichTextEditorComponent;
+  editor.getEditor()?.commands.insertContent(text);
+  fixture.detectChanges();
+  await fixture.whenStable();
+}
 
 interface AdminEventsServiceMock {
   refundPayment: Mock;
@@ -761,9 +788,11 @@ describe('EventManagement', () => {
     expect(await harness.isReminderSendDisabled()).toBe(true);
 
     await harness.setReminderSubject('Reminder subject');
-    await harness.setReminderMessage('Reminder message body.');
-    fixture.detectChanges();
-    await fixture.whenStable();
+    await fillRichTextBody(
+      fixture,
+      'app-ticket-reminder-tab',
+      'Reminder message body.',
+    );
     fixture.detectChanges();
 
     expect(await harness.isReminderSendDisabled()).toBe(false);
@@ -1086,9 +1115,11 @@ describe('EventManagement', () => {
       await fixture.whenStable();
 
       await harness.setBroadcastSubject('Test Subject');
-      await harness.setBroadcastMessage('Test Message Body');
-      fixture.detectChanges();
-      await fixture.whenStable();
+      await fillRichTextBody(
+        fixture,
+        'app-broadcast-email-tab',
+        'Test Message Body',
+      );
       fixture.detectChanges();
 
       expect(await harness.isBroadcastSendDisabled()).toBe(false);

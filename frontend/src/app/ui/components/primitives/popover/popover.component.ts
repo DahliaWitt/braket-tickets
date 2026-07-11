@@ -4,8 +4,8 @@ import {
   OverlayPositionBuilder,
   type OverlayRef,
 } from '@angular/cdk/overlay';
-import { TemplatePortal } from '@angular/cdk/portal';
-import { isPlatformBrowser } from '@angular/common';
+import {TemplatePortal} from '@angular/cdk/portal';
+import {isPlatformBrowser} from '@angular/common';
 import {
   afterNextRender,
   ChangeDetectionStrategy,
@@ -23,13 +23,13 @@ import {
   type TemplateRef,
   ViewContainerRef,
 } from '@angular/core';
-import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
+import {takeUntilDestroyed, toObservable} from '@angular/core/rxjs-interop';
 
-import { filter, type Subscription } from 'rxjs';
+import {filter, type Subscription} from 'rxjs';
 
-import { popoverVariants } from './popover.variants';
+import {popoverVariants} from './popover.variants';
 
-import { mergeClasses } from '@ui/utils/merge-classes';
+import {mergeClasses} from '@ui/utils/merge-classes';
 
 export type ZardPopoverTrigger = 'click' | 'hover' | null;
 export type ZardPopoverPlacement = 'top' | 'bottom' | 'left' | 'right';
@@ -120,16 +120,15 @@ export class ZardPopoverDirective {
 
     toObservable(this.zTrigger)
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((trigger) => {
+      .subscribe(() => {
         if (this.listeners.length) {
           this.unlistenAll();
         }
         this.setupTriggers();
-        this.overlayRefSubscription?.unsubscribe();
-        this.overlayRefSubscription = undefined;
-        if (trigger === 'click') {
-          this.subscribeToOverlayRef();
-        }
+        // Re-establish outside-click dismissal for the current trigger.
+        // This is a no-op until the overlay exists — createOverlay() calls
+        // subscribeToOverlayRef() once the overlayRef has been created.
+        this.subscribeToOverlayRef();
       });
 
     afterNextRender(() => {
@@ -155,7 +154,10 @@ export class ZardPopoverDirective {
       this.createOverlay();
     }
 
-    const templatePortal = new TemplatePortal(this.zContent(), this.viewContainerRef);
+    const templatePortal = new TemplatePortal(
+      this.zContent(),
+      this.viewContainerRef,
+    );
     this.overlayRef?.attach(templatePortal);
     this.isVisible.set(true);
     this.zVisibleChange.emit(true);
@@ -196,6 +198,13 @@ export class ZardPopoverDirective {
 
   private createOverlay() {
     if (isPlatformBrowser(this.platformId)) {
+      // Guard against duplicate creation: afterNextRender and a lazy show()
+      // can both reach here. A second overlay would orphan the first (and its
+      // attached portal) and stack outside-click subscriptions.
+      if (this.overlayRef) {
+        return;
+      }
+
       const positionStrategy = this.overlayPositionBuilder
         .flexibleConnectedTo(this.nativeElement)
         .withPositions(this.getPositions())
@@ -208,12 +217,21 @@ export class ZardPopoverDirective {
         hasBackdrop: false,
         scrollStrategy: this.overlay.scrollStrategies.reposition(),
       });
+
+      // The overlay ref now exists, so the outside-click subscription can
+      // finally attach. subscribeToOverlayRef() was a no-op during the first
+      // change-detection pass (before the overlay was created).
+      this.subscribeToOverlayRef();
     }
   }
 
   private subscribeToOverlayRef(): void {
+    // Always tear down any existing subscription first so trigger changes and
+    // repeated createOverlay/subscribe calls never stack duplicate listeners.
+    this.overlayRefSubscription?.unsubscribe();
+    this.overlayRefSubscription = undefined;
+
     if (
-      this.zOverlayClickable() &&
       this.zTrigger() === 'click' &&
       isPlatformBrowser(this.platformId) &&
       this.overlayRef
@@ -221,6 +239,9 @@ export class ZardPopoverDirective {
       this.overlayRefSubscription = this.overlayRef
         .outsidePointerEvents()
         .pipe(
+          // Evaluate zOverlayClickable() per-event so consumers can toggle
+          // outside-click dismissal at runtime, not just at subscribe time.
+          filter(() => this.zOverlayClickable()),
           filter((event) => {
             const target = event.target;
             if (!(target instanceof Node)) return true;
@@ -239,12 +260,16 @@ export class ZardPopoverDirective {
 
     // Add Escape key handler for all triggers
     this.listeners.push(
-      this.renderer.listen(this.nativeElement, 'keydown', (event: KeyboardEvent) => {
-        if (event.key === 'Escape' && this.isVisible()) {
-          event.preventDefault();
-          this.hide();
-        }
-      }),
+      this.renderer.listen(
+        this.nativeElement,
+        'keydown',
+        (event: KeyboardEvent) => {
+          if (event.key === 'Escape' && this.isVisible()) {
+            event.preventDefault();
+            this.hide();
+          }
+        },
+      ),
     );
 
     if (trigger === 'click') {
@@ -256,12 +281,16 @@ export class ZardPopoverDirective {
       );
       // Add Enter/Space for keyboard activation
       this.listeners.push(
-        this.renderer.listen(this.nativeElement, 'keydown', (event: KeyboardEvent) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            this.toggle();
-          }
-        }),
+        this.renderer.listen(
+          this.nativeElement,
+          'keydown',
+          (event: KeyboardEvent) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              this.toggle();
+            }
+          },
+        ),
       );
     } else if (trigger === 'hover') {
       // Use maxTouchPoints as the canonical touch check — it's defined in the W3C Pointer Events
@@ -272,15 +301,22 @@ export class ZardPopoverDirective {
       if (isTouch) {
         // Touch devices: tap to toggle, tap outside to close
         this.listeners.push(
-          this.renderer.listen(this.nativeElement, 'touchstart', (event: TouchEvent) => {
-            event.stopPropagation();
-            this.toggle();
-          }),
+          this.renderer.listen(
+            this.nativeElement,
+            'touchstart',
+            (event: TouchEvent) => {
+              event.stopPropagation();
+              this.toggle();
+            },
+          ),
         );
 
         const outsideTouchHandler = (event: TouchEvent) => {
           const target = event.target;
-          if (this.isVisible() && (!(target instanceof Node) || !this.nativeElement.contains(target))) {
+          if (
+            this.isVisible() &&
+            (!(target instanceof Node) || !this.nativeElement.contains(target))
+          ) {
             this.hide();
           }
         };
@@ -291,7 +327,10 @@ export class ZardPopoverDirective {
         this.listeners.push(
           this.renderer.listen(this.nativeElement, 'mouseenter', () => {
             this.clearGraceTimer();
-            this.hoverDelayTimer = setTimeout(() => this.show(), this.zHoverDelay());
+            this.hoverDelayTimer = setTimeout(
+              () => this.show(),
+              this.zHoverDelay(),
+            );
           }),
         );
 
@@ -497,5 +536,7 @@ export class ZardPopoverDirective {
 export class ZardPopoverComponent {
   readonly class = input<string>('');
 
-  protected readonly classes = computed(() => mergeClasses(popoverVariants(), this.class()));
+  protected readonly classes = computed(() =>
+    mergeClasses(popoverVariants(), this.class()),
+  );
 }

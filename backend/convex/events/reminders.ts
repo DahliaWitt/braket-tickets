@@ -21,6 +21,9 @@ export const sendTicketPurchaseReminder = mutation({
     eventId: v.id('events'),
     subject: v.string(),
     message: v.string(),
+    // Optional serialized ProseMirror JSON rich body. When present, the server
+    // validates + renders it and derives the canonical plain text from it.
+    bodyJson: v.optional(v.string()),
   },
   returns: ticketReminderSendResultValidator,
   handler: async (ctx, args) => await queueTicketPurchaseReminder(ctx, args),

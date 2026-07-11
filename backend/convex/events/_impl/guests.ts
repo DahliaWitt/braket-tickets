@@ -95,6 +95,11 @@ export async function update(
     type: args.type,
     notes: args.notes,
     emailedAt: guest.emailedAt,
+    // Carry the in-flight ticket-send lock through the replace. Omitting it
+    // would drop the field (replace overwrites the whole document), silently
+    // clearing a lock a concurrent `sendTicket` action is holding and allowing
+    // a duplicate ticket email. See `beginGuestTicketSend` for the lock's role.
+    emailSendLockedAt: guest.emailSendLockedAt,
     checkedInAt: guest.checkedInAt,
     checkedInBy: guest.checkedInBy,
   });
@@ -262,8 +267,10 @@ export async function markAsEmailed(
  * the failure path so a failed send can be retried immediately instead of
  * waiting out the staleness window. Only clears the lock when this attempt
  * still owns it (`emailSendLockedAt === lockToken`), so an older attempt cannot
- * release a newer reclaimed lock. `null` (not `undefined`) is used because
- * `ctx.db.patch` does not clear fields set to `undefined` in this codebase.
+ * release a newer reclaimed lock. `null` (not `undefined`) is used to keep a
+ * released lock distinguishable from a never-claimed one (absent field) — see
+ * the schema doc for `guests.emailSendLockedAt`. (`ctx.db.patch` would remove
+ * the field entirely if set to `undefined`.)
  */
 export async function clearGuestTicketSendLock(
   ctx: MutationCtx,

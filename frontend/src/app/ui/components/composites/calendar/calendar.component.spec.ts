@@ -1,4 +1,4 @@
-import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
+import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -6,15 +6,15 @@ import {
   signal,
   type WritableSignal,
 } from '@angular/core';
-import { type ComponentFixture, TestBed } from '@angular/core/testing';
-import { vi } from 'vitest';
-import type { CalendarMode, CalendarValue } from './calendar.types';
-import { BraCalendarComponent } from './calendar.component';
-import { BraCalendarGridComponent } from './calendar-grid.component';
-import { BraCalendarGridComponentHarness } from './calendar-grid.harness';
-import { BraCalendarNavigationComponent } from './calendar-navigation.component';
-import { BraCalendarNavigationComponentHarness } from './calendar-navigation.component.harness';
-import { BraCalendarComponentHarness } from './calendar.harness';
+import {type ComponentFixture, TestBed} from '@angular/core/testing';
+import {vi} from 'vitest';
+import type {CalendarMode, CalendarValue} from './calendar.types';
+import {BraCalendarComponent} from './calendar.component';
+import {BraCalendarGridComponent} from './calendar-grid.component';
+import {BraCalendarGridComponentHarness} from './calendar-grid.harness';
+import {BraCalendarNavigationComponent} from './calendar-navigation.component';
+import {BraCalendarNavigationComponentHarness} from './calendar-navigation.component.harness';
+import {BraCalendarComponentHarness} from './calendar.harness';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -59,15 +59,17 @@ describe('BraCalendarComponent', () => {
   let _navigationHarness: BraCalendarNavigationComponentHarness;
 
   const getCalendar = (): BraCalendarComponent =>
-    fixture.debugElement.query((de) => de.componentInstance instanceof BraCalendarComponent)
-      ?.componentInstance as BraCalendarComponent;
+    fixture.debugElement.query(
+      (de) => de.componentInstance instanceof BraCalendarComponent,
+    )?.componentInstance as BraCalendarComponent;
 
   const getCalendarApi = (): CalendarComponentTestApi =>
     getCalendar() as unknown as CalendarComponentTestApi;
 
   const getGrid = (): BraCalendarGridComponent =>
-    fixture.debugElement.query((de) => de.componentInstance instanceof BraCalendarGridComponent)
-      ?.componentInstance as BraCalendarGridComponent;
+    fixture.debugElement.query(
+      (de) => de.componentInstance instanceof BraCalendarGridComponent,
+    )?.componentInstance as BraCalendarGridComponent;
 
   const getNavigation = (): BraCalendarNavigationComponent =>
     fixture.debugElement.query(
@@ -87,14 +89,16 @@ describe('BraCalendarComponent', () => {
     const loader = TestbedHarnessEnvironment.loader(fixture);
     _calendarHarness = await loader.getHarness(BraCalendarComponentHarness);
     _gridHarness = await loader.getHarness(BraCalendarGridComponentHarness);
-    _navigationHarness = await loader.getHarness(BraCalendarNavigationComponentHarness);
+    _navigationHarness = await loader.getHarness(
+      BraCalendarNavigationComponentHarness,
+    );
   });
 
   it('should select a date in single mode and emit dateChange', () => {
     const selectedDate = new Date(2026, 0, 11);
     const grid = getGrid();
 
-    grid.dateSelect.emit({ date: selectedDate, index: 10 });
+    grid.dateSelect.emit({date: selectedDate, index: 10});
     fixture.detectChanges();
 
     const value = host.value();
@@ -103,7 +107,9 @@ describe('BraCalendarComponent', () => {
     expect(host.dateChanges()).toHaveLength(1);
     const emittedDate = host.dateChanges()[0];
     expect(emittedDate).toBeInstanceOf(Date);
-    expect((emittedDate as Date).toDateString()).toBe(selectedDate.toDateString());
+    expect((emittedDate as Date).toDateString()).toBe(
+      selectedDate.toDateString(),
+    );
   });
 
   it('should ignore date selection when disabled', () => {
@@ -111,7 +117,7 @@ describe('BraCalendarComponent', () => {
     fixture.detectChanges();
 
     const grid = getGrid();
-    grid.dateSelect.emit({ date: new Date(2026, 0, 15), index: 14 });
+    grid.dateSelect.emit({date: new Date(2026, 0, 15), index: 14});
     fixture.detectChanges();
 
     expect(host.value()).toBeNull();
@@ -126,20 +132,20 @@ describe('BraCalendarComponent', () => {
     const dateOne = new Date(2026, 0, 5);
     const dateTwo = new Date(2026, 0, 7);
 
-    grid.dateSelect.emit({ date: dateOne, index: 4 });
+    grid.dateSelect.emit({date: dateOne, index: 4});
     fixture.detectChanges();
     expect(host.value()).toEqual([dateOne]);
 
-    grid.dateSelect.emit({ date: dateTwo, index: 6 });
+    grid.dateSelect.emit({date: dateTwo, index: 6});
     fixture.detectChanges();
     expect(host.value()).toEqual([dateOne, dateTwo]);
 
-    grid.dateSelect.emit({ date: dateOne, index: 4 });
+    grid.dateSelect.emit({date: dateOne, index: 4});
     fixture.detectChanges();
     expect(host.value()).toEqual([dateTwo]);
 
     const changesBeforeNull = host.dateChanges().length;
-    grid.dateSelect.emit({ date: dateTwo, index: 6 });
+    grid.dateSelect.emit({date: dateTwo, index: 6});
     fixture.detectChanges();
 
     expect(host.value()).toBeNull();
@@ -154,19 +160,19 @@ describe('BraCalendarComponent', () => {
     const start = new Date(2026, 0, 10);
     const earlier = new Date(2026, 0, 3);
 
-    grid.dateSelect.emit({ date: start, index: 9 });
+    grid.dateSelect.emit({date: start, index: 9});
     fixture.detectChanges();
     expect(host.value()).toEqual([start]);
 
-    grid.dateSelect.emit({ date: earlier, index: 2 });
+    grid.dateSelect.emit({date: earlier, index: 2});
     fixture.detectChanges();
     expect(host.value()).toEqual([earlier, start]);
 
-    grid.dateSelect.emit({ date: earlier, index: 2 });
+    grid.dateSelect.emit({date: earlier, index: 2});
     fixture.detectChanges();
     expect(host.value()).toEqual([earlier]);
 
-    grid.dateSelect.emit({ date: earlier, index: 2 });
+    grid.dateSelect.emit({date: earlier, index: 2});
     fixture.detectChanges();
     expect(host.value()).toBeNull();
   });
@@ -227,13 +233,90 @@ describe('BraCalendarComponent', () => {
     expect(calendarApi.currentYearValue()).toBe('2027');
   });
 
+  it('should render the selected month, not roll over, when a 31st is selected and the month dropdown changes', async () => {
+    // Regression: value on the 31st + dropdown to a shorter month used to make
+    // the grid roll into a later month while the header showed the picked month.
+    host.value.set(new Date(2026, 0, 31)); // Jan 31 2026
+    fixture.detectChanges();
+
+    const calendarApi = getCalendarApi();
+    calendarApi.onMonthChange('1'); // pick February
+    fixture.detectChanges();
+
+    // Header state advanced to February...
+    expect(calendarApi.currentMonthValue()).toBe('1');
+    expect(calendarApi.currentYearValue()).toBe('2026');
+    // ...and the rendered grid must agree (would be "March 2026" before the fix).
+    expect(await _calendarHarness.getRenderedGridMonthYear()).toBe(
+      'February 2026',
+    );
+  });
+
+  it('should render February, not roll over, when the previous-month chevron lands on a shorter month', async () => {
+    host.value.set(new Date(2026, 2, 31)); // Mar 31 2026
+    fixture.detectChanges();
+
+    const calendarApi = getCalendarApi();
+    const navigation = getNavigation();
+    expect(calendarApi.currentMonthValue()).toBe('2'); // starts on March
+
+    navigation.previousMonth.emit(); // go to February
+    fixture.detectChanges();
+
+    expect(calendarApi.currentMonthValue()).toBe('1');
+    expect(calendarApi.currentYearValue()).toBe('2026');
+    // Grid must render February, not roll over to March (pre-fix behavior).
+    expect(await _calendarHarness.getRenderedGridMonthYear()).toBe(
+      'February 2026',
+    );
+  });
+
+  it('should keep the grid in sync with the header across a year boundary when a 31st is selected', async () => {
+    host.value.set(new Date(2026, 11, 31)); // Dec 31 2026
+    fixture.detectChanges();
+
+    const calendarApi = getCalendarApi();
+    const navigation = getNavigation();
+    expect(calendarApi.currentMonthValue()).toBe('11');
+    expect(calendarApi.currentYearValue()).toBe('2026');
+
+    navigation.nextMonth.emit(); // roll over to January of the next year
+    fixture.detectChanges();
+
+    expect(calendarApi.currentMonthValue()).toBe('0');
+    expect(calendarApi.currentYearValue()).toBe('2027');
+    expect(await _calendarHarness.getRenderedGridMonthYear()).toBe(
+      'January 2027',
+    );
+  });
+
+  it('should render February, not roll over, when year navigation lands a leap-day selection on a non-leap year', async () => {
+    host.value.set(new Date(2024, 1, 29)); // Feb 29 2024 (leap day)
+    fixture.detectChanges();
+
+    const calendarApi = getCalendarApi();
+    const grid = getGrid();
+    expect(calendarApi.currentMonthValue()).toBe('1');
+    expect(calendarApi.currentYearValue()).toBe('2024');
+
+    grid.nextYear.emit(); // navigateYear(1) -> February 2025 (non-leap)
+    fixture.detectChanges();
+
+    expect(calendarApi.currentMonthValue()).toBe('1');
+    expect(calendarApi.currentYearValue()).toBe('2025');
+    // Feb 2025 has no 29th; pre-fix this rolled the grid to March 2025.
+    expect(await _calendarHarness.getRenderedGridMonthYear()).toBe(
+      'February 2025',
+    );
+  });
+
   it('should update disabled state through ControlValueAccessor', () => {
     const calendar = getCalendar();
     calendar.setDisabledState(true);
     fixture.detectChanges();
 
     const grid = getGrid();
-    grid.dateSelect.emit({ date: new Date(2026, 0, 9), index: 8 });
+    grid.dateSelect.emit({date: new Date(2026, 0, 9), index: 8});
     fixture.detectChanges();
 
     expect(host.value()).toBeNull();
@@ -248,7 +331,7 @@ describe('BraCalendarComponent', () => {
     calendar.registerOnChange(onChange);
     calendar.registerOnTouched(onTouched);
 
-    getGrid().dateSelect.emit({ date: selectedDate, index: 19 });
+    getGrid().dateSelect.emit({date: selectedDate, index: 19});
     fixture.detectChanges();
 
     expect(onChange).toHaveBeenCalledTimes(1);
@@ -301,12 +384,12 @@ describe('BraCalendarComponent', () => {
     calendarApi.currentYearValue.set('2026');
     fixture.detectChanges();
 
-    grid.nextMonth.emit({ position: 'first', dayOfWeek: -1 });
+    grid.nextMonth.emit({position: 'first', dayOfWeek: -1});
     await vi.runAllTimersAsync();
     fixture.detectChanges();
 
     const days = (
-      grid as unknown as { calendarDays: () => { isDisabled: boolean }[] }
+      grid as unknown as {calendarDays: () => {isDisabled: boolean}[]}
     ).calendarDays();
     const expectedFirstEnabled = days.findIndex((day) => !day.isDisabled);
 
@@ -325,12 +408,12 @@ describe('BraCalendarComponent', () => {
     calendarApi.currentYearValue.set('2026');
     fixture.detectChanges();
 
-    grid.previousMonth.emit({ position: 'last', dayOfWeek: -1 });
+    grid.previousMonth.emit({position: 'last', dayOfWeek: -1});
     await vi.runAllTimersAsync();
     fixture.detectChanges();
 
     const days = (
-      grid as unknown as { calendarDays: () => { isDisabled: boolean }[] }
+      grid as unknown as {calendarDays: () => {isDisabled: boolean}[]}
     ).calendarDays();
     let expectedLastEnabled = -1;
     for (let index = days.length - 1; index >= 0; index--) {

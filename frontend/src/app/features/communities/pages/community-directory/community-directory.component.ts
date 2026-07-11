@@ -15,6 +15,8 @@ import {injectQueries, skipToken} from 'convex-angular';
 import {AuthService} from '@/core/services/auth.service';
 import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton.component';
 import {BraCommunityAvatarComponent} from '@ui/components/primitives/community-avatar/community-avatar.component';
+import {BraStatusBadgeComponent} from '@ui/components/primitives/status-badge/status-badge.component';
+import {EmptyStateComponent} from '@ui/components/primitives/empty-state/empty-state.component';
 import {safeResourceValue} from '@/utils/resource';
 
 type CommunityListItem = FunctionReturnType<
@@ -29,31 +31,33 @@ type CommunityListItem = FunctionReturnType<
     RouterLink,
     ZardSkeletonComponent,
     BraCommunityAvatarComponent,
+    BraStatusBadgeComponent,
+    EmptyStateComponent,
   ],
   template: `
     <app-content-layout>
       <div class="space-y-6 py-16 md:py-24">
         <div class="fade-in space-y-4">
-          <p class="mono-label text-2xs text-muted-foreground">Communities</p>
+          <p class="mono-label text-2xs text-muted-foreground">communities</p>
           <h1
             class="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl lg:text-4xl"
           >
-            Community Directory
+            community directory
           </h1>
-          <p class="max-w-2xl text-muted-foreground/80">
-            Discover communities using Braket Tickets for vetting and ticketing.
+          <p class="max-w-2xl text-muted-foreground">
+            the communities on braket — get vetted, get in.
           </p>
         </div>
 
         @if (isLoading()) {
           <div
             data-testid="community-directory-skeleton"
-            class="grid gap-6 md:grid-cols-2 lg:grid-cols-3"
+            class="grid gap-3 md:grid-cols-2 lg:grid-cols-3"
           >
             @for (i of [1, 2, 3, 4, 5, 6]; track i) {
               <div
                 data-testid="skeleton-card"
-                class="flex flex-col gap-4 rounded-xl border border-border bg-card p-6"
+                class="flex flex-col gap-4 bg-card/40 p-6"
               >
                 <z-skeleton zAnimation="shimmer" class="h-16 w-16 rounded-lg" />
                 <div class="space-y-2">
@@ -89,26 +93,25 @@ type CommunityListItem = FunctionReturnType<
               <h2
                 class="font-display text-2xl font-bold tracking-tight text-foreground"
               >
-                Directory unavailable
+                directory unavailable
               </h2>
               <p class="max-w-md text-sm leading-relaxed text-muted-foreground">
-                couldn&apos;t load communities right now. try again to refresh
-                the directory.
+                couldn&apos;t load communities right now — give it another shot
               </p>
             </div>
             <button
               data-testid="community-directory-retry"
               type="button"
               (click)="retryDirectoryLoad()"
-              class="inline-flex min-h-10 items-center justify-center border border-border px-4 py-2 font-mono text-xs tracking-widest text-foreground uppercase transition-colors hover:border-primary hover:text-primary"
+              class="inline-flex min-h-6 cursor-pointer items-center font-mono text-sm tracking-widest text-muted-foreground uppercase transition-colors hover:text-foreground"
             >
-              Try Again
+              &#8635; Try Again
             </button>
           </div>
         } @else if (communities().length > 0) {
           <div
             data-testid="community-list"
-            class="grid gap-6 md:grid-cols-2 lg:grid-cols-3"
+            class="grid gap-3 md:grid-cols-2 lg:grid-cols-3"
           >
             @for (
               community of communities();
@@ -118,7 +121,7 @@ type CommunityListItem = FunctionReturnType<
               @let status = statusMap().get(community._id);
               <div
                 data-testid="community-card"
-                class="group animate-in fade-in slide-in-from-bottom-8 flex flex-col gap-4 rounded-xl border border-border bg-card p-6"
+                class="group animate-in fade-in slide-in-from-bottom-8 flex flex-col gap-4 bg-card/40 p-6 transition-colors hover:bg-card/70"
                 [style.animation-delay]="i * 75 + 'ms'"
                 [style.animation-fill-mode]="'backwards'"
               >
@@ -192,39 +195,45 @@ type CommunityListItem = FunctionReturnType<
                     } @else if (hasRelationshipError()) {
                       <span
                         data-testid="community-relationship-error"
-                        class="inline-flex min-h-6 items-center rounded bg-muted/40 px-2 py-1 font-mono text-[0.625rem] tracking-widest text-muted-foreground uppercase"
+                        class="inline-flex min-h-6 items-center rounded bg-muted/40 px-2 py-1 font-mono text-2xs tracking-widest text-muted-foreground uppercase"
                       >
-                        Status unavailable
+                        status unavailable
                       </span>
                     } @else if (status === 'access') {
-                      <span
+                      <bra-status-badge
                         data-testid="status-access"
-                        class="inline-flex min-h-6 items-center gap-1 rounded bg-[--color-success]/10 px-2 py-1 font-mono text-xs tracking-widest text-[--color-success] uppercase"
+                        status="success"
+                        size="md"
+                        >vetted</bra-status-badge
                       >
-                        Vetted
-                      </span>
                     } @else if (status === 'pending') {
-                      <span
+                      <bra-status-badge
                         data-testid="status-pending"
-                        class="inline-flex min-h-6 items-center gap-1 rounded bg-[--color-warning]/10 px-2 py-1 font-mono text-xs tracking-widest text-[--color-warning] uppercase"
+                        status="warning"
+                        size="md"
+                        >pending</bra-status-badge
                       >
-                        Pending
-                      </span>
+                    } @else if (status === 'revoked') {
+                      <bra-status-badge
+                        data-testid="status-revoked"
+                        status="destructive"
+                        size="md"
+                        >revoked</bra-status-badge
+                      >
                     } @else if (status === 'rejected') {
                       <div
                         class="flex flex-wrap items-center justify-end gap-2"
                       >
-                        <span
+                        <bra-status-badge
                           data-testid="status-rejected"
-                          class="inline-flex min-h-6 items-center gap-1 rounded bg-destructive/10 px-2 py-1 font-mono text-xs tracking-widest text-destructive-text uppercase"
+                          status="destructive"
+                          size="md"
+                          >rejected</bra-status-badge
                         >
-                          Rejected
-                        </span>
-                        @if (
-                          community.status === 'published' &&
-                          latestApplicationStatusMap().get(community._id) ===
-                            'rejected'
-                        ) {
+                        <!-- statusMap only yields 'rejected' when the newest
+                             application is rejected (revoked maps to its own
+                             branch), so publication is the only gate here. -->
+                        @if (community.status === 'published') {
                           <a
                             data-testid="cta-revise"
                             [routerLink]="[
@@ -261,15 +270,19 @@ type CommunityListItem = FunctionReturnType<
             }
           </div>
         } @else {
-          <div data-testid="empty-state" class="space-y-4 py-16 text-center">
-            <p class="text-muted-foreground">No communities listed yet.</p>
+          <app-empty-state
+            data-testid="empty-state"
+            class="block py-16"
+            title="no communities listed yet"
+            description="new communities land here first — check back soon."
+          >
             <a
               routerLink="/"
-              class="font-mono text-sm tracking-widest text-primary uppercase transition-colors hover:text-primary/80"
+              class="mt-2 inline-flex min-h-6 items-center font-mono text-sm tracking-widest text-primary uppercase transition-colors hover:text-primary/80"
             >
-              &larr; Back Home
+              &larr; back home
             </a>
-          </div>
+          </app-empty-state>
         }
       </div>
     </app-content-layout>
@@ -277,7 +290,7 @@ type CommunityListItem = FunctionReturnType<
 })
 export class CommunityDirectoryComponent {
   protected readonly auth = inject(AuthService);
-  protected readonly fallbackDescription = 'Profile coming soon.';
+  protected readonly fallbackDescription = 'profile coming soon.';
   private readonly publicCommunitiesService = inject(PublicCommunitiesService);
   private readonly publicDirectoryAttempt = signal(0);
 
@@ -354,8 +367,11 @@ export class CommunityDirectoryComponent {
   });
 
   readonly statusMap = computed(
-    (): Map<string, 'access' | 'pending' | 'rejected'> => {
-      const map = new Map<string, 'access' | 'pending' | 'rejected'>();
+    (): Map<string, 'access' | 'pending' | 'rejected' | 'revoked'> => {
+      const map = new Map<
+        string,
+        'access' | 'pending' | 'rejected' | 'revoked'
+      >();
       if (!this.auth.isAuthenticated()) return map;
 
       // getMyApplications returns newest-first (desc); track seen organizer IDs
@@ -369,7 +385,9 @@ export class CommunityDirectoryComponent {
         if (app.status === 'pending') {
           map.set(app.organizerId, 'pending');
         } else if (app.status === 'rejected' || app.status === 'revoked') {
-          map.set(app.organizerId, 'rejected');
+          // Revoked memberships keep the same visibility as rejected ones in
+          // the directory, but are labelled accurately as "revoked".
+          map.set(app.organizerId, app.status);
         }
       }
 
@@ -382,22 +400,6 @@ export class CommunityDirectoryComponent {
       return map;
     },
   );
-
-  readonly latestApplicationStatusMap = computed(() => {
-    const map = new Map<
-      string,
-      'pending' | 'approved' | 'rejected' | 'revoked'
-    >();
-    if (!this.auth.isAuthenticated()) return map;
-
-    const applications = this.queries.results().myApplications ?? [];
-    for (const app of applications) {
-      if (!app.organizerId || map.has(app.organizerId)) continue;
-      map.set(app.organizerId, app.status);
-    }
-
-    return map;
-  });
 
   protected retryDirectoryLoad(): void {
     if (this.auth.isAuthenticated()) {

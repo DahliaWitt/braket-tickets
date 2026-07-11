@@ -1,4 +1,5 @@
-import { ComponentHarness } from '@angular/cdk/testing';
+import {ComponentHarness} from '@angular/cdk/testing';
+import {RichTextEditorHarness} from '../rich-text-editor/rich-text-editor.component.harness';
 
 export class TicketReminderTabHarness extends ComponentHarness {
   static hostSelector = 'app-ticket-reminder-tab';
@@ -6,9 +7,13 @@ export class TicketReminderTabHarness extends ComponentHarness {
   private readonly getRecipientCount = this.locatorFor(
     '[data-testid="ticket-reminder-recipient-count"]',
   );
-  private readonly getSendButton = this.locatorFor('[data-testid="send-ticket-reminder"]');
-  private readonly getSubjectInput = this.locatorFor('[data-testid="ticket-reminder-subject"]');
-  private readonly getMessageInput = this.locatorFor('[data-testid="ticket-reminder-message"]');
+  private readonly getSendButton = this.locatorFor(
+    '[data-testid="send-ticket-reminder"]',
+  );
+  private readonly getSubjectInput = this.locatorFor(
+    '[data-testid="ticket-reminder-subject"]',
+  );
+  private readonly getMessageEditor = this.locatorFor(RichTextEditorHarness);
   private readonly getAudienceError = this.locatorForOptional(
     '[data-testid="ticket-reminder-audience-error"]',
   );
@@ -35,10 +40,23 @@ export class TicketReminderTabHarness extends ComponentHarness {
     await input.sendKeys(value);
   }
 
-  async setMessage(value: string): Promise<void> {
-    const input = await this.getMessageInput();
-    await input.clear();
-    await input.sendKeys(value);
+  /** Returns the CDK harness for the embedded rich-text message editor. */
+  async getMessageEditorHarness(): Promise<RichTextEditorHarness> {
+    return this.getMessageEditor();
   }
 
+  /** True when the rich-text message editor is rendered in the compose form. */
+  async hasMessageEditor(): Promise<boolean> {
+    try {
+      await this.getMessageEditor();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Serialized ProseMirror JSON currently held by the message editor. */
+  async getMessageJson(): Promise<string> {
+    return (await this.getMessageEditor()).getSerializedJson();
+  }
 }

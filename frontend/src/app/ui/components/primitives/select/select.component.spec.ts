@@ -221,6 +221,63 @@ describe('ZardSelectComponent', () => {
     expect(selectComponent.focusedIndex()).toBe(2);
   });
 
+  it('should point aria-activedescendant at the highlighted option after a preceding disabled option', async () => {
+    const select = await loader.getHarness(ZardSelectHarness);
+    const selectComponent = getSelectComponent();
+    await openDropdown(select);
+
+    // Enabled options are None(0), Alpha(1), Gamma(2); Beta is disabled and
+    // excluded from navigation. End highlights Gamma, the enabled option that
+    // sits after the disabled Beta in the DOM.
+    selectComponent.onDropdownKeydown(
+      new KeyboardEvent('keydown', {key: 'End'}),
+    );
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(selectComponent.focusedIndex()).toBe(2);
+
+    const gammaId = await select.getOptionId('gamma');
+    const betaId = await select.getOptionId('beta');
+    expect(gammaId).toBeTruthy();
+
+    const activeDescendant = await select.getActiveDescendantId();
+    expect(activeDescendant).toBe(gammaId);
+    // Must never announce the disabled option that precedes the highlighted one.
+    expect(activeDescendant).not.toBe(betaId);
+  });
+
+  it('should keep aria-activedescendant aligned with the highlighted option while arrowing past a disabled option', async () => {
+    const select = await loader.getHarness(ZardSelectHarness);
+    const selectComponent = getSelectComponent();
+    await openDropdown(select);
+
+    const alphaId = await select.getOptionId('alpha');
+    const betaId = await select.getOptionId('beta');
+    const gammaId = await select.getOptionId('gamma');
+
+    // Opening highlights None (index 0). ArrowDown -> Alpha (index 1).
+    selectComponent.onDropdownKeydown(
+      new KeyboardEvent('keydown', {key: 'ArrowDown'}),
+    );
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(selectComponent.focusedIndex()).toBe(1);
+    expect(await select.getActiveDescendantId()).toBe(alphaId);
+
+    // ArrowDown skips the disabled Beta and lands on Gamma (index 2).
+    selectComponent.onDropdownKeydown(
+      new KeyboardEvent('keydown', {key: 'ArrowDown'}),
+    );
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(selectComponent.focusedIndex()).toBe(2);
+
+    const activeDescendant = await select.getActiveDescendantId();
+    expect(activeDescendant).toBe(gammaId);
+    expect(activeDescendant).not.toBe(betaId);
+  });
+
   it('should focus selected item when opening in multiple mode', async () => {
     component.multiple.set(true);
     component.value.set(['gamma']);

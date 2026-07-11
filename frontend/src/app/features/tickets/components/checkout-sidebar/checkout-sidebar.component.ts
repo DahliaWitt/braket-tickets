@@ -250,10 +250,16 @@ export class CheckoutSidebarComponent {
     return Math.max(base * 3, 200);
   });
 
-  // Slider max for community tier: the regular price (ensures users pick "less than regular")
+  // Slider max for community tier: the regular price (ensures users pick "less
+  // than regular"), capped at slidingScaleMax so the slider never offers an
+  // amount the backend (validateTierPricing) rejects. slidingScaleMax is
+  // optional — undefined means no ceiling, mirroring the backend guard.
   readonly communitySliderMax = computed(() => {
     const evt = this.event();
     if (!evt) return 100;
-    return (evt.price || 0) / 100;
+    const priceDollars = (evt.price || 0) / 100;
+    const maxCents = evt.slidingScaleMax;
+    if (maxCents === undefined) return priceDollars;
+    return Math.min(priceDollars, maxCents / 100);
   });
 }

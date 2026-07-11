@@ -282,6 +282,9 @@ export class CommunityAdminHarness extends ComponentHarness {
   private getCreateDialogFocusTrapEl = this.locatorForOptional(
     '[role="dialog"] [cdkTrapFocus]',
   );
+  private getCreateDialogBackdropEl = this.locatorForOptional(
+    '[data-testid="create-link-backdrop"]',
+  );
 
   /** Returns true when the create link dialog is open. */
   async hasCreateDialog(): Promise<boolean> {
@@ -299,6 +302,24 @@ export class CommunityAdminHarness extends ComponentHarness {
     if (dialog) {
       await dialog.sendKeys(TestKey.ESCAPE);
     }
+  }
+
+  /** Returns the aria-hidden attribute of the create-dialog backdrop, or null. */
+  async getDialogBackdropAriaHidden(): Promise<string | null> {
+    const backdrop = await this.getCreateDialogBackdropEl();
+    return backdrop ? backdrop.getAttribute('aria-hidden') : null;
+  }
+
+  /** Returns the tabindex attribute of the create-dialog backdrop, or null when absent. */
+  async getDialogBackdropTabIndex(): Promise<string | null> {
+    const backdrop = await this.getCreateDialogBackdropEl();
+    return backdrop ? backdrop.getAttribute('tabindex') : null;
+  }
+
+  /** Clicks the create-dialog backdrop (dismisses the dialog). */
+  async clickDialogBackdrop(): Promise<void> {
+    const backdrop = await this.getCreateDialogBackdropEl();
+    await backdrop?.click();
   }
 
   private getAuditLogTableEl = this.locatorForOptional(AuditLogTableHarness);

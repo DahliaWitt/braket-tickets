@@ -782,14 +782,107 @@ describe('AuthService', () => {
   });
 
   describe('session initialization', () => {
+    function createServiceWithInit(): AuthService {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          AuthService,
+          {provide: Router, useValue: routerSpy},
+          {provide: CONVEX, useValue: convexClientMock},
+          {provide: AUTH_CLIENT, useValue: authClient as unknown as AuthClient},
+          {provide: BraToastService, useValue: toastSpy},
+        ],
+      });
+      const created = TestBed.inject(AuthService);
+      attachTestQueries(created);
+      return created;
+    }
+
+    it('retries a transient getSession backend error instead of settling as logged out', async () => {
+      const session = {
+        user: {email: 'valid@example.com', name: 'Valid User'},
+        session: {id: 'session-123'},
+      };
+      // A returned {data: null, error} with NO retryable keyword in its message:
+      // recovery must come from promoting the returned error to a throw, not
+      // from string-matching the message.
+      vi.mocked(authClient.getSession)
+        .mockReset()
+        .mockResolvedValueOnce({data: null, error: {status: 503}})
+        .mockResolvedValueOnce({data: session, error: null});
+      // Keep the user query resolved so missing-user repair short-circuits.
+      userSignal.set({
+        _id: 'u1' as unknown,
+        name: 'Valid User',
+        _creationTime: 1,
+      } as UserModel);
+
+      vi.useFakeTimers();
+      try {
+        const initService = createServiceWithInit();
+
+        // Flush the first attempt: the transient error must NOT settle auth into
+        // a confident "unauthenticated" state — the whole point of the fix.
+        await vi.advanceTimersByTimeAsync(0);
+        expect(initService.authInitialized()).toBe(false);
+        expect(initService.isAuthenticated()).toBe(false);
+
+        // Advance through the first retry backoff (delaysMs[1] = 500ms).
+        await vi.advanceTimersByTimeAsync(500);
+
+        expect(authClient.getSession).toHaveBeenCalledTimes(2);
+        expect(initService.authInitialized()).toBe(true);
+        expect(initService.isAuthenticated()).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('settles as unauthenticated when getSession returns no session and no error', async () => {
+      vi.mocked(authClient.getSession)
+        .mockReset()
+        .mockResolvedValue({data: null, error: null});
+
+      const initService = createServiceWithInit();
+
+      await vi.waitFor(() => {
+        expect(initService.authInitialized()).toBe(true);
+      });
+      // A genuine "no session" must settle immediately without retrying.
+      expect(authClient.getSession).toHaveBeenCalledTimes(1);
+      expect(initService.isAuthenticated()).toBe(false);
+    });
+
+    it('exhausts bounded retries on a persistent backend error, then fails closed', async () => {
+      vi.mocked(authClient.getSession)
+        .mockReset()
+        .mockResolvedValue({data: null, error: {status: 503}});
+
+      vi.useFakeTimers();
+      try {
+        const initService = createServiceWithInit();
+
+        // Drain every backoff window: delaysMs = [0, 500, 1000, 2000, 4000].
+        await vi.advanceTimersByTimeAsync(0 + 500 + 1000 + 2000 + 4000 + 10);
+
+        // Bounded to five attempts — no infinite retry loop.
+        expect(authClient.getSession).toHaveBeenCalledTimes(5);
+        // Terminal fail-closed: guards are released (initialized) and the user
+        // is treated as unauthenticated only after retries are exhausted.
+        expect(initService.authInitialized()).toBe(true);
+        expect(initService.isAuthenticated()).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('ignores a stale initSession result after logout wins the race', async () => {
       const staleSession = {
         user: {id: '123', email: 'stale@example.com', name: 'Stale Session'},
         session: {id: 'session-123'},
       };
       let resolveGetSession:
-        | ((value: {data: typeof staleSession; error: null}) => void)
-        | undefined;
+        ((value: {data: typeof staleSession; error: null}) => void) | undefined;
       const pendingGetSession = new Promise<{
         data: typeof staleSession;
         error: null;

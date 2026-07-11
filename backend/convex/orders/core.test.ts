@@ -1866,6 +1866,90 @@ describe('orders', () => {
     ).toBe(5000);
   });
 
+  it('external refund auto-selection refunds valid tickets and preserves used (checked-in) tickets', async () => {
+    const t = convexTest();
+    const userId = await createUser(
+      t,
+      'External Refund Used Ticket Buyer',
+      'external-refund-used@example.com',
+    );
+    const {eventId, inventoryId} = await createEventWithInventory(t, {
+      totalTickets: 5,
+    });
+    const asUser = t.withIdentity({subject: userId});
+
+    const order = await asUser.mutation(api.orders.core.open, {
+      eventId,
+      quantity: 2,
+      tier: 'regular',
+      totalAmount: 5000,
+    });
+    await t.action(internal.orders.core.settlePaidOrderFromStripe, {
+      orderId: order.orderId,
+      stripePaymentIntentId: 'pi_external_refund_used',
+      stripeChargeId: 'ch_external_refund_used',
+      note: 'initial_payment',
+    });
+
+    const seededTickets = await t.run(async (ctx) =>
+      ctx.db
+        .query('tickets')
+        .withIndex('by_order', (q) => q.eq('orderId', order.orderId))
+        .collect(),
+    );
+    seededTickets.sort((a, b) => a._creationTime - b._creationTime);
+    // The oldest ticket is the one auto-selection would pick first when it
+    // (incorrectly) considers 'used' tickets — checking it in makes the bug
+    // observable: a valid-only selection must skip it and refund the newer
+    // still-valid ticket instead.
+    const usedTicketId = seededTickets[0]!._id;
+    const validTicketId = seededTickets[1]!._id;
+    await t.run(async (ctx) => {
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- simulates scanner check-in before an external (dashboard) refund arrives
+      await ctx.db.patch('tickets', usedTicketId, {status: 'used'});
+    });
+
+    // External dashboard refund: no explicit ticketIdsToRefund, so the handler
+    // auto-selects which ticket(s) to invalidate for a $25 partial refund.
+    await t.mutation(internal.orders.core.applyExternalRefund, {
+      orderId: order.orderId,
+      refundedAmountCents: 2500,
+      stripeRefundId: 're_external_used_partial',
+    });
+
+    let usedTicket = await t.run(async (ctx) => ctx.db.get(usedTicketId));
+    let validTicket = await t.run(async (ctx) => ctx.db.get(validTicketId));
+    let inventory = await t.run(async (ctx) =>
+      ctx.db.get('event_inventory', inventoryId),
+    );
+
+    // The checked-in ticket must survive to preserve the attendance record.
+    expect(usedTicket?.status).toBe('used');
+    // The still-valid ticket is the one that gets refunded.
+    expect(validTicket?.status).toBe('refunded');
+    // Only the valid seat is freed; the physically-occupied seat stays sold.
+    expect(inventory?.soldCount).toBe(1);
+
+    // A subsequent external refund covering the full order value must NOT
+    // invalidate the used ticket to "fill" the refund — matching the admin
+    // refund path, which never revokes checked-in tickets automatically.
+    await t.mutation(internal.orders.core.applyExternalRefund, {
+      orderId: order.orderId,
+      refundedAmountCents: 5000,
+      stripeRefundId: 're_external_used_full',
+    });
+
+    usedTicket = await t.run(async (ctx) => ctx.db.get(usedTicketId));
+    validTicket = await t.run(async (ctx) => ctx.db.get(validTicketId));
+    inventory = await t.run(async (ctx) =>
+      ctx.db.get('event_inventory', inventoryId),
+    );
+
+    expect(usedTicket?.status).toBe('used');
+    expect(validTicket?.status).toBe('refunded');
+    expect(inventory?.soldCount).toBe(1);
+  });
+
   it('keeps per-refund ledger amounts separate from cumulative external refund state', async () => {
     const t = convexTest();
     const userId = await createUser(

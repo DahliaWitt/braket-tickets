@@ -556,6 +556,36 @@ describe('CommunityAdminSettingsComponent', () => {
       expect(await harness.isStripeOnboardingIncomplete()).toBe(false);
     });
 
+    it('conveys Stripe charges/payouts/user-steps state as visible text, not dot color alone', async () => {
+      const {fixture, harness} = await setup({
+        organizerData: {
+          _id: FAKE_ORG_ID,
+          name: 'Test Community',
+          email: 'test@example.com',
+          contactInfo: 'Call us',
+          vettingQuestions: [],
+          stripeConnectedAccountId: 'acct_existing',
+          stripeOnboardingStatus: 'in_progress',
+          stripeChargesEnabled: true,
+          stripePayoutsEnabled: false,
+          organizerPaymentReady: false,
+        },
+      });
+
+      fixture.componentInstance.stripeStatus.set({
+        chargesEnabled: true,
+        payoutsEnabled: false,
+        userRequirementsClear: false,
+      });
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(await harness.getStripeChargesStateText()).toBe('enabled');
+      expect(await harness.getStripePayoutsStateText()).toBe('pending');
+      expect(await harness.getStripeUserStepsStateText()).toBe('pending');
+    });
+
     it('shows "Continue Setup on Stripe" CTA for connected-but-incomplete account (BRA-393)', async () => {
       const {fixture} = await setup({
         organizerData: {
@@ -910,6 +940,47 @@ describe('CommunityAdminSettingsComponent', () => {
       expect(convexMock.mutation).toHaveBeenCalled();
       expect(fixture.componentInstance.profileDirty()).toBe(false);
       expect(await harness.isSaveButtonDisabled()).toBe(true);
+    });
+
+    it('sends null for cleared profile fields so the backend removes them', async () => {
+      const {fixture, convexMock} = await setup({
+        organizerData: {
+          _id: FAKE_ORG_ID,
+          name: 'Test Community',
+          email: 'test@example.com',
+          contactInfo: 'Call us',
+          description: 'A cool place',
+          website: 'https://example.com',
+          slug: 'test-community',
+          vettingQuestions: [],
+        },
+      });
+
+      fixture.componentInstance.profileModel.update((m) => ({
+        ...m,
+        email: '',
+        contactInfo: '',
+        description: '',
+        website: '',
+        slug: '',
+      }));
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      await fixture.componentInstance.saveProfile();
+
+      const callArgs = convexMock.mutation.mock.calls[0][1] as Record<
+        string,
+        unknown
+      >;
+      // Explicit null (not undefined) is the wire signal that persists a clear.
+      expect(callArgs).toHaveProperty('email', null);
+      expect(callArgs).toHaveProperty('contactInfo', null);
+      expect(callArgs).toHaveProperty('description', null);
+      expect(callArgs).toHaveProperty('website', null);
+      // slug is intentionally NOT clearable (public URL key): a blank value is
+      // sent as undefined so the backend leaves the stored slug unchanged.
+      expect(callArgs['slug']).toBeUndefined();
     });
 
     it('save button becomes enabled after user edits profile name', async () => {

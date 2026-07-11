@@ -78,9 +78,9 @@ function formatTimestamp(ms: number): string {
               data-testid="feed-entry"
               [attr.data-ticket-id]="entry.ticketId"
             >
-              <!-- Space Mono timestamp in the AA-calibrated warning token -->
+              <!-- Space Mono timestamp in burnt amber (accent token) -->
               <span
-                class="shrink-0 font-mono text-xs leading-tight text-warning tabular-nums"
+                class="shrink-0 font-mono text-xs leading-tight text-accent tabular-nums"
                 data-testid="feed-entry-timestamp"
                 aria-label="Checked in at {{
                   formatTimestamp(entry.checkedInAt)
