@@ -62,6 +62,9 @@ export const send = mutation({
     eventId: v.id('events'),
     subject: v.string(),
     message: v.string(),
+    // Optional serialized ProseMirror JSON rich body. When present, the server
+    // validates + renders it and derives the canonical plain text from it.
+    bodyJson: v.optional(v.string()),
     // Include imported (external) ticket holders WITH an email in the audience.
     // Defaults to true. Recipients are deduped by normalized email across
     // native purchasers, guests, and imported entries regardless of this flag.

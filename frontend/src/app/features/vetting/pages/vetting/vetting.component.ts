@@ -849,8 +849,20 @@ export class VettingComponent {
           );
           values[q.id] = String(rawValue);
         } else if (q.type === 'boolean' && typeof rawValue === 'string') {
-          // Radio buttons store "true"/"false" strings — convert to actual booleans
-          values[q.id] = rawValue === 'true';
+          // Radio buttons store 'true'/'false' strings — convert to real
+          // booleans. An untouched question carries the empty-string sentinel
+          // (''); in that case OMIT the key entirely so the backend records the
+          // answer as unanswered rather than a fabricated explicit "No". Only an
+          // explicitly chosen radio contributes a boolean. The backend accepts a
+          // missing optional boolean (validateBooleanAnswer in
+          // backend/convex/lib/validation.ts) and still enforces required
+          // booleans via its required-answers pass.
+          if (rawValue === 'true') {
+            values[q.id] = true;
+          } else if (rawValue === 'false') {
+            values[q.id] = false;
+          }
+          // rawValue === '' → leave the key out (unanswered).
         } else {
           values[q.id] = rawValue;
         }

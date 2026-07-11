@@ -29,6 +29,29 @@ export class ZardSelectHarness extends ComponentHarness {
     const trigger = await this.trigger();
     return trigger.text();
   }
+
+  /**
+   * Reads `aria-activedescendant` from the open dropdown's listbox.
+   * The listbox renders in a CDK overlay, so it is resolved from the document root.
+   * Requires the dropdown to be open.
+   */
+  async getActiveDescendantId(): Promise<string | null> {
+    const listbox = await this.documentRootLocatorFactory().locatorFor(
+      '[role="listbox"]',
+    )();
+    return listbox.getAttribute('aria-activedescendant');
+  }
+
+  /**
+   * Returns the DOM `id` of the option with the given value.
+   * Requires the dropdown to be open so the option is rendered in the overlay.
+   */
+  async getOptionId(value: string): Promise<string | null> {
+    const option = await this.documentRootLocatorFactory().locatorFor(
+      `z-select-item[value="${value}"]`,
+    )();
+    return option.getAttribute('id');
+  }
 }
 
 export interface ZardSelectItemHarnessFilters extends BaseHarnessFilters {

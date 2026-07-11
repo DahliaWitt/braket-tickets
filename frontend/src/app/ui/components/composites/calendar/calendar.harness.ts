@@ -47,6 +47,16 @@ export class BraCalendarComponentHarness extends ComponentHarness {
     return grid.getEnabledDayLabels();
   }
 
+  /**
+   * Returns the month/year the grid is actually rendering (e.g. "February 2026"),
+   * derived from the in-month day cells. Use this to assert the rendered grid
+   * agrees with the navigation header — not just the header dropdown value.
+   */
+  async getRenderedGridMonthYear(): Promise<string | null> {
+    const grid = await this.getGrid();
+    return grid.getRenderedMonthYear();
+  }
+
   /** Clicks a day button by its visible label (e.g. "15"). */
   async clickDay(label: string): Promise<void> {
     const grid = await this.getGrid();

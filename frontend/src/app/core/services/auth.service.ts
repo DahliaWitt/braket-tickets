@@ -98,6 +98,23 @@ class SessionNotReadyError extends Error {
 }
 
 /**
+ * Raised when `getSession()` resolves with a returned `error` (a transient HTTP
+ * failure such as a 5xx/429 during cold load). Better Auth's better-fetch
+ * client surfaces these as `{data: null, error}` WITHOUT throwing, so a
+ * genuinely unauthenticated user (`{data: null, error: null}`) is
+ * indistinguishable from a backend blip unless the returned error is promoted
+ * to a throw. This marker lets the init retry loop retry the fetch regardless
+ * of the error's message content, instead of settling into a confident
+ * "logged out" state on a recoverable outage.
+ */
+class SessionInitBackendError extends Error {
+  constructor(message: string, options?: {cause?: unknown}) {
+    super(message, options);
+    this.name = 'SessionInitBackendError';
+  }
+}
+
+/**
  * Authentication service handling all user authentication flows.
  *
  * Provides reactive authentication state via signals and supports:
@@ -759,7 +776,22 @@ export class AuthService implements ConvexAuthProvider {
         delaysMs: retryDelaysMs,
         run: async () => {
           logger.info('[initSession] Starting session initialization');
-          const {data} = await this.authClient.getSession();
+          const {data, error} = await this.authClient.getSession();
+          if (error) {
+            // Better Auth's better-fetch client returns HTTP failures (transient
+            // 5xx/429, backend restart, brief outage) as `{data: null, error}`
+            // WITHOUT throwing. Swallowing that error and running
+            // `setSessionState(null)` would flip auth into a confident
+            // "logged out" state for a user with a perfectly valid session.
+            // Promote it to a throw so the retry loop below engages; a genuinely
+            // unauthenticated user resolves as `{data: null, error: null}` and
+            // does NOT reach this branch. Matches the returned-error handling in
+            // refreshSessionFromServer/loadSessionAfterAuth/fetchAccessToken.
+            throw new SessionInitBackendError(
+              error.message || 'Failed to initialize session',
+              {cause: error},
+            );
+          }
           logger.info(
             '[initSession] getSession returned:',
             data ? 'session found' : 'no session',
@@ -788,13 +820,19 @@ export class AuthService implements ConvexAuthProvider {
           }
         },
         shouldRetry: (err, attemptIndex) => {
-          const isNetworkError =
-            err instanceof TypeError && err.message.includes('fetch');
+          // Retry both thrown network failures (rejected fetch → TypeError) and
+          // returned backend errors promoted to SessionInitBackendError above.
+          // Without the marker, a returned 5xx whose message lacks a magic
+          // keyword would slip past isRetryableAuthBackendError and never retry.
+          const isTransientBackendError =
+            err instanceof SessionInitBackendError ||
+            isRetryableAuthBackendError(err) ||
+            (err instanceof TypeError && err.message.includes('fetch'));
           const shouldRetry =
-            isNetworkError && attemptIndex < retryDelaysMs.length - 1;
+            isTransientBackendError && attemptIndex < retryDelaysMs.length - 1;
           if (shouldRetry) {
             logger.warn(
-              `[initSession] Network error on attempt ${attemptIndex + 1}/${retryDelaysMs.length}, retrying...`,
+              `[initSession] Transient backend error on attempt ${attemptIndex + 1}/${retryDelaysMs.length}, retrying...`,
             );
           }
           return shouldRetry;

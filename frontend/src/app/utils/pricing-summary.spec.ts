@@ -1,7 +1,57 @@
 import {describe, expect, it} from 'vitest';
-import {getBuyerPricingSummary} from '@shared/pricing/pricing-summary';
+import {
+  formatUsdCents,
+  getBuyerPricingSummary,
+} from '@shared/pricing/pricing-summary';
+
+describe('formatUsdCents', () => {
+  it('renders whole-dollar amounts without decimal places', () => {
+    expect(formatUsdCents(2500)).toBe('$25');
+    expect(formatUsdCents(4000)).toBe('$40');
+  });
+
+  it('renders zero without decimal places', () => {
+    expect(formatUsdCents(0)).toBe('$0');
+  });
+
+  it('keeps the trailing zero on half-dollar amounts', () => {
+    expect(formatUsdCents(1050)).toBe('$10.50');
+    expect(formatUsdCents(1090)).toBe('$10.90');
+  });
+
+  it('renders sub-dime cents with both decimal places', () => {
+    expect(formatUsdCents(1005)).toBe('$10.05');
+  });
+
+  it('renders non-zero-terminating cents unchanged', () => {
+    expect(formatUsdCents(1099)).toBe('$10.99');
+  });
+});
 
 describe('getBuyerPricingSummary', () => {
+  it('preserves trailing zeros across regular unit and total copy', () => {
+    expect(
+      getBuyerPricingSummary({price: 1050, quantity: 3}),
+    ).toMatchObject({
+      kind: 'regular',
+      primaryText: '$10.50',
+      ariaLabel: '$10.50 regular ticket price',
+      unitAmountCents: 1050,
+      totalAmountCents: 3150,
+    });
+  });
+
+  it('preserves trailing zeros in resale total copy', () => {
+    expect(
+      getBuyerPricingSummary({price: 1050, isResale: true, quantity: 3}),
+    ).toMatchObject({
+      kind: 'resale',
+      primaryText: '$10.50 each resale',
+      secondaryText: '$31.50 total',
+      totalAmountCents: 3150,
+    });
+  });
+
   it('labels regular buyer-visible prices plainly', () => {
     expect(
       getBuyerPricingSummary({price: 2500, supporterDefaultPrice: 4000}),
