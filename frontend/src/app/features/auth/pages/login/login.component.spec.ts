@@ -1,7 +1,7 @@
 import {type ComponentFixture, TestBed} from '@angular/core/testing';
 import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
 import {provideZonelessChangeDetection} from '@angular/core';
-import {LoginComponent} from './login.component';
+import {LoginComponent, INVALID_EMAIL_MESSAGE} from './login.component';
 import {LoginComponentHarness} from './login.component.harness';
 import {AuthService, UnverifiedEmailError} from '@/core/services/auth.service';
 import {PasswordService} from '@/core/services/password.service';
@@ -113,6 +113,41 @@ describe('LoginComponent', () => {
     component.activeTab.set('register');
     fixture.detectChanges();
     expect(component.activeTab()).toBe('register');
+  });
+
+  describe('tablist keyboard navigation', () => {
+    it('switches to the register tab on ArrowRight from the login tab', async () => {
+      await harness.pressArrowKeyOnTab('login', 'right');
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(component.activeTab()).toBe('register');
+      expect(await harness.isRegisterPanelVisible()).toBe(true);
+      expect(await harness.getTabTabindex('register')).toBe('0');
+      expect(await harness.getTabTabindex('login')).toBe('-1');
+    });
+
+    it('switches back to the login tab on ArrowLeft from the register tab', async () => {
+      await harness.switchToRegister();
+
+      await harness.pressArrowKeyOnTab('register', 'left');
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(component.activeTab()).toBe('login');
+      expect(await harness.isLoginPanelVisible()).toBe(true);
+      expect(await harness.getTabTabindex('login')).toBe('0');
+      expect(await harness.getTabTabindex('register')).toBe('-1');
+    });
+
+    it('wraps ArrowLeft from the login tab around to the register tab', async () => {
+      await harness.pressArrowKeyOnTab('login', 'left');
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(component.activeTab()).toBe('register');
+      expect(await harness.isRegisterPanelVisible()).toBe(true);
+    });
   });
 
   it('should call auth.loginWithPassword on login submit', async () => {
@@ -243,7 +278,7 @@ describe('LoginComponent', () => {
       await component.resendVerificationEmail();
       fixture.detectChanges();
 
-      expect(component.message()).toContain('Verification email sent');
+      expect(component.message()).toContain('verification email sent');
     });
 
     it('cancels the registered cleanup timer when destroyed', async () => {
@@ -290,10 +325,7 @@ describe('LoginComponent', () => {
         .mockImplementation(
           (
             intervalId:
-              | string
-              | number
-              | ReturnType<typeof setTimeout>
-              | undefined,
+              string | number | ReturnType<typeof setTimeout> | undefined,
           ) => {
             if (typeof intervalId === 'number') {
               intervalCallbacks.delete(intervalId);
@@ -738,7 +770,7 @@ describe('LoginComponent', () => {
       await fixture.whenStable();
 
       expect(await harness.getResetEmailErrorText()).toContain(
-        'Enter a valid email address.',
+        INVALID_EMAIL_MESSAGE,
       );
       expect(await harness.getResetEmailDescribedBy()).toBe(
         'reset-email-error',
@@ -764,7 +796,7 @@ describe('LoginComponent', () => {
       await fixture.whenStable();
 
       expect(await harness.getResetEmailErrorText()).toContain(
-        'Enter a valid email address.',
+        INVALID_EMAIL_MESSAGE,
       );
       expect(authServiceMock.requestPasswordReset).not.toHaveBeenCalled();
     });

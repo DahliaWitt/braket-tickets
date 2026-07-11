@@ -19,7 +19,11 @@
       <h1 class="sr-only">Authentication</h1>
 
       @if (!isResetMode()) {
-        <div class="flex gap-4 border-b border-border pb-0" role="tablist">
+        <div
+          class="flex gap-4 border-b border-border pb-0"
+          role="tablist"
+          (keydown)="onTabKeydown($event)"
+        >
           <button
             type="button"
             id="tab-login"
@@ -148,7 +152,7 @@
                   } @else if (hasError(loginForm.email, 'maxLength')) {
                     Email must be 254 characters or fewer
                   } @else {
-                    Please enter a valid email address
+                    {{ invalidEmailMessage }}
                   }
                 </div>
               }
@@ -215,7 +219,7 @@
                 id="auth-message"
                 role="status"
                 aria-live="polite"
-                class="border border-secondary/20 bg-secondary/10 p-3 font-mono text-xs text-secondary dark:text-secondary"
+                class="border border-success/20 bg-success/10 p-3 font-mono text-xs text-success"
               >
                 SUCCESS: {{ message() }}
               </div>
@@ -399,7 +403,7 @@
                   } @else if (hasError(registerForm.email, 'maxLength')) {
                     Email must be 254 characters or fewer
                   } @else {
-                    Please enter a valid email address
+                    {{ invalidEmailMessage }}
                   }
                 </div>
               }
@@ -584,7 +588,7 @@
                 id="auth-message"
                 role="status"
                 aria-live="polite"
-                class="space-y-2 border border-secondary/20 bg-secondary/10 p-3 font-mono text-xs text-secondary dark:text-secondary"
+                class="space-y-2 border border-success/20 bg-success/10 p-3 font-mono text-xs text-success"
               >
                 <div>SUCCESS: {{ message() }}</div>
                 @if (isEmailVerificationError()) {
@@ -649,7 +653,7 @@
             data-testid="reset-success-state"
           >
             <div
-              class="border border-secondary/20 bg-secondary/10 p-4 font-mono text-xs text-secondary dark:text-secondary"
+              class="border border-success/20 bg-success/10 p-4 font-mono text-xs text-success"
             >
               SUCCESS: {{ message() }}
             </div>
@@ -696,7 +700,7 @@
                   } @else if (hasError(resetForm.email, 'maxLength')) {
                     Email must be 254 characters or fewer
                   } @else {
-                    Enter a valid email address.
+                    {{ invalidEmailMessage }}
                   }
                 </div>
               }
@@ -707,7 +711,7 @@
                 id="auth-message"
                 role="status"
                 aria-live="polite"
-                class="border border-secondary/20 bg-secondary/10 p-3 font-mono text-xs text-secondary dark:text-secondary"
+                class="border border-success/20 bg-success/10 p-3 font-mono text-xs text-success"
               >
                 SUCCESS: {{ message() }}
               </div>
