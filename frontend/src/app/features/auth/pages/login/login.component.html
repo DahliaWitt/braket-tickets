@@ -19,11 +19,7 @@
       <h1 class="sr-only">Authentication</h1>
 
       @if (!isResetMode()) {
-        <div
-          class="flex gap-4 border-b border-border pb-0"
-          role="tablist"
-          (keydown)="onTabKeydown($event)"
-        >
+        <div class="flex gap-4 border-b border-border pb-0" role="tablist">
           <button
             type="button"
             id="tab-login"
@@ -32,6 +28,7 @@
             [attr.aria-controls]="'login-panel'"
             [attr.tabindex]="activeTab() === 'login' ? 0 : -1"
             (click)="switchTab('login')"
+            (keydown)="onTabKeydown($event)"
             class="min-h-11 border-b-4 pb-2 font-display text-sm tracking-wider uppercase transition-colors"
             [class.text-foreground]="activeTab() === 'login'"
             [class.border-primary]="activeTab() === 'login'"
@@ -49,6 +46,7 @@
             [attr.aria-controls]="'register-panel'"
             [attr.tabindex]="activeTab() === 'register' ? 0 : -1"
             (click)="switchTab('register')"
+            (keydown)="onTabKeydown($event)"
             class="min-h-11 border-b-4 pb-2 font-display text-sm tracking-wider uppercase transition-colors"
             [class.text-foreground]="activeTab() === 'register'"
             [class.border-primary]="activeTab() === 'register'"
