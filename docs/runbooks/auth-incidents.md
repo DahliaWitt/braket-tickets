@@ -278,6 +278,8 @@ The frontend returns to `/confirm/social-link` after the provider flow. If linki
 
 Unlinking records the audit action `account.provider.unlinked`. If the UI reports success but the audit trail never appears, investigate the audit path as a second problem.
 
+If a user reports landing on the site root (or the default `/confirm/*` path) instead of their expected page after linking or verification, the requested `callbackURL` resolved to an origin outside the frontend allowlist and was replaced with the safe fallback. This is by design: `sanitizeFrontendCallbackUrl` in `backend/convex/lib/better_auth.ts` only permits same-origin/relative paths (plus trusted local-dev origins) and rejects protocol-relative, absolute-external, and backslash-obfuscated values (e.g. `/\evil.com`) to prevent open redirects. In production only `SITE_URL` is trusted, so any localhost/other-origin callbackURL falls back — not a bug.
+
 ## Reproduce the issue locally
 
 Start the local app:
