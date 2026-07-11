@@ -40,15 +40,17 @@ export const update = mutation({
   args: {
     id: v.id('organizers'),
     name: v.optional(v.string()),
-    email: v.optional(v.string()),
-    contactInfo: v.optional(v.string()),
+    // `null` explicitly clears these optional fields (an omitted key means
+    // "leave unchanged" and cannot express a clear across the wire).
+    email: v.optional(v.union(v.string(), v.null())),
+    contactInfo: v.optional(v.union(v.string(), v.null())),
     vettingQuestions: v.optional(v.array(vettingQuestionValidator)),
     status: communityPublicationStatusValidator,
-    description: v.optional(v.string()),
-    website: v.optional(v.string()),
+    description: v.optional(v.union(v.string(), v.null())),
+    website: v.optional(v.union(v.string(), v.null())),
     isPublicDirectory: v.optional(v.boolean()),
     logoStorageId: v.optional(v.union(v.id('_storage'), v.null())),
-    slug: v.optional(v.string()),
+    slug: v.optional(v.union(v.string(), v.null())),
     codeOfConduct: v.optional(v.string()),
   },
   returns: v.null(),

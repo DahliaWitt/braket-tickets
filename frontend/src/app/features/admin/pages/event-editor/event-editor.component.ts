@@ -4,6 +4,7 @@ import {
   signal,
   computed,
   effect,
+  untracked,
   linkedSignal,
   resource,
   ChangeDetectionStrategy,
@@ -700,20 +701,39 @@ export class EventEditorComponent implements HasUnsavedChanges {
     );
   });
 
+  /**
+   * Set once the user edits the supporter-price field, so the create-mode
+   * auto-fill effect stops overwriting their in-progress input. Bound to the
+   * input's native `(input)` event alongside the Signal Forms field directive.
+   */
+  private readonly supporterPriceTouched = signal(false);
+
+  /** Marks the supporter-price field as user-edited (see field above). */
+  onSupporterPriceInput(): void {
+    this.supporterPriceTouched.set(true);
+  }
+
   constructor() {
-    // Auto-update supporter price when base price changes (create mode only)
+    // Auto-fill the supporter default price from the base price in create mode,
+    // but only until the user starts editing the supporter field themselves.
+    // Reacting to a memoized `price` computed (not the whole eventModel) keeps
+    // supporter-field keystrokes from re-running this effect, and the touched
+    // guard prevents it from clobbering in-progress input. Edit mode never
+    // auto-fills.
+    const basePriceInput = computed(() => this.eventModel().price);
     effect(() => {
-      const {price, supporterDefaultPrice} = this.eventModel();
+      const price = basePriceInput();
+      if (!this.isCreateMode()) return;
+      if (this.supporterPriceTouched()) return;
       const priceResult = parseStrictUsdCents(price);
-      const supporterResult = parseStrictUsdCents(supporterDefaultPrice);
       if (!priceResult.valid) return;
+      const supporterResult = parseStrictUsdCents(
+        untracked(() => this.eventModel().supporterDefaultPrice),
+      );
       if (!supporterResult.valid && supporterResult.reason !== 'blank') return;
 
       const supporterCents = supporterResult.valid ? supporterResult.cents : 0;
-      if (
-        this.isCreateMode() &&
-        (supporterCents === 0 || supporterCents <= priceResult.cents)
-      ) {
+      if (supporterCents === 0 || supporterCents <= priceResult.cents) {
         this.eventModel.update((m) => ({
           ...m,
           supporterDefaultPrice: String(priceResult.cents / 100 + 5),
@@ -872,12 +892,17 @@ export class EventEditorComponent implements HasUnsavedChanges {
             )
           : undefined;
 
+      const trimmedLocation = formValue.location.trim();
+      const trimmedDescription = formValue.description.trim();
+
       const baseArgs = {
         title: formValue.title,
         date: formatDateYmd(combineLocalEventDateTime(date, formValue.time)),
         ...(endDateArg !== undefined ? {endDate: endDateArg} : {}),
-        location: formValue.location.trim() || undefined,
-        description: formValue.description.trim() || undefined,
+        // Present values only; the edit path re-adds an explicit `null` clear
+        // for emptied fields (create omits them entirely).
+        ...(trimmedLocation ? {location: trimmedLocation} : {}),
+        ...(trimmedDescription ? {description: trimmedDescription} : {}),
         price: priceCents,
         totalTickets: Math.trunc(Number(formValue.totalTickets)),
         ...(supporterDefaultPrice !== undefined ? {supporterDefaultPrice} : {}),
@@ -909,8 +934,17 @@ export class EventEditorComponent implements HasUnsavedChanges {
           {
             id: this.event()!._id,
             ...baseArgs,
-            // Explicit null clears a previously stored end date.
+            // Explicit null clears a previously stored value; baseArgs omits
+            // emptied optional fields, so the update path re-adds the clear.
             ...(endDateArg === undefined ? {endDate: null} : {}),
+            ...(trimmedLocation ? {} : {location: null}),
+            ...(trimmedDescription ? {} : {description: null}),
+            ...(supporterDefaultPrice === undefined
+              ? {supporterDefaultPrice: null}
+              : {}),
+            ...(maxTicketsPerUser === undefined
+              ? {maxTicketsPerUser: null}
+              : {}),
             organizerId: (formValue.organizerId || undefined) as
               | Id<'organizers'>
               | undefined,

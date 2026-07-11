@@ -5,6 +5,7 @@ import {derivePublicationStatus} from '../../lib/community_status';
 import {generateSlug, ensureUniqueSlug} from '../../lib/slugify';
 import {isCommunitySlug} from '@shared/domain/community-slug';
 import {assertUploadConfirmed} from '../../lib/upload_validation';
+import {applyClearableField} from '../../lib/patch';
 import {
   MAX_CODE_OF_CONDUCT_LENGTH,
   MAX_COMMUNITY_CONTACT_LENGTH,
@@ -46,15 +47,17 @@ export type CommunityCreateFields = {
 
 export type CommunityUpdateFields = {
   name?: string;
-  email?: string;
-  contactInfo?: string;
+  // `null` is an explicit clear sentinel on these optional fields; an omitted
+  // key means "leave unchanged".
+  email?: string | null;
+  contactInfo?: string | null;
   vettingQuestions?: CommunityVettingQuestions;
   status?: CommunityPublicationStatus;
-  description?: string;
-  website?: string;
+  description?: string | null;
+  website?: string | null;
   isPublicDirectory?: boolean;
   logoStorageId?: Id<'_storage'> | null;
-  slug?: string;
+  slug?: string | null;
   codeOfConduct?: string;
 };
 
@@ -94,10 +97,10 @@ function validateCommunityVettingQuestions(
   }
 }
 
-function validateCommunityWebsite(website: string | undefined): void {
+function validateCommunityWebsite(website: string | null | undefined): void {
   validateStringLength(website, 'Website', MAX_COMMUNITY_WEBSITE_LENGTH);
 
-  if (website === undefined || website === '') {
+  if (website === undefined || website === null || website === '') {
     return;
   }
 
@@ -162,11 +165,13 @@ export function validatePublishedCommunityRequirements(
 
 export function validateCommunityFields(args: {
   name?: string;
-  email?: string;
-  contactInfo?: string;
+  // `null` is the clear sentinel on the update path; the length/format helpers
+  // below all treat `null` as "no value" and skip it.
+  email?: string | null;
+  contactInfo?: string | null;
   vettingQuestions?: CommunityVettingQuestions;
-  description?: string;
-  website?: string;
+  description?: string | null;
+  website?: string | null;
   codeOfConduct?: string;
 }): void {
   validateStringLength(args.name, 'Name', MAX_COMMUNITY_NAME_LENGTH);
@@ -273,13 +278,30 @@ export async function buildCommunityUpdatePatch(
 
   const updates: CommunityUpdatePatch = {};
   if (args.name !== undefined) updates.name = args.name;
-  if (args.email !== undefined) updates.email = args.email;
-  if (args.contactInfo !== undefined) updates.contactInfo = args.contactInfo;
+  // `null` clears the field (removed via ctx.db.patch); a string sets it; an
+  // omitted key leaves the stored value untouched.
+  applyClearableField(updates, 'email', args.email, currentOrganizer.email);
+  applyClearableField(
+    updates,
+    'contactInfo',
+    args.contactInfo,
+    currentOrganizer.contactInfo,
+  );
   if (args.vettingQuestions !== undefined)
     updates.vettingQuestions = args.vettingQuestions;
   if (args.status !== undefined) updates.status = args.status;
-  if (args.description !== undefined) updates.description = args.description;
-  if (args.website !== undefined) updates.website = args.website;
+  applyClearableField(
+    updates,
+    'description',
+    args.description,
+    currentOrganizer.description,
+  );
+  applyClearableField(
+    updates,
+    'website',
+    args.website,
+    currentOrganizer.website,
+  );
   if (args.isPublicDirectory !== undefined) {
     updates.isPublicDirectory = args.isPublicDirectory;
   }
@@ -298,7 +320,10 @@ export async function buildCommunityUpdatePatch(
     updates.logoStorageId = args.logoStorageId;
   }
 
-  if (args.slug !== undefined) {
+  if (args.slug === null) {
+    // Explicit clear: drop the manual slug. No format/uniqueness check applies.
+    applyClearableField(updates, 'slug', null, currentOrganizer.slug);
+  } else if (args.slug !== undefined) {
     const slugValue = validateManualCommunitySlug(args.slug);
     validateStringLength(slugValue, 'Slug', MAX_COMMUNITY_SLUG_LENGTH);
 

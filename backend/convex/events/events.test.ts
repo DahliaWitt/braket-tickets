@@ -3302,3 +3302,93 @@ describe('event publish — community draft guard', () => {
     );
   });
 });
+
+describe('Event update clearable optional fields', () => {
+  async function seedClearableEvent(
+    t: ReturnType<typeof convexTest>,
+  ): Promise<{eventId: Id<'events'>; adminId: Id<'users'>}> {
+    const adminId = await createRootAdmin(t, 'Clear Admin');
+    const organizerId = await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {name: 'Clear Org'},
+    );
+    const asAdmin = t.withIdentity({subject: adminId});
+    const eventId = await asAdmin.mutation(api.events.management.create, {
+      title: 'Clearable Event',
+      date: '2027-06-01T20:00:00.000Z',
+      price: 2000,
+      totalTickets: 20,
+      status: 'draft',
+      visibility: 'public',
+      organizerId,
+      location: 'Old Venue',
+      description: 'Old description',
+      supporterDefaultPrice: 2500,
+      maxTicketsPerUser: 4,
+    });
+    return {eventId, adminId};
+  }
+
+  it('removes location, description, supporterDefaultPrice, and maxTicketsPerUser when passed null', async () => {
+    const t = convexTest();
+    const {eventId, adminId} = await seedClearableEvent(t);
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    const before = await t.run(async (ctx) => ctx.db.get('events', eventId));
+    expect(before?.location).toBe('Old Venue');
+    expect(before?.description).toBe('Old description');
+    expect(before?.supporterDefaultPrice).toBe(2500);
+    expect(before?.maxTicketsPerUser).toBe(4);
+
+    await asAdmin.mutation(api.events.management.update, {
+      id: eventId,
+      location: null,
+      description: null,
+      supporterDefaultPrice: null,
+      maxTicketsPerUser: null,
+    });
+
+    const after = await t.run(async (ctx) => ctx.db.get('events', eventId));
+    expect(after?.location).toBeUndefined();
+    expect(after?.description).toBeUndefined();
+    expect(after?.supporterDefaultPrice).toBeUndefined();
+    expect(after?.maxTicketsPerUser).toBeUndefined();
+  });
+
+  it('leaves clearable fields unchanged when their keys are omitted', async () => {
+    const t = convexTest();
+    const {eventId, adminId} = await seedClearableEvent(t);
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    await asAdmin.mutation(api.events.management.update, {
+      id: eventId,
+      title: 'Renamed Event',
+    });
+
+    const after = await t.run(async (ctx) => ctx.db.get('events', eventId));
+    expect(after?.title).toBe('Renamed Event');
+    expect(after?.location).toBe('Old Venue');
+    expect(after?.description).toBe('Old description');
+    expect(after?.supporterDefaultPrice).toBe(2500);
+    expect(after?.maxTicketsPerUser).toBe(4);
+  });
+
+  it('updates a clearable field to a new value when a value is provided', async () => {
+    const t = convexTest();
+    const {eventId, adminId} = await seedClearableEvent(t);
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    await asAdmin.mutation(api.events.management.update, {
+      id: eventId,
+      location: 'New Venue',
+      supporterDefaultPrice: 3000,
+    });
+
+    const after = await t.run(async (ctx) => ctx.db.get('events', eventId));
+    expect(after?.location).toBe('New Venue');
+    expect(after?.supporterDefaultPrice).toBe(3000);
+    // Untouched clearable fields stay put.
+    expect(after?.description).toBe('Old description');
+    expect(after?.maxTicketsPerUser).toBe(4);
+  });
+});

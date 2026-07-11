@@ -465,6 +465,53 @@ describe('EventEditorComponent', () => {
     );
   });
 
+  it('should submit null for location, description, supporterDefaultPrice, and maxTicketsPerUser when cleared in edit mode', async () => {
+    component.eventModel.update((m) => ({
+      ...m,
+      location: '',
+      description: '',
+      supporterDefaultPrice: '',
+      maxTicketsPerUser: '',
+    }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    await component.onSubmit('published');
+    await fixture.whenStable();
+
+    expect(eventsServiceMock.updateWithPoster).toHaveBeenCalledWith(
+      expect.objectContaining({
+        location: null,
+        description: null,
+        supporterDefaultPrice: null,
+        maxTicketsPerUser: null,
+      }),
+      undefined,
+      expect.any(Function),
+      expect.any(AbortSignal),
+    );
+  });
+
+  it('should submit new values (not null) when location and supporter price are set in edit mode', async () => {
+    component.eventModel.update((m) => ({
+      ...m,
+      location: 'New Venue',
+      supporterDefaultPrice: '40',
+    }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    await component.onSubmit('published');
+    await fixture.whenStable();
+
+    const submitted = eventsServiceMock.updateWithPoster.mock.calls[0][0] as {
+      location: string | null;
+      supporterDefaultPrice: number | null;
+    };
+    expect(submitted.location).toBe('New Venue');
+    expect(submitted.supporterDefaultPrice).toBe(4000);
+  });
+
   it('should enable save button when a file is selected', async () => {
     // Simulate the child component emitting a fileChanged event to the parent
     const mockFile = new File([''], 'test.png', {type: 'image/png'});
@@ -1631,6 +1678,49 @@ describe('EventEditorComponent - Create Mode', () => {
 
     // Should NOT update automagically because current supporter (50) > price (40)
     expect(component.eventModel().supporterDefaultPrice).toBe('50');
+  });
+
+  it('does not clobber the supporter price once the user starts editing it', async () => {
+    // Base price $20 seeds the supporter default.
+    component.eventModel.update((m) => ({...m, price: '20'}));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(component.eventModel().supporterDefaultPrice).toBe('25');
+
+    // User selects the field and types '2' ($2, at/below the base price). The
+    // old effect re-ran on this keystroke and overwrote it back to '25'.
+    component.onSupporterPriceInput();
+    component.eventModel.update((m) => ({...m, supporterDefaultPrice: '2'}));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(component.eventModel().supporterDefaultPrice).toBe('2');
+
+    // ...and can finish typing '22' without interference.
+    component.onSupporterPriceInput();
+    component.eventModel.update((m) => ({...m, supporterDefaultPrice: '22'}));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(component.eventModel().supporterDefaultPrice).toBe('22');
+  });
+
+  it('stops auto-filling the supporter price after the user has edited it', async () => {
+    // Seed from a base price.
+    component.eventModel.update((m) => ({...m, price: '20'}));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(component.eventModel().supporterDefaultPrice).toBe('25');
+
+    // User edits the supporter field to a value at/below the base price.
+    component.onSupporterPriceInput();
+    component.eventModel.update((m) => ({...m, supporterDefaultPrice: '1'}));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    // Changing the base price must NOT re-seed over the user's edit.
+    component.eventModel.update((m) => ({...m, price: '30'}));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(component.eventModel().supporterDefaultPrice).toBe('1');
   });
 });
 
