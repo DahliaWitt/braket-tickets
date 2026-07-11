@@ -48,10 +48,9 @@ export function generateCalendarDays(config: CalendarDayConfig): CalendarDay[] {
     lastDay = new Date(year, month + 1, 0);
   }
 
-  // Re-derive year/month from the constructed first day so overflow inputs
+  // Re-derive month from the constructed first day so overflow inputs
   // (e.g. month 12 → January of the next year) still mark the correct cells as
   // current-month below. This is a no-op for in-range values.
-  year = firstDay.getFullYear();
   month = firstDay.getMonth();
 
   const startDate = new Date(firstDay);
