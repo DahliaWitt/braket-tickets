@@ -10,7 +10,6 @@ import {
   MAX_GUEST_EMAIL_LENGTH,
   MAX_GUEST_NAME_LENGTH,
   MAX_GUEST_NOTES_LENGTH,
-  validateEmail,
   validateOptionalEmailWithAt,
   validateRequiredString,
   validateStringLength,
@@ -36,13 +35,17 @@ export function validateGuestFields(args: {
 /**
  * Validates all guest fields and returns the trimmed email to persist.
  *
- * Runs the shared {@link validateGuestFields} rules, then trims the email and
- * applies the strict RFC format check. Both the single-add and update mutations
- * call this so neither can persist a malformed or untrimmed email: the stored
- * value later drives broadcast and ticket sends, and a non-address string would
- * enqueue a delivery that can never succeed (permanently consuming its
- * per-segment dedup slot) — exactly the outcome this guard prevents on direct
- * API calls that bypass the admin UI's own validation.
+ * Runs the shared {@link validateGuestFields} rules — which apply the
+ * deliberately lenient `@`-presence + length email check the guest / imported
+ * paths share (see {@link validateOptionalEmailWithAt}) — then trims the email
+ * so the stored value matches what scheduling and broadcast audience lookups
+ * use downstream. Both the single-add and update mutations call this so the
+ * rule cannot drift between paths.
+ *
+ * The guest paths intentionally do NOT apply the strict RFC-style
+ * `validateEmail` regex: guest emails are optional and frequently pasted
+ * from external sources, and the strict regex rejects legitimate-but-unusual
+ * addresses (e.g. `user@localhost`) the product accepts through the admin UI.
  *
  * @returns the trimmed email, or `undefined` when no email was provided
  * @throws ConvexError on the first field that fails
@@ -54,9 +57,5 @@ export function validateGuestFieldsAndNormalizeEmail(args: {
 }): string | undefined {
   validateGuestFields(args);
 
-  const trimmedEmail = args.email?.trim();
-  if (trimmedEmail) {
-    validateEmail(trimmedEmail, 'Email');
-  }
-  return trimmedEmail || undefined;
+  return args.email?.trim() || undefined;
 }
