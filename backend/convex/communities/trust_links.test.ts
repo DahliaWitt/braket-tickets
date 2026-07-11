@@ -2,8 +2,36 @@ import {describe, expect, it} from 'vitest';
 import type {Id} from '../_generated/dataModel';
 import {api} from '../_generated/api';
 import {convexTest} from '../setup.testing';
-import {addMember, addTrustLink, authz, authzUserId} from '../lib/authz';
+import {
+  AUTHZ_RELATION_QUERY_CAP,
+  addMember,
+  addTrustLink,
+  authz,
+  authzUserId,
+} from '../lib/authz';
 import {MAX_TRUST_LINKS} from '../lib/trust_links';
+
+/**
+ * Seed `count` member-role assignments on an organizer using synthetic user id
+ * strings, so a test can reach the member cap without creating that many real
+ * user documents.
+ */
+async function seedMembers(
+  t: ReturnType<typeof convexTest>,
+  organizerId: Id<'organizers'>,
+  count: number,
+): Promise<void> {
+  await t.run(async (ctx) => {
+    for (let index = 0; index < count; index += 1) {
+      await authz.assignRole(
+        ctx,
+        `cap-user-${organizerId}-${index}`,
+        'member',
+        {type: 'organizer', id: organizerId as string},
+      );
+    }
+  });
+}
 
 async function createUser(
   t: ReturnType<typeof convexTest>,
@@ -97,6 +125,45 @@ describe('trust_links', () => {
       },
     );
     expect(outgoingAfterRemoval).toEqual([]);
+  });
+
+  it('returns the whole outgoing page even when a trusted organizer is at the member cap', async () => {
+    const t = convexTest();
+    const trustingOrganizerId = await createOrganizer(t, 'Trusting Org');
+    const bigTrustedOrganizerId = await createOrganizer(t, 'Big Trusted Org');
+    const smallTrustedOrganizerId = await createOrganizer(
+      t,
+      'Small Trusted Org',
+    );
+    const adminId = await createUser(t, 'Community Admin');
+    await assignCommunityAdmin(t, adminId, trustingOrganizerId);
+
+    await t.run(async (ctx) => {
+      await addTrustLink(ctx, trustingOrganizerId, bigTrustedOrganizerId);
+      await addTrustLink(ctx, trustingOrganizerId, smallTrustedOrganizerId);
+    });
+
+    // The big org sits at the enumeration cap; the small org has a handful.
+    await seedMembers(t, bigTrustedOrganizerId, AUTHZ_RELATION_QUERY_CAP);
+    await seedMembers(t, smallTrustedOrganizerId, 4);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const outgoing = await asAdmin.query(api.communities.trust_links.list, {
+      organizerId: trustingOrganizerId,
+    });
+
+    // The at-cap organizer must not fail the whole page: both links come back.
+    expect(outgoing).toHaveLength(2);
+
+    const bigRow = outgoing.find(
+      (row) => row.trustedOrganizerId === bigTrustedOrganizerId,
+    );
+    const smallRow = outgoing.find(
+      (row) => row.trustedOrganizerId === smallTrustedOrganizerId,
+    );
+
+    expect(bigRow?.trustedMemberCount).toBe(AUTHZ_RELATION_QUERY_CAP);
+    expect(smallRow?.trustedMemberCount).toBe(4);
   });
 
   it('denies trust-link creation for non-admins', async () => {

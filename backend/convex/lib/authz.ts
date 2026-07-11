@@ -143,6 +143,37 @@ export async function listOrganizerMembers(
   return userIds;
 }
 
+/**
+ * Count an organizer's members for callers that only need the size (e.g. display
+ * counts), without enumerating them for downstream use.
+ *
+ * Unlike {@link listOrganizerMembers}, this never throws `MEMBER_CAP_EXCEEDED`
+ * when an organizer reaches the enumeration cap. The count is clamped to
+ * {@link AUTHZ_RELATION_QUERY_CAP} so a single at-cap community cannot break a
+ * page that aggregates member counts across many organizers (e.g. the
+ * trust-links management view). Below the cap the count is exact; at or above
+ * the cap it is reported as the cap.
+ */
+export async function countOrganizerMembers(
+  ctx: AuthzCtx,
+  organizerId: Id<'organizers'>,
+): Promise<number> {
+  const userIds = await listRoleUserIds(
+    ctx,
+    'member',
+    organizerScope(organizerId),
+  );
+
+  if (userIds.length >= AUTHZ_RELATION_QUERY_WARN_THRESHOLD) {
+    logger.warn(
+      'authz',
+      `Community ${organizerId} approaching member cap: ${userIds.length}/${AUTHZ_RELATION_QUERY_CAP}`,
+    );
+  }
+
+  return Math.min(userIds.length, AUTHZ_RELATION_QUERY_CAP);
+}
+
 export async function listDirectTrustedOrganizers(
   ctx: AuthzCtx,
   organizerId: Id<'organizers'>,

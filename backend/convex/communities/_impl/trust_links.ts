@@ -6,9 +6,9 @@ import {
   addTrustLink,
   authz,
   authzUserId,
+  countOrganizerMembers,
   listDirectTrustedOrganizers,
   listDirectTrustingOrganizers,
-  listOrganizerMembers,
   listOneHopTrustingAccessOrganizers,
   removeTrustLink,
 } from '../../lib/authz';
@@ -182,9 +182,9 @@ export async function listTrustLinksHandler(
   const outgoingRows = await Promise.all(
     outgoingRelations.map(async (relation) => {
       const trustedOrganizerId = relation.objectId as Id<'organizers'>;
-      const [trustedOrganizer, members] = await Promise.all([
+      const [trustedOrganizer, trustedMemberCount] = await Promise.all([
         ctx.db.get('organizers', trustedOrganizerId),
-        listOrganizerMembers(ctx, trustedOrganizerId),
+        countOrganizerMembers(ctx, trustedOrganizerId),
       ]);
       if (!trustedOrganizer) {
         return null;
@@ -196,7 +196,7 @@ export async function listTrustLinksHandler(
         trustedOrganizerId,
         trustingOrganizerName: organizer.name,
         trustedOrganizerName: trustedOrganizer.name,
-        trustedMemberCount: members.length,
+        trustedMemberCount,
       };
     }),
   );
