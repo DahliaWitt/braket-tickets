@@ -92,7 +92,7 @@ function formatTimestampFull(ms: number): string {
       </div>
 
       <!-- Table -->
-      <div class="overflow-x-auto rounded-xl border border-border/60">
+      <div class="overflow-x-auto rounded-lg border border-border/60">
         <table
           class="w-full font-sans text-sm"
           aria-label="Event attendee roster"
@@ -180,7 +180,8 @@ function formatTimestampFull(ms: number): string {
                   </td>
                   @if (showEmailColumn()) {
                     <td
-                      class="px-4 py-3 font-mono text-xs text-muted-foreground"
+                      class="max-w-[220px] truncate px-4 py-3 font-mono text-xs text-muted-foreground"
+                      [title]="row.email"
                     >
                       {{ row.email }}
                     </td>

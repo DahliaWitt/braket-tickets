@@ -16,7 +16,7 @@
 @if (isLoading()) {
   <!-- Loading Skeleton - Desktop -->
   <div
-    class="hidden overflow-hidden rounded-xl border border-border/50 bg-card shadow-2xl md:block"
+    class="hidden overflow-hidden rounded-lg border border-border/50 bg-card shadow-sm md:block"
     aria-busy="true"
     aria-label="Loading applications"
   >
@@ -72,7 +72,7 @@
     aria-label="Loading applications"
   >
     @for (i of [1, 2, 3]; track i) {
-      <div class="space-y-4 rounded-xl border border-border bg-card/80 p-5">
+      <div class="space-y-4 rounded-lg border border-border bg-card/80 p-5">
         <div class="flex items-center gap-3">
           <z-skeleton class="h-10 w-10 rounded-sm" />
           <div class="flex-1 space-y-2">
@@ -89,7 +89,7 @@
 } @else {
   <!-- Desktop Table View -->
   <div
-    class="ph-no-capture hidden overflow-hidden rounded-xl border border-border/50 bg-card shadow-2xl md:block"
+    class="ph-no-capture hidden overflow-hidden rounded-lg border border-border/50 bg-card shadow-sm md:block"
   >
     <div class="overflow-x-auto">
       <table class="min-w-full border-collapse text-left">
@@ -147,7 +147,7 @@
                       >Submitted:</span
                     >
                     <span class="font-mono text-xs text-muted-foreground">{{
-                      app._creationTime | date: 'medium'
+                      app._creationTime | date: ADMIN_DATETIME
                     }}</span>
 
                     @for (item of getVettingAnswers(app); track item.label) {
@@ -196,13 +196,14 @@
                     <button
                       type="button"
                       z-button
-                      zType="default"
+                      zType="success"
                       [zFull]="true"
+                      [zLoading]="isActionPending(app, 'approved')"
+                      [zDisabled]="isRowPending(app)"
                       [attr.aria-label]="
                         'Approve application for ' +
                         (app.user?.name || 'applicant')
                       "
-                      class="border-none bg-success text-success-foreground shadow-[0_0_15px_-3px_hsl(var(--success)/0.4)] hover:bg-success/90"
                       data-testid="approve-application"
                       (click)="updateStatus(app, 'approved')"
                     >
@@ -213,6 +214,8 @@
                       z-button
                       zType="destructive"
                       [zFull]="true"
+                      [zLoading]="isActionPending(app, 'rejected')"
+                      [zDisabled]="isRowPending(app)"
                       [attr.aria-label]="
                         'Reject application for ' +
                         (app.user?.name || 'applicant')
@@ -225,23 +228,13 @@
                   </div>
                 } @else {
                   <div class="flex flex-col gap-2">
-                    <div
-                      class="inline-flex w-full items-center justify-center rounded border px-3 py-1 text-xs font-bold tracking-wider uppercase"
+                    <bra-status-badge
+                      [status]="statusBadgeVariant(app.status)"
+                      class="w-full justify-center"
                       data-testid="application-status"
-                      [class.bg-success/10]="app.status === 'approved'"
-                      [class.text-success]="app.status === 'approved'"
-                      [class.border-success/20]="app.status === 'approved'"
-                      [class.bg-destructive/10]="app.status === 'rejected'"
-                      [class.text-destructive-text]="app.status === 'rejected'"
-                      [class.border-destructive/20]="app.status === 'rejected'"
-                      [class.bg-muted-foreground/10]="app.status === 'revoked'"
-                      [class.text-muted-foreground]="app.status === 'revoked'"
-                      [class.border-muted-foreground/20]="
-                        app.status === 'revoked'
-                      "
                     >
                       {{ app.status }}
-                    </div>
+                    </bra-status-badge>
                     <div
                       class="text-center font-mono text-2xs text-muted-foreground uppercase"
                     >
@@ -255,6 +248,8 @@
                         z-button
                         zType="default"
                         [zFull]="true"
+                        [zLoading]="isActionPending(app, 'reinstate')"
+                        [zDisabled]="isRowPending(app)"
                         [attr.aria-label]="
                           'Reinstate membership for ' +
                           (app.user?.name || 'applicant')
@@ -292,7 +287,7 @@
     @for (app of filteredApplications(); track app._id; let i = $index) {
       <div
         [class]="
-          'transition-smooth overflow-hidden rounded-xl border border-border bg-card/80 ' +
+          'transition-smooth overflow-hidden rounded-lg border border-border bg-card/80 ' +
           (i % 2 === 0 ? 'fade-in-delay-1' : 'fade-in-delay-2')
         "
         role="article"
@@ -313,23 +308,13 @@
                 >
                   {{ app.user?.name || 'Unknown' }}
                 </div>
-                <div
-                  class="shrink-0 rounded-sm border px-2 py-0.5 text-2xs font-bold tracking-wider uppercase"
-                  [class.bg-warning/10]="app.status === 'pending'"
-                  [class.text-warning]="app.status === 'pending'"
-                  [class.border-warning/20]="app.status === 'pending'"
-                  [class.bg-success/10]="app.status === 'approved'"
-                  [class.text-success]="app.status === 'approved'"
-                  [class.border-success/20]="app.status === 'approved'"
-                  [class.bg-destructive/10]="app.status === 'rejected'"
-                  [class.text-destructive-text]="app.status === 'rejected'"
-                  [class.border-destructive/20]="app.status === 'rejected'"
-                  [class.bg-muted-foreground/10]="app.status === 'revoked'"
-                  [class.text-muted-foreground]="app.status === 'revoked'"
-                  [class.border-muted-foreground/20]="app.status === 'revoked'"
+                <bra-status-badge
+                  [status]="statusBadgeVariant(app.status)"
+                  class="shrink-0"
+                  data-testid="application-status"
                 >
                   {{ app.status }}
-                </div>
+                </bra-status-badge>
               </div>
               <div class="truncate font-mono text-xs text-muted-foreground">
                 {{ app.user?.email }}
@@ -386,7 +371,7 @@
           <div
             class="mt-2 border-t border-border/50 pt-2 font-mono text-2xs text-muted-foreground uppercase"
           >
-            Submitted: {{ app._creationTime | date: 'short' }}
+            Submitted: {{ app._creationTime | date: ADMIN_DATETIME }}
           </div>
         </div>
 
@@ -398,6 +383,8 @@
               z-button
               zType="destructive"
               class="flex-1 rounded-none border-0 border-r border-border/50"
+              [zLoading]="isActionPending(app, 'rejected')"
+              [zDisabled]="isRowPending(app)"
               [attr.aria-label]="
                 'Reject application for ' + (app.user?.name || 'applicant')
               "
@@ -409,8 +396,10 @@
             <button
               type="button"
               z-button
-              zType="default"
-              class="flex-1 rounded-none border-0 bg-success text-success-foreground hover:bg-success/90"
+              zType="success"
+              class="flex-1 rounded-none border-0"
+              [zLoading]="isActionPending(app, 'approved')"
+              [zDisabled]="isRowPending(app)"
               [attr.aria-label]="
                 'Approve application for ' + (app.user?.name || 'applicant')
               "
@@ -428,6 +417,8 @@
               z-button
               zType="default"
               class="w-full rounded-none border-0"
+              [zLoading]="isActionPending(app, 'reinstate')"
+              [zDisabled]="isRowPending(app)"
               [attr.aria-label]="
                 'Reinstate membership for ' + (app.user?.name || 'applicant')
               "

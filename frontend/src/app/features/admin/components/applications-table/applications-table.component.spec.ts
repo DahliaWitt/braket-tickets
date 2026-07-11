@@ -190,6 +190,37 @@ describe('AdminApplicationsTableComponent', () => {
     );
   });
 
+  it('maps application statuses to semantic badge variants', () => {
+    expect(component.statusBadgeVariant('pending')).toBe('warning');
+    expect(component.statusBadgeVariant('approved')).toBe('success');
+    expect(component.statusBadgeVariant('rejected')).toBe('destructive');
+    expect(component.statusBadgeVariant('revoked')).toBe('muted');
+    expect(component.statusBadgeVariant('unknown-status')).toBe('muted');
+  });
+
+  it('guards against double-firing approve while the mutation is in flight', async () => {
+    let resolveApprove!: (value: unknown) => void;
+    const pendingApprove = new Promise((resolve) => {
+      resolveApprove = resolve;
+    });
+    appsServiceMock.approve.mockReturnValue(pendingApprove);
+
+    // The dialog mock auto-confirms synchronously, so the first call starts
+    // the mutation and sets the row-pending guard.
+    component.updateStatus(mockApps[0], 'approved');
+    expect(component.isRowPending(mockApps[0])).toBe(true);
+    expect(component.isActionPending(mockApps[0], 'approved')).toBe(true);
+
+    // A second click on the same row must be swallowed by the guard.
+    component.updateStatus(mockApps[0], 'approved');
+    expect(braDialogMock.create).toHaveBeenCalledTimes(1);
+    expect(appsServiceMock.approve).toHaveBeenCalledTimes(1);
+
+    resolveApprove({});
+    await fixture.whenStable();
+    expect(component.isRowPending(mockApps[0])).toBe(false);
+  });
+
   it('should open dialog and reject application without reason', async () => {
     await component.updateStatus(mockApps[0], 'rejected');
     await fixture.whenStable();
@@ -461,7 +492,7 @@ describe('AdminApplicationsTableComponent', () => {
       expect(await harness.getRowCount()).toBe(0);
       expect(await harness.hasNoResultsState()).toBe(true);
       const emptyText = await harness.getNoResultsText();
-      expect(emptyText).toContain('NO RESULTS FOR');
+      expect(emptyText).toContain('no results for');
       expect(emptyText).toContain('nonexistent');
     });
   });
