@@ -428,7 +428,7 @@ describe('CommunityDirectoryComponent', () => {
   it('should display heading', async () => {
     const {harness} = await setup();
     const heading = await harness.getHeading();
-    expect(await heading.text()).toContain('Community Directory');
+    expect(await heading.text()).toContain('find your scene');
   });
 
   // -------------------------------------------------------------------------
@@ -445,6 +445,13 @@ describe('CommunityDirectoryComponent', () => {
       const {harness} = await setup({communities: []});
       const list = await harness.getCommunityList();
       expect(list).toBeNull();
+    });
+
+    it('should link back home from the empty state', async () => {
+      const {harness} = await setup({communities: []});
+      const homeLink = await harness.getEmptyStateHomeLink();
+      expect(homeLink).toBeTruthy();
+      expect(await homeLink?.getAttribute('href')).toBe('/');
     });
 
     it('should not show empty state when the unauthenticated directory request fails', async () => {
@@ -495,7 +502,7 @@ describe('CommunityDirectoryComponent', () => {
         await harness.getCommunityDescriptionFallbacks();
       expect(fallbackDescriptions.length).toBe(1);
       expect(await fallbackDescriptions[0].text()).toContain(
-        'Profile coming soon.',
+        'profile coming soon',
       );
     });
 
@@ -690,7 +697,7 @@ describe('CommunityDirectoryComponent', () => {
       expect(await harness.getReviseLinks()).toHaveLength(0);
     });
 
-    it('does not show a revise CTA for revoked applications', async () => {
+    it('labels revoked memberships as "revoked" (not "rejected") and offers no revise CTA', async () => {
       const {harness} = await setup({
         communities: mockCommunities,
         isAuthenticated: true,
@@ -706,8 +713,76 @@ describe('CommunityDirectoryComponent', () => {
         ],
       });
 
-      expect(await harness.getStatusBadge('status-rejected')).toBeTruthy();
+      const revokedBadge = await harness.getStatusBadge('status-revoked');
+      expect(revokedBadge).toBeTruthy();
+      expect(await revokedBadge?.text()).toContain('revoked');
+      expect(await harness.getStatusBadge('status-rejected')).toBeNull();
       expect(await harness.getReviseLinks()).toHaveLength(0);
+    });
+
+    it('renders the vetted badge with semantic success token classes', async () => {
+      const {harness} = await setup({
+        communities: mockCommunities,
+        isAuthenticated: true,
+        approvals: [
+          {
+            organizerId: 'c1',
+            organizerName: 'Test Community',
+            source: 'direct',
+          },
+        ],
+        applications: [],
+      });
+
+      const badge = await harness.getStatusBadge('status-access');
+      expect(badge).toBeTruthy();
+      expect(await badge?.text()).toContain('vetted');
+      expect(await badge?.hasClass('bg-success/10')).toBe(true);
+      expect(await badge?.hasClass('text-success')).toBe(true);
+    });
+
+    it('renders the pending badge with semantic warning token classes', async () => {
+      const {harness} = await setup({
+        communities: mockCommunities,
+        isAuthenticated: true,
+        approvals: [],
+        applications: [
+          {
+            _id: 'app-1',
+            _creationTime: 100,
+            organizerId: 'c1',
+            organizerName: 'Test Community',
+            status: 'pending',
+          },
+        ],
+      });
+
+      const badge = await harness.getStatusBadge('status-pending');
+      expect(badge).toBeTruthy();
+      expect(await badge?.hasClass('bg-warning/10')).toBe(true);
+      expect(await badge?.hasClass('text-warning')).toBe(true);
+    });
+
+    it('renders the rejected badge with semantic destructive token classes', async () => {
+      const {harness} = await setup({
+        communities: mockCommunities,
+        isAuthenticated: true,
+        approvals: [],
+        applications: [
+          {
+            _id: 'app-2',
+            _creationTime: 100,
+            organizerId: 'c1',
+            organizerName: 'Test Community',
+            status: 'rejected',
+          },
+        ],
+      });
+
+      const badge = await harness.getStatusBadge('status-rejected');
+      expect(badge).toBeTruthy();
+      expect(await badge?.hasClass('bg-destructive/10')).toBe(true);
+      expect(await badge?.hasClass('text-destructive-text')).toBe(true);
     });
 
     it('should handle mixed statuses across communities', async () => {
@@ -891,14 +966,14 @@ describe('CommunityDirectoryComponent', () => {
       const {harness} = await setupError();
       const errorState = await harness.getErrorState();
       expect(errorState).toBeTruthy();
-      expect(await errorState?.text()).toContain('Directory unavailable');
+      expect(await errorState?.text()).toContain('directory unavailable');
     });
 
     it('shows a retry action when the unauthenticated directory request fails', async () => {
       const {harness} = await setupError();
       const retryButton = await harness.getRetryButton();
       expect(retryButton).toBeTruthy();
-      expect(await retryButton?.text()).toContain('Try Again');
+      expect(await retryButton?.text()).toContain('try again');
     });
 
     it('retries the directory request from the error state', async () => {
@@ -925,7 +1000,7 @@ describe('CommunityDirectoryComponent', () => {
       const {harness} = await setupAuthenticatedError();
       const errorState = await harness.getErrorState();
       expect(errorState).toBeTruthy();
-      expect(await errorState?.text()).toContain('Directory unavailable');
+      expect(await errorState?.text()).toContain('directory unavailable');
     });
 
     it('refetches the authenticated directory queries when retrying a signed-in failure', async () => {

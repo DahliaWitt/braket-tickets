@@ -109,6 +109,12 @@ export class CommunityDirectoryComponentHarness extends ComponentHarness {
     )();
   }
 
+  async getEmptyStateHomeLink(): Promise<TestElement | null> {
+    return this.locatorForOptional(
+      '[data-testid="community-directory-empty-home"]',
+    )();
+  }
+
   // ─── Status Badges ──────────────────────────────────
   async getStatusBadge(testId: string): Promise<TestElement | null> {
     return this.locatorForOptional(`[data-testid="${testId}"]`)();
