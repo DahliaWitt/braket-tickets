@@ -112,4 +112,15 @@ export class HelpSearchComponentHarness extends ComponentHarness {
     const input = await this.getSearchInput();
     await input.blur();
   }
+
+  /** Simulates focus leaving the component entirely (no relatedTarget). */
+  async dispatchFocusOutside(): Promise<void> {
+    const hostEl = await this.host();
+    await hostEl.dispatchEvent('focusout');
+  }
+
+  async dispatchFocus(): Promise<void> {
+    const input = await this.getSearchInput();
+    await input.dispatchEvent('focus');
+  }
 }
