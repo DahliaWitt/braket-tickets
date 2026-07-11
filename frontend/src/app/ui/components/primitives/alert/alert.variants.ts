@@ -99,10 +99,10 @@ export const alertDescriptionVariants = cva(
     variants: {
       zType: {
         default: 'text-muted-foreground',
-        success: 'text-success/90',
-        warning: 'text-warning/90',
-        error: 'text-destructive-text/90',
-        info: 'text-info-text/90',
+        success: 'text-success',
+        warning: 'text-warning',
+        error: 'text-destructive-text',
+        info: 'text-info-text',
       },
       zAppearance: {
         outline: '',
@@ -111,8 +111,8 @@ export const alertDescriptionVariants = cva(
       },
     },
     // On fill the per-type text color would sit on its own fill color
-    // (text-success/90 on bg-success ≈ 1:1) — use the paired -foreground
-    // token at full opacity; /90 over the dark success fill drops below AA.
+    // (text-success on bg-success ≈ 1:1) — use the paired -foreground token
+    // instead. Never alpha-modify AA-calibrated text tokens.
     compoundVariants: [
       {zType: 'default', zAppearance: 'fill', class: 'text-background/90'},
       {zType: 'success', zAppearance: 'fill', class: 'text-success-foreground'},
