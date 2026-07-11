@@ -1,4 +1,4 @@
-import {provideHttpClient} from '@angular/common/http';
+import {HttpErrorResponse, provideHttpClient} from '@angular/common/http';
 import {
   HttpTestingController,
   provideHttpClientTesting,
@@ -93,10 +93,12 @@ describe('UnsubscribePreferencesService', () => {
       globalMarketingOptOut: false,
     });
 
-    await expect(promise).resolves.toBeNull();
+    await expect(promise).rejects.toThrow(
+      'Unexpected unsubscribe preferences response shape',
+    );
   });
 
-  it('returns null for malformed preferences payloads', async () => {
+  it('throws for malformed preferences payloads so callers can retry', async () => {
     const promise = service.loadPreferences('bad-token');
 
     const req = httpMock.expectOne(
@@ -108,7 +110,62 @@ describe('UnsubscribePreferencesService', () => {
       globalMarketingOptOut: false,
     });
 
+    await expect(promise).rejects.toThrow(
+      'Unexpected unsubscribe preferences response shape',
+    );
+  });
+
+  it('returns null when the backend rejects the token as invalid', async () => {
+    const promise = service.loadPreferences('dead-token');
+
+    const req = httpMock.expectOne(
+      `${apiBaseUrl}/api/unsubscribe-preferences?token=dead-token`,
+    );
+    req.flush(
+      {error: 'invalid_token'},
+      {status: 404, statusText: 'Not Found'},
+    );
+
     await expect(promise).resolves.toBeNull();
+  });
+
+  it('returns null when the backend reports a missing token', async () => {
+    const promise = service.loadPreferences('');
+
+    const req = httpMock.expectOne(
+      `${apiBaseUrl}/api/unsubscribe-preferences?token=`,
+    );
+    req.flush(
+      {error: 'missing_token'},
+      {status: 400, statusText: 'Bad Request'},
+    );
+
+    await expect(promise).resolves.toBeNull();
+  });
+
+  it('throws on server errors so callers can retry', async () => {
+    const promise = service.loadPreferences('flaky-token');
+
+    const req = httpMock.expectOne(
+      `${apiBaseUrl}/api/unsubscribe-preferences?token=flaky-token`,
+    );
+    req.flush(
+      {error: 'oops'},
+      {status: 500, statusText: 'Internal Server Error'},
+    );
+
+    await expect(promise).rejects.toBeInstanceOf(HttpErrorResponse);
+  });
+
+  it('throws on network failures so callers can retry', async () => {
+    const promise = service.loadPreferences('offline-token');
+
+    const req = httpMock.expectOne(
+      `${apiBaseUrl}/api/unsubscribe-preferences?token=offline-token`,
+    );
+    req.error(new ProgressEvent('error'));
+
+    await expect(promise).rejects.toBeInstanceOf(HttpErrorResponse);
   });
 
   it('posts preference toggles to the Convex site origin', async () => {

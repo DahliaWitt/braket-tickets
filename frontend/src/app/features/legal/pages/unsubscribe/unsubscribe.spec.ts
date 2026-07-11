@@ -1,4 +1,5 @@
 import {describe, it, expect, vi} from 'vitest';
+import {toast} from 'ngx-sonner';
 import {type ComponentFixture, TestBed} from '@angular/core/testing';
 import {
   provideRouter,
@@ -14,6 +15,7 @@ import {
   type PreferencesResponse,
   UnsubscribePreferencesService,
 } from './unsubscribe-preferences.service';
+import {manualChangeDetection} from '@angular/cdk/testing';
 import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
 import {By} from '@angular/platform-browser';
 
@@ -23,7 +25,7 @@ describe('UnsubscribeComponent', () => {
     'loadPreferences' | 'togglePreference' | 'unsubscribeAll'
   >;
 
-  async function setup(
+  async function configure(
     params: Record<string, string> = {},
     preferencesServiceOverrides: Partial<PreferencesServiceMock> = {},
   ) {
@@ -52,6 +54,17 @@ describe('UnsubscribeComponent', () => {
     const fixture: ComponentFixture<UnsubscribeComponent> =
       TestBed.createComponent(UnsubscribeComponent);
     fixture.detectChanges();
+    return {fixture, preferencesService};
+  }
+
+  async function setup(
+    params: Record<string, string> = {},
+    preferencesServiceOverrides: Partial<PreferencesServiceMock> = {},
+  ) {
+    const {fixture, preferencesService} = await configure(
+      params,
+      preferencesServiceOverrides,
+    );
     await fixture.whenStable();
     const harness = await TestbedHarnessEnvironment.harnessForFixture(
       fixture,
@@ -212,6 +225,180 @@ describe('UnsubscribeComponent', () => {
       UnsubscribeHarness,
     );
     expect(await harness.isGlobalOptOutBannerVisible()).toBe(true);
+  });
+
+  it('shows a retry state, not the invalid-link state, when the fetch fails', async () => {
+    const {fixture, harness} = await setup(
+      {token: 'good-token'},
+      {
+        loadPreferences: vi
+          .fn()
+          .mockRejectedValue(new Error('network unreachable')),
+      },
+    );
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(await harness.isLoadErrorVisible()).toBe(true);
+    expect(await harness.isErrorVisible()).toBe(false);
+    expect(await harness.isConfirmationVisible()).toBe(false);
+  });
+
+  it('recovers from a failed fetch via the retry action', async () => {
+    const preferences: PreferencesResponse = {
+      unsubscribedFrom: null,
+      preferences: [
+        {
+          organizerId: 'org1',
+          organizerName: 'Test Community',
+          optedIn: true,
+          isAdmin: false,
+        },
+      ],
+      globalMarketingOptOut: false,
+    };
+    const loadPreferences = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('flaky network'))
+      .mockResolvedValueOnce(preferences);
+
+    const {fixture, harness} = await setup(
+      {token: 'good-token'},
+      {loadPreferences},
+    );
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(await harness.isLoadErrorVisible()).toBe(true);
+
+    await harness.clickRetry();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(loadPreferences).toHaveBeenCalledTimes(2);
+    expect(await harness.isLoadErrorVisible()).toBe(false);
+    expect(await harness.isConfirmationVisible()).toBe(true);
+  });
+
+  it('shows skeleton rows while preferences are loading', async () => {
+    // The resource loader never resolves, so Angular keeps a PendingTask
+    // open — whenStable() would hang. Bypass stabilization for the harness.
+    const {fixture} = await configure(
+      {token: 'slow-token'},
+      {
+        loadPreferences: vi.fn().mockReturnValue(new Promise(() => void 0)),
+      },
+    );
+
+    await manualChangeDetection(async () => {
+      const harness = await TestbedHarnessEnvironment.harnessForFixture(
+        fixture,
+        UnsubscribeHarness,
+      );
+      expect(await harness.isLoadingVisible()).toBe(true);
+      expect(await harness.getLoadingSkeletonCount()).toBeGreaterThan(0);
+      expect(await harness.isErrorVisible()).toBe(false);
+      expect(await harness.isLoadErrorVisible()).toBe(false);
+    });
+  });
+
+  it('renders the bulk unsubscribe action as a ghost button', async () => {
+    const preferences: PreferencesResponse = {
+      unsubscribedFrom: null,
+      preferences: [
+        {
+          organizerId: 'org1',
+          organizerName: 'Test Community',
+          optedIn: true,
+          isAdmin: false,
+        },
+      ],
+      globalMarketingOptOut: false,
+    };
+
+    const {fixture, harness} = await setup(
+      {token: 'test-token'},
+      {loadPreferences: vi.fn().mockResolvedValue(preferences)},
+    );
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(await harness.getUnsubscribeAllButtonType()).toBe('ghost');
+  });
+
+  it('resets the checkbox to server state when a toggle fails', async () => {
+    const errorSpy = vi.spyOn(toast, 'error').mockImplementation(() => '');
+    const preferences: PreferencesResponse = {
+      unsubscribedFrom: null,
+      preferences: [
+        {
+          organizerId: 'org1',
+          organizerName: 'Test Community',
+          optedIn: true,
+          isAdmin: false,
+        },
+      ],
+      globalMarketingOptOut: false,
+    };
+
+    const {fixture, harness} = await setup(
+      {token: 'test-token'},
+      {
+        loadPreferences: vi.fn().mockResolvedValue(preferences),
+        togglePreference: vi.fn().mockRejectedValue(new Error('boom')),
+      },
+    );
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(await harness.isPreferenceChecked('org1')).toBe(true);
+    await harness.togglePreference('org1');
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(await harness.isPreferenceChecked('org1')).toBe(true);
+    expect(errorSpy).toHaveBeenCalledWith(
+      "couldn't update preference, try again",
+    );
+    errorSpy.mockRestore();
+  });
+
+  it('disables the checkbox while a toggle is in flight', async () => {
+    let resolveToggle!: () => void;
+    const togglePromise = new Promise<void>((resolve) => {
+      resolveToggle = resolve;
+    });
+    const preferences: PreferencesResponse = {
+      unsubscribedFrom: null,
+      preferences: [
+        {
+          organizerId: 'org1',
+          organizerName: 'Test Community',
+          optedIn: true,
+          isAdmin: false,
+        },
+      ],
+      globalMarketingOptOut: false,
+    };
+
+    const {fixture, harness} = await setup(
+      {token: 'test-token'},
+      {
+        loadPreferences: vi.fn().mockResolvedValue(preferences),
+        togglePreference: vi.fn().mockReturnValue(togglePromise),
+      },
+    );
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(await harness.isPreferenceDisabled('org1')).toBe(false);
+    await harness.togglePreference('org1');
+    expect(await harness.isPreferenceDisabled('org1')).toBe(true);
+
+    resolveToggle();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    // Success removes the pref from the opted-in list entirely.
+    expect(await harness.isPreferenceDisabled('org1')).toBeNull();
   });
 
   it('hides global opt-out banner when globalMarketingOptOut is false', async () => {
