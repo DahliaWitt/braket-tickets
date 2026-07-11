@@ -45,7 +45,8 @@ export class BraCodeOfConductLinkComponent {
       zOkText: 'Close',
       zCancelText: null,
       zWidth: 'min(600px, calc(100vw - 2rem))',
-      zCustomClasses: 'max-h-[70vh] overflow-y-auto whitespace-pre-wrap',
+      // Viewport max-height + scrollable body now come from the dialog kit.
+      zCustomClasses: 'whitespace-pre-wrap',
     });
   }
 }

@@ -113,6 +113,29 @@ describe('BraAlertDialogComponent', () => {
     expect(await harness.isCancelInitialFocus()).toBe(true);
   });
 
+  it('should render lowercase default footer labels', async () => {
+    await createDialog({
+      zContent: 'Defaults only',
+    });
+
+    const harness = await loader.getHarness(BraAlertDialogComponentHarness);
+
+    expect(await harness.getCancelText()).toBe('cancel');
+    expect(await harness.getOkText()).toBe('confirm');
+  });
+
+  it('should cap the panel to the viewport and scroll the body region', async () => {
+    await createDialog({
+      zTitle: 'Long form',
+      zContent: 'Tall alert body',
+    });
+
+    const harness = await loader.getHarness(BraAlertDialogComponentHarness);
+
+    expect(await harness.hasViewportMaxHeight()).toBe(true);
+    expect(await harness.hasScrollableBody()).toBe(true);
+  });
+
   it('should use fallback aria-labels when no title is provided', async () => {
     await createDialog({
       zContent: 'No title provided',
