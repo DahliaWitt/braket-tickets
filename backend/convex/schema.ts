@@ -1281,7 +1281,14 @@ const schemaTables = {
     .index('by_sessionTokenDigest', ['sessionTokenDigest'])
     .index('by_pendingSessionTokenDigest', ['pendingSessionTokenDigest'])
     .index('by_magicLink', ['magicLinkId'])
-    .index('by_expiresAt', ['expiresAt']),
+    .index('by_expiresAt', ['expiresAt'])
+    // Cleanup reads only deletable rows: convertedToUserId === undefined
+    // (converted sessions are preserved for audit trail) with expiresAt in the
+    // past. Equality on convertedToUserId first, range on expiresAt second.
+    .index('by_convertedToUserId_expiresAt', [
+      'convertedToUserId',
+      'expiresAt',
+    ]),
 
   /**
    * Per-user, per-community marketing email opt-in preference.

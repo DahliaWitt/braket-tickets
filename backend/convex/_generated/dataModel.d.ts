@@ -688,6 +688,11 @@ export type DataModel = {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_clientKey: ["clientKey", "_creationTime"];
+      by_convertedToUserId_expiresAt: [
+        "convertedToUserId",
+        "expiresAt",
+        "_creationTime",
+      ];
       by_email: ["email", "_creationTime"];
       by_expiresAt: ["expiresAt", "_creationTime"];
       by_magicLink: ["magicLinkId", "_creationTime"];

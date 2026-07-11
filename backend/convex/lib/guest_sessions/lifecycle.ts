@@ -174,18 +174,29 @@ export async function deleteGuestSession(
   await ctx.db.delete('guest_sessions', sessionId);
 }
 
+/** Max guest sessions deleted per cleanup batch before rescheduling. */
+export const CLEANUP_BATCH_SIZE = 200;
+
 export async function cleanupExpiredGuestSessions(
   ctx: MutationCtx,
 ): Promise<number> {
   const now = Date.now();
-  const candidates = await ctx.db
+  // Read only deletable rows directly from the [convertedToUserId, expiresAt]
+  // index: unconverted sessions (convertedToUserId === undefined) whose hard
+  // expiry has passed. Converted sessions are preserved for the audit trail and
+  // never deleted, but their expiresAt still lapses — so filtering them in
+  // memory after an ascending by_expiresAt scan would let them pile up at the
+  // head of the range. Once >=BATCH_SIZE converted rows existed, take() would
+  // return an all-converted batch that deletes nothing yet still reschedules,
+  // an infinite zero-progress runAfter(0) loop. Indexing on convertedToUserId
+  // skips those rows entirely, so every row read here is deletable.
+  const expiredSessions = await ctx.db
     .query('guest_sessions')
-    .withIndex('by_expiresAt', (q) => q.lt('expiresAt', now))
-    .take(200);
+    .withIndex('by_convertedToUserId_expiresAt', (q) =>
+      q.eq('convertedToUserId', undefined).lt('expiresAt', now),
+    )
+    .take(CLEANUP_BATCH_SIZE);
 
-  const expiredSessions = candidates.filter(
-    (session) => session.convertedToUserId === undefined,
-  );
   await Promise.all(
     expiredSessions.map((session) =>
       ctx.db.delete('guest_sessions', session._id),
@@ -199,7 +210,11 @@ export async function cleanupExpiredGuestSessions(
     });
   }
 
-  if (candidates.length === 200) {
+  // Reschedule only when the batch was full, i.e. more deletable rows likely
+  // remain. Each run deletes the rows it read, so the remaining deletable
+  // population strictly shrinks and the self-scheduling chain terminates once a
+  // run clears fewer than a full batch.
+  if (cleaned === CLEANUP_BATCH_SIZE) {
     await ctx.scheduler.runAfter(
       0,
       internal.guest_sessions.core.cleanupExpiredSessions,
