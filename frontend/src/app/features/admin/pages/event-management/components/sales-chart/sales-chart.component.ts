@@ -1,5 +1,5 @@
-import { Component, input, ChangeDetectionStrategy } from '@angular/core';
-import { ChartCoreComponent } from 'ng-apexcharts';
+import {Component, input, ChangeDetectionStrategy} from '@angular/core';
+import {ChartCoreComponent} from 'ng-apexcharts';
 import type {
   ApexAxisChartSeries,
   ApexChart,
@@ -33,7 +33,7 @@ export interface ChartOptions {
 
 /**
  * Lazy-loaded sales chart component.
- * 
+ *
  * This component wraps ApexCharts (~500KB) and is loaded on-demand using @defer
  * to avoid blocking initial page load.
  */

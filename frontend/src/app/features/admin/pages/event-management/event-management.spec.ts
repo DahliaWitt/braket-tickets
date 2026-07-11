@@ -738,8 +738,7 @@ describe('EventManagement', () => {
         -1,
       ) as unknown[] | undefined;
       const confirmOptions = lastConfirmCall?.[0] as
-        | {zDescription?: string}
-        | undefined;
+        {zDescription?: string} | undefined;
       expect(confirmOptions?.zDescription).toContain('$25.00');
     });
   });
@@ -1455,7 +1454,7 @@ describe('EventManagement', () => {
       fixture.detectChanges();
 
       expect(toast.error).toHaveBeenCalledWith(
-        expect.stringContaining('Popup blocked'),
+        expect.stringContaining('popup blocked'),
       );
       // PDF failures must NOT replace the management page content via errorMessage
       expect(fixture.componentInstance.errorMessage()).toBeNull();
@@ -1476,9 +1475,7 @@ describe('EventManagement', () => {
       await fixture.whenStable();
       fixture.detectChanges();
 
-      expect(toast.error).toHaveBeenCalledWith(
-        'Failed to generate ticket PDF.',
-      );
+      expect(toast.error).toHaveBeenCalledWith('failed to generate ticket pdf');
       expect(fixture.componentInstance.errorMessage()).toBeNull();
     });
   });

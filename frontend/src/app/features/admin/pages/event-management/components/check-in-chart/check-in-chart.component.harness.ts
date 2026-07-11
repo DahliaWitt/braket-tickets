@@ -1,4 +1,4 @@
-import { ComponentHarness } from '@angular/cdk/testing';
+import {ComponentHarness} from '@angular/cdk/testing';
 
 export class CheckInChartComponentHarness extends ComponentHarness {
   static hostSelector = 'app-check-in-chart';
