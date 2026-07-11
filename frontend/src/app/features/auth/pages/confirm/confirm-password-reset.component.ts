@@ -87,7 +87,7 @@ const MISSING_RESET_TOKEN_MESSAGE = 'Invalid reset link. No token provided.';
                       [zStatus]="
                         isFieldInvalid(f.password) ? 'error' : undefined
                       "
-                      class="w-full rounded-md border border-input bg-background px-3 py-2 pr-10 font-sans text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                      class="pr-10 font-sans"
                       [attr.aria-describedby]="
                         isFieldInvalid(f.password) ? 'password-error' : null
                       "
@@ -95,7 +95,7 @@ const MISSING_RESET_TOKEN_MESSAGE = 'Invalid reset link. No token provided.';
                     <button
                       type="button"
                       (click)="passwordVisible.set(!passwordVisible())"
-                      class="absolute top-1/2 right-3 -translate-y-1/2 rounded-sm p-2.5 text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+                      class="absolute top-1/2 right-2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:ring-4 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
                       [attr.aria-label]="
                         passwordVisible() ? 'Hide password' : 'Show password'
                       "
@@ -142,7 +142,7 @@ const MISSING_RESET_TOKEN_MESSAGE = 'Invalid reset link. No token provided.';
                           ? 'error'
                           : undefined
                       "
-                      class="w-full rounded-md border border-input bg-background px-3 py-2 pr-10 font-sans text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                      class="pr-10 font-sans"
                       [attr.aria-describedby]="
                         isFieldInvalid(f.passwordConfirm) ||
                         (passwordsMismatch() && submitted())
@@ -155,7 +155,7 @@ const MISSING_RESET_TOKEN_MESSAGE = 'Invalid reset link. No token provided.';
                       (click)="
                         passwordConfirmVisible.set(!passwordConfirmVisible())
                       "
-                      class="absolute top-1/2 right-3 -translate-y-1/2 rounded-sm p-2.5 text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+                      class="absolute top-1/2 right-2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:ring-4 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
                       [attr.aria-label]="
                         passwordConfirmVisible()
                           ? 'Hide password'
@@ -223,7 +223,7 @@ const MISSING_RESET_TOKEN_MESSAGE = 'Invalid reset link. No token provided.';
                 <app-confirmation-state
                   iconId="success-icon"
                   icon="check"
-                  title="Password Reset!"
+                  title="password reset"
                   description="Your password has been reset. You can now log in with your new password."
                   variant="success"
                 >

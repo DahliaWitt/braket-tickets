@@ -52,7 +52,7 @@ type CompleteState = 'loading' | 'ready' | 'submitting' | 'error';
           } @else {
             <div class="space-y-4">
               <p
-                class="font-mono text-2xs tracking-[0.3em] text-primary/80 uppercase"
+                class="font-mono text-2xs tracking-widest text-primary/80 uppercase"
               >
                 One Last Step
               </p>
@@ -77,7 +77,7 @@ type CompleteState = 'loading' | 'ready' | 'submitting' | 'error';
                 [checked]="acceptedTerms()"
                 [disabled]="state() !== 'ready'"
                 (change)="acceptedTerms.set(!acceptedTerms())"
-                class="mt-0.5 h-5 w-5 rounded border-border bg-background text-primary focus:ring-primary focus:ring-offset-background"
+                class="mt-0.5 h-6 w-6 rounded border-border bg-background text-primary focus:ring-primary focus:ring-offset-background"
               />
               <span>
                 I agree to the
