@@ -431,6 +431,14 @@ export class AccountComponentHarness extends ComponentHarness {
     return el ? el.text() : null;
   }
 
+  /** Text of the branded error state shown when the email-preferences query fails. */
+  async getEmailPrefsErrorText(): Promise<string | null> {
+    const el = await this.locatorForOptional(
+      '[data-testid="email-prefs-error"]',
+    )();
+    return el ? el.text() : null;
+  }
+
   async getProviderUnavailableMessage(
     provider: SocialProvider,
   ): Promise<string | null> {

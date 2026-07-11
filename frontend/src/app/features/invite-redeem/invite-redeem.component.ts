@@ -49,9 +49,10 @@ const POLISHED_REDEEM_ERROR_MESSAGES = new Set([
         @if (loading()) {
           <div class="space-y-4" data-testid="redeem-loading">
             <div role="status">
-              <div
-                class="mx-auto h-12 w-12 animate-spin rounded-full border-b-2 border-primary"
-              ></div>
+              <z-icon
+                zType="loader-circle"
+                class="mx-auto h-12 w-12 animate-spin text-primary"
+              />
               <span class="sr-only">Accepting invitation...</span>
             </div>
             <p class="font-mono text-muted-foreground" aria-hidden="true">
@@ -62,15 +63,15 @@ const POLISHED_REDEEM_ERROR_MESSAGES = new Set([
           <div class="space-y-4" data-testid="redeem-success">
             <z-icon
               zType="circle-check"
-              class="mx-auto h-12 w-12 text-secondary"
+              class="mx-auto h-12 w-12 text-success"
             />
             <h1
               class="font-display text-2xl font-bold text-foreground uppercase"
             >
-              Welcome aboard!
+              you're in
             </h1>
             <p class="font-mono text-muted-foreground">
-              You're now a community admin. Let's get started.
+              You're now a community admin.
             </p>
             <a routerLink="/community-admin" z-button class="mt-4">
               Go to Dashboard
@@ -91,14 +92,25 @@ const POLISHED_REDEEM_ERROR_MESSAGES = new Set([
               You need to sign in or create an account to accept this
               invitation.
             </p>
-            <a
-              [routerLink]="['/login']"
-              [queryParams]="{returnUrl: returnUrl(), signup: 'true'}"
-              z-button
-              class="mt-4"
-            >
-              Sign In
-            </a>
+            <div class="mt-4 flex flex-col justify-center gap-4 sm:flex-row">
+              <a
+                data-testid="redeem-sign-in"
+                [routerLink]="['/login']"
+                [queryParams]="{returnUrl: returnUrl()}"
+                z-button
+              >
+                Sign In
+              </a>
+              <a
+                data-testid="redeem-create-account"
+                [routerLink]="['/login']"
+                [queryParams]="{returnUrl: returnUrl(), signup: 'true'}"
+                z-button
+                zType="outline"
+              >
+                Create Account
+              </a>
+            </div>
           </div>
         } @else {
           <div class="space-y-4" data-testid="redeem-error">

@@ -46,8 +46,8 @@ type ConfirmState = 'loading' | 'pending' | 'success' | 'error';
               <app-confirmation-state
                 iconId="success-icon"
                 icon="check"
-                title="Email Changed!"
-                description="Your email has been successfully updated."
+                title="email changed"
+                description="Your email has been updated."
                 variant="success"
               >
                 <a

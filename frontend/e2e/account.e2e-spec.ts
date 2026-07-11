@@ -247,7 +247,7 @@ test.describe('Profile Name Persistence', () => {
 
     // 8. Wait for success message
     // TODO: Add data-testid="profile-success-message" to component template
-    await expect(page.getByText(/profile updated successfully/i)).toBeVisible({
+    await expect(page.getByText(/profile updated/i)).toBeVisible({
       timeout: 10000,
     });
 
