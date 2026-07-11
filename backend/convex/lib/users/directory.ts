@@ -1,11 +1,12 @@
 import type {Doc, Id} from '../../_generated/dataModel';
 import type {MutationCtx, QueryCtx} from '../../_generated/server';
 import {getCommunityMembers} from '../../lib/authz';
+import {applicationsByOrganizerStatusQuery} from '../applications/loaders';
 import {getLatestApplicationForOrganizer} from '../applications/read_models';
 import {
+  filterMembersByEmailPrefix,
   stripCommunityAdminFields,
   stripSensitiveUserFields,
-  takeUsersByEmailPrefix,
 } from './helpers';
 
 type UsersDirectoryCtx = QueryCtx | MutationCtx;
@@ -70,11 +71,33 @@ async function filterUsersByApprovedOrganizerMembership(
   );
 }
 
+/**
+ * Enumerates the distinct users who currently hold at least one `approved`
+ * application for the organizer, using the `by_organizer_status` index. This is
+ * the organizer's approved-membership set, bounded by community size — the
+ * search scopes the email branch to it so recall never depends on the global
+ * `users` table. Callers must still confirm the member's *latest* application is
+ * approved (an older approved row may be superseded by a newer decision).
+ */
+async function listApprovedOrganizerMemberIds(
+  db: UsersDirectoryDb,
+  organizerId: OrganizerId,
+): Promise<Id<'users'>[]> {
+  const memberIds = new Set<Id<'users'>>();
+  for await (const application of applicationsByOrganizerStatusQuery(
+    db,
+    organizerId,
+    'approved',
+  )) {
+    memberIds.add(application.userId);
+  }
+  return [...memberIds];
+}
+
 async function searchApprovedOrganizerMembersByNameOrEmail(
   db: UsersDirectoryDb,
   organizerId: OrganizerId,
   query: string,
-  emailScanLimit?: number,
 ) {
   const lowerQuery = query.toLowerCase();
   const matches: Doc<'users'>[] = [];
@@ -114,12 +137,20 @@ async function searchApprovedOrganizerMembersByNameOrEmail(
   );
 
   if (matches.length < 50) {
-    // Bound the email-prefix scan (parity with the name branch's ~1024
-    // search-index cap) instead of streaming the entire global email range,
-    // which grows with total platform users and amplifies reads via the
-    // per-user application lookup in `pushApprovedMatches`.
+    // Email branch: match the prefix WITHIN the organizer's approved membership
+    // instead of scanning the global `users` email index and then
+    // scope-filtering. Enumerating approved members first keeps reads bounded
+    // by community size and, unlike a capped global scan, can never drop an
+    // in-scope member just because unrelated platform users share the prefix
+    // and sort ahead of them. `pushApprovedMatches` still re-checks each
+    // candidate against the *latest* application, so an older approved row
+    // cannot surface a member whose current status is no longer approved.
+    const approvedMemberIds = await listApprovedOrganizerMemberIds(
+      db,
+      organizerId,
+    );
     await pushApprovedMatches(
-      await takeUsersByEmailPrefix(db, lowerQuery, emailScanLimit),
+      await filterMembersByEmailPrefix(db, approvedMemberIds, lowerQuery),
     );
   }
 
@@ -131,12 +162,6 @@ export async function searchUsersForAdminScope(
   args: {
     query: string;
     organizerId: OrganizerId | null;
-    /**
-     * Overrides the default {@link DIRECTORY_EMAIL_PREFIX_SCAN_LIMIT} for the
-     * organizer-scoped email branch. Intended for tests that assert the scan is
-     * bounded; production callers should omit it to use the default cap.
-     */
-    emailScanLimit?: number;
   },
 ) {
   const query = args.query.trim();
@@ -147,7 +172,6 @@ export async function searchUsersForAdminScope(
         db,
         args.organizerId,
         query,
-        args.emailScanLimit,
       )
     : await searchUsersByNameOrEmail(db, query);
 

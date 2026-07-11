@@ -402,7 +402,7 @@ describe('Users', () => {
     expect(results.map((user) => user._id)).toEqual([approvedUserId]);
   });
 
-  it('bounds the community-admin email search scan instead of streaming the entire global users range', async () => {
+  it('returns an approved community member even when 1024+ unrelated global users share the email prefix and sort ahead of them', async () => {
     const t = convexTest();
 
     const adminId = (await t.mutation(api.testing.users.createUserDirectly, {
@@ -415,40 +415,30 @@ describe('Users', () => {
         name: 'Bounded Scan Community',
       },
     )) as Id<'organizers'>;
-    const otherOrganizerId = (await t.mutation(
-      api.testing.communities.seedOrganizer,
-      {
-        name: 'Bounded Scan Other Community',
-      },
-    )) as Id<'organizers'>;
     await seedCommunityAdmin(t, adminId, organizerId);
 
-    // Out-of-scope users whose emails share the search prefix and sort BEFORE
-    // the scoped member, approved only in an unrelated community. The search
-    // term appears only in emails (never names), so the name search index
-    // cannot match — this exercises the email branch specifically.
-    for (let index = 0; index < 5; index += 1) {
-      const outOfScopeId = (await t.mutation(
-        api.testing.users.createUserDirectly,
-        {
+    // 1025 out-of-scope global users whose emails share the search prefix and
+    // sort BEFORE the scoped member. Their count exceeds the former global
+    // email-scan cap (1024): a scan of the global `users` email index that
+    // stopped at the cap would never reach the in-scope member. The term
+    // appears only in emails (never names), so the name search index cannot
+    // surface any of them — this exercises the email branch specifically.
+    await t.run(async (ctx) => {
+      for (let index = 0; index < 1025; index += 1) {
+        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- bulk seed of >1024 global users to exceed the former global email-scan cap; individual mutations would be far too many
+        await ctx.db.insert('users', {
           name: `Outside Member ${index}`,
-          email: `bound-dir-${String(index).padStart(3, '0')}@example.com`,
-        },
-      )) as Id<'users'>;
-      await t.mutation(api.testing.applications.seedApplication, {
-        userId: outOfScopeId,
-        organizerId: otherOrganizerId,
-        status: 'approved',
-        answers: {},
-      });
-    }
+          email: `bound-dir-${String(index).padStart(4, '0')}@example.com`,
+        });
+      }
+    });
 
-    // Scoped approved member whose email sorts AFTER the out-of-scope window.
+    // Scoped approved member whose email sorts AFTER every out-of-scope user.
     const scopedMemberId = (await t.mutation(
       api.testing.users.createUserDirectly,
       {
         name: 'Scoped Approved Trailing',
-        email: 'bound-dir-999@example.com',
+        email: 'bound-dir-9999@example.com',
       },
     )) as Id<'users'>;
     await t.mutation(api.testing.applications.seedApplication, {
@@ -458,37 +448,19 @@ describe('Users', () => {
       answers: {},
     });
 
-    // With a scan cap smaller than the number of preceding out-of-scope
-    // matches, the scoped member sits beyond the scan window and is never
-    // reached — proving the email scan is bounded. Before the fix the unbounded
-    // stream walked the whole global range and would have returned it.
-    const boundedResults = await t.run((ctx) =>
+    // The email search scopes to the community's approved membership first, so
+    // the in-scope member is always found — no global-users scan gates recall,
+    // and no amount of unrelated global prefix matches can crowd it out.
+    const results = await t.run((ctx) =>
       searchUsersForAdminScope(ctx.db, {
         query: 'bound-dir-',
         organizerId,
-        emailScanLimit: 3,
       }),
     );
-    expect(boundedResults.map((user) => user._id)).not.toContain(
-      scopedMemberId,
-    );
-
-    // With a window large enough to include it, the same member is returned —
-    // the cap is the only reason it was dropped, so in-window scoped matches
-    // are still surfaced correctly.
-    const withinWindowResults = await t.run((ctx) =>
-      searchUsersForAdminScope(ctx.db, {
-        query: 'bound-dir-',
-        organizerId,
-        emailScanLimit: 6,
-      }),
-    );
-    expect(withinWindowResults.map((user) => user._id)).toEqual([
-      scopedMemberId,
-    ]);
+    expect(results.map((user) => user._id)).toEqual([scopedMemberId]);
   });
 
-  it('bounds the organizer-directory email search scan instead of streaming the entire global users range', async () => {
+  it('returns an organizer-directory member even when 1024+ unrelated global users share the email prefix and sort ahead of them', async () => {
     const t = convexTest();
 
     const organizerId = (await t.mutation(
@@ -498,21 +470,26 @@ describe('Users', () => {
       },
     )) as Id<'organizers'>;
 
-    // Out-of-scope users that are never added to the organizer directory, with
-    // emails that share the prefix and sort before the scoped member.
-    for (let index = 0; index < 5; index += 1) {
-      await t.mutation(api.testing.users.createUserDirectly, {
-        name: `Outside Directory ${index}`,
-        email: `bound-org-${String(index).padStart(3, '0')}@example.com`,
-      });
-    }
+    // 1025 out-of-scope global users that are never added to the organizer
+    // directory, with emails that share the prefix and sort before the scoped
+    // member. Their count exceeds the former global email-scan cap (1024), so a
+    // global email-index scan that stopped at the cap would miss the member.
+    await t.run(async (ctx) => {
+      for (let index = 0; index < 1025; index += 1) {
+        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- bulk seed of >1024 global users to exceed the former global email-scan cap; individual mutations would be far too many
+        await ctx.db.insert('users', {
+          name: `Outside Directory ${index}`,
+          email: `bound-org-${String(index).padStart(4, '0')}@example.com`,
+        });
+      }
+    });
 
-    // Scoped directory member whose email sorts after the out-of-scope window.
+    // Scoped directory member whose email sorts after every out-of-scope user.
     const scopedMemberId = (await t.mutation(
       api.testing.users.createUserDirectly,
       {
         name: 'Scoped Directory Trailing',
-        email: 'bound-org-999@example.com',
+        email: 'bound-org-9999@example.com',
       },
     )) as Id<'users'>;
     await t.mutation(api.testing.applications.seedApplication, {
@@ -523,28 +500,13 @@ describe('Users', () => {
     });
     await addOrganizerMember(t, scopedMemberId, organizerId);
 
-    // Cap below the out-of-scope prefix run: the scoped directory row is beyond
-    // the scan window and excluded (unbounded before the fix would have found
-    // it after draining the global email range).
-    const boundedPage = await t.run((ctx) =>
-      searchUserApplicationsInDirectory(ctx, organizerId, 'bound-org-', {
-        emailScanLimit: 3,
-      }),
+    // The directory email search scopes to the organizer's membership first, so
+    // the in-scope member is surfaced regardless of how many unrelated global
+    // users share the prefix or sort ahead of them.
+    const page = await t.run((ctx) =>
+      searchUserApplicationsInDirectory(ctx, organizerId, 'bound-org-'),
     );
-    expect(boundedPage.page.map((row) => row.user._id)).not.toContain(
-      scopedMemberId,
-    );
-
-    // A window large enough to reach the scoped row surfaces it — confirming
-    // the cap, not a scoping bug, was responsible for the exclusion above.
-    const withinWindowPage = await t.run((ctx) =>
-      searchUserApplicationsInDirectory(ctx, organizerId, 'bound-org-', {
-        emailScanLimit: 6,
-      }),
-    );
-    expect(withinWindowPage.page.map((row) => row.user._id)).toEqual([
-      scopedMemberId,
-    ]);
+    expect(page.page.map((row) => row.user._id)).toEqual([scopedMemberId]);
   });
 
   it('lists active members with their latest application snapshot', async () => {
