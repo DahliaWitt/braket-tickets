@@ -2,6 +2,12 @@
 
 Applies to everything under `/frontend`.
 
+## Design & brand rules
+
+For any UI, copy, or visual change, follow `docs/design/brand-rules.md` — the
+authoritative, citable design rules (lowercase copy voice, Syne/Inter/Space Mono
+typography, semantic-token-only color, 4px mixed radius, sanctioned effects, WCAG 2.2 AA).
+
 ## Angular
 
 - Keep Angular v22 zoneless patterns: signals/computed for state, `resource()` for async loading

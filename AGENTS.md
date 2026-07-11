@@ -28,6 +28,7 @@ Ticketing and community vetting platform.
 - When introducing a shared helper in `backend/convex/lib/` or `frontend/src/app/` (core/shared utilities), migrate every existing duplicated implementation to the helper in the same change. Grep for the pattern before writing the helper; a helper that ships alongside the duplicates it was meant to replace creates exactly the drift and divergence it was designed to prevent.
 - Keep TypeScript strict; use `unknown` plus narrowing instead of `any`.
 - Use `frontend/src/app/utils/logger.ts` for frontend logging so PII scrubbing stays centralized.
+- For any UI/copy/visual change, follow `docs/design/brand-rules.md` — the authoritative, citable brand & design rules (voice, typography, semantic tokens, radius, effects, a11y).
 - Update `docs/runbooks/` in the same change whenever behavior, deployment, config, cron jobs, env vars, external integrations, or operator commands change.
 - Verify runbook facts against current repo sources before writing them: code, workflows, compose files, scripts, and generated API/types.
 - Run targeted checks while iterating. Use `pnpm typecheck`, `pnpm test:frontend`, `pnpm test:convex`, or other focused commands based on what changed. Reserve `pnpm validate` for the final integration check before merging or for CI — not as a default after every task, especially with parallel agents on the same worktree. Use `./scripts/validate.sh all` or `./scripts/validate.sh full` only when the user explicitly asks for E2E-inclusive validation.
