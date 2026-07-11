@@ -483,13 +483,13 @@
                       <td
                         class="p-5 align-middle font-mono text-xs text-muted-foreground"
                       >
-                        {{ link._creationTime | date: 'mediumDate' }}
+                        {{ link._creationTime | date: ADMIN_DATE }}
                       </td>
                       <td
                         class="p-5 align-middle font-mono text-xs text-muted-foreground"
                       >
                         @if (link.lastUsedAt) {
-                          {{ link.lastUsedAt | date: 'mediumDate' }}
+                          {{ link.lastUsedAt | date: ADMIN_DATE }}
                         } @else {
                           <span class="text-muted-foreground">never</span>
                         }
@@ -498,7 +498,7 @@
                         class="p-5 align-middle font-mono text-xs text-muted-foreground"
                       >
                         @if (link.expiresAt) {
-                          {{ link.expiresAt | date: 'mediumDate' }}
+                          {{ link.expiresAt | date: ADMIN_DATE }}
                         } @else {
                           <span class="text-muted-foreground">—</span>
                         }
@@ -685,7 +685,7 @@
                         Created
                       </p>
                       <p class="font-mono text-sm text-muted-foreground">
-                        {{ link._creationTime | date: 'shortDate' }}
+                        {{ link._creationTime | date: ADMIN_DATE }}
                       </p>
                     </div>
                     <div>
@@ -696,7 +696,7 @@
                       </p>
                       <p class="font-mono text-sm text-muted-foreground">
                         @if (link.lastUsedAt) {
-                          {{ link.lastUsedAt | date: 'shortDate' }}
+                          {{ link.lastUsedAt | date: ADMIN_DATE }}
                         } @else {
                           never
                         }
@@ -710,7 +710,7 @@
                       </p>
                       <p class="font-mono text-sm text-muted-foreground">
                         @if (link.expiresAt) {
-                          {{ link.expiresAt | date: 'shortDate' }}
+                          {{ link.expiresAt | date: ADMIN_DATE }}
                         } @else {
                           —
                         }
@@ -869,13 +869,13 @@
                       <td
                         class="p-5 align-middle font-mono text-xs text-muted-foreground"
                       >
-                        {{ link._creationTime | date: 'mediumDate' }}
+                        {{ link._creationTime | date: ADMIN_DATE }}
                       </td>
                       <td
                         class="p-5 align-middle font-mono text-xs text-muted-foreground"
                       >
                         @if (link.lastUsedAt) {
-                          {{ link.lastUsedAt | date: 'mediumDate' }}
+                          {{ link.lastUsedAt | date: ADMIN_DATE }}
                         } @else {
                           <span>never</span>
                         }
@@ -884,7 +884,7 @@
                         class="p-5 align-middle font-mono text-xs text-muted-foreground"
                       >
                         @if (link.expiresAt) {
-                          {{ link.expiresAt | date: 'mediumDate' }}
+                          {{ link.expiresAt | date: ADMIN_DATE }}
                         } @else {
                           <span>—</span>
                         }
@@ -892,7 +892,7 @@
                       <td
                         class="p-5 align-middle font-mono text-xs text-muted-foreground"
                       >
-                        {{ link.deletedAt | date: 'mediumDate' }}
+                        {{ link.deletedAt | date: ADMIN_DATE }}
                       </td>
                     </tr>
                   }
@@ -953,7 +953,7 @@
                         Created
                       </p>
                       <p class="font-mono text-sm text-muted-foreground">
-                        {{ link._creationTime | date: 'shortDate' }}
+                        {{ link._creationTime | date: ADMIN_DATE }}
                       </p>
                     </div>
                     <div>
@@ -963,7 +963,7 @@
                         Deleted
                       </p>
                       <p class="font-mono text-sm text-muted-foreground">
-                        {{ link.deletedAt | date: 'shortDate' }}
+                        {{ link.deletedAt | date: ADMIN_DATE }}
                       </p>
                     </div>
                     <div>
@@ -974,7 +974,7 @@
                       </p>
                       <p class="font-mono text-sm text-muted-foreground">
                         @if (link.lastUsedAt) {
-                          {{ link.lastUsedAt | date: 'shortDate' }}
+                          {{ link.lastUsedAt | date: ADMIN_DATE }}
                         } @else {
                           never
                         }

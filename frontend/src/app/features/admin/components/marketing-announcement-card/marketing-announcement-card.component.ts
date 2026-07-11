@@ -18,6 +18,7 @@ import {ZardCardComponent} from '@ui/components/primitives/card/card.component';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
 import {logger} from '@/utils/logger';
 import {readInputValue} from '@ui/utils/dom-event';
+import {ADMIN_DATETIME} from '@/features/admin/utils/date-formats';
 
 interface MarketingScheduleState {
   date: Date;
@@ -181,7 +182,7 @@ function humanizeMarketingError(
                 class="font-mono text-xs text-muted-foreground"
                 data-testid="marketing-announcement-scheduled-for"
               >
-                Sends {{ status.scheduledFor | date: 'medium' }}
+                Sends {{ status.scheduledFor | date: ADMIN_DATETIME }}
               </p>
             }
 
@@ -190,7 +191,9 @@ function humanizeMarketingError(
                 class="font-mono text-xs text-muted-foreground"
                 data-testid="marketing-announcement-sent-at"
               >
-                Sent {{ status.sentAt ?? status.scheduledFor | date: 'medium' }}
+                Sent {{
+                  status.sentAt ?? status.scheduledFor | date: ADMIN_DATETIME
+                }}
                 @if (status.recipientCount !== undefined) {
                   to {{ status.recipientCount }} recipient{{
                     status.recipientCount === 1 ? '' : 's'
@@ -402,6 +405,8 @@ function humanizeMarketingError(
   `,
 })
 export class MarketingAnnouncementCardComponent {
+  protected readonly ADMIN_DATETIME = ADMIN_DATETIME;
+
   private readonly convex = injectConvex();
 
   readonly eventId = input.required<string>();
