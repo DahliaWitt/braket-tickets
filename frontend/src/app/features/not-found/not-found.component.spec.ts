@@ -3,7 +3,6 @@ import {vi} from 'vitest';
 import {type ComponentFixture, TestBed} from '@angular/core/testing';
 import {provideRouter} from '@angular/router';
 import {provideZonelessChangeDetection, signal} from '@angular/core';
-import type {HarnessLoader} from '@angular/cdk/testing';
 import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
 import {NotFoundComponent} from './not-found.component';
 import {NotFoundComponentHarness} from './not-found.component.harness';
@@ -13,12 +12,10 @@ import {
   createMockConvexClient,
   type MockConvexClient,
 } from '@/testing/mock-types';
-import {ZardButtonComponentHarness} from '@/ui/components/primitives/button/button.component.harness';
 
 describe('NotFoundComponent', () => {
   let fixture: ComponentFixture<NotFoundComponent>;
   let convexMock: MockConvexClient;
-  let loader: HarnessLoader;
   let harness: NotFoundComponentHarness;
 
   beforeEach(async () => {
@@ -39,7 +36,6 @@ describe('NotFoundComponent', () => {
 
     fixture = TestBed.createComponent(NotFoundComponent);
     fixture.detectChanges();
-    loader = TestbedHarnessEnvironment.loader(fixture);
     harness = await TestbedHarnessEnvironment.harnessForFixture(
       fixture,
       NotFoundComponentHarness,
@@ -52,13 +48,19 @@ describe('NotFoundComponent', () => {
     });
   });
 
+  describe('copy', () => {
+    it('should say the page does not exist instead of claiming a fix is underway', async () => {
+      const body = await harness.getBodyText();
+      expect(body).toContain("this page doesn't exist");
+      expect(body).not.toMatch(/working vewy hawd|fix this/i);
+    });
+  });
+
   describe('accessibility', () => {
-    it('should have aria-label on go home button', async () => {
-      const button = await loader.getHarness(
-        ZardButtonComponentHarness.with({text: 'Go Home'}),
+    it('should have aria-label on go home action', async () => {
+      await expect(harness.getGoHomeAriaLabel()).resolves.toBe(
+        'Navigate to home',
       );
-      const host = await button.host();
-      expect(await host.getAttribute('aria-label')).toBe('Navigate to home');
     });
 
     it('should have proper heading hierarchy', () => {

@@ -22,6 +22,7 @@ import {
 } from '@shared/pricing/pricing-summary';
 import {EventDatePipe} from '@/utils/event-date.pipe';
 import {EventEndTimePipe} from '@/utils/event-end-time.pipe';
+import {outlineMonoCta} from '@/features/shared/outline-cta';
 
 @Component({
   selector: 'app-dashboard',
@@ -41,6 +42,18 @@ import {EventEndTimePipe} from '@/utils/event-end-time.pipe';
 })
 export class DashboardComponent {
   auth = inject(AuthService);
+
+  // Outline-mono CTA treatments (shared helper — see features/shared/outline-cta).
+  // Layout classes are composed here so each `[class]` binding is self-contained.
+  /** Community "apply" chip in the discover grid (group-hover fill). */
+  protected readonly applyChipClass = `flex-shrink-0 ${outlineMonoCta({trigger: 'group', size: 'sm'})}`;
+  /** Compact community "apply" chip in the sidebar list (group-hover fill). */
+  protected readonly compactApplyChipClass = `flex-shrink-0 ${outlineMonoCta({trigger: 'group', size: 'xs'})}`;
+  /** Vetting "revise answers" resubmit link. */
+  protected readonly resubmitCtaClass = `inline-flex w-fit items-center ${outlineMonoCta({trigger: 'hover', size: 'md'})}`;
+  /** Featured-event "get tickets" button. */
+  protected readonly getTicketsCtaClass = `inline-block ${outlineMonoCta({trigger: 'hover', size: 'lg'})}`;
+
   private dashboardData = inject(DashboardDataService);
   private dashboardPageData = inject(DashboardPageDataService);
   private readonly browser = inject(BrowserPlatformService);

@@ -30,6 +30,23 @@ export class NotFoundComponentHarness extends ComponentHarness {
     return button ? button.getAttribute('routerLink') : null;
   }
 
+  /** Returns the aria-label of the "Go Home" action, or null if missing. */
+  async getGoHomeAriaLabel(): Promise<string | null> {
+    const button = await this.getGoHomeButton();
+    return button ? button.getAttribute('aria-label') : null;
+  }
+
+  /** Returns the visible text of the "Go Home" action. */
+  async getGoHomeText(): Promise<string | null> {
+    const button = await this.getGoHomeButton();
+    return button ? (await button.text()).trim() : null;
+  }
+
+  /** Returns the full body copy of the 404 page. */
+  async getBodyText(): Promise<string> {
+    return (await this.host()).text();
+  }
+
   /** Clicks the "Go Home" button. */
   async clickGoHome(): Promise<void> {
     const button = await this.getGoHomeButton();
