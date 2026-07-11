@@ -736,6 +736,25 @@ describe('DashboardComponent', () => {
       expect(hasCta).toBe(false);
     });
 
+    it('should render "View Event" as a real link when the user cannot purchase', async () => {
+      setup({
+        approvals: mockApprovals,
+        events: [mockEvent],
+        eventAvailability: {
+          '1': {
+            isSoldOut: true,
+            userTicketCount: 0,
+            ticketSalesStatus: 'active',
+            purchaseAccess: {allowed: true, source: 'direct'},
+          },
+        },
+      });
+      await createComponent();
+
+      expect(await harness.hasGetTicketsCta()).toBe(false);
+      expect(await harness.getViewEventHrefs()).toEqual(['/events/1']);
+    });
+
     it('should link Get Tickets CTA with buy=true when user can purchase', async () => {
       setup({
         approvals: mockApprovals,

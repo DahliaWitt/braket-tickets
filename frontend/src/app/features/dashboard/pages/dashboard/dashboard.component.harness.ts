@@ -90,6 +90,19 @@ export class DashboardComponentHarness extends ComponentHarness {
     );
   }
 
+  /** Get all "View Event" fallback link hrefs (non-purchasable events). */
+  async getViewEventHrefs(): Promise<string[]> {
+    const els = await this.locatorForAll(
+      '[data-testid="dashboard-view-event"]',
+    )();
+    const hrefs: string[] = [];
+    for (const el of els) {
+      const href = await el.getAttribute('href');
+      if (href) hrefs.push(href);
+    }
+    return hrefs;
+  }
+
   /** Check whether the "Get Tickets" CTA is visible on the featured event. */
   async hasGetTicketsCta(): Promise<boolean> {
     const el = await this.locatorForOptional(

@@ -290,9 +290,9 @@ export class DashboardComponent {
   }
 
   /**
-   * View Model for Dashboard Events.
-   * Pre-calculates status, color, and ability to purchase for each event.
-   * This removes complex logic from the template and runs only when data changes.
+   * View model for dashboard events: whether the current user can purchase
+   * each one. Purchase requires backend access plus an active, non-sold-out
+   * sale where the per-user ticket limit has not been reached.
    */
   readonly dashboardEvents = computed(() => {
     const events = this.rawEvents();
@@ -301,40 +301,19 @@ export class DashboardComponent {
     return events.map((event) => {
       const availability = availabilityMap[event._id];
 
-      let status: {message: string; color: string} | null = null;
       let canPurchase = false;
-      let isLimitReached = false;
-
       if (availability) {
-        // Calculate Limit Reached
         const count = availability.userTicketCount ?? 0;
-        isLimitReached = count >= (event.maxTicketsPerUser ?? 4);
-
-        // Calculate Status
-        if (availability.isSoldOut) {
-          status = {message: 'Sold Out', color: 'red'};
-        } else if (availability.ticketSalesStatus === 'paused') {
-          status = {message: 'Ticket Sales Are Paused', color: 'yellow'};
-        } else if (availability.ticketSalesStatus === 'ended') {
-          status = {message: 'Ticket Sales Have Ended', color: 'red'};
-        } else if (isLimitReached) {
-          status = {
-            message: `Limit Reached (${count} owned)`,
-            color: 'success',
-          };
-        }
-
-        if (availability.purchaseAccess.allowed && !isLimitReached && !status) {
-          canPurchase = true;
-        }
+        const isLimitReached = count >= (event.maxTicketsPerUser ?? 4);
+        canPurchase =
+          availability.purchaseAccess.allowed &&
+          !availability.isSoldOut &&
+          availability.ticketSalesStatus !== 'paused' &&
+          availability.ticketSalesStatus !== 'ended' &&
+          !isLimitReached;
       }
 
-      return {
-        ...event,
-        uiStatus: status,
-        isLimitReached,
-        canPurchase,
-      };
+      return {...event, canPurchase};
     });
   });
 
