@@ -120,7 +120,7 @@ export class BraDatePickerComponent
   readonly zType = input<BraDatePickerVariants['zType']>('outline');
   readonly zSize = input<BraDatePickerVariants['zSize']>('default');
   readonly value = model<Date | null>(null);
-  readonly placeholder = input<string>('Pick a date');
+  readonly placeholder = input<string>('pick a date');
   readonly zFormat = input<string>('MMMM d, yyyy');
   readonly minDate = input<Date | null>(null);
   readonly maxDate = input<Date | null>(null);
@@ -143,7 +143,7 @@ export class BraDatePickerComponent
       this.zSize() ?? 'default';
     const height = HEIGHT_BY_SIZE[size];
     return mergeClasses(
-      'w-full justify-between text-left font-mono bg-transparent border-b-2 transition-colors',
+      'w-full justify-between border-b-2 bg-transparent text-left font-mono transition-colors',
       'border-input text-foreground hover:border-ring focus-visible:border-ring focus-visible:outline-none',
       !hasValue && 'text-muted-foreground',
       height,

@@ -40,7 +40,6 @@ type OnChangeType = (value: boolean) => void;
           [attr.aria-describedby]="zAriaDescribedBy()"
           (change)="onCheckboxChange()"
           (blur)="onCheckboxBlur()"
-          name="checkbox"
         />
         <z-icon
           zType="check"

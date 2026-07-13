@@ -40,6 +40,35 @@ export class BraAlertDialogComponentHarness extends ComponentHarness {
     return el ? el.text() : null;
   }
 
+  async getCancelText(): Promise<string | null> {
+    const btn = await this.cancelButton();
+    return btn ? (await btn.text()).trim() : null;
+  }
+
+  async getOkText(): Promise<string | null> {
+    const btn = await this.okButton();
+    return btn ? (await btn.text()).trim() : null;
+  }
+
+  private async getHostClassTokens(): Promise<string[]> {
+    const className = (await (await this.host()).getAttribute('class')) ?? '';
+    return className.split(/\s+/);
+  }
+
+  /** The alert panel must never grow past the viewport. */
+  async hasViewportMaxHeight(): Promise<boolean> {
+    return (await this.getHostClassTokens()).includes(
+      'max-h-[calc(100dvh-2rem)]',
+    );
+  }
+
+  /** The body region scrolls while header/footer stay visible. */
+  async hasScrollableBody(): Promise<boolean> {
+    const body = await this.focusFallback();
+    const className = (await body?.getAttribute('class')) ?? '';
+    return className.split(/\s+/).includes('overflow-y-auto');
+  }
+
   async hasCancelButton(): Promise<boolean> {
     return (await this.cancelButton()) !== null;
   }

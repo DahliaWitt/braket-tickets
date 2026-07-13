@@ -4,9 +4,9 @@ export const inputVariants = cva('w-full text-foreground', {
   variants: {
     zType: {
       default:
-        'flex rounded-md border px-4 font-normal border-input bg-transparent file:border-0 file:text-foreground file:bg-transparent file:font-medium placeholder:text-muted-foreground outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50',
+        'flex rounded-md border border-input bg-transparent px-4 font-normal outline-hidden file:border-0 file:bg-transparent file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50',
       textarea:
-        'flex pb-2 min-h-20 h-auto rounded-md border border-input bg-background px-3 py-2 text-base placeholder:text-muted-foreground outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50',
+        'flex h-auto min-h-20 rounded-md border border-input bg-background px-3 py-2 pb-2 text-base outline-hidden placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50',
     },
     zSize: {
       default: 'text-base',
@@ -19,7 +19,7 @@ export const inputVariants = cva('w-full text-foreground', {
       success: 'border-success focus-visible:ring-success',
     },
     zBorderless: {
-      true: 'flex-1 bg-transparent border-0 outline-none focus-visible:ring-0 focus-visible:ring-offset-0 px-0 py-0',
+      true: 'flex-1 border-0 bg-transparent px-0 py-0 outline-hidden focus-visible:ring-0 focus-visible:ring-offset-0',
     },
   },
   defaultVariants: {
@@ -31,12 +31,12 @@ export const inputVariants = cva('w-full text-foreground', {
     {
       zType: 'default',
       zSize: 'sm',
-      class: 'h-8 file:md:py-2 file:max-md:py-1.5',
+      class: 'h-8 file:max-md:py-1.5 file:md:py-2',
     },
     {
       zType: 'default',
       zSize: 'lg',
-      class: 'h-10 py-1 file:md:py-3 file:max-md:py-2.5',
+      class: 'h-12 py-2 file:max-md:py-2.5 file:md:py-3',
     },
   ],
 });

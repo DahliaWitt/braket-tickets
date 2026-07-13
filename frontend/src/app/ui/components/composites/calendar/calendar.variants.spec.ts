@@ -11,6 +11,12 @@ describe('calendarDayButtonVariants', () => {
     expect(classes).not.toContain('hover:bg-accent');
   });
 
+  it('opts day buttons back into a pointer cursor (Tailwind v4 preflight sets cursor:default)', () => {
+    const classes = calendarDayButtonVariants();
+
+    expect(classes.split(/\s+/)).toContain('cursor-pointer');
+  });
+
   it('uses primary pink for the unselected today chip', () => {
     const classes = calendarDayButtonVariants({
       today: true,

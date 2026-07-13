@@ -26,4 +26,10 @@ export class ZardCheckboxHarness extends ComponentHarness {
     const labelText = await this.getLabelTextElement();
     return labelText.text();
   }
+
+  /** Native `name` attribute of the underlying checkbox input. */
+  async getInputName(): Promise<string | null> {
+    const input = await this.getInput();
+    return input.getAttribute('name');
+  }
 }

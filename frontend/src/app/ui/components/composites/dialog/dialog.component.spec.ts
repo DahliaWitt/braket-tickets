@@ -96,12 +96,24 @@ describe('BraDialogComponent', () => {
       'This action cannot be undone.',
     );
     expect(await harness.getContentText()).toContain('Dialog body');
-    expect(await harness.getCancelText()).toContain('Cancel');
-    expect(await harness.getOkText()).toContain('OK');
+    expect(await harness.getCancelText()).toContain('cancel');
+    expect(await harness.getOkText()).toContain('confirm');
     expect(await harness.getAriaLabelledBy()).toContain('-title');
     expect(await harness.getAriaDescribedBy()).toContain('-description');
     expect(await harness.hasFocusTrapAnchors()).toBe(true);
     expect(await harness.isCancelInitialFocus()).toBe(true);
+  });
+
+  it('should cap the panel to the viewport and scroll the body region', async () => {
+    await createDialog({
+      zTitle: 'Long form',
+      zContent: 'Tall dialog body',
+    });
+
+    const harness = await loader.getHarness(BraDialogHarness);
+
+    expect(await harness.hasViewportMaxHeight()).toBe(true);
+    expect(await harness.hasScrollableBody()).toBe(true);
   });
 
   it('should hide close and footer actions when disabled by config', async () => {

@@ -1,5 +1,5 @@
 <div
-  class="flex flex-col gap-4 p-6"
+  class="flex max-h-[calc(100dvh-2rem)] flex-col gap-4 p-6"
   cdkTrapFocus
   [cdkTrapFocusAutoCapture]="true"
 >
@@ -19,7 +19,7 @@
         <p
           data-testid="z-alert-description"
           [id]="descriptionId()"
-          class="text-muted-foreground text-sm"
+          class="text-sm text-muted-foreground"
         >
           {{ config.zDescription }}
         </p>
@@ -28,6 +28,7 @@
   }
 
   <main
+    class="min-h-0 overflow-y-auto"
     tabindex="-1"
     aria-label="Alert dialog content"
     data-testid="z-alert-focus-fallback"
@@ -51,7 +52,7 @@
         [attr.aria-label]="cancelButtonAriaLabel()"
         (click)="onCancelClick()"
       >
-        {{ config.zCancelText || 'Cancel' }}
+        {{ config.zCancelText || 'cancel' }}
       </button>
     }
 
@@ -65,7 +66,7 @@
         [attr.aria-label]="okButtonAriaLabel()"
         (click)="onOkClick()"
       >
-        {{ config.zOkText || 'Continue' }}
+        {{ config.zOkText || 'confirm' }}
       </button>
     }
   </footer>

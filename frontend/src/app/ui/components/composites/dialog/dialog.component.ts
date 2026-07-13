@@ -91,7 +91,7 @@ export class BraDialogOptions<T, U> {
               <p
                 data-testid="z-description"
                 [id]="descriptionId()"
-                class="text-muted-foreground text-sm"
+                class="text-sm text-muted-foreground"
               >
                 {{ config.zDescription }}
               </p>
@@ -101,7 +101,7 @@ export class BraDialogOptions<T, U> {
       }
 
       <main
-        class="flex flex-col space-y-4"
+        class="flex min-h-0 flex-col space-y-4 overflow-y-auto"
         tabindex="-1"
         aria-label="Dialog content"
         data-testid="z-focus-fallback"
@@ -132,7 +132,7 @@ export class BraDialogOptions<T, U> {
                 <z-icon [zType]="config.zCancelIcon" />
               }
 
-              {{ config.zCancelText ?? 'Cancel' }}
+              {{ config.zCancelText || 'cancel' }}
             </button>
           }
 
@@ -149,7 +149,7 @@ export class BraDialogOptions<T, U> {
                 <z-icon [zType]="config.zOkIcon" />
               }
 
-              {{ config.zOkText ?? 'OK' }}
+              {{ config.zOkText || 'confirm' }}
             </button>
           }
         </footer>

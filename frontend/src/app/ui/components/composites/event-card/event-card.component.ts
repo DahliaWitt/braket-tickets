@@ -95,7 +95,7 @@ export interface EventCardData {
           ></div>
           <div class="absolute inset-0 flex items-center justify-center">
             <span
-              class="line-clamp-3 px-4 text-center font-display text-4xl leading-none font-black tracking-tighter text-foreground/10 uppercase select-none @[600px]:text-5xl"
+              class="line-clamp-3 px-4 text-center font-display text-4xl leading-none font-extrabold tracking-tighter text-foreground/10 uppercase select-none @[600px]:text-5xl"
             >
               {{ event().title }}
             </span>
@@ -139,7 +139,7 @@ export interface EventCardData {
         <p
           class="mb-6 line-clamp-3 grow font-sans text-sm text-card-foreground/80 @[600px]:line-clamp-4"
         >
-          {{ event().description || 'No description provided.' }}
+          {{ event().description || 'no description provided' }}
         </p>
 
         @if (isSoldOut()) {
@@ -163,7 +163,7 @@ export interface EventCardData {
             class="flex-1"
             [attr.aria-label]="'More information about ' + event().title"
           >
-            More Info
+            more info
           </a>
           @if (showBuyButton()) {
             <a
@@ -176,7 +176,7 @@ export interface EventCardData {
               [attr.aria-label]="buyButtonAriaLabel()"
               [zDisabled]="isBuyDisabled()"
             >
-              Tickets
+              tickets
             </a>
           }
         </div>

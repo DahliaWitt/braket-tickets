@@ -30,6 +30,25 @@ export class BraDialogHarness extends ComponentHarness {
     return (await this.host()).getAttribute('role');
   }
 
+  private async getHostClassTokens(): Promise<string[]> {
+    const className = (await (await this.host()).getAttribute('class')) ?? '';
+    return className.split(/\s+/);
+  }
+
+  /** The dialog panel must never grow past the viewport. */
+  async hasViewportMaxHeight(): Promise<boolean> {
+    return (await this.getHostClassTokens()).includes(
+      'max-h-[calc(100dvh-2rem)]',
+    );
+  }
+
+  /** The body region scrolls while header/footer stay visible. */
+  async hasScrollableBody(): Promise<boolean> {
+    const body = await this.focusFallback();
+    const className = (await body?.getAttribute('class')) ?? '';
+    return className.split(/\s+/).includes('overflow-y-auto');
+  }
+
   async getAriaLabelledBy(): Promise<string | null> {
     return (await this.host()).getAttribute('aria-labelledby');
   }
