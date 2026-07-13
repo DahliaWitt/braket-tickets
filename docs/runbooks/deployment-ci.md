@@ -390,7 +390,7 @@ doppler run --project braket-tickets --config stg -- pnpm convex deploy
 pnpm seed:dev:fresh
 ```
 
-Use `pnpm seed:dev:clear` for this recovery path. The script creates a short-lived token-gated seed session, clears the dev deployment through `backend/convex/seed/`, and removes `DEV_SEED`, `DEV_SEED_TOKEN`, and `DEV_SEED_EXPIRES_AT` before exiting. If the script reports failed env cleanup, run the printed cleanup commands before retrying or deploying.
+Use `pnpm seed:dev:clear` for this recovery path. The script creates a short-lived token-gated seed session, clears the dev deployment through `backend/convex/seed/`, and removes `DEV_SEED`, `DEV_SEED_TOKEN`, and `DEV_SEED_EXPIRES_AT` before exiting. Before setting any seed env var, it requires an exact HTTPS Convex cloud RPC URL and a current `dev:<deployment-name>|<token>` deployment key whose deployment matches both `CONVEX_URL` and the staging allowlist; other key types, URL forms, and mismatches fail closed without exposing the token. If the script reports failed env cleanup, run the printed Doppler cleanup commands before retrying or deploying; the validated deployment-scoped `CONVEX_DEPLOY_KEY` selects the target, so those commands intentionally omit `--deployment`.
 
 ### Manually deploy Angular preview
 

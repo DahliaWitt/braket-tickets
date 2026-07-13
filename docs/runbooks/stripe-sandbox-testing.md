@@ -50,7 +50,7 @@ Use reseed only in `local` or `stg` where `STRIPE_SECRET_KEY` is test mode.
 pnpm seed:fixture
 
 # Staging/development (shared fixture account for CI)
-doppler run --config stg -- pnpm seed:fixture
+pnpm seed:sandbox:fixture
 ```
 
 The seeded test event is owned by the connected account resolved for each env (`STRIPE_SANDBOX_CONNECTED_ACCOUNT_ID`), so QA/dev events can always complete checkout without weakening payment readiness logic.
