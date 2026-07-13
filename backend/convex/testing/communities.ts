@@ -1,7 +1,7 @@
 import {v} from 'convex/values';
 import type {Doc, Id} from '../_generated/dataModel';
 import type {MutationCtx} from '../_generated/server';
-import {addMember, addTrustLink, authz} from '../lib/authz';
+import {addMember, addTrustLink, authz, organizerScope} from '../lib/authz';
 import {ensureApprovedMarketingPreference} from '../lib/marketing_emails/preferences';
 import {
   refreshOrganizerDirectoryForMembershipChange,
@@ -218,6 +218,38 @@ export const seedCommunityAdmin = testingMutation({
       id: organizerId as string,
     });
     await addSeedMembership(ctx, userId, organizerId);
+    return null;
+  },
+});
+
+/**
+ * Seeds `count` synthetic `member` role assignments on an organizer via the authz
+ * component, so a test can drive an organizer to (or past) `AUTHZ_RELATION_QUERY_CAP`
+ * without inserting that many real user documents. The subjects are throwaway id
+ * strings (`cap-user-<organizerId>-<index>`), never real `users` rows — these
+ * assignments only exist to exercise the member-cap threshold in enumeration/count
+ * helpers.
+ *
+ * Role assignment is reserved for dedicated seed helpers (see
+ * `backend/convex/testing/AGENTS.md`), so bulk member-cap seeding lives here rather
+ * than inline in test files.
+ * PROTECTED: Only callable when IS_TEST env var is set.
+ */
+export const seedOrganizerMemberRolesAtScale = testingMutation({
+  args: {
+    organizerId: v.id('organizers'),
+    count: v.number(),
+  },
+  returns: v.null(),
+  handler: async (ctx, {organizerId, count}) => {
+    for (let index = 0; index < count; index += 1) {
+      await authz.assignRole(
+        ctx,
+        `cap-user-${organizerId}-${index}`,
+        'member',
+        organizerScope(organizerId),
+      );
+    }
     return null;
   },
 });

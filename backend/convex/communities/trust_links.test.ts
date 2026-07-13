@@ -2,8 +2,40 @@ import {describe, expect, it} from 'vitest';
 import type {Id} from '../_generated/dataModel';
 import {api} from '../_generated/api';
 import {convexTest} from '../setup.testing';
-import {addMember, addTrustLink, authz, authzUserId} from '../lib/authz';
+import {
+  AUTHZ_RELATION_QUERY_CAP,
+  addMember,
+  addTrustLink,
+  authz,
+  authzUserId,
+} from '../lib/authz';
 import {MAX_TRUST_LINKS} from '../lib/trust_links';
+
+/**
+ * Per-test timeout for cases that seed up to AUTHZ_RELATION_QUERY_CAP member
+ * relations. Each assignRole round-trips through the authz component, which is
+ * CPU-bound and irreducible in convex-test (~12s locally for 1000 members and
+ * several times slower under CI coverage + shared-runner contention), so these
+ * tests need headroom over the 30s global timeout.
+ */
+const MEMBER_CAP_SEED_TEST_TIMEOUT_MS = 120000;
+
+/**
+ * Seed `count` member-role assignments on an organizer via the dedicated
+ * `api.testing.communities` helper, so a test can reach the member cap without
+ * creating that many real user documents. Role assignment stays out of the test
+ * file per `backend/convex/testing/AGENTS.md`.
+ */
+async function seedMembers(
+  t: ReturnType<typeof convexTest>,
+  organizerId: Id<'organizers'>,
+  count: number,
+): Promise<void> {
+  await t.mutation(api.testing.communities.seedOrganizerMemberRolesAtScale, {
+    organizerId,
+    count,
+  });
+}
 
 async function createUser(
   t: ReturnType<typeof convexTest>,
@@ -98,6 +130,49 @@ describe('trust_links', () => {
     );
     expect(outgoingAfterRemoval).toEqual([]);
   });
+
+  it(
+    'returns the whole outgoing page even when a trusted organizer is at the member cap',
+    async () => {
+      const t = convexTest();
+      const trustingOrganizerId = await createOrganizer(t, 'Trusting Org');
+      const bigTrustedOrganizerId = await createOrganizer(t, 'Big Trusted Org');
+      const smallTrustedOrganizerId = await createOrganizer(
+        t,
+        'Small Trusted Org',
+      );
+      const adminId = await createUser(t, 'Community Admin');
+      await assignCommunityAdmin(t, adminId, trustingOrganizerId);
+
+      await t.run(async (ctx) => {
+        await addTrustLink(ctx, trustingOrganizerId, bigTrustedOrganizerId);
+        await addTrustLink(ctx, trustingOrganizerId, smallTrustedOrganizerId);
+      });
+
+      // The big org sits at the enumeration cap; the small org has a handful.
+      await seedMembers(t, bigTrustedOrganizerId, AUTHZ_RELATION_QUERY_CAP);
+      await seedMembers(t, smallTrustedOrganizerId, 4);
+
+      const asAdmin = t.withIdentity({subject: adminId});
+      const outgoing = await asAdmin.query(api.communities.trust_links.list, {
+        organizerId: trustingOrganizerId,
+      });
+
+      // The at-cap organizer must not fail the whole page: both links come back.
+      expect(outgoing).toHaveLength(2);
+
+      const bigRow = outgoing.find(
+        (row) => row.trustedOrganizerId === bigTrustedOrganizerId,
+      );
+      const smallRow = outgoing.find(
+        (row) => row.trustedOrganizerId === smallTrustedOrganizerId,
+      );
+
+      expect(bigRow?.trustedMemberCount).toBe(AUTHZ_RELATION_QUERY_CAP);
+      expect(smallRow?.trustedMemberCount).toBe(4);
+    },
+    MEMBER_CAP_SEED_TEST_TIMEOUT_MS,
+  );
 
   it('denies trust-link creation for non-admins', async () => {
     const t = convexTest();
