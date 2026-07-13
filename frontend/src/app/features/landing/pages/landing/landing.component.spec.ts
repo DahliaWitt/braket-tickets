@@ -1,5 +1,6 @@
 import '../../../../../test-setup';
 import {type ComponentFixture, TestBed} from '@angular/core/testing';
+import {manualChangeDetection} from '@angular/cdk/testing';
 import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
 import {LandingComponent} from './landing.component';
 import {LandingComponentHarness} from './landing.component.harness';
@@ -79,9 +80,10 @@ function makeConvexMock({
   return convexMock;
 }
 
-async function setup(
+async function configure(
   communities: MockCommunity[] = [],
   events: MockEvent[] = [],
+  listUpcoming?: ReturnType<typeof vi.fn>,
 ) {
   const authServiceSpy = {isAuthenticated: signal(false)};
   const convexMock = makeConvexMock({communities});
@@ -90,7 +92,7 @@ async function setup(
     getBySlug: vi.fn().mockResolvedValue(null),
   };
   const publicEventsServiceMock = {
-    listUpcoming: vi.fn().mockResolvedValue(events),
+    listUpcoming: listUpcoming ?? vi.fn().mockResolvedValue(events),
   };
 
   await TestBed.configureTestingModule({
@@ -114,11 +116,6 @@ async function setup(
   const fixture: ComponentFixture<LandingComponent> =
     TestBed.createComponent(LandingComponent);
   fixture.detectChanges();
-  await fixture.whenStable();
-  const landingHarness = await TestbedHarnessEnvironment.harnessForFixture(
-    fixture,
-    LandingComponentHarness,
-  );
 
   return {
     fixture,
@@ -127,6 +124,23 @@ async function setup(
     convexMock,
     publicCommunitiesServiceMock,
     router,
+  };
+}
+
+async function setup(
+  communities: MockCommunity[] = [],
+  events: MockEvent[] = [],
+  listUpcoming?: ReturnType<typeof vi.fn>,
+) {
+  const base = await configure(communities, events, listUpcoming);
+  await base.fixture.whenStable();
+  const landingHarness = await TestbedHarnessEnvironment.harnessForFixture(
+    base.fixture,
+    LandingComponentHarness,
+  );
+
+  return {
+    ...base,
     landingHarness,
   };
 }
@@ -192,6 +206,66 @@ describe('LandingComponent', () => {
 
       const {component} = await setup([], events);
       expect(component.shouldCenter()).toBe(false);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Events query states
+  // -----------------------------------------------------------------------
+
+  describe('events query states', () => {
+    it('shows skeleton rows while events are loading and does not center the hero', async () => {
+      // The resource loader never resolves, so Angular keeps a PendingTask
+      // open — whenStable() would hang. Bypass stabilization for the harness.
+      const listUpcoming = vi.fn().mockReturnValue(new Promise(() => void 0));
+      const {fixture, component} = await configure([], [], listUpcoming);
+
+      await manualChangeDetection(async () => {
+        const landingHarness =
+          await TestbedHarnessEnvironment.harnessForFixture(
+            fixture,
+            LandingComponentHarness,
+          );
+        expect(await landingHarness.hasEventsLoadingSection()).toBe(true);
+        expect(await landingHarness.getEventsSkeletonCount()).toBeGreaterThan(
+          0,
+        );
+        expect(await landingHarness.hasEventsSection()).toBe(false);
+        expect(await landingHarness.hasEventsErrorSection()).toBe(false);
+        expect(component.shouldCenter()).toBe(false);
+      });
+    });
+
+    it('shows a fallback line instead of an invisible outage when the fetch fails', async () => {
+      const listUpcoming = vi.fn().mockRejectedValue(new Error('outage'));
+      const {landingHarness, component} = await setup([], [], listUpcoming);
+
+      expect(await landingHarness.hasEventsErrorSection()).toBe(true);
+      expect(await landingHarness.getEventsErrorText()).toContain(
+        "events aren't loading right now",
+      );
+      expect(await landingHarness.hasEventsSection()).toBe(false);
+      expect(await landingHarness.hasEventsLoadingSection()).toBe(false);
+      expect(component.shouldCenter()).toBe(false);
+    });
+
+    it('renders events without skeleton or error once settled with data', async () => {
+      const events = [makeEvent({_id: 'evt-1', title: 'Settled Event'})];
+      const {landingHarness, component} = await setup([], events);
+
+      expect(await landingHarness.hasEventsSection()).toBe(true);
+      expect(await landingHarness.hasEventsLoadingSection()).toBe(false);
+      expect(await landingHarness.hasEventsErrorSection()).toBe(false);
+      expect(component.shouldCenter()).toBe(false);
+    });
+
+    it('centers the hero only when settled and empty', async () => {
+      const {landingHarness, component} = await setup([], []);
+
+      expect(await landingHarness.hasEventsSection()).toBe(false);
+      expect(await landingHarness.hasEventsLoadingSection()).toBe(false);
+      expect(await landingHarness.hasEventsErrorSection()).toBe(false);
+      expect(component.shouldCenter()).toBe(true);
     });
   });
 

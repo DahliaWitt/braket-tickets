@@ -115,7 +115,7 @@ test.describe('Registration Flow', () => {
         await expect(page.getByTestId('redeem-needs-login')).toBeVisible({
           timeout: 15000,
         });
-        await page.getByRole('link', {name: /sign in/i}).click();
+        await page.getByRole('link', {name: /create account/i}).click();
 
         await loginPage.waitForReady();
         await expect(page).toHaveURL(

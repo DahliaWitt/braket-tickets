@@ -52,4 +52,58 @@ export class UnsubscribeHarness extends ComponentHarness {
     const btn = await this.locatorFor('[data-testid="unsub-all-btn"]')();
     await btn.click();
   }
+
+  /** Resolved z-button variant of the unsubscribe-all action. */
+  async getUnsubscribeAllButtonType(): Promise<string | null> {
+    const btn = await this.locatorForOptional(
+      '[data-testid="unsub-all-btn"]',
+    )();
+    return btn ? btn.getAttribute('data-type') : null;
+  }
+
+  async isLoadingVisible(): Promise<boolean> {
+    const el = await this.locatorForOptional('[data-testid="unsub-loading"]')();
+    return el !== null;
+  }
+
+  async getLoadingSkeletonCount(): Promise<number> {
+    const skeletons = await this.locatorForAll(
+      '[data-testid="unsub-loading"] z-skeleton',
+    )();
+    return skeletons.length;
+  }
+
+  async isLoadErrorVisible(): Promise<boolean> {
+    const el = await this.locatorForOptional(
+      '[data-testid="unsub-load-error"]',
+    )();
+    return el !== null;
+  }
+
+  async clickRetry(): Promise<void> {
+    const btn = await this.locatorFor('[data-testid="unsub-retry-btn"]')();
+    await btn.click();
+  }
+
+  private prefToggle(organizerId: string) {
+    return this.locatorForOptional(
+      `[data-testid="pref-toggle-${organizerId}"]`,
+    )();
+  }
+
+  async togglePreference(organizerId: string): Promise<void> {
+    const checkbox = await this.prefToggle(organizerId);
+    if (!checkbox) throw new Error(`Toggle for ${organizerId} not found`);
+    await checkbox.click();
+  }
+
+  async isPreferenceChecked(organizerId: string): Promise<boolean | null> {
+    const checkbox = await this.prefToggle(organizerId);
+    return checkbox ? checkbox.getProperty<boolean>('checked') : null;
+  }
+
+  async isPreferenceDisabled(organizerId: string): Promise<boolean | null> {
+    const checkbox = await this.prefToggle(organizerId);
+    return checkbox ? checkbox.getProperty<boolean>('disabled') : null;
+  }
 }

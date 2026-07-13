@@ -40,14 +40,20 @@ export const update = mutation({
   args: {
     id: v.id('organizers'),
     name: v.optional(v.string()),
-    email: v.optional(v.string()),
-    contactInfo: v.optional(v.string()),
+    // `null` explicitly clears these optional fields (an omitted key means
+    // "leave unchanged" and cannot express a clear across the wire).
+    email: v.optional(v.union(v.string(), v.null())),
+    contactInfo: v.optional(v.union(v.string(), v.null())),
     vettingQuestions: v.optional(v.array(vettingQuestionValidator)),
     status: communityPublicationStatusValidator,
-    description: v.optional(v.string()),
-    website: v.optional(v.string()),
+    description: v.optional(v.union(v.string(), v.null())),
+    website: v.optional(v.union(v.string(), v.null())),
     isPublicDirectory: v.optional(v.boolean()),
     logoStorageId: v.optional(v.union(v.id('_storage'), v.null())),
+    // slug is intentionally NOT clearable: it is the community's public URL key
+    // (organizers.by_slug drives public pages, the directory, and event
+    // lookups) and create always assigns one. A blank slug is a no-op, not a
+    // clear. Reassigning to a new slug is still supported.
     slug: v.optional(v.string()),
     codeOfConduct: v.optional(v.string()),
   },

@@ -504,6 +504,116 @@ describe('guests.update', () => {
     expect(afterUpdate?.checkedInBy).toBe(adminId);
   });
 
+  it('preserves an in-flight ticket-send lock so an edit cannot enable a double-send', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Send In Flight',
+      email: 'in-flight@example.com',
+      type: 'guest',
+    });
+
+    // A send action claims the lock; the PDF build + email dispatch is in
+    // flight (the lock is held, not yet released).
+    const claim = await t.mutation(
+      internal.events.guests.beginGuestTicketSend,
+      {id: guestId, requireUnsent: true},
+    );
+    expect(claim.claimed).toBe(true);
+    const lockToken = claim.lockToken;
+    expect(typeof lockToken).toBe('number');
+
+    // A concurrent admin edit of an unrelated field must NOT clear the lock.
+    await asAdmin.mutation(api.events.guests.update, {
+      id: guestId,
+      name: 'Send In Flight (renamed)',
+      type: 'guest',
+    });
+
+    const afterUpdate = await t.run(async (ctx) => ctx.db.get(guestId));
+    expect(afterUpdate?.name).toBe('Send In Flight (renamed)');
+    expect(afterUpdate?.emailSendLockedAt).toBe(lockToken);
+
+    // Because the lock survived, a second send claim is still turned away as
+    // in-flight — the edit did not open a double-send window.
+    const second = await t.mutation(
+      internal.events.guests.beginGuestTicketSend,
+      {id: guestId, requireUnsent: false},
+    );
+    expect(second).toEqual({
+      claimed: false,
+      reason: 'in_flight',
+      lockToken: null,
+    });
+  });
+
+  it('preserves a released (null) send lock across an update', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Released Lock',
+      email: 'released@example.com',
+      type: 'guest',
+    });
+
+    // A completed send leaves emailSendLockedAt set to null (released, not
+    // absent). An update must not resurrect it to `undefined`.
+    const claim = await t.mutation(
+      internal.events.guests.beginGuestTicketSend,
+      {id: guestId, requireUnsent: true},
+    );
+    await t.mutation(internal.events.guests.markAsEmailed, {
+      id: guestId,
+      lockToken: claim.lockToken!,
+    });
+
+    await asAdmin.mutation(api.events.guests.update, {
+      id: guestId,
+      name: 'Released Lock (renamed)',
+      type: 'guest',
+    });
+
+    const afterUpdate = await t.run(async (ctx) => ctx.db.get(guestId));
+    expect(afterUpdate?.emailSendLockedAt).toBeNull();
+  });
+
+  it('leaves a never-claimed send lock absent after an update', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Never Sent',
+      type: 'guest',
+    });
+
+    const beforeUpdate = await t.run(async (ctx) => ctx.db.get(guestId));
+    expect(beforeUpdate?.emailSendLockedAt).toBeUndefined();
+
+    await asAdmin.mutation(api.events.guests.update, {
+      id: guestId,
+      name: 'Never Sent (renamed)',
+      type: 'guest',
+    });
+
+    // Carrying an absent lock through replace must not resurrect the field.
+    const afterUpdate = await t.run(async (ctx) => ctx.db.get(guestId));
+    expect(afterUpdate?.emailSendLockedAt).toBeUndefined();
+  });
+
   it('rejects non-admin users', async () => {
     const t = convexTest();
 

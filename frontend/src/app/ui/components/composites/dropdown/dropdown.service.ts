@@ -48,6 +48,13 @@ export class BraDropdownService {
   private outsideClickSubscription!: Subscription;
   private unlisten: () => void = noopFn;
 
+  /** Tears down the overlay-panel hover keep-alive listeners for the open menu. */
+  private unlistenOverlayHover: () => void = noopFn;
+  /** Pending grace-period close timer for hover mode; null when none is scheduled. */
+  private hoverGraceTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Grace period (ms) applied to the currently open hover menu. */
+  private hoverGraceMs = 0;
+
   readonly activeTrigger = signal<HTMLElement | null>(null);
   readonly isOpen = computed(() => this.activeTrigger() !== null);
 
@@ -69,12 +76,65 @@ export class BraDropdownService {
     }
   }
 
+  /**
+   * Open (or keep open) a menu for hover interaction. Cancels any pending
+   * grace-period close so moving the pointer from the trigger into the menu
+   * does not dismiss it. Idempotent when the menu is already open for this
+   * trigger.
+   */
+  openHover(
+    triggerElement: ElementRef<HTMLElement>,
+    template: TemplateRef<unknown>,
+    viewContainerRef: ViewContainerRef,
+    menuId: string,
+    triggerId: string,
+    graceMs: number,
+  ) {
+    this.clearHoverGraceTimer();
+    this.hoverGraceMs = graceMs;
+
+    if (this.activeTrigger() === triggerElement.nativeElement) {
+      return;
+    }
+
+    this.open(triggerElement, template, viewContainerRef, menuId, triggerId, {
+      hover: true,
+    });
+  }
+
+  /**
+   * Schedule a grace-period close for the active hover menu, giving the pointer
+   * time to travel across the gap between the trigger and the menu. A no-op
+   * when nothing is open.
+   */
+  scheduleHoverClose() {
+    if (!this.isOpen()) {
+      return;
+    }
+
+    this.clearHoverGraceTimer();
+    const activeTriggerAtSchedule = this.activeTrigger();
+    this.hoverGraceTimer = setTimeout(() => {
+      this.hoverGraceTimer = null;
+      // Only close if the same menu is still open (the pointer never returned).
+      if (this.activeTrigger() === activeTriggerAtSchedule) {
+        this.close();
+      }
+    }, this.hoverGraceMs);
+  }
+
+  /** Cancel a pending grace-period close (e.g. the pointer re-entered). */
+  cancelHoverClose() {
+    this.clearHoverGraceTimer();
+  }
+
   private open(
     triggerElement: ElementRef<HTMLElement>,
     template: TemplateRef<unknown>,
     viewContainerRef: ViewContainerRef,
     menuId: string,
     triggerId: string,
+    options: {hover?: boolean} = {},
   ) {
     if (this.isOpen()) {
       this.close();
@@ -89,6 +149,10 @@ export class BraDropdownService {
 
     this.portal = new TemplatePortal(template, viewContainerRef);
     this.overlayRef.attach(this.portal);
+
+    if (options.hover) {
+      this.setupHoverKeepAlive();
+    }
 
     setTimeout(() => {
       this.setupKeyboardNavigation();
@@ -112,6 +176,9 @@ export class BraDropdownService {
   }
 
   close() {
+    this.clearHoverGraceTimer();
+    this.unlistenOverlayHover();
+    this.unlistenOverlayHover = noopFn;
     if (this.overlayRef?.hasAttached()) {
       this.overlayRef.detach();
     }
@@ -119,6 +186,39 @@ export class BraDropdownService {
     this.unlisten();
     this.destroyOverlay();
     this.activeTrigger.set(null);
+  }
+
+  /**
+   * Treat the overlay panel as part of the hover region: entering it cancels a
+   * pending close, and leaving it schedules one. This bridges the pixel gap
+   * between the trigger and the menu so hover mode stays usable.
+   */
+  private setupHoverKeepAlive() {
+    if (
+      !this.overlayRef?.hasAttached() ||
+      !isPlatformBrowser(this.platformId)
+    ) {
+      return;
+    }
+
+    const panel = this.overlayRef.overlayElement;
+    const enter = this.renderer.listen(panel, 'mouseenter', () =>
+      this.cancelHoverClose(),
+    );
+    const leave = this.renderer.listen(panel, 'mouseleave', () =>
+      this.scheduleHoverClose(),
+    );
+    this.unlistenOverlayHover = () => {
+      enter();
+      leave();
+    };
+  }
+
+  private clearHoverGraceTimer() {
+    if (this.hoverGraceTimer !== null) {
+      clearTimeout(this.hoverGraceTimer);
+      this.hoverGraceTimer = null;
+    }
   }
 
   private createOverlay(triggerElement: ElementRef<HTMLElement>) {

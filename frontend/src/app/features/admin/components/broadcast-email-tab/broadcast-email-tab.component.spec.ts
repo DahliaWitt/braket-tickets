@@ -74,10 +74,30 @@ describe('BroadcastEmailTabComponent', () => {
     fixture.componentRef.setInput('communityId', 'community-1');
     fixture.detectChanges();
     await fixture.whenStable();
+    // afterNextRender creates the TipTap editor and emits its initial empty
+    // document; flush again so that emission lands before the test body runs.
+    fixture.detectChanges();
+    await fixture.whenStable();
     harness = await TestbedHarnessEnvironment.harnessForFixture(
       fixture,
       BroadcastEmailTabComponentHarness,
     );
+  });
+
+  const BODY_JSON = JSON.stringify({
+    type: 'doc',
+    content: [
+      {type: 'paragraph', content: [{type: 'text', text: 'Bring your ID.'}]},
+    ],
+  });
+
+  it('renders the rich-text editor for the message body', async () => {
+    expect(await harness.hasMessageEditor()).toBe(true);
+  });
+
+  it('supplies an image uploader so the editor image button is enabled', async () => {
+    const editor = await harness.getMessageEditorHarness();
+    expect(await editor.isImageButtonEnabled()).toBe(true);
   });
 
   it('uses the email-card spacing contract', async () => {
@@ -95,6 +115,7 @@ describe('BroadcastEmailTabComponent', () => {
     component.broadcastFormModel.set({
       subject: overLength,
       message: 'valid message',
+      bodyJson: BODY_JSON,
     });
     fixture.detectChanges();
     await fixture.whenStable();
@@ -107,6 +128,7 @@ describe('BroadcastEmailTabComponent', () => {
     component.broadcastFormModel.set({
       subject: 'valid subject',
       message: overLength,
+      bodyJson: BODY_JSON,
     });
     fixture.detectChanges();
     await fixture.whenStable();
@@ -194,6 +216,7 @@ describe('BroadcastEmailTabComponent', () => {
     component.broadcastFormModel.set({
       subject: 'Door update',
       message: 'Bring your ID.',
+      bodyJson: '',
     });
     fixture.detectChanges();
     await fixture.whenStable();
@@ -211,11 +234,14 @@ describe('BroadcastEmailTabComponent', () => {
     );
   });
 
-  it('opens confirmation and shows feedback after a broadcast is confirmed', async () => {
-    component.broadcastFormModel.set({
+  it('sends the serialized body JSON alongside the plaintext fallback', async () => {
+    component.broadcastFormModel.update((model) => ({
+      ...model,
       subject: 'Door update',
-      message: 'Bring your ID.',
-    });
+    }));
+    // Simulate the editor emitting its document + derived plaintext.
+    component.onBodyTextChange('Bring your ID.');
+    component.onBodyJsonChange(BODY_JSON);
     fixture.detectChanges();
     await fixture.whenStable();
 
@@ -235,6 +261,14 @@ describe('BroadcastEmailTabComponent', () => {
     await fixture.whenStable();
 
     expect(convexMock.mutation).toHaveBeenCalledOnce();
+    expect(convexMock.mutation).toHaveBeenCalledWith(
+      api.events.broadcasts.send,
+      expect.objectContaining({
+        subject: 'Door update',
+        message: 'Bring your ID.',
+        bodyJson: BODY_JSON,
+      }),
+    );
     expect(component.sendFeedback()).toEqual({
       kind: 'success',
       message: 'Broadcast queued for 2 recipients',

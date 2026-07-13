@@ -1,9 +1,9 @@
 import {TestBed} from '@angular/core/testing';
 import {provideZonelessChangeDetection} from '@angular/core';
-import {provideRouter} from '@angular/router';
+import {provideRouter, Router} from '@angular/router';
 import {By} from '@angular/platform-browser';
 import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
-import {describe, it, expect, beforeEach} from 'vitest';
+import {describe, it, expect, beforeEach, vi} from 'vitest';
 import {HelpSearchComponent} from './help-search.component';
 import {HelpSearchComponentHarness} from './help-search.component.harness';
 import {HelpSearchService} from '../../services/help-search.service';
@@ -118,8 +118,84 @@ describe('HelpSearchComponent', () => {
 
     expect(await harness.getResultCount()).toBe(0);
     expect(await harness.getNoResultsMessageText()).toContain(
-      'No matching articles found',
+      'no matching articles found',
     );
+  });
+
+  describe('dropdown dismissal', () => {
+    async function getHarness(): Promise<HelpSearchComponentHarness> {
+      return TestbedHarnessEnvironment.harnessForFixture(
+        fixture,
+        HelpSearchComponentHarness,
+      );
+    }
+
+    it('dismisses the dropdown when focus leaves the component', async () => {
+      const harness = await getHarness();
+      await harness.typeQuery('getting');
+      expect(await harness.isResultsDropdownVisible()).toBe(true);
+
+      await harness.dispatchFocusOutside();
+      expect(await harness.isResultsDropdownVisible()).toBe(false);
+      expect(await harness.getAriaExpanded()).toBe('false');
+    });
+
+    it('keeps the query after dismissal and reopens on focus', async () => {
+      const harness = await getHarness();
+      await harness.typeQuery('getting');
+      await harness.dispatchFocusOutside();
+      expect(await harness.isResultsDropdownVisible()).toBe(false);
+      expect(await harness.getQueryValue()).toBe('getting');
+
+      await harness.dispatchFocus();
+      expect(await harness.isResultsDropdownVisible()).toBe(true);
+    });
+
+    it('does not reopen on focus when the query is empty', async () => {
+      const harness = await getHarness();
+      await harness.dispatchFocus();
+      expect(await harness.isResultsDropdownVisible()).toBe(false);
+    });
+
+    it('stays open when focus moves to a result inside the component', async () => {
+      const harness = await getHarness();
+      await harness.typeQuery('getting');
+      expect(await harness.isResultsDropdownVisible()).toBe(true);
+
+      // Simulate the focusout fired when the user mousedowns a result:
+      // relatedTarget is the result button, which lives inside the component.
+      const input = fixture.debugElement.query(
+        By.css('[data-testid="help-search-input"]'),
+      ).nativeElement as HTMLInputElement;
+      const resultButton = fixture.debugElement.query(
+        By.css('[data-testid="help-search-results"] button[role="option"]'),
+      ).nativeElement as HTMLButtonElement;
+      input.dispatchEvent(
+        new FocusEvent('focusout', {
+          bubbles: true,
+          relatedTarget: resultButton,
+        }),
+      );
+      await fixture.whenStable();
+
+      expect(await harness.isResultsDropdownVisible()).toBe(true);
+    });
+
+    it('clicking a result still navigates after the focusout guard', async () => {
+      const harness = await getHarness();
+      const router = TestBed.inject(Router);
+      const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+
+      await harness.typeQuery('getting');
+      await harness.clickResult(0);
+
+      expect(navigateSpy).toHaveBeenCalledWith([
+        '/help',
+        'users',
+        'getting-started',
+      ]);
+      expect(await harness.isResultsDropdownVisible()).toBe(false);
+    });
   });
 
   describe('section badge labels', () => {

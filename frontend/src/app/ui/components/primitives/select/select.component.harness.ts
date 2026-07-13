@@ -1,9 +1,19 @@
-import { type BaseHarnessFilters, ComponentHarness, HarnessPredicate } from '@angular/cdk/testing';
+import {
+  type BaseHarnessFilters,
+  ComponentHarness,
+  HarnessPredicate,
+  TestKey,
+} from '@angular/cdk/testing';
 
 export class ZardSelectHarness extends ComponentHarness {
   static hostSelector = 'z-select';
 
   private readonly trigger = this.locatorFor('button');
+  // The open dropdown panel renders in the CDK overlay container, outside the
+  // `z-select` host, so it must be reached through the document root locator.
+  private readonly panel = this.documentRootLocatorFactory().locatorFor(
+    '.cdk-overlay-container [role="listbox"]',
+  );
 
   async clickTrigger(): Promise<void> {
     const trigger = await this.trigger();
@@ -13,6 +23,28 @@ export class ZardSelectHarness extends ComponentHarness {
   async isOpen(): Promise<boolean> {
     const trigger = await this.trigger();
     return (await trigger.getAttribute('aria-expanded')) === 'true';
+  }
+
+  /**
+   * Sends an Escape keydown from the open dropdown panel (the element carrying
+   * the `keydown.escape.prevent-with-stop` binding). Use this to assert that an
+   * open select consumes Escape locally without letting it bubble out to an
+   * enclosing dialog.
+   */
+  async dispatchEscapeFromPanel(): Promise<void> {
+    const panel = await this.panel();
+    await panel.sendKeys(TestKey.ESCAPE);
+  }
+
+  /**
+   * Sends an Escape keydown from the trigger button (the element carrying the
+   * `keydown.escape.prevent` binding and `onTriggerKeydown` handler). When the
+   * dropdown is open the trigger consumes Escape; when it is already closed the
+   * Escape is allowed to propagate so an enclosing dialog can close.
+   */
+  async dispatchEscapeFromTrigger(): Promise<void> {
+    const trigger = await this.trigger();
+    await trigger.sendKeys(TestKey.ESCAPE);
   }
 
   async getAriaLabel(): Promise<string | null> {
@@ -28,6 +60,29 @@ export class ZardSelectHarness extends ComponentHarness {
   async getTriggerText(): Promise<string> {
     const trigger = await this.trigger();
     return trigger.text();
+  }
+
+  /**
+   * Reads `aria-activedescendant` from the open dropdown's listbox.
+   * The listbox renders in a CDK overlay, so it is resolved from the document root.
+   * Requires the dropdown to be open.
+   */
+  async getActiveDescendantId(): Promise<string | null> {
+    const listbox = await this.documentRootLocatorFactory().locatorFor(
+      '[role="listbox"]',
+    )();
+    return listbox.getAttribute('aria-activedescendant');
+  }
+
+  /**
+   * Returns the DOM `id` of the option with the given value.
+   * Requires the dropdown to be open so the option is rendered in the overlay.
+   */
+  async getOptionId(value: string): Promise<string | null> {
+    const option = await this.documentRootLocatorFactory().locatorFor(
+      `z-select-item[value="${value}"]`,
+    )();
+    return option.getAttribute('id');
   }
 }
 

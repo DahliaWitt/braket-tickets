@@ -447,6 +447,27 @@ describe('ticketPurchaseReminderTemplate', () => {
     expect(html).not.toContain('2026-02-27T07:30:00.000Z');
     expect(text).not.toContain('2026-02-27T07:30:00.000Z');
   });
+
+  it('injects the rich HTML body verbatim and keeps the plain message for the text part', () => {
+    const {html, text} = ticketPurchaseReminderTemplate({
+      event: {
+        _id: 'evt_late',
+        title: 'Late Night Reminder',
+        date: '2026-02-27T07:30:00.000Z',
+        location: 'Afterhours',
+      },
+      organizer: {id: 'org_late', name: 'Night Shift'},
+      message: 'Still available',
+      bodyHtml: '<p><strong>Still</strong> available</p>',
+      siteUrl: 'https://braket.gay',
+      unsubToken: 'reminder-unsub-token',
+      preferenceCenterUrl: 'https://braket.gay/account#email-preferences',
+    });
+
+    expect(html).toContain('<p><strong>Still</strong> available</p>');
+    expect(html).not.toContain('&lt;p&gt;');
+    expect(text).toContain('Still available');
+  });
 });
 describe('applicationApprovedTemplate', () => {
   it('links approved applicants to events filtered to their community', () => {
@@ -629,6 +650,49 @@ describe('eventBroadcastTemplate', () => {
     expect(headers['List-Unsubscribe']).toContain(
       'http://127.0.0.1:3211/api/unsubscribe/one-click?token=broadcast-unsub-token',
     );
+  });
+
+  it('injects the rich HTML body verbatim and keeps the plain message for the text part', () => {
+    const {html, text} = eventBroadcastTemplate({
+      event: {
+        _id: 'evt_456',
+        title: 'Basement Assembly',
+        date: '2026-06-20T21:00:00.000Z',
+        location: 'Sublevel',
+      },
+      organizer: {id: 'org_456', name: 'Night Signal'},
+      message: 'Heading\n\nbody line',
+      bodyHtml: '<h2 style="color: #FAFAFA;">Heading</h2><p>body line</p>',
+      siteUrl: 'https://braket.gay',
+      unsubToken: 'broadcast-unsub-token',
+      preferenceCenterUrl: 'https://braket.gay/account#email-preferences',
+    });
+
+    // Rich fragment injected as-is (block-level elements survive, unescaped).
+    expect(html).toContain('<h2 style="color: #FAFAFA;">Heading</h2>');
+    expect(html).toContain('<p>body line</p>');
+    expect(html).not.toContain('&lt;h2');
+    // Plain-text part still uses the extracted message.
+    expect(text).toContain('Heading');
+    expect(text).toContain('body line');
+  });
+
+  it('escapes the plain message (no rich body) so HTML cannot be injected', () => {
+    const {html} = eventBroadcastTemplate({
+      event: {
+        _id: 'evt_456',
+        title: 'Basement Assembly',
+        date: '2026-06-20T21:00:00.000Z',
+      },
+      organizer: {id: 'org_456', name: 'Night Signal'},
+      message: '<script>alert(1)</script>',
+      siteUrl: 'https://braket.gay',
+      unsubToken: 'broadcast-unsub-token',
+      preferenceCenterUrl: 'https://braket.gay/account#email-preferences',
+    });
+
+    expect(html).not.toContain('<script>alert(1)</script>');
+    expect(html).toContain('&lt;script&gt;');
   });
 });
 

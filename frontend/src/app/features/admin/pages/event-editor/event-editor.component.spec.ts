@@ -465,6 +465,53 @@ describe('EventEditorComponent', () => {
     );
   });
 
+  it('should submit null for location, description, supporterDefaultPrice, and maxTicketsPerUser when cleared in edit mode', async () => {
+    component.eventModel.update((m) => ({
+      ...m,
+      location: '',
+      description: '',
+      supporterDefaultPrice: '',
+      maxTicketsPerUser: '',
+    }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    await component.onSubmit('published');
+    await fixture.whenStable();
+
+    expect(eventsServiceMock.updateWithPoster).toHaveBeenCalledWith(
+      expect.objectContaining({
+        location: null,
+        description: null,
+        supporterDefaultPrice: null,
+        maxTicketsPerUser: null,
+      }),
+      undefined,
+      expect.any(Function),
+      expect.any(AbortSignal),
+    );
+  });
+
+  it('should submit new values (not null) when location and supporter price are set in edit mode', async () => {
+    component.eventModel.update((m) => ({
+      ...m,
+      location: 'New Venue',
+      supporterDefaultPrice: '40',
+    }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    await component.onSubmit('published');
+    await fixture.whenStable();
+
+    const submitted = eventsServiceMock.updateWithPoster.mock.calls[0][0] as {
+      location: string | null;
+      supporterDefaultPrice: number | null;
+    };
+    expect(submitted.location).toBe('New Venue');
+    expect(submitted.supporterDefaultPrice).toBe(4000);
+  });
+
   it('should enable save button when a file is selected', async () => {
     // Simulate the child component emitting a fileChanged event to the parent
     const mockFile = new File([''], 'test.png', {type: 'image/png'});
@@ -880,6 +927,50 @@ describe('EventEditorComponent', () => {
     expect(await harness.isSlidingScaleEnabled()).toBe(false);
     expect(component.eventModel().slidingScaleEnabled).toBe(false);
     expect(component.isDirty()).toBe(false);
+  });
+
+  it('sends an explicit disable so turning sliding scale off in edit mode persists', async () => {
+    // Turn NOTAFLOF on, then back off, then save. The submitted payload must
+    // carry `{enabled: false}`. Sending `undefined` is a silent backend no-op
+    // (lib/events/writes.ts skips slidingScale* when sliderConfig is undefined),
+    // which would leave sliding-scale pricing on after a "successful" save and
+    // flip the toggle back on when the form reloads.
+    await harness.setSlidingScaleEnabled(true);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(await harness.isSlidingScaleEnabled()).toBe(true);
+
+    await harness.setSlidingScaleEnabled(false);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(await harness.isSlidingScaleEnabled()).toBe(false);
+
+    await component.onSubmit('published');
+    await fixture.whenStable();
+
+    expect(eventsServiceMock.updateWithPoster).toHaveBeenCalledTimes(1);
+    const args = eventsServiceMock.updateWithPoster.mock.calls[0][0] as Record<
+      string,
+      unknown
+    >;
+    expect(args['sliderConfig']).toEqual({enabled: false});
+  });
+
+  it('still sends an explicit enable payload when sliding scale is turned on in edit mode', async () => {
+    await harness.setSlidingScaleEnabled(true);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(await harness.isSlidingScaleEnabled()).toBe(true);
+
+    await component.onSubmit('published');
+    await fixture.whenStable();
+
+    expect(eventsServiceMock.updateWithPoster).toHaveBeenCalledTimes(1);
+    const args = eventsServiceMock.updateWithPoster.mock.calls[0][0] as Record<
+      string,
+      unknown
+    >;
+    expect(args['sliderConfig']).toMatchObject({enabled: true});
   });
 
   // ── Publish dialog ──────────────────────────────────────────────────
@@ -1631,6 +1722,69 @@ describe('EventEditorComponent - Create Mode', () => {
 
     // Should NOT update automagically because current supporter (50) > price (40)
     expect(component.eventModel().supporterDefaultPrice).toBe('50');
+  });
+
+  it('does not clobber the supporter price once the user starts editing it', async () => {
+    // Base price $20 seeds the supporter default.
+    component.eventModel.update((m) => ({...m, price: '20'}));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(component.eventModel().supporterDefaultPrice).toBe('25');
+
+    // User selects the field and types '2' ($2, at/below the base price). The
+    // old effect re-ran on this keystroke and overwrote it back to '25'.
+    component.onSupporterPriceInput();
+    component.eventModel.update((m) => ({...m, supporterDefaultPrice: '2'}));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(component.eventModel().supporterDefaultPrice).toBe('2');
+
+    // ...and can finish typing '22' without interference.
+    component.onSupporterPriceInput();
+    component.eventModel.update((m) => ({...m, supporterDefaultPrice: '22'}));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(component.eventModel().supporterDefaultPrice).toBe('22');
+  });
+
+  it('stops auto-filling the supporter price after the user has edited it', async () => {
+    // Seed from a base price.
+    component.eventModel.update((m) => ({...m, price: '20'}));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(component.eventModel().supporterDefaultPrice).toBe('25');
+
+    // User edits the supporter field to a value at/below the base price.
+    component.onSupporterPriceInput();
+    component.eventModel.update((m) => ({...m, supporterDefaultPrice: '1'}));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    // Changing the base price must NOT re-seed over the user's edit.
+    component.eventModel.update((m) => ({...m, price: '30'}));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(component.eventModel().supporterDefaultPrice).toBe('1');
+  });
+
+  it('keeps a DOM-typed supporter price when the base price later changes (pins the (input) binding)', async () => {
+    component.eventModel.update((m) => ({...m, price: '20'}));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(component.eventModel().supporterDefaultPrice).toBe('25');
+
+    // Type a low value through the real input element — this fires the native
+    // (input) handler that marks the field user-edited. If that binding is
+    // removed, the later price change below re-seeds over this value.
+    await harness.setSupporterPrice('1');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(component.eventModel().supporterDefaultPrice).toBe('1');
+
+    component.eventModel.update((m) => ({...m, price: '30'}));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(component.eventModel().supporterDefaultPrice).toBe('1');
   });
 });
 

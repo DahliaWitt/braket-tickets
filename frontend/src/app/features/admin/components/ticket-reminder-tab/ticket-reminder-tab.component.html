@@ -37,20 +37,20 @@
       </div>
 
       <div class="space-y-1 md:col-span-2">
-        <label
-          for="ticket-reminder-message"
+        <span
+          id="ticket-reminder-message-label"
           class="font-mono text-xs tracking-widest text-muted-foreground uppercase"
         >
           Message
-        </label>
-        <textarea
-          id="ticket-reminder-message"
-          zInput
-          [formField]="reminderForm.message"
+        </span>
+        <app-rich-text-editor
           data-testid="ticket-reminder-message"
-          rows="5"
-          placeholder="Write your reminder message..."
-        ></textarea>
+          ariaLabelledby="ticket-reminder-message-label"
+          [disabled]="isSendingTicketReminder()"
+          [imageUpload]="imageUpload"
+          (jsonChange)="onBodyJsonChange($event)"
+          (textChange)="onBodyTextChange($event)"
+        />
         <p class="font-mono text-2xs text-muted-foreground">
           {{ reminderMessageLength() }} / {{ maxTicketReminderMessageLength }}
         </p>

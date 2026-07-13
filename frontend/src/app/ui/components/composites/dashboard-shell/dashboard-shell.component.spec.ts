@@ -22,6 +22,7 @@ import {DashboardShellHarness} from './dashboard-shell.component.harness';
       [titleAccent]="titleAccent"
       [tabs]="tabs"
       [selectedTabId]="selectedTabId()"
+      [overrideBorder]="overrideBorder()"
     >
       @if (showActions()) {
         <button type="button" dashboardActions>TEST ACTION</button>
@@ -53,6 +54,7 @@ class TestHostComponent {
   ];
   readonly showActions = signal(false);
   readonly selectedTabId = signal<string | null>(null);
+  readonly overrideBorder = signal(false);
 }
 
 @Component({
@@ -132,6 +134,49 @@ describe('DashboardShellComponent', () => {
 
   it('should return correct tab count', async () => {
     expect(await harness.getTabCount()).toBe(8);
+  });
+
+  it('renders the h1 as solid foreground text without gradient or glow effects', async () => {
+    const titleClass = await harness.getTitleClass();
+    expect(titleClass).toContain('text-foreground');
+    expect(titleClass).toContain('font-display');
+    expect(titleClass).toContain('text-2xl');
+    expect(titleClass).not.toContain('bg-clip-text');
+    expect(titleClass).not.toContain('drop-shadow');
+
+    const accentClass = await harness.getTitleAccentClass();
+    expect(accentClass ?? '').not.toContain('bg-clip-text');
+    expect(accentClass ?? '').not.toContain('text-transparent');
+  });
+
+  it('gives every desktop nav link a hover state', async () => {
+    const classes = await harness.getTabLinkClasses();
+    expect(classes.length).toBeGreaterThan(0);
+    for (const cls of classes) {
+      expect(cls).toContain('hover:text-foreground');
+    }
+  });
+
+  it('renders a solid primary active-tab indicator (no gradient)', async () => {
+    const classes = await harness.getTabIndicatorClasses();
+    expect(classes.length).toBeGreaterThan(0);
+    for (const cls of classes) {
+      expect(cls).toContain('bg-primary');
+      expect(cls).not.toContain('bg-linear');
+    }
+  });
+
+  it('toggles the semantic warning border via overrideBorder', async () => {
+    expect(await harness.getMainContentClass()).not.toContain(
+      'border-warning/40',
+    );
+
+    fixture.componentInstance.overrideBorder.set(true);
+    await fixture.whenStable();
+
+    const mainClass = await harness.getMainContentClass();
+    expect(mainClass).toContain('border-l-4');
+    expect(mainClass).toContain('border-warning/40');
   });
 
   it('renders the desktop nav as a sticky vertical rail with overflow handling', async () => {

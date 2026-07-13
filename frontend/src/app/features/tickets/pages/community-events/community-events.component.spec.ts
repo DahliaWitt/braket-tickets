@@ -217,6 +217,17 @@ describe('CommunityEventsComponent', () => {
       expect(await harness.isPickerStateVisible()).toBe(true);
       // Empty state component renders inside the picker container
       expect(await harness.isEmptyStateVisible()).toBe(false);
+      expect(await harness.isPickerEmptyStateVisible()).toBe(true);
+      expect(await harness.getPickerEmptyStateTitle()).toBe(
+        'no communities listed yet',
+      );
+      expect(await harness.getPickerEmptyHomeHref()).toBe('/');
+    });
+
+    it('does not show the picker empty state when communities exist', async () => {
+      await createComponent({}, null, mockCommunities);
+
+      expect(await harness.isPickerEmptyStateVisible()).toBe(false);
     });
   });
 
@@ -230,6 +241,16 @@ describe('CommunityEventsComponent', () => {
       expect(await harness.isEmptyStateVisible()).toBe(true);
       expect(await harness.isErrorStateVisible()).toBe(false);
       expect(await harness.isLoadingStateVisible()).toBe(false);
+    });
+
+    it('shows brand-voice copy and a browse CTA in the empty state', async () => {
+      await createComponent(
+        {community: 'org1'},
+        {organizerName: 'Empty Community', events: []},
+      );
+
+      expect(await harness.getEmptyStateTitle()).toBe('nothing coming up');
+      expect(await harness.getEmptyStateBrowseHref()).toBe('/events');
     });
 
     it('shows community name in header for empty state', async () => {

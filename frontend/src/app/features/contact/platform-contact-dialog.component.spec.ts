@@ -59,6 +59,10 @@ describe('PlatformContactDialogComponent', () => {
     expect(dialogRef.close).not.toHaveBeenCalled();
   });
 
+  it('renders the mail client action through the z-button kit variant', async () => {
+    expect(await harness.getOpenMailButtonType()).toBe('default');
+  });
+
   it('copies the email and keeps the dialog open', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', {
@@ -70,7 +74,7 @@ describe('PlatformContactDialogComponent', () => {
     await harness.clickCopyEmail();
 
     expect(writeText).toHaveBeenCalledWith('contact@braket.gay');
-    expect(successSpy).toHaveBeenCalledWith('Email copied');
+    expect(successSpy).toHaveBeenCalledWith('email copied');
     expect(dialogRef.close).not.toHaveBeenCalled();
   });
 

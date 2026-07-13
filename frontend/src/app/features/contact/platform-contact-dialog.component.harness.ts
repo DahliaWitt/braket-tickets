@@ -24,6 +24,11 @@ export class PlatformContactDialogHarness extends ComponentHarness {
     return (await this.getOpenMailLink()).getAttribute('href');
   }
 
+  /** Resolved z-button variant of the open-mail anchor (data-type attr). */
+  async getOpenMailButtonType(): Promise<string | null> {
+    return (await this.getOpenMailLink()).getAttribute('data-type');
+  }
+
   async clickOpenMailClient(): Promise<void> {
     await (await this.getOpenMailLink()).click();
   }

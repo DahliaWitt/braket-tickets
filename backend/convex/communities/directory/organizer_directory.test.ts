@@ -8,7 +8,9 @@ import {
   enqueueMembershipPropagation,
   refreshOrganizerDirectoryForMembershipChange,
   refreshOrganizerDirectoryForTrustedMembers,
+  searchUserApplicationsInDirectory,
 } from '../../lib/users/organizer_directory';
+import {searchUsersForAdminScope} from '../../lib/users/directory';
 
 async function seedRootAdmin(
   t: ReturnType<typeof convexTest>,
@@ -398,6 +400,113 @@ describe('Users', () => {
     });
 
     expect(results.map((user) => user._id)).toEqual([approvedUserId]);
+  });
+
+  it('returns an approved community member even when 1024+ unrelated global users share the email prefix and sort ahead of them', async () => {
+    const t = convexTest();
+
+    const adminId = (await t.mutation(api.testing.users.createUserDirectly, {
+      name: 'Bounded Scan Admin',
+      email: 'bounded-scan-admin@example.com',
+    })) as Id<'users'>;
+    const organizerId = (await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {
+        name: 'Bounded Scan Community',
+      },
+    )) as Id<'organizers'>;
+    await seedCommunityAdmin(t, adminId, organizerId);
+
+    // 1025 out-of-scope global users whose emails share the search prefix and
+    // sort BEFORE the scoped member. Their count exceeds the former global
+    // email-scan cap (1024): a scan of the global `users` email index that
+    // stopped at the cap would never reach the in-scope member. The term
+    // appears only in emails (never names), so the name search index cannot
+    // surface any of them — this exercises the email branch specifically.
+    await t.run(async (ctx) => {
+      for (let index = 0; index < 1025; index += 1) {
+        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- bulk seed of >1024 global users to exceed the former global email-scan cap; individual mutations would be far too many
+        await ctx.db.insert('users', {
+          name: `Outside Member ${index}`,
+          email: `bound-dir-${String(index).padStart(4, '0')}@example.com`,
+        });
+      }
+    });
+
+    // Scoped approved member whose email sorts AFTER every out-of-scope user.
+    const scopedMemberId = (await t.mutation(
+      api.testing.users.createUserDirectly,
+      {
+        name: 'Scoped Approved Trailing',
+        email: 'bound-dir-9999@example.com',
+      },
+    )) as Id<'users'>;
+    await t.mutation(api.testing.applications.seedApplication, {
+      userId: scopedMemberId,
+      organizerId,
+      status: 'approved',
+      answers: {},
+    });
+
+    // The email search scopes to the community's approved membership first, so
+    // the in-scope member is always found — no global-users scan gates recall,
+    // and no amount of unrelated global prefix matches can crowd it out.
+    const results = await t.run((ctx) =>
+      searchUsersForAdminScope(ctx.db, {
+        query: 'bound-dir-',
+        organizerId,
+      }),
+    );
+    expect(results.map((user) => user._id)).toEqual([scopedMemberId]);
+  });
+
+  it('returns an organizer-directory member even when 1024+ unrelated global users share the email prefix and sort ahead of them', async () => {
+    const t = convexTest();
+
+    const organizerId = (await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {
+        name: 'Bounded Directory Community',
+      },
+    )) as Id<'organizers'>;
+
+    // 1025 out-of-scope global users that are never added to the organizer
+    // directory, with emails that share the prefix and sort before the scoped
+    // member. Their count exceeds the former global email-scan cap (1024), so a
+    // global email-index scan that stopped at the cap would miss the member.
+    await t.run(async (ctx) => {
+      for (let index = 0; index < 1025; index += 1) {
+        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- bulk seed of >1024 global users to exceed the former global email-scan cap; individual mutations would be far too many
+        await ctx.db.insert('users', {
+          name: `Outside Directory ${index}`,
+          email: `bound-org-${String(index).padStart(4, '0')}@example.com`,
+        });
+      }
+    });
+
+    // Scoped directory member whose email sorts after every out-of-scope user.
+    const scopedMemberId = (await t.mutation(
+      api.testing.users.createUserDirectly,
+      {
+        name: 'Scoped Directory Trailing',
+        email: 'bound-org-9999@example.com',
+      },
+    )) as Id<'users'>;
+    await t.mutation(api.testing.applications.seedApplication, {
+      userId: scopedMemberId,
+      organizerId,
+      status: 'approved',
+      answers: {},
+    });
+    await addOrganizerMember(t, scopedMemberId, organizerId);
+
+    // The directory email search scopes to the organizer's membership first, so
+    // the in-scope member is surfaced regardless of how many unrelated global
+    // users share the prefix or sort ahead of them.
+    const page = await t.run((ctx) =>
+      searchUserApplicationsInDirectory(ctx, organizerId, 'bound-org-'),
+    );
+    expect(page.page.map((row) => row.user._id)).toEqual([scopedMemberId]);
   });
 
   it('lists active members with their latest application snapshot', async () => {

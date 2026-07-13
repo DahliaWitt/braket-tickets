@@ -88,7 +88,7 @@ describe('InviteRedeemComponent', () => {
     expect(component.returnUrl()).toBe('/admin-invite/test-token');
   });
 
-  it('links unauthenticated invitees to registration with the invite returnUrl', async () => {
+  it('links the sign-in CTA to the login tab without the signup param', async () => {
     authInitializedSignal.set(true);
     isAuthenticatedSignal.set(false);
 
@@ -102,6 +102,24 @@ describe('InviteRedeemComponent', () => {
       InviteRedeemComponentHarness,
     );
     expect(await harness.getSignInHref()).toBe(
+      '/login?returnUrl=%2Fadmin-invite%2Ftest-token',
+    );
+  });
+
+  it('links the create-account CTA to registration with the invite returnUrl', async () => {
+    authInitializedSignal.set(true);
+    isAuthenticatedSignal.set(false);
+
+    fixture.componentRef.setInput('token', 'test-token');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      InviteRedeemComponentHarness,
+    );
+    expect(await harness.getCreateAccountHref()).toBe(
       '/login?returnUrl=%2Fadmin-invite%2Ftest-token&signup=true',
     );
   });

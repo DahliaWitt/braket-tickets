@@ -71,7 +71,7 @@ describe('FooterComponent', () => {
 
     await vi.waitFor(() =>
       expect(toastMock.error).toHaveBeenCalledWith(
-        'Feedback is unavailable right now.',
+        'feedback is unavailable right now',
       ),
     );
   });
@@ -85,7 +85,7 @@ describe('FooterComponent', () => {
 
     await vi.waitFor(() =>
       expect(toastMock.error).toHaveBeenCalledWith(
-        'Feedback is unavailable right now.',
+        'feedback is unavailable right now',
       ),
     );
   });

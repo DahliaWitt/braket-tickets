@@ -154,9 +154,12 @@ describe('PasswordService', () => {
 
       await service.requestVerificationEmail('user@example.com');
 
+      // Must match the signup flow's callback so Better Auth's `/verify-email`
+      // redirect lands on the verification-outcome page, not `/login` (where an
+      // error redirect would be misrouted to the social sign-in error page).
       expect(authClient.sendVerificationEmail).toHaveBeenCalledWith({
         email: 'user@example.com',
-        callbackURL: expect.stringContaining('/login') as unknown,
+        callbackURL: expect.stringContaining('/confirm/verification') as unknown,
       });
     });
   });

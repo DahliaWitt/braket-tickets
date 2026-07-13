@@ -651,26 +651,22 @@ const schemaTables = {
     // ToS assent evidence for guest purchases (BRA-455)
     tosAcceptedAt: v.optional(v.number()),
     tosVersion: v.optional(v.string()),
+    /**
+     * Client-supplied idempotency key for free-ticket claims. A fresh key is
+     * minted per claim attempt on the frontend and reused verbatim across the
+     * Convex client's automatic mutation retries, so a genuine network retry
+     * replays the same completed order while a deliberate new claim (a new
+     * attempt, hence a new key) issues a fresh ticket. Absent on paid checkout
+     * orders and on rows created before this field existed.
+     */
+    idempotencyKey: v.optional(v.string()),
   })
     .index('by_owner_user_event_state', ['userId', 'eventId', 'state'])
     .index('by_owner_guest_event_state', ['guestSessionId', 'eventId', 'state'])
-    .index('by_owner_user_event_state_kind_amountCents_tier_quantity', [
-      'userId',
-      'eventId',
-      'state',
-      'kind',
-      'amountCents',
-      'tier',
-      'quantity',
-    ])
-    .index('by_owner_guest_event_state_kind_amountCents_tier_quantity', [
+    .index('by_owner_user_idempotencyKey', ['userId', 'idempotencyKey'])
+    .index('by_owner_guest_idempotencyKey', [
       'guestSessionId',
-      'eventId',
-      'state',
-      'kind',
-      'amountCents',
-      'tier',
-      'quantity',
+      'idempotencyKey',
     ])
     .index('by_event_and_state', ['eventId', 'state'])
     .index('by_stripeCheckoutSessionId', ['stripeCheckoutSessionId'])
@@ -789,9 +785,12 @@ const schemaTables = {
     /**
      * Timestamp of the most recent claim. Reclaim path refreshes this when a
      * stale pending row is taken over by a subsequent delivery. The transient
-     * retry path (`releaseWebhookClaimForRetry`) zeroes this so the next
-     * Stripe retry reclaims immediately instead of waiting for the stale
-     * threshold.
+     * retry path (`releaseWebhookClaimForRetry`) backdates this by exactly
+     * `STALE_CLAIM_THRESHOLD_MS` so the next Stripe retry reclaims immediately
+     * — while keeping the row recent enough that the failure reaper
+     * (`REAPER_FAILURE_TIMEOUT_MS`) does not poison it. It must NOT be zeroed:
+     * `claimedAt: 0` reads as "ancient" to the reaper and gets promoted to
+     * `failed`, short-circuiting Stripe's pending retries.
      */
     claimedAt: v.number(),
     completedAt: v.optional(v.number()),
@@ -1088,11 +1087,27 @@ const schemaTables = {
     .index('by_storageId', ['storageId'])
     .index('by_storageId_and_uploaderUserId', ['storageId', 'uploaderUserId']),
 
+  /**
+   * Registry of inline images actually published in a SENT rich email
+   * (broadcast or ticket reminder). Written atomically in the send transaction.
+   * The public, unauthenticated `/api/images/{storageId}` route serves ONLY
+   * images with a row here — a confirmed upload that was never emailed (e.g. an
+   * event poster or an abandoned composer draft) stays private to the signed
+   * getUrl flow. Also serves as the reference registry for storage GC.
+   */
+  richEmailImages: defineTable({
+    storageId: v.id('_storage'),
+    firstPublishedAt: v.number(),
+  }).index('by_storageId', ['storageId']),
+
   eventBroadcasts: defineTable({
     eventId: v.id('events'),
     adminId: v.id('users'),
     subject: v.string(),
+    /** Plain-text message body. For rich sends this is the plain text extracted from bodyJson. */
     message: v.string(),
+    /** Optional serialized ProseMirror JSON rich body (see lib/email/rich_text_validator.ts). */
+    bodyJson: v.optional(v.string()),
     recipientCount: v.number(),
     sentAt: v.number(),
   })
@@ -1128,7 +1143,10 @@ const schemaTables = {
     eventId: v.id('events'),
     adminId: v.id('users'),
     subject: v.string(),
+    /** Plain-text message body. For rich sends this is the plain text extracted from bodyJson. */
     message: v.string(),
+    /** Optional serialized ProseMirror JSON rich body (see lib/email/rich_text_validator.ts). */
+    bodyJson: v.optional(v.string()),
     recipientCount: v.number(),
     sentAt: v.number(),
   })
@@ -1262,7 +1280,14 @@ const schemaTables = {
     .index('by_sessionTokenDigest', ['sessionTokenDigest'])
     .index('by_pendingSessionTokenDigest', ['pendingSessionTokenDigest'])
     .index('by_magicLink', ['magicLinkId'])
-    .index('by_expiresAt', ['expiresAt']),
+    .index('by_expiresAt', ['expiresAt'])
+    // Cleanup reads only deletable rows: convertedToUserId === undefined
+    // (converted sessions are preserved for audit trail) with expiresAt in the
+    // past. Equality on convertedToUserId first, range on expiresAt second.
+    .index('by_convertedToUserId_expiresAt', [
+      'convertedToUserId',
+      'expiresAt',
+    ]),
 
   /**
    * Per-user, per-community marketing email opt-in preference.

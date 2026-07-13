@@ -43,6 +43,41 @@ export class CommunityEventsComponentHarness extends ComponentHarness {
     return !!el;
   }
 
+  async getEmptyStateTitle(): Promise<string | null> {
+    const el = await this.locatorForOptional(
+      '[data-testid="community-events-empty"] [data-testid="empty-state-title"]',
+    )();
+    return el ? (await el.text()).trim() : null;
+  }
+
+  async getEmptyStateBrowseHref(): Promise<string | null> {
+    const el = await this.locatorForOptional(
+      '[data-testid="community-events-empty-browse"]',
+    )();
+    return el ? el.getAttribute('href') : null;
+  }
+
+  async isPickerEmptyStateVisible(): Promise<boolean> {
+    const el = await this.locatorForOptional(
+      '[data-testid="community-picker-empty"]',
+    )();
+    return !!el;
+  }
+
+  async getPickerEmptyStateTitle(): Promise<string | null> {
+    const el = await this.locatorForOptional(
+      '[data-testid="community-picker-empty"] [data-testid="empty-state-title"]',
+    )();
+    return el ? (await el.text()).trim() : null;
+  }
+
+  async getPickerEmptyHomeHref(): Promise<string | null> {
+    const el = await this.locatorForOptional(
+      '[data-testid="community-picker-empty-home"]',
+    )();
+    return el ? el.getAttribute('href') : null;
+  }
+
   async getEventCardCount(): Promise<number> {
     const cards = await this.locatorForAll(EventCardHarness)();
     return cards.length;

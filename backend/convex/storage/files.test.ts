@@ -1,5 +1,5 @@
-import {describe, it, expect} from 'vitest';
-import {convexTest} from '../setup.testing';
+import {describe, it, expect, vi} from 'vitest';
+import {convexTest, finishAllScheduledFunctions} from '../setup.testing';
 import {api, internal} from '../_generated/api';
 import type {Id} from '../_generated/dataModel';
 import {checkMagicBytes} from './files';
@@ -7,6 +7,7 @@ import {
   assertUploadConfirmed,
   cleanupReplacedUpload,
 } from '../lib/upload_validation';
+import {recordPublishedEmailImages} from '../lib/email/rich_text_images';
 
 /**
  * Unit tests for convex/storage/files.ts
@@ -416,7 +417,11 @@ describe('files', () => {
           mimeType: 'image/jpeg',
         });
 
-        expect(result).toEqual({valid: true, storageId});
+        expect(result.valid).toBe(true);
+        expect(result.storageId).toBe(storageId);
+        // Success now surfaces a durable public URL for the confirmed file.
+        expect(typeof result.url).toBe('string');
+        expect(result.url).toBeTruthy();
 
         const confirmationRecord = await t.run(async (ctx) => {
           return await ctx.db
@@ -440,7 +445,10 @@ describe('files', () => {
           mimeType: 'image/png',
         });
 
-        expect(result).toEqual({valid: true, storageId});
+        expect(result.valid).toBe(true);
+        expect(result.storageId).toBe(storageId);
+        expect(typeof result.url).toBe('string');
+        expect(result.url).toBeTruthy();
       });
 
       it('rejects a JPEG file claimed as PNG (deletes it)', async () => {
@@ -548,7 +556,8 @@ describe('files', () => {
             mimeType: 'image/jpeg',
           },
         );
-        expect(firstResult).toEqual({valid: true, storageId});
+        expect(firstResult.valid).toBe(true);
+        expect(firstResult.storageId).toBe(storageId);
 
         const secondResult = await secondUser.action(
           api.storage.files.confirmUpload,
@@ -735,7 +744,10 @@ describe('files', () => {
         mimeType: 'image/jpeg',
       });
 
-      expect(result).toEqual({valid: true, storageId});
+      expect(result.valid).toBe(true);
+      expect(result.storageId).toBe(storageId);
+      expect(typeof result.url).toBe('string');
+      expect(result.url).toBeTruthy();
     });
   });
 
@@ -811,9 +823,98 @@ describe('files', () => {
         return null;
       });
     });
+
+    it('pins files published in a sent rich email (skips deletion entirely)', async () => {
+      const {t, asUser} = await createAuthenticatedUser();
+
+      const jpegBytes = new Uint8Array([
+        0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
+      ]);
+      const storageId = await t.run(async (ctx) => {
+        const blob = new Blob([jpegBytes.buffer as ArrayBuffer], {
+          type: 'image/jpeg',
+        });
+        return await ctx.storage.store(blob);
+      });
+      await asUser.action(api.storage.files.confirmUpload, {
+        storageId,
+        mimeType: 'image/jpeg',
+      });
+      // Mark the upload as published in a sent email (the send-handler step).
+      await t.run((ctx) => recordPublishedEmailImages(ctx, [storageId]));
+
+      await t.run(async (ctx) => {
+        await cleanupReplacedUpload(ctx, storageId);
+        return null;
+      });
+
+      // Blob AND confirmation record both survive: sent emails reference the
+      // blob via durable /api/images URLs, so entity cleanup must not touch it.
+      const urlAfter = await t.run(async (ctx) =>
+        ctx.storage.getUrl(storageId),
+      );
+      expect(urlAfter).not.toBeNull();
+      const recordAfter = await t.run(async (ctx) =>
+        ctx.db
+          .query('confirmedUploads')
+          .withIndex('by_storageId', (q) => q.eq('storageId', storageId))
+          .first(),
+      );
+      expect(recordAfter).not.toBeNull();
+    });
   });
 
   describe('_cleanupOrphanedUploads', () => {
+    const ORPHAN_AGE_THRESHOLD_MS = 60 * 60 * 1000; // 1 hour
+    // A "now" far enough in the future that every file stored during the test
+    // (created at real wall-clock time) is older than the 1h cutoff and thus a
+    // cleanup candidate.
+    const agedNowMs = () => Date.now() + 2 * ORPHAN_AGE_THRESHOLD_MS;
+
+    /** Stores `count` blobs in one transaction, returning ids in creation order. */
+    async function storeBlobs(
+      t: Awaited<ReturnType<typeof createAuthenticatedUser>>['t'],
+      count: number,
+    ): Promise<Id<'_storage'>[]> {
+      return await t.run(async (ctx) => {
+        const ids: Id<'_storage'>[] = [];
+        for (let i = 0; i < count; i += 1) {
+          const blob = new Blob([new Uint8Array([0xff, 0xd8, 0xff])], {
+            type: 'image/jpeg',
+          });
+          ids.push(await ctx.storage.store(blob));
+        }
+        return ids;
+      });
+    }
+
+    /** Marks each storageId confirmed via the production internal mutation. */
+    async function markConfirmed(
+      t: Awaited<ReturnType<typeof createAuthenticatedUser>>['t'],
+      storageIds: Id<'_storage'>[],
+      uploaderUserId: Id<'users'>,
+    ): Promise<void> {
+      await t.run(async (ctx) => {
+        for (const storageId of storageIds) {
+          await ctx.runMutation(
+            internal.storage.files._markUploadConfirmed,
+            {storageId, uploaderUserId},
+          );
+        }
+      });
+    }
+
+    /** Returns the set of storageIds still present in the _storage table. */
+    async function remainingStorageIds(
+      t: Awaited<ReturnType<typeof createAuthenticatedUser>>['t'],
+    ): Promise<Set<Id<'_storage'>>> {
+      const ids = await t.run(async (ctx) => {
+        const files = await ctx.db.system.query('_storage').collect();
+        return files.map((file) => file._id);
+      });
+      return new Set(ids);
+    }
+
     it('runs without error on empty storage', async () => {
       const {t} = await createAuthenticatedUser();
 
@@ -853,6 +954,85 @@ describe('files', () => {
       // Confirmed file should still exist
       const url = await t.run(async (ctx) => ctx.storage.getUrl(storageId));
       expect(url).not.toBeNull();
+    });
+
+    it('deletes an unconfirmed upload once it is older than the age threshold', async () => {
+      const {t} = await createAuthenticatedUser();
+      const [orphanId] = await storeBlobs(t, 1);
+
+      await t.mutation(internal.storage.files._cleanupOrphanedUploads, {
+        nowMs: agedNowMs(),
+      });
+
+      const url = await t.run(async (ctx) => ctx.storage.getUrl(orphanId));
+      expect(url).toBeNull();
+    });
+
+    it('preserves an unconfirmed upload younger than the age threshold', async () => {
+      const {t} = await createAuthenticatedUser();
+      const [orphanId] = await storeBlobs(t, 1);
+
+      // Default now: the freshly stored file is well under 1h old.
+      await t.mutation(internal.storage.files._cleanupOrphanedUploads, {});
+
+      const url = await t.run(async (ctx) => ctx.storage.getUrl(orphanId));
+      expect(url).not.toBeNull();
+    });
+
+    it('does not delete confirmed files even when they are aged', async () => {
+      const {t, userId} = await createAuthenticatedUser();
+      const confirmedIds = await storeBlobs(t, 3);
+      await markConfirmed(t, confirmedIds, userId);
+
+      await t.mutation(internal.storage.files._cleanupOrphanedUploads, {
+        nowMs: agedNowMs(),
+      });
+
+      const remaining = await remainingStorageIds(t);
+      for (const id of confirmedIds) {
+        expect(remaining.has(id)).toBe(true);
+      }
+    });
+
+    // Regression: with 500+ confirmed files at the head of the creation-time
+    // ordering, the previous from-the-head scan budget (500) was exhausted by
+    // confirmed files every run and never reached newer orphans — cleanup
+    // silently stalled. The paged, cursor-advancing sweep must page past the
+    // confirmed backlog, reach the orphans, delete them, and terminate.
+    it('reaches and deletes orphans beyond a large confirmed backlog', async () => {
+      vi.useFakeTimers();
+      try {
+        const {t, userId} = await createAuthenticatedUser();
+
+        // 501 confirmed files occupy the head of the ordering (created first,
+        // so they have the smallest _creationTime values).
+        const confirmedIds = await storeBlobs(t, 501);
+        await markConfirmed(t, confirmedIds, userId);
+
+        // Orphans created after the confirmed backlog.
+        const orphanIds = await storeBlobs(t, 4);
+
+        // Kick off the sweep with every file aged past the cutoff, then drain
+        // the self-rescheduled continuations that page through the backlog.
+        await t.mutation(internal.storage.files._cleanupOrphanedUploads, {
+          nowMs: agedNowMs(),
+        });
+        await finishAllScheduledFunctions(t);
+
+        const remaining = await remainingStorageIds(t);
+
+        // Every orphan was reached and deleted despite the 501-file backlog.
+        for (const id of orphanIds) {
+          expect(remaining.has(id)).toBe(false);
+        }
+        // Every confirmed file was preserved.
+        for (const id of confirmedIds) {
+          expect(remaining.has(id)).toBe(true);
+        }
+        expect(remaining.size).toBe(confirmedIds.length);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

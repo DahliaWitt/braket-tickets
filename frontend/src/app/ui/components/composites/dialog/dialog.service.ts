@@ -78,6 +78,7 @@ export class BraDialogService {
   ): BraDialogRef<T> {
     const noopOverlayRef = {
       outsidePointerEvents: () => EMPTY,
+      keydownEvents: () => EMPTY,
       hasAttached: () => false,
       detachBackdrop: () => undefined,
       dispose: () => undefined,
