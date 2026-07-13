@@ -771,6 +771,107 @@ describe('guests.update', () => {
     ).rejects.toThrow(/exceeds maximum length/);
   });
 
+  it('rejects an email with no @ sign', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Guest',
+      type: 'guest',
+    });
+
+    // update shares the guest paths' lenient `@`-presence rule: a value with no
+    // `@` is obviously not an address and is rejected, but the strict RFC regex
+    // is deliberately NOT applied (see the accepts-unusual-address test below).
+    await expect(
+      asAdmin.mutation(api.events.guests.update, {
+        id: guestId,
+        name: 'Guest',
+        email: 'not-an-email',
+        type: 'guest',
+      }),
+    ).rejects.toThrow('Email is invalid');
+  });
+
+  it('accepts an unusual but valid @ address the strict regex would reject', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Guest',
+      type: 'guest',
+    });
+
+    // `user@localhost` has an `@` but no dotted domain, so the strict RFC regex
+    // rejects it. The guest paths intentionally accept it — matching the admin
+    // add/edit dialog, which submits any trimmed address containing `@`.
+    await asAdmin.mutation(api.events.guests.update, {
+      id: guestId,
+      name: 'Guest',
+      email: 'user@localhost',
+      type: 'guest',
+    });
+
+    const guest = await t.run(async (ctx) => ctx.db.get(guestId));
+    expect(guest?.email).toBe('user@localhost');
+  });
+
+  it('trims surrounding whitespace from a valid email', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Guest',
+      type: 'guest',
+    });
+
+    await asAdmin.mutation(api.events.guests.update, {
+      id: guestId,
+      name: 'Guest',
+      email: '  spaced@example.com  ',
+      type: 'guest',
+    });
+
+    const guest = await t.run(async (ctx) => ctx.db.get(guestId));
+    expect(guest?.email).toBe('spaced@example.com');
+  });
+
+  it('accepts a valid email', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Guest',
+      type: 'guest',
+    });
+
+    await asAdmin.mutation(api.events.guests.update, {
+      id: guestId,
+      name: 'Guest',
+      email: 'valid@example.com',
+      type: 'guest',
+    });
+
+    const guest = await t.run(async (ctx) => ctx.db.get(guestId));
+    expect(guest?.email).toBe('valid@example.com');
+  });
+
   it('rejects a blank name', async () => {
     const t = convexTest();
 
