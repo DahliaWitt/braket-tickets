@@ -104,6 +104,23 @@ describe('EventManagementResaleTabComponent', () => {
     expect(dataChangedSpy).toHaveBeenCalledTimes(1);
   });
 
+  it('toasts the extracted error and resets in-flight state when cancellation fails', async () => {
+    const dataChangedSpy = vi.fn();
+    component.dataChanged.subscribe(dataChangedSpy);
+    resaleServiceMock.cancelResaleListing.mockRejectedValueOnce(
+      new Error('boom'),
+    );
+
+    component.adminCancelListing(mockListing);
+    await lastConfirmRun;
+
+    // extractErrorMessage(new Error('boom')) → 'boom'
+    expect(toast.error).toHaveBeenCalledWith('boom');
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(dataChangedSpy).not.toHaveBeenCalled();
+    expect(component.isCancellingListing()).toBeNull();
+  });
+
   it('does not cancel when the confirmation is declined', async () => {
     alertDialogMock.confirm.mockImplementation(() => undefined);
 
