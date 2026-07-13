@@ -8,10 +8,12 @@ import {
   signal,
 } from '@angular/core';
 import {type ComponentFixture, TestBed} from '@angular/core/testing';
+import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
 import {By} from '@angular/platform-browser';
 import {Subject} from 'rxjs';
 import {vi} from 'vitest';
 import {ZardTooltipDirective} from './tooltip';
+import {ZardTooltipTriggerHarness} from './tooltip.harness';
 import {type ZardTooltipPositionVariants} from './tooltip.variants';
 
 @Component({
@@ -152,18 +154,24 @@ describe('ZardTooltipDirective', () => {
     vi.restoreAllMocks();
   });
 
-  it('should not force a pointer cursor for hover-triggered tooltips', () => {
+  it('should not force a pointer cursor for hover-triggered tooltips', async () => {
     host.trigger.set('hover');
     fixture.detectChanges();
 
-    expect(getTriggerButton().style.cursor).toBe('');
+    const harness = await TestbedHarnessEnvironment.loader(fixture).getHarness(
+      ZardTooltipTriggerHarness,
+    );
+    expect(await harness.getCursor()).toBe('');
   });
 
-  it('should apply a pointer cursor for click-triggered tooltips', () => {
+  it('should apply a pointer cursor for click-triggered tooltips', async () => {
     host.trigger.set('click');
     fixture.detectChanges();
 
-    expect(getTriggerButton().style.cursor).toBe('pointer');
+    const harness = await TestbedHarnessEnvironment.loader(fixture).getHarness(
+      ZardTooltipTriggerHarness,
+    );
+    expect(await harness.hasPointerCursor()).toBe(true);
   });
 
   it('should show tooltip content and set aria-describedby', () => {

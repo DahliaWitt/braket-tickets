@@ -374,12 +374,9 @@ describe('ZardTabGroupComponent', () => {
   // Interaction affordances --------------------------------------------------
 
   it('should opt tab buttons back into a pointer cursor (Tailwind v4 preflight sets cursor:default)', async () => {
-    const {fixture} = await setupDefault();
-    const buttons = queryAll<HTMLButtonElement>(fixture, 'button[role="tab"]');
+    const {harness} = await setupDefault();
 
-    expect(buttons.length).toBeGreaterThan(0);
-    for (const button of buttons) {
-      expect(button.className.split(/\s+/)).toContain('cursor-pointer');
-    }
+    expect(await harness.getTabCount()).toBeGreaterThan(0);
+    expect(await harness.tabButtonsHavePointerCursor()).toBe(true);
   });
 });

@@ -132,7 +132,7 @@ export class BraDialogOptions<T, U> {
                 <z-icon [zType]="config.zCancelIcon" />
               }
 
-              {{ config.zCancelText ?? 'cancel' }}
+              {{ config.zCancelText || 'cancel' }}
             </button>
           }
 
@@ -149,7 +149,7 @@ export class BraDialogOptions<T, U> {
                 <z-icon [zType]="config.zOkIcon" />
               }
 
-              {{ config.zOkText ?? 'confirm' }}
+              {{ config.zOkText || 'confirm' }}
             </button>
           }
         </footer>

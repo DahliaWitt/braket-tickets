@@ -4,9 +4,9 @@ export const inputVariants = cva('w-full text-foreground', {
   variants: {
     zType: {
       default:
-        'flex rounded-md border border-input bg-transparent px-4 font-normal outline-none file:border-0 file:bg-transparent file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50',
+        'flex rounded-md border border-input bg-transparent px-4 font-normal outline-hidden file:border-0 file:bg-transparent file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50',
       textarea:
-        'flex h-auto min-h-20 rounded-md border border-input bg-background px-3 py-2 pb-2 text-base outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50',
+        'flex h-auto min-h-20 rounded-md border border-input bg-background px-3 py-2 pb-2 text-base outline-hidden placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50',
     },
     zSize: {
       default: 'text-base',
@@ -19,7 +19,7 @@ export const inputVariants = cva('w-full text-foreground', {
       success: 'border-success focus-visible:ring-success',
     },
     zBorderless: {
-      true: 'flex-1 border-0 bg-transparent px-0 py-0 outline-none focus-visible:ring-0 focus-visible:ring-offset-0',
+      true: 'flex-1 border-0 bg-transparent px-0 py-0 outline-hidden focus-visible:ring-0 focus-visible:ring-offset-0',
     },
   },
   defaultVariants: {

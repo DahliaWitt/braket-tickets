@@ -33,4 +33,18 @@ export class ZardTabGroupHarness extends ComponentHarness {
   async getTabCount(): Promise<number> {
     return (await this.getTabs()).length;
   }
+
+  /**
+   * Whether every tab button opts into a pointer cursor. Tailwind v4 preflight
+   * resets buttons to `cursor: default`, so tab buttons must explicitly re-add
+   * `cursor-pointer`.
+   */
+  async tabButtonsHavePointerCursor(): Promise<boolean> {
+    const tabs = await this.getTabs();
+    if (tabs.length === 0) return false;
+    const flags = await Promise.all(
+      tabs.map((tab) => tab.hasClass('cursor-pointer')),
+    );
+    return flags.every(Boolean);
+  }
 }

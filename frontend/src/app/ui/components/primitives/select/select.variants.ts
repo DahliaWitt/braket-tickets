@@ -9,7 +9,7 @@ export const selectVariants = cva(
 export const selectTriggerVariants = cva(
   mergeClasses(
     'flex w-full items-center justify-between gap-2 rounded-md border border-input bg-background',
-    'cursor-pointer shadow-xs transition-colors outline-none disabled:cursor-not-allowed disabled:opacity-50',
+    'cursor-pointer shadow-xs transition-colors outline-hidden disabled:cursor-not-allowed disabled:opacity-50',
     'text-foreground hover:border-ring hover:bg-primary/5',
     'data-placeholder:text-muted-foreground [&_svg:not([class*="text-"])]:text-muted-foreground',
     'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
