@@ -9,8 +9,7 @@
 :host ::ng-deep .apexcharts-tooltip {
   background: hsl(var(--card)) !important;
   border: 1px solid hsl(var(--primary)) !important;
-  border-radius: 8px !important;
-  box-shadow: 0 0 20px hsl(var(--primary) / 0.3) !important;
+  border-radius: var(--radius) !important;
 }
 
 :host ::ng-deep .apexcharts-tooltip-title {
@@ -44,9 +43,4 @@
 /* Grid styling */
 :host ::ng-deep .apexcharts-gridline {
   stroke: hsl(var(--border)) !important;
-}
-
-/* Area glow effect */
-:host ::ng-deep .apexcharts-area-series .apexcharts-series-markers circle {
-  filter: drop-shadow(0 0 6px hsl(var(--primary)));
 }

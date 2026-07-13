@@ -1,16 +1,24 @@
-import { ComponentHarness } from '@angular/cdk/testing';
-import { ZardButtonComponentHarness } from '@ui/components/primitives/button/button.component.harness';
+import {ComponentHarness} from '@angular/cdk/testing';
+import {ZardButtonComponentHarness} from '@ui/components/primitives/button/button.component.harness';
 
 export class ExportDialogHarness extends ComponentHarness {
   static hostSelector = 'app-export-dialog';
 
-  private getCsvButton = this.locatorFor(ZardButtonComponentHarness.with({ text: /CSV/ }));
+  private getCsvButton = this.locatorFor(
+    ZardButtonComponentHarness.with({text: /CSV/}),
+  );
 
-  private getPdfButton = this.locatorFor(ZardButtonComponentHarness.with({ text: /PDF/ }));
+  private getPdfButton = this.locatorFor(
+    ZardButtonComponentHarness.with({text: /PDF/}),
+  );
 
-  private getCancelButton = this.locatorFor(ZardButtonComponentHarness.with({ text: 'Cancel' }));
+  private getCancelButton = this.locatorFor(
+    ZardButtonComponentHarness.with({text: 'Cancel'}),
+  );
 
-  private getExportButton = this.locatorFor(ZardButtonComponentHarness.with({ text: /Export/ }));
+  private getExportButton = this.locatorFor(
+    ZardButtonComponentHarness.with({text: /Export/}),
+  );
 
   private getCheckboxes = this.locatorForAll('z-checkbox');
 

@@ -36,6 +36,8 @@ import {ZardButtonComponent} from '@ui/components/primitives/button/button.compo
 import {ZardCardComponent} from '@ui/components/primitives/card/card.component';
 import {ZardProgressBarComponent} from '@ui/components/primitives/progress-bar/progress-bar.component';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
+import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton.component';
+import {EmptyStateComponent} from '@ui/components/primitives/empty-state/empty-state.component';
 import {BraInventoryMeterComponent} from '@ui/components/composites/inventory-meter/inventory-meter.component';
 import {EventAnalyticsTabComponent} from '@/features/admin/components/event-analytics-tab/event-analytics-tab.component';
 import {BroadcastEmailTabComponent} from '@/features/admin/components/broadcast-email-tab/broadcast-email-tab.component';
@@ -122,6 +124,8 @@ function getManagementLoadErrorMessage(error: unknown): string | null {
     ZardCardComponent,
     ZardProgressBarComponent,
     ZardIconComponent,
+    ZardSkeletonComponent,
+    EmptyStateComponent,
     BraInventoryMeterComponent,
     EventAnalyticsTabComponent,
     BroadcastEmailTabComponent,

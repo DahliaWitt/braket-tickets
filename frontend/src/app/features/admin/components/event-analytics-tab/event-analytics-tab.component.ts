@@ -231,14 +231,6 @@ export class EventAnalyticsTabComponent {
           easing: 'easeinout',
           speed: 500,
         },
-        dropShadow: {
-          enabled: true,
-          top: 0,
-          left: 0,
-          blur: 8,
-          opacity: 0.4,
-          color: primary,
-        },
       },
       colors: [primary],
       fill: {

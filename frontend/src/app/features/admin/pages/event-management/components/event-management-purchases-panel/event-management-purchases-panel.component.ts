@@ -22,6 +22,7 @@ import {
   type ExportDialogData,
 } from '../export-dialog/export-dialog.component';
 import {BraStatusBadgeComponent} from '@ui/components/primitives/status-badge/status-badge.component';
+import {EmptyStateComponent} from '@ui/components/primitives/empty-state/empty-state.component';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 import {ZardCardComponent} from '@ui/components/primitives/card/card.component';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
@@ -29,6 +30,7 @@ import {ZardTooltipDirective} from '@ui/components/primitives/tooltip/tooltip';
 import {logger} from '@/utils/logger';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
 import {formatEventDate} from '@/utils/event-date-format';
+import {ADMIN_DATETIME} from '@/features/admin/utils/date-formats';
 
 /**
  * An import batch grouped for display: its key, the source label (from the
@@ -49,6 +51,7 @@ export interface ImportedBatchGroup {
     CurrencyPipe,
     DatePipe,
     BraStatusBadgeComponent,
+    EmptyStateComponent,
     ZardButtonComponent,
     ZardCardComponent,
     ZardIconComponent,
@@ -61,6 +64,9 @@ export class EventManagementPurchasesPanelComponent {
   private readonly dialogService = inject(BraDialogService);
   private readonly alertDialog = inject(BraAlertDialogService);
   private readonly browser = inject(BrowserPlatformService);
+
+  /** Shared admin datetime format for both desktop and mobile timestamps. */
+  protected readonly ADMIN_DATETIME = ADMIN_DATETIME;
 
   readonly eventTitle = input.required<string>();
   readonly eventDate = input.required<string>();
@@ -233,13 +239,13 @@ export class EventManagementPurchasesPanelComponent {
       );
       if (!this.browser.openPdfPreview(pdfDataUrl, 'Ticket PDF')) {
         logger.error('Popup blocked');
-        toast.error('Popup blocked. Please allow popups to view the ticket.');
+        toast.error('popup blocked — allow popups to view the ticket');
       } else {
-        toast.success('Ticket PDF opened.');
+        toast.success('ticket pdf opened');
       }
     } catch (error) {
       logger.error('Failed to generate ticket PDF', error);
-      toast.error('Failed to generate ticket PDF.');
+      toast.error('failed to generate ticket pdf');
     } finally {
       this.isGeneratingPdf.set(null);
     }
@@ -398,16 +404,12 @@ export class EventManagementPurchasesPanelComponent {
     this.isRefunding.set(purchase.id);
     try {
       await this.adminEventsService.refundPayment(purchase.id);
-      toast.success(
-        isFree
-          ? 'Tickets cancelled successfully'
-          : 'Payment refunded successfully',
-      );
+      toast.success(isFree ? 'tickets cancelled' : 'payment refunded');
       this.dataChanged.emit();
     } catch (error) {
       logger.error('Failed to refund payment', error);
       toast.error(
-        isFree ? 'Failed to cancel tickets' : 'Failed to refund payment',
+        isFree ? 'failed to cancel tickets' : 'failed to refund payment',
       );
     } finally {
       this.isRefunding.set(null);
@@ -424,11 +426,11 @@ export class EventManagementPurchasesPanelComponent {
     this.isRefunding.set(purchase.id);
     try {
       await this.adminEventsService.forceRefundAll(purchase.id);
-      toast.success('Full payment refunded successfully');
+      toast.success('full payment refunded');
       this.dataChanged.emit();
     } catch (error) {
       logger.error('Failed to force refund payment', error);
-      toast.error('Failed to force refund payment');
+      toast.error('failed to force refund payment');
     } finally {
       this.isRefunding.set(null);
       this.finishPurchaseRefund(purchase.id);
@@ -475,15 +477,11 @@ export class EventManagementPurchasesPanelComponent {
     this.isRefundingTicket.set(ticketId);
     try {
       await this.adminEventsService.refundTicket(ticketId);
-      toast.success(
-        isFree
-          ? 'Ticket cancelled successfully'
-          : 'Ticket refunded successfully',
-      );
+      toast.success(isFree ? 'ticket cancelled' : 'ticket refunded');
       this.dataChanged.emit();
     } catch (error) {
       logger.error('Single ticket refund failed', error);
-      toast.error('Failed to refund ticket');
+      toast.error('failed to refund ticket');
     } finally {
       this.isRefundingTicket.set(null);
       this.finishPurchaseRefund(purchaseId);

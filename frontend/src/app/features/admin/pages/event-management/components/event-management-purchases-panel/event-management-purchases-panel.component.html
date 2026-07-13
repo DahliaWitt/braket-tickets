@@ -1,6 +1,6 @@
 <div class="ph-no-capture space-y-4">
   <div class="flex items-center justify-between">
-    <h2 class="font-display text-xl text-foreground">Buyer List</h2>
+    <h2 class="font-display text-xl text-foreground">buyer list</h2>
     <div class="flex items-center gap-3">
       <span
         class="font-mono text-xs tracking-widest text-muted-foreground uppercase"
@@ -24,7 +24,7 @@
   </div>
 
   <div
-    class="hidden overflow-hidden rounded-xl border border-border bg-card md:block"
+    class="hidden overflow-x-auto rounded-lg border border-border bg-card shadow-sm md:block"
   >
     <table class="w-full border-collapse text-left">
       <thead class="border-b border-border bg-muted">
@@ -68,16 +68,20 @@
             data-testid="buyer-entry"
           >
             <td class="px-6 py-4 font-mono text-sm text-muted-foreground">
-              {{ purchase.createdAt | date: 'shortDate' }}
+              {{ purchase.createdAt | date: ADMIN_DATETIME }}
             </td>
             <td class="px-6 py-4">
               <div class="flex flex-col">
-                <span class="text-sm font-medium text-foreground">{{
-                  purchase.userName || 'Unknown'
-                }}</span>
-                <span class="font-mono text-xs text-muted-foreground">{{
-                  purchase.userEmail
-                }}</span>
+                <span
+                  class="max-w-[220px] truncate text-sm font-medium text-foreground"
+                  [title]="purchase.userName || 'Unknown'"
+                  >{{ purchase.userName || 'Unknown' }}</span
+                >
+                <span
+                  class="max-w-[220px] truncate font-mono text-xs text-muted-foreground"
+                  [title]="purchase.userEmail"
+                  >{{ purchase.userEmail }}</span
+                >
               </div>
             </td>
             <td class="px-6 py-4">
@@ -291,10 +295,8 @@
           }
         } @empty {
           <tr>
-            <td colspan="5" class="px-6 py-12 text-center">
-              <span class="font-mono text-sm text-muted-foreground"
-                >NO RECORDS FOUND</span
-              >
+            <td colspan="5">
+              <app-empty-state title="no purchases yet" />
             </td>
           </tr>
         }
@@ -345,7 +347,7 @@
             </div>
             <div>
               <div class="mb-1 text-muted-foreground uppercase">Purchased</div>
-              <div>{{ purchase.createdAt | date: 'short' }}</div>
+              <div>{{ purchase.createdAt | date: ADMIN_DATETIME }}</div>
             </div>
           </div>
 
@@ -527,11 +529,7 @@
         </div>
       </z-card>
     } @empty {
-      <div
-        class="rounded-lg border border-dashed border-border py-10 text-center font-mono text-muted-foreground"
-      >
-        No completed purchases yet.
-      </div>
+      <app-empty-state title="no purchases yet" />
     }
   </div>
 
@@ -551,7 +549,7 @@
 
       @for (batch of importedBatches(); track batch.batchKey) {
         <div
-          class="overflow-hidden rounded-xl border border-border bg-card"
+          class="overflow-hidden rounded-lg border border-border bg-card"
           data-testid="imported-batch"
           [attr.data-batch-key]="batch.batchKey"
         >
@@ -582,7 +580,7 @@
               [zDisabled]="removingBatchKey() === batch.batchKey"
               data-testid="remove-imported-batch"
               [attr.data-batch-key]="batch.batchKey"
-              class="min-h-[24px] text-destructive hover:bg-destructive/10"
+              class="min-h-[24px] text-destructive-text hover:bg-destructive/10"
               [attr.aria-label]="
                 'Remove import batch from ' + batch.sourceLabel
               "
@@ -636,7 +634,7 @@
                     [zDisabled]="removingEntryId() === entry._id"
                     data-testid="remove-imported-entry"
                     [attr.data-entry-id]="entry._id"
-                    class="min-h-[24px] text-destructive hover:bg-destructive/10"
+                    class="min-h-[24px] text-destructive-text hover:bg-destructive/10"
                     [zTooltip]="'Remove ' + importedEntryActionLabel(entry)"
                     [attr.aria-label]="
                       'Remove ' + importedEntryActionLabel(entry)
