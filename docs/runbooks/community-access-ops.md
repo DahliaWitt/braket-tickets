@@ -145,9 +145,8 @@ Removal is idempotent. If a team removes a link and later wants to restore trust
 
 Operational limit:
 
-- Outgoing trust-link rows compute `trustedMemberCount` via `countOrganizerMembers(...)` in `backend/convex/lib/authz.ts`.
-- That count is clamped to the enumeration cap (`AUTHZ_RELATION_QUERY_CAP`, `1,000`): below the cap it is exact, at or above the cap it is reported as `1,000`. It never throws, so one at-cap trusted community cannot fail the whole trust-links page.
-- The stricter enumeration helper `listOrganizerMembers(...)` still hard-fails at `1,000` members with `MEMBER_CAP_EXCEEDED`; that throw is intentional for callers that must read the full member list (roster, directory rebuild, marketing audience) until relation pagination exists.
+- Outgoing trust-link rows compute `trustedMemberCount` via [`countOrganizerMembers`](../../backend/convex/lib/authz.ts) — see that file for the current cap value and clamping behavior. It never throws, so one at-cap trusted community cannot fail the whole trust-links page.
+- The stricter enumeration helper [`listOrganizerMembers`](../../backend/convex/lib/authz.ts) still hard-fails at the cap with `MEMBER_CAP_EXCEEDED`; that throw is intentional for callers that must read the full member list (roster, directory rebuild, marketing audience) until relation pagination exists.
 
 ## Explain event visibility
 

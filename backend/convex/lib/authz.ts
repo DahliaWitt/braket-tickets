@@ -116,16 +116,33 @@ async function listRoleUserIds(
   return assignments.map((assignment) => assignment.userId);
 }
 
+async function fetchOrganizerMemberUserIds(
+  ctx: AuthzCtx,
+  organizerId: Id<'organizers'>,
+): Promise<string[]> {
+  return listRoleUserIds(ctx, 'member', organizerScope(organizerId));
+}
+
+function warnIfApproachingMemberCap(
+  organizerId: Id<'organizers'>,
+  memberCount: number,
+): void {
+  if (memberCount >= AUTHZ_RELATION_QUERY_WARN_THRESHOLD) {
+    logger.warn(
+      'authz',
+      `Community ${organizerId} approaching member cap: ${memberCount}/${AUTHZ_RELATION_QUERY_CAP}`,
+    );
+  }
+}
+
 export async function listOrganizerMembers(
   ctx: AuthzCtx,
   organizerId: Id<'organizers'>,
 ): Promise<string[]> {
-  const userIds = await listRoleUserIds(
-    ctx,
-    'member',
-    organizerScope(organizerId),
-  );
+  const userIds = await fetchOrganizerMemberUserIds(ctx, organizerId);
 
+  // Throw before warning: an at-cap community must fail hard here, matching the
+  // original behavior where the cap throw pre-empts the "approaching cap" warn.
   if (userIds.length >= AUTHZ_RELATION_QUERY_CAP) {
     throwAppError(
       'MEMBER_CAP_EXCEEDED',
@@ -133,12 +150,7 @@ export async function listOrganizerMembers(
     );
   }
 
-  if (userIds.length >= AUTHZ_RELATION_QUERY_WARN_THRESHOLD) {
-    logger.warn(
-      'authz',
-      `Community ${organizerId} approaching member cap: ${userIds.length}/${AUTHZ_RELATION_QUERY_CAP}`,
-    );
-  }
+  warnIfApproachingMemberCap(organizerId, userIds.length);
 
   return userIds;
 }
@@ -158,18 +170,9 @@ export async function countOrganizerMembers(
   ctx: AuthzCtx,
   organizerId: Id<'organizers'>,
 ): Promise<number> {
-  const userIds = await listRoleUserIds(
-    ctx,
-    'member',
-    organizerScope(organizerId),
-  );
+  const userIds = await fetchOrganizerMemberUserIds(ctx, organizerId);
 
-  if (userIds.length >= AUTHZ_RELATION_QUERY_WARN_THRESHOLD) {
-    logger.warn(
-      'authz',
-      `Community ${organizerId} approaching member cap: ${userIds.length}/${AUTHZ_RELATION_QUERY_CAP}`,
-    );
-  }
+  warnIfApproachingMemberCap(organizerId, userIds.length);
 
   return Math.min(userIds.length, AUTHZ_RELATION_QUERY_CAP);
 }
