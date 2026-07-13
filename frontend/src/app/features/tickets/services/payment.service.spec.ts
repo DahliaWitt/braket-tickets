@@ -343,6 +343,7 @@ describe('PaymentService', () => {
           eventId: 'event_1',
           quantity: 1,
           tier: 'regular',
+          idempotencyKey: expect.any(String) as string,
         },
       );
       expect(result.success).toBe(true);
@@ -370,6 +371,7 @@ describe('PaymentService', () => {
           tier: 'notaflof',
           sessionToken: 'guest_token',
           termsAccepted: true,
+          idempotencyKey: expect.any(String) as string,
         },
       );
       expect(result.success).toBe(true);
@@ -680,7 +682,29 @@ describe('PaymentService', () => {
   });
 
   describe('extractErrorMessage via live entrypoints', () => {
-    it('returns the explicit message from ConvexError object data', async () => {
+    it('returns the explicit message from ConvexError object data for an unmapped code', async () => {
+      // A known payment code resolves to its friendly copy (see the
+      // RESERVATION_EXPIRED / PRICE_MISMATCH cases). The raw backend message is
+      // surfaced only when the code is unmapped or absent.
+      convexClientMock.mutation.mockRejectedValue(
+        new ConvexError({
+          code: 'SOME_UNMAPPED_CODE',
+          message: 'Invalid or expired session',
+        }),
+      );
+
+      await expect(
+        service.startPrimaryCheckoutSession(
+          'event_1',
+          1,
+          'regular',
+          1000,
+          'light',
+        ),
+      ).rejects.toThrow('Invalid or expired session');
+    });
+
+    it('maps RESERVATION_EXPIRED to a user-friendly message over the raw backend message', async () => {
       convexClientMock.mutation.mockRejectedValue(
         new ConvexError({
           code: 'RESERVATION_EXPIRED',
@@ -696,7 +720,7 @@ describe('PaymentService', () => {
           1000,
           'light',
         ),
-      ).rejects.toThrow('Invalid or expired session');
+      ).rejects.toThrow('This reservation has expired. Please try again.');
     });
 
     it('maps PRICE_MISMATCH to a user-friendly message', async () => {

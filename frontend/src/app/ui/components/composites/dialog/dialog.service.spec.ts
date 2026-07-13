@@ -61,6 +61,7 @@ interface DialogContainerStub {
 
 interface OverlayStub {
   outsidePointerEvents: ReturnType<typeof vi.fn>;
+  keydownEvents: ReturnType<typeof vi.fn>;
   hasAttached: ReturnType<typeof vi.fn>;
   detachBackdrop: ReturnType<typeof vi.fn>;
   dispose: ReturnType<typeof vi.fn>;
@@ -85,6 +86,7 @@ function mockFocusableElementGeometry(): void {
 
 const createDialogHarness = () => {
   const outsidePointerEvents$ = new Subject<PointerEvent>();
+  const keydownEvents$ = new Subject<KeyboardEvent>();
   const contentInstance = {id: 'content-instance'};
 
   const dialogContainer: DialogContainerStub = {
@@ -107,6 +109,7 @@ const createDialogHarness = () => {
 
   const overlayRef: OverlayStub = {
     outsidePointerEvents: vi.fn(() => outsidePointerEvents$.asObservable()),
+    keydownEvents: vi.fn(() => keydownEvents$.asObservable()),
     hasAttached: vi.fn(() => true),
     detachBackdrop: vi.fn(),
     dispose: vi.fn(),

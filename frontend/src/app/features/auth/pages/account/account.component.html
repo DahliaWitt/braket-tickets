@@ -486,7 +486,7 @@
                 <button
                   type="button"
                   (click)="oldPasswordVisible.set(!oldPasswordVisible())"
-                  class="absolute top-1/2 right-3 flex min-h-6 min-w-6 -translate-y-1/2 items-center justify-center rounded-sm p-1 text-muted-foreground hover:text-foreground/80 focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none"
+                  class="absolute top-1/2 right-2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:ring-4 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
                   [attr.aria-label]="
                     oldPasswordVisible() ? 'Hide password' : 'Show password'
                   "
@@ -535,7 +535,7 @@
                 <button
                   type="button"
                   (click)="newPasswordVisible.set(!newPasswordVisible())"
-                  class="absolute top-1/2 right-3 flex min-h-6 min-w-6 -translate-y-1/2 items-center justify-center rounded-sm p-1 text-muted-foreground hover:text-foreground/80 focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none"
+                  class="absolute top-1/2 right-2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:ring-4 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
                   [attr.aria-label]="
                     newPasswordVisible() ? 'Hide password' : 'Show password'
                   "
@@ -609,7 +609,7 @@
                   (click)="
                     confirmPasswordVisible.set(!confirmPasswordVisible())
                   "
-                  class="absolute top-1/2 right-3 flex min-h-6 min-w-6 -translate-y-1/2 items-center justify-center rounded-sm p-1 text-muted-foreground hover:text-foreground/80 focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none"
+                  class="absolute top-1/2 right-2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:ring-4 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
                   [attr.aria-label]="
                     confirmPasswordVisible() ? 'Hide password' : 'Show password'
                   "
@@ -709,7 +709,7 @@
                 <button
                   type="button"
                   (click)="setPasswordVisible.set(!setPasswordVisible())"
-                  class="absolute top-1/2 right-3 flex min-h-6 min-w-6 -translate-y-1/2 items-center justify-center rounded-sm p-1 text-muted-foreground hover:text-foreground/80 focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none"
+                  class="absolute top-1/2 right-2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:ring-4 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
                   [attr.aria-label]="
                     setPasswordVisible() ? 'Hide password' : 'Show password'
                   "
@@ -784,7 +784,7 @@
                   (click)="
                     setPasswordConfirmVisible.set(!setPasswordConfirmVisible())
                   "
-                  class="absolute top-1/2 right-3 flex min-h-6 min-w-6 -translate-y-1/2 items-center justify-center rounded-sm p-1 text-muted-foreground hover:text-foreground/80 focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none"
+                  class="absolute top-1/2 right-2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:ring-4 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
                   [attr.aria-label]="
                     setPasswordConfirmVisible()
                       ? 'Hide password'
@@ -899,7 +899,7 @@
                   Some communities are still enabled
                 </p>
                 <p
-                  class="mt-1 text-warning/70"
+                  class="mt-1 text-warning"
                   data-testid="global-optout-banner-body"
                 >
                   You've opted out of marketing emails from new communities.
@@ -919,7 +919,7 @@
                   Marketing emails are paused
                 </p>
                 <p
-                  class="mt-1 text-warning/70"
+                  class="mt-1 text-warning"
                   data-testid="global-optout-banner-body"
                 >
                   You've opted out of all community marketing emails. New
@@ -954,6 +954,22 @@
             <p class="animate-pulse font-mono text-sm text-muted-foreground">
               Loading…
             </p>
+          } @else if (emailPrefs.error()) {
+            <div
+              data-testid="email-prefs-error"
+              role="alert"
+              aria-live="assertive"
+              class="space-y-2 py-4 text-center"
+            >
+              <h3
+                class="font-display text-lg font-bold tracking-tight text-destructive-text uppercase"
+              >
+                hit a snag
+              </h3>
+              <p class="font-sans text-sm text-muted-foreground">
+                couldn't load your email preferences — refresh to try again
+              </p>
+            </div>
           } @else if (displayedEmailPrefs().length === 0) {
             <p
               class="font-mono text-sm text-muted-foreground"

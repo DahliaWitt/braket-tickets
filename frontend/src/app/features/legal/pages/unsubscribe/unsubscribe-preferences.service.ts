@@ -1,5 +1,5 @@
 import {inject, Injectable} from '@angular/core';
-import {HttpClient} from '@angular/common/http';
+import {HttpClient, HttpErrorResponse} from '@angular/common/http';
 import {firstValueFrom} from 'rxjs';
 import {logger} from '@/utils/logger';
 import {isRecord} from '@shared/type-guards';
@@ -48,6 +48,14 @@ function isPreferencesResponse(value: unknown): value is PreferencesResponse {
   );
 }
 
+/**
+ * Statuses the unsubscribe endpoints return for a genuinely dead token:
+ * 400 (`missing_token`) and 404 (`invalid_token`). Anything else — network
+ * failure, 5xx, malformed payload — is a transient fetch failure the caller
+ * should surface as retryable, not as an invalid link.
+ */
+const INVALID_TOKEN_STATUSES: ReadonlySet<number> = new Set([400, 404]);
+
 @Injectable({
   providedIn: 'root',
 })
@@ -55,25 +63,38 @@ export class UnsubscribePreferencesService {
   private readonly http = inject(HttpClient);
   private readonly apiBaseUrl = environment.convexSiteUrl.replace(/\/$/, '');
 
+  /**
+   * Loads preferences for an unsubscribe token.
+   *
+   * Returns `null` only when the backend rejected the token itself.
+   * Throws on transient failures (network, 5xx, unexpected payload shape) so
+   * a `resource()` loader can branch into a retry state instead of telling
+   * the user their link is dead.
+   */
   async loadPreferences(token: string): Promise<PreferencesResponse | null> {
+    let result: unknown;
     try {
-      const result = await firstValueFrom(
+      result = await firstValueFrom(
         this.http.get<unknown>(
           `${this.apiBaseUrl}/api/unsubscribe-preferences?token=${encodeURIComponent(token)}`,
         ),
       );
-      if (!isPreferencesResponse(result)) {
-        logger.warn(
-          'Unexpected unsubscribe preferences response shape',
-          result,
-        );
+    } catch (err) {
+      if (
+        err instanceof HttpErrorResponse &&
+        INVALID_TOKEN_STATUSES.has(err.status)
+      ) {
+        logger.warn('Unsubscribe token rejected by backend', err.status);
         return null;
       }
-      return result;
-    } catch (err) {
       logger.error('Failed to load unsubscribe preferences', err);
-      return null;
+      throw err;
     }
+    if (!isPreferencesResponse(result)) {
+      logger.warn('Unexpected unsubscribe preferences response shape', result);
+      throw new Error('Unexpected unsubscribe preferences response shape');
+    }
+    return result;
   }
 
   async togglePreference(

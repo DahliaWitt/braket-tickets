@@ -1946,6 +1946,7 @@ export declare const api: {
         "public",
         {
           eventId: Id<"events">;
+          idempotencyKey?: string;
           quantity: number;
           tier: "regular" | "notaflof" | "supporter";
         },
@@ -1956,6 +1957,7 @@ export declare const api: {
         "public",
         {
           eventId: Id<"events">;
+          idempotencyKey?: string;
           quantity: number;
           sessionToken: string;
           termsAccepted: boolean;
@@ -3042,6 +3044,15 @@ export declare const api: {
         },
         Id<"resale_listings">
       >;
+      setResaleListingStatus: FunctionReference<
+        "mutation",
+        "public",
+        {
+          listingId: Id<"resale_listings">;
+          status: "listed" | "pending" | "completed" | "cancelled";
+        },
+        null
+      >;
     };
     tickets: {
       seedTicket: FunctionReference<
@@ -3166,6 +3177,12 @@ export declare const api: {
         "mutation",
         "public",
         { email: string; name?: string },
+        Id<"users">
+      >;
+      seedEmaillessUser: FunctionReference<
+        "mutation",
+        "public",
+        { name: string },
         Id<"users">
       >;
       setRootAdminStatus: FunctionReference<
@@ -4828,6 +4845,7 @@ export declare const internal: {
             maximumRowsRead?: number;
             numItems: number;
           };
+          windowStartMs?: number;
         },
         null
       >;
@@ -5117,6 +5135,7 @@ export declare const internal: {
           eventId: Id<"events">;
           expiresAt: number;
           guestSessionId?: Id<"guest_sessions">;
+          idempotencyKey?: string;
           kind: "primary" | "resale";
           quantity: number;
           releaseReason?:
@@ -5153,6 +5172,7 @@ export declare const internal: {
           eventId: Id<"events">;
           expiresAt: number;
           guestSessionId?: Id<"guest_sessions">;
+          idempotencyKey?: string;
           kind: "primary" | "resale";
           quantity: number;
           releaseReason?:
@@ -5202,6 +5222,7 @@ export declare const internal: {
           eventId: Id<"events">;
           expiresAt: number;
           guestSessionId?: Id<"guest_sessions">;
+          idempotencyKey?: string;
           kind: "primary" | "resale";
           quantity: number;
           releaseReason?:

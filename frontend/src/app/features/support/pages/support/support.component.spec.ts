@@ -1,20 +1,27 @@
-import {describe, it, expect, beforeEach} from 'vitest';
+import {describe, it, expect, beforeEach, vi} from 'vitest';
 import {type ComponentFixture, TestBed} from '@angular/core/testing';
 import {provideRouter} from '@angular/router';
 import {provideZonelessChangeDetection} from '@angular/core';
 import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
 import {SupportComponent} from './support.component';
 import {SupportComponentHarness} from './support.component.harness';
-import {ZardButtonComponentHarness} from '@/ui/components/primitives/button/button.component.harness';
+import {PlatformContactDialogService} from '@/features/contact/platform-contact-dialog.service';
 
 describe('SupportComponent', () => {
   let fixture: ComponentFixture<SupportComponent>;
   let harness: SupportComponentHarness;
+  let contactDialogMock: {open: ReturnType<typeof vi.fn>};
 
   beforeEach(async () => {
+    contactDialogMock = {open: vi.fn()};
+
     await TestBed.configureTestingModule({
       imports: [SupportComponent],
-      providers: [provideZonelessChangeDetection(), provideRouter([])],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideRouter([]),
+        {provide: PlatformContactDialogService, useValue: contactDialogMock},
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(SupportComponent);
@@ -26,21 +33,14 @@ describe('SupportComponent', () => {
   });
 
   describe('email support button', () => {
-    it('should expose a real mailto link on the email support action', async () => {
+    it('should open the platform contact dialog with the support subject', async () => {
       expect(await harness.isEmailSupportButtonVisible()).toBe(true);
-      const button = await TestbedHarnessEnvironment.loader(fixture).getHarness(
-        ZardButtonComponentHarness.with({text: /EMAIL SUPPORT/}),
-      );
 
-      expect(await button.getHref()).toBe(
-        'mailto:contact@braket.gay?subject=Braket%20support',
-      );
-      expect(await harness.getEmailSupportHref()).toBe(
-        'mailto:contact@braket.gay?subject=Braket%20support',
-      );
-      expect(await harness.getManualContactHref()).toBe(
-        'mailto:contact@braket.gay?subject=Braket%20support',
-      );
+      await harness.clickEmailSupport();
+
+      expect(contactDialogMock.open).toHaveBeenCalledWith({
+        subject: 'Braket support',
+      });
     });
   });
 

@@ -1,5 +1,6 @@
-import {convexTest} from '../setup.testing';
+import {convexTest, finishAllScheduledFunctions} from '../setup.testing';
 import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest';
+import type {FunctionArgs} from 'convex/server';
 import {api, internal} from '../_generated/api';
 
 async function setupDigestData(digestHour: number) {
@@ -151,10 +152,9 @@ describe('notification_digests.sendDailyDigests', () => {
             name: `Admin ${i}`,
             email: `admin-${i}@test.com`,
           })
-        : await t.run(async (ctx) =>
-            // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- emailless admins intentionally bail before enqueueEmailDelivery; production mutation requires email
-            ctx.db.insert('users', {name: `Admin ${i}`}),
-          );
+        : await t.mutation(api.testing.users.seedEmaillessUser, {
+            name: `Admin ${i}`,
+          });
       const applicantUserId = await t.mutation(
         api.testing.users.createUserDirectly,
         {
@@ -198,5 +198,101 @@ describe('notification_digests.sendDailyDigests', () => {
       ctx.db.query('emailDedup').collect(),
     );
     expect(dedupKeys).toHaveLength(2);
+  });
+
+  it('freezes the time window across every continuation page over an hour+day boundary', async () => {
+    // digestHour 23: the run starts at 23:59:59 UTC on Jan 15, but its
+    // continuations are driven at 00:00:05 UTC on Jan 16 — flipping BOTH the
+    // UTC hour (23 → 0) and the calendar day. Before the fix each continuation
+    // recomputed `getUTCHours()` (= 0) and resumed the digestHour-23 cursor
+    // against the digestHour-0 index range, which drops every admin past page 1
+    // (Convex rejects the mismatched cursor; the per-day dedup key blocks any
+    // same-day retry). The frozen `windowStartMs` threaded through every
+    // self-scheduled page must keep the hour (23) and date (2026-01-15)
+    // constant for the whole multi-page run.
+    const digestHour = 23;
+    const startMs = Date.parse('2026-01-15T23:59:59Z');
+    vi.setSystemTime(new Date(startMs));
+
+    const t = convexTest();
+    const orgId = await t.mutation(api.testing.communities.seedOrganizer, {
+      name: 'Boundary Community',
+    });
+
+    // 201 admins → THREE pages of 100/100/1, forcing two self-scheduled
+    // continuation hops (page 1→2 and page 2→3) so the "every page" claim is
+    // covered directly, not just the first hop. Only admins 0, 100, and 200
+    // have an email, so each page sends exactly one digest — mirroring the
+    // batch test above and avoiding the convex-test parallel-mutation race.
+    const emailAdminIndexes = new Set([0, 100, 200]);
+    for (let i = 0; i < 201; i += 1) {
+      const adminUserId = emailAdminIndexes.has(i)
+        ? await t.mutation(api.testing.users.createUserDirectly, {
+            name: `Admin ${i}`,
+            email: `boundary-admin-${i}@test.com`,
+          })
+        : await t.mutation(api.testing.users.seedEmaillessUser, {
+            name: `Admin ${i}`,
+          });
+      const applicantUserId = await t.mutation(
+        api.testing.users.createUserDirectly,
+        {
+          name: `Boundary Applicant ${i}`,
+          email: `boundary-app-${i}@test.com`,
+        },
+      );
+
+      await t.mutation(api.testing.admin.seedAdminNotificationPreference, {
+        userId: adminUserId,
+        organizerId: orgId,
+        mode: 'digest',
+        digestHour,
+      });
+      await t.mutation(api.testing.applications.seedApplication, {
+        userId: applicantUserId,
+        organizerId: orgId,
+        status: 'pending',
+      });
+    }
+
+    // Page 1 runs at 23:59:59 and self-schedules the next page.
+    await t.mutation(internal.marketing.digests.sendDailyDigests, {});
+
+    // Advance past midnight, then let the real Convex scheduler drive the
+    // remaining pages exactly as production would. This exercises the actual
+    // continuation-threading path, not a hand-fed replay.
+    vi.setSystemTime(new Date('2026-01-16T00:00:05Z'));
+    await finishAllScheduledFunctions(t);
+
+    // Every self-scheduled continuation must carry the SAME frozen epoch — this
+    // is what keeps the digestHour cursor valid and the cutoff/today stable on
+    // every hop. Asserting exact equality (not just "defined") also pins the
+    // 24h application cutoff, which is derived from the same epoch.
+    const scheduled = await t.run(async (ctx) =>
+      ctx.db.system.query('_scheduled_functions').collect(),
+    );
+    const continuations = scheduled.filter((job) =>
+      JSON.stringify(job).includes('sendDailyDigests'),
+    );
+    // Two continuation hops: page 1→2 and page 2→3.
+    expect(continuations.length).toBeGreaterThanOrEqual(2);
+    for (const job of continuations) {
+      const jobArgs = (job as {args: unknown[]}).args[0] as FunctionArgs<
+        typeof internal.marketing.digests.sendDailyDigests
+      >;
+      expect(jobArgs.windowStartMs).toBe(startMs);
+    }
+
+    const dedupKeys = await t.run(async (ctx) =>
+      ctx.db.query('emailDedup').collect(),
+    );
+    // All three pages delivered: no cursor crash, no dropped digests.
+    expect(dedupKeys).toHaveLength(3);
+    // Every dedup key uses the frozen start date (Jan 15), never the post-flip
+    // date (Jan 16) — proving `today` stayed constant across the midnight run.
+    for (const row of dedupKeys) {
+      expect(row.key).toContain('2026-01-15');
+      expect(row.key).not.toContain('2026-01-16');
+    }
   });
 });

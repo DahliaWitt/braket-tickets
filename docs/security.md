@@ -151,7 +151,7 @@ Event read access is centralized in `canViewEvent(...)` and list-style event que
 | `public_viewable` | anonymous users can view | vetted users only |
 | `public` | anonymous users can view | no vetting required |
 
-Draft, cancelled, and draft-community events require scoped `event:view` access. Public-facing reads must not reimplement the matrix directly.
+Draft, cancelled, and draft-community events are readable only by organizers who can modify the event (scoped `event:manage`/`event:edit`) — community admins and root admins. Members and door-staff scanners hold neither permission, so they cannot read a community's unpublished or cancelled events (there is no standalone `event:view` permission). Public-facing reads must not reimplement the matrix directly.
 
 ## 7. Membership Write Points
 

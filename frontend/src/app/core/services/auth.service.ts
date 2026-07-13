@@ -42,6 +42,7 @@ import {AuthSessionSync} from './auth-session-sync';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
 import {
   AUTH_SETTLE_TIMEOUT_MS,
+  MISSING_USER_REPAIR_MAX_QUERY_ERRORS,
   type ConvexClientWithErrorHandling,
   type SessionChannelMessage,
   requiresSocialSignupCompletion,
@@ -570,6 +571,14 @@ export class AuthService implements ConvexAuthProvider {
 
   private async repairMissingUserForSession(sessionKey: string): Promise<void> {
     let waitMs = 0;
+    // Cumulative count of decisions observed while the profile query is errored.
+    // A persistent query error would otherwise keep the loop polling forever
+    // (data() stays undefined, authSyncFailed stays false); bounding it here
+    // guarantees a terminal state. Counting cumulatively — rather than
+    // consecutively — is deliberate: an errored subscription can oscillate
+    // between 'error' and 'pending' while Convex re-evaluates it, and resetting
+    // on 'pending' would let it evade the bound indefinitely.
+    let queryErrorCount = 0;
 
     for (;;) {
       const repairDecision = this.getMissingUserRepairDecision(sessionKey);
@@ -581,6 +590,16 @@ export class AuthService implements ConvexAuthProvider {
         await this.syncUserToApp({markAuthSyncFailedOnError: false});
         return;
       }
+      if (repairDecision === 'error') {
+        queryErrorCount += 1;
+        if (queryErrorCount >= MISSING_USER_REPAIR_MAX_QUERY_ERRORS) {
+          logger.warn(
+            '[AuthService] Abandoning missing app-user repair: current-user profile query kept erroring',
+            this.userQuery.error(),
+          );
+          return;
+        }
+      }
 
       waitMs = waitMs === 0 ? 50 : Math.min(waitMs * 2, 1000);
       await new Promise<void>((resolve) => setTimeout(resolve, waitMs));
@@ -589,7 +608,7 @@ export class AuthService implements ConvexAuthProvider {
 
   private getMissingUserRepairDecision(
     sessionKey: string,
-  ): 'pending' | 'repair' | 'skip' {
+  ): 'pending' | 'repair' | 'skip' | 'error' {
     const session = this.session();
     if (
       !session ||
@@ -608,6 +627,18 @@ export class AuthService implements ConvexAuthProvider {
 
     if (this.authSyncFailed()) {
       return 'skip';
+    }
+
+    // The profile query failed and left no usable data (fresh subscription that
+    // rejected). `injectQuery` clears `isLoading` and preserves `data` on error,
+    // so this state — error set, data still undefined — is otherwise
+    // indistinguishable from "still loading" and would loop forever as
+    // 'pending'. Surface it as 'error' so the repair loop can bound its retries.
+    if (
+      this.userQuery.error() !== undefined &&
+      this.userQuery.data() === undefined
+    ) {
+      return 'error';
     }
 
     const currentUser = this.userQuery.data();

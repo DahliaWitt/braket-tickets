@@ -236,8 +236,29 @@ export async function finalizeWebhookEvent(
  * Stripe's first webhook retry lands in seconds-to-minutes after a 5xx —
  * well inside `STALE_CLAIM_THRESHOLD_MS`. Without this release, the retry
  * would see `pending` and skip as `in_flight`, forcing callers to wait
- * out the stale window for every transient handler error. Zeroing
- * `claimedAt` makes the row immediately reclaimable on the next delivery.
+ * out the stale window for every transient handler error.
+ *
+ * We backdate `claimedAt` to exactly one `STALE_CLAIM_THRESHOLD_MS` in the
+ * past rather than zeroing it. Two independent consumers read `claimedAt`:
+ *
+ *   1. `claimWebhookEvent` treats a pending row as reclaimable once
+ *      `now - claimedAt >= STALE_CLAIM_THRESHOLD_MS`. Backdating by exactly
+ *      the threshold means the very next delivery reclaims immediately —
+ *      the in-flight window has just elapsed.
+ *   2. `reapStaleWebhookClaims` promotes a pending row to `failed` once
+ *      `claimedAt < now - REAPER_FAILURE_TIMEOUT_MS` (96h). A released row
+ *      is only `STALE_CLAIM_THRESHOLD_MS` (5 min) old, so it stays far
+ *      inside the reaper's failure window.
+ *
+ * Zeroing `claimedAt` (`claimedAt: 0`) would satisfy consumer 1 but poison
+ * consumer 2: `0 < now - 96h` is trivially true, so the very next reaper
+ * tick (≤30 min) would promote the just-released row to
+ * `failed`/`stale_timeout`. `claimWebhookEvent` then short-circuits the
+ * pending Stripe retry as `already_failed`, the HTTP endpoint ACKs 200, and
+ * Stripe cancels its remaining retries — silently dropping a
+ * payment-critical webhook. Backdating instead of zeroing preserves the
+ * module invariant that a row is never promoted to `failed` while Stripe
+ * still has retries queued (see `REAPER_FAILURE_TIMEOUT_MS`).
  *
  * `attempts` is deliberately NOT decremented — ops use it to distinguish
  * "first try failed, retrying" from "handler keeps throwing."
@@ -246,7 +267,10 @@ export async function releaseWebhookClaimForRetry(
   db: WebhookClaimsDb,
   args: {claimId: Id<'stripe_webhook_events'>},
 ): Promise<void> {
-  await db.patch('stripe_webhook_events', args.claimId, {claimedAt: 0});
+  const reclaimableAt = Date.now() - STALE_CLAIM_THRESHOLD_MS;
+  await db.patch('stripe_webhook_events', args.claimId, {
+    claimedAt: reclaimableAt,
+  });
 }
 
 /**

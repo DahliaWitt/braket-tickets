@@ -73,7 +73,7 @@ Check these items in order:
 If the cron ran but did not send the digest, invoke the current export path directly:
 
 ```bash
-pnpm convex run --prod notification_digests:sendDailyDigests
+pnpm convex run --prod marketing/digests:sendDailyDigests
 ```
 
 ## Verify bulk email unsubscribe compliance

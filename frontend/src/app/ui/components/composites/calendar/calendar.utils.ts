@@ -25,12 +25,33 @@ export function isDateDisabled(
 }
 
 export function generateCalendarDays(config: CalendarDayConfig): CalendarDay[] {
-  const {year, month, mode, selectedDates, minDate, maxDate, disabled} = config;
+  const {mode, selectedDates, minDate, maxDate, disabled} = config;
 
   const today = new Date();
 
-  const firstDay = new Date(year, month, 1);
-  const lastDay = new Date(year, month + 1, 0);
+  // Guard against invalid navigation input. A NaN year/month (e.g. produced by
+  // an Invalid Date propagated from upstream) — or a finite but out-of-range
+  // value such as year 275760 — yields Invalid Date boundaries, and the
+  // day-generation loop below would never terminate because its exit condition
+  // `currentWeekDate > endDate` is a NaN comparison that is always false,
+  // hanging the browser tab. Fall back to the current month whenever either
+  // boundary is invalid, so no Invalid Date can reach the loop or the grid.
+  let year = Number.isFinite(config.year) ? Math.trunc(config.year) : today.getFullYear();
+  let month = Number.isFinite(config.month) ? Math.trunc(config.month) : today.getMonth();
+
+  let firstDay = new Date(year, month, 1);
+  let lastDay = new Date(year, month + 1, 0);
+  if (Number.isNaN(firstDay.getTime()) || Number.isNaN(lastDay.getTime())) {
+    year = today.getFullYear();
+    month = today.getMonth();
+    firstDay = new Date(year, month, 1);
+    lastDay = new Date(year, month + 1, 0);
+  }
+
+  // Re-derive month from the constructed first day so overflow inputs
+  // (e.g. month 12 → January of the next year) still mark the correct cells as
+  // current-month below. This is a no-op for in-range values.
+  month = firstDay.getMonth();
 
   const startDate = new Date(firstDay);
   startDate.setDate(startDate.getDate() - startDate.getDay());
@@ -71,7 +92,12 @@ export function generateCalendarDays(config: CalendarDayConfig): CalendarDay[] {
       ? `${selectedDates[0].getFullYear()}-${selectedDates[0].getMonth()}-${selectedDates[0].getDate()}`
       : null;
 
-  for (;;) {
+  // A month grid spans at most 6 weeks (42 cells). This hard iteration bound is
+  // the structural termination guarantee: it holds regardless of date validity,
+  // so even if the boundary guards above were ever bypassed the loop can never
+  // run unbounded and hang the tab.
+  const maxCalendarCells = 6 * 7;
+  for (let i = 0; i < maxCalendarCells; i++) {
     if (currentWeekDate > endDate) break;
 
     const date = new Date(currentWeekDate);
@@ -190,14 +216,21 @@ export function normalizeCalendarValue(v: CalendarValue): CalendarValue {
   if (v instanceof Date) return toValidDate(v);
 
   if (Array.isArray(v)) {
-    return v.map((d) => toValidDate(d));
+    // Drop entries that fail validation (toValidDate returns null) so an
+    // Invalid Date can never reach consumers as an unusable Date object.
+    return v.map((d) => toValidDate(d)).filter((d): d is Date => d !== null);
   }
 
   return toValidDate(v);
 }
 
-export function toValidDate(value: unknown): Date {
-  if (value instanceof Date) return value;
+export function toValidDate(value: unknown): Date | null {
+  if (value instanceof Date) {
+    // An Invalid Date (e.g. `new Date('garbage')`) is still `instanceof Date`.
+    // Returning it unguarded lets NaN year/month reach generateCalendarDays and
+    // hang the tab, so treat it the same as any other unparseable input.
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
 
   if (typeof value === 'number' && value.toString().length === 8) {
     const s = value.toString();
@@ -218,7 +251,7 @@ export function toValidDate(value: unknown): Date {
 
   const date = new Date(value as string | number | Date);
 
-  if (isNaN(date.getTime())) return null as unknown as Date;
+  if (isNaN(date.getTime())) return null;
 
   return makeSafeDate(date.getFullYear(), date.getMonth(), date.getDate());
 }

@@ -12,12 +12,29 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export const sendDailyDigests = internalMutation({
   args: {
     paginationOpts: v.optional(paginationOptsValidator),
+    // Epoch (ms) marking the start of this digest run. Computed once on the
+    // first (cron-triggered) invocation and threaded through every paginated
+    // continuation so the entire run shares one frozen time window.
+    //
+    // Convex pagination cursors are only valid against the exact index range
+    // they came from. If a continuation recomputed `currentHour` from its own
+    // wall-clock and a run straddled an hour boundary, the follow-up page would
+    // query `.eq('digestHour', H+1)` with a cursor positioned in the digestHour-H
+    // range and `.paginate()` would throw an invalid-cursor error — silently
+    // dropping every admin past the first page (the per-day dedup key means no
+    // same-day retry). Freezing the window also keeps `today` (dedup key + email
+    // sourceId) stable across a midnight-UTC crossing.
+    windowStartMs: v.optional(v.number()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const currentHour = new Date().getUTCHours();
-    const cutoff = Date.now() - DAY_MS;
-    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD UTC
+    // Freeze the run's time window on the first invocation; continuations carry
+    // it forward untouched. All three derived values come from this single
+    // epoch so the paginated query filter never changes mid-run.
+    const windowStartMs = args.windowStartMs ?? Date.now();
+    const currentHour = new Date(windowStartMs).getUTCHours();
+    const cutoff = windowStartMs - DAY_MS;
+    const today = new Date(windowStartMs).toISOString().slice(0, 10); // YYYY-MM-DD UTC
 
     const result = await ctx.db
       .query('adminNotificationPreferences')
@@ -89,7 +106,10 @@ export const sendDailyDigests = internalMutation({
       }),
     );
 
-    // Self-schedule continuation if batch was full
+    // Self-schedule continuation if batch was full. Carry the frozen window
+    // forward so the continuation resumes the cursor against the same
+    // digestHour index range it was created in — even if the run crosses an
+    // hour or day boundary.
     if (!result.isDone) {
       await ctx.scheduler.runAfter(
         0,
@@ -99,6 +119,7 @@ export const sendDailyDigests = internalMutation({
             numItems: DIGEST_BATCH_SIZE,
             cursor: result.continueCursor,
           },
+          windowStartMs,
         },
       );
     }

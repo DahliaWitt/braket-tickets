@@ -46,6 +46,9 @@ import {
 
 type Tab = 'login' | 'register';
 
+/** Single source for the invalid-email format message across all three login-page forms. */
+export const INVALID_EMAIL_MESSAGE = 'Please enter a valid email address';
+
 interface LoginRouteState {
   readonly signupRequested: boolean;
   readonly registeredMessageRequested: boolean;
@@ -88,6 +91,7 @@ export class LoginComponent {
   readonly message = signal<string | null>(null);
 
   readonly socialProviders = CONNECTED_PROVIDERS;
+  readonly invalidEmailMessage = INVALID_EMAIL_MESSAGE;
   readonly loginSubmitted = signal(false);
   readonly registerSubmitted = signal(false);
   readonly resetSubmitted = signal(false);
@@ -532,7 +536,7 @@ export class LoginComponent {
 
     this.resetSubmitted.set(true);
     if (this.resetForm().invalid()) {
-      this.error.set('Please enter a valid email address.');
+      this.error.set(INVALID_EMAIL_MESSAGE);
       return;
     }
 
@@ -588,7 +592,7 @@ export class LoginComponent {
 
     try {
       await this.passwordService.requestVerificationEmail(email);
-      this.message.set('Verification email sent! Check your inbox.');
+      this.message.set('verification email sent. check your inbox.');
       this.startResendCooldown();
     } catch (err: unknown) {
       const error =

@@ -15,7 +15,7 @@ export const badgeVariants = cva(
         warning: 'border-transparent bg-warning text-warning-foreground',
         info: 'border-transparent bg-info text-info-foreground',
         outline:
-          'text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground',
+          'text-foreground [a&]:hover:bg-foreground/10 [a&]:hover:text-foreground',
       },
       zAppearance: {
         solid: '',
@@ -57,7 +57,7 @@ export const badgeVariants = cva(
       {
         zType: 'secondary',
         zAppearance: 'soft',
-        class: 'border border-secondary/20 bg-secondary/10 text-secondary',
+        class: 'border border-secondary/20 bg-secondary/10 text-secondary-text',
       },
     ],
     defaultVariants: {

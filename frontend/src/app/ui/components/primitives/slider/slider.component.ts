@@ -33,7 +33,7 @@ import {
 } from './slider.variants';
 
 import { mergeClasses } from '@ui/utils/merge-classes';
-import { clamp, convertValueToPercentage, roundToStep } from '@ui/utils/number';
+import { clamp, convertValueToPercentage, roundToStep, roundToStepClamped } from '@ui/utils/number';
 import { ControlValueAccessorBase } from '@ui/utils/control-value-accessor.base';
 
 @Component({
@@ -299,8 +299,7 @@ export class ZardSliderComponent extends ControlValueAccessorBase<number> {
     const max = this.zMax();
     const step = this.zStep();
 
-    const clampedValue = clamp(value, [min, max]);
-    const roundedValue = roundToStep(clampedValue, min, step);
+    const roundedValue = roundToStepClamped(value, min, max, step);
 
     if (roundedValue === this.lastEmittedValue()) {
       return;
@@ -317,6 +316,12 @@ export class ZardSliderComponent extends ControlValueAccessorBase<number> {
 
     const percent = this.percentValue();
     const rawValue = this.zMin() + ((this.zMax() - this.zMin()) * percent) / 100;
+    // Intentionally NOT clamped: roundToStep always lands on a step-grid point,
+    // so `currentValue ± zStep` stays grid-aligned. At an off-grid zMax the
+    // rounded value sits one grid point past the ceiling (e.g. 10 → 12), which
+    // makes ArrowLeft snap to the nearest grid value below the max (12-4 = 8),
+    // matching native <input type=range> step-down. The Math.max/Math.min bounds
+    // below already keep every emitted value within [zMin, zMax].
     const currentValue = roundToStep(rawValue, this.zMin(), this.zStep());
 
     let newValue: number;
@@ -354,7 +359,7 @@ export class ZardSliderComponent extends ControlValueAccessorBase<number> {
   private updateSliderFromPercentage(percentage: number): void {
     const clamped = clamp(percentage, [0, 1]);
     const rawValue = this.zMin() + (this.zMax() - this.zMin()) * clamped;
-    const value = roundToStep(rawValue, this.zMin(), this.zStep());
+    const value = roundToStepClamped(rawValue, this.zMin(), this.zMax(), this.zStep());
 
     if (value !== this.lastEmittedValue()) {
       this.percentValue.set(convertValueToPercentage(value, this.zMin(), this.zMax()));
@@ -383,7 +388,7 @@ export class ZardSliderComponent extends ControlValueAccessorBase<number> {
     const raw = this.zValue();
     const value = raw != null && raw >= min && raw <= max ? raw : def;
 
-    const initial = roundToStep(value, min, step);
+    const initial = roundToStepClamped(value, min, max, step);
     this.percentValue.set(convertValueToPercentage(initial, min, max));
     this.lastEmittedValue.set(initial);
     this.thumbOffset.set(0);

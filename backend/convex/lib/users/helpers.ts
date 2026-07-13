@@ -5,6 +5,37 @@ import {getUserCommunities} from '../../lib/authz';
 import {batchGetUsers} from '../../lib/batch_utils';
 import {throwAppError} from '../errors';
 
+type UsersDb = QueryCtx['db'] | MutationCtx['db'];
+
+/**
+ * Loads the given community members and returns those whose (lowercased) email
+ * starts with `lowerTerm`, in ascending email order.
+ *
+ * Directory email search matches the term WITHIN a community's bounded
+ * membership set instead of scanning the global `users` `email` index and then
+ * scope-filtering the results. Scanning the global index first is unsafe: a
+ * short or common prefix can match an unbounded number of unrelated platform
+ * users, and any cap on that scan silently drops an in-scope member whenever
+ * enough of those users share the prefix and sort ahead of them (the member
+ * lands beyond the scanned window). Matching within the membership set cannot
+ * drop a member for that reason, and reads stay bounded by community size (the
+ * legitimate working set) rather than by total platform users.
+ *
+ * `memberUserIds` MUST already be scoped to the caller's community (e.g. the
+ * organizer's directory rows or approved applications). This helper filters by
+ * email only; it does not itself enforce membership.
+ */
+export async function filterMembersByEmailPrefix(
+  db: UsersDb,
+  memberUserIds: Iterable<Id<'users'>>,
+  lowerTerm: string,
+): Promise<Doc<'users'>[]> {
+  const memberUsers = await batchGetUsers({db}, memberUserIds);
+  return [...memberUsers.values()]
+    .filter((user) => user.email?.toLowerCase().startsWith(lowerTerm) ?? false)
+    .sort((a, b) => (a.email ?? '').localeCompare(b.email ?? ''));
+}
+
 /**
  * Represents a user row in community admin/scanner lists.
  * Single source of truth for community membership display rows.

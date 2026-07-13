@@ -131,7 +131,14 @@ function requiresScopedEventView(
  * Whether a user (or anonymous visitor) can view an event.
  *
  * This is the single source of truth for event read access:
- * - Draft, cancelled, orphaned, and draft-community events require scoped event:view.
+ * - Draft, cancelled, orphaned, and draft-community events are readable only by
+ *   organizers who can modify the event (event:manage/edit) — community admins,
+ *   and root admins via the global fallback. Members and door-staff scanners are
+ *   intentionally excluded, mirroring the lifecycle gates in canViewEventRoster
+ *   and canScanEvent, which deny scanners on non-published events. Gating on a
+ *   modify permission (rather than a dedicated "view" permission) keeps this
+ *   robust: members/scanners never hold manage/edit, so no stale grant can
+ *   reopen access to unpublished/cancelled events.
  * - Published public/public_viewable events in live communities are readable by everyone.
  * - Published private events in live communities require purchase eligibility.
  */
@@ -160,14 +167,34 @@ export async function canViewEvent(
   }
 
   if (userId !== null && requiresScopedEventView(event, organizer)) {
-    return canWithFallback(
-      ctx,
-      authzUserId(userId),
-      'event:view',
-      organizerScope(event.organizerId),
-    );
+    return canModifyEventForRestrictedView(ctx, userId, event);
   }
   return false;
+}
+
+/**
+ * Whether a user has organizer-level rights to view an event that is not
+ * publicly viewable (draft, cancelled, orphaned, or in an unpublished
+ * community). Restricted to those who can modify the event — community admins
+ * and root admins (via the global fallback).
+ *
+ * Deliberately checks event:manage/edit rather than roster/scan: a door-staff
+ * scanner's read access ends when an event leaves published state (see
+ * canViewEventRoster / canScanEvent), so it must not see unpublished or
+ * cancelled events here either. Regular members hold neither manage nor edit
+ * and are therefore denied.
+ */
+async function canModifyEventForRestrictedView(
+  ctx: AccessCtx,
+  userId: Id<'users'>,
+  event: Doc<'events'>,
+): Promise<boolean> {
+  const uid = authzUserId(userId);
+  const scope = organizerScope(event.organizerId);
+  if (await canWithFallback(ctx, uid, 'event:manage', scope)) {
+    return true;
+  }
+  return canWithFallback(ctx, uid, 'event:edit', scope);
 }
 
 export async function filterViewableEvents(

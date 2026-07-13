@@ -224,7 +224,7 @@ Convex crons are part of the deployment — they cannot be individually restarte
 If you need to run a cron function manually, look up the export path that `backend/convex/crons.ts` references, then run that export through the backend package. For example, the hourly digest cron maps to:
 
 ```bash
-pnpm convex run --prod notification_digests:sendDailyDigests
+pnpm convex run --prod marketing/digests:sendDailyDigests
 ```
 
 ## Restore data from backup

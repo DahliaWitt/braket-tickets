@@ -2,7 +2,7 @@ import type {OverlayRef} from '@angular/cdk/overlay';
 import {isPlatformBrowser} from '@angular/common';
 import {Inject, PLATFORM_ID} from '@angular/core';
 
-import {filter, fromEvent, map, Subject, takeUntil} from 'rxjs';
+import {filter, map, Subject, takeUntil} from 'rxjs';
 
 import type {BraDialogComponent, BraDialogOptions} from './dialog.component';
 
@@ -45,14 +45,18 @@ export class BraDialogRef<T = unknown, R = unknown, U = unknown> {
         .subscribe(() => this.close());
     }
 
-    if (isPlatformBrowser(this.platformId)) {
-      fromEvent<KeyboardEvent>(document, 'keydown')
-        .pipe(
-          filter((event) => event.key === 'Escape'),
-          takeUntil(this.destroy$),
-        )
-        .subscribe(() => this.close());
-    }
+    // Subscribe to the overlay's own keydown stream instead of a raw document
+    // listener so CDK's OverlayKeyboardDispatcher only delivers Escape to the
+    // topmost overlay. This lets an inner overlay (e.g. an open z-select
+    // dropdown) or a stacked dialog handle Escape first, and closes only the
+    // topmost dialog. On the server the overlay ref is a no-op emitting EMPTY.
+    this.overlayRef
+      .keydownEvents()
+      .pipe(
+        filter((event) => event.key === 'Escape'),
+        takeUntil(this.destroy$),
+      )
+      .subscribe(() => this.close());
   }
 
   close(result?: R) {

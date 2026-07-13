@@ -131,11 +131,7 @@
                     </p>
                   }
                 </div>
-                <span
-                  class="flex-shrink-0 border border-primary px-4 py-1.5 font-mono text-2xs tracking-widest text-foreground uppercase transition-colors group-hover:bg-primary group-hover:text-primary-foreground"
-                >
-                  Apply
-                </span>
+                <span [class]="applyChipClass">Apply</span>
               </a>
             }
           }
@@ -315,7 +311,7 @@
               <a
                 [routerLink]="['/vetting', resubmit.routeParam]"
                 data-testid="dashboard-resubmit-cta"
-                class="inline-flex w-fit items-center border border-primary px-4 py-2 font-mono text-2xs tracking-widest text-foreground uppercase transition-colors hover:bg-primary hover:text-primary-foreground"
+                [class]="resubmitCtaClass"
               >
                 Revise answers
                 <span aria-hidden="true" class="ml-2">&rarr;</span>
@@ -509,11 +505,7 @@
                     </p>
                   }
                 </div>
-                <span
-                  class="flex-shrink-0 border border-primary px-3 py-1 font-mono text-2xs tracking-widest text-foreground uppercase transition-colors group-hover:bg-primary group-hover:text-primary-foreground"
-                >
-                  Apply
-                </span>
+                <span [class]="compactApplyChipClass">Apply</span>
               </a>
             }
           </div>
@@ -623,7 +615,7 @@
                         [routerLink]="['/events', event._id]"
                         [queryParams]="{buy: 'true'}"
                         data-testid="dashboard-get-tickets"
-                        class="inline-block border-2 border-primary px-6 py-2 font-mono text-2xs tracking-widest text-foreground uppercase transition-colors hover:bg-primary hover:text-primary-foreground"
+                        [class]="getTicketsCtaClass"
                         [attr.aria-label]="'Get tickets for ' + event.title"
                       >
                         Get Tickets &rarr;

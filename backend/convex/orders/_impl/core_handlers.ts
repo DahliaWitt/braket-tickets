@@ -34,7 +34,11 @@ import {
   repairPrimaryHeldInventoryCount,
 } from '../../lib/orders/inventory_reconciliation';
 import {releaseOrderState} from '../../lib/orders/release';
-import {getOrderForCaller, throwOrderError} from '../../lib/orders/access';
+import {
+  assertValidIdempotencyKey,
+  getOrderForCaller,
+  throwOrderError,
+} from '../../lib/orders/access';
 import {resolveStripeConnectInfo} from '../../lib/payments/refund_processing';
 import {
   calculateRefundedTicketCount,
@@ -61,7 +65,11 @@ type OpenForGuestArgs = OpenArgs & {
   termsAccepted: boolean;
 };
 type OpenResaleArgs = Omit<OpenArgs, 'quantity'>;
-type ClaimFreeTicketArgs = Omit<OpenArgs, 'totalAmount'>;
+type ClaimFreeTicketArgs = Omit<OpenArgs, 'totalAmount'> & {
+  // Optional for rollout backward-compat: old website clients loaded before
+  // this deploy call without the key. Absent behaves as a fresh claim.
+  idempotencyKey?: string;
+};
 type ClaimFreeTicketAsGuestArgs = ClaimFreeTicketArgs & {
   sessionToken: string;
   termsAccepted: boolean;
@@ -217,45 +225,87 @@ function toCheckoutStatus(order: {
   };
 }
 
-async function findCompletedFreeOrderForIdentity(
+/**
+ * Resolve a prior free-ticket claim that this exact idempotency key may replay.
+ *
+ * The key is minted per claim attempt on the frontend and reused verbatim
+ * across the Convex client's automatic mutation retries, so a match here is a
+ * genuine retry of an already-completed claim — replay it instead of issuing a
+ * second ticket. A deliberate new claim arrives with a fresh key, finds no
+ * match, and proceeds to create a new order (subject to `assertTicketLimit`).
+ *
+ * The key is absent for old website clients that were loaded before this
+ * version deployed (Convex ships the backend ahead of the frontend). Convex
+ * still executes each client mutation call exactly once, so a missing key is
+ * treated as a fresh claim: skip the replay lookup and fall through to a
+ * normal order create, which `assertTicketLimit` still bounds. A present key
+ * is validated and length-bounded before it is used for an index lookup or
+ * persisted, since these are public, attacker-reachable mutations.
+ *
+ * Scoped to the caller (userId / guestSessionId) as defense in depth; the key
+ * itself is globally unique, but scoping guarantees one owner can never replay
+ * another's order even in the astronomically unlikely event of a collision.
+ *
+ * A key that resolves to an order whose shape does not match the current claim
+ * (different event/tier/quantity, or not a completed free primary order) is a
+ * client contract violation — the same key was sent for a different claim.
+ * Reject it loudly rather than silently replaying the wrong order or issuing no
+ * ticket, which is the exact silent-drop failure this fix exists to prevent.
+ */
+async function resolveReplayableFreeClaim(
   ctx: MutationCtx,
   identity:
     | {type: 'user'; userId: Id<'users'>}
     | {type: 'guest'; guestSessionId: Id<'guest_sessions'>},
   args: ClaimFreeTicketArgs,
 ): Promise<Doc<'ticket_orders'> | null> {
-  const query =
-    identity.type === 'user'
-      ? ctx.db
-          .query('ticket_orders')
-          .withIndex(
-            'by_owner_user_event_state_kind_amountCents_tier_quantity',
-            (q) =>
-              q
-                .eq('userId', identity.userId)
-                .eq('eventId', args.eventId)
-                .eq('state', 'completed')
-                .eq('kind', 'primary')
-                .eq('amountCents', 0)
-                .eq('tier', args.tier)
-                .eq('quantity', args.quantity),
-          )
-      : ctx.db
-          .query('ticket_orders')
-          .withIndex(
-            'by_owner_guest_event_state_kind_amountCents_tier_quantity',
-            (q) =>
-              q
-                .eq('guestSessionId', identity.guestSessionId)
-                .eq('eventId', args.eventId)
-                .eq('state', 'completed')
-                .eq('kind', 'primary')
-                .eq('amountCents', 0)
-                .eq('tier', args.tier)
-                .eq('quantity', args.quantity),
-          );
+  // Old client (arg predates this deploy): behave as a fresh claim. Querying
+  // the index with an `undefined` key would match every keyless order, so the
+  // lookup must be skipped entirely, not run with an empty value.
+  if (args.idempotencyKey === undefined) {
+    return null;
+  }
+  assertValidIdempotencyKey(args.idempotencyKey);
 
-  return await query.first();
+  const existing =
+    identity.type === 'user'
+      ? await ctx.db
+          .query('ticket_orders')
+          .withIndex('by_owner_user_idempotencyKey', (q) =>
+            q
+              .eq('userId', identity.userId)
+              .eq('idempotencyKey', args.idempotencyKey),
+          )
+          .first()
+      : await ctx.db
+          .query('ticket_orders')
+          .withIndex('by_owner_guest_idempotencyKey', (q) =>
+            q
+              .eq('guestSessionId', identity.guestSessionId)
+              .eq('idempotencyKey', args.idempotencyKey),
+          )
+          .first();
+
+  if (!existing) {
+    return null;
+  }
+
+  const matchesClaim =
+    existing.state === 'completed' &&
+    existing.kind === 'primary' &&
+    existing.amountCents === 0 &&
+    existing.eventId === args.eventId &&
+    existing.tier === args.tier &&
+    existing.quantity === args.quantity;
+
+  if (!matchesClaim) {
+    throwOrderError(
+      'INVALID_STATE',
+      'This idempotency key was already used for a different claim',
+    );
+  }
+
+  return existing;
 }
 
 async function resolveOrderCallerForQuery(
@@ -384,13 +434,9 @@ export async function claimFreeTicketHandler(
     throwOrderError('FORBIDDEN', 'Authentication is required');
   }
 
-  const existingCompletedOrder = await findCompletedFreeOrderForIdentity(
-    ctx,
-    identity,
-    args,
-  );
-  if (existingCompletedOrder) {
-    return {success: true, orderId: existingCompletedOrder._id};
+  const existingClaim = await resolveReplayableFreeClaim(ctx, identity, args);
+  if (existingClaim) {
+    return {success: true, orderId: existingClaim._id};
   }
 
   await rateLimiter.limit(ctx, 'orderClaimFreeTicket', {
@@ -404,6 +450,7 @@ export async function claimFreeTicketHandler(
     quantity: args.quantity,
     tier: args.tier,
     amountCents: 0,
+    idempotencyKey: args.idempotencyKey,
   });
   await completePrimaryOrderState(ctx, {
     orderId: order._id,
@@ -421,13 +468,9 @@ export async function claimFreeTicketAsGuestHandler(
     throwOrderError('FORBIDDEN', 'Guest session required');
   }
 
-  const existingCompletedOrder = await findCompletedFreeOrderForIdentity(
-    ctx,
-    identity,
-    args,
-  );
-  if (existingCompletedOrder) {
-    return {success: true, orderId: existingCompletedOrder._id};
+  const existingClaim = await resolveReplayableFreeClaim(ctx, identity, args);
+  if (existingClaim) {
+    return {success: true, orderId: existingClaim._id};
   }
 
   if (args.termsAccepted !== true) {
@@ -450,6 +493,7 @@ export async function claimFreeTicketAsGuestHandler(
     amountCents: 0,
     tosAcceptedAt: Date.now(),
     tosVersion: LEGAL_TERMS_VERSION,
+    idempotencyKey: args.idempotencyKey,
   });
   await completePrimaryOrderState(ctx, {
     orderId: order._id,
