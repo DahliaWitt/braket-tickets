@@ -146,8 +146,8 @@ importers:
         specifier: ^6.16.0
         version: 6.17.2
       stripe:
-        specifier: ^22.2.1
-        version: 22.3.0(@types/node@22.19.7)
+        specifier: ^22.3.1
+        version: 22.3.1(@types/node@22.19.7)
     devDependencies:
       '@codecov/vite-plugin':
         specifier: ^2.0.1
@@ -270,8 +270,8 @@ importers:
         specifier: ^3.4.6
         version: 3.4.6
       '@stripe/stripe-js':
-        specifier: ^9.8.0
-        version: 9.8.0
+        specifier: ^9.9.0
+        version: 9.9.0
       '@tiptap/core':
         specifier: 3.27.2
         version: 3.27.2(@tiptap/pm@3.27.2)
@@ -4424,8 +4424,8 @@ packages:
   '@stripe/connect-js@3.4.6':
     resolution: {integrity: sha512-fuC/U/ONDBMKwTBxKAnEBQH+m0x+Tze62/bV1ZDLT7oRnsJgddEnRi7FzdwIxz9pmFZhOJpSaikLIBw9g/1o1w==}
 
-  '@stripe/stripe-js@9.8.0':
-    resolution: {integrity: sha512-DHJpol/98VKyojNSYmpkB5vOMnlf87hPe0wPxyaYTNiTMk5QjKMXDfSZLwGctYIXAgAWDFeRABc8lFAj0BELyw==}
+  '@stripe/stripe-js@9.9.0':
+    resolution: {integrity: sha512-Vwqe6Q5cU4i82tPyAv2BpaW/fQSNdOSO4/J8EeDLPp5/oIZiMmdB+Hgh863zFH+rtoxpuWGvD1L7QPh8k1Rdvw==}
     engines: {node: '>=12.16'}
 
   '@swc/helpers@0.5.21':
@@ -9531,8 +9531,8 @@ packages:
     resolution: {integrity: sha512-1tB5mhVo7U+ETBKNf92xT4hrQa3pm0MZ0PQvuDnWgAAGHDsfp4lPSpiS6psrSiet87wyGPh9ft6wmhOMQ0hDiw==}
     engines: {node: '>=14.16'}
 
-  stripe@22.3.0:
-    resolution: {integrity: sha512-ypO6xjVrMWs9SmIMeHr8naCx3dAQ0clxMdUTxn7Ejd7hmY9meBGfE+N4pVHkf9sUNebAHp6uJo6mV3GxDIc2cA==}
+  stripe@22.3.1:
+    resolution: {integrity: sha512-6XSLN0KK0IdfXqDHqMg6CDoO3eO62ye9dhzw0fZp55AUOzHR1YRJOqYHTsuCi4QJ4Ni/usEmXtq69c9ghKDmYw==}
     engines: {node: '>=18'}
     peerDependencies:
       '@types/node': '>=18'
@@ -15102,7 +15102,7 @@ snapshots:
 
   '@stripe/connect-js@3.4.6': {}
 
-  '@stripe/stripe-js@9.8.0': {}
+  '@stripe/stripe-js@9.9.0': {}
 
   '@swc/helpers@0.5.21':
     dependencies:
@@ -21104,7 +21104,7 @@ snapshots:
 
   strip-json-comments@5.0.3: {}
 
-  stripe@22.3.0(@types/node@22.19.7):
+  stripe@22.3.1(@types/node@22.19.7):
     optionalDependencies:
       '@types/node': 22.19.7
 
