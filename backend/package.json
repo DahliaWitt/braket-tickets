@@ -43,7 +43,7 @@
   "devDependencies": {
     "@codecov/vite-plugin": "^2.0.1",
     "@convex-dev/eslint-plugin": "^2.0.0",
-    "@edge-runtime/vm": "^3.2.0",
+    "@edge-runtime/vm": "^5.0.0",
     "@tiptap/core": "3.27.2",
     "@tiptap/extension-bold": "3.27.2",
     "@tiptap/extension-document": "3.27.2",
