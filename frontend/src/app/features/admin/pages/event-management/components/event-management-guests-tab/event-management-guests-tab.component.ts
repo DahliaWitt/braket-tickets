@@ -297,9 +297,11 @@ export class EventManagementGuestsTabComponent {
   private async performRemoveGuest(guestId: string): Promise<void> {
     try {
       await this.adminEventsService.removeGuest(guestId);
+      if (this.destroyRef.destroyed) return;
       toast.success('guest removed');
       this.dataChanged.emit();
     } catch (error) {
+      if (this.destroyRef.destroyed) return;
       logger.error('Failed to remove guest', error);
       toast.error('failed to remove guest');
     }
@@ -312,6 +314,7 @@ export class EventManagementGuestsTabComponent {
     // guests — but the backend still dedupes it against concurrent in-flight
     // sends, which surfaces here as 'skipped'.
     const outcome = await this.dispatchSendTicket(guestId, false);
+    if (this.destroyRef.destroyed) return;
     if (outcome === 'sent') {
       toast.success('ticket sent');
       this.dataChanged.emit();

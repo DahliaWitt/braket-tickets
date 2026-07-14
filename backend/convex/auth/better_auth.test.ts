@@ -133,8 +133,7 @@ describe('auth password reset callback', () => {
       to: 'reset@example.com',
     });
     const runActionPayload = runActionMock.mock.calls[0]?.[1] as
-      | {subject?: string; html?: string}
-      | undefined;
+      {subject?: string; html?: string} | undefined;
     expect(runActionPayload?.subject).toMatch(/reset/i);
     expect(runActionPayload?.html).toContain(
       'https://example.com/confirm/password-reset/token-123',
@@ -415,11 +414,14 @@ describe('buildFrontendCallbackUrl', () => {
     'javascript:alert(document.domain)',
     'data:text/html,<script>alert(1)</script>',
     'blob:https://app.example.com/1234-5678', // same-origin but non-http(s)
-  ])('rejects open-redirect payload %j and falls back to SITE_URL', (payload) => {
-    expect(buildFrontendCallbackUrl(payload, '/confirm/social-link')).toBe(
-      'https://app.example.com/confirm/social-link',
-    );
-  });
+  ])(
+    'rejects open-redirect payload %j and falls back to SITE_URL',
+    (payload) => {
+      expect(buildFrontendCallbackUrl(payload, '/confirm/social-link')).toBe(
+        'https://app.example.com/confirm/social-link',
+      );
+    },
+  );
 
   it('keeps percent-encoded separators on the same origin path', () => {
     // %2F%2F is not re-decoded into an authority by the URL parser, so it stays
@@ -469,7 +471,7 @@ describe('haveIBeenPwned plugin registration', () => {
     expect(hibp).toBeDefined();
   });
 
-  it('checks only HTTP-route paths, never mutation-context password flows', async () => {
+  it('checks only enabled HTTP routes, never server-only password flows', async () => {
     const {HIBP_CHECKED_PATHS} =
       await vi.importActual<typeof import('../lib/better_auth')>(
         '../lib/better_auth',
@@ -477,9 +479,9 @@ describe('haveIBeenPwned plugin registration', () => {
     const plugins = await buildPlugins();
     const hibp = plugins.find((p) => p.id === 'have-i-been-pwned');
 
-    // /change-password and /set-password run through Convex mutations,
-    // where outbound fetch is prohibited and the fail-closed check would
-    // break every password change.
+    // /change-password is disabled as an HTTP route and invoked by the V2
+    // action through auth.api.changePassword. /set-password runs in mutation
+    // context, where outbound fetch is prohibited.
     expect(hibp?.options?.paths).toEqual(HIBP_CHECKED_PATHS);
     expect(HIBP_CHECKED_PATHS).toEqual(['/sign-up/email', '/reset-password']);
     expect(hibp?.options?.paths).not.toContain('/change-password');
@@ -508,5 +510,62 @@ describe('haveIBeenPwned plugin registration', () => {
     process.env.AUTH_HIBP_DISABLED = 'true';
     const plugins = await buildPlugins();
     expect(plugins.some((p) => p.id === 'have-i-been-pwned')).toBe(false);
+  });
+});
+
+describe('password change route boundary', () => {
+  const originalEnv = {...process.env};
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.AUTH_BASE_URL = 'http://127.0.0.1:3210';
+    process.env.IS_TEST = 'true';
+  });
+
+  afterEach(() => {
+    process.env = {...originalEnv};
+  });
+
+  it('disables the Better Auth password-change HTTP route', async () => {
+    const {createAuth} =
+      await vi.importActual<typeof import('../lib/better_auth')>(
+        '../lib/better_auth',
+      );
+    const config = createAuth({runAction: runActionMock} as never) as {
+      disabledPaths?: string[];
+    };
+
+    expect(config.disabledPaths).toEqual(['/change-password']);
+  });
+
+  it('returns 404 for the disabled route without removing the server API', async () => {
+    const [{betterAuth: realBetterAuth}, {memoryAdapter}] = await Promise.all([
+      vi.importActual<typeof import('better-auth')>('better-auth'),
+      vi.importActual<typeof import('better-auth/adapters/memory')>(
+        'better-auth/adapters/memory',
+      ),
+    ]);
+    const auth = realBetterAuth({
+      baseURL: 'https://auth.example.com',
+      secret: 'better-auth-test-secret-at-least-32-characters',
+      database: memoryAdapter({}),
+      emailAndPassword: {enabled: true},
+      disabledPaths: ['/change-password'],
+    });
+
+    const response = await auth.handler(
+      new Request('https://auth.example.com/api/auth/change-password', {
+        method: 'POST',
+        headers: {'content-type': 'application/json'},
+        body: JSON.stringify({
+          currentPassword: 'old-password-123',
+          newPassword: 'new-password-456',
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(404);
+    expect(await response.text()).toBe('Not Found');
+    expect(auth.api.changePassword).toBeTypeOf('function');
   });
 });

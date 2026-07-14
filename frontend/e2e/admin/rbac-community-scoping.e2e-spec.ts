@@ -8,8 +8,10 @@ import {
   signInUser,
   waitForAuthenticatedDashboard,
 } from '../test-utils/auth-helpers';
+import {getHarnessWhenVisible} from '../helpers/harness-helpers';
 import {BraToastHarness} from '../../src/app/ui/components/composites/toast/toast.component.harness';
 import {CommunityAdminSettingsHarness} from '../../src/app/features/admin/pages/community-admin-settings/community-admin-settings.component.harness';
+import {CommunityAdminHarness} from '../../src/app/features/admin/pages/community-admin/community-admin.harness';
 import {api} from '@convex/_generated/api';
 import type {Id} from '@convex/_generated/dataModel';
 
@@ -145,6 +147,41 @@ test.describe('RBAC Community Admin Scoping', () => {
 
       // OrgB's event must NOT be visible
       await expect(eventsTable.filter({hasText: eventBTitle})).toHaveCount(0);
+    });
+
+    test('mobile section selector reflects the current non-pending route', async ({
+      page,
+      convexHelper,
+    }) => {
+      const suffix = uniqueName('mobile-events')
+        .replace(/\s+/g, '-')
+        .toLowerCase();
+      const adminId = await getRootAdminId(convexHelper);
+      const orgId = await convexHelper.mutation(
+        api.testing.communities.seedOrganizer,
+        {name: uniqueName('Mobile Events Org')},
+      );
+      const user = await seedCommunityAdminUser(convexHelper, {
+        suffix,
+        orgId,
+        grantedBy: adminId,
+      });
+
+      await page.setViewportSize({width: 390, height: 844});
+      await signInUser(page, user.email, user.password);
+      await page.goto(`/community-admin/events?community=${orgId}`);
+
+      const communityAdmin = await getHarnessWhenVisible(
+        page,
+        CommunityAdminHarness,
+        15000,
+        'attached',
+      );
+      await expect
+        .poll(() => communityAdmin.getSelectedMobileSectionValue(), {
+          timeout: 15000,
+        })
+        .toBe('events');
     });
 
     test('community admin with two communities can switch between them', async ({

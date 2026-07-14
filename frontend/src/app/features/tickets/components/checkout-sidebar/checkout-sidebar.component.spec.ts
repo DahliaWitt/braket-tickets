@@ -305,6 +305,34 @@ describe('CheckoutSidebarComponent — logarithmic supporter slider', () => {
         '/events/event123?buy=true&source=sidebar#details',
       );
     });
+
+    it('keeps a genuinely free ticket available when organizer payment setup is incomplete', async () => {
+      fixture.componentRef.setInput(
+        'event',
+        stubEvent({price: 0, organizerPaymentReady: false}),
+      );
+      fixture.componentRef.setInput('selectedTier', 'regular');
+      fixture.componentRef.setInput('totalAmount', 0);
+      await fixture.whenStable();
+
+      expect(await harness.isPaymentSetupIncomplete()).toBe(false);
+      expect(await harness.isFreeTicketVisible()).toBe(true);
+      expect(await harness.isFreeTicketEnabled()).toBe(true);
+    });
+
+    it('still blocks paid checkout when organizer payment setup is incomplete', async () => {
+      fixture.componentRef.setInput(
+        'event',
+        stubEvent({price: 4000, organizerPaymentReady: false}),
+      );
+      fixture.componentRef.setInput('selectedTier', 'regular');
+      fixture.componentRef.setInput('totalAmount', 4000);
+      await fixture.whenStable();
+
+      expect(await harness.isPaymentSetupIncomplete()).toBe(true);
+      expect(await harness.isStripePaymentVisible()).toBe(false);
+      expect(await harness.isFreeTicketVisible()).toBe(false);
+    });
   });
 
   describe('max ticket notice copy', () => {
@@ -423,7 +451,10 @@ describe('CheckoutSidebarComponent — logarithmic supporter slider', () => {
       fixture.componentRef.setInput('selectedTier', 'notaflof');
       fixture.componentRef.setInput('customAmount', 0);
       fixture.componentRef.setInput('totalAmount', 0);
-      fixture.componentRef.setInput('slidingScaleError', 'Minimum amount is $5.00');
+      fixture.componentRef.setInput(
+        'slidingScaleError',
+        'Minimum amount is $5.00',
+      );
       fixture.detectChanges();
 
       expect(await harness.isFreeTicketVisible()).toBe(false);
@@ -554,6 +585,27 @@ describe('CheckoutSidebarComponent — logarithmic supporter slider', () => {
 
       fixture.componentRef.setInput('termsAccepted', true);
       fixture.detectChanges();
+
+      expect(await harness.isFreeTicketEnabled()).toBe(true);
+    });
+
+    it('gates a free guest claim on terms even when organizer payment setup is incomplete', async () => {
+      asGuestWithEmail();
+      fixture.componentRef.setInput(
+        'event',
+        stubEvent({price: 0, organizerPaymentReady: false}),
+      );
+      fixture.componentRef.setInput('totalAmount', 0);
+      fixture.componentRef.setInput('termsAccepted', false);
+      await fixture.whenStable();
+
+      expect(await harness.isPaymentSetupIncomplete()).toBe(false);
+      expect(await harness.isTermsCheckboxVisible()).toBe(true);
+      expect(await harness.isFreeTicketVisible()).toBe(true);
+      expect(await harness.isFreeTicketEnabled()).toBe(false);
+
+      fixture.componentRef.setInput('termsAccepted', true);
+      await fixture.whenStable();
 
       expect(await harness.isFreeTicketEnabled()).toBe(true);
     });

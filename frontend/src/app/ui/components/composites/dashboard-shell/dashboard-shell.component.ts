@@ -77,11 +77,12 @@ export interface DashboardTab {
             [id]="mobileSectionSelectId"
             data-testid="mobile-section-select"
             class="native-select h-12 w-full rounded border border-border bg-card px-3 py-2 font-mono text-xs tracking-widest text-foreground uppercase shadow-none transition-colors hover:border-ring focus-visible:border-ring"
-            [value]="activeTabId()"
             (change)="onMobileSectionChange($event)"
           >
             @for (tab of tabs(); track tab.id) {
-              <option [value]="tab.id">{{ tab.label }}</option>
+              <option [value]="tab.id" [selected]="tab.id === activeTabId()">
+                {{ tab.label }}
+              </option>
             }
           </select>
         </nav>

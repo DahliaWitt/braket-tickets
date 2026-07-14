@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import {expect, test} from './audit-fixtures';
 import {writeJsonReport, writeHtmlReport} from './audit-report';
 import {AUDIT_ROUTES} from './audit-routes';
-import {runChecks} from './audit-checks';
+import {runChecks, waitForFiniteAnimationsToSettle} from './audit-checks';
 import type {AuditRouteResult} from './audit-types';
 import {api} from '@convex/_generated/api';
 import type {Id} from '@convex/_generated/dataModel';
@@ -64,6 +64,55 @@ function makeSkippedResult(
   };
 }
 
+test.describe('Audit harness', () => {
+  test('settles finite opacity animations without waiting on infinite animations', async ({
+    page,
+  }) => {
+    await page.setContent(`
+      <style>
+        @keyframes audit-finite-fade {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        @keyframes audit-infinite-pulse {
+          from { transform: scale(1); }
+          to { transform: scale(1.01); }
+        }
+
+        #finite {
+          animation: audit-finite-fade 240ms linear forwards;
+        }
+
+        #infinite {
+          animation: audit-infinite-pulse 20ms linear infinite alternate;
+        }
+      </style>
+      <div id="finite">Finite</div>
+      <div id="infinite">Infinite</div>
+    `);
+
+    const settled = await waitForFiniteAnimationsToSettle(
+      page,
+      'animation-settle regression test',
+      1_000,
+    );
+
+    expect(settled).toBe(true);
+    expect(
+      await page.locator('#finite').evaluate((element) => ({
+        opacity: getComputedStyle(element).opacity,
+        playState: element.getAnimations()[0]?.playState,
+      })),
+    ).toEqual({opacity: '1', playState: 'finished'});
+    expect(
+      await page
+        .locator('#infinite')
+        .evaluate((element) => element.getAnimations()[0]?.playState),
+    ).toBe('running');
+  });
+});
+
 /** Absolute path to the shared backend seed assets directory. */
 const SEED_ASSETS_DIR = path.resolve(
   __dirname,
@@ -107,14 +156,14 @@ async function uploadSeedImage(
 
 /**
  * Seed the full demo dataset and return IDs keyed for route resolution.
- * Creates 6 users, calls seedDemoData once, then grants the global admin
+ * Creates 7 users, calls seedDemoData once, then grants the global admin
  * community_admin access so adminPage can reach community admin routes.
  */
 async function seedAllDemoData(
   convexHelper: ConvexHelper,
 ): Promise<Record<string, unknown>> {
-  // Create 6 demo users
-  const [cooperId, kimId, nomiId, barneyId, charlieId, tobiasId] =
+  // Create 7 demo users
+  const [cooperId, kimId, nomiId, barneyId, charlieId, tobiasId, cherylId] =
     await Promise.all([
       convexHelper.mutation(api.testing.users.createUserDirectly, {
         email: `audit-cooper-${Date.now()}@example.com`,
@@ -139,6 +188,10 @@ async function seedAllDemoData(
       convexHelper.mutation(api.testing.users.createUserDirectly, {
         email: `audit-tobias-${Date.now()}@example.com`,
         name: 'Tobias',
+      }),
+      convexHelper.mutation(api.testing.users.createUserDirectly, {
+        email: `audit-cheryl-${Date.now()}@example.com`,
+        name: 'Cheryl',
       }),
     ]);
 
@@ -174,6 +227,7 @@ async function seedAllDemoData(
     barneyId: barneyId as Id<'users'>,
     charlieId: charlieId as Id<'users'>,
     tobiasId: tobiasId as Id<'users'>,
+    cherylId: cherylId as Id<'users'>,
     posterIds: {
       concreteWax,
       lowFrequency,

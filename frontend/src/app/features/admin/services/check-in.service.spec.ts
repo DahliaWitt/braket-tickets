@@ -19,6 +19,7 @@ import {
 } from '../../../../testing/mock-types';
 import {MockWebHaptics} from '@/testing/mock-web-haptics';
 import {WEB_HAPTICS_CTOR} from './web-haptics.token';
+import {type Id} from '@convex/_generated/dataModel';
 
 interface MockAudioElement {
   src: string;
@@ -202,5 +203,40 @@ describe('CheckInService', () => {
     await service.enableSoundFromGesture();
 
     expect(service.showEnableSoundFallback()).toBe(false);
+  });
+
+  it('reverts a native ticket check-in through the existing Convex mutation', async () => {
+    const ticketId = 'ticket-123' as Id<'tickets'>;
+    convexClientMock.mutation.mockResolvedValue({
+      success: true,
+      message: 'Check-in reverted successfully',
+    });
+
+    const result = await service.revertCheckIn(ticketId);
+
+    expect(convexClientMock.mutation).toHaveBeenCalledWith(
+      api.events.check_in.revertCheckIn,
+      {ticketId},
+    );
+    expect(result).toEqual({
+      success: true,
+      message: 'Check-in reverted successfully',
+    });
+    expect(service.isProcessing()).toBe(false);
+  });
+
+  it('returns a visible failure result and unlocks after a revert error', async () => {
+    const ticketId = 'ticket-123' as Id<'tickets'>;
+    convexClientMock.mutation.mockRejectedValue(
+      new Error('network unavailable'),
+    );
+
+    const result = await service.revertCheckIn(ticketId);
+
+    expect(result).toEqual({
+      success: false,
+      message: 'network unavailable',
+    });
+    expect(service.isProcessing()).toBe(false);
   });
 });

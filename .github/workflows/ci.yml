@@ -290,10 +290,9 @@ jobs:
   e2e:
     name: E2E Tests
     # GitHub-hosted (4 vCPU / 16 GB). Each job is isolated, which removes the
-    # self-hosted contention that saturated the shared 16-core host (a single
-    # E2E job draws ~9 cores: Convex backend ~3, browsers ~5, node ~1) and the
-    # shared-browser-volume GC race. Slower per run than the idle self-hosted
-    # box, but 20 can run in parallel with zero cross-job interference.
+    # self-hosted contention and shared-browser-volume GC race. Keep browser
+    # concurrency below the runner's full CPU count because the local Convex
+    # backend also needs CPU throughout the suite.
     runs-on: ubuntu-latest
     # Isolated on 4 vCPU is slower than the self-hosted box; give headroom over
     # the old 15-min ceiling. Tune down once real durations are known.
@@ -358,11 +357,10 @@ jobs:
           # e2e.ts will replace these with per-run ephemeral ports.
           CONVEX_URL: http://127.0.0.1:3210
           CONVEX_SITE_URL: http://127.0.0.1:3211
-          # 4 vCPU runner. PW_WORKERS=4 oversubscribes slightly (workers + the
-          # ~3-core Convex backend) but the job is isolated, so it only slows
-          # this run — no cross-job 503 contention. Monitor and drop to 3/2 if
-          # runs approach the timeout.
-          PW_WORKERS: '4'
+          # Two browsers leave CPU for the local Convex backend. Running four
+          # workers on a four-vCPU runner caused backend timeouts, 503s, and
+          # session-initialization retries under load.
+          PW_WORKERS: '2'
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
           SMTP_USER: ${{ secrets.SMTP_USER }}

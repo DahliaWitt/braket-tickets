@@ -524,9 +524,11 @@ function getAuthConfig() {
  *
  * Both are served through Better Auth HTTP routes registered as Convex
  * httpActions (backend/convex/http.ts), so the plugin's outbound fetch to
- * the HIBP range API is permitted. Mutation-context password flows
- * (/change-password, /set-password) must never appear here: Convex
- * mutations cannot fetch, and the plugin fails closed.
+ * the HIBP range API is permitted. The /change-password HTTP route is
+ * disabled below; the V2 action invokes auth.api.changePassword directly and
+ * intentionally keeps the existing no-HIBP policy. The mutation-context
+ * /set-password flow must never appear here because Convex mutations cannot
+ * fetch and the plugin fails closed.
  */
 export const HIBP_CHECKED_PATHS = [
   '/sign-up/email',
@@ -546,6 +548,11 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
     baseURL: AUTH_BASE_URL,
     database: authComponent.adapter(ctx),
     trustedOrigins,
+    // Password changes must pass through auth.public.changePasswordV2 so the
+    // committed per-user rate limit cannot roll back on an invalid password.
+    // disabledPaths affects only Better Auth's HTTP router; the V2 action can
+    // still invoke auth.api.changePassword directly on the server.
+    disabledPaths: ['/change-password'],
     advanced: {
       useSecureCookies: !isLocalDevelopment,
     },
@@ -660,13 +667,14 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
             haveIBeenPwned({
               // Only paths served through Better Auth HTTP routes (Convex
               // httpActions, where outbound fetch is permitted). Deliberately
-              // drops /change-password from the plugin defaults: it runs
-              // through a Convex mutation (auth.public.changePassword calls
-              // auth.api.* in mutation context), where fetch is prohibited —
-              // including it would hard-fail every password change because
-              // the plugin fails closed. /set-password (also mutation
-              // context) was never a plugin default; it stays out of
-              // HIBP_CHECKED_PATHS for the same reason.
+              // drops /change-password from the plugin defaults: breach
+              // screening is intentionally scoped to sign-up and password
+              // reset, not authenticated password changes. The legacy
+              // HTTP route is disabled, and the rollout-only legacy mutation
+              // rejects stale clients before reaching Better Auth. V2 runs as
+              // an action but preserves the same screening policy.
+              // /set-password (also mutation context) was never a plugin
+              // default and remains out.
               paths: [...HIBP_CHECKED_PATHS],
               customPasswordCompromisedMessage: COMPROMISED_PASSWORD_MESSAGE,
             }),

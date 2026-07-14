@@ -168,7 +168,7 @@ type OutgoingTrustLink = TrustLink & {direction: 'outgoing'};
                       [attr.data-org-name]="link.trustedOrganizerName"
                     >
                       <td
-                        class="p-5 font-display tracking-wide"
+                        class="p-5 font-display tracking-wide text-foreground"
                         data-testid="outgoing-name"
                       >
                         {{ link.trustedOrganizerName }}
@@ -210,7 +210,7 @@ type OutgoingTrustLink = TrustLink & {direction: 'outgoing'};
               >
                 <div class="flex items-center justify-between">
                   <span
-                    class="font-display tracking-wide"
+                    class="font-display tracking-wide text-foreground"
                     data-testid="outgoing-name"
                     >{{ link.trustedOrganizerName }}</span
                   >
@@ -277,7 +277,7 @@ type OutgoingTrustLink = TrustLink & {direction: 'outgoing'};
                 [attr.data-org-name]="link.trustingOrganizerName"
               >
                 <div
-                  class="font-display tracking-wide"
+                  class="font-display tracking-wide text-foreground"
                   data-testid="incoming-name"
                 >
                   {{ link.trustingOrganizerName }}

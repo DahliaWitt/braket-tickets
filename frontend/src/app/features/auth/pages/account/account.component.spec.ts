@@ -917,6 +917,7 @@ describe('AccountComponent', () => {
 
       expect(await harness.hasLoadingSkeleton()).toBe(false);
       expect(await harness.hasProfileNameInput()).toBe(true);
+      expect(await harness.profileNameLabelUsesForegroundToken()).toBe(true);
     });
   });
 

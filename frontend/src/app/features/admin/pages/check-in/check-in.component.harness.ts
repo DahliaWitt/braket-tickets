@@ -29,6 +29,9 @@ export class CheckInComponentHarness extends ComponentHarness {
   protected getCheckInButtons = this.locatorForAll(
     '[data-testid="buyer-entry"] button[aria-label^="Check in"]',
   );
+  protected getTicketRevertButtons = this.locatorForAll(
+    '[data-testid="ticket-revert-button"]',
+  );
   protected getManualFeedback = this.locatorForOptional(
     '[data-testid="manual-check-in-feedback"]',
   );
@@ -194,6 +197,35 @@ export class CheckInComponentHarness extends ComponentHarness {
         async (button) => (await button.getAttribute('aria-label')) ?? '',
       ),
     );
+  }
+
+  async getTicketRevertButtonLabels(): Promise<string[]> {
+    const buttons = await this.getTicketRevertButtons();
+    return Promise.all(
+      buttons.map(
+        async (button) => (await button.getAttribute('aria-label')) ?? '',
+      ),
+    );
+  }
+
+  async clickTicketRevertOnItem(index: number): Promise<void> {
+    const buttons = await this.getTicketRevertButtons();
+    if (!buttons[index]) {
+      throw new Error(`Ticket revert button ${index} not found`);
+    }
+    await buttons[index].click();
+  }
+
+  async getTicketRevertButtonText(index: number): Promise<string | null> {
+    const buttons = await this.getTicketRevertButtons();
+    return buttons[index] ? (await buttons[index].text()).trim() : null;
+  }
+
+  async isTicketRevertButtonDisabled(index: number): Promise<boolean> {
+    const buttons = await this.getTicketRevertButtons();
+    return buttons[index]
+      ? ((await buttons[index].getProperty<boolean>('disabled')) ?? false)
+      : true;
   }
 
   async getManualFeedbackText(): Promise<string | null> {

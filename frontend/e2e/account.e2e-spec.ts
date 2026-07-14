@@ -1,4 +1,9 @@
-import {test, expect, createEnvironment} from './helpers/test-setup';
+import {
+  test,
+  expect,
+  createEnvironment,
+  uniqueName,
+} from './helpers/test-setup';
 import {
   signInUser,
   waitForAuthenticatedDashboard,
@@ -23,7 +28,10 @@ test.describe('Account Management', () => {
       // Four sequential async operations (seed + login + form + re-login) need ample budget
       test.setTimeout(120_000);
       // 1. Seed a test user
-      const testEmail = `account-pwd-change-${Date.now()}@example.com`;
+      const accountSuffix = uniqueName('account-pwd-change')
+        .replace(/\s+/g, '-')
+        .toLowerCase();
+      const testEmail = `${accountSuffix}@example.com`;
       const originalPassword = 'OriginalPassword123!';
       const newPassword = 'NewSecurePassword456!';
 

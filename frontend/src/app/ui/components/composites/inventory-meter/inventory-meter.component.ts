@@ -65,6 +65,7 @@ import {
       <div
         class="inventory-meter-track relative h-2.5 w-full overflow-hidden border border-border bg-muted/60"
         role="progressbar"
+        [attr.aria-label]="label()"
         [attr.aria-valuemin]="0"
         [attr.aria-valuemax]="totalTickets()"
         [attr.aria-valuenow]="occupiedCount()"

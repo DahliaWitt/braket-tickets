@@ -45,10 +45,13 @@
   } @else {
     <div class="grid grid-cols-1 gap-8 md:grid-cols-2">
       <!-- Profile Section -->
-      <z-card class="fade-in border-border bg-card/80" [zTitle]="profileTitle">
+      <z-card
+        class="animate-in slide-in-from-bottom-2 border-border bg-card/80 duration-400"
+        [zTitle]="profileTitle"
+      >
         <ng-template #profileTitle>
           <span
-            class="flex items-center gap-2 font-display text-sm tracking-widest uppercase"
+            class="flex items-center gap-2 font-display text-sm tracking-widest text-foreground uppercase"
           >
             <z-icon zType="user" zSize="sm" class="text-secondary" /> PROFILE
           </span>
@@ -61,7 +64,7 @@
           <div class="space-y-1">
             <label
               for="profile-name"
-              class="font-mono text-2xs tracking-widest text-muted-foreground uppercase"
+              class="font-mono text-2xs tracking-widest text-foreground uppercase"
               >Display Name</label
             >
             <input
@@ -131,10 +134,13 @@
       </z-card>
 
       <!-- Identity / Email Section -->
-      <z-card class="fade-in border-border bg-card/80" [zTitle]="identityTitle">
+      <z-card
+        class="animate-in slide-in-from-bottom-2 border-border bg-card/80 duration-400"
+        [zTitle]="identityTitle"
+      >
         <ng-template #identityTitle>
           <span
-            class="flex items-center gap-2 font-display text-sm tracking-widest uppercase"
+            class="flex items-center gap-2 font-display text-sm tracking-widest text-foreground uppercase"
           >
             <z-icon zType="mail" zSize="sm" class="text-secondary" /> EMAIL
             ADDRESS
@@ -294,10 +300,13 @@
       </z-card>
 
       <!-- Social Accounts -->
-      <z-card class="fade-in border-border bg-card/80" [zTitle]="socialTitle">
+      <z-card
+        class="animate-in slide-in-from-bottom-2 border-border bg-card/80 duration-400"
+        [zTitle]="socialTitle"
+      >
         <ng-template #socialTitle>
           <span
-            class="flex items-center gap-2 font-display text-sm tracking-widest uppercase"
+            class="flex items-center gap-2 font-display text-sm tracking-widest text-foreground uppercase"
           >
             <z-icon zType="link" zSize="sm" class="text-secondary" /> SOCIAL
             ACCOUNTS
@@ -444,12 +453,12 @@
 
       <!-- Security / Password Section -->
       <z-card
-        class="fade-in-delay-1 border-border bg-card/80"
+        class="animate-in slide-in-from-bottom-2 border-border bg-card/80 delay-100 duration-400"
         [zTitle]="credsTitle"
       >
         <ng-template #credsTitle>
           <span
-            class="flex items-center gap-2 font-display text-sm tracking-widest uppercase"
+            class="flex items-center gap-2 font-display text-sm tracking-widest text-foreground uppercase"
           >
             <z-icon zType="key" zSize="sm" class="text-secondary" /> PASSWORD &
             SECURITY
@@ -871,14 +880,14 @@
 
       <!-- Email Preferences -->
       <z-card
-        class="fade-in border-border bg-card/80 md:col-span-2"
+        class="animate-in slide-in-from-bottom-2 border-border bg-card/80 duration-400 md:col-span-2"
         [zTitle]="emailPrefTitle"
         data-testid="email-preferences-card"
         id="email-preferences"
       >
         <ng-template #emailPrefTitle>
           <span
-            class="flex items-center gap-2 font-display text-sm tracking-widest uppercase"
+            class="flex items-center gap-2 font-display text-sm tracking-widest text-foreground uppercase"
           >
             <z-icon zType="mail" zSize="sm" class="text-secondary" /> EMAIL
             PREFERENCES

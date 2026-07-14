@@ -575,6 +575,15 @@ export class CommunityAdminSettingsHarness extends ComponentHarness {
     return (await btn.getAttribute('disabled')) !== null;
   }
 
+  async saveNotificationsUsesHighContrastTokens(): Promise<boolean> {
+    const btn = await this._saveNotificationsBtn();
+    return (
+      (await btn.hasClass('bg-foreground')) &&
+      (await btn.hasClass('text-background')) &&
+      (await btn.hasClass('dark:bg-foreground'))
+    );
+  }
+
   // ─── Aliases for test compatibility ───────────────────
   async typeInProfileName(value: string): Promise<void> {
     return this.setProfileName(value);

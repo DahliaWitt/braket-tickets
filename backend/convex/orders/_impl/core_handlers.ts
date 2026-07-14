@@ -49,9 +49,7 @@ import {ORDER_RELEASE_GRACE_MS} from '../../lib/constants';
 import {LEGAL_TERMS_VERSION} from '@shared/constants';
 
 type CheckoutFailureStage =
-  | 'account_setup'
-  | 'checkout_session'
-  | 'payment_intent';
+  'account_setup' | 'checkout_session' | 'payment_intent';
 
 type OpenArgs = {
   eventId: Id<'events'>;
@@ -205,6 +203,20 @@ function toOpenOrderResult(order: {
     expiresAt: order.expiresAt,
     state: order.state,
   };
+}
+
+function getGuestTermsEvidence(termsAccepted: boolean): {
+  tosAcceptedAt: number;
+  tosVersion: string;
+} {
+  if (termsAccepted !== true) {
+    throwOrderError(
+      'TERMS_NOT_ACCEPTED',
+      'You must accept the terms of service to continue',
+    );
+  }
+
+  return {tosAcceptedAt: Date.now(), tosVersion: LEGAL_TERMS_VERSION};
 }
 
 function toCheckoutStatus(order: {
@@ -376,12 +388,7 @@ export async function openForGuestHandler(
     throwOrderError('FORBIDDEN', 'Guest session required');
   }
 
-  if (args.termsAccepted !== true) {
-    throwOrderError(
-      'TERMS_NOT_ACCEPTED',
-      'You must accept the terms of service to continue',
-    );
-  }
+  const termsEvidence = getGuestTermsEvidence(args.termsAccepted);
 
   await rateLimiter.limit(ctx, 'orderOpenForGuest', {
     key: `${identity.guestOwnerKey}:${args.eventId}`,
@@ -394,8 +401,7 @@ export async function openForGuestHandler(
     quantity: args.quantity,
     tier: args.tier,
     amountCents: args.totalAmount,
-    tosAcceptedAt: Date.now(),
-    tosVersion: LEGAL_TERMS_VERSION,
+    ...termsEvidence,
   });
 
   return toOpenOrderResult(order);
@@ -468,16 +474,12 @@ export async function claimFreeTicketAsGuestHandler(
     throwOrderError('FORBIDDEN', 'Guest session required');
   }
 
+  // Reject refusal even if the idempotency key can replay an existing order.
+  const termsEvidence = getGuestTermsEvidence(args.termsAccepted);
+
   const existingClaim = await resolveReplayableFreeClaim(ctx, identity, args);
   if (existingClaim) {
     return {success: true, orderId: existingClaim._id};
-  }
-
-  if (args.termsAccepted !== true) {
-    throwOrderError(
-      'TERMS_NOT_ACCEPTED',
-      'You must accept the terms of service to continue',
-    );
   }
 
   await rateLimiter.limit(ctx, 'orderClaimFreeTicketForGuest', {
@@ -491,8 +493,7 @@ export async function claimFreeTicketAsGuestHandler(
     quantity: args.quantity,
     tier: args.tier,
     amountCents: 0,
-    tosAcceptedAt: Date.now(),
-    tosVersion: LEGAL_TERMS_VERSION,
+    ...termsEvidence,
     idempotencyKey: args.idempotencyKey,
   });
   await completePrimaryOrderState(ctx, {

@@ -93,7 +93,13 @@ function formatTimestampFull(ms: number): string {
       </div>
 
       <!-- Table -->
-      <div class="overflow-x-auto rounded-lg border border-border/60">
+      <div
+        class="overflow-x-auto rounded-lg border border-border/60"
+        role="region"
+        aria-label="Event attendee roster"
+        tabindex="0"
+        data-testid="roster-scroll-region"
+      >
         <table
           class="w-full font-sans text-sm"
           aria-label="Event attendee roster"
@@ -189,7 +195,7 @@ function formatTimestampFull(ms: number): string {
                   }
                   <td class="px-4 py-3">
                     <span
-                      class="font-mono text-xs tracking-wider text-primary/80 uppercase"
+                      class="font-mono text-xs tracking-wider text-primary uppercase"
                     >
                       {{ row.tierName }}
                     </span>

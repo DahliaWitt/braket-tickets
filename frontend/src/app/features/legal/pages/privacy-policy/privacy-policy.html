@@ -1,5 +1,5 @@
 <app-content-layout>
-  <div class="mx-auto max-w-4xl py-8 font-sans">
+  <div class="mx-auto w-full max-w-4xl min-w-0 py-8 font-sans">
     <h1
       class="mb-6 font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl lg:text-4xl"
     >
@@ -151,7 +151,13 @@
           </li>
         </ul>
 
-        <div class="mt-6 overflow-x-auto">
+        <div
+          class="mt-6 w-full max-w-full min-w-0 overflow-x-auto"
+          data-testid="privacy-notice-table-region"
+          role="region"
+          aria-label="California privacy notice details"
+          tabindex="0"
+        >
           <p class="mb-3 text-sm font-semibold text-foreground">
             CCPA/CPRA-Style Notice at Collection
           </p>

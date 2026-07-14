@@ -100,16 +100,9 @@
           </tr>
         }
       } @else {
-        @for (
-          member of filteredMembers();
-          track member.user._id;
-          let i = $index
-        ) {
+        @for (member of filteredMembers(); track member.user._id) {
           <tr
-            [class]="
-              'transition-smooth group hover:bg-muted/30 ' +
-              (i % 2 === 0 ? 'fade-in-delay-1' : 'fade-in-delay-2')
-            "
+            class="transition-smooth group hover:bg-muted/30"
             role="row"
             data-testid="member-row"
           >
@@ -139,7 +132,9 @@
                     ID: {{ member.user._id }}
                   </div>
                   @if (member.isCommunityAdmin) {
-                    <bra-status-badge status="primary" class="mt-1"
+                    <bra-status-badge
+                      status="primary"
+                      class="mt-1 text-foreground"
                       >community admin</bra-status-badge
                     >
                   }
@@ -296,12 +291,9 @@
       </div>
     }
   } @else {
-    @for (member of filteredMembers(); track member.user._id; let i = $index) {
+    @for (member of filteredMembers(); track member.user._id) {
       <z-card
-        [class]="
-          'transition-smooth border-border bg-card/80 ' +
-          (i % 2 === 0 ? 'fade-in-delay-1' : 'fade-in-delay-2')
-        "
+        class="transition-smooth border-border bg-card/80"
         [zTitle]="memberHeader"
         role="article"
       >
@@ -323,7 +315,9 @@
                   {{ member.user['email'] || 'No email' }}
                 </div>
                 @if (member.isCommunityAdmin) {
-                  <bra-status-badge status="primary" class="mt-1"
+                  <bra-status-badge
+                    status="primary"
+                    class="mt-1 text-foreground"
                     >community admin</bra-status-badge
                   >
                 }

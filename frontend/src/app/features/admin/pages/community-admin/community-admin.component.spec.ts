@@ -469,6 +469,23 @@ describe('CommunityAdminComponent', () => {
       expect(fixture.componentInstance.activeTab()).toBe('history');
     });
 
+    it('keeps the mobile section selector aligned with live route params', async () => {
+      const routeParamMap$ = new BehaviorSubject(
+        convertToParamMap({tab: 'events'}),
+      );
+      const {fixture, harness} = await setup({
+        tab: 'pending',
+        routeParamMap$,
+      });
+
+      expect(await harness.getSelectedMobileSectionValue()).toBe('events');
+
+      routeParamMap$.next(convertToParamMap({tab: 'settings'}));
+      await fixture.whenStable();
+
+      expect(await harness.getSelectedMobileSectionValue()).toBe('settings');
+    });
+
     it('sets activeTab to "members" when tab input is "members"', async () => {
       const {fixture} = await setup({tab: 'members'});
       expect(fixture.componentInstance.activeTab()).toBe('members');
@@ -815,6 +832,20 @@ describe('CommunityAdminComponent', () => {
       expect(await harness.hasMagicLinksInfo()).toBe(true);
       const text = await harness.getMagicLinksInfoText();
       expect(text).toContain('A shortcut past the application process');
+    });
+
+    it('uses level-two headings for mobile magic-link cards', async () => {
+      const link = makeMagicLink({
+        _id: 'link-heading' as Id<'magic_links'>,
+        label: 'Heading Check',
+      });
+      const controller = createMagicLinksQueryController([link]);
+      const {harness} = await setup({
+        tab: 'magic-links',
+        magicLinksController: controller,
+      });
+
+      expect(await harness.getMagicLinkMobileHeadingTags()).toEqual(['H2']);
     });
 
     it('scopes magic link queries to the selected community', async () => {

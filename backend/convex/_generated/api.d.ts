@@ -33,6 +33,16 @@ export declare const api: {
         },
         null
       >;
+      changePasswordV2: FunctionReference<
+        "action",
+        "public",
+        {
+          currentPassword: string;
+          newPassword: string;
+          revokeOtherSessions?: boolean;
+        },
+        null
+      >;
       completeSocialSignupOnboarding: FunctionReference<
         "mutation",
         "public",
@@ -3626,6 +3636,14 @@ export declare const api: {
  */
 export declare const internal: {
   auth: {
+    public: {
+      applyChangePasswordRateLimit: FunctionReference<
+        "mutation",
+        "internal",
+        { userId: Id<"users"> },
+        null
+      >;
+    };
     sync: {
       backfillAuthUserLinks: FunctionReference<
         "mutation",

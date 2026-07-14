@@ -25,7 +25,8 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   maxFailures: 0, // Run all tests to see flakiness patterns
   retries: process.env.CI ? 2 : 0,
-  // CI: PW_WORKERS is always set (currently 5). Local: use half logical CPUs.
+  // CI sets PW_WORKERS explicitly to leave CPU for the local Convex backend.
+  // Local runs use half the available logical CPUs.
   workers: process.env.PW_WORKERS
     ? parseInt(process.env.PW_WORKERS, 10)
     : Math.max(1, Math.floor(os.cpus().length / 2)),

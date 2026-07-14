@@ -23,30 +23,6 @@ function formatTimestamp(ms: number): string {
 @Component({
   selector: 'app-check-in-activity-feed',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styles: [
-    `
-      @keyframes slideInFromTop {
-        from {
-          opacity: 0;
-          transform: translateY(-12px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      }
-
-      .feed-entry-enter {
-        animation: slideInFromTop 200ms ease-out forwards;
-      }
-
-      @media (prefers-reduced-motion: reduce) {
-        .feed-entry-enter {
-          animation: none;
-        }
-      }
-    `,
-  ],
   template: `
     <div
       class="relative"
@@ -74,13 +50,13 @@ function formatTimestamp(ms: number): string {
         <div class="space-y-3 border-l border-border/40 pl-4">
           @for (entry of entries(); track entry.ticketId) {
             <div
-              class="feed-entry-enter flex items-baseline gap-3"
+              class="animate-in slide-in-from-top-3 flex items-baseline gap-3 duration-200 motion-reduce:animate-none"
               data-testid="feed-entry"
               [attr.data-ticket-id]="entry.ticketId"
             >
               <!-- Space Mono timestamp in burnt amber (accent token) -->
               <span
-                class="shrink-0 font-mono text-xs leading-tight text-accent tabular-nums"
+                class="shrink-0 font-mono text-xs leading-tight text-accent-text tabular-nums"
                 data-testid="feed-entry-timestamp"
                 aria-label="Checked in at {{
                   formatTimestamp(entry.checkedInAt)
@@ -97,7 +73,7 @@ function formatTimestamp(ms: number): string {
 
               <!-- Tier in muted plum -->
               <span
-                class="shrink-0 font-mono text-2xs leading-tight tracking-wider text-primary/60 uppercase"
+                class="shrink-0 font-mono text-2xs leading-tight tracking-wider text-primary uppercase"
                 data-testid="feed-entry-tier"
                 >{{ entry.tierName }}</span
               >
