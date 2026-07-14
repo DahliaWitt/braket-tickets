@@ -81,7 +81,7 @@
     "ifttt-lint": "^0.11.1",
     "jscpd": "^4.0.8",
     "knip": "^6.23.0",
-    "prettier": "^3.9.4",
+    "prettier": "^3.9.5",
     "prettier-plugin-tailwindcss": "^0.8.0",
     "tree-kill": "^1.2.2",
     "ts-morph": "^28.0.0",
