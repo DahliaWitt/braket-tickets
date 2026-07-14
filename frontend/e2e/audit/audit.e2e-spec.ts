@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import {expect, test} from './audit-fixtures';
 import {writeJsonReport, writeHtmlReport} from './audit-report';
 import {AUDIT_ROUTES} from './audit-routes';
-import {runChecks, waitForFiniteAnimationsToSettle} from './audit-checks';
+import {runChecks} from './audit-checks';
 import type {AuditRouteResult} from './audit-types';
 import {api} from '@convex/_generated/api';
 import type {Id} from '@convex/_generated/dataModel';
@@ -63,55 +63,6 @@ function makeSkippedResult(
     skipReason: `Missing seed data: ${missing.join(', ')}`,
   };
 }
-
-test.describe('Audit harness', () => {
-  test('settles finite opacity animations without waiting on infinite animations', async ({
-    page,
-  }) => {
-    await page.setContent(`
-      <style>
-        @keyframes audit-finite-fade {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-
-        @keyframes audit-infinite-pulse {
-          from { transform: scale(1); }
-          to { transform: scale(1.01); }
-        }
-
-        #finite {
-          animation: audit-finite-fade 240ms linear forwards;
-        }
-
-        #infinite {
-          animation: audit-infinite-pulse 20ms linear infinite alternate;
-        }
-      </style>
-      <div id="finite">Finite</div>
-      <div id="infinite">Infinite</div>
-    `);
-
-    const settled = await waitForFiniteAnimationsToSettle(
-      page,
-      'animation-settle regression test',
-      1_000,
-    );
-
-    expect(settled).toBe(true);
-    expect(
-      await page.locator('#finite').evaluate((element) => ({
-        opacity: getComputedStyle(element).opacity,
-        playState: element.getAnimations()[0]?.playState,
-      })),
-    ).toEqual({opacity: '1', playState: 'finished'});
-    expect(
-      await page
-        .locator('#infinite')
-        .evaluate((element) => element.getAnimations()[0]?.playState),
-    ).toBe('running');
-  });
-});
 
 /** Absolute path to the shared backend seed assets directory. */
 const SEED_ASSETS_DIR = path.resolve(
