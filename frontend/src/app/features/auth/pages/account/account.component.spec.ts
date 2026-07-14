@@ -14,16 +14,7 @@ import {vi, describe, it, expect, beforeEach} from 'vitest';
 import {type ExternalAuth} from '@/features/auth/models/external-auth.model';
 import {api} from '@convex/_generated/api';
 import {functionReferenceMatches} from '@/testing/convex-reference-matchers';
-
-function createDeferred<T>() {
-  let resolve!: (value: T | PromiseLike<T>) => void;
-  let reject!: (reason?: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return {promise, resolve, reject};
-}
+import {createDeferred} from '@/testing/deferred';
 
 /**
  * Helper to assert a field has a specific validation error.

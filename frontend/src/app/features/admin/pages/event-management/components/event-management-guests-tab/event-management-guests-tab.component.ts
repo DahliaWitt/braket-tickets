@@ -301,8 +301,8 @@ export class EventManagementGuestsTabComponent {
       toast.success('guest removed');
       this.dataChanged.emit();
     } catch (error) {
-      if (this.destroyRef.destroyed) return;
       logger.error('Failed to remove guest', error);
+      if (this.destroyRef.destroyed) return;
       toast.error('failed to remove guest');
     }
   }

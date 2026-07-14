@@ -363,7 +363,13 @@ export class CheckInComponent implements OnInit {
 
   /** Ask for confirmation before undoing a native ticket check-in. */
   confirmTicketCheckInRevert(ticket: Ticket): void {
-    if (this.isProcessing() || !this.isTicketCheckedIn(ticket)) return;
+    if (
+      this.isProcessing() ||
+      this.revertingTicketId() ||
+      !this.isTicketCheckedIn(ticket)
+    ) {
+      return;
+    }
 
     const attendee = this.ticketAttendeeName(ticket);
     this.alertDialog.confirm({

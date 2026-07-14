@@ -28,6 +28,7 @@ import {
 import {functionReferenceMatches} from '@/testing/convex-reference-matchers';
 import {api} from '@convex/_generated/api';
 import {toast} from 'ngx-sonner';
+import {createDeferred} from '@/testing/deferred';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -129,16 +130,6 @@ function makeMagicLink(
     redemptionCount: 0,
     ...overrides,
   };
-}
-
-function createDeferred<T>() {
-  let resolve!: (value: T | PromiseLike<T>) => void;
-  let reject!: (reason?: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return {promise, resolve, reject};
 }
 
 function createActivatedRouteMock(

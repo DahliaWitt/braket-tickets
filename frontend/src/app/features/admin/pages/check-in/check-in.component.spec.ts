@@ -20,6 +20,7 @@ import {MockWebHaptics} from '@/testing/mock-web-haptics';
 import {WEB_HAPTICS_CTOR} from '../../services/web-haptics.token';
 import {QR_SCANNER_CTOR} from '../../components/check-in-scanner/qr-scanner.token';
 import {BraAlertDialogService} from '@ui/components/composites/alert-dialog/alert-dialog.service';
+import {createDeferred} from '@/testing/deferred';
 
 type Ticket = FunctionReturnType<typeof api.tickets.public.listByEvent>[0];
 type Guest = FunctionReturnType<typeof api.events.guests.listByEvent>[0];
@@ -32,16 +33,6 @@ type RevertCheckInResult = FunctionReturnType<
   typeof api.events.check_in.revertCheckIn
 >;
 type ConfirmDialogConfig = Parameters<BraAlertDialogService['confirm']>[0];
-
-function createDeferred<T>() {
-  let resolve!: (value: T | PromiseLike<T>) => void;
-  let reject!: (reason?: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return {promise, resolve, reject};
-}
 
 class MockQrScanner {
   start = vi.fn().mockResolvedValue(undefined);
@@ -572,6 +563,35 @@ describe('CheckInComponent', () => {
     expect(await harness.getTicketRevertButtonLabels()).toEqual([
       'Undo check-in for ticket row 1, id 111111, for Alice',
     ]);
+  });
+
+  it('uses the active revert signal to disable only its Undo button and block another confirmation', async () => {
+    const ticket = {
+      _id: 'ticket-used',
+      user: {name: 'Alice', email: 'alice@test.com'},
+      tier: 'regular',
+      status: 'used',
+      checkedInAt: new Date('2026-05-01T21:30:00Z').getTime(),
+    } as unknown as Ticket;
+    fixture.componentInstance.checkInModel.update((model) => ({
+      ...model,
+      eventId: 'event-1',
+    }));
+    await fixture.whenStable();
+
+    seedTickets('event-1', [ticket]);
+    fixture.componentInstance.isProcessing.set(false);
+    fixture.componentInstance.revertingTicketId.set(ticket._id);
+    await fixture.whenStable();
+
+    expect(await harness.isTicketRevertButtonDisabled(0)).toBe(true);
+
+    fixture.componentInstance.revertingTicketId.set('another-ticket');
+    await fixture.whenStable();
+
+    expect(await harness.isTicketRevertButtonDisabled(0)).toBe(false);
+    fixture.componentInstance.confirmTicketCheckInRevert(ticket);
+    expect(alertDialogMock.confirm).not.toHaveBeenCalled();
   });
 
   it('requires confirmation, shows progress, and restores a reverted ticket to an actionable state', async () => {

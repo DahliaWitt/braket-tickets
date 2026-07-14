@@ -89,19 +89,18 @@ async function checkHeadingHierarchy(page: Page): Promise<AuditFinding[]> {
 }
 
 /**
- * Tiered touch target check based on WCAG 2.2 SC 2.5.8 (AA).
+ * Touch target check based on WCAG 2.2 SC 2.5.8 (AA).
  *
- * Thresholds per element type:
- *   - Primary CTA (submit, purchase buttons): 36px — critical user paths
- *   - All other interactive elements: 24px — WCAG 2.2 AA minimum
+ * The WCAG threshold is 24px for every interactive element. Primary CTAs also
+ * receive separate, non-critical 36px usability guidance.
  *
  * WCAG 2.5.8 exceptions implemented:
- *   - Inline text links (inside <p>, <li>, <td>, <span>) — fully exempt
+ *   - Links genuinely embedded in adjacent prose — fully exempt
  *   - Native browser controls (unstyled <select>, native checkboxes) — exempt
  *   - Visually hidden / sr-only elements — exempt
  *   - Spacing exception: undersized target OK if 24px circle doesn't overlap neighbors
  */
-async function checkTouchTargets(page: Page): Promise<AuditFinding[]> {
+export async function checkTouchTargets(page: Page): Promise<AuditFinding[]> {
   return page.evaluate(
     (): Array<{
       check: string;
@@ -164,14 +163,62 @@ async function checkTouchTargets(page: Page): Promise<AuditFinding[]> {
           continue;
         }
 
-        // WCAG 2.5.8 "Inline" exception: links within prose are exempt
+        // WCAG 2.5.8 "Inline" exception: links genuinely embedded in prose are
+        // exempt. A generic container alone (for example <span> or <td>) is not
+        // enough; require adjacent prose at the same inline formatting level.
         if (el.tagName === 'A') {
-          const parent = el.parentElement;
+          const proseContainerTags = new Set([
+            'P',
+            'LI',
+            'BLOCKQUOTE',
+            'FIGCAPTION',
+            'LABEL',
+          ]);
+          const inlineFormattingTags = new Set([
+            'ABBR',
+            'B',
+            'CITE',
+            'CODE',
+            'EM',
+            'I',
+            'MARK',
+            'Q',
+            'S',
+            'SMALL',
+            'STRONG',
+            'U',
+          ]);
+          let inlineNode: Element = el;
+          let proseContainer = el.parentElement;
+          let hasOnlyInlineFormattingWrappers = true;
+
+          while (
+            proseContainer &&
+            !proseContainerTags.has(proseContainer.tagName)
+          ) {
+            if (!inlineFormattingTags.has(proseContainer.tagName)) {
+              hasOnlyInlineFormattingWrappers = false;
+              break;
+            }
+            inlineNode = proseContainer;
+            proseContainer = proseContainer.parentElement;
+          }
+
+          const hasAdjacentProse = [
+            inlineNode.previousSibling,
+            inlineNode.nextSibling,
+          ].some(
+            (node) =>
+              node?.nodeType === Node.TEXT_NODE &&
+              (node.textContent ?? '').trim().length > 0,
+          );
+
           if (
-            parent &&
-            /^(P|LI|TD|TH|SPAN|LABEL|BLOCKQUOTE|FIGCAPTION)$/.test(
-              parent.tagName,
-            )
+            style.display === 'inline' &&
+            hasOnlyInlineFormattingWrappers &&
+            proseContainer !== null &&
+            proseContainerTags.has(proseContainer.tagName) &&
+            hasAdjacentProse
           ) {
             continue;
           }
@@ -186,53 +233,61 @@ async function checkTouchTargets(page: Page): Promise<AuditFinding[]> {
           (el.tagName === 'BUTTON' ||
             htmlEl.getAttribute('role') === 'button') &&
           CTA_PATTERNS.test(text);
-        const threshold = isCta ? CTA_MIN : WCAG_AA_MIN;
-
         const shortDim = Math.min(rect.width, rect.height);
-        if (shortDim >= threshold) continue;
 
-        // WCAG 2.5.8 "Spacing" exception: target is OK if a 24px-diameter circle
-        // centered on it doesn't overlap any adjacent target's 24px circle
-        const cx = rect.left + rect.width / 2;
-        const cy = rect.top + rect.height / 2;
-        const radius = WCAG_AA_MIN / 2; // 12px
-        let hasOverlap = false;
-        for (let j = 0; j < interactiveRects.length; j++) {
-          if (j === i) continue;
-          const other = interactiveRects[j];
-          const ox = other.left + other.width / 2;
-          const oy = other.top + other.height / 2;
-          const dist = Math.sqrt((cx - ox) ** 2 + (cy - oy) ** 2);
-          if (dist < radius * 2) {
-            // circles overlap if distance < 24px
-            hasOverlap = true;
-            break;
+        if (shortDim < WCAG_AA_MIN) {
+          // WCAG 2.5.8 "Spacing" exception: target is OK if a 24px-diameter
+          // circle centered on it doesn't overlap any adjacent target's circle.
+          const cx = rect.left + rect.width / 2;
+          const cy = rect.top + rect.height / 2;
+          const radius = WCAG_AA_MIN / 2; // 12px
+          let hasOverlap = false;
+          for (let j = 0; j < interactiveRects.length; j++) {
+            if (j === i) continue;
+            const other = interactiveRects[j];
+            const ox = other.left + other.width / 2;
+            const oy = other.top + other.height / 2;
+            const dist = Math.sqrt((cx - ox) ** 2 + (cy - oy) ** 2);
+            if (dist < radius * 2) {
+              // circles overlap if distance < 24px
+              hasOverlap = true;
+              break;
+            }
+          }
+
+          if (hasOverlap) {
+            const severity = shortDim < 16 ? 'serious' : 'moderate';
+            const selector = htmlEl.id
+              ? `#${htmlEl.id}`
+              : `${htmlEl.tagName.toLowerCase()}${htmlEl.className ? '.' + htmlEl.className.split(' ')[0] : ''}`;
+
+            findings.push({
+              check: 'touch-target-size',
+              severity,
+              message: `Interactive element: ${Math.round(rect.width)}×${Math.round(rect.height)}px (minimum ${WCAG_AA_MIN}×${WCAG_AA_MIN}px).`,
+              element: selector,
+              suggestion:
+                shortDim < 16
+                  ? 'This element is very small and likely unusable on touch devices. Increase size or add padding.'
+                  : 'Increase the element size or add padding to meet the 24px WCAG 2.2 AA minimum.',
+            });
           }
         }
-        // If no overlap with neighbors, the spacing exception applies — skip
-        if (!hasOverlap && !isCta) continue;
 
-        const severity = isCta
-          ? 'critical'
-          : shortDim < 16
-            ? 'serious'
-            : 'moderate';
-        const selector = htmlEl.id
-          ? `#${htmlEl.id}`
-          : `${htmlEl.tagName.toLowerCase()}${htmlEl.className ? '.' + htmlEl.className.split(' ')[0] : ''}`;
-        const label = isCta ? 'CTA' : 'interactive element';
+        if (isCta && shortDim < CTA_MIN) {
+          const selector = htmlEl.id
+            ? `#${htmlEl.id}`
+            : `${htmlEl.tagName.toLowerCase()}${htmlEl.className ? '.' + htmlEl.className.split(' ')[0] : ''}`;
 
-        findings.push({
-          check: 'touch-target-size',
-          severity,
-          message: `${label}: ${Math.round(rect.width)}×${Math.round(rect.height)}px (minimum ${threshold}×${threshold}px).`,
-          element: selector,
-          suggestion: isCta
-            ? 'Primary action buttons should be at least 36×36px for usability on touch devices.'
-            : shortDim < 16
-              ? 'This element is very small and likely unusable on touch devices. Increase size or add padding.'
-              : 'Increase the element size or add padding to meet the 24px WCAG 2.2 AA minimum.',
-        });
+          findings.push({
+            check: 'cta-touch-target-guidance',
+            severity: 'minor',
+            message: `CTA: ${Math.round(rect.width)}×${Math.round(rect.height)}px (36×36px recommended).`,
+            element: selector,
+            suggestion:
+              'Consider making primary action buttons at least 36×36px for improved touch usability.',
+          });
+        }
       }
 
       return findings;
@@ -516,7 +571,9 @@ async function checkEmptyLinks(page: Page): Promise<AuditFinding[]> {
  * This catches layout bugs where fixed-width children push the page wider
  * than the screen, causing unwanted horizontal scroll on mobile.
  */
-async function checkViewportOverflow(page: Page): Promise<AuditFinding[]> {
+export async function checkViewportOverflow(
+  page: Page,
+): Promise<AuditFinding[]> {
   return page.evaluate(
     (): Array<{
       check: string;
@@ -533,6 +590,7 @@ async function checkViewportOverflow(page: Page): Promise<AuditFinding[]> {
         element?: string;
         suggestion?: string;
       }> = [];
+      const viewportHeight = document.documentElement.clientHeight;
       // Check semantic containers and common layout elements — not every single element
       const selectors =
         'section, nav, header, footer, main, aside, article, div, form, table, ul, ol';
@@ -549,15 +607,23 @@ async function checkViewportOverflow(page: Page): Promise<AuditFinding[]> {
         if (rect.width === 0 || rect.height === 0) continue;
         if (htmlEl.offsetParent === null && htmlEl.tagName !== 'BODY') continue;
 
-        // Skip elements positioned off-screen via CSS transforms (e.g., drawers/slide-overs
-        // using translate-x-full). These exist in the DOM but are visually hidden.
-        // Tailwind v4 uses the CSS `translate` property (not `transform`) for translate-x-*,
-        // so we must check both.
+        // Skip transformed drawers/slide-overs only when their final bounding box
+        // is fully outside the viewport. Visible transforms (scale, animation,
+        // positioning) still need overflow reporting.
         const hasOffscreenTransform = (el: Element) => {
           const s = window.getComputedStyle(el);
-          if (s.transform && s.transform !== 'none') return true;
-          if (s.translate && s.translate !== 'none') return true;
-          return false;
+          const hasTransform =
+            (s.transform && s.transform !== 'none') ||
+            (s.translate && s.translate !== 'none');
+          if (!hasTransform) return false;
+
+          const transformedRect = el.getBoundingClientRect();
+          return (
+            transformedRect.right <= 0 ||
+            transformedRect.left >= viewportWidth ||
+            transformedRect.bottom <= 0 ||
+            transformedRect.top >= viewportHeight
+          );
         };
         if (hasOffscreenTransform(htmlEl)) continue;
         let transformedAncestor = htmlEl.parentElement;
@@ -621,10 +687,13 @@ const CONSOLE_NOISE_PATTERNS = [
   /Angular is running in development mode/i,
   /favicon\.ico/i,
   /Lit is in dev mode/i,
-  /NG0\d{3}/, // Angular dev-mode warnings
+  // Observed in the audit environment for intentionally lazy event artwork.
+  // Keep this exact warning shape narrow so runtime errors such as NG0100,
+  // NG0200, and NG0201 remain visible.
+  /^NG0913: An image with src .+ is the Largest Contentful Paint \(LCP\) element but was given a "loading" value of "lazy", which can negatively impact application loading performance\. This warning can be addressed by changing the loading value of the LCP image to "eager", or by using the NgOptimizedImage directive's prioritization utilities\. For more information about addressing or disabling this warning, see https:\/\/v22\.angular\.dev\/errors\/NG0913\. Find more at https:\/\/v22\.angular\.dev\/errors\/NG0913$/,
 ];
 
-function isNoisyConsoleError(text: string): boolean {
+export function isNoisyConsoleError(text: string): boolean {
   return CONSOLE_NOISE_PATTERNS.some((pattern) => pattern.test(text));
 }
 

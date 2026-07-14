@@ -347,7 +347,10 @@
                               type="button"
                               data-testid="ticket-revert-button"
                               (click)="confirmTicketCheckInRevert(ticket)"
-                              [disabled]="isProcessing()"
+                              [disabled]="
+                                isProcessing() ||
+                                revertingTicketId() === ticket._id
+                              "
                               [attr.aria-label]="
                                 ticketRevertLabel(ticket, rowIndex)
                               "

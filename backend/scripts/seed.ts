@@ -39,6 +39,7 @@ import {
   createSeedEnvSession,
   resolveSeedEnvTarget,
   type DevSeedEnvVar,
+  type SeedCleanupTarget,
   type SeedEnvTarget,
 } from './seed-session.ts';
 import {
@@ -851,14 +852,14 @@ async function main(): Promise<void> {
   const seedExpiresAt = String(Date.now() + SEED_SESSION_TTL_MS);
 
   // Temporarily enable a token-gated seed session.
-  const cleanupTarget = {
-    ...envTarget,
-    dopplerProject: process.env['DOPPLER_PROJECT'] ?? 'braket-tickets',
-    dopplerConfig:
-      isDev && envTarget.kind === 'remote'
-        ? (process.env['DOPPLER_CONFIG'] ?? 'stg')
-        : undefined,
-  };
+  const cleanupTarget: SeedCleanupTarget =
+    envTarget.kind === 'remote'
+      ? {
+          ...envTarget,
+          dopplerProject: process.env['DOPPLER_PROJECT'] ?? 'braket-tickets',
+          dopplerConfig: process.env['DOPPLER_CONFIG'] ?? 'stg',
+        }
+      : envTarget;
   const seedEnvSession = createSeedEnvSession({
     target: cleanupTarget,
     setEnv: (name: DevSeedEnvVar, value: string) =>

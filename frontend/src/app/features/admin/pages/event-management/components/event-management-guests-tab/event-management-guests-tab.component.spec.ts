@@ -601,6 +601,27 @@ describe('EventManagementGuestsTabComponent', () => {
     expect(warnSpy.mock.calls.flat().join(' ')).not.toContain('NG0953');
   });
 
+  it('logs a removal failure after the tab is destroyed without emitting UI feedback', async () => {
+    let rejectRemoval: ((error: Error) => void) | undefined;
+    const removalError = new Error('boom');
+    adminEventsServiceMock.removeGuest.mockReturnValue(
+      new Promise<void>((_resolve, reject) => {
+        rejectRemoval = reject;
+      }),
+    );
+
+    fixture.componentInstance.removeGuest(mockGuest as unknown as Guest);
+    fixture.destroy();
+    rejectRemoval?.(removalError);
+    await lastConfirmRun;
+
+    expect(logger.error).toHaveBeenCalledWith(
+      'Failed to remove guest',
+      removalError,
+    );
+    expect(toast.error).not.toHaveBeenCalledWith('failed to remove guest');
+  });
+
   it('does not remove a guest when the confirmation is declined', async () => {
     alertDialogMock.confirm.mockImplementation(() => undefined);
     fixture.componentRef.setInput('guests', [mockGuest]);

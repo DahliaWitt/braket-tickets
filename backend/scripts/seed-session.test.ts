@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import {describe, expect, it, vi} from 'vitest';
+import {describe, expect, expectTypeOf, it, vi} from 'vitest';
 
 import {
   convexEnvTargetArgs,
@@ -9,6 +9,7 @@ import {
   manualEnvRemoveCommand,
   resolveSeedEnvTarget,
   type DevSeedEnvVar,
+  type SeedCleanupTarget,
 } from './seed-session';
 
 describe('convexEnvTargetArgs', () => {
@@ -142,6 +143,20 @@ describe('resolveSeedEnvTarget', () => {
 });
 
 describe('manualEnvRemoveCommand', () => {
+  it('allows Doppler configuration only on remote cleanup targets', () => {
+    expectTypeOf<{
+      kind: 'remote';
+      deployment: string;
+      dopplerConfig: string;
+    }>().toMatchTypeOf<SeedCleanupTarget>();
+    expectTypeOf<{
+      kind: 'local';
+      url: string;
+      adminKey: string;
+      dopplerConfig: string;
+    }>().not.toMatchTypeOf<SeedCleanupTarget>();
+  });
+
   it('prints target-aware remote cleanup commands through Doppler', () => {
     expect(
       manualEnvRemoveCommand('DEV_SEED_TOKEN', {

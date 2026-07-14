@@ -58,10 +58,13 @@ test.describe.serial('Check-In Flow', () => {
         // Wait for at least one event option to appear in the selector, then assert the seeded event is present
         await expect
           .poll(
-            () => eventSelectionHarness.getListItemsCount().catch(() => -1),
+            () =>
+              eventSelectionHarness
+                .getAvailableEventOptionsCount()
+                .catch(() => -1),
             {timeout: 10000},
           )
-          .toBeGreaterThanOrEqual(0);
+          .toBeGreaterThanOrEqual(1);
         await expect(
           adminPage.locator('select[aria-label="Select event"] option', {
             hasText: eventTitle,

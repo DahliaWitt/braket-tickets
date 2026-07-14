@@ -6,21 +6,28 @@ export const DEV_SEED_ENV_VARS = [
 
 export type DevSeedEnvVar = (typeof DEV_SEED_ENV_VARS)[number];
 
-export type SeedEnvTarget =
-  | {
-      kind: 'local';
-      url: string;
-      adminKey: string;
-    }
-  | {
-      kind: 'remote';
-      deployment: string;
-    };
-
-export type SeedCleanupTarget = SeedEnvTarget & {
-  dopplerConfig?: string;
-  dopplerProject?: string;
+type LocalSeedEnvTarget = {
+  kind: 'local';
+  url: string;
+  adminKey: string;
 };
+
+type RemoteSeedEnvTarget = {
+  kind: 'remote';
+  deployment: string;
+};
+
+export type SeedEnvTarget = LocalSeedEnvTarget | RemoteSeedEnvTarget;
+
+export type SeedCleanupTarget =
+  | (LocalSeedEnvTarget & {
+      dopplerConfig?: never;
+      dopplerProject?: never;
+    })
+  | (RemoteSeedEnvTarget & {
+      dopplerConfig?: string;
+      dopplerProject?: string;
+    });
 
 type SeedEnvSessionOptions = {
   target: SeedCleanupTarget;
@@ -62,7 +69,7 @@ export function manualEnvRemoveCommand(
   name: DevSeedEnvVar,
   target: SeedCleanupTarget,
 ): string {
-  if (target.dopplerConfig) {
+  if (target.kind === 'remote' && target.dopplerConfig) {
     return [
       'doppler',
       'run',

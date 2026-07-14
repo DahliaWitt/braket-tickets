@@ -10,6 +10,9 @@ export class CheckInComponentHarness extends ComponentHarness {
   protected getSelectedEventOption = this.locatorForOptional(
     'select[aria-label="Select event"] option:checked',
   );
+  protected getAvailableEventOptions = this.locatorForAll(
+    'select[aria-label="Select event"] option:not([value=""])',
+  );
   protected getTabs = this.locatorForAll('[role="tab"]');
   protected getSearchInput = this.locatorFor(
     'input[aria-label="Filter attendees"]',
@@ -111,6 +114,11 @@ export class CheckInComponentHarness extends ComponentHarness {
   async getSelectedEventValue(): Promise<string> {
     const select = await this.getEventSelector();
     return select.getProperty('value');
+  }
+
+  async getAvailableEventOptionsCount(): Promise<number> {
+    const options = await this.getAvailableEventOptions();
+    return options.length;
   }
 
   async hasEventEmptyState(): Promise<boolean> {

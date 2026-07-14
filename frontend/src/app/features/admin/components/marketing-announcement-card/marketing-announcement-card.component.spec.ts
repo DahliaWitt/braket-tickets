@@ -14,16 +14,7 @@ import {
 import {MarketingAnnouncementCardComponent} from './marketing-announcement-card.component';
 import {MarketingAnnouncementCardHarness} from './marketing-announcement-card.component.harness';
 import {functionReferenceMatches} from '@/testing/convex-reference-matchers';
-
-function createDeferred<T>() {
-  let resolve!: (value: T) => void;
-  let reject!: (reason?: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return {promise, resolve, reject};
-}
+import {createDeferred} from '@/testing/deferred';
 
 function toExpectedDateValue(timestamp: number): string {
   const date = new Date(timestamp);
