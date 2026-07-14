@@ -1,9 +1,5 @@
 {
   "mcpServers": {
-    "playwright": {
-      "command": "npx",
-      "args": ["-y", "@playwright/mcp", "server", "--browser", "chromium"]
-    },
     "cloudflare-docs": {
       "type": "http",
       "url": "https://docs.mcp.cloudflare.com/mcp"
@@ -20,10 +16,6 @@
       "type": "http",
       "url": "https://mcp.sentry.dev/mcp"
     },
-    "posthog": {
-      "type": "http",
-      "url": "https://mcp.posthog.com/mcp"
-    },
     "stripe": {
       "type": "http",
       "url": "https://mcp.stripe.com"
@@ -31,6 +23,22 @@
     "angular-cli": {
       "command": "npx",
       "args": ["-y", "@angular/cli", "mcp"]
+    },
+    "convex": {
+      "command": "npx",
+      "args": ["-y", "convex@latest", "mcp", "start"]
+    },
+    "better-auth": {
+      "command": "npx",
+      "args": ["-y", "@better-auth/mcp"]
+    },
+    "better-auth-docs": {
+      "type": "http",
+      "url": "https://mcp.better-auth.com/mcp"
+    },
+    "eslint": {
+      "command": "npx",
+      "args": ["-y", "@eslint/mcp"]
     },
     "agentlint": {
       "command": "npx",

@@ -49,10 +49,11 @@ frontend/*.pdf
 # Git worktrees (project-local)
 .worktrees/
 
-# AI tool configurations (local-only)
+# AI tool local state
 .agent/
 .augment/
-.codex/
+.codex/*
+!.codex/config.toml
 .cursor/
 .gemini/settings.json
 .jules/
@@ -117,8 +118,6 @@ convex-local-backend-x86_64-unknown-linux-gnu.zip
 
 # Automated testing stuff
 /qa-patrol-*
-dogfood-output
-.tmp-agent-browser/
 
 docs/plans/
 

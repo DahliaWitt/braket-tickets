@@ -5,7 +5,6 @@
   "agentSkillsSha": "231a67aa8a5b29cc2794cbc8298335a71aaa6d0e",
   "installedSkillNames": [
     "adapt",
-    "agent-browser",
     "angular-developer",
     "animate",
     "arrange",
@@ -37,7 +36,6 @@
     "critique",
     "delight",
     "distill",
-    "dogfood",
     "extract",
     "frontend-design",
     "go",
