@@ -63,7 +63,7 @@
     "@types/react": "^19.2.17",
     "@typescript-eslint/parser": "^8.62.1",
     "@vitest/coverage-v8": "^4.1.9",
-    "convex-test": "^0.0.54",
+    "convex-test": "^0.0.52",
     "eslint": "^10.6.0",
     "tsx": "^4.22.4",
     "typescript": "~6.0.3",
