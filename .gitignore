@@ -118,8 +118,6 @@ convex-local-backend-x86_64-unknown-linux-gnu.zip
 
 # Automated testing stuff
 /qa-patrol-*
-dogfood-output
-.tmp-agent-browser/
 
 docs/plans/
 
