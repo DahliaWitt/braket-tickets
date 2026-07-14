@@ -78,14 +78,14 @@
     "web-haptics": "^0.0.6"
   },
   "devDependencies": {
-    "@analogjs/vite-plugin-angular": "^2.6.2",
+    "@analogjs/vite-plugin-angular": "^2.6.3",
     "@angular-devkit/architect": "^0.2200.6",
     "@angular-devkit/build-angular": "^22.0.6",
     "@angular-devkit/core": "^22.0.6",
     "@angular/build": "^22.0.6",
     "@angular/cli": "^22.0.6",
     "@angular/compiler-cli": "^22.0.6",
-    "@anthropic-ai/sdk": "^0.109.1",
+    "@anthropic-ai/sdk": "^0.110.0",
     "@axe-core/playwright": "^4.12.1",
     "@codecov/vite-plugin": "^2.0.1",
     "@compodoc/compodoc": "^1.1.26",
