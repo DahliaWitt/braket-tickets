@@ -89,21 +89,23 @@ If the user reports a generic reset failure after clicking the link, inspect the
 
 ## Fix password creation or password-change failures
 
-The current password mutations are:
+The current password operations are:
 
 - `auth.public.setPassword`
-- `auth.public.changePassword`
+- `auth.public.changePasswordV2` (action)
 
-Use `setPassword` for an authenticated account that does not already have a password. Use `changePassword` for an authenticated account that must present the current password.
+Use `setPassword` for an authenticated account that does not already have a password. Use `changePasswordV2` for an authenticated account that must present the current password. The legacy `auth.public.changePassword` mutation remains addressable only for stale generated clients, but it fails closed with `Refresh this page before changing your password` and never verifies or changes a password. This avoids both Convex's one-second mutation budget and a transactional rate-limit rollback on wrong-current-password failures.
 
 Use this checklist:
 
-1. Confirm that the user is authenticated before you troubleshoot either mutation.
+1. Confirm that the user is authenticated before you troubleshoot either operation.
 2. Confirm that the client and server both treat mismatched new passwords as a local validation error.
 3. Check whether the UI mapped the backend failure to `Current password is incorrect`.
-4. Check Convex logs for repeated `changePassword` or `setPassword` failures if the UI keeps retrying.
+4. Check Convex logs for `changePasswordV2` or `setPassword` failures. The current UI makes one password-change action call and does not replay it after an ambiguous response, because the first call may already have changed the password.
 
-`changePassword` currently passes `revokeOtherSessions: true`, so session churn after a successful password change is expected.
+`changePasswordV2` charges the per-user rate limit in a committed internal mutation before calling Better Auth, so failed current-password attempts count toward the three-per-hour limit. It currently passes `revokeOtherSessions: true`, so session churn after a successful password change is expected.
+
+The direct Better Auth HTTP endpoint `/api/auth/change-password` is disabled and returns 404. This is intentional: browser clients must use `auth.public.changePasswordV2`, while that server action continues to call Better Auth's `auth.api.changePassword` method internally.
 
 ## Handle breached-password rejections or an HIBP outage
 
@@ -117,9 +119,10 @@ Scope:
 
 - Checked: `/sign-up/email` and `/reset-password` (Better Auth HTTP routes,
   which run as Convex httpActions where outbound fetch is permitted).
-- Not checked: `auth.public.changePassword` and `auth.public.setPassword`.
-  Both call Better Auth from Convex mutation context, where outbound fetch is
-  prohibited, so they are deliberately excluded from `HIBP_CHECKED_PATHS`.
+- Not checked: `auth.public.changePasswordV2`, its rollout-only legacy
+  `auth.public.changePassword` mutation, and `auth.public.setPassword`. These
+  operations are deliberately excluded from `HIBP_CHECKED_PATHS`; only the
+  Better Auth HTTP routes listed above invoke the external breach check.
 - Disabled entirely when `IS_TEST=true` (E2E and local test runs never call
   the external API) and when the `AUTH_HIBP_DISABLED` kill switch is set.
 - Local dev (`pnpm dev`) runs with `IS_TEST=false`

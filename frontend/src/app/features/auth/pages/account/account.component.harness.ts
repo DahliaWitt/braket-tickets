@@ -20,6 +20,7 @@ export class AccountComponentHarness extends ComponentHarness {
 
   // Profile form
   protected getProfileNameInput = this.locatorFor('input[id="profile-name"]');
+  protected getProfileNameLabel = this.locatorFor('label[for="profile-name"]');
 
   async getPasswordSubmitButton(): Promise<ZardButtonComponentHarness> {
     const buttons = await this.getAllButtons();
@@ -563,5 +564,11 @@ export class AccountComponentHarness extends ComponentHarness {
   async hasProfileNameInput(): Promise<boolean> {
     const el = await this.locatorForOptional('input[id="profile-name"]')();
     return el !== null;
+  }
+
+  async profileNameLabelUsesForegroundToken(): Promise<boolean> {
+    const label = await this.getProfileNameLabel();
+    const classes = await label.getAttribute('class');
+    return classes?.split(/\s+/u).includes('text-foreground') ?? false;
   }
 }

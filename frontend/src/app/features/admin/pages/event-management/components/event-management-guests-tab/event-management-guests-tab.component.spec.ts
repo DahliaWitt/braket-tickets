@@ -370,6 +370,30 @@ describe('EventManagementGuestsTabComponent', () => {
     await Promise.all([firstSend, duplicateSend]);
   });
 
+  it('does not emit send feedback after the tab is destroyed', async () => {
+    let resolveSend!: () => void;
+    adminEventsServiceMock.sendGuestTicket.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveSend = () => resolve({status: 'sent'});
+        }),
+    );
+    const dataChangedSpy = vi.fn();
+    fixture.componentInstance.dataChanged.subscribe(dataChangedSpy);
+    const warnSpy = vi
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined);
+
+    const sendPromise = fixture.componentInstance.sendGuestTicket('guest-1');
+    resolveSend();
+    fixture.destroy();
+    await sendPromise;
+
+    expect(toast.success).not.toHaveBeenCalledWith('ticket sent');
+    expect(dataChangedSpy).not.toHaveBeenCalled();
+    expect(warnSpy.mock.calls.flat().join(' ')).not.toContain('NG0953');
+  });
+
   it('surfaces a neutral notice when a single send is skipped as already in flight', async () => {
     adminEventsServiceMock.sendGuestTicket.mockResolvedValue({
       status: 'skipped',
@@ -555,6 +579,47 @@ describe('EventManagementGuestsTabComponent', () => {
     expect(adminEventsServiceMock.removeGuest).toHaveBeenCalledWith('guest-1');
     expect(toast.success).toHaveBeenCalledWith('guest removed');
     expect(dataChangedSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not emit removal feedback after the tab is destroyed', async () => {
+    let resolveRemoval: (() => void) | undefined;
+    adminEventsServiceMock.removeGuest.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveRemoval = resolve;
+      }),
+    );
+    const warnSpy = vi
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined);
+
+    fixture.componentInstance.removeGuest(mockGuest as unknown as Guest);
+    fixture.destroy();
+    resolveRemoval?.();
+    await lastConfirmRun;
+
+    expect(toast.success).not.toHaveBeenCalledWith('guest removed');
+    expect(warnSpy.mock.calls.flat().join(' ')).not.toContain('NG0953');
+  });
+
+  it('logs a removal failure after the tab is destroyed without emitting UI feedback', async () => {
+    let rejectRemoval: ((error: Error) => void) | undefined;
+    const removalError = new Error('boom');
+    adminEventsServiceMock.removeGuest.mockReturnValue(
+      new Promise<void>((_resolve, reject) => {
+        rejectRemoval = reject;
+      }),
+    );
+
+    fixture.componentInstance.removeGuest(mockGuest as unknown as Guest);
+    fixture.destroy();
+    rejectRemoval?.(removalError);
+    await lastConfirmRun;
+
+    expect(logger.error).toHaveBeenCalledWith(
+      'Failed to remove guest',
+      removalError,
+    );
+    expect(toast.error).not.toHaveBeenCalledWith('failed to remove guest');
   });
 
   it('does not remove a guest when the confirmation is declined', async () => {

@@ -146,6 +146,9 @@ import {BraStatusBadgeComponent} from '@ui/components/primitives/status-badge/st
                       [status]="
                         community.status === 'draft' ? 'warning' : 'primary'
                       "
+                      [class]="
+                        community.status === 'draft' ? '' : 'text-foreground'
+                      "
                       data-testid="community-status-badge"
                       >{{
                         community.status === 'draft' ? 'draft' : 'published'
@@ -161,7 +164,7 @@ import {BraStatusBadgeComponent} from '@ui/components/primitives/status-badge/st
                       z-button
                       zType="ghost"
                       zSize="sm"
-                      class="font-mono text-2xs tracking-widest uppercase"
+                      class="font-mono text-2xs tracking-widest text-foreground uppercase"
                       data-testid="manage-community-btn"
                     >
                       Manage
@@ -262,7 +265,11 @@ import {BraStatusBadgeComponent} from '@ui/components/primitives/status-badge/st
                     [status]="
                       community.status === 'draft' ? 'warning' : 'primary'
                     "
-                    class="shrink-0"
+                    [class]="
+                      community.status === 'draft'
+                        ? 'shrink-0'
+                        : 'shrink-0 text-foreground'
+                    "
                     data-testid="community-status-badge"
                     >{{
                       community.status === 'draft' ? 'draft' : 'published'
@@ -290,7 +297,7 @@ import {BraStatusBadgeComponent} from '@ui/components/primitives/status-badge/st
                     z-button
                     zType="ghost"
                     zSize="sm"
-                    class="font-mono text-2xs tracking-widest uppercase"
+                    class="font-mono text-2xs tracking-widest text-foreground uppercase"
                     data-testid="manage-community-btn"
                   >
                     Manage

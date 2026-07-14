@@ -35,6 +35,17 @@ export class AdminCommunityListComponentHarness extends ComponentHarness {
     return (await this.getManageActions()).length;
   }
 
+  async getManageActionClasses(): Promise<string[][]> {
+    const actions = await this.getManageActions();
+    return Promise.all(
+      actions.map(async (action) =>
+        ((await action.getAttribute('class')) ?? '')
+          .split(/\s+/)
+          .filter(Boolean),
+      ),
+    );
+  }
+
   async clickInviteAdmin(): Promise<void> {
     const button = await this.getInviteAdminButton();
     await button.click();

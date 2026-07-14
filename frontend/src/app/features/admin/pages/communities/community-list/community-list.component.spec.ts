@@ -177,6 +177,18 @@ describe('AdminCommunityListComponent', () => {
     expect(await harness.getManageActionCount()).toBe(2);
   });
 
+  it('uses the accessible foreground token for Manage actions in both layouts', async () => {
+    const {harness} = await setup();
+
+    const manageActionClasses = await harness.getManageActionClasses();
+    expect(manageActionClasses).toHaveLength(2);
+    expect(
+      manageActionClasses.every((classes) =>
+        classes.includes('text-foreground'),
+      ),
+    ).toBe(true);
+  });
+
   it('should stack the header actions on mobile and keep each action full width', async () => {
     const {fixture} = await setup();
     const hostElement = fixture.nativeElement as HTMLElement;

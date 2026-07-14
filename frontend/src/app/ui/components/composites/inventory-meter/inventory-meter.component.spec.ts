@@ -149,6 +149,11 @@ describe('BraInventoryMeterComponent', () => {
     expect(text).toContain('50 remaining');
   });
 
+  it('names the progressbar with its visible label', async () => {
+    const harness = await getHarness();
+    expect(await harness.getAriaLabel()).toBe('Tickets Sold');
+  });
+
   it('reports occupied capacity (sold + held) via aria-valuenow so it matches the bar fill', async () => {
     host.inputs.set({
       soldCount: 40,

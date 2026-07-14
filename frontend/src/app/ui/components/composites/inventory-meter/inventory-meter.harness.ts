@@ -52,6 +52,11 @@ export class BraInventoryMeterHarness extends ComponentHarness {
     return el.getAttribute('aria-valuetext');
   }
 
+  async getAriaLabel(): Promise<string | null> {
+    const el = await this.locatorFor('[role="progressbar"]')();
+    return el.getAttribute('aria-label');
+  }
+
   async getAriaValueNow(): Promise<string | null> {
     const el = await this.locatorFor('[role="progressbar"]')();
     return el.getAttribute('aria-valuenow');

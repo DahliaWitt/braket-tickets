@@ -211,7 +211,7 @@
 
             <!-- List -->
             <div
-              class="md:scrollbar-thin md:scrollbar-thumb-muted md:scrollbar-track-transparent min-h-0 flex-1 space-y-3 overflow-y-auto p-4"
+              class="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 md:scrollbar-thin md:scrollbar-thumb-muted md:scrollbar-track-transparent"
             >
               @if (activeTab() === 'tickets') {
                 <div
@@ -301,7 +301,7 @@
 
                       <div class="shrink-0">
                         @if (
-                          ticket.status === 'valid' &&
+                          ticketDisplayStatus(ticket) === 'valid' &&
                           !isTicketRecentlyCheckedIn(ticket._id)
                         ) {
                           <button
@@ -315,35 +315,53 @@
                           >
                             Check-in
                           </button>
-                        } @else if (
-                          ticket.status === 'used' ||
-                          isTicketRecentlyCheckedIn(ticket._id)
-                        ) {
-                          <div
-                            class="flex flex-col items-end rounded-lg border border-success/20 bg-success/10 px-3 py-1.5 text-success shadow-inner"
-                          >
-                            <div class="flex items-center gap-1">
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                width="10"
-                                height="10"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="3"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                              >
-                                <polyline points="20 6 9 17 4 12" />
-                              </svg>
-                              <span
-                                class="font-mono text-2xs font-black tracking-tighter uppercase"
-                                >Verified</span
-                              >
+                        } @else if (isTicketCheckedIn(ticket)) {
+                          <div class="flex flex-col items-end gap-2">
+                            <div
+                              class="flex flex-col items-end rounded-lg border border-success/20 bg-success/10 px-3 py-1.5 text-success shadow-inner"
+                            >
+                              <div class="flex items-center gap-1">
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="10"
+                                  height="10"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="3"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                >
+                                  <polyline points="20 6 9 17 4 12" />
+                                </svg>
+                                <span
+                                  class="font-mono text-2xs font-black tracking-tighter uppercase"
+                                  >Verified</span
+                                >
+                              </div>
+                              <span class="font-mono text-[8px] opacity-60">{{
+                                ticketCheckedInAt(ticket) | eventDate: 'HH:mm'
+                              }}</span>
                             </div>
-                            <span class="font-mono text-[8px] opacity-60">{{
-                              ticketCheckedInAt(ticket) | eventDate: 'HH:mm'
-                            }}</span>
+                            <button
+                              type="button"
+                              data-testid="ticket-revert-button"
+                              (click)="confirmTicketCheckInRevert(ticket)"
+                              [disabled]="
+                                isProcessing() ||
+                                revertingTicketId() === ticket._id
+                              "
+                              [attr.aria-label]="
+                                ticketRevertLabel(ticket, rowIndex)
+                              "
+                              class="min-h-[44px] rounded border border-border bg-background px-3 py-2 font-mono text-2xs font-bold tracking-widest text-foreground uppercase transition-colors hover:border-ring hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              @if (revertingTicketId() === ticket._id) {
+                                Undoing...
+                              } @else {
+                                Undo
+                              }
+                            </button>
                           </div>
                         } @else {
                           <span

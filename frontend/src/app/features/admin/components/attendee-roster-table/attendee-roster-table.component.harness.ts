@@ -19,6 +19,9 @@ export class AttendeeRosterTableHarness extends ComponentHarness {
   private readonly getColumnHeaders = this.locatorForAll(
     '[data-testid="roster-table"] thead th',
   );
+  private readonly getScrollRegion = this.locatorFor(
+    '[data-testid="roster-scroll-region"]',
+  );
 
   async getVisibleRowCount(): Promise<number> {
     return (await this.getRows()).length;
@@ -34,6 +37,29 @@ export class AttendeeRosterTableHarness extends ComponentHarness {
   async hasColumnHeader(label: string): Promise<boolean> {
     const headers = await this.getColumnHeaderLabels();
     return headers.includes(label);
+  }
+
+  async getScrollRegionAttributes(): Promise<{
+    role: string | null;
+    label: string | null;
+    tabindex: string | null;
+  }> {
+    const region = await this.getScrollRegion();
+    return {
+      role: await region.getAttribute('role'),
+      label: await region.getAttribute('aria-label'),
+      tabindex: await region.getAttribute('tabindex'),
+    };
+  }
+
+  async focusScrollRegion(): Promise<void> {
+    const region = await this.getScrollRegion();
+    await region.focus();
+  }
+
+  async isScrollRegionFocused(): Promise<boolean> {
+    const region = await this.getScrollRegion();
+    return region.isFocused();
   }
 
   /** Returns the row element for a given email, or null if not visible. */

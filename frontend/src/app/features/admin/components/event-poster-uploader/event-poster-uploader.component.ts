@@ -27,32 +27,27 @@ import {BrowserPlatformService} from '@/core/services/browser-platform.service';
       <div
         data-testid="poster-upload-zone"
         [class]="
-          'relative aspect-4/5 w-48 flex-none cursor-pointer overflow-hidden rounded-sm ' +
+          'group relative aspect-4/5 w-48 flex-none overflow-hidden rounded-sm ' +
           'border-2 transition-colors duration-150 ' +
           'focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2 ' +
           uploadZoneClasses()
         "
-        (click)="triggerFilePicker()"
-        (keydown.enter)="triggerFilePicker()"
-        (keydown.space)="triggerFilePicker()"
         (dragenter)="onDragEnter($event)"
         (dragover)="onDragOver($event)"
         (dragleave)="onDragLeave($event)"
         (drop)="onDrop($event)"
-        [attr.aria-label]="uploadZoneAriaLabel()"
-        role="button"
-        tabindex="0"
       >
-        <!-- Hidden file input — programmatically triggered -->
+        <!-- The native input is the sole interactive control for the entire zone. -->
         <input
           #fileInput
           id="posterUpload"
           data-testid="poster-file-input"
           type="file"
-          class="sr-only"
+          class="absolute inset-0 z-20 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
           (change)="onFileChange($event)"
           [attr.accept]="acceptedImageFileInput"
-          aria-label="Select event flyer image"
+          [attr.aria-label]="uploadZoneAriaLabel()"
+          [disabled]="uploadProgress() !== null"
         />
 
         @if (effectivePosterUrl()) {
@@ -68,7 +63,7 @@ import {BrowserPlatformService} from '@/core/services/browser-platform.service';
             <img
               data-testid="poster-current-image"
               [src]="currentPosterUrl()!"
-              loading="lazy"
+              loading="eager"
               decoding="async"
               alt="Current Poster"
               class="absolute inset-0 h-full w-full object-cover"
@@ -79,7 +74,7 @@ import {BrowserPlatformService} from '@/core/services/browser-platform.service';
           @if (!isDragging()) {
             <div
               data-testid="poster-hover-overlay"
-              class="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-background/0 text-foreground/0 transition-all duration-150 hover:bg-background/60 hover:text-foreground"
+              class="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-background/0 text-foreground/0 transition-all duration-150 group-focus-within:bg-background/60 group-focus-within:text-foreground group-hover:bg-background/60 group-hover:text-foreground"
             >
               <z-icon zType="upload-cloud" class="h-6 w-6" />
               <span class="font-mono text-2xs tracking-widest uppercase"
@@ -111,7 +106,9 @@ import {BrowserPlatformService} from '@/core/services/browser-platform.service';
               {{ isDragOver() ? 'Release to upload' : 'Drop poster here' }}
             </span>
             @if (!isDragOver()) {
-              <span class="font-mono text-2xs text-muted-foreground/60"
+              <span
+                data-testid="poster-browse-hint"
+                class="font-mono text-2xs text-muted-foreground"
                 >or click to browse</span
               >
             }
@@ -275,13 +272,6 @@ export class EventPosterUploaderComponent {
     if (file instanceof File) {
       this.handleFile(file);
     }
-  }
-
-  // ── File-picker trigger ──────────────────────────────────────────────────────
-
-  triggerFilePicker(): void {
-    if (this.uploadProgress() !== null) return;
-    this.browser.clickElementById('posterUpload');
   }
 
   // ── File input handler ───────────────────────────────────────────────────────

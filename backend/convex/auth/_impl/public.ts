@@ -1,4 +1,4 @@
-import type {MutationCtx} from '../../_generated/server';
+import type {ActionCtx, MutationCtx} from '../../_generated/server';
 import {internal} from '../../_generated/api';
 import {
   authComponent,
@@ -31,8 +31,7 @@ import {
 
 type SocialProvider = 'google' | 'discord';
 type SocialSyncBlockedReason =
-  | 'provider_email_missing'
-  | 'provider_email_unverified';
+  'provider_email_missing' | 'provider_email_unverified';
 
 function buildSocialLinkCallbackUrl(
   provider: SocialProvider,
@@ -173,24 +172,25 @@ export async function completeSocialSignupOnboardingHandler(
   return null;
 }
 
-export async function changePasswordHandler(
-  ctx: MutationCtx,
-  args: {
-    currentPassword: string;
-    newPassword: string;
-    revokeOtherSessions?: boolean;
-  },
-): Promise<null> {
+type ChangePasswordArgs = {
+  currentPassword: string;
+  newPassword: string;
+  revokeOtherSessions?: boolean;
+};
+
+function validateChangePasswordArgs(args: ChangePasswordArgs): void {
   validateStringLength(
     args.currentPassword,
     'Current password',
     MAX_PASSWORD_LENGTH,
   );
   validateStringLength(args.newPassword, 'New password', MAX_PASSWORD_LENGTH);
+}
 
-  const {_id: userId} = await requireUser(ctx);
-  await rateLimiter.limit(ctx, 'changePassword', {key: userId, throws: true});
-
+async function changePasswordWithBetterAuth(
+  ctx: MutationCtx | ActionCtx,
+  args: ChangePasswordArgs,
+): Promise<null> {
   const {auth, headers} = await authComponent.getAuth(createAuth, ctx);
   const result = await auth.api.changePassword({
     body: {
@@ -205,6 +205,45 @@ export async function changePasswordHandler(
     throwAppError('AUTH_PASSWORD_CHANGE_FAILED', 'Failed to change password');
   }
   return null;
+}
+
+export async function changePasswordHandler(
+  ctx: MutationCtx,
+  args: ChangePasswordArgs,
+): Promise<null> {
+  validateChangePasswordArgs(args);
+  await requireUser(ctx);
+
+  // A mutation cannot durably consume the rate-limit attempt and then surface
+  // Better Auth's wrong-current-password error: throwing rolls the whole
+  // transaction back, including the limiter write. Keep the legacy function
+  // path present for stale generated clients, but fail closed before password
+  // verification so it cannot bypass the V2 action's committed rate limit.
+  throwAppError(
+    'AUTH_PASSWORD_CHANGE_CLIENT_UPDATE_REQUIRED',
+    'Refresh this page before changing your password',
+  );
+}
+
+export async function changePasswordV2Handler(
+  ctx: ActionCtx,
+  args: ChangePasswordArgs,
+): Promise<null> {
+  validateChangePasswordArgs(args);
+
+  const userId = await ctx.runQuery(
+    internal.lib.auth_helpers.getAuthUserIdInternal,
+    {},
+  );
+  if (!userId) {
+    throwUnauthenticated();
+  }
+
+  await ctx.runMutation(internal.auth.public.applyChangePasswordRateLimit, {
+    userId,
+  });
+
+  return await changePasswordWithBetterAuth(ctx, args);
 }
 
 export async function linkSocialAccountHandler(

@@ -898,6 +898,22 @@ describe('orders', () => {
   });
 
   describe('ToS assent evidence (BRA-455)', () => {
+    it('legacy openForGuest rejects an omitted terms flag', async () => {
+      const t = convexTest();
+      const {eventId} = await createEventWithInventory(t);
+      const {sessionToken} = await createGuestSession(t);
+
+      await expect(
+        t.mutation(api.orders.core.openForGuest, {
+          sessionToken,
+          eventId,
+          quantity: 1,
+          tier: 'regular',
+          totalAmount: 2500,
+        } as never),
+      ).rejects.toThrow('Missing required field `termsAccepted`');
+    });
+
     it('openForGuest rejects the order when terms are not accepted', async () => {
       const t = convexTest();
       const {eventId} = await createEventWithInventory(t);
@@ -948,6 +964,22 @@ describe('orders', () => {
       expect(order!.tosAcceptedAt!).toBeGreaterThanOrEqual(before);
       expect(order!.tosAcceptedAt!).toBeLessThanOrEqual(Date.now());
       expect(order?.tosVersion).toBe(LEGAL_TERMS_VERSION);
+    });
+
+    it('legacy claimFreeTicketAsGuest rejects an omitted terms flag', async () => {
+      const t = convexTest();
+      const {eventId} = await createEventWithInventory(t, {price: 0});
+      const {sessionToken} = await createGuestSession(t);
+
+      await expect(
+        t.mutation(api.orders.core.claimFreeTicketAsGuest, {
+          sessionToken,
+          eventId,
+          quantity: 1,
+          tier: 'regular',
+          idempotencyKey: 'idem-legacy-guest-no-terms',
+        } as never),
+      ).rejects.toThrow('Missing required field `termsAccepted`');
     });
 
     it('claimFreeTicketAsGuest rejects the claim when terms are not accepted', async () => {
@@ -1003,7 +1035,7 @@ describe('orders', () => {
       expect(order?.tosVersion).toBe(LEGAL_TERMS_VERSION);
     });
 
-    it('claimFreeTicketAsGuest replays the existing completed order without re-checking terms', async () => {
+    it('claimFreeTicketAsGuest replays an accepted existing completed order', async () => {
       const t = convexTest();
       const {eventId} = await createEventWithInventory(t, {price: 0});
       const {sessionToken} = await createGuestSession(t);
@@ -1018,20 +1050,30 @@ describe('orders', () => {
         idempotencyKey: replayKey,
       });
 
-      // Idempotent replay must short-circuit on the existing completed order
-      // (same key) BEFORE the terms check, so a stale/false client value on
-      // retry does not fail an already-completed claim.
+      // An accepted retry must replay the existing completed order without
+      // spending rate limit or issuing another ticket.
       const second = await t.mutation(api.orders.core.claimFreeTicketAsGuest, {
         sessionToken,
         eventId,
         quantity: 1,
         tier: 'regular',
-        termsAccepted: false,
+        termsAccepted: true,
         idempotencyKey: replayKey,
       });
 
       expect(second.success).toBe(true);
       expect(second.orderId).toBe(first.orderId);
+
+      await expect(
+        t.mutation(api.orders.core.claimFreeTicketAsGuest, {
+          sessionToken,
+          eventId,
+          quantity: 1,
+          tier: 'regular',
+          termsAccepted: false,
+          idempotencyKey: replayKey,
+        }),
+      ).rejects.toThrow('accept the terms of service');
     });
 
     it('open (signed-in) creates an order without ToS assent fields', async () => {
@@ -1444,14 +1486,13 @@ describe('orders', () => {
       });
 
     await expect(
-      t.withIdentity({subject: secondBuyerId}).mutation(
-        api.orders.core.openResale,
-        {
+      t
+        .withIdentity({subject: secondBuyerId})
+        .mutation(api.orders.core.openResale, {
           eventId,
           tier: 'regular',
           totalAmount: 2500,
-        },
-      ),
+        }),
     ).rejects.toThrow('No resale tickets are available');
 
     // The first buyer's hold is untouched by the rejected contender.

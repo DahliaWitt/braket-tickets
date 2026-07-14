@@ -10,6 +10,9 @@ export class CommunityAdminHarness extends ComponentHarness {
   static hostSelector = 'app-community-admin';
 
   private getTabLinksAll = this.locatorForAll('[data-testid="tab-link"]');
+  private getMobileSectionSelectEl = this.locatorForOptional(
+    '[data-testid="mobile-section-select"]',
+  );
   private getCommunitySelectorEl = this.locatorForOptional(
     CommunitySelectorHarness,
   );
@@ -63,6 +66,14 @@ export class CommunityAdminHarness extends ComponentHarness {
     return Promise.all(tabs.map((tab) => tab.text())).then((texts) =>
       texts.map((text) => text.trim()),
     );
+  }
+
+  /** Returns the section selected by the shell's mobile/tablet nav. */
+  async getSelectedMobileSectionValue(): Promise<string | null> {
+    const select = await this.getMobileSectionSelectEl();
+    if (!select) return null;
+    const value: unknown = await select.getProperty('value');
+    return typeof value === 'string' ? value : null;
   }
 
   /** Returns the CommunitySelectorHarness, or null if not present. */
@@ -225,6 +236,9 @@ export class CommunityAdminHarness extends ComponentHarness {
   private getMagicLinkCopyStatusEl = this.locatorForOptional(
     '[data-testid="magic-link-copy-status"]',
   );
+  private getMagicLinkMobileHeadingsAll = this.locatorForAll(
+    'h2[data-testid="magic-link-label"], h2[data-testid="magic-link-mobile-heading"]',
+  );
   private getActiveRowsAll = this.locatorForAll(
     '[data-testid="magic-link-active-row"]',
   );
@@ -265,6 +279,14 @@ export class CommunityAdminHarness extends ComponentHarness {
     const el = await this.getMagicLinkCopyStatusEl();
     if (!el) return null;
     return (await el.text()).trim();
+  }
+
+  /** Returns the tag names used by rendered mobile magic-link card headings. */
+  async getMagicLinkMobileHeadingTags(): Promise<string[]> {
+    const headings = await this.getMagicLinkMobileHeadingsAll();
+    return Promise.all(
+      headings.map((heading) => heading.getProperty<string>('tagName')),
+    );
   }
 
   /** Returns the count of active-link desktop rows. */

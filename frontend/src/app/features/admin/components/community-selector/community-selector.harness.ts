@@ -94,6 +94,20 @@ export class CommunitySelectorHarness extends ComponentHarness {
     return (await button.text()).trim();
   }
 
+  /** Returns the set-default button's design-system variant, or null when absent. */
+  async getSetDefaultButtonVariant(): Promise<string | null> {
+    const button = await this.getSetDefaultButton();
+    if (!button) return null;
+    return button.getAttribute('data-type');
+  }
+
+  /** Returns the rendered set-default button classes, or null when absent. */
+  async getSetDefaultButtonClasses(): Promise<string | null> {
+    const button = await this.getSetDefaultButton();
+    if (!button) return null;
+    return button.getAttribute('class');
+  }
+
   /** Returns whether the set-default action is disabled. */
   async isSetDefaultButtonDisabled(): Promise<boolean | null> {
     const button = await this.getSetDefaultButton();

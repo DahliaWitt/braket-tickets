@@ -265,14 +265,12 @@ const TIME_WINDOW_OPTIONS = [
   styles: [
     `
       .audit-row-enter {
-        opacity: 0;
         transform: translateY(4px);
         animation: auditRowIn 300ms ease forwards;
       }
 
       @keyframes auditRowIn {
         to {
-          opacity: 1;
           transform: translateY(0);
         }
       }
@@ -294,7 +292,6 @@ const TIME_WINDOW_OPTIONS = [
       @media (prefers-reduced-motion: reduce) {
         .audit-row-enter {
           animation: none;
-          opacity: 1;
           transform: none;
         }
         .audit-detail-expand {

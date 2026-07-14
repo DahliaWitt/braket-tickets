@@ -99,7 +99,8 @@ export interface HeaderAction {
             width="56"
             height="56"
             priority
-            class="-my-2 h-10 md:-my-4 md:h-14 dark:invert"
+            data-testid="header-logo"
+            class="-my-2 h-10 w-10 md:-my-4 md:h-14 md:w-14 dark:invert"
           />
         </a>
 

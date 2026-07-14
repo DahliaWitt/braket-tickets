@@ -28,11 +28,7 @@ import {type BraStatusBadgeVariants} from '@ui/components/primitives/status-badg
 import {EventDatePipe} from '@/utils/event-date.pipe';
 
 type EventDisplayStatus =
-  | 'draft'
-  | 'published'
-  | 'cancelled'
-  | 'past'
-  | 'happening now';
+  'draft' | 'published' | 'cancelled' | 'past' | 'happening now';
 
 type RouteQueryParams = Readonly<
   Record<string, string | number | boolean | null | undefined>
@@ -112,7 +108,7 @@ type RouteQueryParams = Readonly<
             @for (event of events(); track event._id; let i = $index) {
               <tr
                 [class]="
-                  'group animate-in fade-in slide-in-from-bottom-2 transition-colors duration-300 hover:bg-muted/30 ' +
+                  'group animate-in slide-in-from-bottom-2 transition-colors duration-300 hover:bg-muted/30 ' +
                   (i === 0
                     ? 'delay-75'
                     : i === 1
@@ -171,6 +167,7 @@ type RouteQueryParams = Readonly<
                       data-testid="manage-event"
                       [href]="eventRouteHref(event, 'manage')"
                       (click)="navigateToEvent($event, event, 'manage')"
+                      class="text-foreground"
                     >
                       MANAGE
                     </a>
@@ -221,7 +218,7 @@ type RouteQueryParams = Readonly<
         @for (event of events(); track event._id; let i = $index) {
           <z-card
             [class]="
-              'animate-in fade-in slide-in-from-bottom-8 border-border bg-card/80 transition-transform duration-300 motion-safe:hover:scale-[1.01] ' +
+              'animate-in slide-in-from-bottom-8 border-border bg-card/80 transition-transform duration-300 motion-safe:hover:scale-[1.01] ' +
               (i === 0
                 ? 'delay-75'
                 : i === 1
@@ -267,6 +264,7 @@ type RouteQueryParams = Readonly<
                 data-testid="manage-event"
                 [href]="eventRouteHref(event, 'manage')"
                 (click)="navigateToEvent($event, event, 'manage')"
+                class="text-foreground"
               >
                 MANAGE
               </a>
@@ -465,8 +463,7 @@ export class AdminEventsTableComponent {
   }
 
   private eventRouteQueryParams():
-    | Record<string, string | number | boolean>
-    | undefined {
+    Record<string, string | number | boolean> | undefined {
     const params = this.routeQueryParams();
     if (!params) {
       return undefined;

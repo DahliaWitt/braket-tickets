@@ -4,6 +4,7 @@ import {type ComponentFixture, TestBed} from '@angular/core/testing';
 import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
 import {provideZonelessChangeDetection} from '@angular/core';
 import {provideRouter, Router} from '@angular/router';
+import {RouterTestingHarness} from '@angular/router/testing';
 import {vi} from 'vitest';
 import {
   DashboardShellComponent,
@@ -55,6 +56,24 @@ class TestHostComponent {
   readonly showActions = signal(false);
   readonly selectedTabId = signal<string | null>(null);
   readonly overrideBorder = signal(false);
+}
+
+@Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  selector: 'app-route-aware-host',
+  imports: [DashboardShellComponent],
+  template: `
+    <app-dashboard-shell [tabs]="tabs">
+      <div data-testid="projected-content">Route-aware content</div>
+    </app-dashboard-shell>
+  `,
+})
+class RouteAwareHostComponent {
+  readonly tabs: DashboardTab[] = [
+    {id: 'pending', label: 'Pending Apps', path: '/community-admin/pending'},
+    {id: 'events', label: 'Events', path: '/community-admin/events'},
+    {id: 'settings', label: 'Settings', path: '/community-admin/settings'},
+  ];
 }
 
 @Component({
@@ -246,6 +265,49 @@ describe('DashboardShellComponent', () => {
     fixture.detectChanges();
 
     expect(await harness.getSelectedMobileSectionValue()).toBe('members');
+  });
+});
+
+describe('DashboardShellComponent (route-aware mobile selection)', () => {
+  let routerHarness: RouterTestingHarness;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [RouteAwareHostComponent],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideRouter([
+          {
+            path: 'community-admin/:tab',
+            component: RouteAwareHostComponent,
+          },
+        ]),
+      ],
+    }).compileComponents();
+
+    routerHarness = await RouterTestingHarness.create();
+  });
+
+  async function navigateTo(path: string): Promise<DashboardShellHarness> {
+    await routerHarness.navigateByUrl(path, RouteAwareHostComponent);
+    await routerHarness.fixture.whenStable();
+    return TestbedHarnessEnvironment.loader(routerHarness.fixture).getHarness(
+      DashboardShellHarness,
+    );
+  }
+
+  it('selects the current section on a direct route load or reload', async () => {
+    const harness = await navigateTo('/community-admin/events');
+
+    expect(await harness.getSelectedMobileSectionValue()).toBe('events');
+  });
+
+  it('updates the selected section after route navigation', async () => {
+    let harness = await navigateTo('/community-admin/pending');
+    expect(await harness.getSelectedMobileSectionValue()).toBe('pending');
+
+    harness = await navigateTo('/community-admin/settings');
+    expect(await harness.getSelectedMobileSectionValue()).toBe('settings');
   });
 });
 

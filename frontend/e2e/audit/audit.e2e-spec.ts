@@ -107,14 +107,14 @@ async function uploadSeedImage(
 
 /**
  * Seed the full demo dataset and return IDs keyed for route resolution.
- * Creates 6 users, calls seedDemoData once, then grants the global admin
+ * Creates 7 users, calls seedDemoData once, then grants the global admin
  * community_admin access so adminPage can reach community admin routes.
  */
 async function seedAllDemoData(
   convexHelper: ConvexHelper,
 ): Promise<Record<string, unknown>> {
-  // Create 6 demo users
-  const [cooperId, kimId, nomiId, barneyId, charlieId, tobiasId] =
+  // Create 7 demo users
+  const [cooperId, kimId, nomiId, barneyId, charlieId, tobiasId, cherylId] =
     await Promise.all([
       convexHelper.mutation(api.testing.users.createUserDirectly, {
         email: `audit-cooper-${Date.now()}@example.com`,
@@ -139,6 +139,10 @@ async function seedAllDemoData(
       convexHelper.mutation(api.testing.users.createUserDirectly, {
         email: `audit-tobias-${Date.now()}@example.com`,
         name: 'Tobias',
+      }),
+      convexHelper.mutation(api.testing.users.createUserDirectly, {
+        email: `audit-cheryl-${Date.now()}@example.com`,
+        name: 'Cheryl',
       }),
     ]);
 
@@ -174,6 +178,7 @@ async function seedAllDemoData(
     barneyId: barneyId as Id<'users'>,
     charlieId: charlieId as Id<'users'>,
     tobiasId: tobiasId as Id<'users'>,
+    cherylId: cherylId as Id<'users'>,
     posterIds: {
       concreteWax,
       lowFrequency,

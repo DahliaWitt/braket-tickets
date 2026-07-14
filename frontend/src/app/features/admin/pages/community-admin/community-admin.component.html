@@ -603,7 +603,7 @@
                   <!-- Card Header -->
                   <div class="flex items-start justify-between gap-3">
                     <div class="min-w-0">
-                      <h3
+                      <h2
                         class="truncate font-display text-lg font-bold tracking-wide text-foreground"
                         data-testid="magic-link-label"
                         [title]="
@@ -619,7 +619,7 @@
                               ? 'Link ' + link.tokenPrefix
                               : 'Link')
                         }}
-                      </h3>
+                      </h2>
                       <span
                         data-testid="magic-link-token-prefix"
                         class="mt-1 block font-mono text-xs text-muted-foreground"
@@ -909,8 +909,9 @@
                 >
                   <div class="flex items-start justify-between gap-3">
                     <div class="min-w-0">
-                      <h3
+                      <h2
                         class="truncate font-display text-lg font-bold tracking-wide text-muted-foreground"
+                        data-testid="magic-link-mobile-heading"
                         [title]="
                           link.label ||
                           (link.tokenPrefix
@@ -924,7 +925,7 @@
                               ? 'Link ' + link.tokenPrefix
                               : 'Link')
                         }}
-                      </h3>
+                      </h2>
                       <p class="mt-1 font-mono text-xs text-muted-foreground">
                         {{ link.tokenPrefix || 'hidden' }}
                       </p>

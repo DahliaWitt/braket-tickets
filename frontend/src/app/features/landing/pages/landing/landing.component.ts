@@ -211,7 +211,7 @@ import {EventEndTimePipe} from '@/utils/event-end-time.pipe';
                       ? ['/communities', community.slug]
                       : ['/communities']
                   "
-                  class="flex flex-shrink-0 items-center gap-1.5 transition-colors hover:text-primary"
+                  class="flex min-h-6 flex-shrink-0 items-center gap-1.5 transition-colors hover:text-primary"
                   [attr.aria-label]="'View ' + community.name + ' community'"
                 >
                   <bra-community-avatar
@@ -229,7 +229,7 @@ import {EventEndTimePipe} from '@/utils/event-end-time.pipe';
             </div>
             <a
               routerLink="/communities"
-              class="flex-shrink-0 font-mono text-2xs tracking-widest text-primary uppercase transition-colors hover:text-primary/80"
+              class="inline-flex min-h-6 flex-shrink-0 items-center font-mono text-2xs tracking-widest text-primary uppercase transition-colors hover:text-primary/80"
             >
               All →
             </a>

@@ -2374,6 +2374,13 @@ describe('CommunityAdminSettingsComponent', () => {
       expect(await harness.hasNotificationsSection()).toBe(true);
     });
 
+    it('uses high-contrast theme tokens for the save action', async () => {
+      const {harness} = await setup();
+      expect(await harness.saveNotificationsUsesHighContrastTokens()).toBe(
+        true,
+      );
+    });
+
     it('defaults notifMode to off when no preference exists', async () => {
       const {harness} = await setup({notifPrefData: null});
       expect(await harness.getSelectedNotifMode()).toBe('off');
