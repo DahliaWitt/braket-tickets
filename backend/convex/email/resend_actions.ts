@@ -10,6 +10,11 @@ import {
   emailReplyTo,
   resend,
 } from '../lib/resend_component';
+// eslint-disable-next-line @convex-dev/import-wrong-runtime -- importer is 'use node'; plugin heuristic misses that. Same pattern as tickets/actions.ts.
+import {
+  deliverFallbackEmail,
+  deliverPreviewEmail,
+} from '../lib/email/smtp_delivery';
 import {isEmailPreviewMode} from '../lib/email_delivery_mode';
 import {logger} from '../lib/logger';
 import {providerEmailDeliveryArgs} from '../lib/validators/email_delivery';
@@ -99,7 +104,7 @@ export const send = internalAction({
     };
     const sendFallbackAndRecord = async (): Promise<void> => {
       try {
-        await ctx.runAction(internal.email.smtp.sendFallback, fallbackPayload);
+        await deliverFallbackEmail(fallbackPayload);
       } catch (error) {
         await recordFallbackFailure(error);
       }
@@ -130,7 +135,7 @@ export const send = internalAction({
     }
 
     if (isEmailPreviewMode()) {
-      await ctx.runAction(internal.email.smtp.sendPreview, {
+      await deliverPreviewEmail(ctx, {
         ...fallbackPayload,
         source: args.source,
         sourceId: args.sourceId,

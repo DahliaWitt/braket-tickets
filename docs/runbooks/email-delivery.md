@@ -13,7 +13,8 @@ This runbook is for engineers or admins who troubleshoot outbound email from Bra
 Source of truth:
 
 - `backend/convex/email/resend_actions.ts`
-- `backend/convex/email/smtp.ts` (Ethereal preview and Gmail SMTP fallback)
+- `backend/convex/email/smtp.ts` (Ethereal preview action)
+- `backend/convex/lib/email/smtp_delivery.ts` (shared SMTP transport: Ethereal preview and Gmail fallback)
 - `backend/convex/lib/email_delivery_wrapper.ts`
 - `backend/convex/marketing/digests.ts`
 - `backend/convex/lib/email_dedup.ts`

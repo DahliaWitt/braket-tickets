@@ -47,10 +47,9 @@ export const emailAttachmentValidator = v.object({
 });
 
 /**
- * Renderable email payload accepted by every provider action
- * (smtp.sendPreview, smtp.sendFallback, resend_actions.send).
+ * Renderable email payload fields shared by the provider delivery contract.
  */
-export const emailPayloadArgs = {
+const emailPayloadArgs = {
   to: v.string(),
   subject: v.string(),
   html: v.string(),
