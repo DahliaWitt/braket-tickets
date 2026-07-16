@@ -273,11 +273,21 @@ The current mutations are:
 - `auth.public.linkSocialAccount`
 - `auth.public.unlinkSocialAccount`
 
-The frontend returns to `/confirm/social-link` after the provider flow. If linking or unlinking fails:
+The frontend returns to `/confirm/social-link` after the provider flow. Unlike
+`/confirm/social-signin`, this redirect carries **no `ott` parameter**: Better
+Auth's OAuth callback only creates a session (which the crossDomain plugin
+converts into an OTT) for sign-in flows, never for link flows. The page
+confirms the link with the user's existing session by reading
+`users.profile.getConnectedAccounts` — an `ott` on this route is neither
+expected nor required. If linking or unlinking fails:
 
 1. Confirm that the user can still authenticate with the primary account.
 2. Confirm that the provider returns to `/confirm/social-link`.
 3. Check the mapped Convex error before you retry.
+4. Check Account Settings before assuming the link failed: the backend links
+   the account during the provider callback, before the browser returns to
+   the frontend, so a confirmation-page error can be a false negative while
+   the `account.provider.linked` audit row already exists.
 
 Unlinking records the audit action `account.provider.unlinked`. If the UI reports success but the audit trail never appears, investigate the audit path as a second problem.
 
