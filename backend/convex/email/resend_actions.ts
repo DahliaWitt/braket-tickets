@@ -12,16 +12,8 @@ import {
 } from '../lib/resend_component';
 import {isEmailPreviewMode} from '../lib/email_delivery_mode';
 import {logger} from '../lib/logger';
-import {emailDeliverySourceValidator} from '../lib/validators/email_delivery';
+import {providerEmailDeliveryArgs} from '../lib/validators/email_delivery';
 import {isTestEnvironment} from '../lib/environment';
-
-const attachmentValidator = v.object({
-  filename: v.string(),
-  content: v.string(),
-  encoding: v.optional(v.string()),
-  contentType: v.optional(v.string()),
-  cid: v.optional(v.string()),
-});
 
 function isRetryablePreAcceptanceError(error: unknown): boolean {
   if (typeof error !== 'object' || error === null) {
@@ -76,21 +68,17 @@ function sanitizeTestAttachments(
 
 export const send = internalAction({
   args: {
-    to: v.string(),
-    subject: v.string(),
-    html: v.string(),
-    text: v.optional(v.string()),
-    headers: v.optional(v.record(v.string(), v.string())),
-    attachments: v.optional(v.array(attachmentValidator)),
+    ...providerEmailDeliveryArgs,
+    // Transitional tolerance — remove after one release. Jobs scheduled by
+    // the pre-contract wrapper spread `requireDelivery` into these args; a
+    // job enqueued just before this code deploys must not fail validation
+    // after it. The value is ignored: those jobs already carry the correct
+    // `critical` flag (the old wrapper computed and passed it too).
     requireDelivery: v.optional(v.boolean()),
-    source: emailDeliverySourceValidator,
-    sourceId: v.string(),
-    recipient: v.string(),
-    critical: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const critical = args.critical === true || args.requireDelivery === true;
+    const critical = args.critical === true;
     const fallbackPayload = {
       to: args.to,
       subject: args.subject,

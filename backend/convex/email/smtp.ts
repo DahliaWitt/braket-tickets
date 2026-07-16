@@ -6,24 +6,10 @@ import {internal} from '../_generated/api';
 import {internalAction} from '../_generated/server';
 import {logger} from '../lib/logger';
 import {withRetry} from '../lib/resilience';
-import {emailDeliverySourceValidator} from '../lib/validators/email_delivery';
-
-const attachmentValidator = v.object({
-  filename: v.string(),
-  content: v.string(),
-  encoding: v.optional(v.string()),
-  contentType: v.optional(v.string()),
-  cid: v.optional(v.string()),
-});
-
-const smtpPayloadValidator = {
-  to: v.string(),
-  subject: v.string(),
-  html: v.string(),
-  text: v.optional(v.string()),
-  headers: v.optional(v.record(v.string(), v.string())),
-  attachments: v.optional(v.array(attachmentValidator)),
-};
+import {
+  emailPayloadArgs,
+  providerEmailDeliveryArgs,
+} from '../lib/validators/email_delivery';
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -116,13 +102,7 @@ async function sendViaSmtp(
 }
 
 export const sendPreview = internalAction({
-  args: {
-    ...smtpPayloadValidator,
-    source: emailDeliverySourceValidator,
-    sourceId: v.string(),
-    recipient: v.string(),
-    critical: v.optional(v.boolean()),
-  },
+  args: providerEmailDeliveryArgs,
   returns: v.null(),
   handler: async (ctx, args) => {
     try {
@@ -151,7 +131,7 @@ export const sendPreview = internalAction({
 });
 
 export const sendFallback = internalAction({
-  args: smtpPayloadValidator,
+  args: emailPayloadArgs,
   returns: v.null(),
   handler: async (_ctx, args) => {
     await sendViaSmtp(args, 'fallback');
