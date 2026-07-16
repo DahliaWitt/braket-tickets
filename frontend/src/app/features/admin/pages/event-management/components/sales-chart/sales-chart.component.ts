@@ -14,7 +14,7 @@ import type {
   ApexYAxis,
 } from 'ng-apexcharts';
 
-import 'apexcharts/line';
+import '../apexcharts-registration';
 
 export interface ChartOptions {
   series: ApexAxisChartSeries;

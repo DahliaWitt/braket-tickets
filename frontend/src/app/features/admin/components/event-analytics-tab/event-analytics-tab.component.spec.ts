@@ -1,8 +1,13 @@
 import '../../../../../test-setup';
-import {type ComponentFixture, TestBed} from '@angular/core/testing';
+import {
+  type ComponentFixture,
+  TestBed,
+  DeferBlockBehavior,
+} from '@angular/core/testing';
 import {provideZonelessChangeDetection} from '@angular/core';
 import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
-import {expect, describe, it, afterEach} from 'vitest';
+import {expect, describe, it, vi, afterEach} from 'vitest';
+import {patchChartHostDimensions} from '@/features/admin/pages/event-management/components/testing/chart-options.fixture';
 import {CONVEX} from 'convex-angular';
 import {AuthService} from '@/core/services/auth.service';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
@@ -74,9 +79,11 @@ describe('EventAnalyticsTabComponent', () => {
 
   async function setup(
     summary: EventManagementSummary,
+    deferBlockBehavior = DeferBlockBehavior.Manual,
   ): Promise<EventAnalyticsTabHarness> {
     TestBed.configureTestingModule({
       imports: [EventAnalyticsTabComponent],
+      deferBlockBehavior,
       providers: [
         provideZonelessChangeDetection(),
         {
@@ -124,8 +131,7 @@ describe('EventAnalyticsTabComponent', () => {
 
     const options = fixture.componentInstance.checkInChartOptions();
     const firstPoint = options?.series[0]?.data[0] as
-      | {x: number; y: number}
-      | undefined;
+      {x: number; y: number} | undefined;
     const labelFormatter = options?.xaxis.labels?.formatter;
     const tooltipFormatter = options?.tooltip.x?.formatter;
 
@@ -141,6 +147,54 @@ describe('EventAnalyticsTabComponent', () => {
     expect(await harness.hasPauseSalesButton()).toBe(true);
     expect(await harness.hasEndSalesButton()).toBe(true);
     expect(await harness.getTicketSalesUnavailableMessageText()).toBeNull();
+  });
+
+  it('renders both charts concurrently through their immediate defer blocks', async () => {
+    // Regression for the ApexCharts registration race: both charts load
+    // through concurrent @defer blocks, and each must register its own chart
+    // types — CheckInChart used to crash with `chart type "line" is not
+    // registered` whenever its chunk beat SalesChart's.
+    const restoreDimensions = patchChartHostDimensions();
+    try {
+      const harness = await setup(
+        {
+          ...buildSummary(),
+          salesByDay: [
+            {date: '2026-01-10', quantity: 2},
+            {date: '2026-01-11', quantity: 5},
+          ],
+          checkInStats: {
+            checkedIn: 3,
+            checkInRate: 1,
+            buckets: [
+              {time: Date.UTC(2026, 0, 14, 20, 0, 0), count: 1},
+              {time: Date.UTC(2026, 0, 14, 21, 0, 0), count: 2},
+            ],
+          },
+        },
+        DeferBlockBehavior.Playthrough,
+      );
+
+      await vi.waitFor(async () => {
+        const salesChart = await harness.getSalesChart();
+        const checkInChart = await harness.getCheckInChart();
+        expect(salesChart).not.toBeNull();
+        expect(checkInChart).not.toBeNull();
+        expect(await salesChart!.hasRenderedSeries()).toBe(true);
+        expect(await checkInChart!.hasRenderedSeries()).toBe(true);
+      });
+    } finally {
+      restoreDimensions();
+    }
+  });
+
+  it('shows empty states and no charts when there is no sales or check-in data', async () => {
+    const harness = await setup(buildSummary(), DeferBlockBehavior.Playthrough);
+
+    expect(await harness.getSalesChart()).toBeNull();
+    expect(await harness.getCheckInChart()).toBeNull();
+    expect(await harness.isCheckInChartCardPresent()).toBe(false);
+    expect(await harness.getSalesEmptyStateText()).toBe('No sales yet.');
   });
 
   it('hides pause and end sales actions for a draft event', async () => {

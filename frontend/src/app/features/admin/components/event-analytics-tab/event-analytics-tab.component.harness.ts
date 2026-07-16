@@ -1,4 +1,6 @@
 import {ComponentHarness, type TestElement} from '@angular/cdk/testing';
+import {SalesChartComponentHarness} from '@/features/admin/pages/event-management/components/sales-chart/sales-chart.component.harness';
+import {CheckInChartComponentHarness} from '@/features/admin/pages/event-management/components/check-in-chart/check-in-chart.component.harness';
 
 /**
  * CDK test harness for `app-event-analytics-tab`.
@@ -136,6 +138,32 @@ export class EventAnalyticsTabHarness extends ComponentHarness {
       this.collectText(this.getTierStatModeEls),
     ]);
     return {min, max, mean, median, mode};
+  }
+
+  // ── Deferred charts ─────────────────────────────────────────────────
+  private getSalesChartHarness = this.locatorForOptional(
+    SalesChartComponentHarness,
+  );
+  private getCheckInChartHarness = this.locatorForOptional(
+    CheckInChartComponentHarness,
+  );
+
+  /** null until the sales-chart defer block resolves. */
+  async getSalesChart(): Promise<SalesChartComponentHarness | null> {
+    return this.getSalesChartHarness();
+  }
+
+  /** null until the check-in-chart defer block resolves. */
+  async getCheckInChart(): Promise<CheckInChartComponentHarness | null> {
+    return this.getCheckInChartHarness();
+  }
+
+  private getSalesEmptyStateEl = this.locatorForOptional(
+    '[data-testid="sales-empty-state"]',
+  );
+
+  async getSalesEmptyStateText(): Promise<string | null> {
+    return this.readTrimmed(this.getSalesEmptyStateEl);
   }
 
   // ── Check-in analytics ──────────────────────────────────────────────

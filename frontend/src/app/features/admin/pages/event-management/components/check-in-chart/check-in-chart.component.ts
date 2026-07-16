@@ -2,6 +2,8 @@ import {Component, input, ChangeDetectionStrategy} from '@angular/core';
 import {ChartCoreComponent} from 'ng-apexcharts';
 import type {ChartOptions} from '../sales-chart/sales-chart.component';
 
+import '../apexcharts-registration';
+
 @Component({
   selector: 'app-check-in-chart',
   changeDetection: ChangeDetectionStrategy.OnPush,

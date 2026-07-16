@@ -317,7 +317,12 @@
           </div>
         }
       } @else {
-        <div class="font-mono text-sm text-muted-foreground">No sales yet.</div>
+        <div
+          class="font-mono text-sm text-muted-foreground"
+          data-testid="sales-empty-state"
+        >
+          No sales yet.
+        </div>
       }
     </div>
   </z-card>
