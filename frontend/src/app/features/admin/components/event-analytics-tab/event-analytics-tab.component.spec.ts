@@ -197,7 +197,9 @@ describe('EventAnalyticsTabComponent', () => {
     expect(await harness.getSalesChart()).toBeNull();
     expect(await harness.getCheckInChart()).toBeNull();
     expect(await harness.isCheckInChartCardPresent()).toBe(false);
-    expect(await harness.getSalesEmptyStateText()).toBe('No sales yet.');
+    expect(await harness.getSalesEmptyStateText()).toBe(
+      'no sales yet — spread the word',
+    );
   });
 
   it('hides pause and end sales actions for a draft event', async () => {
