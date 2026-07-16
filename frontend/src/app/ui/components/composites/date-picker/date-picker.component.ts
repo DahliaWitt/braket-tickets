@@ -1,5 +1,6 @@
 import {DatePipe} from '@angular/common';
 import {
+  booleanAttribute,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -11,6 +12,7 @@ import {
   signal,
   viewChild,
   ViewEncapsulation,
+  ElementRef,
   type TemplateRef,
 } from '@angular/core';
 import {NG_VALUE_ACCESSOR, type ControlValueAccessor} from '@angular/forms';
@@ -52,28 +54,49 @@ const HEIGHT_BY_SIZE: Record<
     ZardIconComponent,
   ],
   template: `
-    <button
-      z-button
-      type="button"
-      [zType]="zType() ?? 'outline'"
-      [zSize]="zSize() ?? 'default'"
-      [disabled]="disabled()"
-      [class]="buttonClasses()"
-      zPopover
-      #popoverDirective="zPopover"
-      [zContent]="calendarTemplate"
-      [zVisible]="isOpen()"
-      zTrigger="click"
-      (zVisibleChange)="onPopoverVisibilityChange($event)"
-      [attr.aria-expanded]="isOpen()"
-      [attr.aria-haspopup]="true"
-      [attr.aria-label]="ariaLabel()"
-    >
-      <z-icon zType="calendar" aria-hidden="true" />
-      <span [class]="textClasses()">
-        {{ displayText() }}
-      </span>
-    </button>
+    <!--
+      The wrapper must be inline-level: the component host renders as
+      display:inline, and a block-level child fragments the host's inline box
+      (its border/padding classes then paint around an empty strip). An
+      inline-block also gives the absolute clear affordance a reliable
+      containing block, which an inline host does not.
+    -->
+    <span class="relative inline-block w-full">
+      <button
+        z-button
+        type="button"
+        #triggerButton
+        [zType]="zType() ?? 'outline'"
+        [zSize]="zSize() ?? 'default'"
+        [disabled]="disabled()"
+        [class]="buttonClasses()"
+        zPopover
+        #popoverDirective="zPopover"
+        [zContent]="calendarTemplate"
+        [zVisible]="isOpen()"
+        zTrigger="click"
+        (zVisibleChange)="onPopoverVisibilityChange($event)"
+        [attr.aria-expanded]="isOpen()"
+        [attr.aria-haspopup]="true"
+        [attr.aria-label]="ariaLabel()"
+      >
+        <z-icon zType="calendar" aria-hidden="true" />
+        <span [class]="textClasses()">
+          {{ displayText() }}
+        </span>
+      </button>
+      @if (showClearButton()) {
+        <button
+          type="button"
+          data-testid="date-picker-clear"
+          class="absolute top-1/2 right-2 flex size-6 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          [attr.aria-label]="clearLabel()"
+          (click)="onClearClick()"
+        >
+          <z-icon zType="x" aria-hidden="true" />
+        </button>
+      }
+    </span>
 
     <ng-template #calendarTemplate>
       <z-popover [class]="popoverClasses()">
@@ -115,6 +138,10 @@ export class BraDatePickerComponent
   readonly popoverDirective =
     viewChild.required<ZardPopoverDirective>('popoverDirective');
   readonly calendar = viewChild.required<BraCalendarComponent>('calendar');
+  private readonly triggerButton = viewChild.required<
+    unknown,
+    ElementRef<HTMLButtonElement>
+  >('triggerButton', {read: ElementRef});
 
   readonly class = input<ClassValue>('');
   readonly zType = input<BraDatePickerVariants['zType']>('outline');
@@ -124,6 +151,12 @@ export class BraDatePickerComponent
   readonly zFormat = input<string>('MMMM d, yyyy');
   readonly minDate = input<Date | null>(null);
   readonly maxDate = input<Date | null>(null);
+  /**
+   * Opt-in: renders a clear affordance when a date is selected. Leave off for
+   * required fields so they cannot be emptied from the UI.
+   */
+  readonly clearable = input(false, {transform: booleanAttribute});
+  readonly clearLabel = input<string>('clear date');
 
   readonly dateChange = output<Date | null>();
   readonly isOpen = signal(false);
@@ -137,6 +170,10 @@ export class BraDatePickerComponent
     ),
   );
 
+  protected readonly showClearButton = computed(
+    () => this.clearable() && !!this.value() && !this.disabled(),
+  );
+
   protected readonly buttonClasses = computed(() => {
     const hasValue = !!this.value();
     const size: NonNullable<BraDatePickerVariants['zSize']> =
@@ -146,6 +183,9 @@ export class BraDatePickerComponent
       'w-full justify-between border-b-2 bg-transparent text-left font-mono transition-colors',
       'border-input text-foreground hover:border-ring focus-visible:border-ring focus-visible:outline-none',
       !hasValue && 'text-muted-foreground',
+      // Reserve space for the overlaid clear affordance whenever it can
+      // appear, so the text does not shift when a date is set or cleared.
+      this.clearable() && 'pr-10',
       height,
       this.class(),
     );
@@ -185,6 +225,16 @@ export class BraDatePickerComponent
     this.dateChange.emit(singleDate);
 
     this.popoverDirective().hide();
+  }
+
+  protected onClearClick(): void {
+    this.value.set(null);
+    this.onChange(null);
+    this.onTouched();
+    this.dateChange.emit(null);
+    // The clear button removes itself from the DOM; without an explicit
+    // handoff, keyboard/screen-reader focus falls back to <body>.
+    this.triggerButton().nativeElement.focus();
   }
 
   protected onPopoverVisibilityChange(visible: boolean): void {

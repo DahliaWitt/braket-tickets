@@ -584,6 +584,16 @@ export class EventEditorComponent implements HasUnsavedChanges {
     ]);
   }
 
+  /**
+   * Clearing the end date from the picker must also drop the paired end time —
+   * otherwise the leftover time trips the endDateTimePair validator and the
+   * "cleared" state can never be saved.
+   */
+  onEndDateChange(date: Date | null): void {
+    if (date !== null) return;
+    this.eventModel.update((m) => (m.endTime === '' ? m : {...m, endTime: ''}));
+  }
+
   toggleSlidingScale(event: Event) {
     const target = event.target;
     if (!target || typeof target !== 'object' || !('checked' in target)) return;

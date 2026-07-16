@@ -465,6 +465,107 @@ describe('EventEditorComponent', () => {
     );
   });
 
+  describe('end date clearing', () => {
+    function makeEventWithEnd(): EditableEvent {
+      const start = getFutureDate(31);
+      start.setHours(22, 0, 0, 0);
+      const end = getFutureDate(32);
+      end.setHours(6, 0, 0, 0);
+      return {
+        ...mockEvent,
+        date: start.toISOString(),
+        endDate: end.toISOString(),
+      };
+    }
+
+    /** Rebuilds the editor fixture so getOneForEdit mock changes take effect. */
+    async function recreateEditor(): Promise<void> {
+      fixture = TestBed.createComponent(EventEditorComponent);
+      component = fixture.componentInstance;
+      fixture.componentRef.setInput('id', 'evt123');
+      harness = await TestbedHarnessEnvironment.harnessForFixture(
+        fixture,
+        EventEditorHarness,
+      );
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(component.isLoading()).toBe(false);
+      fixture.detectChanges();
+    }
+
+    it('shows the clear affordance only on the populated optional end date', async () => {
+      eventsServiceMock.getOneForEdit.mockResolvedValue(makeEventWithEnd());
+      await recreateEditor();
+
+      const endPicker = await harness.getEndDatePicker();
+      const startPicker = await harness.getStartDatePicker();
+      expect(await endPicker.hasClearButton()).toBe(true);
+      expect(await endPicker.getClearButtonLabel()).toBe('clear end date');
+      // The required start date must never expose a clear affordance.
+      expect(await startPicker.hasClearButton()).toBe(false);
+    });
+
+    it('hides the clear affordance when no end date is set', async () => {
+      const endPicker = await harness.getEndDatePicker();
+      expect(await endPicker.hasClearButton()).toBe(false);
+    });
+
+    it('clears both end date and end time together and marks the form dirty', async () => {
+      eventsServiceMock.getOneForEdit.mockResolvedValue(makeEventWithEnd());
+      await recreateEditor();
+
+      expect(component.eventModel().endDate).not.toBeNull();
+      expect(component.eventModel().endTime).not.toBe('');
+      expect(component.isDirty()).toBe(false);
+
+      await harness.clearEndDate();
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(component.eventModel().endDate).toBeNull();
+      expect(component.eventModel().endTime).toBe('');
+      expect(await harness.getEndTimeValue()).toBe('');
+      // No dangling half of the pair, so the pair validator must stay quiet.
+      expect(await harness.getEndTimeErrorText()).toBeNull();
+      expect(component.isDirty()).toBe(true);
+      expect(await harness.isSaveButtonDisabled()).toBe(false);
+    });
+
+    it('saves endDate null after clearing via the UI and stays absent after reload', async () => {
+      const seeded = makeEventWithEnd();
+      eventsServiceMock.getOneForEdit.mockResolvedValue(seeded);
+      await recreateEditor();
+
+      await harness.clearEndDate();
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      // After the save, the backend serves the event without an end date.
+      eventsServiceMock.getOneForEdit.mockResolvedValue({
+        ...seeded,
+        endDate: undefined,
+      });
+
+      await component.onSubmit('published');
+      await fixture.whenStable();
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(eventsServiceMock.updateWithPoster).toHaveBeenCalledWith(
+        expect.objectContaining({endDate: null}),
+        undefined,
+        expect.any(Function),
+        expect.any(AbortSignal),
+      );
+
+      const endPicker = await harness.getEndDatePicker();
+      expect(component.eventModel().endDate).toBeNull();
+      expect(component.eventModel().endTime).toBe('');
+      expect(await endPicker.hasClearButton()).toBe(false);
+      expect(component.isDirty()).toBe(false);
+    });
+  });
+
   it('should submit null for location, description, supporterDefaultPrice, and maxTicketsPerUser when cleared in edit mode', async () => {
     component.eventModel.update((m) => ({
       ...m,

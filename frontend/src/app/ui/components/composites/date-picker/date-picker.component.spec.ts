@@ -177,4 +177,99 @@ describe('BraDatePickerComponent', () => {
     const picker = await getPicker();
     expect(await picker.isDisabled()).toBe(true);
   });
+
+  describe('clearable', () => {
+    it('should not render a clear button by default even when populated', async () => {
+      component.writeValue(new Date(2026, 5, 20));
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const picker = await getPicker();
+      expect(await picker.hasClearButton()).toBe(false);
+    });
+
+    it('should not render a clear button when clearable but empty', async () => {
+      fixture.componentRef.setInput('clearable', true);
+      component.writeValue(null);
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const picker = await getPicker();
+      expect(await picker.hasClearButton()).toBe(false);
+    });
+
+    it('should render an accessible clear button when clearable and populated', async () => {
+      fixture.componentRef.setInput('clearable', true);
+      component.writeValue(new Date(2026, 5, 20));
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const picker = await getPicker();
+      expect(await picker.hasClearButton()).toBe(true);
+      expect(await picker.getClearButtonLabel()).toBe('clear date');
+    });
+
+    it('should use the configured clear label', async () => {
+      fixture.componentRef.setInput('clearable', true);
+      fixture.componentRef.setInput('clearLabel', 'clear end date');
+      component.writeValue(new Date(2026, 5, 20));
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const picker = await getPicker();
+      expect(await picker.getClearButtonLabel()).toBe('clear end date');
+    });
+
+    it('should hide the clear button while disabled', async () => {
+      fixture.componentRef.setInput('clearable', true);
+      component.writeValue(new Date(2026, 5, 20));
+      component.setDisabledState(true);
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const picker = await getPicker();
+      expect(await picker.hasClearButton()).toBe(false);
+    });
+
+    it('should clear the value and notify CVA/output callbacks without opening the popover', async () => {
+      fixture.componentRef.setInput('clearable', true);
+      fixture.componentRef.setInput('placeholder', 'Same night (optional)');
+      component.writeValue(new Date(2026, 5, 20));
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const onChange = vi.fn();
+      const onTouched = vi.fn();
+      const emitSpy = vi.spyOn(component.dateChange, 'emit');
+      component.registerOnChange(onChange);
+      component.registerOnTouched(onTouched);
+
+      const picker = await getPicker();
+      await picker.clear();
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(component.value()).toBeNull();
+      expect(onChange).toHaveBeenCalledWith(null);
+      expect(onTouched).toHaveBeenCalledTimes(1);
+      expect(emitSpy).toHaveBeenCalledWith(null);
+      expect(component.isOpen()).toBe(false);
+      expect(await picker.hasClearButton()).toBe(false);
+      expect(await picker.getDisplayText()).toContain('Same night (optional)');
+    });
+
+    it('should hand focus to the trigger after clearing so keyboard users are not dropped', async () => {
+      fixture.componentRef.setInput('clearable', true);
+      component.writeValue(new Date(2026, 5, 20));
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const picker = await getPicker();
+      await picker.clear();
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(await picker.isTriggerFocused()).toBe(true);
+    });
+  });
 });
