@@ -65,7 +65,9 @@ export const emailPayloadArgs = {
  * delivery-tracking metadata. Internal-only dispatch flags such as
  * `requireDelivery` are NOT part of this contract — the wrapper in
  * lib/email_delivery_wrapper.ts folds them into `critical` before dispatch,
- * and provider validators reject any extra field.
+ * and provider validators reject extra fields. (Sole exception: for one
+ * release, resend_actions.send tolerates and ignores `requireDelivery` so
+ * jobs scheduled by the pre-contract wrapper survive the deploy window.)
  */
 export const providerEmailDeliveryArgs = {
   ...emailPayloadArgs,

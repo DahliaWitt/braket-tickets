@@ -188,6 +188,39 @@ describe('Preview email delivery contract', () => {
     }
   });
 
+  it('fails the email-change request at dispatch when required delivery is unconfigured', async () => {
+    const env = snapshotEnv(ENV_KEYS);
+    usePreviewModeEnv({configured: false});
+    try {
+      const t = convexTest();
+
+      await expect(
+        t.run(async (ctx) => {
+          // Mirror a real mutation ctx: scheduler but no runAction, so
+          // dispatchEmailSend takes the scheduler branch and its
+          // required-delivery guard must throw BEFORE anything is enqueued.
+          const mutationCtx = {
+            scheduler: ctx.scheduler,
+            runMutation: ctx.runMutation,
+          } as unknown as Parameters<typeof dispatchEmailChangeConfirmation>[0];
+          await dispatchEmailChangeConfirmation(mutationCtx, {
+            to: 'current-owner@example.com',
+            newEmail: 'fresh-address@example.com',
+            url: 'https://example.convex.site/verify?token=abc',
+          });
+        }),
+      ).rejects.toThrow(/required but not configured/i);
+
+      expect(sendMailMock).not.toHaveBeenCalled();
+      const deliveries = await t.run(async (ctx) =>
+        ctx.db.query('emailDeliveries').collect(),
+      );
+      expect(deliveries).toHaveLength(0);
+    } finally {
+      restoreEnv(ENV_KEYS, env);
+    }
+  });
+
   it('delivers immediately from action contexts through the real sendPreview validator', async () => {
     const env = snapshotEnv(ENV_KEYS);
     usePreviewModeEnv();

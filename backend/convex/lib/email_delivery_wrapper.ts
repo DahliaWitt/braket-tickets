@@ -54,8 +54,10 @@ export type DeliveryMetadata = {
   requireDelivery?: boolean;
 };
 
-// Both provider actions (smtp.sendPreview, resend_actions.send) share the
-// providerEmailDeliveryArgs validator, so one generated arg type covers both.
+// Both provider actions (smtp.sendPreview, resend_actions.send) accept the
+// providerEmailDeliveryArgs contract. sendPreview's generated arg type IS that
+// contract exactly (send additionally tolerates a transitional, ignored
+// requireDelivery field for one release), so it types the builder's output.
 type ProviderEmailArgs = FunctionArgs<typeof internal.email.smtp.sendPreview>;
 
 const providerArgsValidator = v.object(providerEmailDeliveryArgs);
