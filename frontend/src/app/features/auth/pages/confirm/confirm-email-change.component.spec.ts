@@ -205,7 +205,6 @@ describe('ConfirmEmailChangeComponent', () => {
       'ott-token-123',
       {
         navigateOnSuccess: false,
-        syncUserToApp: true,
       },
     );
   });

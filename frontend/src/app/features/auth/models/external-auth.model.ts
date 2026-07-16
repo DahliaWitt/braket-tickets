@@ -8,7 +8,7 @@ const SOCIAL_PROVIDER_FLAGS: Record<SocialProvider, true> = {
   discord: true,
 };
 
-export const SOCIAL_PROVIDER_IDS = Object.keys(
+const SOCIAL_PROVIDER_IDS = Object.keys(
   SOCIAL_PROVIDER_FLAGS,
 ) as readonly SocialProvider[];
 

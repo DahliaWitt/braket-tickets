@@ -886,8 +886,7 @@ describe('AuthService', () => {
         session: {id: 'session-123'},
       };
       let resolveGetSession:
-        | ((value: {data: typeof staleSession; error: null}) => void)
-        | undefined;
+        ((value: {data: typeof staleSession; error: null}) => void) | undefined;
       const pendingGetSession = new Promise<{
         data: typeof staleSession;
         error: null;
@@ -1281,7 +1280,6 @@ describe('AuthService', () => {
       await expect(
         service.handleOAuthCallback('ott-token', {
           navigateOnSuccess: false,
-          syncUserToApp: true,
         }),
       ).resolves.toEqual({requiresSocialSignupCompletion: true});
 
@@ -1330,7 +1328,6 @@ describe('AuthService', () => {
         await expect(
           service.handleOAuthCallback('ott-token', {
             navigateOnSuccess: false,
-            syncUserToApp: true,
           }),
         ).rejects.toEqual(new SocialAuthBlockedError(blockedReason));
 

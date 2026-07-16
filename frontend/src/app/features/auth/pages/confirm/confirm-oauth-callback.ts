@@ -31,10 +31,7 @@ export async function resolveConfirmOAuthCallback(options: {
   try {
     const completionState = await options.auth.handleOAuthCallback(
       options.ott,
-      {
-        navigateOnSuccess: false,
-        syncUserToApp: true,
-      },
+      {navigateOnSuccess: false},
     );
     return {ok: true, result: {completionState}};
   } catch (err: unknown) {
