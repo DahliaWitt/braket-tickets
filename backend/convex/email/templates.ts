@@ -1092,3 +1092,87 @@ export function payoutSentTemplate(
     html: wrapEmail(content, `Payout sent for ${amountFormatted}`),
   };
 }
+
+/**
+ * Buyer-facing confirmation for a processed refund (CUJ 6.9 step 5).
+ *
+ * Covers paid refunds (partial or complete) and zero-dollar cancellations of
+ * free tickets. `ticketsRefunded` is the count cancelled by THIS refund; it
+ * can be 0 for money-only adjustments reconciled from external Stripe
+ * refunds.
+ */
+export function refundConfirmationTemplate(args: {
+  event: {title: string; date: string; endDate?: string; location?: string};
+  refundedAmountCents: number;
+  currency: 'USD';
+  ticketsRefunded: number;
+  isFullRefund: boolean;
+  supportEmail?: string;
+}): {subject: string; html: string} {
+  const safeTitle = escapeHtml(args.event.title);
+  const safeLocation = args.event.location
+    ? escapeHtml(args.event.location)
+    : '';
+  const dateStr = formatEventDateTime(args.event);
+  const isZeroDollar = args.refundedAmountCents === 0;
+  const amountFormatted = `$${(args.refundedAmountCents / 100).toFixed(2)} ${args.currency}`;
+  const safeAmount = escapeHtml(amountFormatted);
+  const scopeLabel = args.isFullRefund ? 'full refund' : 'partial refund';
+
+  const ticketsLine =
+    args.ticketsRefunded === 0
+      ? 'No tickets were cancelled for this refund — it only adjusted the payment.'
+      : args.ticketsRefunded === 1
+        ? 'Your ticket has been cancelled and can no longer be used for entry.'
+        : `${args.ticketsRefunded} tickets have been cancelled and can no longer be used for entry.`;
+
+  const moneyLine = isZeroDollar
+    ? 'This was a free ticket, so there’s no charge to send back.'
+    : `We sent <strong style="color: ${baseStyles.textLight};">${safeAmount}</strong> back to your original payment method.`;
+
+  const settlementLine = isZeroDollar
+    ? ''
+    : `<p style="margin: 0 0 24px 0; font-size: 16px; line-height: 1.6; color: ${baseStyles.textMuted};">
+          Refunds usually land back on your card within 5–10 business days, depending on your bank.
+      </p>`;
+
+  const supportLine = args.supportEmail
+    ? `Questions? Reach us at <a href="mailto:${escapeHtml(args.supportEmail)}" style="color: ${baseStyles.accentViolet}; text-decoration: underline;">${escapeHtml(args.supportEmail)}</a> or just reply to this email~`
+    : 'Questions? Just reply to this email and we’ll sort it out~';
+
+  const content = `
+      <h2 style="margin: 0 0 16px 0; font-family: 'Syne', 'Chakra Petch', system-ui, sans-serif; font-size: 24px; line-height: 1.15; font-weight: 700; color: ${baseStyles.textLight};">
+          Refund confirmed (${scopeLabel})
+      </h2>
+      <p style="margin: 0 0 8px 0; font-size: 16px; line-height: 1.6; color: ${baseStyles.textMuted};">
+          ${moneyLine}
+      </p>
+      <p style="margin: 0 0 8px 0; font-size: 16px; line-height: 1.6; color: ${baseStyles.textMuted};">
+          ${ticketsLine}
+      </p>
+      <div style="margin: 24px 0; padding: 20px 0; border-top: 1px solid ${baseStyles.border}; border-bottom: 1px solid ${baseStyles.border};">
+          <p style="margin: 0 0 8px 0; font-size: 11px; color: ${baseStyles.textDim}; font-family: 'Space Mono', 'Courier New', monospace; text-transform: uppercase; letter-spacing: 1.5px;">EVENT DETAILS</p>
+          <p style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: ${baseStyles.accentPink};">${safeTitle}</p>
+          <p style="margin: 0 0 4px 0; font-size: 16px; color: ${baseStyles.textLight};">${escapeHtml(dateStr)}</p>
+          ${safeLocation ? `<p style="margin: 0; font-size: 16px; color: ${baseStyles.textMuted};">${safeLocation}</p>` : ''}
+      </div>
+      ${settlementLine}
+      <p style="margin: 24px 0 0 0; font-size: 13px; line-height: 1.5; color: ${baseStyles.textDim};">
+          ${supportLine}
+      </p>
+  `;
+
+  const subject = args.isFullRefund
+    ? `Your refund for ${safeTitle}`
+    : `Your partial refund for ${safeTitle}`;
+
+  return {
+    subject,
+    html: wrapEmail(
+      content,
+      isZeroDollar
+        ? `Your ${scopeLabel} for ${args.event.title} is confirmed.`
+        : `Your ${scopeLabel} of ${amountFormatted} for ${args.event.title} is confirmed.`,
+    ),
+  };
+}

@@ -28,7 +28,12 @@ Jump to:
 
 ## Restore transactional email delivery
 
-**Symptom:** Users do not receive verification, password-reset, ticket-confirmation, or vetting-notification email.
+**Symptom:** Users do not receive verification, password-reset, ticket-confirmation, refund-confirmation, or vetting-notification email.
+
+Refund confirmations use `source: 'refund'` and are deduplicated with an
+`emailDedup` key of `refund-confirmation-{orderId}-{stripeRefundId|tickets-N}`;
+see [payments.md](payments.md#buyer-refund-confirmation-email) for the
+end-to-end behavior.
 
 Start with these checks:
 

@@ -45,6 +45,11 @@ import {
   generateStripeIdempotencyKey,
 } from '../../lib/payments/refunds';
 import {loadOrderFinancial} from '../../lib/orders/financial_reporting';
+import {enqueueEmailDelivery} from '../../lib/email_delivery_wrapper';
+import {guardEmailDedup} from '../../lib/email_dedup';
+import {emailReplyTo} from '../../lib/resend_component';
+import {refundConfirmationTemplate} from '../../email/templates';
+import {logger} from '../../lib/logger';
 import {ORDER_RELEASE_GRACE_MS} from '../../lib/constants';
 import {LEGAL_TERMS_VERSION} from '@shared/constants';
 
@@ -975,7 +980,128 @@ export async function applyExternalRefundHandler(
     });
   }
 
+  // Buyer confirmation (CUJ 6.9 step 5). Only when this application actually
+  // moved money back or cancelled tickets — reruns of an already-applied
+  // refund (action retries after an unacknowledged commit, duplicate or
+  // out-of-order webhook echoes) compute refundDelta === 0 and an empty
+  // ticketsToRefund and skip. Enqueued inside this transaction so the
+  // confirmation commits atomically with the refund state; delivery itself
+  // runs out-of-band and can never roll back the accepted Stripe refund.
+  if (refundDelta > 0 || ticketsToRefund.length > 0) {
+    event ??= await ctx.db.get('events', order.eventId);
+    await sendRefundConfirmationEmail(ctx, {
+      order,
+      event,
+      refundDiscriminator:
+        args.stripeRefundId ??
+        `tickets-${alreadyRefundedCount + ticketsToRefund.length}`,
+      refundedAmountCents:
+        ledgerRefundAmountCents > 0 ? ledgerRefundAmountCents : refundDelta,
+      ticketsRefunded: ticketsToRefund.length,
+      isFullRefund:
+        nextRefundedAmount >= order.amountCents &&
+        ticketsToRefund.length >= activeTickets.length,
+    });
+  }
+
   return null;
+}
+
+/**
+ * Enqueue the buyer-facing refund confirmation for one applied refund.
+ *
+ * Idempotency: the emailDedup guard is keyed on the Stripe refund id (or a
+ * cancelled-ticket count for zero-dollar refunds), so the admin action's
+ * direct application and the later `charge.refunded` webhook echo of the
+ * same refund — as well as mutation retries — produce exactly one email.
+ * The guard row commits in the same transaction as the refund state, so a
+ * rolled-back application also rolls back the guard and stays sendable.
+ *
+ * Failures are contained: a missing recipient or template/enqueue error is
+ * logged and swallowed so the refund state application (which must converge
+ * with the already-committed Stripe refund) can never fail on email
+ * plumbing. Delivery failures downstream are recorded in
+ * emailDeliveryFailures via the critical-delivery pipeline.
+ */
+async function sendRefundConfirmationEmail(
+  ctx: MutationCtx,
+  args: {
+    order: Doc<'ticket_orders'>;
+    event: Doc<'events'> | null;
+    refundDiscriminator: string;
+    refundedAmountCents: number;
+    ticketsRefunded: number;
+    isFullRefund: boolean;
+  },
+): Promise<void> {
+  const {order, event} = args;
+  try {
+    let recipient: string | null = null;
+    if (order.userId) {
+      const user = await ctx.db.get('users', order.userId);
+      recipient = user?.email ?? null;
+    } else if (order.guestSessionId) {
+      const guestSession = await ctx.db.get(
+        'guest_sessions',
+        order.guestSessionId,
+      );
+      recipient = guestSession?.email ?? null;
+    }
+    if (!recipient) {
+      logger.warn(
+        'payments',
+        'Refund confirmation skipped: order has no reachable recipient',
+        {orderId: order._id, refundDiscriminator: args.refundDiscriminator},
+      );
+      return;
+    }
+    if (!event) {
+      logger.warn(
+        'payments',
+        'Refund confirmation skipped: order event is missing',
+        {orderId: order._id, refundDiscriminator: args.refundDiscriminator},
+      );
+      return;
+    }
+
+    const dedupKey = `refund-confirmation-${order._id}-${args.refundDiscriminator}`;
+    const alreadySent = await guardEmailDedup(ctx, dedupKey);
+    if (alreadySent) return;
+
+    const {subject, html} = refundConfirmationTemplate({
+      event: {
+        title: event.title,
+        date: event.date,
+        endDate: event.endDate,
+        location: event.location,
+      },
+      refundedAmountCents: args.refundedAmountCents,
+      currency: order.currency,
+      ticketsRefunded: args.ticketsRefunded,
+      isFullRefund: args.isFullRefund,
+      supportEmail: emailReplyTo()?.[0],
+    });
+    await enqueueEmailDelivery(
+      ctx,
+      {to: recipient, subject, html},
+      {
+        source: 'refund',
+        sourceId: `${order._id}:${args.refundDiscriminator}`,
+        recipient,
+        critical: true,
+      },
+    );
+  } catch (error) {
+    logger.error(
+      'payments',
+      'Refund confirmation email enqueue failed; refund state is unaffected',
+      {
+        orderId: order._id,
+        refundDiscriminator: args.refundDiscriminator,
+        error,
+      },
+    );
+  }
 }
 
 export async function clearCheckoutSessionHandler(

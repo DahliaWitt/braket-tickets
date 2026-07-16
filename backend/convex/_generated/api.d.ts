@@ -3926,7 +3926,8 @@ export declare const internal: {
             | "ticket"
             | "payout"
             | "resale_available"
-            | "auth";
+            | "auth"
+            | "refund";
           sourceId: string;
         },
         boolean
@@ -3953,7 +3954,8 @@ export declare const internal: {
             | "ticket"
             | "payout"
             | "resale_available"
-            | "auth";
+            | "auth"
+            | "refund";
           sourceId: string;
         },
         null
@@ -3975,7 +3977,8 @@ export declare const internal: {
             | "ticket"
             | "payout"
             | "resale_available"
-            | "auth";
+            | "auth"
+            | "refund";
           sourceId: string;
         },
         null
@@ -4198,7 +4201,8 @@ export declare const internal: {
             | "ticket"
             | "payout"
             | "resale_available"
-            | "auth";
+            | "auth"
+            | "refund";
           sourceId: string;
           subject: string;
           text?: string;
@@ -4253,7 +4257,8 @@ export declare const internal: {
             | "ticket"
             | "payout"
             | "resale_available"
-            | "auth";
+            | "auth"
+            | "refund";
           sourceId: string;
           subject: string;
           text?: string;

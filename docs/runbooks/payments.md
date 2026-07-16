@@ -244,6 +244,28 @@ DOPPLER_CONFIG=prd pnpm sync:env:prod
 - Then ensure the corresponding financial event is recorded so the order history is complete
 - If ticket state and financial events disagree, prioritize ticket entitlement safety first and escalate
 
+### Buyer refund confirmation email
+
+Every applied refund enqueues one buyer confirmation from
+`applyExternalRefundHandler` in
+[orders/\_impl/core_handlers.ts](../../backend/convex/orders/_impl/core_handlers.ts) —
+this covers admin refunds (standard, force-all, single ticket), zero-dollar
+free-ticket cancellations, and external Stripe-dashboard refunds reconciled by
+the `charge.refunded` webhook.
+
+- Delivery uses `source: 'refund'` with
+  `sourceId: {orderId}:{stripeRefundId}` (zero-dollar refunds use a
+  `tickets-N` discriminator instead of a Stripe refund id).
+- Duplicate suppression is an `emailDedup` row keyed
+  `refund-confirmation-{orderId}-{stripeRefundId|tickets-N}`, so an admin
+  refund and its webhook echo, duplicate webhook deliveries, and mutation
+  retries produce exactly one email.
+- Email problems never block or roll back refund state: a missing recipient
+  or enqueue error is logged under the `payments` scope and skipped. Delivery
+  failures are recorded in `emailDeliveryFailures` with `source === 'refund'`
+  (see [email-delivery.md](email-delivery.md) for recovery, including the
+  dedup-row deletion step to allow a manual re-send).
+
 ---
 
 ## Reconcile revenue

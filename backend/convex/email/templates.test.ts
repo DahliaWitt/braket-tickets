@@ -5,6 +5,7 @@ import {
   eventBroadcastTemplate,
   payoutSentTemplate,
   purchasedTicketTemplate,
+  refundConfirmationTemplate,
   resaleAvailableTemplate,
   ticketPurchaseReminderTemplate,
   vettingDigestTemplate,
@@ -573,6 +574,100 @@ describe('payoutSentTemplate', () => {
     expect(html).toContain(
       'https://community.braket.gay/community-admin/events/event%20id/manage?community=deep%20end',
     );
+  });
+});
+
+describe('refundConfirmationTemplate', () => {
+  const refundEvent = {
+    title: 'Warehouse Communion',
+    date: '2026-05-01T20:00:00.000Z',
+    location: 'The Vault',
+  };
+
+  it('renders a complete refund with plural ticket copy, amount, timing, and event identity', () => {
+    const {subject, html} = refundConfirmationTemplate({
+      event: refundEvent,
+      refundedAmountCents: 5000,
+      currency: 'USD',
+      ticketsRefunded: 2,
+      isFullRefund: true,
+      supportEmail: 'help@braket.gay',
+    });
+
+    expect(subject).toBe('Your refund for Warehouse Communion');
+    expect(html).toContain('full refund');
+    expect(html).toContain('$50.00 USD');
+    expect(html).toContain(
+      '2 tickets have been cancelled and can no longer be used for entry.',
+    );
+    expect(html).toContain('5–10 business days');
+    expect(html).toContain('Warehouse Communion');
+    expect(html).toContain('The Vault');
+    expect(html).toContain('mailto:help@braket.gay');
+  });
+
+  it('renders a partial single-ticket refund with singular copy', () => {
+    const {subject, html} = refundConfirmationTemplate({
+      event: refundEvent,
+      refundedAmountCents: 2500,
+      currency: 'USD',
+      ticketsRefunded: 1,
+      isFullRefund: false,
+    });
+
+    expect(subject).toBe('Your partial refund for Warehouse Communion');
+    expect(html).toContain('partial refund');
+    expect(html).toContain('$25.00 USD');
+    expect(html).toContain(
+      'Your ticket has been cancelled and can no longer be used for entry.',
+    );
+    expect(html).not.toContain('tickets have been cancelled');
+    expect(html).toContain('reply to this email');
+  });
+
+  it('renders zero-dollar refunds without money-return or settlement copy', () => {
+    const {html} = refundConfirmationTemplate({
+      event: refundEvent,
+      refundedAmountCents: 0,
+      currency: 'USD',
+      ticketsRefunded: 1,
+      isFullRefund: true,
+    });
+
+    expect(html).toContain('free ticket');
+    expect(html).toContain('no charge to send back');
+    expect(html).not.toContain('5–10 business days');
+    expect(html).not.toContain('back to your original payment method');
+  });
+
+  it('describes money-only refunds when no tickets were cancelled', () => {
+    const {html} = refundConfirmationTemplate({
+      event: refundEvent,
+      refundedAmountCents: 1000,
+      currency: 'USD',
+      ticketsRefunded: 0,
+      isFullRefund: false,
+    });
+
+    expect(html).toContain('No tickets were cancelled for this refund');
+    expect(html).toContain('$10.00 USD');
+  });
+
+  it('escapes user-controlled event fields', () => {
+    const {html} = refundConfirmationTemplate({
+      event: {
+        title: '<script>alert(1)</script>',
+        date: '2026-05-01T20:00:00.000Z',
+        location: '<img src=x>',
+      },
+      refundedAmountCents: 2500,
+      currency: 'USD',
+      ticketsRefunded: 1,
+      isFullRefund: false,
+    });
+
+    expect(html).not.toContain('<script>alert(1)</script>');
+    expect(html).not.toContain('<img src=x>');
   });
 });
 
