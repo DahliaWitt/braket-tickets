@@ -1096,10 +1096,11 @@ export function payoutSentTemplate(
 /**
  * Buyer-facing confirmation for a processed refund (CUJ 6.9 step 5).
  *
- * Covers paid refunds (partial or complete) and zero-dollar cancellations of
- * free tickets. `ticketsRefunded` is the count cancelled by THIS refund; it
- * can be 0 for money-only adjustments reconciled from external Stripe
- * refunds.
+ * Covers paid refunds (partial or complete), zero-dollar cancellations of
+ * free tickets (`isFreeOrder`), and zero-dollar ticket cancellations on paid
+ * orders whose money was already returned by an earlier refund.
+ * `ticketsRefunded` is the count cancelled by THIS refund; it can be 0 for
+ * money-only adjustments reconciled from external Stripe refunds.
  */
 export function refundConfirmationTemplate(args: {
   event: {title: string; date: string; endDate?: string; location?: string};
@@ -1107,6 +1108,7 @@ export function refundConfirmationTemplate(args: {
   currency: 'USD';
   ticketsRefunded: number;
   isFullRefund: boolean;
+  isFreeOrder: boolean;
   supportEmail?: string;
 }): {subject: string; html: string} {
   const safeTitle = escapeHtml(args.event.title);
@@ -1126,8 +1128,14 @@ export function refundConfirmationTemplate(args: {
         ? 'Your ticket has been cancelled and can no longer be used for entry.'
         : `${args.ticketsRefunded} tickets have been cancelled and can no longer be used for entry.`;
 
+  // Zero-dollar refunds mean different things on free vs paid orders: a free
+  // ticket has no charge to return, while a paid order reaching this with $0
+  // had its money returned by an earlier refund (e.g. force-cancelling used
+  // tickets after an external full refund).
   const moneyLine = isZeroDollar
-    ? 'This was a free ticket, so there’s no charge to send back.'
+    ? args.isFreeOrder
+      ? 'This was a free ticket, so there’s no charge to send back.'
+      : 'No additional money was sent back for this refund — your payment was already returned by an earlier refund.'
     : `We sent <strong style="color: ${baseStyles.textLight};">${safeAmount}</strong> back to your original payment method.`;
 
   const settlementLine = isZeroDollar
@@ -1162,9 +1170,10 @@ export function refundConfirmationTemplate(args: {
       </p>
   `;
 
+  // Subjects are plain text, not HTML — use the raw title.
   const subject = args.isFullRefund
-    ? `Your refund for ${safeTitle}`
-    : `Your partial refund for ${safeTitle}`;
+    ? `Your refund for ${args.event.title}`
+    : `Your partial refund for ${args.event.title}`;
 
   return {
     subject,

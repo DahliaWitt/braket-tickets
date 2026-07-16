@@ -42,7 +42,12 @@ async function createRootAdmin(
 
 async function createEventWithInventory(
   t: ReturnType<typeof convexTest>,
-  overrides: Partial<{title: string; price: number; totalTickets: number}> = {},
+  overrides: Partial<{
+    title: string;
+    price: number;
+    totalTickets: number;
+    resaleEnabled: boolean;
+  }> = {},
 ): Promise<{eventId: Id<'events'>; organizerId: Id<'organizers'>}> {
   const organizerId = await t.mutation(api.testing.communities.seedOrganizer, {
     name: 'Refund Test Organizer',
@@ -56,6 +61,7 @@ async function createEventWithInventory(
     date: '2030-12-15',
     visibility: 'public',
     ticketSalesStatus: 'active',
+    resaleEnabled: overrides.resaleEnabled,
     organizerId,
   });
   return {eventId, organizerId};
@@ -100,8 +106,12 @@ async function getRefundEmails(
   to: string,
 ): Promise<Array<{subject: string; html: string}>> {
   const emails = await t.query(api.testing.email.getSentEmails, {to});
-  return emails.filter((email) =>
-    email.subject.toLowerCase().includes('refund'),
+  // Match on the exact subject prefixes: seeded event titles contain the
+  // word "Refund", so a substring match would also catch purchase emails.
+  return emails.filter(
+    (email) =>
+      email.subject.startsWith('Your refund for') ||
+      email.subject.startsWith('Your partial refund for'),
   );
 }
 
@@ -514,6 +524,114 @@ describe('refund confirmation emails', () => {
       tickets.filter((ticket) => ticket.status === 'refunded'),
     ).toHaveLength(1);
     expect(await getRefundEmails(t, buyerEmail)).toHaveLength(0);
+  });
+
+  it('force-cancelling used tickets after an external full refund never claims a free ticket', async () => {
+    const t = convexTest();
+    const adminId = await createRootAdmin(
+      t,
+      'Admin',
+      'admin-used-force@example.com',
+    );
+    const buyerEmail = 'used-force-buyer@example.com';
+    const buyerId = await createUser(t, 'Used Force Buyer', buyerEmail);
+    const {eventId} = await createEventWithInventory(t, {
+      title: 'Used Force Event',
+    });
+    const orderId = await settlePaidOrder(t, buyerId, eventId, {
+      quantity: 2,
+      totalAmount: 5000,
+      piSuffix: 'used_force',
+    });
+    const tickets = await getOrderTickets(t, orderId);
+    await t.run(async (ctx) => {
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- simulates a checked-in ticket without the scanner flow
+      await ctx.db.patch('tickets', tickets[0]!._id, {status: 'used'});
+    });
+
+    // External dashboard full refund: money fully returned, but the webhook
+    // auto-selection preserves the used ticket.
+    await t.mutation(internal.orders.core.applyExternalRefund, {
+      orderId,
+      refundedAmountCents: 5000,
+      stripeRefundId: 're_used_force_1',
+      ledgerRefundAmountCents: 5000,
+    });
+    // Admin then force-cancels the surviving used ticket: zero additional
+    // money moves on this paid order.
+    await t
+      .withIdentity({subject: adminId})
+      .action(api.payments.refunds.forceRefundAll, {orderId});
+
+    const refundEmails = await getRefundEmails(t, buyerEmail);
+    expect(refundEmails).toHaveLength(2);
+    // 100% of the money came back, so both are full refunds despite the
+    // used ticket surviving the first application.
+    for (const email of refundEmails) {
+      expect(email.subject).toBe('Your refund for Used Force Event');
+    }
+    const moneyEmail = refundEmails.find((email) =>
+      email.html.includes('$50.00 USD'),
+    );
+    const cancellationEmail = refundEmails.find((email) =>
+      email.html.includes('No additional money was sent back for this refund'),
+    );
+    expect(moneyEmail).toBeDefined();
+    expect(cancellationEmail).toBeDefined();
+    expect(cancellationEmail!.html).not.toContain('free ticket');
+    expect(cancellationEmail!.html).toContain(
+      'Your ticket has been cancelled and can no longer be used for entry.',
+    );
+  });
+
+  it('money-only refunds on resale-sold orders are suppressed (seller payout race)', async () => {
+    const t = convexTest();
+    const sellerEmail = 'seller-race@example.com';
+    const sellerId = await createUser(t, 'Race Seller', sellerEmail);
+    const buyerId = await createUser(t, 'Race Buyer', 'race-buyer@example.com');
+    const {eventId} = await createEventWithInventory(t, {resaleEnabled: true});
+    const orderId = await settlePaidOrder(t, sellerId, eventId, {
+      quantity: 1,
+      totalAmount: 2500,
+      piSuffix: 'seller_race',
+    });
+    const tickets = await getOrderTickets(t, orderId);
+    // A completed resale sale: the transfer marks the seller's sold ticket
+    // 'refunded' and the listing 'completed' (see applyResaleTicketTransfer).
+    await t.mutation(api.testing.resale.seedResaleListing, {
+      ticketId: tickets[0]!._id,
+      eventId,
+      sellerId,
+      buyerId,
+      status: 'completed',
+      sellerRefundAmountCents: 2250,
+      resaleFeeCents: 250,
+    });
+    await t.run(async (ctx) => {
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- mirrors applyResaleTicketTransfer marking the sold ticket refunded, without running the full resale checkout
+      await ctx.db.patch('tickets', tickets[0]!._id, {status: 'refunded'});
+    });
+
+    // The seller-payout refund's charge.refunded webhook arriving BEFORE the
+    // resale settlement records its financial event.
+    await t.mutation(internal.orders.core.applyExternalRefund, {
+      orderId,
+      refundedAmountCents: 2250,
+      stripeRefundId: 're_seller_race_1',
+      ledgerRefundAmountCents: 2250,
+    });
+
+    expect(await getRefundEmails(t, sellerEmail)).toHaveLength(0);
+    // Refund state still converges — only the email is suppressed.
+    const financialEvents = await t.run(async (ctx) =>
+      ctx.db
+        .query('order_financial_events')
+        .withIndex('by_order', (q) => q.eq('orderId', orderId))
+        .collect(),
+    );
+    expect(financialEvents.some((row) => row.kind === 'payment_refunded')).toBe(
+      true,
+    );
   });
 
   it('zero-dollar refunds of separate free tickets are not cross-deduplicated', async () => {

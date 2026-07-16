@@ -591,6 +591,7 @@ describe('refundConfirmationTemplate', () => {
       currency: 'USD',
       ticketsRefunded: 2,
       isFullRefund: true,
+      isFreeOrder: false,
       supportEmail: 'help@braket.gay',
     });
 
@@ -613,6 +614,7 @@ describe('refundConfirmationTemplate', () => {
       currency: 'USD',
       ticketsRefunded: 1,
       isFullRefund: false,
+      isFreeOrder: false,
     });
 
     expect(subject).toBe('Your partial refund for Warehouse Communion');
@@ -625,19 +627,36 @@ describe('refundConfirmationTemplate', () => {
     expect(html).toContain('reply to this email');
   });
 
-  it('renders zero-dollar refunds without money-return or settlement copy', () => {
+  it('renders zero-dollar free-order refunds without money-return or settlement copy', () => {
     const {html} = refundConfirmationTemplate({
       event: refundEvent,
       refundedAmountCents: 0,
       currency: 'USD',
       ticketsRefunded: 1,
       isFullRefund: true,
+      isFreeOrder: true,
     });
 
     expect(html).toContain('free ticket');
     expect(html).toContain('no charge to send back');
     expect(html).not.toContain('5–10 business days');
     expect(html).not.toContain('back to your original payment method');
+  });
+
+  it('never calls a paid order a free ticket when this refund moved no money', () => {
+    const {html} = refundConfirmationTemplate({
+      event: refundEvent,
+      refundedAmountCents: 0,
+      currency: 'USD',
+      ticketsRefunded: 1,
+      isFullRefund: true,
+      isFreeOrder: false,
+    });
+
+    expect(html).not.toContain('free ticket');
+    expect(html).toContain('No additional money was sent back for this refund');
+    expect(html).toContain('already returned by an earlier refund');
+    expect(html).not.toContain('5–10 business days');
   });
 
   it('describes money-only refunds when no tickets were cancelled', () => {
@@ -647,10 +666,29 @@ describe('refundConfirmationTemplate', () => {
       currency: 'USD',
       ticketsRefunded: 0,
       isFullRefund: false,
+      isFreeOrder: false,
     });
 
     expect(html).toContain('No tickets were cancelled for this refund');
     expect(html).toContain('$10.00 USD');
+  });
+
+  it('keeps subjects as plain text while escaping the title in HTML', () => {
+    const {subject, html} = refundConfirmationTemplate({
+      event: {
+        title: 'Drum & Bass <Night>',
+        date: '2026-05-01T20:00:00.000Z',
+      },
+      refundedAmountCents: 2500,
+      currency: 'USD',
+      ticketsRefunded: 1,
+      isFullRefund: true,
+      isFreeOrder: false,
+    });
+
+    expect(subject).toBe('Your refund for Drum & Bass <Night>');
+    expect(html).toContain('Drum &amp; Bass &lt;Night&gt;');
+    expect(html).not.toContain('Drum & Bass <Night>');
   });
 
   it('escapes user-controlled event fields', () => {
@@ -664,6 +702,7 @@ describe('refundConfirmationTemplate', () => {
       currency: 'USD',
       ticketsRefunded: 1,
       isFullRefund: false,
+      isFreeOrder: false,
     });
 
     expect(html).not.toContain('<script>alert(1)</script>');

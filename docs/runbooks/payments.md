@@ -265,6 +265,15 @@ the `charge.refunded` webhook.
   failures are recorded in `emailDeliveryFailures` with `source === 'refund'`
   (see [email-delivery.md](email-delivery.md) for recovery, including the
   dedup-row deletion step to allow a manual re-send).
+- Money-only refunds on an order whose ticket has a `completed`
+  `resale_listings` row send no email: resale seller proceeds are paid as a
+  Stripe refund against the seller's original order, and this rule keeps
+  the seller from receiving a "refund" confirmation for a successful sale
+  when the webhook races ahead of the resale settlement. Refunds that
+  cancel tickets on such orders still email normally.
+- Full vs partial in the subject is money-based for paid orders (full once
+  every cent is returned, even if a checked-in ticket survives) and
+  ticket-based for free orders.
 
 ---
 

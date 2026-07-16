@@ -984,10 +984,21 @@ export async function applyExternalRefundHandler(
   // moved money back or cancelled tickets — reruns of an already-applied
   // refund (action retries after an unacknowledged commit, duplicate or
   // out-of-order webhook echoes) compute refundDelta === 0 and an empty
-  // ticketsToRefund and skip. Enqueued inside this transaction so the
-  // confirmation commits atomically with the refund state; delivery itself
-  // runs out-of-band and can never roll back the accepted Stripe refund.
-  if (refundDelta > 0 || ticketsToRefund.length > 0) {
+  // ticketsToRefund and skip. Money-only refunds on an order whose ticket
+  // was sold through resale are also suppressed: seller proceeds are paid
+  // as a Stripe refund against the seller's original order, and when that
+  // `charge.refunded` webhook races ahead of the resale settlement's
+  // financial event, the completed listing is the only signal that the
+  // "refund" is really a sale payout — without it the seller would
+  // race-dependently get a confusing refund confirmation for a successful
+  // sale. Enqueued inside this transaction so the confirmation commits
+  // atomically with the refund state; delivery itself runs out-of-band and
+  // can never roll back the accepted Stripe refund.
+  const shouldSendConfirmation =
+    ticketsToRefund.length > 0 ||
+    (refundDelta > 0 &&
+      !(await hasCompletedResaleSaleForTickets(ctx, orderTickets)));
+  if (shouldSendConfirmation) {
     event ??= await ctx.db.get('events', order.eventId);
     await sendRefundConfirmationEmail(ctx, {
       order,
@@ -998,13 +1009,38 @@ export async function applyExternalRefundHandler(
       refundedAmountCents:
         ledgerRefundAmountCents > 0 ? ledgerRefundAmountCents : refundDelta,
       ticketsRefunded: ticketsToRefund.length,
+      // Paid orders are "complete" once every cent is back, even if a
+      // checked-in ticket survives; free orders (no money to measure) are
+      // complete once every remaining active ticket is cancelled.
       isFullRefund:
-        nextRefundedAmount >= order.amountCents &&
-        ticketsToRefund.length >= activeTickets.length,
+        order.amountCents > 0
+          ? nextRefundedAmount >= order.amountCents
+          : ticketsToRefund.length >= activeTickets.length,
     });
   }
 
   return null;
+}
+
+/**
+ * True when any of the order's tickets was sold through resale (has a
+ * completed `resale_listings` row). Used to recognize seller-payout refunds
+ * arriving via `charge.refunded` before the resale settlement records its
+ * financial event. Bounded: one order holds 1–10 tickets, and a ticket
+ * accrues at most a handful of listings across relist cycles.
+ */
+async function hasCompletedResaleSaleForTickets(
+  ctx: MutationCtx,
+  orderTickets: Array<Doc<'tickets'>>,
+): Promise<boolean> {
+  for (const ticket of orderTickets) {
+    for await (const listing of ctx.db
+      .query('resale_listings')
+      .withIndex('by_ticket', (q) => q.eq('ticketId', ticket._id))) {
+      if (listing.status === 'completed') return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -1079,6 +1115,7 @@ async function sendRefundConfirmationEmail(
       currency: order.currency,
       ticketsRefunded: args.ticketsRefunded,
       isFullRefund: args.isFullRefund,
+      isFreeOrder: order.amountCents === 0,
       supportEmail: emailReplyTo()?.[0],
     });
     await enqueueEmailDelivery(
