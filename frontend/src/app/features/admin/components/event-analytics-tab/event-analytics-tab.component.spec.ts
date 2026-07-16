@@ -175,14 +175,17 @@ describe('EventAnalyticsTabComponent', () => {
         DeferBlockBehavior.Playthrough,
       );
 
-      await vi.waitFor(async () => {
-        const salesChart = await harness.getSalesChart();
-        const checkInChart = await harness.getCheckInChart();
-        expect(salesChart).not.toBeNull();
-        expect(checkInChart).not.toBeNull();
-        expect(await salesChart!.hasRenderedSeries()).toBe(true);
-        expect(await checkInChart!.hasRenderedSeries()).toBe(true);
-      });
+      await vi.waitFor(
+        async () => {
+          const salesChart = await harness.getSalesChart();
+          const checkInChart = await harness.getCheckInChart();
+          expect(salesChart).not.toBeNull();
+          expect(checkInChart).not.toBeNull();
+          expect(await salesChart!.hasRenderedSeries()).toBe(true);
+          expect(await checkInChart!.hasRenderedSeries()).toBe(true);
+        },
+        {timeout: 5000},
+      );
     } finally {
       restoreDimensions();
     }

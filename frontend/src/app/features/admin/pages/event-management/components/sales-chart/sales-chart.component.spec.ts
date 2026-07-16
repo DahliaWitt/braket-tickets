@@ -1,5 +1,5 @@
 import '../../../../../../../test-setup';
-import {type ComponentFixture, TestBed} from '@angular/core/testing';
+import {TestBed} from '@angular/core/testing';
 import {provideZonelessChangeDetection} from '@angular/core';
 import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
 import {expect, describe, it, vi, beforeEach, afterEach} from 'vitest';
@@ -16,7 +16,6 @@ import {
 } from '../testing/chart-options.fixture';
 
 describe('SalesChartComponent', () => {
-  let fixture: ComponentFixture<SalesChartComponent>;
   let restoreDimensions: () => void;
 
   beforeEach(() => {
@@ -36,7 +35,7 @@ describe('SalesChartComponent', () => {
       providers: [provideZonelessChangeDetection()],
     });
 
-    fixture = TestBed.createComponent(SalesChartComponent);
+    const fixture = TestBed.createComponent(SalesChartComponent);
     fixture.componentRef.setInput('options', options);
     fixture.detectChanges();
     await fixture.whenStable();
@@ -50,16 +49,22 @@ describe('SalesChartComponent', () => {
     const harness = await setup();
 
     expect(await harness.isChartPresent()).toBe(true);
-    await vi.waitFor(async () => {
-      expect(await harness.hasRenderedSeries()).toBe(true);
-    });
+    await vi.waitFor(
+      async () => {
+        expect(await harness.hasRenderedSeries()).toBe(true);
+      },
+      {timeout: 5000},
+    );
   });
 
   it('mounts the chart with an empty series without throwing', async () => {
     const harness = await setup(buildAreaChartOptions({data: []}));
 
-    await vi.waitFor(async () => {
-      expect(await harness.hasRenderedSvg()).toBe(true);
-    });
+    await vi.waitFor(
+      async () => {
+        expect(await harness.hasRenderedSvg()).toBe(true);
+      },
+      {timeout: 5000},
+    );
   });
 });

@@ -1,6 +1,6 @@
 import {Component, input, ChangeDetectionStrategy} from '@angular/core';
 import {ChartCoreComponent} from 'ng-apexcharts';
-import type {ChartOptions} from '../sales-chart/sales-chart.component';
+import type {ChartOptions} from '../chart-options';
 
 import '../apexcharts-registration';
 

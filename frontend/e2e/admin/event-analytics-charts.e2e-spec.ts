@@ -39,6 +39,16 @@ async function seedAnalyticsEvent(
     grantedBy: adminUser._id,
   });
 
+  // Tickets belong to a throwaway attendee — never the shared global admin,
+  // whose /tickets state other specs assert against.
+  const attendeeId = await convexHelper.mutation(
+    api.testing.users.createUserDirectly,
+    {
+      email: `analytics-attendee-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`,
+      name: uniqueName('Analytics Attendee'),
+    },
+  );
+
   const eventId = await convexHelper.mutation(api.testing.events.seedEvent, {
     title: uniqueName('Analytics Charts Event'),
     date: new Date(Date.now() + 86400000).toISOString(),
@@ -51,7 +61,7 @@ async function seedAnalyticsEvent(
   // Sales data: valid tickets auto-create completed orders → salesByDay.
   for (let i = 0; i < 2; i++) {
     await convexHelper.mutation(api.testing.tickets.seedTicket, {
-      userId: adminUser._id,
+      userId: attendeeId,
       eventId,
       status: 'valid',
       tier: 'regular',
@@ -61,7 +71,7 @@ async function seedAnalyticsEvent(
   // Check-in data: used tickets with checkedInAt → checkInStats.buckets.
   for (const minutesAgo of [30, 15]) {
     await convexHelper.mutation(api.testing.tickets.seedTicket, {
-      userId: adminUser._id,
+      userId: attendeeId,
       eventId,
       status: 'used',
       tier: 'regular',
@@ -89,6 +99,11 @@ test.describe('Event analytics charts', () => {
     await expect(adminPage.locator('h1')).toBeVisible({timeout: 15000});
 
     // Analytics is the default tab; both defer blocks fire immediately.
+    // The tab only renders once the summary query resolves, and zoneless
+    // harness queries do not retry — wait for the host before getHarness.
+    await expect(adminPage.locator('app-event-analytics-tab')).toBeAttached({
+      timeout: 15000,
+    });
     const env = createEnvironment(adminPage);
     const analyticsTab = await env.getHarness(EventAnalyticsTabHarness);
 

@@ -7,7 +7,7 @@ import {
   output,
 } from '@angular/core';
 import {CurrencyPipe} from '@angular/common';
-import type {ChartOptions} from '@/features/admin/pages/event-management/components/sales-chart/sales-chart.component';
+import type {ChartOptions} from '@/features/admin/pages/event-management/components/chart-options';
 import {type EventManagementSummary} from '@/features/admin/models/event-management.model';
 import type {TicketSalesStatus} from '@/features/admin/services/admin-events.service';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';

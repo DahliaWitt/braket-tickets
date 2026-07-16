@@ -1,4 +1,5 @@
-import type {ChartOptions} from '../sales-chart/sales-chart.component';
+import type {ChartOptions} from '../chart-options';
+import {BRAND_PALETTE} from '@/utils/brand-palette';
 
 /**
  * jsdom reports zero layout dimensions, which makes ApexCharts bail out
@@ -87,6 +88,6 @@ export function buildAreaChartOptions(
     tooltip: {theme: 'light'},
     markers: {size: 0},
     theme: {mode: 'light'},
-    colors: ['#ff0055'],
+    colors: [BRAND_PALETTE.primary],
   };
 }
