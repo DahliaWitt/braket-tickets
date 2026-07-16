@@ -52,12 +52,13 @@ The table below lists the common causes in the current system:
 
 ### Provider dispatch contract
 
-All outbound email flows through `backend/convex/lib/email_delivery_wrapper.ts`,
+All outbound email flows through
+[`backend/convex/lib/email_delivery_wrapper.ts`](../../backend/convex/lib/email_delivery_wrapper.ts),
 which builds the exact argument object the provider actions accept
 (`email/smtp:sendPreview` for Ethereal preview, `email/resend_actions:send` for
 production). Both actions share the `providerEmailDeliveryArgs` validator in
-`backend/convex/lib/validators/email_delivery.ts`, and that validator rejects
-unknown fields at runtime. Internal-only dispatch flags such as
+[`backend/convex/lib/validators/email_delivery.ts`](../../backend/convex/lib/validators/email_delivery.ts),
+and that validator rejects unknown fields at runtime. Internal-only dispatch flags such as
 `requireDelivery` never reach a provider action — the wrapper folds them into
 the `critical` flag.
 
