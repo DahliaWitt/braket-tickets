@@ -207,7 +207,7 @@ describe('refund confirmation emails', () => {
     );
     expect(forceEmail).toBeDefined();
     expect(forceEmail!.subject).toBe('Your refund for Force Refund Event');
-    expect(forceEmail!.html).toContain('full refund');
+    expect(forceEmail!.html).toContain('Your order is now fully refunded.');
     expect(forceEmail!.html).toContain('$25.00 USD');
     expect(forceEmail!.html).toContain(
       'Your ticket has been cancelled and can no longer be used for entry.',

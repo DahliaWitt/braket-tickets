@@ -596,7 +596,9 @@ describe('refundConfirmationTemplate', () => {
     });
 
     expect(subject).toBe('Your refund for Warehouse Communion');
-    expect(html).toContain('full refund');
+    expect(html).toContain('Refund confirmed');
+    expect(html).not.toContain('(full refund)');
+    expect(html).toContain('Your order is now fully refunded.');
     expect(html).toContain('$50.00 USD');
     expect(html).toContain(
       '2 tickets have been cancelled and can no longer be used for entry.',
@@ -618,7 +620,8 @@ describe('refundConfirmationTemplate', () => {
     });
 
     expect(subject).toBe('Your partial refund for Warehouse Communion');
-    expect(html).toContain('partial refund');
+    expect(html).not.toContain('(partial refund)');
+    expect(html).toContain('The rest of your order is unchanged.');
     expect(html).toContain('$25.00 USD');
     expect(html).toContain(
       'Your ticket has been cancelled and can no longer be used for entry.',

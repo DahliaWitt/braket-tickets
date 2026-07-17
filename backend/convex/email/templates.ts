@@ -1124,7 +1124,6 @@ export function refundConfirmationTemplate(args: {
   const isZeroDollar = args.refundedAmountCents === 0;
   const amountFormatted = `$${(args.refundedAmountCents / 100).toFixed(2)} ${args.currency}`;
   const safeAmount = escapeHtml(amountFormatted);
-  const scopeLabel = args.isFullRefund ? 'full refund' : 'partial refund';
   const plural = args.ticketsRefunded > 1;
 
   const ticketsLine =
@@ -1198,9 +1197,15 @@ export function refundConfirmationTemplate(args: {
           Refunds usually land back on your card within 5–10 business days, depending on your bank.
       </p>`;
 
+  // Scope in plain words instead of a "(partial refund)" label: say what it
+  // means for the rest of the order.
+  const scopeLine = args.isFullRefund
+    ? 'Your order is now fully refunded.'
+    : 'The rest of your order is unchanged.';
+
   const content = `
       <h2 style="margin: 0 0 16px 0; font-family: 'Syne', 'Chakra Petch', system-ui, sans-serif; font-size: 24px; line-height: 1.15; font-weight: 700; color: ${baseStyles.textLight};">
-          Refund confirmed (${scopeLabel})
+          Refund confirmed
       </h2>
       <p style="margin: 0 0 8px 0; font-size: 16px; line-height: 1.6; color: ${baseStyles.textMuted};">
           ${moneyLine}
@@ -1208,23 +1213,25 @@ export function refundConfirmationTemplate(args: {
       <p style="margin: 0 0 8px 0; font-size: 16px; line-height: 1.6; color: ${baseStyles.textMuted};">
           ${ticketsLine}
       </p>
+      <p style="margin: 0 0 8px 0; font-size: 16px; line-height: 1.6; color: ${baseStyles.textMuted};">
+          ${scopeLine}
+      </p>
       ${eventDetailsBlock}
       ${settlementLine}
       ${supportBlock}
   `;
 
   // Subjects are plain text, not HTML — use the raw title.
-  const subject = args.isFullRefund
-    ? `Your refund for ${args.event.title}`
-    : `Your partial refund for ${args.event.title}`;
+  const refundNoun = args.isFullRefund ? 'refund' : 'partial refund';
+  const subject = `Your ${refundNoun} for ${args.event.title}`;
 
   return {
     subject,
     html: wrapEmail(
       content,
       isZeroDollar
-        ? `Your ${scopeLabel} for ${args.event.title} is confirmed.`
-        : `Your ${scopeLabel} of ${amountFormatted} for ${args.event.title} is confirmed.`,
+        ? `Your ${refundNoun} for ${args.event.title} is confirmed.`
+        : `Your ${refundNoun} of ${amountFormatted} for ${args.event.title} is confirmed.`,
     ),
   };
 }
