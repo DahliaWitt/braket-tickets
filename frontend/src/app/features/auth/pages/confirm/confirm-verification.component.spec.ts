@@ -106,7 +106,6 @@ describe('ConfirmVerificationComponent', () => {
       'ott-token',
       {
         navigateOnSuccess: false,
-        syncUserToApp: true,
       },
     );
     expect(authServiceMock.confirmVerification).not.toHaveBeenCalled();

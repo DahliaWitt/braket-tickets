@@ -218,10 +218,7 @@ export class ConfirmEmailChangeComponent {
     }
 
     try {
-      await this.auth.handleOAuthCallback(ott, {
-        navigateOnSuccess: false,
-        syncUserToApp: true,
-      });
+      await this.auth.handleOAuthCallback(ott, {navigateOnSuccess: false});
       this.callbackCompleted.set(true);
     } catch (err: unknown) {
       this.error.set(

@@ -211,7 +211,6 @@ export class ConfirmVerificationComponent {
         callbackErrorMessage: 'Verification failed',
         missingOttMessage: 'Verification failed',
         fallbackErrorMessage: 'Verification failed',
-        syncUserToApp: true,
       });
 
       if (!outcome.ok) {
