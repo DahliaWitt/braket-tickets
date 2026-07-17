@@ -13,7 +13,8 @@ This runbook is for engineers or admins who troubleshoot outbound email from Bra
 Source of truth:
 
 - `backend/convex/email/resend_actions.ts`
-- `backend/convex/email/smtp.ts` (Ethereal preview and Gmail SMTP fallback)
+- `backend/convex/email/smtp.ts` (Ethereal preview action)
+- `backend/convex/lib/email/smtp_delivery.ts` (shared SMTP transport: Ethereal preview and Gmail fallback)
 - `backend/convex/lib/email_delivery_wrapper.ts`
 - `backend/convex/marketing/digests.ts`
 - `backend/convex/lib/email_dedup.ts`
@@ -48,6 +49,27 @@ The table below lists the common causes in the current system:
 | Resend sending limit reached                  | Check the Resend quota and raise the limit if needed                                                                                                |
 | Email dedup guard blocked a legitimate retry  | Check the `emailDedup` table for the idempotency key                                                                                                |
 | From address or domain is blocked             | Verify SPF, DKIM, and sender-domain status in Resend                                                                                                |
+
+### Provider dispatch contract
+
+All outbound email flows through
+[`backend/convex/lib/email_delivery_wrapper.ts`](../../backend/convex/lib/email_delivery_wrapper.ts),
+which builds the exact argument object the provider actions accept
+(`email/smtp:sendPreview` for Ethereal preview, `email/resend_actions:send` for
+production). Both actions share the `providerEmailDeliveryArgs` validator in
+[`backend/convex/lib/validators/email_delivery.ts`](../../backend/convex/lib/validators/email_delivery.ts),
+and that validator rejects unknown fields at runtime. Internal-only dispatch flags such as
+`requireDelivery` never reach a provider action — the wrapper folds them into
+the `critical` flag.
+
+When troubleshooting, distinguish two failure shapes in the Convex logs:
+
+- **Handler failures** (SMTP/Resend errors) record a row in
+  `emailDeliveryFailures` before rethrowing — check that table first.
+- **Argument validation failures** (`Validator error: Unexpected field ...`)
+  fail before the handler runs, so nothing is recorded in
+  `emailDeliveryFailures`. These indicate a contract drift between the wrapper
+  and the provider validators and are a code bug, not an ops issue.
 
 If a legitimate email was blocked by the dedup guard:
 
