@@ -139,23 +139,33 @@ export class ConfirmSocialLinkComponent {
   constructor() {
     effect(() => {
       const queryParamMap = this.queryParamMap();
-      const authInitialized = this.auth.authInitialized();
       const alreadyInitialized = untracked(() => this.initialized());
       if (alreadyInitialized) {
         return;
       }
 
+      const callbackError = queryParamMap.get('error') ?? undefined;
+      if (callbackError) {
+        this.initialized.set(true);
+        this.fail(CALLBACK_ERROR_MESSAGE);
+        return;
+      }
+
+      const provider = queryParamMap.get('provider') ?? undefined;
+      if (!isSocialProvider(provider)) {
+        this.initialized.set(true);
+        this.fail(INVALID_LINK_MESSAGE);
+        return;
+      }
+
       // The link confirmation reads state owned by the signed-in session, so
       // hold the loading state until auth bootstrap settles.
-      if (!authInitialized) {
+      if (!this.auth.authInitialized()) {
         return;
       }
 
       this.initialized.set(true);
-      void this.initialize(
-        queryParamMap.get('error') ?? undefined,
-        queryParamMap.get('provider') ?? undefined,
-      );
+      void this.initialize(provider);
     });
 
     effect(() => {
@@ -186,20 +196,7 @@ export class ConfirmSocialLinkComponent {
     await this.router.navigate(['/account']);
   }
 
-  private async initialize(
-    callbackError: string | undefined,
-    provider: string | undefined,
-  ): Promise<void> {
-    if (callbackError) {
-      this.fail(CALLBACK_ERROR_MESSAGE);
-      return;
-    }
-
-    if (!isSocialProvider(provider)) {
-      this.fail(INVALID_LINK_MESSAGE);
-      return;
-    }
-
+  private async initialize(provider: SocialProvider): Promise<void> {
     if (!this.auth.isAuthenticated()) {
       this.fail(SIGNED_OUT_MESSAGE);
       return;

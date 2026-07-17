@@ -137,8 +137,8 @@ describe('ConfirmSocialLinkComponent', () => {
     );
   });
 
-  it('rejects a missing provider parameter', async () => {
-    await setupComponent({});
+  it('rejects a missing provider parameter before auth bootstrap', async () => {
+    await setupComponent({}, {authInitialized: false});
     await renderAndSettle();
 
     expect(component.state()).toBe('error');
@@ -148,8 +148,11 @@ describe('ConfirmSocialLinkComponent', () => {
     expect(authServiceMock.getExternalAuths).not.toHaveBeenCalled();
   });
 
-  it('rejects an unknown provider parameter', async () => {
-    await setupComponent({provider: 'https://evil.example'});
+  it('rejects an unknown provider parameter before auth bootstrap', async () => {
+    await setupComponent(
+      {provider: 'https://evil.example'},
+      {authInitialized: false},
+    );
     await renderAndSettle();
 
     expect(component.state()).toBe('error');
@@ -159,8 +162,11 @@ describe('ConfirmSocialLinkComponent', () => {
     expect(authServiceMock.getExternalAuths).not.toHaveBeenCalled();
   });
 
-  it('shows a generic provider error when the callback reports a failure', async () => {
-    await setupComponent({error: 'access_denied', provider: 'google'});
+  it('shows a provider callback error before auth bootstrap', async () => {
+    await setupComponent(
+      {error: 'access_denied', provider: 'google'},
+      {authInitialized: false},
+    );
     await renderAndSettle();
 
     expect(component.state()).toBe('error');
