@@ -40,7 +40,6 @@ type EmailSendPayload = {
   to: string;
   subject: string;
   html: string;
-  requireDelivery?: boolean;
 };
 
 const LOCAL_FRONTEND_PORTS = ['4200', '4201', '4202'] as const;
@@ -48,6 +47,7 @@ const LOCAL_FRONTEND_PORTS = ['4200', '4201', '4202'] as const;
 async function dispatchEmailSend(
   ctx: GenericCtx<DataModel>,
   payload: EmailSendPayload,
+  options: {requireDelivery?: boolean} = {},
 ): Promise<void> {
   const metadata = {
     source: 'auth' as const,
@@ -57,6 +57,7 @@ async function dispatchEmailSend(
     sourceId: 'dispatch',
     recipient: payload.to,
     critical: true,
+    requireDelivery: options.requireDelivery,
   };
   if ('runAction' in ctx) {
     await sendEmailDeliveryNow(ctx, payload, metadata);
@@ -65,7 +66,7 @@ async function dispatchEmailSend(
 
   if ('scheduler' in ctx) {
     if (
-      payload.requireDelivery &&
+      options.requireDelivery &&
       !isTestEnvironment() &&
       !hasConfiguredCriticalEmailCredentials()
     ) {
@@ -76,6 +77,30 @@ async function dispatchEmailSend(
   }
 
   throw new Error('Mutation or action context required for email delivery');
+}
+
+/**
+ * Sends the email-change confirmation to the user's CURRENT address.
+ *
+ * Exported so contract tests can exercise the exact production dispatch —
+ * template, requireDelivery flag, and provider args — end to end. The vitest
+ * setup mocks authComponent.getAuth (Better Auth's HTTP layer), so nothing
+ * above this function is reachable in convex-test; this is the highest
+ * production-shaped entry point for the email-change delivery contract.
+ */
+export async function dispatchEmailChangeConfirmation(
+  ctx: GenericCtx<DataModel>,
+  args: {to: string; newEmail: string; url: string},
+): Promise<void> {
+  const {subject, html} = emailChangeConfirmationTemplate(
+    args.newEmail,
+    args.url,
+  );
+  await dispatchEmailSend(
+    ctx,
+    {to: args.to, subject, html},
+    {requireDelivery: true},
+  );
 }
 
 /**
@@ -605,15 +630,10 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
       changeEmail: {
         enabled: true,
         sendChangeEmailConfirmation: async ({user, newEmail, url}) => {
-          const {subject, html} = emailChangeConfirmationTemplate(
+          await dispatchEmailChangeConfirmation(ctx, {
+            to: user.email,
             newEmail,
             url,
-          );
-          await dispatchEmailSend(ctx, {
-            to: user.email,
-            subject,
-            html,
-            requireDelivery: true,
           });
         },
       },

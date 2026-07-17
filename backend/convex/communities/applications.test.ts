@@ -3,6 +3,7 @@ import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest';
 import {api} from '../_generated/api';
 import type {Id} from '../_generated/dataModel';
 import {addMember, authz, authzUserId, isCommunityMember} from '../lib/authz';
+import {MAX_IMMEDIATE_NOTIFICATION_RECIPIENTS} from '../lib/applications/queries';
 
 // Reviews can enqueue notification emails through workpool; drain those
 // callbacks between tests so edge-runtime teardown has no pending console RPC.
@@ -2746,5 +2747,59 @@ describe('applications.submit — vetting notifications', () => {
     expect(notifyKeys[0].key).toBe(
       `vetting-notify-${applicationId}-${adminUserId}`,
     );
+  });
+
+  it('truncates immediate notifications at the recipient cap', async () => {
+    const t = convexTest();
+    const orgId = (await t.mutation(api.testing.communities.seedOrganizer, {
+      name: 'Cap Community',
+      vettingQuestions: requiredTextQuestion('q1'),
+    })) as Id<'organizers'>;
+
+    const adminIds = await Promise.all(
+      Array.from(
+        {length: MAX_IMMEDIATE_NOTIFICATION_RECIPIENTS + 1},
+        async (_, index) => {
+          const adminId = (await t.mutation(
+            api.testing.users.createUserDirectly,
+            {
+              name: `Cap Admin ${index}`,
+              email: `cap-admin-${index}@notify-test.com`,
+            },
+          )) as Id<'users'>;
+          await assignCommunityAdmin(t, adminId, orgId);
+          await t.mutation(api.testing.admin.seedAdminNotificationPreference, {
+            userId: adminId,
+            organizerId: orgId,
+            mode: 'all',
+            digestHour: 9,
+          });
+          return adminId;
+        },
+      ),
+    );
+    expect(adminIds).toHaveLength(MAX_IMMEDIATE_NOTIFICATION_RECIPIENTS + 1);
+
+    const applicantId = (await t.mutation(
+      api.testing.users.createUserDirectly,
+      {
+        name: 'Cap Applicant',
+        email: 'cap-applicant@notify-test.com',
+      },
+    )) as Id<'users'>;
+    const asApplicant = t.withIdentity({subject: applicantId});
+
+    await asApplicant.mutation(api.communities.applications.submit, {
+      organizerId: orgId,
+      answers: {q1: 'answer'},
+    });
+
+    const dedupKeys = await t.run(async (ctx) =>
+      ctx.db.query('emailDedup').collect(),
+    );
+    const notifyKeys = dedupKeys.filter((k) =>
+      k.key.startsWith('vetting-notify-'),
+    );
+    expect(notifyKeys).toHaveLength(MAX_IMMEDIATE_NOTIFICATION_RECIPIENTS);
   });
 });

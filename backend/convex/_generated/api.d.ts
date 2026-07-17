@@ -4212,25 +4212,6 @@ export declare const internal: {
       >;
     };
     smtp: {
-      sendFallback: FunctionReference<
-        "action",
-        "internal",
-        {
-          attachments?: Array<{
-            cid?: string;
-            content: string;
-            contentType?: string;
-            encoding?: string;
-            filename: string;
-          }>;
-          headers?: Record<string, string>;
-          html: string;
-          subject: string;
-          text?: string;
-          to: string;
-        },
-        null
-      >;
       sendPreview: FunctionReference<
         "action",
         "internal",
