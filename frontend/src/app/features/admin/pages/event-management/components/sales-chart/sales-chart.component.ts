@@ -1,35 +1,8 @@
 import {Component, input, ChangeDetectionStrategy} from '@angular/core';
 import {ChartCoreComponent} from 'ng-apexcharts';
-import type {
-  ApexAxisChartSeries,
-  ApexChart,
-  ApexXAxis,
-  ApexDataLabels,
-  ApexStroke,
-  ApexFill,
-  ApexGrid,
-  ApexTooltip,
-  ApexMarkers,
-  ApexTheme,
-  ApexYAxis,
-} from 'ng-apexcharts';
+import type {ChartOptions} from '../chart-options';
 
-import 'apexcharts/line';
-
-export interface ChartOptions {
-  series: ApexAxisChartSeries;
-  chart: ApexChart;
-  xaxis: ApexXAxis;
-  yaxis: ApexYAxis;
-  dataLabels: ApexDataLabels;
-  stroke: ApexStroke;
-  fill: ApexFill;
-  grid: ApexGrid;
-  tooltip: ApexTooltip;
-  markers: ApexMarkers;
-  theme: ApexTheme;
-  colors: string[];
-}
+import '../apexcharts-registration';
 
 /**
  * Lazy-loaded sales chart component.

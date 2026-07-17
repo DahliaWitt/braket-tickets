@@ -3075,6 +3075,7 @@ export declare const api: {
         "mutation",
         "public",
         {
+          checkedInAt?: number;
           eventId: Id<"events">;
           guestSessionId?: Id<"guest_sessions">;
           orderId?: Id<"ticket_orders">;
