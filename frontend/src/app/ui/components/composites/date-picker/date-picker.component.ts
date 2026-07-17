@@ -89,9 +89,10 @@ const HEIGHT_BY_SIZE: Record<
         <button
           type="button"
           data-testid="date-picker-clear"
-          class="absolute top-1/2 right-2 flex size-6 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          class="absolute top-1/2 right-2 flex size-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           [attr.aria-label]="clearLabel()"
           (click)="onClearClick()"
+          (keydown.escape)="onClearEscape($event)"
         >
           <z-icon zType="x" aria-hidden="true" />
         </button>
@@ -234,6 +235,13 @@ export class BraDatePickerComponent
     this.dateChange.emit(null);
     // The clear button removes itself from the DOM; without an explicit
     // handoff, keyboard/screen-reader focus falls back to <body>.
+    this.triggerButton().nativeElement.focus();
+  }
+
+  protected onClearEscape(event: Event): void {
+    if (!this.isOpen()) return;
+    event.preventDefault();
+    this.popoverDirective().hide();
     this.triggerButton().nativeElement.focus();
   }
 

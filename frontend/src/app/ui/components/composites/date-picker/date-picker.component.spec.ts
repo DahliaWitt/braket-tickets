@@ -207,6 +207,28 @@ describe('BraDatePickerComponent', () => {
       const picker = await getPicker();
       expect(await picker.hasClearButton()).toBe(true);
       expect(await picker.getClearButtonLabel()).toBe('clear date');
+      expect(await picker.clearButtonHasPointerCursor()).toBe(true);
+    });
+
+    it('should close the open popover when Escape comes from the clear button', async () => {
+      fixture.componentRef.setInput('clearable', true);
+      component.writeValue(new Date(2026, 5, 20));
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const picker = await getPicker();
+      await picker.open();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      await new Promise<void>((resolve) => setTimeout(resolve));
+      expect(await picker.isOpen()).toBe(true);
+
+      await picker.dispatchEscapeFromClearButton();
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(await picker.isOpen()).toBe(false);
+      expect(component.value()).not.toBeNull();
     });
 
     it('should use the configured clear label', async () => {
