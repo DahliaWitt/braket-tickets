@@ -253,24 +253,39 @@ this covers admin refunds (standard, force-all, single ticket), zero-dollar
 free-ticket cancellations, and external Stripe-dashboard refunds reconciled by
 the `charge.refunded` webhook.
 
-- Delivery uses `source: 'refund'` with
-  `sourceId: {orderId}:{stripeRefundId}` (zero-dollar refunds use a
-  `tickets-N` discriminator instead of a Stripe refund id).
+- The email reports the state transition the application performed: the
+  newly-confirmed refunded amount (cumulative delta, not the individual
+  Stripe refund's amount) and the tickets cancelled by that application.
+  Out-of-order webhook delivery of partial refunds therefore produces one
+  coherent email carrying the full delta; the late stale webhook sends
+  nothing.
+- Delivery uses `source: 'refund'` with a
+  `sourceId: {orderId}:{stripeRefundId|zero}-tickets-{N}` discriminator,
+  where N is the cumulative cancelled-ticket count after the application.
 - Duplicate suppression is an `emailDedup` row keyed
-  `refund-confirmation-{orderId}-{stripeRefundId|tickets-N}`, so an admin
-  refund and its webhook echo, duplicate webhook deliveries, and mutation
-  retries produce exactly one email.
+  `refund-confirmation-{orderId}-{stripeRefundId|zero}-tickets-{N}`. Exact
+  duplicates (webhook redelivery, mutation retries, an admin action's own
+  webhook echo) send exactly one email; a same-refund application that
+  cancels additional tickets (a force refund whose echo landed first) gets
+  a distinct N and sends corrective copy.
 - Email problems never block or roll back refund state: a missing recipient
-  or enqueue error is logged under the `payments` scope and skipped. Delivery
-  failures are recorded in `emailDeliveryFailures` with `source === 'refund'`
-  (see [email-delivery.md](email-delivery.md) for recovery, including the
-  dedup-row deletion step to allow a manual re-send).
-- Money-only refunds on an order whose ticket has a `completed`
-  `resale_listings` row send no email: resale seller proceeds are paid as a
+  or render error is logged under the `payments` scope and skipped without
+  consuming the dedup slot; an enqueue error releases the just-inserted
+  dedup row in the same transaction so the confirmation stays manually
+  re-sendable. Delivery failures after a successful enqueue are recorded in
+  `emailDeliveryFailures` with `source === 'refund'` and use the critical
+  Gmail SMTP fallback (see [email-delivery.md](email-delivery.md) for
+  recovery, including the dedup-row deletion step to allow a manual
+  re-send).
+- Money-only refunds whose amount matches an in-flight resale seller payout
+  (a `completed` listing on one of the order's tickets with
+  `sellerRefundState` not yet `completed` and an equal
+  `sellerRefundAmountCents`) send no email: seller proceeds are paid as a
   Stripe refund against the seller's original order, and this rule keeps
   the seller from receiving a "refund" confirmation for a successful sale
-  when the webhook races ahead of the resale settlement. Refunds that
-  cancel tickets on such orders still email normally.
+  when the webhook races ahead of the resale settlement. Genuine refunds on
+  orders with settled resale history, and refunds that cancel tickets,
+  still email normally.
 - Full vs partial in the subject is money-based for paid orders (full once
   every cent is returned, even if a checked-in ticket survives) and
   ticket-based for free orders.

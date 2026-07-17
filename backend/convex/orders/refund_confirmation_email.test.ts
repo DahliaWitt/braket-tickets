@@ -340,7 +340,7 @@ describe('refund confirmation emails', () => {
     expect(await getRefundEmails(t, buyerEmail)).toHaveLength(1);
   });
 
-  it('re-applying the same refund id with an explicit ticket list is deduplicated', async () => {
+  it('a same-refund-id application that cancels additional tickets sends corrective copy', async () => {
     const t = convexTest();
     const buyerEmail = 'echo-buyer@example.com';
     const buyerId = await createUser(t, 'Echo Buyer', buyerEmail);
@@ -356,16 +356,25 @@ describe('refund confirmation emails', () => {
       await ctx.db.patch('tickets', tickets[0]!._id, {status: 'used'});
     });
 
-    // Webhook applies the refund first (auto-selects only valid tickets).
+    // The force refund's webhook echo lands first: it auto-selects only the
+    // valid ticket, so its email reports one cancelled ticket.
     await t.mutation(internal.orders.core.applyExternalRefund, {
       orderId,
       refundedAmountCents: 5000,
       stripeRefundId: 're_echo_1',
       ledgerRefundAmountCents: 5000,
     });
-    // A late application of the SAME Stripe refund with an explicit ticket
-    // list (the admin action landing after its own webhook echo) still
-    // cancels the listed ticket but must not send a second confirmation.
+    // The admin action's own application of the SAME Stripe refund then
+    // cancels the used ticket. Suppressing it would leave the buyer's only
+    // email claiming one cancelled ticket while two ended cancelled, so it
+    // must send corrective copy for the additional cancellation.
+    await t.mutation(internal.orders.core.applyExternalRefund, {
+      orderId,
+      refundedAmountCents: 5000,
+      stripeRefundId: 're_echo_1',
+      ticketIdsToRefund: [tickets[0]!._id],
+    });
+    // ...and a true duplicate of that second application stays deduplicated.
     await t.mutation(internal.orders.core.applyExternalRefund, {
       orderId,
       refundedAmountCents: 5000,
@@ -373,7 +382,55 @@ describe('refund confirmation emails', () => {
       ticketIdsToRefund: [tickets[0]!._id],
     });
 
-    expect(await getRefundEmails(t, buyerEmail)).toHaveLength(1);
+    const refundEmails = await getRefundEmails(t, buyerEmail);
+    expect(refundEmails).toHaveLength(2);
+    const corrective = refundEmails.find((email) =>
+      email.html.includes('No additional money was sent back for this refund'),
+    );
+    expect(corrective).toBeDefined();
+    expect(corrective!.html).toContain(
+      'Your ticket has been cancelled and can no longer be used for entry.',
+    );
+  });
+
+  it('out-of-order partial refund webhooks yield one coherent final-state email', async () => {
+    const t = convexTest();
+    const buyerEmail = 'ooo-buyer@example.com';
+    const buyerId = await createUser(t, 'OOO Buyer', buyerEmail);
+    const {eventId} = await createEventWithInventory(t, {
+      title: 'Out Of Order Event',
+    });
+    const orderId = await settlePaidOrder(t, buyerId, eventId, {
+      quantity: 2,
+      totalAmount: 5000,
+      piSuffix: 'ooo_refund',
+    });
+
+    // Two $25 refunds exist in Stripe; the SECOND one's webhook (cumulative
+    // $50) arrives first. The email must describe the state transition it
+    // applied — $50 and both tickets — not the individual $25 refund.
+    await t.mutation(internal.orders.core.applyExternalRefund, {
+      orderId,
+      refundedAmountCents: 5000,
+      stripeRefundId: 're_ooo_2',
+      ledgerRefundAmountCents: 2500,
+    });
+    // The first refund's webhook arrives late with a stale cumulative total
+    // and applies nothing new — no second email.
+    await t.mutation(internal.orders.core.applyExternalRefund, {
+      orderId,
+      refundedAmountCents: 2500,
+      stripeRefundId: 're_ooo_1',
+      ledgerRefundAmountCents: 2500,
+    });
+
+    const refundEmails = await getRefundEmails(t, buyerEmail);
+    expect(refundEmails).toHaveLength(1);
+    expect(refundEmails[0]!.subject).toBe('Your refund for Out Of Order Event');
+    expect(refundEmails[0]!.html).toContain('$50.00 USD');
+    expect(refundEmails[0]!.html).toContain(
+      '2 tickets have been cancelled and can no longer be used for entry.',
+    );
   });
 
   it('admin refund followed by its webhook echo sends exactly one email', async () => {
@@ -596,8 +653,10 @@ describe('refund confirmation emails', () => {
       piSuffix: 'seller_race',
     });
     const tickets = await getOrderTickets(t, orderId);
-    // A completed resale sale: the transfer marks the seller's sold ticket
-    // 'refunded' and the listing 'completed' (see applyResaleTicketTransfer).
+    // A completed resale sale with the seller payout still in flight: the
+    // transfer marks the seller's sold ticket 'refunded' and the listing
+    // 'completed' (see applyResaleTicketTransfer); settlement has not yet
+    // recorded the payout's financial event.
     await t.mutation(api.testing.resale.seedResaleListing, {
       ticketId: tickets[0]!._id,
       eventId,
@@ -606,6 +665,7 @@ describe('refund confirmation emails', () => {
       status: 'completed',
       sellerRefundAmountCents: 2250,
       resaleFeeCents: 250,
+      sellerRefundState: 'pending',
     });
     await t.run(async (ctx) => {
       // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- mirrors applyResaleTicketTransfer marking the sold ticket refunded, without running the full resale checkout
@@ -632,6 +692,67 @@ describe('refund confirmation emails', () => {
     expect(financialEvents.some((row) => row.kind === 'payment_refunded')).toBe(
       true,
     );
+  });
+
+  it('genuine refunds on orders with settled resale history still email', async () => {
+    const t = convexTest();
+    const sellerEmail = 'settled-seller@example.com';
+    const sellerId = await createUser(t, 'Settled Seller', sellerEmail);
+    const buyerId = await createUser(
+      t,
+      'Settled Buyer',
+      'settled-buyer@example.com',
+    );
+    const {eventId} = await createEventWithInventory(t, {
+      title: 'Settled Resale Event',
+      resaleEnabled: true,
+    });
+    const orderId = await settlePaidOrder(t, sellerId, eventId, {
+      quantity: 2,
+      totalAmount: 5000,
+      piSuffix: 'settled_resale',
+    });
+    const tickets = await getOrderTickets(t, orderId);
+    // One ticket was resold and the seller payout fully settled: the
+    // listing's sellerRefundState is 'completed' and its financial event is
+    // on the ledger.
+    await t.mutation(api.testing.resale.seedResaleListing, {
+      ticketId: tickets[0]!._id,
+      eventId,
+      sellerId,
+      buyerId,
+      status: 'completed',
+      sellerRefundAmountCents: 2250,
+      resaleFeeCents: 250,
+      sellerRefundState: 'completed',
+    });
+    await t.run(async (ctx) => {
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- mirrors applyResaleTicketTransfer marking the sold ticket refunded, without running the full resale checkout
+      await ctx.db.patch('tickets', tickets[0]!._id, {status: 'refunded'});
+    });
+    await t.mutation(internal.orders.core.recordFinancialEvent, {
+      orderId,
+      eventId,
+      kind: 'payment_refunded',
+      amountCents: 2250,
+      stripeRefundId: 're_settled_payout',
+    });
+
+    // A later GENUINE money-only dashboard refund for part of the remaining
+    // charge must not be swallowed by the order's resale history.
+    await t.mutation(internal.orders.core.applyExternalRefund, {
+      orderId,
+      refundedAmountCents: 3250,
+      stripeRefundId: 're_settled_genuine',
+      ledgerRefundAmountCents: 1000,
+    });
+
+    const refundEmails = await getRefundEmails(t, sellerEmail);
+    expect(refundEmails).toHaveLength(1);
+    expect(refundEmails[0]!.subject).toBe(
+      'Your partial refund for Settled Resale Event',
+    );
+    expect(refundEmails[0]!.html).toContain('$10.00 USD');
   });
 
   it('zero-dollar refunds of separate free tickets are not cross-deduplicated', async () => {

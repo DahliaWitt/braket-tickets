@@ -31,7 +31,8 @@ Jump to:
 **Symptom:** Users do not receive verification, password-reset, ticket-confirmation, refund-confirmation, or vetting-notification email.
 
 Refund confirmations use `source: 'refund'` and are deduplicated with an
-`emailDedup` key of `refund-confirmation-{orderId}-{stripeRefundId|tickets-N}`;
+`emailDedup` key of
+`refund-confirmation-{orderId}-{stripeRefundId|zero}-tickets-{N}`;
 see [payments.md](payments.md#buyer-refund-confirmation-email) for the
 end-to-end behavior.
 
@@ -41,18 +42,18 @@ Start with these checks:
 2. Check the Resend dashboard for delivery failures or bounces.
 3. Confirm that `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`, and sender-domain DNS are valid.
 4. For local or staging preview delivery, confirm `SMTP_HOST=smtp.ethereal.email`, `SMTP_PORT=587`, `SMTP_USER`, and `SMTP_PASS`.
-5. For critical production auth or ticket email only, confirm Gmail SMTP fallback credentials are still valid.
+5. For critical production auth, ticket, or refund-confirmation email only, confirm Gmail SMTP fallback credentials are still valid.
 
 The table below lists the common causes in the current system:
 
-| Cause                                         | Fix                                                                                                                                                 |
-| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Resend API key expired or rotated             | Update `RESEND_API_KEY` in Doppler for production, then run `DOPPLER_CONFIG=prd pnpm sync:env:prod`. Local/staging use Ethereal preview SMTP.       |
-| Local/staging preview SMTP is missing         | Set `SMTP_HOST=smtp.ethereal.email`, `SMTP_PORT=587`, `SMTP_USER`, and `SMTP_PASS`, then sync the affected non-production deployment.               |
-| Gmail fallback credentials expired or rotated | Update `SMTP_USER` and `SMTP_PASS`; fallback is only used for critical auth and ticket-delivery mail after Resend pre-acceptance transient failures |
-| Resend sending limit reached                  | Check the Resend quota and raise the limit if needed                                                                                                |
-| Email dedup guard blocked a legitimate retry  | Check the `emailDedup` table for the idempotency key                                                                                                |
-| From address or domain is blocked             | Verify SPF, DKIM, and sender-domain status in Resend                                                                                                |
+| Cause                                         | Fix                                                                                                                                                                       |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Resend API key expired or rotated             | Update `RESEND_API_KEY` in Doppler for production, then run `DOPPLER_CONFIG=prd pnpm sync:env:prod`. Local/staging use Ethereal preview SMTP.                             |
+| Local/staging preview SMTP is missing         | Set `SMTP_HOST=smtp.ethereal.email`, `SMTP_PORT=587`, `SMTP_USER`, and `SMTP_PASS`, then sync the affected non-production deployment.                                     |
+| Gmail fallback credentials expired or rotated | Update `SMTP_USER` and `SMTP_PASS`; fallback is only used for critical auth, ticket-delivery, and refund-confirmation mail after Resend pre-acceptance transient failures |
+| Resend sending limit reached                  | Check the Resend quota and raise the limit if needed                                                                                                                      |
+| Email dedup guard blocked a legitimate retry  | Check the `emailDedup` table for the idempotency key                                                                                                                      |
+| From address or domain is blocked             | Verify SPF, DKIM, and sender-domain status in Resend                                                                                                                      |
 
 If a legitimate email was blocked by the dedup guard:
 

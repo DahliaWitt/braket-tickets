@@ -34,6 +34,27 @@ export async function guardEmailDedup(
   return false;
 }
 
+/**
+ * Compensating delete for a dedup key inserted by `guardEmailDedup` earlier
+ * in the SAME transaction. Use when the guarded fan-out fails after the
+ * guard but the caller intends to swallow the error instead of aborting the
+ * transaction: without this, the swallowed error would commit the key with
+ * no email behind it, permanently burning the slot (guardEmailDedup's
+ * rollback contract only heals when the whole transaction aborts).
+ */
+export async function releaseEmailDedup(
+  ctx: MutationCtx,
+  idempotencyKey: string,
+): Promise<void> {
+  const existing = await ctx.db
+    .query('emailDedup')
+    .withIndex('by_key', (q) => q.eq('key', idempotencyKey))
+    .first();
+  if (existing) {
+    await ctx.db.delete('emailDedup', existing._id);
+  }
+}
+
 export async function hasEmailDedup(
   ctx: Pick<MutationCtx, 'db'>,
   idempotencyKey: string,
@@ -63,10 +84,16 @@ export const cleanupStaleEmailDedup = internalMutation({
       .withIndex('by_createdAt', (q) => q.lt('createdAt', cutoff))
       .take(CLEANUP_BATCH_SIZE);
 
-    await Promise.all(stale.map((record) => ctx.db.delete("emailDedup", record._id)));
+    await Promise.all(
+      stale.map((record) => ctx.db.delete('emailDedup', record._id)),
+    );
 
     if (stale.length === CLEANUP_BATCH_SIZE) {
-      await ctx.scheduler.runAfter(0, internal.lib.email_dedup.cleanupStaleEmailDedup, {});
+      await ctx.scheduler.runAfter(
+        0,
+        internal.lib.email_dedup.cleanupStaleEmailDedup,
+        {},
+      );
     }
 
     return null;
