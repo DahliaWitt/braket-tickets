@@ -2,12 +2,12 @@ import {
   test,
   expect,
   uniqueName,
-  createEnvironment,
   type ConvexHelper,
 } from '../helpers/test-setup';
 import {api} from '@convex/_generated/api';
 import type {Id} from '@convex/_generated/dataModel';
 import {EventAnalyticsTabHarness} from '../../src/app/features/admin/components/event-analytics-tab/event-analytics-tab.component.harness';
+import {getHarnessWhenVisible} from '../helpers/harness-helpers';
 
 /**
  * Cold-load regression for the ApexCharts chart-type registration race.
@@ -29,15 +29,6 @@ async function seedAnalyticsEvent(
     api.testing.communities.seedOrganizer,
     {name: uniqueName('Analytics Charts Org')},
   );
-  const adminUser = await convexHelper.query(api.testing.users.getByEmail, {
-    email: 'global-admin@example.com',
-  });
-  if (!adminUser) throw new Error('Admin user not found');
-  await convexHelper.mutation(api.testing.communities.seedCommunityAdmin, {
-    userId: adminUser._id,
-    organizerId: orgId,
-    grantedBy: adminUser._id,
-  });
 
   // Tickets belong to a throwaway attendee — never the shared global admin,
   // whose /tickets state other specs assert against.
@@ -96,16 +87,16 @@ test.describe('Event analytics charts', () => {
     const eventId = await seedAnalyticsEvent(convexHelper);
 
     await adminPage.goto(`/community-admin/events/${eventId}/manage`);
-    await expect(adminPage.locator('h1')).toBeVisible({timeout: 15000});
 
     // Analytics is the default tab; both defer blocks fire immediately.
     // The tab only renders once the summary query resolves, and zoneless
-    // harness queries do not retry — wait for the host before getHarness.
-    await expect(adminPage.locator('app-event-analytics-tab')).toBeAttached({
-      timeout: 15000,
-    });
-    const env = createEnvironment(adminPage);
-    const analyticsTab = await env.getHarness(EventAnalyticsTabHarness);
+    // harness queries do not retry — wait for the host before resolving it.
+    const analyticsTab = await getHarnessWhenVisible(
+      adminPage,
+      EventAnalyticsTabHarness,
+      15000,
+      'attached',
+    );
 
     await expect
       .poll(
