@@ -592,7 +592,7 @@ describe('refundConfirmationTemplate', () => {
       ticketsRefunded: 2,
       isFullRefund: true,
       isFreeOrder: false,
-      supportEmail: 'help@braket.gay',
+      supportEmail: 'contact@braket.gay',
     });
 
     expect(subject).toBe('Your refund for Warehouse Communion');
@@ -604,7 +604,7 @@ describe('refundConfirmationTemplate', () => {
     expect(html).toContain('5–10 business days');
     expect(html).toContain('Warehouse Communion');
     expect(html).toContain('The Vault');
-    expect(html).toContain('mailto:help@braket.gay');
+    expect(html).toContain('mailto:contact@braket.gay');
   });
 
   it('renders a partial single-ticket refund with singular copy', () => {
