@@ -106,12 +106,16 @@ async function getRefundEmails(
   to: string,
 ): Promise<Array<{subject: string; html: string}>> {
   const emails = await t.query(api.testing.email.getSentEmails, {to});
-  // Match on the exact subject prefixes: seeded event titles contain the
-  // word "Refund", so a substring match would also catch purchase emails.
+  // Match on the exact subject shapes: seeded event titles contain the word
+  // "Refund", so a substring match would also catch purchase emails. Free
+  // orders use cancellation framing ("...was/were cancelled") instead of
+  // refund subjects.
   return emails.filter(
     (email) =>
       email.subject.startsWith('Your refund for') ||
-      email.subject.startsWith('Your partial refund for'),
+      email.subject.startsWith('Your partial refund for') ||
+      email.subject.endsWith('was cancelled') ||
+      email.subject.endsWith('were cancelled'),
   );
 }
 
@@ -246,13 +250,13 @@ describe('refund confirmation emails', () => {
     );
   });
 
-  it('zero-dollar free-claim refund emails free-ticket copy without settlement timing', async () => {
+  it('zero-dollar free-claim refunds email a cancellation notice without refund vocabulary', async () => {
     const t = convexTest();
     const adminId = await createRootAdmin(t, 'Admin', 'admin-free@example.com');
     const buyerEmail = 'free-buyer@example.com';
     const buyerId = await createUser(t, 'Free Buyer', buyerEmail);
     const {eventId} = await createEventWithInventory(t, {
-      title: 'Free Refund Event',
+      title: 'Free Claim Event',
       price: 0,
     });
     const claim = await t
@@ -270,11 +274,14 @@ describe('refund confirmation emails', () => {
 
     const refundEmails = await getRefundEmails(t, buyerEmail);
     expect(refundEmails).toHaveLength(1);
-    expect(refundEmails[0]!.subject).toBe('Your refund for Free Refund Event');
+    expect(refundEmails[0]!.subject).toBe(
+      'Your ticket for Free Claim Event was cancelled',
+    );
     expect(refundEmails[0]!.html).toContain('no charge to send back');
     expect(refundEmails[0]!.html).toContain(
       'Your ticket has been cancelled and can no longer be used for entry.',
     );
+    expect(refundEmails[0]!.html).not.toMatch(/refund/i);
     expect(refundEmails[0]!.html).not.toContain('5–10 business days');
   });
 

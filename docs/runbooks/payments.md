@@ -289,6 +289,12 @@ the `charge.refunded` webhook.
 - Full vs partial in the subject is money-based for paid orders (full once
   every cent is returned, even if a checked-in ticket survives) and
   ticket-based for free orders.
+- Free orders get cancellation framing instead of refund framing: subject
+  `Your ticket(s) for {event} was/were cancelled`, no refund vocabulary
+  anywhere in the message. No money moved, so a "refund" subject would read
+  like a billing error; the email's job is telling the holder their entry
+  credential no longer works. Delivery still flows through the same
+  `source: 'refund'` pipeline and dedup keys.
 
 ---
 

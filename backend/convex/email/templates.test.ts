@@ -627,8 +627,8 @@ describe('refundConfirmationTemplate', () => {
     expect(html).toContain('reply to this email');
   });
 
-  it('renders zero-dollar free-order refunds without money-return or settlement copy', () => {
-    const {html} = refundConfirmationTemplate({
+  it('frames free-order cancellations without any refund vocabulary', () => {
+    const {subject, html} = refundConfirmationTemplate({
       event: refundEvent,
       refundedAmountCents: 0,
       currency: 'USD',
@@ -637,10 +637,33 @@ describe('refundConfirmationTemplate', () => {
       isFreeOrder: true,
     });
 
-    expect(html).toContain('free ticket');
+    expect(subject).toBe('Your ticket for Warehouse Communion was cancelled');
+    expect(html).toContain('Ticket cancelled');
+    expect(html).toContain('It was a free ticket');
     expect(html).toContain('no charge to send back');
+    expect(html).not.toMatch(/refund/i);
     expect(html).not.toContain('5–10 business days');
     expect(html).not.toContain('back to your original payment method');
+  });
+
+  it('pluralizes free-order cancellations and notes surviving tickets on partial cancels', () => {
+    const {subject, html} = refundConfirmationTemplate({
+      event: refundEvent,
+      refundedAmountCents: 0,
+      currency: 'USD',
+      ticketsRefunded: 2,
+      isFullRefund: false,
+      isFreeOrder: true,
+    });
+
+    expect(subject).toBe('Your tickets for Warehouse Communion were cancelled');
+    expect(html).toContain('Tickets cancelled');
+    expect(html).toContain(
+      '2 tickets have been cancelled and can no longer be used for entry.',
+    );
+    expect(html).toContain('They were free tickets');
+    expect(html).toContain('Any other tickets on your order are still valid.');
+    expect(html).not.toMatch(/refund/i);
   });
 
   it('never calls a paid order a free ticket when this refund moved no money', () => {
