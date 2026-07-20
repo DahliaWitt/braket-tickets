@@ -146,8 +146,8 @@ importers:
         specifier: ^6.16.0
         version: 6.17.2
       stripe:
-        specifier: ^22.3.1
-        version: 22.3.1(@types/node@22.19.7)
+        specifier: ^22.3.2
+        version: 22.3.2(@types/node@22.19.7)
     devDependencies:
       '@codecov/vite-plugin':
         specifier: ^2.0.1
@@ -9529,8 +9529,8 @@ packages:
     resolution: {integrity: sha512-1tB5mhVo7U+ETBKNf92xT4hrQa3pm0MZ0PQvuDnWgAAGHDsfp4lPSpiS6psrSiet87wyGPh9ft6wmhOMQ0hDiw==}
     engines: {node: '>=14.16'}
 
-  stripe@22.3.1:
-    resolution: {integrity: sha512-6XSLN0KK0IdfXqDHqMg6CDoO3eO62ye9dhzw0fZp55AUOzHR1YRJOqYHTsuCi4QJ4Ni/usEmXtq69c9ghKDmYw==}
+  stripe@22.3.2:
+    resolution: {integrity: sha512-O13QOvgEIQvDlTy6Ubb5kB980wpbhmoZNsgCXKILjCMZS67f+bW+6w99k3gnSi/N1lkryoj1WYdpGT5Wc5edjg==}
     engines: {node: '>=18'}
     peerDependencies:
       '@types/node': '>=18'
@@ -10430,6 +10430,18 @@ packages:
 
   ws@8.21.0:
     resolution: {integrity: sha512-Vsp28b7DRcimFQvrqu2Wek3z1iYxDCWqHYB8Qsnk/S4RfaCQzPGPyBNuVjJV3cd6UiKtUtp6sNM77gWvzcCH+g==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
+  ws@8.21.1:
+    resolution: {integrity: sha512-+0NTnW77fFN/DjQi6k/Sq/Yvk4Sgajw7urW8V+asjXnRgDs9gyGkdb7EzgfhA4goXsRIZKE28fzIXBHEzhuiWw==}
     engines: {node: '>=10.0.0'}
     peerDependencies:
       bufferutil: ^4.0.1
@@ -18090,7 +18102,7 @@ snapshots:
       buffer-image-size: 0.6.4
       entities: 7.0.1
       whatwg-mimetype: 3.0.0
-      ws: 8.21.0
+      ws: 8.21.1
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -21078,7 +21090,7 @@ snapshots:
 
   strip-json-comments@5.0.3: {}
 
-  stripe@22.3.1(@types/node@22.19.7):
+  stripe@22.3.2(@types/node@22.19.7):
     optionalDependencies:
       '@types/node': 22.19.7
 
@@ -21975,6 +21987,8 @@ snapshots:
   wrappy@1.0.2: {}
 
   ws@8.21.0: {}
+
+  ws@8.21.1: {}
 
   wsl-utils@0.1.0:
     dependencies:
