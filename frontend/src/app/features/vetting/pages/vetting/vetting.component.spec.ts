@@ -13,6 +13,22 @@ import {signal, type WritableSignal} from '@angular/core';
 import {vi, describe, it, expect, beforeEach} from 'vitest';
 import {computed} from '@angular/core';
 import {ConvexError} from 'convex/values';
+import {CONVEX} from 'convex-angular';
+import {
+  createMockConvexClient,
+  type MockConvexClient,
+} from '@/testing/mock-types';
+import {type Application} from '@/features/vetting/models/application.model';
+
+// Real ConvexReactClient never invokes the data callback synchronously from
+// inside `onUpdate` — the first emission always arrives on a later microtask
+// once the socket/local store settles. Mirror that contract so the mock drives
+// injectQuery through the same async path production code sees (pending ->
+// settled) instead of collapsing the loading state in the same tick the
+// subscription is created.
+const emitAsync = (onData: (data: unknown) => void, value: unknown): void => {
+  queueMicrotask(() => onData(value));
+};
 
 describe('VettingComponent', () => {
   let fixture: ComponentFixture<VettingComponent>;
@@ -23,6 +39,16 @@ describe('VettingComponent', () => {
   let communitiesServiceMock: unknown;
   let dashboardDataMock: unknown;
   let router: Router;
+  let mockConvexClient: MockConvexClient;
+
+  // Per-test control over the existing-application subscription (the only
+  // Convex subscription the component opens). The onUpdate router below reads
+  // these; each test tweaks them before creating the fixture.
+  let existingApplicationDoc: unknown = null;
+  let suppressExistingEmit = false;
+  let existingApplicationError: Error | null = null;
+  let emitExisting: ((v: unknown) => void) | undefined;
+  let emitExistingError: ((e: Error) => void) | undefined;
 
   async function waitForVettingResource(): Promise<void> {
     await new Promise((resolve) =>
@@ -52,11 +78,10 @@ describe('VettingComponent', () => {
   async function setupExistingApplicationLoading(): Promise<
     ComponentFixture<VettingComponent>
   > {
-    (
-      appsServiceMock as {
-        getMyApplicationForOrganizer: ReturnType<typeof vi.fn>;
-      }
-    ).getMyApplicationForOrganizer.mockReturnValue(createPendingPromise());
+    // Questions resolve (organizerId sets) so the existing-application query
+    // subscribes, but the subscription never emits -> query.isLoading() stays
+    // true -> the gate blocks the form.
+    suppressExistingEmit = true;
 
     const loadingFixture = TestBed.createComponent(VettingComponent);
     loadingFixture.componentRef.setInput('id', 'org-123');
@@ -65,6 +90,8 @@ describe('VettingComponent', () => {
     await new Promise((resolve) =>
       requestAnimationFrame(() => resolve(undefined)),
     );
+    loadingFixture.detectChanges();
+    await loadingFixture.whenStable();
     loadingFixture.detectChanges();
 
     return loadingFixture;
@@ -88,6 +115,13 @@ describe('VettingComponent', () => {
     // Clear sessionStorage to prevent form state from leaking between tests
     sessionStorage.clear();
 
+    // Reset the existing-application subscription controls.
+    existingApplicationDoc = null;
+    suppressExistingEmit = false;
+    existingApplicationError = null;
+    emitExisting = undefined;
+    emitExistingError = undefined;
+
     const userSignal = signal({
       _id: '123',
       id: '123',
@@ -103,9 +137,45 @@ describe('VettingComponent', () => {
 
     appsServiceMock = {
       create: vi.fn().mockResolvedValue({id: 'app-123'}),
-      getMyApplication: vi.fn().mockResolvedValue(null),
-      getMyApplicationForOrganizer: vi.fn().mockResolvedValue(null),
+      // The component maps the raw subscription document via mapToApp; mirror
+      // the real service's identity-preserving validation so status/denyReason
+      // flow through to the derived signals.
+      mapToApp: vi.fn((doc: unknown): Application | null =>
+        doc && typeof doc === 'object' && '_id' in doc
+          ? (doc as Application)
+          : null,
+      ),
     };
+
+    mockConvexClient = createMockConvexClient();
+    // The existing-application query is the ONLY Convex subscription the
+    // component opens (questionsResource still uses the mocked
+    // CommunitiesService, not Convex), so a single router suffices.
+    const onUpdate = vi
+      .fn()
+      .mockImplementation(
+        (
+          queryRef: unknown,
+          args: unknown,
+          onData: (d: unknown) => void,
+          onError?: (e: Error) => void,
+        ) => {
+          void queryRef;
+          void args;
+          emitExisting = onData;
+          if (onError) emitExistingError = onError;
+          if (suppressExistingEmit) return () => void 0; // keeps isLoading() true
+          if (existingApplicationError) {
+            const err = existingApplicationError;
+            if (onError) queueMicrotask(() => onError(err));
+            return () => void 0;
+          }
+          emitAsync(onData, existingApplicationDoc); // default null -> form renders
+          return () => void 0;
+        },
+      );
+    mockConvexClient.onUpdate = onUpdate;
+    mockConvexClient.client.onUpdate = onUpdate;
 
     communitiesServiceMock = {
       list: vi.fn().mockResolvedValue([]),
@@ -152,6 +222,7 @@ describe('VettingComponent', () => {
         {provide: ApplicationsService, useValue: appsServiceMock},
         {provide: CommunitiesService, useValue: communitiesServiceMock},
         {provide: DashboardDataService, useValue: dashboardDataMock},
+        {provide: CONVEX, useValue: mockConvexClient},
       ],
     }).compileComponents();
 
@@ -653,6 +724,152 @@ describe('VettingComponent', () => {
     });
   });
 
+  describe('Optional boolean answers', () => {
+    // Rebuilds the fixture against a community whose only boolean question is
+    // OPTIONAL, plus a required text question so the form can be submitted.
+    // No code of conduct → conduct agreement is not required.
+    async function setupOptionalBooleanCommunity(): Promise<void> {
+      fixture.destroy();
+      (
+        communitiesServiceMock as {getBySlugOrId: ReturnType<typeof vi.fn>}
+      ).getBySlugOrId.mockResolvedValue({
+        _id: 'optbool-community',
+        name: 'Optional Boolean Community',
+        status: 'published',
+        vettingQuestions: [
+          {
+            id: 'referral',
+            question: 'How did you hear about us?',
+            type: 'text',
+            required: true,
+          },
+          {
+            id: 'attended',
+            question: 'Have you attended one of our events before?',
+            type: 'boolean',
+            required: false,
+          },
+        ],
+      });
+
+      fixture = TestBed.createComponent(VettingComponent);
+      fixture.componentRef.setInput('id', 'optbool-community');
+      fixture.detectChanges();
+      await waitForVettingResource();
+      harness = await TestbedHarnessEnvironment.harnessForFixture(
+        fixture,
+        VettingComponentHarness,
+      );
+
+      await harness.setReferral('Friend recommended me');
+      fixture.detectChanges();
+      await fixture.whenStable();
+    }
+
+    function submittedAnswers(): Record<string, unknown> {
+      const createMock = (appsServiceMock as {create: ReturnType<typeof vi.fn>})
+        .create;
+      expect(createMock).toHaveBeenCalledTimes(1);
+      const arg = createMock.mock.calls[0][0] as {
+        answers: Record<string, unknown>;
+      };
+      return arg.answers;
+    }
+
+    it('omits an untouched optional boolean instead of sending false', async () => {
+      await setupOptionalBooleanCommunity();
+
+      expect(await harness.isSubmitDisabled()).toBe(false);
+
+      await fixture.componentInstance.onSubmit();
+      await fixture.whenStable();
+
+      const answers = submittedAnswers();
+      // The untouched optional boolean must NOT appear at all — an omitted key
+      // is the only way the backend records it as "unanswered" (its answers
+      // validator has no null branch).
+      expect(answers).not.toHaveProperty('attended');
+      expect(answers['referral']).toBe('Friend recommended me');
+      expect(answers['source']).toBe('web');
+    });
+
+    it('sends false when the optional boolean No radio is explicitly chosen', async () => {
+      await setupOptionalBooleanCommunity();
+
+      await harness.clickBooleanRadio('attended', 'false');
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      await fixture.componentInstance.onSubmit();
+      await fixture.whenStable();
+
+      const answers = submittedAnswers();
+      expect(answers['attended']).toBe(false);
+    });
+
+    it('sends true when the optional boolean Yes radio is explicitly chosen', async () => {
+      await setupOptionalBooleanCommunity();
+
+      await harness.clickBooleanRadio('attended', 'true');
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      await fixture.componentInstance.onSubmit();
+      await fixture.whenStable();
+
+      const answers = submittedAnswers();
+      expect(answers['attended']).toBe(true);
+    });
+
+    it('still blocks submission when a required boolean is left untouched', async () => {
+      fixture.destroy();
+      (
+        communitiesServiceMock as {getBySlugOrId: ReturnType<typeof vi.fn>}
+      ).getBySlugOrId.mockResolvedValue({
+        _id: 'reqbool-community',
+        name: 'Required Boolean Community',
+        status: 'published',
+        vettingQuestions: [
+          {
+            id: 'referral',
+            question: 'How did you hear about us?',
+            type: 'text',
+            required: true,
+          },
+          {
+            id: 'notACop',
+            question: 'Are you not a cop?',
+            type: 'boolean',
+            required: true,
+          },
+        ],
+      });
+
+      fixture = TestBed.createComponent(VettingComponent);
+      fixture.componentRef.setInput('id', 'reqbool-community');
+      fixture.detectChanges();
+      await waitForVettingResource();
+      harness = await TestbedHarnessEnvironment.harnessForFixture(
+        fixture,
+        VettingComponentHarness,
+      );
+
+      await harness.setReferral('Friend recommended me');
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      // Required boolean untouched → form invalid → submit is a no-op.
+      expect(await harness.isSubmitDisabled()).toBe(true);
+
+      await fixture.componentInstance.onSubmit();
+      await fixture.whenStable();
+
+      expect(
+        (appsServiceMock as {create: ReturnType<typeof vi.fn>}).create,
+      ).not.toHaveBeenCalled();
+    });
+  });
+
   describe('Form Submission', () => {
     beforeEach(async () => {
       await harness.setReferral('Friend recommended me');
@@ -837,13 +1054,7 @@ describe('VettingComponent', () => {
     });
 
     it('shows a blocked state when the existing application check fails', async () => {
-      (
-        appsServiceMock as {
-          getMyApplicationForOrganizer: ReturnType<typeof vi.fn>;
-        }
-      ).getMyApplicationForOrganizer.mockRejectedValue(
-        new Error('status lookup failed'),
-      );
+      existingApplicationError = new Error('status lookup failed');
 
       fixture = TestBed.createComponent(VettingComponent);
       fixture.componentRef.setInput('id', 'org-123');
@@ -888,20 +1099,16 @@ describe('VettingComponent', () => {
     });
 
     it('should show pending state when user has a pending application', async () => {
-      // Create a fresh fixture with a pending application
-      (
-        appsServiceMock as {
-          getMyApplicationForOrganizer: ReturnType<typeof vi.fn>;
-        }
-      ).getMyApplicationForOrganizer.mockResolvedValue({
+      // Seed the subscription with a pending application
+      existingApplicationDoc = {
         _id: 'app-123',
         _creationTime: Date.now(),
         userId: '123',
         status: 'pending',
         answers: {},
-      });
+      };
 
-      // Re-create the component so the resource fetches the new mock
+      // Re-create the component so the subscription emits the new doc
       fixture = TestBed.createComponent(VettingComponent);
       fixture.componentRef.setInput('id', 'org-123');
       fixture.detectChanges();
@@ -918,17 +1125,13 @@ describe('VettingComponent', () => {
     });
 
     it('should show approved state when user has an approved application', async () => {
-      (
-        appsServiceMock as {
-          getMyApplicationForOrganizer: ReturnType<typeof vi.fn>;
-        }
-      ).getMyApplicationForOrganizer.mockResolvedValue({
+      existingApplicationDoc = {
         _id: 'app-456',
         _creationTime: Date.now(),
         userId: '123',
         status: 'approved',
         answers: {},
-      });
+      };
 
       fixture = TestBed.createComponent(VettingComponent);
       fixture.componentRef.setInput('id', 'org-123');
@@ -954,19 +1157,54 @@ describe('VettingComponent', () => {
       expect(formInstance).not.toBeNull();
     });
 
+    it('reacts live when the existing-application subscription pushes an approval', async () => {
+      // The base fixture already rendered the form from the null emission.
+      expect(await harness.isApprovedStateVisible()).toBe(false);
+
+      // Push a new value through the captured subscription callback WITHOUT
+      // recreating the component — this exercises the injectQuery re-emit path
+      // that resource() could never hit.
+      emitExisting?.({
+        _id: 'app-live',
+        _creationTime: Date.now(),
+        userId: '123',
+        status: 'approved',
+        answers: {},
+      });
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(await harness.isApprovedStateVisible()).toBe(true);
+    });
+
+    it('reacts live when the existing-application subscription reports an error', async () => {
+      // The base fixture rendered the form from the null emission.
+      expect(await harness.isGateErrorStateVisible()).toBe(false);
+      expect(await harness.isReferralInputVisible()).toBe(true);
+
+      // Drive the subscription's error channel (injectQuery's `fail`) live.
+      emitExistingError?.(new Error('status lookup failed'));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(await harness.isGateErrorStateVisible()).toBe(true);
+      expect(await harness.getGateErrorStateText()).toContain(
+        "couldn't check your application status",
+      );
+      expect(await harness.isReferralInputVisible()).toBe(false);
+    });
+
     it('should show rejected state when user has a rejected application', async () => {
-      (
-        appsServiceMock as {
-          getMyApplicationForOrganizer: ReturnType<typeof vi.fn>;
-        }
-      ).getMyApplicationForOrganizer.mockResolvedValue({
+      existingApplicationDoc = {
         _id: 'app-789',
         _creationTime: Date.now(),
         userId: '123',
         status: 'rejected',
         denyReason: 'We could not verify your eligibility.',
         answers: {},
-      });
+      };
 
       fixture = TestBed.createComponent(VettingComponent);
       fixture.componentRef.setInput('id', 'org-123');
@@ -1140,18 +1378,17 @@ describe('VettingComponent', () => {
         ],
       });
 
-      (
-        appsServiceMock as {
-          getMyApplicationForOrganizer: ReturnType<typeof vi.fn>;
-        }
-      ).getMyApplicationForOrganizer.mockResolvedValue({
+      // questionsResource still resolves organizerId even when the community is
+      // unavailable (component returns community._id for draft/no-question
+      // communities), so the query subscribes and emits the rejected doc.
+      existingApplicationDoc = {
         _id: 'app-999',
         _creationTime: Date.now(),
         userId: '123',
         status: 'rejected',
         denyReason: 'Eligibility was not verified.',
         answers: {},
-      });
+      };
 
       fixture = TestBed.createComponent(VettingComponent);
       fixture.componentRef.setInput('id', 'org-123');

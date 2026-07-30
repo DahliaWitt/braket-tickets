@@ -5,13 +5,13 @@ import {
   computed,
   ChangeDetectionStrategy,
   type OnInit,
-  type Signal,
   effect,
+  type Signal,
 } from '@angular/core';
 import {RouterLink} from '@angular/router';
 import {FormField, form} from '@angular/forms/signals';
 import {AuthService} from '@/core/services/auth.service';
-import {injectQuery, skipToken} from 'convex-angular';
+import {injectQueries, injectQuery, skipToken} from 'convex-angular';
 import {toast} from 'ngx-sonner';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 import {ZardCardComponent} from '@ui/components/primitives/card/card.component';
@@ -22,16 +22,28 @@ import {ZardInputDirective} from '@ui/components/primitives/input/input.directiv
 import {CheckInService} from '@/features/admin/services/check-in.service';
 import {readInputValue} from '@ui/utils/dom-event';
 import {EventDatePipe} from '@/utils/event-date.pipe';
+import {BraAlertDialogService} from '@ui/components/composites/alert-dialog/alert-dialog.service';
 
 import {type Id} from '@convex/_generated/dataModel';
 import {type FunctionReturnType} from 'convex/server';
 type Ticket = FunctionReturnType<typeof api.tickets.public.listByEvent>[0];
 type Guest = FunctionReturnType<typeof api.events.guests.listByEvent>[0];
+type ImportedEntry = FunctionReturnType<
+  typeof api.events.imported_tickets.listByEvent
+>[0];
 type CheckInResult = FunctionReturnType<typeof api.events.check_in.checkIn>;
 
 // Precompute lowercase search string to avoid repeated operations during filtering
 type SearchableTicket = Ticket & {searchStr: string};
 type SearchableGuest = Guest & {searchStr: string};
+type SearchableImported = ImportedEntry & {searchStr: string};
+
+/** Per-source door count for the imported check-in breakdown. */
+interface ImportedSourceCount {
+  sourceLabel: string;
+  total: number;
+  checkedIn: number;
+}
 interface ManualFeedback {
   kind: 'success' | 'error';
   message: string;
@@ -56,27 +68,33 @@ interface ManualFeedback {
 export class CheckInComponent implements OnInit {
   auth = inject(AuthService);
   checkInService = inject(CheckInService);
+  private readonly alertDialog = inject(BraAlertDialogService);
 
   isProcessing = this.checkInService.isProcessing;
   lastResult = this.checkInService.lastResult;
   readonly isScannerExpanded = signal(false);
   readonly manualFeedback = signal<ManualFeedback | null>(null);
   private readonly recentTicketCheckIns = signal<Record<string, number>>({});
+  private readonly recentTicketReverts = signal<Record<string, number | null>>(
+    {},
+  );
   private readonly recentGuestCheckIns = signal<Record<string, number>>({});
+  private readonly recentImportedCheckIns = signal<Record<string, number>>({});
+  readonly revertingTicketId = signal<string | null>(null);
 
   // Config
   private readonly isRootAdmin = computed(
     () => this.auth.userRole() === 'root_admin',
   );
 
-  private readonly adminEventsQuery = injectQuery(
-    api.events.management.adminList,
-    () => (this.isRootAdmin() ? {} : skipToken),
-  );
-  private readonly staffEventsQuery = injectQuery(
-    api.communities.scanners.myScannerEvents,
-    () => (this.isRootAdmin() ? skipToken : {}),
-  );
+  private readonly eventsQueries = injectQueries(() => ({
+    admin: this.isRootAdmin()
+      ? {query: api.events.management.adminList, args: {}}
+      : skipToken,
+    staff: this.isRootAdmin()
+      ? skipToken
+      : {query: api.communities.scanners.myScannerEvents, args: {}},
+  }));
 
   /**
    * Raw query data (undefined when the query is still loading). Used by the
@@ -85,9 +103,9 @@ export class CheckInComponent implements OnInit {
    */
   private readonly rawEventsData = computed(() => {
     if (this.isRootAdmin()) {
-      return this.adminEventsQuery.data();
+      return this.eventsQueries.results().admin;
     }
-    return this.staffEventsQuery.data();
+    return this.eventsQueries.results().staff;
   });
 
   readonly events = computed(() => this.rawEventsData() ?? []);
@@ -100,24 +118,27 @@ export class CheckInComponent implements OnInit {
   );
 
   // Signals
-  readonly checkInModel = signal({eventId: '' as string, filter: ''});
+  readonly checkInModel = signal({eventId: '', filter: ''});
   f = form(this.checkInModel);
 
   readonly selectedEventId = computed(
     () => (this.checkInModel().eventId as Id<'events'>) || null,
   );
 
-  private readonly ticketsQuery = injectQuery(
-    api.tickets.public.listByEvent,
-    () => {
-      const eventId = this.selectedEventId();
-      if (!eventId) return skipToken;
-      return {eventId};
-    },
-  );
+  private readonly rosterQueries = injectQueries(() => {
+    const eventId = this.selectedEventId();
+    return {
+      tickets: eventId
+        ? {query: api.tickets.public.listByEvent, args: {eventId}}
+        : skipToken,
+      guests: eventId
+        ? {query: api.events.guests.listByEvent, args: {eventId}}
+        : skipToken,
+    };
+  });
 
-  private readonly guestsQuery = injectQuery(
-    api.events.guests.listByEvent,
+  private readonly importedQuery = injectQuery(
+    api.events.imported_tickets.listByEvent,
     () => {
       const eventId = this.selectedEventId();
       if (!eventId) return skipToken;
@@ -153,22 +174,34 @@ export class CheckInComponent implements OnInit {
   // source of truth, no effect/setter mirror.
   readonly tickets = computed<Ticket[]>(() =>
     this.computeRosterForSelectedEvent(
-      this.ticketsQuery.data(),
-      this.ticketsQuery.isLoading(),
+      this.rosterQueries.results().tickets,
+      this.rosterQueries.statuses().tickets === 'pending',
     ),
   );
   readonly guests = computed<Guest[]>(() =>
     this.computeRosterForSelectedEvent(
-      this.guestsQuery.data(),
-      this.guestsQuery.isLoading(),
+      this.rosterQueries.results().guests,
+      this.rosterQueries.statuses().guests === 'pending',
+    ),
+  );
+  readonly importedEntries = computed<ImportedEntry[]>(() =>
+    this.computeRosterForSelectedEvent(
+      this.importedQuery.data(),
+      this.importedQuery.isLoading(),
     ),
   );
 
-  // Direct re-export of the underlying query signals. No `computed(() => q.isLoading())`
-  // wrapper — that would add an extra reactive node that does nothing a direct
-  // signal reference doesn't already do.
-  readonly isLoadingTickets: Signal<boolean> = this.ticketsQuery.isLoading;
-  readonly isLoadingGuests: Signal<boolean> = this.guestsQuery.isLoading;
+  // injectQueries exposes per-key state only through the aggregate `statuses()`
+  // record — there is no per-key `isLoading` signal to re-export. Derive each
+  // roster's loading flag from its OWN key's status, never the aggregate
+  // `isLoading()` (which spans both keys and would gate one roster on the
+  // other's fetch). Matches the repo idiom (dashboard-page-data, community-admin).
+  readonly isLoadingTickets = computed(
+    () => this.rosterQueries.statuses().tickets === 'pending',
+  );
+  readonly isLoadingGuests = computed(
+    () => this.rosterQueries.statuses().guests === 'pending',
+  );
 
   readonly activeTab = signal<'tickets' | 'guests'>('tickets');
 
@@ -205,6 +238,51 @@ export class CheckInComponent implements OnInit {
     return all.filter((g) => g.searchStr.includes(term));
   });
 
+  // Imported (external) entries also match on their external reference (barcode
+  // digits) so door staff can type the number printed under the QR when a scan
+  // fails — the manual fallback for external tickets.
+  readonly searchableImported = computed<SearchableImported[]>(() => {
+    return this.importedEntries().map((entry) => ({
+      ...entry,
+      searchStr:
+        `${entry.name} ${entry.email || ''} ${entry.externalRef || ''} ${entry.orderRef || ''} ${entry.ticketTypeLabel || ''} ${entry.sourceLabel}`.toLowerCase(),
+    }));
+  });
+
+  readonly filteredImported = computed(() => {
+    const all = this.searchableImported();
+    const term = this.checkInModel().filter?.toLowerCase() || '';
+    if (!term) return all;
+
+    return all.filter((entry) => entry.searchStr.includes(term));
+  });
+
+  readonly isLoadingImported: Signal<boolean> = this.importedQuery.isLoading;
+
+  /**
+   * Per-source door counts for imported entries (total + checked-in), so the
+   * combined door total presents the breakdown rather than silently folding
+   * external attendees into the ticket-scoped counter. Derived here from the
+   * table, mirroring how guest check-in counts are derived today.
+   */
+  readonly importedSourceCounts = computed<ImportedSourceCount[]>(() => {
+    const bySource = new Map<string, ImportedSourceCount>();
+    for (const entry of this.importedEntries()) {
+      const existing = bySource.get(entry.sourceLabel) ?? {
+        sourceLabel: entry.sourceLabel,
+        total: 0,
+        checkedIn: 0,
+      };
+      existing.total += 1;
+      if (this.importedCheckedInAt(entry) !== undefined)
+        existing.checkedIn += 1;
+      bySource.set(entry.sourceLabel, existing);
+    }
+    return [...bySource.values()].sort((a, b) =>
+      a.sourceLabel.localeCompare(b.sourceLabel),
+    );
+  });
+
   readonly eventTitle = computed(() => {
     const id = this.selectedEventId();
     if (!id) return null;
@@ -221,7 +299,10 @@ export class CheckInComponent implements OnInit {
       this.checkInService.lastResult.set(null);
       this.manualFeedback.set(null);
       this.recentTicketCheckIns.set({});
+      this.recentTicketReverts.set({});
       this.recentGuestCheckIns.set({});
+      this.recentImportedCheckIns.set({});
+      this.revertingTicketId.set(null);
     });
 
     // Clear stale dropdown selection when the selected event disappears from
@@ -266,19 +347,75 @@ export class CheckInComponent implements OnInit {
   /** Called by the scanner child when a QR code is detected. */
   onQRScanned(data: string): void {
     this.checkInService.triggerHaptic();
-    void this.checkInService.checkIn(data);
+    // Forward the scanned event so the external-ticket fallback can resolve
+    // RA-style barcodes against this event's imported entries.
+    void this.checkInService.checkIn(data, this.selectedEventId() ?? undefined);
   }
 
   /** Check in a ticket from the manual list. */
   async checkInTicket(scanData: string): Promise<void> {
-    await this.checkInService.checkIn(scanData);
+    await this.checkInService.checkIn(
+      scanData,
+      this.selectedEventId() ?? undefined,
+    );
     this.applyManualCheckInResult('ticket', scanData, this.lastResult());
+  }
+
+  /** Ask for confirmation before undoing a native ticket check-in. */
+  confirmTicketCheckInRevert(ticket: Ticket): void {
+    if (
+      this.isProcessing() ||
+      this.revertingTicketId() ||
+      !this.isTicketCheckedIn(ticket)
+    ) {
+      return;
+    }
+
+    const attendee = this.ticketAttendeeName(ticket);
+    this.alertDialog.confirm({
+      zTitle: 'Undo check-in?',
+      zDescription: `Mark ${attendee}'s ticket as not checked in? They can be checked in again.`,
+      zOkText: 'Undo check-in',
+      zCancelText: 'Keep checked in',
+      zMaskClosable: false,
+      zOnOk: () => {
+        void this.revertTicketCheckIn(ticket);
+      },
+    });
   }
 
   /** Check in a guest from the guest list. */
   async checkInGuest(guestId: string): Promise<void> {
     await this.checkInService.checkInGuest(guestId);
     this.applyManualCheckInResult('guest', guestId, this.lastResult());
+  }
+
+  /** Check in an external (imported) ticket holder from the imported list. */
+  async checkInImported(entryId: string): Promise<void> {
+    const result = await this.checkInService.checkInImported(entryId);
+    if (!result) {
+      this.manualFeedback.set({
+        kind: 'error',
+        message: 'External ticket check-in did not start.',
+      });
+      return;
+    }
+    if (!result.success) {
+      this.manualFeedback.set({kind: 'error', message: result.message});
+      return;
+    }
+    const timestamp = result.entry.checkedInAt ?? Date.now();
+    this.recentImportedCheckIns.update((current) => ({
+      ...current,
+      [entryId]: timestamp,
+    }));
+    // A re-check of an already-admitted holder signals a duplicate, matching the
+    // native ticket path's failure feedback — not a fresh green success.
+    this.manualFeedback.set(
+      result.alreadyCheckedIn
+        ? {kind: 'error', message: 'Already checked in.'}
+        : {kind: 'success', message: 'External ticket holder checked in.'},
+    );
   }
 
   enableScannerSounds(): void {
@@ -292,14 +429,14 @@ export class CheckInComponent implements OnInit {
   }
 
   ticketCheckInLabel(ticket: Ticket, rowIndex: number): string {
-    const attendee =
-      ticket.user?.name ||
-      ticket.user?.email ||
-      ticket.guestEmail ||
-      'attendee';
+    const attendee = this.ticketAttendeeName(ticket);
     const tier = ticket.tier || 'ticket';
-    const status = ticket.status || 'unknown status';
+    const status = this.ticketDisplayStatus(ticket) || 'unknown status';
     return `Check in ticket row ${rowIndex + 1}, ${tier} ticket, status ${status}, id ${this.idSuffix(ticket._id)}, for ${attendee}`;
+  }
+
+  ticketRevertLabel(ticket: Ticket, rowIndex: number): string {
+    return `Undo check-in for ticket row ${rowIndex + 1}, id ${this.idSuffix(ticket._id)}, for ${this.ticketAttendeeName(ticket)}`;
   }
 
   guestCheckInLabel(guest: Guest, rowIndex: number): string {
@@ -312,12 +449,33 @@ export class CheckInComponent implements OnInit {
     return this.recentTicketCheckIns()[ticketId] !== undefined;
   }
 
+  isTicketCheckedIn(ticket: Ticket): boolean {
+    return (
+      this.ticketDisplayStatus(ticket) === 'used' ||
+      this.isTicketRecentlyCheckedIn(ticket._id)
+    );
+  }
+
+  ticketDisplayStatus(ticket: Ticket): Ticket['status'] {
+    return this.isTicketLocallyReverted(ticket) ? 'valid' : ticket.status;
+  }
+
   ticketCheckedInAt(ticket: Ticket): number | undefined {
+    if (this.isTicketLocallyReverted(ticket)) return undefined;
     return ticket.checkedInAt ?? this.recentTicketCheckIns()[ticket._id];
   }
 
   guestCheckedInAt(guest: Guest): number | undefined {
     return guest.checkedInAt ?? this.recentGuestCheckIns()[guest._id];
+  }
+
+  importedCheckedInAt(entry: ImportedEntry): number | undefined {
+    return entry.checkedInAt ?? this.recentImportedCheckIns()[entry._id];
+  }
+
+  importedCheckInLabel(entry: ImportedEntry, rowIndex: number): string {
+    const name = entry.name || 'external ticket holder';
+    return `Check in external row ${rowIndex + 1}, source ${entry.sourceLabel}, id ${this.idSuffix(entry._id)}, for ${name}`;
   }
 
   private applyManualCheckInResult(
@@ -345,6 +503,11 @@ export class CheckInComponent implements OnInit {
     const timestamp = checkedInAt ?? Date.now();
 
     if (type === 'ticket') {
+      this.recentTicketReverts.update((current) => {
+        const next = {...current};
+        delete next[id];
+        return next;
+      });
       this.recentTicketCheckIns.update((current) => ({
         ...current,
         [id]: timestamp,
@@ -363,6 +526,69 @@ export class CheckInComponent implements OnInit {
           ? 'Ticket checked in. Row marked verified.'
           : 'Guest checked in. Row marked checked in.',
     });
+  }
+
+  private async revertTicketCheckIn(ticket: Ticket): Promise<void> {
+    if (this.isProcessing() || this.revertingTicketId()) {
+      this.manualFeedback.set({
+        kind: 'error',
+        message: 'Wait for the current door action to finish, then try again.',
+      });
+      return;
+    }
+
+    const ticketId = ticket._id;
+    const revertedCheckedInAt = this.ticketCheckedInAt(ticket) ?? null;
+    this.revertingTicketId.set(ticketId);
+    this.manualFeedback.set(null);
+
+    try {
+      const result = await this.checkInService.revertCheckIn(ticketId);
+      if (!result) {
+        this.manualFeedback.set({
+          kind: 'error',
+          message: 'Check-in undo did not start.',
+        });
+        return;
+      }
+      if (!result.success) {
+        this.manualFeedback.set({kind: 'error', message: result.message});
+        return;
+      }
+
+      this.recentTicketCheckIns.update((current) => {
+        const next = {...current};
+        delete next[ticketId];
+        return next;
+      });
+      this.recentTicketReverts.update((current) => ({
+        ...current,
+        [ticketId]: revertedCheckedInAt,
+      }));
+      this.manualFeedback.set({
+        kind: 'success',
+        message: 'Check-in undone. Ticket is valid again.',
+      });
+    } finally {
+      this.revertingTicketId.set(null);
+    }
+  }
+
+  private isTicketLocallyReverted(ticket: Ticket): boolean {
+    const recentReverts = this.recentTicketReverts();
+    if (!Object.hasOwn(recentReverts, ticket._id)) return false;
+
+    const revertedCheckedInAt = recentReverts[ticket._id];
+    return (
+      ticket.status === 'used' &&
+      (ticket.checkedInAt ?? null) === revertedCheckedInAt
+    );
+  }
+
+  private ticketAttendeeName(ticket: Ticket): string {
+    return (
+      ticket.user?.name || ticket.user?.email || ticket.guestEmail || 'attendee'
+    );
   }
 
   private idSuffix(id: string): string {

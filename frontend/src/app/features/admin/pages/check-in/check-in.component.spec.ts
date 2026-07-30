@@ -19,6 +19,8 @@ import {type MockConvexClient} from '../../../../../testing/mock-types';
 import {MockWebHaptics} from '@/testing/mock-web-haptics';
 import {WEB_HAPTICS_CTOR} from '../../services/web-haptics.token';
 import {QR_SCANNER_CTOR} from '../../components/check-in-scanner/qr-scanner.token';
+import {BraAlertDialogService} from '@ui/components/composites/alert-dialog/alert-dialog.service';
+import {createDeferred} from '@/testing/deferred';
 
 type Ticket = FunctionReturnType<typeof api.tickets.public.listByEvent>[0];
 type Guest = FunctionReturnType<typeof api.events.guests.listByEvent>[0];
@@ -27,6 +29,10 @@ type ScannerEvent = FunctionReturnType<
   typeof api.communities.scanners.myScannerEvents
 >[0];
 type UserRole = 'root_admin' | 'community_admin' | 'user';
+type RevertCheckInResult = FunctionReturnType<
+  typeof api.events.check_in.revertCheckIn
+>;
+type ConfirmDialogConfig = Parameters<BraAlertDialogService['confirm']>[0];
 
 class MockQrScanner {
   start = vi.fn().mockResolvedValue(undefined);
@@ -53,6 +59,7 @@ describe('CheckInComponent', () => {
   >;
   let destroySpy: ReturnType<typeof vi.spyOn>;
   let userRoleSignal: ReturnType<typeof signal<UserRole>>;
+  let alertDialogMock: {confirm: ReturnType<typeof vi.fn>};
 
   // ── convex-angular subscription mock ──────────────────────────────────────
   //
@@ -108,21 +115,21 @@ describe('CheckInComponent', () => {
     seedQuery(api.events.management.adminList, {}, data);
   const seedScannerEvents = (data: ScannerEvent[]) =>
     seedQuery(api.communities.scanners.myScannerEvents, {}, data);
-  const makeScannerEvent = (id: string, title: string): ScannerEvent =>
-    ({
-      _id: id as Id<'events'>,
-      _creationTime: 0,
-      date: '2026-05-01',
-      organizerId: 'organizer-1' as Id<'organizers'>,
-      posterUrl: null,
-      price: 0,
-      status: 'published',
-      title,
-      totalTickets: 100,
-      visibility: 'public',
-    }) as ScannerEvent;
-  const makeAdminEvent = (id: string, title: string): AdminEvent =>
-    ({...makeScannerEvent(id, title)}) as AdminEvent;
+  const makeScannerEvent = (id: string, title: string): ScannerEvent => ({
+    _id: id as Id<'events'>,
+    _creationTime: 0,
+    date: '2026-05-01',
+    organizerId: 'organizer-1' as Id<'organizers'>,
+    posterUrl: null,
+    price: 0,
+    status: 'published',
+    title,
+    totalTickets: 100,
+    visibility: 'public',
+  });
+  const makeAdminEvent = (id: string, title: string): AdminEvent => ({
+    ...makeScannerEvent(id, title),
+  });
   const setUserRole = async (role: UserRole): Promise<void> => {
     userRoleSignal.set(role);
     fixture.detectChanges();
@@ -269,6 +276,7 @@ describe('CheckInComponent', () => {
           .mockImplementation(() => () => void 0),
       },
     };
+    alertDialogMock = {confirm: vi.fn()};
 
     await TestBed.configureTestingModule({
       imports: [CheckInComponent],
@@ -278,6 +286,7 @@ describe('CheckInComponent', () => {
         {provide: QR_SCANNER_CTOR, useValue: MockQrScanner},
         {provide: AuthService, useValue: authServiceMock},
         {provide: CONVEX, useValue: convexClientMock},
+        {provide: BraAlertDialogService, useValue: alertDialogMock},
         provideRouter([]),
       ],
     }).compileComponents();
@@ -357,7 +366,9 @@ describe('CheckInComponent', () => {
     await fixture.whenStable();
 
     expect(hapticSpy).toHaveBeenCalled();
-    expect(checkInSpy).toHaveBeenCalledWith('ticket-123');
+    // Scan data is forwarded along with the selected event context (undefined
+    // here since no event is selected in this test) for the external fallback.
+    expect(checkInSpy).toHaveBeenCalledWith('ticket-123', undefined);
   });
 
   it('should clean up service on destroy', () => {
@@ -527,6 +538,169 @@ describe('CheckInComponent', () => {
       'Ticket checked in. Row marked verified.',
     );
     expect(await harness.getListItemText(0)).toContain('Verified');
+    expect(await harness.getCheckInButtonLabels()).toEqual([]);
+    expect(await harness.getTicketRevertButtonLabels()).toHaveLength(1);
+  });
+
+  it('offers an accessible undo action for a used native ticket', async () => {
+    fixture.componentInstance.checkInModel.update((m) => ({
+      ...m,
+      eventId: 'event-1',
+    }));
+    await fixture.whenStable();
+
+    seedTickets('event-1', [
+      {
+        _id: 'ticket-alpha-111111',
+        user: {name: 'Alice', email: 'alice@test.com'},
+        tier: 'regular',
+        status: 'used',
+        checkedInAt: new Date('2026-05-01T21:30:00Z').getTime(),
+      } as unknown as Ticket,
+    ]);
+    await fixture.whenStable();
+
+    expect(await harness.getTicketRevertButtonLabels()).toEqual([
+      'Undo check-in for ticket row 1, id 111111, for Alice',
+    ]);
+  });
+
+  it('uses the active revert signal to disable only its Undo button and block another confirmation', async () => {
+    const ticket = {
+      _id: 'ticket-used',
+      user: {name: 'Alice', email: 'alice@test.com'},
+      tier: 'regular',
+      status: 'used',
+      checkedInAt: new Date('2026-05-01T21:30:00Z').getTime(),
+    } as unknown as Ticket;
+    fixture.componentInstance.checkInModel.update((model) => ({
+      ...model,
+      eventId: 'event-1',
+    }));
+    await fixture.whenStable();
+
+    seedTickets('event-1', [ticket]);
+    fixture.componentInstance.isProcessing.set(false);
+    fixture.componentInstance.revertingTicketId.set(ticket._id);
+    await fixture.whenStable();
+
+    expect(await harness.isTicketRevertButtonDisabled(0)).toBe(true);
+
+    fixture.componentInstance.revertingTicketId.set('another-ticket');
+    await fixture.whenStable();
+
+    expect(await harness.isTicketRevertButtonDisabled(0)).toBe(false);
+    fixture.componentInstance.confirmTicketCheckInRevert(ticket);
+    expect(alertDialogMock.confirm).not.toHaveBeenCalled();
+  });
+
+  it('requires confirmation, shows progress, and restores a reverted ticket to an actionable state', async () => {
+    const deferred = createDeferred<RevertCheckInResult>();
+    (convexClientMock.mutation as unknown as Mock).mockImplementation(
+      (reference: FunctionReference<'mutation'>) =>
+        getFunctionName(reference) ===
+        getFunctionName(api.events.check_in.revertCheckIn)
+          ? deferred.promise
+          : Promise.resolve(mockCheckInResult),
+    );
+    fixture.componentInstance.checkInModel.update((m) => ({
+      ...m,
+      eventId: 'event-1',
+    }));
+    await fixture.whenStable();
+
+    seedTickets('event-1', [
+      {
+        _id: 'ticket-used',
+        user: {name: 'Alice', email: 'alice@test.com'},
+        tier: 'regular',
+        status: 'used',
+        checkedInAt: new Date('2026-05-01T21:30:00Z').getTime(),
+      } as unknown as Ticket,
+    ]);
+    await fixture.whenStable();
+
+    await harness.clickTicketRevertOnItem(0);
+
+    expect(alertDialogMock.confirm).toHaveBeenCalledTimes(1);
+    expect(convexClientMock.mutation).not.toHaveBeenCalledWith(
+      api.events.check_in.revertCheckIn,
+      expect.anything(),
+    );
+
+    const config = alertDialogMock.confirm.mock.calls[0]?.[0] as
+      ConfirmDialogConfig | undefined;
+    expect(config?.zTitle).toBe('Undo check-in?');
+    config?.zOnOk?.(undefined);
+
+    await expect
+      .poll(() => harness.getTicketRevertButtonText(0))
+      .toBe('Undoing...');
+    expect(await harness.isTicketRevertButtonDisabled(0)).toBe(true);
+
+    deferred.resolve({
+      success: true,
+      message: 'Check-in reverted successfully',
+    });
+
+    await expect
+      .poll(() => harness.getManualFeedbackText())
+      .toContain('Check-in undone. Ticket is valid again.');
+    expect(await harness.getTicketRevertButtonLabels()).toEqual([]);
+    expect(await harness.getCheckInButtonLabels()).toHaveLength(1);
+
+    seedTickets('event-1', [
+      {
+        _id: 'ticket-used',
+        user: {name: 'Alice', email: 'alice@test.com'},
+        tier: 'regular',
+        status: 'refunded',
+      } as unknown as Ticket,
+    ]);
+    await fixture.whenStable();
+
+    expect(await harness.getListItemText(0)).toContain('refunded');
+    expect(await harness.getCheckInButtonLabels()).toEqual([]);
+    expect(await harness.getTicketRevertButtonLabels()).toEqual([]);
+  });
+
+  it('keeps a used ticket undoable and shows the failure reason when revert fails', async () => {
+    (convexClientMock.mutation as unknown as Mock).mockImplementation(
+      (reference: FunctionReference<'mutation'>) =>
+        getFunctionName(reference) ===
+        getFunctionName(api.events.check_in.revertCheckIn)
+          ? Promise.resolve({
+              success: false,
+              message: 'Cannot revert check-in: ticket is refunded',
+            })
+          : Promise.resolve(mockCheckInResult),
+    );
+    fixture.componentInstance.checkInModel.update((m) => ({
+      ...m,
+      eventId: 'event-1',
+    }));
+    await fixture.whenStable();
+
+    seedTickets('event-1', [
+      {
+        _id: 'ticket-used',
+        user: {name: 'Alice', email: 'alice@test.com'},
+        tier: 'regular',
+        status: 'used',
+        checkedInAt: new Date('2026-05-01T21:30:00Z').getTime(),
+      } as unknown as Ticket,
+    ]);
+    await fixture.whenStable();
+
+    await harness.clickTicketRevertOnItem(0);
+    const config = alertDialogMock.confirm.mock.calls[0]?.[0] as
+      ConfirmDialogConfig | undefined;
+    config?.zOnOk?.(undefined);
+
+    await expect
+      .poll(() => harness.getManualFeedbackText())
+      .toContain('Cannot revert check-in: ticket is refunded');
+    expect(await harness.getTicketRevertButtonLabels()).toHaveLength(1);
     expect(await harness.getCheckInButtonLabels()).toEqual([]);
   });
 
@@ -907,9 +1081,7 @@ describe('CheckInComponent', () => {
     let warnSpy: MockInstance<typeof toast.warning>;
 
     beforeEach(() => {
-      warnSpy = vi
-        .spyOn(toast, 'warning')
-        .mockImplementation(() => '' as unknown as string & number);
+      warnSpy = vi.spyOn(toast, 'warning').mockImplementation(() => '');
       warnSpy.mockClear();
     });
 

@@ -18,8 +18,10 @@ permissions:
 jobs:
   lint:
     name: Lint + Typecheck (ESLint + tsc)
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'self-hosted' }}
-    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    # Headroom over the self-hosted era: a cold hosted runner (empty pnpm store
+    # and Angular cache after eviction) needs the extra minutes.
+    timeout-minutes: 15
     environment:
       name: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' && 'production' || github.event_name == 'pull_request' && github.base_ref == 'develop' && 'development' || github.ref_name == 'main' && 'production' || 'development' }}
       deployment: false
@@ -28,20 +30,11 @@ jobs:
       CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-      - name: Setup pnpm
-        uses: pnpm/action-setup@c336a2788d9774dccfdeb4823a5058ccc9f07453 # v4.3.0
-      - name: Setup Node.js
-        # Runs on self-hosted too: Angular 22 requires Node >=22.22.3, newer than
-        # the runner image's baked-in Node. setup-node installs the .nvmrc version
-        # and prepends it to PATH, overriding the image until it is rebuilt.
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version-file: '.nvmrc'
-      - name: Install root dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Install frontend dependencies
-        working-directory: ./frontend
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Setup pnpm + Node
+        uses: ./.github/actions/setup-node-pnpm
+      - name: Install dependencies
+        # Installs every workspace package (frontend included) from the root lockfile.
         run: pnpm install --frozen-lockfile
       - name: Check Convex generated files are fresh
         if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
@@ -59,8 +52,10 @@ jobs:
 
   test:
     name: Unit Tests
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'self-hosted' }}
-    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    # Headroom over the self-hosted era: a cold hosted runner (empty pnpm store
+    # and Angular cache after eviction) needs the extra minutes.
+    timeout-minutes: 15
     environment:
       name: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' && 'production' || github.event_name == 'pull_request' && github.base_ref == 'develop' && 'development' || github.ref_name == 'main' && 'production' || 'development' }}
       deployment: false
@@ -68,20 +63,11 @@ jobs:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-      - name: Setup pnpm
-        uses: pnpm/action-setup@c336a2788d9774dccfdeb4823a5058ccc9f07453 # v4.3.0
-      - name: Setup Node.js
-        # Runs on self-hosted too: Angular 22 requires Node >=22.22.3, newer than
-        # the runner image's baked-in Node. setup-node installs the .nvmrc version
-        # and prepends it to PATH, overriding the image until it is rebuilt.
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version-file: '.nvmrc'
-      - name: Install root dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Install frontend dependencies
-        working-directory: ./frontend
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Setup pnpm + Node
+        uses: ./.github/actions/setup-node-pnpm
+      - name: Install dependencies
+        # Installs every workspace package (frontend included) from the root lockfile.
         run: pnpm install --frozen-lockfile
       - name: Unit tests (frontend)
         working-directory: ./frontend
@@ -113,30 +99,42 @@ jobs:
           }
       - name: Upload frontend coverage to Codecov
         if: ${{ always() && env.CODECOV_TOKEN != '' && steps.assert_frontend_coverage.outcome == 'success' && steps.assert_convex_coverage.outcome == 'success' }}
-        uses: codecov/codecov-action@ad3126e916f78f00edff4ed0317cf185271ccc2d # v5.4.2
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           token: ${{ env.CODECOV_TOKEN }}
           files: frontend/coverage/coverage-final.json
           flags: frontend
           slug: ${{ github.repository }}
           disable_search: true
-          fail_ci_if_error: true
+          # Install the Codecov CLI from PyPI instead of downloading it from
+          # cli.codecov.io. The download path GPG-verifies the binary against a
+          # key fetched from keybase.io, which fails ("No public key") on
+          # ephemeral hosted runners that lack the warm keyring the self-hosted
+          # pool had; the PyPI path anchors integrity to pip/TLS instead.
+          use_pypi: true
+          # Defense in depth: even with the PyPI path, a Codecov infra flake
+          # must not redden a green test suite. Coverage generation is still
+          # enforced by the assert_*_coverage steps above.
+          fail_ci_if_error: false
       - name: Upload convex coverage to Codecov
         if: ${{ always() && env.CODECOV_TOKEN != '' && steps.assert_frontend_coverage.outcome == 'success' && steps.assert_convex_coverage.outcome == 'success' }}
-        uses: codecov/codecov-action@ad3126e916f78f00edff4ed0317cf185271ccc2d # v5.4.2
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           token: ${{ env.CODECOV_TOKEN }}
           files: backend/coverage/coverage-final.json
           flags: convex
           slug: ${{ github.repository }}
           disable_search: true
-          fail_ci_if_error: true
+          # See the frontend upload step above.
+          use_pypi: true
+          fail_ci_if_error: false
 
   stripe-contracts:
     name: Stripe Sandbox Contracts
     if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 12
+    # Gated on lint to conserve Stripe sandbox API quota on obviously-broken pushes.
     needs: [lint]
     # Stripe sandbox contracts must always run against sandbox/test credentials.
     # Pin this job to the GitHub "development" environment (Doppler stg sync).
@@ -150,8 +148,10 @@ jobs:
       STRIPE_SANDBOX_CONNECTED_ACCOUNT_ID: ${{ secrets.STRIPE_SANDBOX_CONNECTED_ACCOUNT_ID }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-      - name: Install root dependencies
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Setup pnpm + Node
+        uses: ./.github/actions/setup-node-pnpm
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Run Stripe sandbox preflight checks
         run: pnpm test:convex:sandbox:preflight
@@ -160,28 +160,38 @@ jobs:
 
   build:
     name: Build Frontend
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'self-hosted' }}
-    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    # Headroom over the self-hosted era: a cold hosted runner (empty pnpm store
+    # and Angular cache after eviction) needs the extra minutes.
+    timeout-minutes: 15
     environment:
       name: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' && 'production' || github.event_name == 'pull_request' && github.base_ref == 'develop' && 'development' || github.ref_name == 'main' && 'production' || 'development' }}
       deployment: false
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-      - name: Setup pnpm
-        uses: pnpm/action-setup@c336a2788d9774dccfdeb4823a5058ccc9f07453 # v4.3.0
-      - name: Setup Node.js
-        # Runs on self-hosted too: Angular 22 requires Node >=22.22.3, newer than
-        # the runner image's baked-in Node. setup-node installs the .nvmrc version
-        # and prepends it to PATH, overriding the image until it is rebuilt.
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version-file: '.nvmrc'
-      - name: Install root dependencies
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Setup pnpm + Node
+        uses: ./.github/actions/setup-node-pnpm
+      - name: Install dependencies
+        # Installs every workspace package (frontend included) from the root lockfile.
         run: pnpm install --frozen-lockfile
-      - name: Install frontend dependencies
+      - name: Enable Angular build cache on CI
+        # The Angular CLI disables its build cache when it detects CI. Enable it
+        # at runtime for this job only — a global angular.json setting would also
+        # switch the self-hosted e2e and deploy builds to persistent incremental
+        # caching on the Whiterose disk.
         working-directory: ./frontend
-        run: pnpm install --frozen-lockfile
+        run: pnpm exec ng config cli.cache.environment all
+      - name: Restore Angular build cache
+        # Key on the lockfile only: cache entries are immutable, and a per-sha
+        # key would mint a new multi-hundred-MB entry per commit, churning the
+        # repo's 10 GB cache budget and evicting the pnpm store caches.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: frontend/.angular/cache
+          key: angular-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            angular-build-${{ runner.os }}-
       - name: Build frontend with stats
         id: build_frontend
         working-directory: ./frontend
@@ -200,7 +210,7 @@ jobs:
           PUPPETEER_EXECUTABLE_PATH: ''
       - name: Upload bundle analysis
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: bundle-analysis
           path: |
@@ -230,28 +240,24 @@ jobs:
     name: Build Storybook
     # Disabled: broken by Angular 22. See docs/runbooks/deployment-ci.md
     # (Storybook job disabled) for rationale and re-enable steps.
+    # "Build Storybook" was also removed from the develop/main required status
+    # checks (2026-07-08). When re-enabling this job, re-add the required check
+    # with the gh api command in the runbook section.
     if: false
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'self-hosted' }}
-    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    # Headroom over the self-hosted era: a cold hosted runner (empty pnpm store
+    # and Angular cache after eviction) needs the extra minutes.
+    timeout-minutes: 15
     environment:
       name: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' && 'production' || github.event_name == 'pull_request' && github.base_ref == 'develop' && 'development' || github.ref_name == 'main' && 'production' || 'development' }}
       deployment: false
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-      - name: Setup pnpm
-        uses: pnpm/action-setup@c336a2788d9774dccfdeb4823a5058ccc9f07453 # v4.3.0
-      - name: Setup Node.js
-        # Runs on self-hosted too: Angular 22 requires Node >=22.22.3, newer than
-        # the runner image's baked-in Node. setup-node installs the .nvmrc version
-        # and prepends it to PATH, overriding the image until it is rebuilt.
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version-file: '.nvmrc'
-      - name: Install root dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Install frontend dependencies
-        working-directory: ./frontend
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Setup pnpm + Node
+        uses: ./.github/actions/setup-node-pnpm
+      - name: Install dependencies
+        # Installs every workspace package (frontend included) from the root lockfile.
         run: pnpm install --frozen-lockfile
       - name: Build Storybook
         working-directory: ./frontend
@@ -262,14 +268,18 @@ jobs:
   e2e-check:
     name: E2E Gate
     if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [lint, test, build]
+    # Intentionally no `needs:` on lint/test/build — E2E starts in parallel with
+    # the fan-out so PR wall-clock is max(fan-out, e2e), not their sum. A PR push
+    # that fails lint may waste one E2E run, bounded by cancel-in-progress on
+    # re-push (PR events only). develop/main pushes are pre-validated: the strict
+    # up-to-date requirement means the merged state already passed full CI.
     outputs:
       should_run: ${{ steps.check.outputs.should_run }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
 
@@ -279,8 +289,14 @@ jobs:
 
   e2e:
     name: E2E Tests
-    runs-on: self-hosted
-    timeout-minutes: 15
+    # GitHub-hosted (4 vCPU / 16 GB). Each job is isolated, which removes the
+    # self-hosted contention and shared-browser-volume GC race. Keep browser
+    # concurrency below the runner's full CPU count because the local Convex
+    # backend also needs CPU throughout the suite.
+    runs-on: ubuntu-latest
+    # Isolated on 4 vCPU is slower than the self-hosted box; give headroom over
+    # the old 15-min ceiling. Tune down once real durations are known.
+    timeout-minutes: 30
     needs: [e2e-check]
     if: ${{ needs.e2e-check.outputs.should_run == 'true' && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
     # Never expose production environment secrets to pull_request workflows.
@@ -291,42 +307,48 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@c336a2788d9774dccfdeb4823a5058ccc9f07453 # v4.3.0
-      - name: Setup Node.js
-        # e2e.ts --build compiles the Angular app, which requires Node >=22.22.3
-        # (newer than the runner image). Pin via .nvmrc until the image is rebuilt.
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - name: Setup pnpm + Node
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve Playwright version
+        # Cache key for the browser cache — the installed CLI version determines
+        # the browser revisions, so keying on it invalidates on a Playwright bump.
+        id: pw
+        run: echo "version=$(pnpm --filter frontend exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Playwright browser cache
+        id: pw-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          node-version-file: '.nvmrc'
-
-      - name: Install root dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Install frontend dependencies
-        working-directory: ./frontend
-        run: pnpm install --frozen-lockfile
-
-      - name: Fix interrupted dpkg state
-        run: sudo dpkg --configure -a 2>/dev/null || true
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
 
       - name: Install Playwright browsers
         working-directory: ./frontend
-        run: |
-          if [ -n "${PLAYWRIGHT_BROWSERS_PATH:-}" ] && [ -d "$PLAYWRIGHT_BROWSERS_PATH" ]; then
-            echo "Using pre-installed browsers at $PLAYWRIGHT_BROWSERS_PATH"
-            # Ensure the currently locked Playwright browser revisions exist.
-            # install-deps only installs system packages and won't download missing browsers.
-            pnpm exec playwright install chromium webkit
-            pnpm exec playwright install-deps chromium webkit 2>/dev/null || true
-          else
-            echo "PLAYWRIGHT_BROWSERS_PATH not set or missing — installing browsers"
-            pnpm exec playwright install --with-deps chromium webkit
-          fi
+        # On a cache hit only the OS deps need (re)installing; on a miss, download
+        # the browsers too. --with-deps handles the apt packages either way.
+        run: pnpm exec playwright install --with-deps chromium webkit
+
+      - name: Enable Angular build cache on CI
+        # build:e2e runs `ng build`, whose cache the CLI disables under CI by
+        # default. Enable it for this job so the restored .angular/cache is used.
+        working-directory: ./frontend
+        run: pnpm exec ng config cli.cache.environment all
+
+      - name: Restore Angular build cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: frontend/.angular/cache
+          key: angular-e2e-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            angular-e2e-${{ runner.os }}-
 
       - name: Run E2E tests
         run: npx tsx scripts/e2e.ts --build
@@ -335,7 +357,10 @@ jobs:
           # e2e.ts will replace these with per-run ephemeral ports.
           CONVEX_URL: http://127.0.0.1:3210
           CONVEX_SITE_URL: http://127.0.0.1:3211
-          PW_WORKERS: '5'
+          # Two browsers leave CPU for the local Convex backend. Running four
+          # workers on a four-vCPU runner caused backend timeouts, 503s, and
+          # session-initialization retries under load.
+          PW_WORKERS: '2'
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
           SMTP_USER: ${{ secrets.SMTP_USER }}
@@ -344,7 +369,7 @@ jobs:
 
       - name: Upload E2E logs (failure)
         if: ${{ failure() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: e2e-logs
           path: |
@@ -354,7 +379,7 @@ jobs:
 
       - name: Upload HTML report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-report
           path: frontend/playwright-report

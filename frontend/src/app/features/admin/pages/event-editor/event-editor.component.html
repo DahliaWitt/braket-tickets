@@ -54,7 +54,12 @@
   } @else if (error()) {
     <z-card class="border-destructive/30 bg-destructive/5">
       <div class="py-12 text-center">
-        <p class="mono-label text-destructive">{{ error() }}</p>
+        <p
+          class="mono-label text-destructive-text"
+          data-testid="event-editor-error"
+        >
+          {{ error() }}
+        </p>
         <z-button
           [routerLink]="eventsListRoute"
           [queryParams]="eventsListQueryParams() ?? undefined"
@@ -114,19 +119,19 @@
                 @if (hasError(eventForm.title, 'maxLength')) {
                   <p
                     data-testid="title-too-long-error"
-                    class="text-xs text-destructive uppercase"
+                    class="text-xs text-destructive-text uppercase"
                   >
                     Title cannot exceed {{ maxEventTitleLength }} characters
                   </p>
                 } @else if (hasError(eventForm.title, 'required')) {
                   <p
                     data-testid="title-blank-error"
-                    class="text-xs text-destructive uppercase"
+                    class="text-xs text-destructive-text uppercase"
                   >
                     Title is required
                   </p>
                 } @else if (isFieldInvalid(eventForm.title)) {
-                  <p class="text-xs text-destructive uppercase">
+                  <p class="text-xs text-destructive-text uppercase">
                     Title is required
                   </p>
                 } @else {
@@ -141,7 +146,7 @@
                     eventModel().title.length >= eventTitleWarningLength &&
                     eventModel().title.length < maxEventTitleLength
                   "
-                  [class.text-destructive]="
+                  [class.text-destructive-text]="
                     eventModel().title.length >= maxEventTitleLength
                   "
                   >{{ eventModel().title.length }}/{{
@@ -163,12 +168,13 @@
                 placeholder="Pick a date"
                 zFormat="yyyy-MM-dd"
                 zSize="sm"
+                data-testid="start-date-picker"
                 class="!rounded-sm !border !border-b-0 !border-border !bg-background !py-2 !font-sans !text-sm"
                 [class.!border-destructive/50]="
                   isFieldInvalid(eventForm.date) ||
                   hasError(eventForm.date, 'pastDate')
                 "
-                [class.!text-destructive]="
+                [class.!text-destructive-text]="
                   isFieldInvalid(eventForm.date) ||
                   hasError(eventForm.date, 'pastDate')
                 "
@@ -182,14 +188,14 @@
               @if (hasError(eventForm.date, 'pastDate')) {
                 <p
                   data-testid="date-error"
-                  class="text-xs text-destructive uppercase"
+                  class="text-xs text-destructive-text uppercase"
                 >
                   Date cannot be in the past
                 </p>
               } @else if (isFieldInvalid(eventForm.date)) {
                 <p
                   data-testid="date-error"
-                  class="text-xs text-destructive uppercase"
+                  class="text-xs text-destructive-text uppercase"
                 >
                   Date is required
                 </p>
@@ -218,16 +224,68 @@
               @if (hasError(eventForm.time, 'invalidEventTime')) {
                 <p
                   data-testid="time-error"
-                  class="text-xs text-destructive uppercase"
+                  class="text-xs text-destructive-text uppercase"
                 >
                   Choose a valid time for this date
                 </p>
               } @else if (isFieldInvalid(eventForm.time)) {
                 <p
                   data-testid="time-error"
-                  class="text-xs text-destructive uppercase"
+                  class="text-xs text-destructive-text uppercase"
                 >
                   Time is required
+                </p>
+              }
+            </div>
+
+            <!-- End date (optional) -->
+            <div class="space-y-2">
+              <span
+                class="block font-mono text-xs tracking-wider text-muted-foreground uppercase"
+                >End Date</span
+              >
+              <bra-date-picker
+                [formField]="eventForm.endDate"
+                [minDate]="eventModel().date ?? minimumEventDate()"
+                placeholder="Same night (optional)"
+                zFormat="yyyy-MM-dd"
+                zSize="sm"
+                clearable
+                clearLabel="clear end date"
+                (dateChange)="onEndDateChange($event)"
+                data-testid="end-date-picker"
+                class="!rounded-sm !border !border-b-0 !border-border !bg-background !py-2 !font-sans !text-sm"
+                [class.!border-destructive/50]="endWindowError()"
+                [class.!text-destructive-text]="endWindowError()"
+                [attr.aria-invalid]="endWindowError() ? 'true' : null"
+                [attr.aria-describedby]="
+                  endWindowError() ? 'end-window-error' : null
+                "
+              />
+            </div>
+
+            <!-- End time (optional) -->
+            <div class="space-y-2">
+              <label
+                for="endTime"
+                class="block font-mono text-xs tracking-wider text-muted-foreground uppercase"
+                >End Time</label
+              >
+              <input
+                type="time"
+                id="endTime"
+                [formField]="eventForm.endTime"
+                [class]="
+                  inputClasses + (endWindowError() ? ' ' + errorClasses : '')
+                "
+              />
+              @if (endWindowError(); as endError) {
+                <p
+                  id="end-window-error"
+                  data-testid="end-time-error"
+                  class="text-xs text-destructive-text uppercase"
+                >
+                  {{ endError }}
                 </p>
               }
             </div>
@@ -293,21 +351,21 @@
               @if (hasError(eventForm.price, 'invalidDecimal')) {
                 <p
                   data-testid="price-error"
-                  class="text-xs text-destructive uppercase"
+                  class="text-xs text-destructive-text uppercase"
                 >
                   Use a dollar amount like 20 or 20.00
                 </p>
               } @else if (hasError(eventForm.price, 'negativePrice')) {
                 <p
                   data-testid="price-error"
-                  class="text-xs text-destructive uppercase"
+                  class="text-xs text-destructive-text uppercase"
                 >
                   Price cannot be negative
                 </p>
               } @else if (isFieldInvalid(eventForm.price)) {
                 <p
                   data-testid="price-error"
-                  class="text-xs text-destructive uppercase"
+                  class="text-xs text-destructive-text uppercase"
                 >
                   Price is required
                 </p>
@@ -351,7 +409,7 @@
               ) {
                 <p
                   data-testid="totalTickets-error"
-                  class="text-xs text-destructive uppercase"
+                  class="text-xs text-destructive-text uppercase"
                 >
                   @if (hasError(eventForm.totalTickets, 'wholeNumber')) {
                     Must be a whole number
@@ -424,7 +482,7 @@
                   @if (hasError(eventForm.slidingScaleMin, 'invalidDecimal')) {
                     <p
                       data-testid="slidingScaleMin-error"
-                      class="text-xs text-destructive uppercase"
+                      class="text-xs text-destructive-text uppercase"
                     >
                       Use a dollar amount like 20 or 20.00
                     </p>
@@ -466,7 +524,7 @@
                   @if (hasError(eventForm.slidingScaleMax, 'invalidDecimal')) {
                     <p
                       data-testid="slidingScaleMax-error"
-                      class="text-xs text-destructive uppercase"
+                      class="text-xs text-destructive-text uppercase"
                     >
                       Use a dollar amount like 20 or 20.00
                     </p>
@@ -503,6 +561,7 @@
                 inputmode="decimal"
                 id="supporterDefaultPrice"
                 [formField]="eventForm.supporterDefaultPrice"
+                (input)="onSupporterPriceInput()"
                 (wheel)="preventNumericInputWheel($event)"
                 placeholder="0.00"
                 [class]="
@@ -524,13 +583,13 @@
               />
             </div>
             @if (hasError(eventForm.supporterDefaultPrice, 'invalidDecimal')) {
-              <p class="text-xs text-destructive uppercase">
+              <p class="text-xs text-destructive-text uppercase">
                 Use a dollar amount like 20 or 20.00
               </p>
             } @else if (
               hasError(eventForm.supporterDefaultPrice, 'supporterPrice')
             ) {
-              <p class="text-xs text-destructive uppercase">
+              <p class="text-xs text-destructive-text uppercase">
                 Must be greater than buyer ticket price
               </p>
             }
@@ -574,7 +633,7 @@
               ) {
                 <p
                   data-testid="maxTicketsPerUser-error"
-                  class="text-xs text-destructive uppercase"
+                  class="text-xs text-destructive-text uppercase"
                 >
                   @if (hasError(eventForm.maxTicketsPerUser, 'wholeNumber')) {
                     Must be a whole number
@@ -760,7 +819,7 @@
             <p
               data-testid="event-save-error"
               role="alert"
-              class="order-0 text-xs text-destructive uppercase sm:mr-auto"
+              class="order-0 text-xs text-destructive-text uppercase sm:mr-auto"
             >
               {{ submitError() }}
             </p>

@@ -17,25 +17,33 @@ import {AuthService} from '@/core/services/auth.service';
 import {highlightArticleCode} from './article-highlighter';
 import {safeResourceValue} from '@/utils/resource';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
+import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
+import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton.component';
 
 @Component({
   selector: 'app-article',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, MarkdownComponent, ZardIconComponent],
+  imports: [
+    RouterLink,
+    MarkdownComponent,
+    ZardIconComponent,
+    ZardButtonComponent,
+    ZardSkeletonComponent,
+  ],
   template: `
     <!-- Breadcrumb -->
     <nav
       aria-label="Breadcrumb"
       data-testid="help-breadcrumb"
-      class="flex items-center gap-2 text-sm text-muted-foreground mb-6"
+      class="mb-6 flex items-center gap-2 text-sm text-muted-foreground"
     >
-      <a routerLink="/help" class="hover:text-foreground transition-colors"
-        >Help</a
+      <a routerLink="/help" class="transition-colors hover:text-foreground"
+        >help</a
       >
       <span>/</span>
       <a
         [routerLink]="['/help', section()]"
-        class="hover:text-foreground transition-colors capitalize"
+        class="transition-colors hover:text-foreground"
       >
         {{ sectionLabel() }}
       </a>
@@ -49,44 +57,56 @@ import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
 
     @if (hasLoadError()) {
       <div
-        class="w-full max-w-xl mx-auto flex flex-col items-center justify-center text-center py-16 animate-in fade-in zoom-in duration-500"
+        class="animate-in fade-in zoom-in mx-auto flex w-full max-w-xl flex-col items-center justify-center py-16 text-center duration-500"
         data-testid="article-error-state"
         role="alert"
         aria-live="assertive"
       >
         <div
-          class="w-20 h-20 mb-6 rounded-full bg-destructive/20 flex items-center justify-center"
+          class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-destructive/20"
         >
-          <span class="text-destructive text-4xl" aria-hidden="true">!</span>
+          <span class="text-4xl text-destructive-text" aria-hidden="true"
+            >!</span
+          >
         </div>
         <h2
-          class="text-2xl md:text-3xl font-bold uppercase tracking-tight mb-4 text-destructive font-display"
+          class="mb-4 font-display text-2xl font-bold tracking-tight text-destructive-text uppercase md:text-3xl"
         >
           hit a snag
         </h2>
-        <p class="text-muted-foreground text-lg mb-8 font-sans">
+        <p class="mb-8 font-sans text-lg text-muted-foreground">
           couldn't load this article — try again later
         </p>
         <a
           routerLink="/help"
-          class="text-sm uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors font-mono"
+          class="font-mono text-sm tracking-widest text-muted-foreground uppercase transition-colors hover:text-foreground"
         >
-          Back to Help Center
+          back to help center
         </a>
       </div>
     } @else if (article()) {
       @if (canAccess()) {
         <article
           data-testid="help-article-content"
-          class="prose dark:prose-invert max-w-none font-sans prose-headings:font-display prose-h1:font-sans prose-h1:text-3xl prose-h1:font-bold prose-h2:text-xl prose-h3:text-lg prose-p:text-muted-foreground prose-a:text-primary prose-code:text-primary prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none prose-pre:bg-card prose-pre:border prose-pre:border-border"
+          class="prose max-w-none font-sans dark:prose-invert prose-headings:font-display prose-h1:text-3xl prose-h1:font-bold prose-h2:text-xl prose-h3:text-lg prose-p:text-muted-foreground prose-a:text-primary prose-code:rounded prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:text-primary prose-code:before:content-none prose-code:after:content-none prose-pre:border prose-pre:border-border prose-pre:bg-card"
         >
           @if (markdownContent.isLoading()) {
-            <p
-              class="text-muted-foreground animate-pulse"
+            <div
+              class="not-prose space-y-4"
               data-testid="article-loading-state"
+              aria-hidden="true"
             >
-              Loading article...
-            </p>
+              <z-skeleton class="h-9 w-2/3" />
+              <div class="space-y-2 pt-4">
+                <z-skeleton class="h-4 w-full" />
+                <z-skeleton class="h-4 w-11/12" />
+                <z-skeleton class="h-4 w-4/5" />
+              </div>
+              <div class="space-y-2 pt-4">
+                <z-skeleton class="h-4 w-full" />
+                <z-skeleton class="h-4 w-3/4" />
+              </div>
+            </div>
           } @else if (markdownContentValue(); as md) {
             <markdown [data]="md" (ready)="enhanceMarkdown()" />
           }
@@ -98,7 +118,7 @@ import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
             @if (prevArticle()) {
               <a
                 [routerLink]="['/help', section(), prevArticle()!.slug]"
-                class="group flex min-w-0 flex-auto items-center gap-3 text-sm hover:text-foreground transition-colors text-muted-foreground"
+                class="group flex min-w-0 flex-auto items-center gap-3 text-sm text-muted-foreground transition-colors hover:text-foreground"
                 data-testid="prev-article-link"
               >
                 <span
@@ -112,11 +132,11 @@ import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
                   />
                 </span>
                 <span class="flex min-w-0 flex-col gap-1">
-                  <span class="font-mono text-2xs uppercase tracking-widest"
-                    >Previous</span
+                  <span class="font-mono text-2xs tracking-widest uppercase"
+                    >previous</span
                   >
                   <span
-                    class="line-clamp-2 max-w-full whitespace-normal break-words font-medium leading-snug"
+                    class="line-clamp-2 max-w-full leading-snug font-medium break-words whitespace-normal"
                     data-testid="prev-article-title"
                   >
                     {{ prevArticle()!.title }}
@@ -128,15 +148,15 @@ import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
             @if (nextArticle()) {
               <a
                 [routerLink]="['/help', section(), nextArticle()!.slug]"
-                class="group flex min-w-0 flex-auto items-center justify-end gap-3 text-right text-sm hover:text-foreground transition-colors text-muted-foreground"
+                class="group flex min-w-0 flex-auto items-center justify-end gap-3 text-right text-sm text-muted-foreground transition-colors hover:text-foreground"
                 data-testid="next-article-link"
               >
                 <span class="flex min-w-0 flex-col gap-1">
-                  <span class="font-mono text-2xs uppercase tracking-widest"
-                    >Next</span
+                  <span class="font-mono text-2xs tracking-widest uppercase"
+                    >next</span
                   >
                   <span
-                    class="line-clamp-2 max-w-full whitespace-normal break-words font-medium leading-snug"
+                    class="line-clamp-2 max-w-full leading-snug font-medium break-words whitespace-normal"
                     data-testid="next-article-title"
                   >
                     {{ nextArticle()!.title }}
@@ -161,30 +181,50 @@ import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
           data-testid="help-login-prompt"
           class="rounded border border-border p-8 text-center"
         >
-          <h2 class="text-xl font-display font-semibold mb-2">
-            Sign in to access this article
+          <h2 class="mb-2 font-display text-xl font-semibold">
+            sign in to access this article
           </h2>
-          <p class="text-muted-foreground mb-6">
-            This article is restricted to {{ accessLevelLabel() }} members.
+          <p class="mb-6 text-muted-foreground">
+            this article is restricted to {{ accessLevelLabel() }} members.
           </p>
           <a
+            z-button
             routerLink="/login"
             [queryParams]="{returnUrl: '/help/' + section() + '/' + slug()}"
-            class="inline-flex items-center px-4 py-2 rounded bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
           >
-            Sign in
+            sign in
           </a>
         </div>
       }
+    } @else if (!manifestLoaded()) {
+      <!-- Deep link while the manifest is still loading — skeleton, not a false not-found -->
+      <div
+        class="space-y-4"
+        data-testid="article-manifest-loading-state"
+        aria-hidden="true"
+      >
+        <z-skeleton class="h-9 w-2/3" />
+        <div class="space-y-2 pt-4">
+          <z-skeleton class="h-4 w-full" />
+          <z-skeleton class="h-4 w-11/12" />
+          <z-skeleton class="h-4 w-4/5" />
+        </div>
+      </div>
     } @else {
-      <div class="text-muted-foreground">
-        <h1 class="text-2xl font-display font-bold mb-4">Article not found</h1>
-        <p>The article you're looking for doesn't exist or has been moved.</p>
+      <div
+        class="text-muted-foreground"
+        data-testid="article-not-found-state"
+        role="status"
+      >
+        <h1 class="mb-4 font-display text-2xl font-bold tracking-tight">
+          article not found
+        </h1>
+        <p>this article doesn't exist or has moved.</p>
         <a
           [routerLink]="['/help', section()]"
-          class="text-primary hover:underline mt-4 inline-block"
+          class="mt-4 inline-block font-mono text-sm tracking-widest text-muted-foreground uppercase transition-colors hover:text-foreground"
         >
-          Back to {{ sectionLabel() }}
+          back to {{ sectionLabel() }}
         </a>
       </div>
     }
@@ -207,24 +247,32 @@ export class ArticleComponent {
     const s = this.section();
     switch (s) {
       case 'users':
-        return 'User Guide';
+        return 'user guide';
       case 'admins':
-        return 'Admin Guide';
+        return 'admin guide';
       case 'developers':
-        return 'Developer Guide';
+        return 'developer guide';
       default:
         return s;
     }
   });
 
+  readonly manifestLoaded = computed(() => this.manifest.isLoaded());
+
+  // undefined until the manifest resolves the article — keeps the resource
+  // idle so unknown slugs surface as not-found instead of a fetch error.
   private readonly articlePath = computed(() => {
     const a = this.article();
-    const relPath = a?.path ?? `${this.slug()}.md`;
+    if (!a) return undefined;
+    const relPath = a.path ?? `${this.slug()}.md`;
     return `/docs/${this.section()}/${relPath}`;
   });
 
   readonly markdownContent = resource({
-    params: () => ({path: this.articlePath()}),
+    params: () => {
+      const path = this.articlePath();
+      return path === undefined ? undefined : {path};
+    },
     loader: async ({params}) => {
       const raw = await firstValueFrom(
         this.http.get(params.path, {responseType: 'text'}),
@@ -234,7 +282,7 @@ export class ArticleComponent {
   });
 
   readonly hasLoadError = computed<boolean>(
-    () => this.markdownContent.error() != null,
+    () => this.markdownContent.error() != null || this.manifest.loadFailed(),
   );
   readonly markdownContentValue = computed(() =>
     safeResourceValue(this.markdownContent),

@@ -5,12 +5,15 @@ import {
   input,
   signal,
 } from '@angular/core';
+import {formatDate} from '@angular/common';
 import {RouterLink} from '@angular/router';
 import {injectPaginatedQuery, skipToken} from 'convex-angular';
+import {ADMIN_DATETIME} from '@/features/admin/utils/date-formats';
 import {type FunctionReturnType} from 'convex/server';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
 import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton.component';
+import {EmptyStateComponent} from '@ui/components/primitives/empty-state/empty-state.component';
 import {type ZardIcon} from '@ui/components/primitives/icon/icons';
 import {api} from '@convex/_generated/api';
 import {type Id} from '@convex/_generated/dataModel';
@@ -107,7 +110,28 @@ export const ACTION_DISPLAY: Record<
   'event.update': {icon: 'calendar', label: 'UPDATED EVENT'},
   'guest.add': {icon: 'user-plus', label: 'ADDED GUEST'},
   'guest.check-in': {icon: 'scan-line', label: 'CHECKED IN GUEST'},
+  'guest.import': {icon: 'user-plus', label: 'IMPORTED GUESTS'},
   'guest.update': {icon: 'pencil', label: 'UPDATED GUEST'},
+  'imported_tickets.check-in': {
+    icon: 'scan-line',
+    label: 'CHECKED IN EXTERNAL TICKET',
+  },
+  'imported_tickets.import': {
+    icon: 'user-plus',
+    label: 'IMPORTED EXTERNAL TICKETS',
+  },
+  'imported_tickets.remove': {
+    icon: 'trash',
+    label: 'REMOVED EXTERNAL TICKET',
+  },
+  'imported_tickets.batch_remove': {
+    icon: 'trash',
+    label: 'REMOVED IMPORT BATCH',
+  },
+  'imported_tickets.redact': {
+    icon: 'user-plus',
+    label: 'REDACTED EXTERNAL TICKETS',
+  },
   'magic_link.create': {icon: 'wand-2', label: 'CREATED MAGIC LINK'},
   'magic_link.delete': {icon: 'wand-2', label: 'DELETED MAGIC LINK'},
   'magic_link.disable': {icon: 'wand-2', label: 'DISABLED MAGIC LINK'},
@@ -236,18 +260,17 @@ const TIME_WINDOW_OPTIONS = [
     ZardIconComponent,
     ZardSkeletonComponent,
     RouterLink,
+    EmptyStateComponent,
   ],
   styles: [
     `
       .audit-row-enter {
-        opacity: 0;
         transform: translateY(4px);
         animation: auditRowIn 300ms ease forwards;
       }
 
       @keyframes auditRowIn {
         to {
-          opacity: 1;
           transform: translateY(0);
         }
       }
@@ -269,7 +292,6 @@ const TIME_WINDOW_OPTIONS = [
       @media (prefers-reduced-motion: reduce) {
         .audit-row-enter {
           animation: none;
-          opacity: 1;
           transform: none;
         }
         .audit-detail-expand {
@@ -400,12 +422,6 @@ export class AuditLogTableComponent {
   }
 
   protected absoluteTime(timestamp: number): string {
-    return new Date(timestamp).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
+    return formatDate(timestamp, ADMIN_DATETIME, 'en-US');
   }
 }

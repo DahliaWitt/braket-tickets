@@ -28,6 +28,18 @@ import {BrowserPlatformService} from '@/core/services/browser-platform.service';
 
 const FAKE_ORG_ID = 'org-abc' as Id<'organizers'>;
 
+// Emit a Convex subscription result asynchronously (next microtask), mirroring
+// the real ConvexReactClient, which never invokes the onUpdate callback
+// synchronously from within onUpdate(). injectQueries() registers each key's
+// subscription *after* calling convex.onUpdate(...), and its staleness guard
+// drops any emission that arrives before registration completes — so a
+// synchronous emit is silently discarded. Every INITIAL mock emission must go
+// through this. `await fixture.whenStable()` (and advanceTimersByTimeAsync,
+// which faketimers leaves microtasks real for) flushes the queued microtask.
+function emitAsync(fn: () => void): void {
+  queueMicrotask(fn);
+}
+
 function makeCommunityContextMock(options: {
   selectedId?: Id<'organizers'> | null;
 }) {
@@ -105,15 +117,15 @@ async function setup(options?: {
         );
         if (name === getFunctionName(api.communities.profile.getAdmin)) {
           organizerQueryOnData = onData;
-          onData(orgData);
+          emitAsync(() => onData(orgData));
         } else if (
           name === getFunctionName(api.communities.admins.listByCommunity)
         ) {
-          onData(adminData);
+          emitAsync(() => onData(adminData));
         } else if (
           name === getFunctionName(api.communities.scanners.listByCommunity)
         ) {
-          onData(scannerData);
+          emitAsync(() => onData(scannerData));
         } else if (
           name ===
           getFunctionName(
@@ -121,7 +133,7 @@ async function setup(options?: {
               .getMyNotificationPreference,
           )
         ) {
-          onData(notifPrefData);
+          emitAsync(() => onData(notifPrefData));
         } else if (
           name ===
           getFunctionName(api.communities.scanners.searchGrantCandidates)
@@ -132,10 +144,10 @@ async function setup(options?: {
               onData,
             });
           } else {
-            onData(searchResultsData);
+            emitAsync(() => onData(searchResultsData));
           }
         } else {
-          onData([]);
+          emitAsync(() => onData([]));
         }
         return () => void 0;
       },
@@ -544,6 +556,36 @@ describe('CommunityAdminSettingsComponent', () => {
       expect(await harness.isStripeOnboardingIncomplete()).toBe(false);
     });
 
+    it('conveys Stripe charges/payouts/user-steps state as visible text, not dot color alone', async () => {
+      const {fixture, harness} = await setup({
+        organizerData: {
+          _id: FAKE_ORG_ID,
+          name: 'Test Community',
+          email: 'test@example.com',
+          contactInfo: 'Call us',
+          vettingQuestions: [],
+          stripeConnectedAccountId: 'acct_existing',
+          stripeOnboardingStatus: 'in_progress',
+          stripeChargesEnabled: true,
+          stripePayoutsEnabled: false,
+          organizerPaymentReady: false,
+        },
+      });
+
+      fixture.componentInstance.stripeStatus.set({
+        chargesEnabled: true,
+        payoutsEnabled: false,
+        userRequirementsClear: false,
+      });
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(await harness.getStripeChargesStateText()).toBe('enabled');
+      expect(await harness.getStripePayoutsStateText()).toBe('pending');
+      expect(await harness.getStripeUserStepsStateText()).toBe('pending');
+    });
+
     it('shows "Continue Setup on Stripe" CTA for connected-but-incomplete account (BRA-393)', async () => {
       const {fixture} = await setup({
         organizerData: {
@@ -655,7 +697,7 @@ describe('CommunityAdminSettingsComponent', () => {
     it('stripeOnboardingReturn=1 calls checkAccountStatus with community param as organizerId then clears URL', async () => {
       const {fixture, convexMock, routerNavigateSpy} = await setup({
         queryParams: {
-          community: FAKE_ORG_ID as string,
+          community: FAKE_ORG_ID,
           stripeOnboardingReturn: '1',
         },
         organizerData: {
@@ -898,6 +940,47 @@ describe('CommunityAdminSettingsComponent', () => {
       expect(convexMock.mutation).toHaveBeenCalled();
       expect(fixture.componentInstance.profileDirty()).toBe(false);
       expect(await harness.isSaveButtonDisabled()).toBe(true);
+    });
+
+    it('sends null for cleared profile fields so the backend removes them', async () => {
+      const {fixture, convexMock} = await setup({
+        organizerData: {
+          _id: FAKE_ORG_ID,
+          name: 'Test Community',
+          email: 'test@example.com',
+          contactInfo: 'Call us',
+          description: 'A cool place',
+          website: 'https://example.com',
+          slug: 'test-community',
+          vettingQuestions: [],
+        },
+      });
+
+      fixture.componentInstance.profileModel.update((m) => ({
+        ...m,
+        email: '',
+        contactInfo: '',
+        description: '',
+        website: '',
+        slug: '',
+      }));
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      await fixture.componentInstance.saveProfile();
+
+      const callArgs = convexMock.mutation.mock.calls[0][1] as Record<
+        string,
+        unknown
+      >;
+      // Explicit null (not undefined) is the wire signal that persists a clear.
+      expect(callArgs).toHaveProperty('email', null);
+      expect(callArgs).toHaveProperty('contactInfo', null);
+      expect(callArgs).toHaveProperty('description', null);
+      expect(callArgs).toHaveProperty('website', null);
+      // slug is intentionally NOT clearable (public URL key): a blank value is
+      // sent as undefined so the backend leaves the stored slug unchanged.
+      expect(callArgs['slug']).toBeUndefined();
     });
 
     it('save button becomes enabled after user edits profile name', async () => {
@@ -1643,9 +1726,9 @@ describe('CommunityAdminSettingsComponent', () => {
             const argsObj = _args as Record<string, unknown> | undefined;
             if (argsObj && 'id' in argsObj) {
               capturedOnData = onData;
-              onData(orgData);
+              emitAsync(() => onData(orgData));
             } else {
-              onData([]);
+              emitAsync(() => onData([]));
             }
             return () => void 0;
           },
@@ -1672,6 +1755,11 @@ describe('CommunityAdminSettingsComponent', () => {
       }).compileComponents();
 
       const fixture = TestBed.createComponent(CommunityAdminSettingsComponent);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      // Second round: the mock emits on a microtask during the first
+      // whenStable; the seeding effect then needs one more change-detection
+      // pass to run (same stabilization pattern as the shared setup()).
       fixture.detectChanges();
       await fixture.whenStable();
 
@@ -2124,7 +2212,7 @@ describe('CommunityAdminSettingsComponent', () => {
 
         // Search "alice" and resolve it — Alice's row is current. The
         // detectChanges/whenStable after advancing the debounce lets the
-        // injectQuery effect re-run and register the subscription for "alice".
+        // injectQueries effect re-run and register the subscription for "alice".
         await harness.setScannerSearch('alice');
         await vi.advanceTimersByTimeAsync(300);
         fixture.detectChanges();
@@ -2137,7 +2225,8 @@ describe('CommunityAdminSettingsComponent', () => {
         expect(await harness.getScannerSearchResultText(0)).toContain('Alice');
 
         // Edit to "bob" and fire the debounced query for "bob" — but DO NOT
-        // resolve it. `injectQuery` keeps Alice's `.data()` during the refetch.
+        // resolve it. `injectQueries` preserves the scannerSearch key's prior
+        // `results()` entry during the refetch.
         await harness.setScannerSearch('bob');
         await vi.advanceTimersByTimeAsync(300);
         fixture.detectChanges();
@@ -2164,7 +2253,7 @@ describe('CommunityAdminSettingsComponent', () => {
         expect(grantedAlice).toBe(false);
       });
 
-      it('isLoading gate alone forces non-current during an in-flight refetch', async () => {
+      it('pending status forces non-current during an in-flight refetch', async () => {
         const {fixture, harness, resolveSearch} = await setup({
           deferSearch: true,
         });
@@ -2179,18 +2268,19 @@ describe('CommunityAdminSettingsComponent', () => {
         await fixture.whenStable();
 
         // Fire the debounced query for "bob" but leave it unresolved. Per
-        // convex-angular, an args change flips isLoading TRUE and keeps the
-        // previous `.data()` — so this is exactly the in-flight window.
+        // convex-angular, an args change flips the scannerSearch key's
+        // statuses() to 'pending' while results() retains the prior payload —
+        // so this is exactly the in-flight window.
         await harness.setScannerSearch('bob');
         await vi.advanceTimersByTimeAsync(300);
         fixture.detectChanges();
         await fixture.whenStable();
 
-        // The isLoading gate makes results non-current independent of the
-        // stamp: injectQuery reports the in-flight refetch...
+        // The status gate makes results non-current independent of the stamp:
+        // injectQueries reports the in-flight refetch as 'pending'...
         expect(
-          fixture.componentInstance['scannerSearchQuery'].isLoading(),
-        ).toBe(true);
+          fixture.componentInstance['queries'].statuses().scannerSearch,
+        ).toBe('pending');
         // ...and the panel therefore renders zero grantable rows.
         expect(await harness.getScannerSearchResultCount()).toBe(0);
         expect(await harness.hasScannerSearchLoading()).toBe(true);
@@ -2282,6 +2372,13 @@ describe('CommunityAdminSettingsComponent', () => {
     it('shows notifications section', async () => {
       const {harness} = await setup();
       expect(await harness.hasNotificationsSection()).toBe(true);
+    });
+
+    it('uses high-contrast theme tokens for the save action', async () => {
+      const {harness} = await setup();
+      expect(await harness.saveNotificationsUsesHighContrastTokens()).toBe(
+        true,
+      );
     });
 
     it('defaults notifMode to off when no preference exists', async () => {

@@ -89,7 +89,7 @@ describe('AuditLogTableComponent', () => {
 
     fixture = TestBed.createComponent(AuditLogTableComponent);
     component = fixture.componentInstance;
-    fixture.componentRef.setInput('organizerId', 'org1' as unknown);
+    fixture.componentRef.setInput('organizerId', 'org1');
     fixture.detectChanges();
     await fixture.whenStable();
   };

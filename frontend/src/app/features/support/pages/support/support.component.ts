@@ -1,44 +1,40 @@
-import {Component, ChangeDetectionStrategy} from '@angular/core';
-import {RouterModule} from '@angular/router';
+import {Component, ChangeDetectionStrategy, inject} from '@angular/core';
 import {ContentLayoutComponent} from '@/layout/content-layout/content-layout.component';
+import {PlatformContactDialogService} from '@/features/contact/platform-contact-dialog.service';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
 
 @Component({
   selector: 'app-support',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [
-    RouterModule,
-    ContentLayoutComponent,
-    ZardButtonComponent,
-    ZardIconComponent,
-  ],
+  imports: [ContentLayoutComponent, ZardButtonComponent, ZardIconComponent],
   template: `
     <app-content-layout>
       <div
-        class="container max-w-2xl mx-auto px-4 py-8 sm:py-12 md:py-24 grow flex flex-col justify-center text-center fade-in"
+        class="fade-in container mx-auto flex max-w-2xl grow flex-col justify-center px-4 py-8 text-center sm:py-12 md:py-24"
       >
         <h1
-          class="text-2xl sm:text-3xl lg:text-4xl font-bold mb-6 tracking-tight font-display uppercase text-foreground"
+          class="mb-6 font-display text-2xl font-bold tracking-tight text-foreground uppercase sm:text-3xl lg:text-4xl"
         >
           Need Help?
         </h1>
-        <p class="text-xl text-muted-foreground mb-12 max-w-lg mx-auto">
-          We're here to help with any questions or issues you might have.
+        <p class="mx-auto mb-12 max-w-lg text-xl text-muted-foreground">
+          event questions go to the organizer. platform and account stuff comes
+          to us.
         </p>
 
-        <div class="grid gap-6 sm:gap-8 max-w-lg mx-auto w-full">
+        <div class="mx-auto grid w-full max-w-lg gap-6 sm:gap-8">
           <!-- Event Specific Support -->
           <div
-            class="p-8 md:p-10 border border-border bg-card/30 rounded-none text-left"
+            class="rounded-none border border-border bg-card/30 p-8 text-left md:p-10"
           >
             <h2
-              class="text-xl font-bold font-display text-foreground mb-4 flex items-center gap-2"
+              class="mb-4 flex items-center gap-2 font-display text-xl font-bold text-foreground"
             >
               <z-icon zType="calendar" class="size-5" />
               Event Questions?
             </h2>
-            <p class="text-muted-foreground mb-4">
+            <p class="mb-4 text-muted-foreground">
               For questions about tickets, times, or venue details for a
               specific event, please
               <strong>contact the event organizer directly</strong>.
@@ -46,46 +42,35 @@ import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
           </div>
 
           <!-- Platform Support -->
-          <div class="p-8 md:p-10 border border-border bg-card/30 rounded-none">
-            <h2 class="text-xl font-bold font-display text-foreground mb-4">
+          <div class="rounded-none border border-border bg-card/30 p-8 md:p-10">
+            <h2 class="mb-4 font-display text-xl font-bold text-foreground">
               Platform Support
             </h2>
             <p class="mb-8 text-muted-foreground">
               For account issues, technical problems, or official Braket events:
             </p>
 
-            <a
+            <button
+              type="button"
               z-button
               zType="default"
               zSize="lg"
-              href="mailto:contact@braket.gay?subject=Braket%20support"
-              data-testid="email-support-link"
+              (click)="openContactDialog()"
+              data-testid="email-support-button"
               class="w-full"
             >
               EMAIL SUPPORT
-            </a>
-
-            <div class="mt-8 pt-8 border-t border-border/50">
-              <p
-                class="text-xs text-muted-foreground uppercase tracking-widest mb-3 font-mono"
-              >
-                Manual Contact Address
-              </p>
-              <div
-                class="bg-background/50 p-3 border border-border inline-block"
-              >
-                <a
-                  href="mailto:contact@braket.gay?subject=Braket%20support"
-                  class="font-mono text-sm select-all text-foreground underline decoration-border underline-offset-4 hover:text-primary"
-                  data-testid="manual-contact-link"
-                  >contact@braket.gay</a
-                >
-              </div>
-            </div>
+            </button>
           </div>
         </div>
       </div>
     </app-content-layout>
   `,
 })
-export class SupportComponent {}
+export class SupportComponent {
+  private readonly contactDialog = inject(PlatformContactDialogService);
+
+  openContactDialog(): void {
+    this.contactDialog.open({subject: 'Braket support'});
+  }
+}

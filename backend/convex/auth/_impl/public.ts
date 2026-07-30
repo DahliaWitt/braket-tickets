@@ -1,4 +1,4 @@
-import type {MutationCtx} from '../../_generated/server';
+import type {ActionCtx, MutationCtx} from '../../_generated/server';
 import {internal} from '../../_generated/api';
 import {
   authComponent,
@@ -13,11 +13,13 @@ import {
   requireUser,
 } from '../../lib/auth_identity';
 import {insertAdminAuditLog} from '../../lib/admin_audit_log';
+import {throwAppError, throwUnauthenticated} from '../../lib/errors';
 import {
-  getAppErrorMessage,
-  throwAppError,
-  throwUnauthenticated,
-} from '../../lib/errors';
+  mapEmailChangeError,
+  mapLinkAccountError,
+  mapSetPasswordError,
+  mapUnlinkAccountError,
+} from './auth_error_map';
 import {rateLimiter} from '../../lib/rate_limits';
 import {
   MAX_CALLBACK_URL_LENGTH,
@@ -29,8 +31,7 @@ import {
 
 type SocialProvider = 'google' | 'discord';
 type SocialSyncBlockedReason =
-  | 'provider_email_missing'
-  | 'provider_email_unverified';
+  'provider_email_missing' | 'provider_email_unverified';
 
 function buildSocialLinkCallbackUrl(
   provider: SocialProvider,
@@ -58,87 +59,19 @@ async function insertAuthAuditLog(
   });
 }
 
-function mapEmailChangeError(message: string): string {
-  const normalized = message.toLowerCase();
-
-  if (
-    normalized.includes('already exists') ||
-    normalized.includes('another email')
-  ) {
-    return 'Email address already in use';
-  }
-
-  if (normalized.includes('email is the same')) {
-    return 'New email must be different from current email';
-  }
-
-  if (normalized.includes('disabled')) {
-    return 'Email change is currently unavailable';
-  }
-
-  if (
-    normalized.includes('smtp') ||
-    normalized.includes('resend') ||
-    normalized.includes('delivery is required') ||
-    normalized.includes('email delivery is not configured')
-  ) {
-    return 'Email change is currently unavailable';
-  }
-
-  if (normalized.includes('invalid email')) {
-    return 'Please enter a valid email address';
-  }
-
-  return message || 'Failed to request email change';
-}
-
-function mapLinkAccountError(message: string): string {
-  const normalized = message.toLowerCase();
-
-  if (
-    normalized.includes('already linked') ||
-    normalized.includes('already exists') ||
-    normalized.includes('linked to another')
-  ) {
-    return 'This provider cannot be connected to this account right now.';
-  }
-
-  if (
-    normalized.includes('disabled') ||
-    normalized.includes('invalid provider')
-  ) {
-    return 'This provider is unavailable right now.';
-  }
-
-  return 'Unable to connect provider right now.';
-}
-
-function mapUnlinkAccountError(message: string): string {
-  if (message.toLowerCase().includes('last account')) {
-    return 'Cannot remove the last login method.';
-  }
-
-  return 'Unable to remove this login method right now.';
-}
-
-function mapSetPasswordError(_message: string): string {
-  return 'Unable to set password right now.';
-}
-
 /**
- * Extracts a user-facing message from an unknown error (handling
- * ConvexError, Error, and fallback), applies a domain-specific mapper,
- * and throws an AppError — replacing the repeated
+ * Applies a Better Auth error mapper (code-first, message-fallback; see
+ * `./auth_error_map`) to an unknown thrown error and throws the resulting
+ * AppError — replacing the repeated
  * `catch (err) → err instanceof Error ? … : String(err) → throwAppError(…)`
  * boilerplate across auth handlers.
  */
 function mapAndThrowAuthError(
   code: string,
-  mapper: (message: string) => string,
+  mapper: (error: unknown) => string,
   error: unknown,
 ): never {
-  const message = getAppErrorMessage(error) ?? String(error);
-  throwAppError(code, mapper(message));
+  throwAppError(code, mapper(error));
 }
 
 export async function syncCurrentUserHandler(ctx: MutationCtx): Promise<{
@@ -239,24 +172,25 @@ export async function completeSocialSignupOnboardingHandler(
   return null;
 }
 
-export async function changePasswordHandler(
-  ctx: MutationCtx,
-  args: {
-    currentPassword: string;
-    newPassword: string;
-    revokeOtherSessions?: boolean;
-  },
-): Promise<null> {
+type ChangePasswordArgs = {
+  currentPassword: string;
+  newPassword: string;
+  revokeOtherSessions?: boolean;
+};
+
+function validateChangePasswordArgs(args: ChangePasswordArgs): void {
   validateStringLength(
     args.currentPassword,
     'Current password',
     MAX_PASSWORD_LENGTH,
   );
   validateStringLength(args.newPassword, 'New password', MAX_PASSWORD_LENGTH);
+}
 
-  const {_id: userId} = await requireUser(ctx);
-  await rateLimiter.limit(ctx, 'changePassword', {key: userId, throws: true});
-
+async function changePasswordWithBetterAuth(
+  ctx: MutationCtx | ActionCtx,
+  args: ChangePasswordArgs,
+): Promise<null> {
   const {auth, headers} = await authComponent.getAuth(createAuth, ctx);
   const result = await auth.api.changePassword({
     body: {
@@ -271,6 +205,45 @@ export async function changePasswordHandler(
     throwAppError('AUTH_PASSWORD_CHANGE_FAILED', 'Failed to change password');
   }
   return null;
+}
+
+export async function changePasswordHandler(
+  ctx: MutationCtx,
+  args: ChangePasswordArgs,
+): Promise<null> {
+  validateChangePasswordArgs(args);
+  await requireUser(ctx);
+
+  // A mutation cannot durably consume the rate-limit attempt and then surface
+  // Better Auth's wrong-current-password error: throwing rolls the whole
+  // transaction back, including the limiter write. Keep the legacy function
+  // path present for stale generated clients, but fail closed before password
+  // verification so it cannot bypass the V2 action's committed rate limit.
+  throwAppError(
+    'AUTH_PASSWORD_CHANGE_CLIENT_UPDATE_REQUIRED',
+    'Refresh this page before changing your password',
+  );
+}
+
+export async function changePasswordV2Handler(
+  ctx: ActionCtx,
+  args: ChangePasswordArgs,
+): Promise<null> {
+  validateChangePasswordArgs(args);
+
+  const userId = await ctx.runQuery(
+    internal.lib.auth_helpers.getAuthUserIdInternal,
+    {},
+  );
+  if (!userId) {
+    throwUnauthenticated();
+  }
+
+  await ctx.runMutation(internal.auth.public.applyChangePasswordRateLimit, {
+    userId,
+  });
+
+  return await changePasswordWithBetterAuth(ctx, args);
 }
 
 export async function linkSocialAccountHandler(
@@ -365,8 +338,19 @@ export async function setPasswordHandler(
 ): Promise<null> {
   validateStringLength(args.newPassword, 'New password', MAX_PASSWORD_LENGTH);
 
-  const {_id: userId} = await requireUser(ctx);
+  const {_id: userId, socialSignupCompletionRequired} = await requireUser(ctx);
   await rateLimiter.limit(ctx, 'setPassword', {key: userId, throws: true});
+
+  // Adding a credential account fires the Better Auth account.onCreate
+  // trigger, whose sync treats "credential account exists" as onboarding
+  // complete. Refuse until completeSocialSignupOnboarding has stamped terms
+  // acceptance, so a direct API call cannot skip the terms gate.
+  if (socialSignupCompletionRequired === true) {
+    throwAppError(
+      'AUTH_SET_PASSWORD_FAILED',
+      'Finish signing up before adding a password.',
+    );
+  }
 
   try {
     const {auth, headers} = await authComponent.getAuth(createAuth, ctx);
@@ -522,7 +506,6 @@ export async function requestEmailChangeHandler(
     await ctx.db.patch('users', userId, {
       pendingEmail: undefined,
     });
-    const message = getAppErrorMessage(err) ?? String(err);
-    return await fail(mapEmailChangeError(message));
+    return await fail(mapEmailChangeError(err));
   }
 }

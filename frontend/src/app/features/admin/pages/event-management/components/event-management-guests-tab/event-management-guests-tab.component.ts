@@ -1,8 +1,8 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  DestroyRef,
   computed,
+  DestroyRef,
   inject,
   input,
   output,
@@ -13,6 +13,7 @@ import {takeUntilDestroyed} from '@angular/core/rxjs-interop';
 import {toast} from 'ngx-sonner';
 import {AdminEventsService} from '@/features/admin/services/admin-events.service';
 import {type Guest} from '@/features/admin/models/event-management.model';
+import {BraAlertDialogService} from '@ui/components/composites/alert-dialog/alert-dialog.service';
 import {BraDialogService} from '@ui/components/composites/dialog/dialog.service';
 import {
   AddGuestDialogComponent,
@@ -24,8 +25,18 @@ import {ZardCardComponent} from '@ui/components/primitives/card/card.component';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
 import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton.component';
 import {ZardTooltipDirective} from '@ui/components/primitives/tooltip/tooltip';
+import {EmptyStateComponent} from '@ui/components/primitives/empty-state/empty-state.component';
 import {logger} from '@/utils/logger';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
+import {GUEST_IMPORT_CONFIG} from '@/features/admin/import/import-config';
+// Import the surface directly (not via the barrel) so @defer can code-split it:
+// a barrel that also exports the eagerly-used config keeps the component eager.
+import {ImportSurfaceComponent} from '@/features/admin/import/import-surface.component';
+import type {
+  ImportConfirmPayload,
+  ImportReport,
+} from '@/features/admin/import/import-surface.types';
+import {buildImportErrorReport, buildImportReport} from '../import-report.util';
 
 /** Max guest ticket sends dispatched at once by "Send All". */
 const SEND_ALL_CONCURRENCY = 8;
@@ -92,6 +103,8 @@ function isAddGuestDialogResult(value: unknown): value is AddGuestDialogResult {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     BraStatusBadgeComponent,
+    EmptyStateComponent,
+    ImportSurfaceComponent,
     ZardButtonComponent,
     ZardCardComponent,
     ZardIconComponent,
@@ -103,6 +116,7 @@ function isAddGuestDialogResult(value: unknown): value is AddGuestDialogResult {
 export class EventManagementGuestsTabComponent {
   private readonly adminEventsService = inject(AdminEventsService);
   private readonly dialogService = inject(BraDialogService);
+  private readonly alertDialog = inject(BraAlertDialogService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly browser = inject(BrowserPlatformService);
 
@@ -118,6 +132,72 @@ export class EventManagementGuestsTabComponent {
   readonly pendingSendGuests = computed(() =>
     this.guests().filter((guest) => guest.email && !guest.emailedAt),
   );
+
+  /** Config for the shared import surface (guest target). */
+  readonly guestImportConfig = GUEST_IMPORT_CONFIG;
+
+  /** Whether the bulk-import surface is open (lazily rendered via @defer). */
+  readonly isImporting = signal(false);
+
+  /** Server report fed back to the surface after the bulk mutation returns. */
+  readonly importReport = signal<ImportReport | null>(null);
+
+  /**
+   * Strong dedup keys (name+email, lowercased) for the current guest list,
+   * matching `GUEST_IMPORT_CONFIG.dedupKey`. Feeds the preview's duplicate
+   * hints from the live guest subscription. The server re-checks at commit.
+   */
+  readonly existingGuestKeys = computed<ReadonlySet<string>>(() => {
+    const keys = new Set<string>();
+    for (const guest of this.guests()) {
+      // Derive the key through the config so the tab's preview hints can never
+      // drift from the surface's within-batch dedup.
+      const key = GUEST_IMPORT_CONFIG.dedupKey({
+        name: guest.name,
+        email: guest.email,
+      });
+      if (key !== null) keys.add(key);
+    }
+    return keys;
+  });
+
+  openImportSurface(): void {
+    this.importReport.set(null);
+    this.isImporting.set(true);
+  }
+
+  closeImportSurface(): void {
+    this.isImporting.set(false);
+    this.importReport.set(null);
+  }
+
+  async onGuestImportConfirmed(payload: ImportConfirmPayload): Promise<void> {
+    try {
+      const result = await this.adminEventsService.bulkAddGuests(
+        this.eventId(),
+        payload.batchKey,
+        payload.rows.map((row) => ({
+          name: row.name,
+          email: row.email,
+          type: row.guestType,
+          notes: row.notes,
+        })),
+      );
+      this.importReport.set(buildImportReport(result));
+      if (result.insertedCount > 0) {
+        this.dataChanged.emit();
+      }
+    } catch (error) {
+      // Route through the central PII-scrubbing logger — never log row values.
+      logger.error('Failed to bulk add guests', error);
+      this.importReport.set(
+        buildImportErrorReport(
+          error,
+          "couldn't add those guests — try again in a bit",
+        ),
+      );
+    }
+  }
 
   guestActionLabel(guest: Guest): string {
     const name = guest.name || guest.email || 'guest';
@@ -149,11 +229,11 @@ export class EventManagementGuestsTabComponent {
 
     try {
       await this.adminEventsService.addGuest(this.eventId(), result);
-      toast.success('Guest added');
+      toast.success('guest added');
       this.dataChanged.emit();
     } catch (error) {
       logger.error('Failed to add guest', error);
-      toast.error('Failed to add guest');
+      toast.error('failed to add guest');
     }
   }
 
@@ -192,24 +272,38 @@ export class EventManagementGuestsTabComponent {
 
     try {
       await this.adminEventsService.updateGuest(guestId, result);
-      toast.success('Guest updated');
+      toast.success('guest updated');
       this.dataChanged.emit();
     } catch (error) {
       logger.error('Failed to update guest', error);
-      toast.error('Failed to update guest');
+      toast.error('failed to update guest');
     }
   }
 
-  async removeGuest(guestId: string): Promise<void> {
-    if (!confirm('Are you sure you want to remove this guest?')) return;
+  removeGuest(guest: Guest): void {
+    const name = guest.name || guest.email || 'this guest';
+    this.alertDialog.confirm({
+      zTitle: 'remove guest',
+      zDescription: `remove ${name} from the guest list? their ticket stops working. this can't be undone.`,
+      zOkText: 'remove guest',
+      zCancelText: 'keep them',
+      zOkDestructive: true,
+      zMaskClosable: false,
+      // Returning the promise lets tests (and future callers) await the work.
+      zOnOk: () => this.performRemoveGuest(guest._id),
+    });
+  }
 
+  private async performRemoveGuest(guestId: string): Promise<void> {
     try {
       await this.adminEventsService.removeGuest(guestId);
-      toast.success('Guest removed');
+      if (this.destroyRef.destroyed) return;
+      toast.success('guest removed');
       this.dataChanged.emit();
     } catch (error) {
       logger.error('Failed to remove guest', error);
-      toast.error('Failed to remove guest');
+      if (this.destroyRef.destroyed) return;
+      toast.error('failed to remove guest');
     }
   }
 
@@ -220,17 +314,18 @@ export class EventManagementGuestsTabComponent {
     // guests — but the backend still dedupes it against concurrent in-flight
     // sends, which surfaces here as 'skipped'.
     const outcome = await this.dispatchSendTicket(guestId, false);
+    if (this.destroyRef.destroyed) return;
     if (outcome === 'sent') {
-      toast.success('Ticket sent successfully');
+      toast.success('ticket sent');
       this.dataChanged.emit();
     } else if (outcome === 'skipped') {
-      toast.info('This ticket is already being sent');
+      toast.info('this ticket is already being sent');
     } else {
-      toast.error('Failed to send guest ticket');
+      toast.error('failed to send guest ticket');
     }
   }
 
-  async sendAllTickets(): Promise<void> {
+  sendAllTickets(): void {
     if (this.isSendingAll()) return;
 
     const targets = this.pendingSendGuests().filter(
@@ -239,7 +334,21 @@ export class EventManagementGuestsTabComponent {
     if (targets.length === 0) return;
 
     const noun = targets.length === 1 ? 'guest' : 'guests';
-    if (!confirm(`Send tickets to ${targets.length} ${noun}?`)) return;
+    this.alertDialog.confirm({
+      zTitle: 'send all tickets',
+      zDescription: `email tickets to ${targets.length} ${noun} who haven't received one yet?`,
+      zOkText: `send ${targets.length === 1 ? 'ticket' : 'tickets'}`,
+      zCancelText: 'not yet',
+      zMaskClosable: false,
+      // Returning the promise lets tests (and future callers) await the batch.
+      zOnOk: () => this.performSendAllTickets(targets),
+    });
+  }
+
+  private async performSendAllTickets(
+    targets: readonly Guest[],
+  ): Promise<void> {
+    if (this.isSendingAll()) return;
 
     this.isSendingAll.set(true);
     try {
@@ -259,16 +368,16 @@ export class EventManagementGuestsTabComponent {
       ).length;
       const failed = outcomes.filter((outcome) => outcome === 'failed').length;
       if (sent > 0) {
-        toast.success(`Sent ${sent} ticket${sent === 1 ? '' : 's'}`);
+        toast.success(`sent ${sent} ticket${sent === 1 ? '' : 's'}`);
       }
       if (skipped > 0) {
         toast.info(
-          `Skipped ${skipped} already-sent guest${skipped === 1 ? '' : 's'}`,
+          `skipped ${skipped} already-sent guest${skipped === 1 ? '' : 's'}`,
         );
       }
       if (failed > 0) {
         toast.error(
-          `Failed to send ${failed} ticket${failed === 1 ? '' : 's'}`,
+          `failed to send ${failed} ticket${failed === 1 ? '' : 's'}`,
         );
       }
       // Reconcile the roster whenever server state advanced — sends we made or
@@ -310,10 +419,10 @@ export class EventManagementGuestsTabComponent {
         pdfDataUrlToBlob(pdfDataUrl),
         `guest-ticket-${guestId}.pdf`,
       );
-      toast.success('Guest ticket download started.');
+      toast.success('guest ticket download started');
     } catch (error) {
       logger.error('Failed to download guest ticket', error);
-      toast.error('Failed to download guest ticket.');
+      toast.error('failed to download guest ticket');
     } finally {
       this.updateIdSet(this.generatingPdfIds, guestId, false);
     }

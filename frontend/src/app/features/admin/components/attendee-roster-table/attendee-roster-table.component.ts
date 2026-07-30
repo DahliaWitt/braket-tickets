@@ -19,6 +19,7 @@ import {logger} from '@/utils/logger';
 import {toast} from 'ngx-sonner';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
 import {formatEventDate} from '@/utils/event-date-format';
+import {ADMIN_DATE} from '@/features/admin/utils/date-formats';
 
 type RosterRow = FunctionReturnType<
   typeof api.events.analytics.getEventAttendeeRosterPage
@@ -92,7 +93,13 @@ function formatTimestampFull(ms: number): string {
       </div>
 
       <!-- Table -->
-      <div class="overflow-x-auto rounded-xl border border-border/60">
+      <div
+        class="overflow-x-auto rounded-lg border border-border/60"
+        role="region"
+        aria-label="Event attendee roster"
+        tabindex="0"
+        data-testid="roster-scroll-region"
+      >
         <table
           class="w-full font-sans text-sm"
           aria-label="Event attendee roster"
@@ -180,14 +187,15 @@ function formatTimestampFull(ms: number): string {
                   </td>
                   @if (showEmailColumn()) {
                     <td
-                      class="px-4 py-3 font-mono text-xs text-muted-foreground"
+                      class="max-w-[220px] truncate px-4 py-3 font-mono text-xs text-muted-foreground"
+                      [title]="row.email"
                     >
                       {{ row.email }}
                     </td>
                   }
                   <td class="px-4 py-3">
                     <span
-                      class="font-mono text-xs tracking-wider text-primary/80 uppercase"
+                      class="font-mono text-xs tracking-wider text-primary uppercase"
                     >
                       {{ row.tierName }}
                     </span>
@@ -195,7 +203,7 @@ function formatTimestampFull(ms: number): string {
                   <td
                     class="hidden px-4 py-3 font-mono text-xs text-muted-foreground sm:table-cell"
                   >
-                    {{ row.purchaseDate | date: 'MMM d' }}
+                    {{ row.purchaseDate | date: ADMIN_DATE }}
                   </td>
                   <td class="px-4 py-3">
                     @if (
@@ -271,6 +279,8 @@ function formatTimestampFull(ms: number): string {
   `,
 })
 export class AttendeeRosterTableComponent {
+  protected readonly ADMIN_DATE = ADMIN_DATE;
+
   readonly eventId = input.required<Id<'events'>>();
   /** Whether to show the export button. False for door staff. */
   readonly canExport = input<boolean>(false);

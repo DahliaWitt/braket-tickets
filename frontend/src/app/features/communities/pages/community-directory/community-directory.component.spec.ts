@@ -10,6 +10,8 @@ import {CONVEX} from 'convex-angular';
 import {provideRouter} from '@angular/router';
 import {provideZonelessChangeDetection, signal} from '@angular/core';
 import {vi, describe, it, expect, beforeEach} from 'vitest';
+import {api} from '@convex/_generated/api';
+import {functionReferenceMatches} from '@/testing/convex-reference-matchers';
 import {
   createMockConvexClient,
   type MockConvexClient,
@@ -45,10 +47,9 @@ const mockCommunities = [
 // ---------------------------------------------------------------------------
 
 /**
- * The community directory component calls injectQuery in this order:
- *   1. list               (authenticated only)
- *   2. getUserApprovals   (authenticated only)
- *   3. getMyApplications  (authenticated only)
+ * Routes each subscription to its payload by function reference, so the mock
+ * is independent of the order in which injectQueries registers its keys
+ * (communities / approvals / myApplications).
  */
 function createConvexMock(options: {
   communities?: unknown[];
@@ -62,29 +63,40 @@ function createConvexMock(options: {
     applications = [],
     listError = null,
   } = options;
-  let callIndex = 0;
   const convexMock = createMockConvexClient();
   const onUpdate = vi
     .fn()
     .mockImplementation(
       (
-        _query: unknown,
+        query: unknown,
         _args: unknown,
         onData: (data: unknown) => void,
         onError?: (error: Error) => void,
       ) => {
-        const idx = callIndex++;
-        if (idx === 0) {
-          if (listError) {
-            onError?.(listError);
-          } else {
-            onData(communities);
+        // Emit asynchronously to mirror the real Convex client: injectQueries
+        // registers the active subscription only after onUpdate returns, and its
+        // settle/fail guard drops any emission that arrives before that. A
+        // synchronous onData/onError here would be silently discarded.
+        queueMicrotask(() => {
+          if (functionReferenceMatches(query, api.communities.list.list)) {
+            if (listError) onError?.(listError);
+            else onData(communities);
+          } else if (
+            functionReferenceMatches(
+              query,
+              api.communities.trust_links.getUserApprovals,
+            )
+          ) {
+            onData(approvals);
+          } else if (
+            functionReferenceMatches(
+              query,
+              api.communities.applications.getMyApplications,
+            )
+          ) {
+            onData(applications);
           }
-        } else if (idx === 1) {
-          onData(approvals);
-        } else {
-          onData(applications);
-        }
+        });
         return () => void 0;
       },
     );
@@ -296,8 +308,11 @@ async function setupRelationshipLoading() {
     .fn()
     .mockImplementation(
       (_query: unknown, _args: unknown, onData: (data: unknown) => void) => {
+        // Only the communities query (idx 0) emits; approvals/applications stay
+        // pending. Emit asynchronously so injectQueries' settle guard accepts it
+        // (see createConvexMock note).
         if (callIndex++ === 0) {
-          onData(mockCommunities);
+          queueMicrotask(() => onData(mockCommunities));
         }
         return () => void 0;
       },
@@ -327,6 +342,9 @@ async function setupRelationshipLoading() {
 
   const fixture = TestBed.createComponent(CommunityDirectoryComponent);
   fixture.detectChanges();
+  // Flush the queued communities emission so the cards render; approvals and
+  // applications remain pending (never emit), keeping the relationship CTA gated.
+  await fixture.whenStable();
 
   return {fixture};
 }
@@ -346,11 +364,13 @@ async function setupRelationshipError() {
         onData: (data: unknown) => void,
         onError?: (error: Error) => void,
       ) => {
+        // Emit asynchronously (see createConvexMock note): synchronous
+        // onData/onError would be dropped by injectQueries' settle/fail guard.
         const idx = callIndex++;
         if (idx === 0) {
-          onData(mockCommunities);
+          queueMicrotask(() => onData(mockCommunities));
         } else {
-          onError?.(relationshipError);
+          queueMicrotask(() => onError?.(relationshipError));
         }
         return () => void 0;
       },
@@ -408,7 +428,7 @@ describe('CommunityDirectoryComponent', () => {
   it('should display heading', async () => {
     const {harness} = await setup();
     const heading = await harness.getHeading();
-    expect(await heading.text()).toContain('Community Directory');
+    expect(await heading.text()).toContain('community directory');
   });
 
   // -------------------------------------------------------------------------
@@ -419,6 +439,8 @@ describe('CommunityDirectoryComponent', () => {
       const {harness} = await setup({communities: []});
       const emptyState = await harness.getEmptyState();
       expect(emptyState).toBeTruthy();
+      expect(await emptyState!.text()).toContain('no communities listed yet');
+      expect(await emptyState!.text()).toContain('back home');
     });
 
     it('should not show community list', async () => {
@@ -475,7 +497,7 @@ describe('CommunityDirectoryComponent', () => {
         await harness.getCommunityDescriptionFallbacks();
       expect(fallbackDescriptions.length).toBe(1);
       expect(await fallbackDescriptions[0].text()).toContain(
-        'Profile coming soon.',
+        'profile coming soon.',
       );
     });
 
@@ -670,7 +692,7 @@ describe('CommunityDirectoryComponent', () => {
       expect(await harness.getReviseLinks()).toHaveLength(0);
     });
 
-    it('does not show a revise CTA for revoked applications', async () => {
+    it('labels revoked memberships "revoked" without a revise CTA', async () => {
       const {harness} = await setup({
         communities: mockCommunities,
         isAuthenticated: true,
@@ -686,8 +708,78 @@ describe('CommunityDirectoryComponent', () => {
         ],
       });
 
-      expect(await harness.getStatusBadge('status-rejected')).toBeTruthy();
+      const revokedBadge = await harness.getStatusBadge('status-revoked');
+      expect(revokedBadge).toBeTruthy();
+      expect(await revokedBadge!.text()).toContain('revoked');
+      // Revoked memberships must not be mislabelled as rejected applications.
+      expect(await harness.getStatusBadge('status-rejected')).toBeNull();
       expect(await harness.getReviseLinks()).toHaveLength(0);
+    });
+
+    it('renders relationship badges with semantic status-badge classes', async () => {
+      const {harness} = await setup({
+        communities: mockCommunities,
+        isAuthenticated: true,
+        approvals: [
+          {
+            organizerId: 'c1',
+            organizerName: 'Test Community',
+            source: 'direct',
+          },
+        ],
+        applications: [
+          {
+            _id: 'app-pending',
+            _creationTime: 100,
+            organizerId: 'c2',
+            organizerName: 'Another Community',
+            status: 'pending',
+          },
+        ],
+      });
+
+      const accessBadge = await harness.getStatusBadge('status-access');
+      const accessClasses = await accessBadge!.getAttribute('class');
+      expect(accessClasses).toContain('bg-success/10');
+      expect(accessClasses).toContain('text-success');
+      expect(await accessBadge!.text()).toContain('vetted');
+
+      const pendingBadge = await harness.getStatusBadge('status-pending');
+      const pendingClasses = await pendingBadge!.getAttribute('class');
+      expect(pendingClasses).toContain('bg-warning/10');
+      expect(pendingClasses).toContain('text-warning');
+      expect(await pendingBadge!.text()).toContain('pending');
+    });
+
+    it('renders rejected and revoked badges with AA destructive text tokens', async () => {
+      const {harness} = await setup({
+        communities: mockCommunities,
+        isAuthenticated: true,
+        approvals: [],
+        applications: [
+          {
+            _id: 'app-rejected',
+            _creationTime: 100,
+            organizerId: 'c1',
+            organizerName: 'Test Community',
+            status: 'rejected',
+          },
+          {
+            _id: 'app-revoked',
+            _creationTime: 100,
+            organizerId: 'c2',
+            organizerName: 'Another Community',
+            status: 'revoked',
+          },
+        ],
+      });
+
+      for (const testId of ['status-rejected', 'status-revoked']) {
+        const badge = await harness.getStatusBadge(testId);
+        const classes = await badge!.getAttribute('class');
+        expect(classes).toContain('bg-destructive/10');
+        expect(classes).toContain('text-destructive-text');
+      }
     });
 
     it('should handle mixed statuses across communities', async () => {
@@ -871,7 +963,7 @@ describe('CommunityDirectoryComponent', () => {
       const {harness} = await setupError();
       const errorState = await harness.getErrorState();
       expect(errorState).toBeTruthy();
-      expect(await errorState?.text()).toContain('Directory unavailable');
+      expect(await errorState?.text()).toContain('directory unavailable');
     });
 
     it('shows a retry action when the unauthenticated directory request fails', async () => {
@@ -905,33 +997,22 @@ describe('CommunityDirectoryComponent', () => {
       const {harness} = await setupAuthenticatedError();
       const errorState = await harness.getErrorState();
       expect(errorState).toBeTruthy();
-      expect(await errorState?.text()).toContain('Directory unavailable');
+      expect(await errorState?.text()).toContain('directory unavailable');
     });
 
     it('refetches the authenticated directory queries when retrying a signed-in failure', async () => {
       const {fixture, harness} = await setupAuthenticatedError();
       const component = fixture.componentInstance as unknown as {
-        allCommunitiesQuery: {refetch: () => void};
-        approvalsQuery: {refetch: () => void};
-        myApplicationsQuery: {refetch: () => void};
+        queries: {refetch: () => void};
       };
-      const allCommunitiesRefetch = vi.spyOn(
-        component.allCommunitiesQuery,
-        'refetch',
-      );
-      const approvalsRefetch = vi.spyOn(component.approvalsQuery, 'refetch');
-      const applicationsRefetch = vi.spyOn(
-        component.myApplicationsQuery,
-        'refetch',
-      );
+      const refetchSpy = vi.spyOn(component.queries, 'refetch');
       const retryButton = await harness.getRetryButton();
       expect(retryButton).toBeTruthy();
 
       await retryButton?.click();
 
-      expect(allCommunitiesRefetch).toHaveBeenCalledTimes(1);
-      expect(approvalsRefetch).toHaveBeenCalledTimes(1);
-      expect(applicationsRefetch).toHaveBeenCalledTimes(1);
+      // A single injectQueries refetch resubscribes all three keyed queries.
+      expect(refetchSpy).toHaveBeenCalledTimes(1);
     });
   });
 

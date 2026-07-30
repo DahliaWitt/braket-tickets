@@ -1,13 +1,18 @@
-import { type EventManagementPurchase, type Guest } from '../models/event-management.model';
 import {
-  formatExportDateTime,
-  formatUsdCents,
-} from '../utils/export-formatting';
+  type EventManagementPurchase,
+  type Guest,
+  type ImportedTicketHolder,
+} from '../models/event-management.model';
+import {formatExportDateTime, formatUsdCents} from '../utils/export-formatting';
 
 export type ExportFieldKey =
   | Extract<Exclude<keyof EventManagementPurchase, 'tickets'>, string>
   | 'formattedAmount'
-  | 'formattedDate';
+  | 'formattedDate'
+  | 'source';
+
+/** Source label used for Braket-native rows in the export source column. */
+export const NATIVE_SOURCE_LABEL = 'braket tickets';
 
 export type ExportRow = Partial<Record<ExportFieldKey | 'status', string>>;
 
@@ -50,12 +55,13 @@ export interface ExportConfig {
  * Includes the most commonly needed columns: name, email, tier, quantity, amount, and date.
  */
 export const DEFAULT_EXPORT_FIELDS: ExportField[] = [
-  { key: 'userName', label: 'Name', enabled: true },
-  { key: 'userEmail', label: 'Email', enabled: true },
-  { key: 'tier', label: 'Tier', enabled: true },
-  { key: 'quantity', label: 'Quantity', enabled: true },
-  { key: 'formattedAmount', label: 'Amount', enabled: true },
-  { key: 'formattedDate', label: 'Purchase Date', enabled: true },
+  {key: 'userName', label: 'Name', enabled: true},
+  {key: 'userEmail', label: 'Email', enabled: true},
+  {key: 'tier', label: 'Tier', enabled: true},
+  {key: 'quantity', label: 'Quantity', enabled: true},
+  {key: 'formattedAmount', label: 'Amount', enabled: true},
+  {key: 'formattedDate', label: 'Purchase Date', enabled: true},
+  {key: 'source', label: 'Source', enabled: true},
 ];
 
 function purchaseFieldValue(
@@ -71,6 +77,8 @@ function purchaseFieldValue(
       return purchase.userEmail ?? '—';
     case 'tier':
       return purchase.tier.toUpperCase();
+    case 'source':
+      return NATIVE_SOURCE_LABEL;
     case 'id':
     case 'status':
     case 'userId':
@@ -99,6 +107,8 @@ function guestFieldValue(guest: Guest, field: ExportField): string {
       return '—';
     case 'formattedDate':
       return guest.emailedAt ? formatExportDateTime(guest.emailedAt) : '—';
+    case 'source':
+      return NATIVE_SOURCE_LABEL;
     case 'id':
     case 'status':
     case 'userId':
@@ -111,11 +121,50 @@ function guestFieldValue(guest: Guest, field: ExportField): string {
   }
 }
 
+/**
+ * Field value for an imported external ticket-holder. Imported entries carry no
+ * financial data, so tier / quantity / amount / refund-status columns emit BLANK
+ * (empty string, not zero) — a zero would read as a real free-of-charge sale.
+ * The raw purchase-date string passes through UNFORMATTED (external exports
+ * carry no timezone, so parsing to a timestamp would encode a guess as fact).
+ */
+function importedFieldValue(
+  entry: ImportedTicketHolder,
+  field: ExportField,
+): string {
+  switch (field.key) {
+    case 'userName':
+      return entry.name;
+    case 'userEmail':
+      return entry.email ?? '—';
+    case 'formattedDate':
+      // Raw source string, never re-formatted.
+      return entry.purchaseDateRaw ?? '';
+    case 'source':
+      return entry.sourceLabel;
+    // Financial columns are intentionally blank for imported entries.
+    case 'tier':
+    case 'quantity':
+    case 'formattedAmount':
+    case 'status':
+    case 'amount':
+    case 'refundedAmountCents':
+      return '';
+    case 'id':
+    case 'userId':
+    case 'createdAt':
+      return '';
+    default:
+      throw new Error('Unsupported export field');
+  }
+}
+
 export function prepareAttendeeExportData(
   purchases: EventManagementPurchase[],
   fields: ExportField[],
   guests: Guest[] = [],
   includeStatus = false,
+  importedEntries: ImportedTicketHolder[] = [],
 ): ExportRow[] {
   const purchaseRows = purchases.map((purchase) => {
     const row: ExportRow = {};
@@ -145,5 +194,21 @@ export function prepareAttendeeExportData(
     return row;
   });
 
-  return [...purchaseRows, ...guestRows];
+  const importedRows = importedEntries.map((entry) => {
+    const row: ExportRow = {};
+
+    for (const field of fields) {
+      row[field.key] = importedFieldValue(entry, field);
+    }
+
+    // Imported entries have no refund state — the status column stays blank
+    // (never 'ACTIVE'/'REFUNDED', which would imply a native financial record).
+    if (includeStatus) {
+      row['status'] = '';
+    }
+
+    return row;
+  });
+
+  return [...purchaseRows, ...guestRows, ...importedRows];
 }

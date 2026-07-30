@@ -1,4 +1,4 @@
-import { ComponentHarness } from '@angular/cdk/testing';
+import {ComponentHarness} from '@angular/cdk/testing';
 
 export class ZardAlertHarness extends ComponentHarness {
   static hostSelector = 'z-alert';
@@ -11,6 +11,11 @@ export class ZardAlertHarness extends ComponentHarness {
   async getDescription(): Promise<string | null> {
     const el = await this.locatorForOptional('[data-alert-description]')();
     return el ? el.text() : null;
+  }
+
+  async descriptionHasClass(className: string): Promise<boolean> {
+    const el = await this.locatorForOptional('[data-alert-description]')();
+    return el ? el.hasClass(className) : false;
   }
 
   async getType(): Promise<string | null> {

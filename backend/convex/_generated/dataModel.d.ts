@@ -109,7 +109,13 @@ export type DataModel = {
         | "event.update"
         | "guest.add"
         | "guest.check-in"
+        | "guest.import"
         | "guest.update"
+        | "imported_tickets.import"
+        | "imported_tickets.remove"
+        | "imported_tickets.batch_remove"
+        | "imported_tickets.redact"
+        | "imported_tickets.check-in"
         | "magic_link.create"
         | "magic_link.delete"
         | "magic_link.disable"
@@ -273,11 +279,7 @@ export type DataModel = {
       _creationTime: number;
     };
     fieldPaths:
-      | "_creationTime"
-      | "_id"
-      | "confirmedAt"
-      | "storageId"
-      | "uploaderUserId";
+      "_creationTime" | "_id" | "confirmedAt" | "storageId" | "uploaderUserId";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
@@ -504,6 +506,7 @@ export type DataModel = {
   eventBroadcasts: {
     document: {
       adminId: Id<"users">;
+      bodyJson?: string;
       eventId: Id<"events">;
       message: string;
       recipientCount: number;
@@ -516,6 +519,7 @@ export type DataModel = {
       | "_creationTime"
       | "_id"
       | "adminId"
+      | "bodyJson"
       | "eventId"
       | "message"
       | "recipientCount"
@@ -577,6 +581,7 @@ export type DataModel = {
       checkedInCount?: number;
       date: string;
       description?: string;
+      endDate?: string;
       inventoryId?: Id<"event_inventory">;
       lastCheckInAt?: number | null;
       location?: string;
@@ -605,6 +610,7 @@ export type DataModel = {
       | "checkedInCount"
       | "date"
       | "description"
+      | "endDate"
       | "inventoryId"
       | "lastCheckInAt"
       | "location"
@@ -682,6 +688,11 @@ export type DataModel = {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_clientKey: ["clientKey", "_creationTime"];
+      by_convertedToUserId_expiresAt: [
+        "convertedToUserId",
+        "expiresAt",
+        "_creationTime",
+      ];
       by_email: ["email", "_creationTime"];
       by_expiresAt: ["expiresAt", "_creationTime"];
       by_magicLink: ["magicLinkId", "_creationTime"];
@@ -725,6 +736,88 @@ export type DataModel = {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_event: ["eventId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  importBatches: {
+    document: {
+      batchKey: string;
+      eventId: Id<"events">;
+      result: {
+        insertedCount: number;
+        outcomes: Array<{
+          reason?: string;
+          rowIndex: number;
+          status: "inserted" | "skipped" | "invalid";
+        }>;
+        skippedCount: number;
+      };
+      target: "guests" | "importedTickets";
+      _id: Id<"importBatches">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "batchKey"
+      | "eventId"
+      | "result"
+      | "result.insertedCount"
+      | "result.outcomes"
+      | "result.skippedCount"
+      | "target";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_event_batch_key_target: [
+        "eventId",
+        "batchKey",
+        "target",
+        "_creationTime",
+      ];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  importedTicketHolders: {
+    document: {
+      batchKey: string;
+      checkedInAt?: number;
+      checkedInBy?: Id<"users">;
+      email?: string;
+      eventId: Id<"events">;
+      externalRef?: string;
+      externalRefKey?: string;
+      name: string;
+      orderRef?: string;
+      purchaseDateRaw?: string;
+      sourceLabel: string;
+      ticketTypeLabel?: string;
+      _id: Id<"importedTicketHolders">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "batchKey"
+      | "checkedInAt"
+      | "checkedInBy"
+      | "email"
+      | "eventId"
+      | "externalRef"
+      | "externalRefKey"
+      | "name"
+      | "orderRef"
+      | "purchaseDateRaw"
+      | "sourceLabel"
+      | "ticketTypeLabel";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_event: ["eventId", "_creationTime"];
+      by_event_batch_key: ["eventId", "batchKey", "_creationTime"];
+      by_event_external_ref_key: ["eventId", "externalRefKey", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};
@@ -1016,10 +1109,7 @@ export type DataModel = {
       _creationTime: number;
     };
     fieldPaths:
-      | "_creationTime"
-      | "_id"
-      | "trustedOrganizerId"
-      | "trustingOrganizerId";
+      "_creationTime" | "_id" | "trustedOrganizerId" | "trustingOrganizerId";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
@@ -1049,10 +1139,7 @@ export type DataModel = {
       applicationReason?: string;
       applicationStatus?: "pending" | "approved" | "rejected" | "revoked";
       communityAccessSource?:
-        | "approved_application"
-        | "magic_link"
-        | "direct_member"
-        | "shared";
+        "approved_application" | "magic_link" | "direct_member" | "shared";
       isCommunityAdmin?: boolean;
       organizerId: Id<"organizers">;
       sortTime: number;
@@ -1357,17 +1444,28 @@ export type DataModel = {
       _creationTime: number;
     };
     fieldPaths:
-      | "_creationTime"
-      | "_id"
-      | "email"
-      | "eventId"
-      | "notifiedAt"
-      | "userId";
+      "_creationTime" | "_id" | "email" | "eventId" | "notifiedAt" | "userId";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_event: ["eventId", "_creationTime"];
       by_user_event: ["userId", "eventId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  richEmailImages: {
+    document: {
+      firstPublishedAt: number;
+      storageId: Id<"_storage">;
+      _id: Id<"richEmailImages">;
+      _creationTime: number;
+    };
+    fieldPaths: "_creationTime" | "_id" | "firstPublishedAt" | "storageId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_storageId: ["storageId", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};
@@ -1451,6 +1549,7 @@ export type DataModel = {
       eventId: Id<"events">;
       expiresAt: number;
       guestSessionId?: Id<"guest_sessions">;
+      idempotencyKey?: string;
       kind: "primary" | "resale";
       quantity: number;
       releaseReason?:
@@ -1466,6 +1565,8 @@ export type DataModel = {
       stripeCheckoutSessionId?: string;
       stripePaymentIntentId?: string;
       tier: "regular" | "notaflof" | "supporter";
+      tosAcceptedAt?: number;
+      tosVersion?: string;
       trustSource: "direct" | "shared" | "open_access";
       trustViaOrganizerId?: Id<"organizers">;
       userId?: Id<"users">;
@@ -1482,6 +1583,7 @@ export type DataModel = {
       | "eventId"
       | "expiresAt"
       | "guestSessionId"
+      | "idempotencyKey"
       | "kind"
       | "quantity"
       | "releasedAt"
@@ -1492,6 +1594,8 @@ export type DataModel = {
       | "stripeCheckoutSessionId"
       | "stripePaymentIntentId"
       | "tier"
+      | "tosAcceptedAt"
+      | "tosVersion"
       | "trustSource"
       | "trustViaOrganizerId"
       | "userId";
@@ -1505,14 +1609,9 @@ export type DataModel = {
         "state",
         "_creationTime",
       ];
-      by_owner_guest_event_state_kind_amountCents_tier_quantity: [
+      by_owner_guest_idempotencyKey: [
         "guestSessionId",
-        "eventId",
-        "state",
-        "kind",
-        "amountCents",
-        "tier",
-        "quantity",
+        "idempotencyKey",
         "_creationTime",
       ];
       by_owner_user_event_state: [
@@ -1521,14 +1620,9 @@ export type DataModel = {
         "state",
         "_creationTime",
       ];
-      by_owner_user_event_state_kind_amountCents_tier_quantity: [
+      by_owner_user_idempotencyKey: [
         "userId",
-        "eventId",
-        "state",
-        "kind",
-        "amountCents",
-        "tier",
-        "quantity",
+        "idempotencyKey",
         "_creationTime",
       ];
       by_stripeCheckoutSessionId: ["stripeCheckoutSessionId", "_creationTime"];
@@ -1540,6 +1634,7 @@ export type DataModel = {
   ticketReminderSends: {
     document: {
       adminId: Id<"users">;
+      bodyJson?: string;
       eventId: Id<"events">;
       message: string;
       recipientCount: number;
@@ -1552,6 +1647,7 @@ export type DataModel = {
       | "_creationTime"
       | "_id"
       | "adminId"
+      | "bodyJson"
       | "eventId"
       | "message"
       | "recipientCount"

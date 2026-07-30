@@ -1,4 +1,4 @@
-import { ComponentHarness } from '@angular/cdk/testing';
+import {ComponentHarness} from '@angular/cdk/testing';
 
 export class BraInventoryMeterHarness extends ComponentHarness {
   static hostSelector = 'bra-inventory-meter';
@@ -37,9 +37,24 @@ export class BraInventoryMeterHarness extends ComponentHarness {
     return el !== null;
   }
 
+  /**
+   * Read the secondary external-ticket annotation ("+ N external · M total").
+   * Returns null when no external entries exist (the line is not rendered).
+   */
+  async getExternalAnnotation(): Promise<string | null> {
+    const el = await this.locatorForOptional('[data-testid$="-external"]')();
+    if (!el) return null;
+    return (await el.text()).replace(/\s+/g, ' ').trim();
+  }
+
   async getAriaValueText(): Promise<string | null> {
     const el = await this.locatorFor('[role="progressbar"]')();
     return el.getAttribute('aria-valuetext');
+  }
+
+  async getAriaLabel(): Promise<string | null> {
+    const el = await this.locatorFor('[role="progressbar"]')();
+    return el.getAttribute('aria-label');
   }
 
   async getAriaValueNow(): Promise<string | null> {

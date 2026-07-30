@@ -722,6 +722,359 @@ describe('eventBroadcasts.send', () => {
   });
 });
 
+// ── send (rich body) ──────────────────────────────────────────────────
+
+describe('eventBroadcasts.send — rich body', () => {
+  const richDoc = (content: unknown): string =>
+    JSON.stringify({type: 'doc', content});
+
+  it('validates + renders bodyJson, stores it, derives plain text, and sends rich HTML', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminAndEvent(t);
+
+    await seedTicketHolder(t, eventId, 'rich-holder@example.com');
+
+    const bodyJson = richDoc([
+      {
+        type: 'paragraph',
+        content: [
+          {type: 'text', text: 'Doors ', marks: [{type: 'bold'}]},
+          {type: 'text', text: 'at 9pm'},
+        ],
+      },
+      {
+        type: 'bulletList',
+        content: [
+          {
+            type: 'listItem',
+            content: [
+              {
+                type: 'paragraph',
+                content: [{type: 'text', text: 'bring ID'}],
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+
+    const result = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Rich Update',
+      // Client best-effort plain text is ignored; server re-derives from bodyJson.
+      message: 'client-supplied-should-be-ignored',
+      bodyJson,
+    });
+
+    expect(result.success).toBe(true);
+
+    const broadcast = await t.run(async (ctx) =>
+      ctx.db
+        .query('eventBroadcasts')
+        .withIndex('by_event', (q) => q.eq('eventId', eventId))
+        .first(),
+    );
+    expect(broadcast).not.toBeNull();
+    // Stored bodyJson is the SANITIZED document (structurally equal for a
+    // clean input; raw client strings are never persisted).
+    expect(JSON.parse(broadcast!.bodyJson!)).toEqual(JSON.parse(bodyJson));
+    // message column is the server-derived plain text, not the client message.
+    expect(broadcast!.message).toContain('Doors at 9pm');
+    expect(broadcast!.message).toContain('- bring ID');
+    expect(broadcast!.message).not.toContain(
+      'client-supplied-should-be-ignored',
+    );
+
+    const capturedPayloads = await t.query(api.testing.email.getSentEmails, {
+      to: 'rich-holder@example.com',
+    });
+    const payload = capturedPayloads[0] as QueuedSmtpArgs | null;
+    expect(payload?.html).toContain('<strong');
+    expect(payload?.html).toContain('<ul');
+    expect(payload?.text).toContain('Doors at 9pm');
+  });
+
+  it('returns validation_error for a bodyJson with a javascript: link', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminAndEvent(t);
+
+    await seedTicketHolder(t, eventId, 'holder@example.com');
+
+    const result = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Malicious',
+      message: 'fallback',
+      bodyJson: richDoc([
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text: 'click',
+              marks: [{type: 'link', attrs: {href: 'javascript:alert(1)'}}],
+            },
+          ],
+        },
+      ]),
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe('validation_error');
+    }
+
+    const broadcasts = await t.run(async (ctx) =>
+      ctx.db
+        .query('eventBroadcasts')
+        .withIndex('by_event', (q) => q.eq('eventId', eventId))
+        .collect(),
+    );
+    expect(broadcasts).toHaveLength(0);
+  });
+
+  it('returns validation_error for a bodyJson with an unknown node type', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminAndEvent(t);
+
+    await seedTicketHolder(t, eventId, 'holder@example.com');
+
+    const result = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Bad node',
+      message: 'fallback',
+      bodyJson: richDoc([{type: 'script', content: []}]),
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe('validation_error');
+    }
+  });
+
+  // ── Inline-image security gate (adversarial) ────────────────────────
+  const PNG_BYTES = new Uint8Array([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+  ]);
+
+  async function seedConfirmedImage(
+    t: TestHarness,
+    asAdmin: ReturnType<TestHarness['withIdentity']>,
+  ): Promise<Id<'_storage'>> {
+    const storageId = await t.run(async (ctx) => {
+      const blob = new Blob([PNG_BYTES.buffer as ArrayBuffer], {
+        type: 'image/png',
+      });
+      return await ctx.storage.store(blob);
+    });
+    const result = await asAdmin.action(api.storage.files.confirmUpload, {
+      storageId,
+      mimeType: 'image/png',
+    });
+    expect(result.valid).toBe(true);
+    return storageId;
+  }
+
+  it('rejects a forged image src (arbitrary remote host, no storageId)', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminAndEvent(t);
+    await seedTicketHolder(t, eventId, 'holder@example.com');
+
+    const result = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Tracking pixel',
+      message: 'fallback',
+      bodyJson: richDoc([
+        {
+          type: 'image',
+          attrs: {src: 'https://attacker.example/pixel.png', alt: 'x'},
+        },
+      ]),
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe('validation_error');
+    }
+    const broadcasts = await t.run(async (ctx) =>
+      ctx.db
+        .query('eventBroadcasts')
+        .withIndex('by_event', (q) => q.eq('eventId', eventId))
+        .collect(),
+    );
+    expect(broadcasts).toHaveLength(0);
+  });
+
+  it('rejects an image whose storageId is not a confirmed upload', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminAndEvent(t);
+    await seedTicketHolder(t, eventId, 'holder@example.com');
+
+    // A well-formed but UNconfirmed storage id (stored, never confirmed).
+    const unconfirmed = await t.run(async (ctx) => {
+      const blob = new Blob([PNG_BYTES.buffer as ArrayBuffer], {
+        type: 'image/png',
+      });
+      return await ctx.storage.store(blob);
+    });
+
+    const result = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Forged id',
+      message: 'fallback',
+      bodyJson: richDoc([
+        {type: 'image', attrs: {storageId: unconfirmed, alt: 'x'}},
+      ]),
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe('validation_error');
+    }
+    const broadcasts = await t.run(async (ctx) =>
+      ctx.db
+        .query('eventBroadcasts')
+        .withIndex('by_event', (q) => q.eq('eventId', eventId))
+        .collect(),
+    );
+    expect(broadcasts).toHaveLength(0);
+  });
+
+  it('renders a confirmed image through the durable /api/images route', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminAndEvent(t);
+    await seedTicketHolder(t, eventId, 'img-holder@example.com');
+    const storageId = await seedConfirmedImage(t, asAdmin);
+
+    // Smuggle preview-only / hostile extra attrs alongside the storageId: the
+    // validator ignores them for rendering, and persistence must strip them.
+    const bodyJson = richDoc([
+      {
+        type: 'image',
+        attrs: {
+          storageId,
+          alt: 'flyer',
+          src: 'https://signed.example/preview?sig=SECRET',
+          onerror: 'alert(1)',
+        },
+      },
+    ]);
+
+    const result = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Confirmed image',
+      message: 'fallback',
+      bodyJson,
+    });
+    expect(result.success).toBe(true);
+
+    const capturedPayloads = await t.query(api.testing.email.getSentEmails, {
+      to: 'img-holder@example.com',
+    });
+    const payload = capturedPayloads[0] as QueuedSmtpArgs | null;
+    // Durable, server-owned route — never the attacker host, never the signed
+    // preview getUrl (which is not durable and must not be emailed).
+    expect(payload?.html).toContain(
+      `/api/images/${encodeURIComponent(storageId)}`,
+    );
+    expect(payload?.html).not.toContain('attacker');
+    const signedPreviewUrl = await t.run((ctx) =>
+      ctx.storage.getUrl(storageId),
+    );
+    expect(signedPreviewUrl).toBeTruthy();
+    expect(payload?.html).not.toContain(signedPreviewUrl as string);
+
+    // The send registered the image as published, so the public /api/images
+    // route (which serves ONLY registered images) can resolve it.
+    const published = await t.run((ctx) =>
+      ctx.db
+        .query('richEmailImages')
+        .withIndex('by_storageId', (q) => q.eq('storageId', storageId))
+        .first(),
+    );
+    expect(published).not.toBeNull();
+
+    // Persistence regression: the stored bodyJson is the SANITIZED document —
+    // the smuggled signed preview src and onerror attrs must not survive.
+    const stored = await t.run(async (ctx) =>
+      ctx.db
+        .query('eventBroadcasts')
+        .withIndex('by_event', (q) => q.eq('eventId', eventId))
+        .first(),
+    );
+    expect(stored?.bodyJson).toContain(storageId);
+    expect(stored?.bodyJson).not.toContain('signed.example');
+    expect(stored?.bodyJson).not.toContain('onerror');
+    expect(stored?.bodyJson).not.toContain('"src"');
+  });
+
+  it('rejects a body that renders past the amplification cap without burning the dedup slot', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminAndEvent(t);
+    await seedTicketHolder(t, eventId, 'holder@example.com');
+
+    // ~5KB of JSON (mostly empty paragraphs) renders to ~49KB of styled HTML —
+    // past the rendered-size cap. Must fail as validation_error BEFORE the
+    // dedup read so a corrected retry with the same subject still sends.
+    const result = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Amplified',
+      message: 'fallback',
+      bodyJson: richDoc([
+        {type: 'paragraph', content: [{type: 'text', text: 'x'}]},
+        ...Array.from({length: 250}, () => ({type: 'paragraph'})),
+      ]),
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe('validation_error');
+    }
+
+    // Same subject → same dedup key: succeeds only if the bomb never burned it.
+    const retry = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Amplified',
+      message: 'legit body',
+    });
+    expect(retry.success).toBe(true);
+  });
+
+  it('rejects an image confirmed by a different user (ownership)', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminAndEvent(t);
+    await seedTicketHolder(t, eventId, 'holder@example.com');
+
+    // A DIFFERENT user confirms an upload; the admin sender does not own it and
+    // must not be able to republish it through the durable image route.
+    const otherId = await t.mutation(api.testing.users.createUserDirectly, {
+      name: 'Other Uploader',
+      email: 'other-uploader@example.com',
+    });
+    const storageId = await seedConfirmedImage(
+      t,
+      t.withIdentity({subject: otherId}),
+    );
+
+    const result = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Someone else image',
+      message: 'fallback',
+      bodyJson: richDoc([{type: 'image', attrs: {storageId, alt: 'x'}}]),
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe('validation_error');
+    }
+    const broadcasts = await t.run(async (ctx) =>
+      ctx.db
+        .query('eventBroadcasts')
+        .withIndex('by_event', (q) => q.eq('eventId', eventId))
+        .collect(),
+    );
+    expect(broadcasts).toHaveLength(0);
+  });
+});
+
 // ── listHistory ──────────────────────────────────────────────────────
 
 describe('eventBroadcasts.listHistory', () => {
@@ -925,6 +1278,39 @@ describe('eventBroadcasts.send dedup', () => {
     }
   });
 
+  it('returns already_sent (not no_recipients) when a committed broadcast later has an empty audience', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminAndEvent(t);
+    await seedGuest(t, eventId, {name: 'Solo', email: 'solo@example.com'});
+
+    const first = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Only Send',
+      message: 'Hi',
+    });
+    expect(first.success).toBe(true);
+
+    // Remove the only recipient so the audience is now empty on retry.
+    const guestId = await t.run(
+      async (ctx) =>
+        (await ctx.db
+          .query('guests')
+          .withIndex('by_event', (q) => q.eq('eventId', eventId))
+          .first())!._id,
+    );
+    await asAdmin.mutation(api.events.guests.remove, {id: guestId});
+
+    const retry = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Only Send',
+      message: 'Hi',
+    });
+    // A committed broadcast whose audience later emptied is a retry, not a
+    // never-sent empty event.
+    expect(retry.success).toBe(false);
+    if (!retry.success) expect(retry.error).toBe('already_sent');
+  });
+
   it('allows sending to different events', async () => {
     const t = convexTest();
     const {asAdmin} = await seedAdminAndEvent(t);
@@ -992,5 +1378,298 @@ describe('eventBroadcasts.send dedup', () => {
         .collect(),
     );
     expect(broadcasts).toHaveLength(1);
+  });
+});
+
+// ── external ticket-holder inclusion ─────────────────────────────────
+
+describe('eventBroadcasts — external ticket holders', () => {
+  async function seedAdminEventWithOrg(t: TestHarness) {
+    const adminId = await t.mutation(api.testing.users.createUserDirectly, {
+      name: 'Admin',
+      email: `ext-broadcast-admin-${Date.now()}-${Math.random()}@braket.gay`,
+      isRootAdmin: true,
+    });
+    const organizerId = await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {name: 'Ext Broadcast Org', slug: `ext-bc-${Date.now()}`},
+    );
+    const eventId = await t.mutation(api.testing.events.seedEvent, {
+      ...EVENT_SEED_BASE,
+      organizerId,
+    });
+    return {
+      adminId,
+      organizerId,
+      eventId,
+      asAdmin: t.withIdentity({subject: adminId}),
+    };
+  }
+
+  it('getAudience reports the reachable/unreachable split for imported entries', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminEventWithOrg(t);
+
+    await asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId,
+      batchKey: 'bc-split-1',
+      dedupMode: 'skip',
+      rows: [
+        {name: 'Reachable One', email: 'ext1@example.com', externalRef: 'X1'},
+        {name: 'Reachable Two', email: 'ext2@example.com', externalRef: 'X2'},
+        {name: 'No Email', externalRef: 'X3'},
+      ],
+    });
+
+    const result = await asAdmin.query(api.events.broadcasts.getAudience, {
+      eventId,
+    });
+    expect(result.importedReachableCount).toBe(2);
+    expect(result.importedUnreachableCount).toBe(1);
+    // Default ON: the 2 reachable imported entries join the audience.
+    expect(result.recipientCount).toBe(2);
+  });
+
+  it('toggle ON includes imported entries with email; OFF excludes them', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminEventWithOrg(t);
+
+    await seedTicketHolder(t, eventId, 'native@example.com');
+    await asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId,
+      batchKey: 'bc-toggle-1',
+      dedupMode: 'skip',
+      rows: [
+        {name: 'Imported Emailed', email: 'imp@example.com', externalRef: 'T1'},
+        {name: 'Imported NoEmail', externalRef: 'T2'},
+      ],
+    });
+
+    const on = await asAdmin.query(api.events.broadcasts.getAudience, {
+      eventId,
+      includeExternalTicketHolders: true,
+    });
+    // native + 1 reachable imported.
+    expect(on.recipientCount).toBe(2);
+
+    const off = await asAdmin.query(api.events.broadcasts.getAudience, {
+      eventId,
+      includeExternalTicketHolders: false,
+    });
+    // native only.
+    expect(off.recipientCount).toBe(1);
+    // The split is reported regardless of the toggle.
+    expect(off.importedReachableCount).toBe(1);
+    expect(off.importedUnreachableCount).toBe(1);
+  });
+
+  it('send with toggle ON delivers to imported-with-email; OFF delivers to none of them', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminEventWithOrg(t);
+
+    await asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId,
+      batchKey: 'bc-send-on',
+      dedupMode: 'skip',
+      rows: [
+        {
+          name: 'Ext Recipient',
+          email: 'extsend@example.com',
+          externalRef: 'S1',
+        },
+      ],
+    });
+
+    const on = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Doors',
+      message: 'Doors open at 9pm',
+      includeExternalTicketHolders: true,
+    });
+    expect(on.success).toBe(true);
+    if (on.success) expect(on.recipientCount).toBe(1);
+
+    const captured = await t.query(api.testing.email.getSentEmails, {
+      to: 'extsend@example.com',
+    });
+    expect(captured).toHaveLength(1);
+
+    // A second event: same import, toggle OFF → no recipients at all.
+    const second = await seedAdminEventWithOrg(t);
+    await second.asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId: second.eventId,
+      batchKey: 'bc-send-off',
+      dedupMode: 'skip',
+      rows: [
+        {name: 'Ext Only', email: 'extoff@example.com', externalRef: 'S2'},
+      ],
+    });
+    const off = await second.asAdmin.mutation(api.events.broadcasts.send, {
+      eventId: second.eventId,
+      subject: 'Doors',
+      message: 'Doors open at 9pm',
+      includeExternalTicketHolders: false,
+    });
+    // Only imported entries exist and they are excluded → no_recipients.
+    expect(off.success).toBe(false);
+    if (!off.success) expect(off.error).toBe('no_recipients');
+
+    const capturedOff = await t.query(api.testing.email.getSentEmails, {
+      to: 'extoff@example.com',
+    });
+    expect(capturedOff).toHaveLength(0);
+  });
+
+  it('broadening a same-subject retry (external off -> on) reaches only the newly included external holders', async () => {
+    const t = convexTest();
+    const {adminId, eventId, asAdmin} = await seedAdminEventWithOrg(t);
+
+    await seedTicketHolder(t, eventId, 'native@example.com');
+    await asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId,
+      batchKey: 'broaden-1',
+      dedupMode: 'skip',
+      rows: [{name: 'Ext', email: 'external@example.com', externalRef: 'B1'}],
+    });
+
+    // First send excludes external holders: only the native holder is emailed.
+    const first = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Set time',
+      message: 'Set time change',
+      includeExternalTicketHolders: false,
+    });
+    expect(first.success).toBe(true);
+    if (first.success) expect(first.recipientCount).toBe(1);
+    expect(
+      await t.query(api.testing.email.getSentEmails, {
+        to: 'external@example.com',
+      }),
+    ).toHaveLength(0);
+
+    // The broadcast rate limit is 1 per 5 min per (admin, event); reset it to
+    // simulate the elapsed window before the legitimate broadening resend.
+    await t.mutation(api.testing.utilities.resetRateLimit, {
+      name: 'broadcastEmail',
+      key: `${adminId}:${eventId}`,
+    });
+
+    // Retry the SAME subject with external holders included: the external
+    // recipient is reached, and the native holder is NOT re-emailed.
+    const broadened = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Set time',
+      message: 'Set time change',
+      includeExternalTicketHolders: true,
+    });
+    expect(broadened.success).toBe(true);
+    if (broadened.success) expect(broadened.recipientCount).toBe(1);
+    expect(
+      await t.query(api.testing.email.getSentEmails, {
+        to: 'external@example.com',
+      }),
+    ).toHaveLength(1);
+    // Native holder still has exactly one email from the first send.
+    expect(
+      await t.query(api.testing.email.getSentEmails, {
+        to: 'native@example.com',
+      }),
+    ).toHaveLength(1);
+
+    // A third send of the same subject with external on has nothing left.
+    const third = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Set time',
+      message: 'Set time change',
+      includeExternalTicketHolders: true,
+    });
+    expect(third.success).toBe(false);
+    if (!third.success) expect(third.error).toBe('already_sent');
+  });
+
+  it('a full send then a narrowing retry short-circuits as already_sent (no duplicate native email)', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminEventWithOrg(t);
+
+    await seedTicketHolder(t, eventId, 'native2@example.com');
+    await asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId,
+      batchKey: 'narrow-1',
+      dedupMode: 'skip',
+      rows: [{name: 'Ext', email: 'external2@example.com', externalRef: 'N1'}],
+    });
+
+    // First send includes everyone (default toggle on).
+    const first = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'All out',
+      message: 'Goes to everyone',
+    });
+    expect(first.success).toBe(true);
+    if (first.success) expect(first.recipientCount).toBe(2);
+
+    // Retry the same subject with external OFF: the native segment was already
+    // sent, so there is nothing new — never a duplicate to the native holder.
+    const narrowed = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'All out',
+      message: 'Goes to everyone',
+      includeExternalTicketHolders: false,
+    });
+    expect(narrowed.success).toBe(false);
+    if (!narrowed.success) expect(narrowed.error).toBe('already_sent');
+    expect(
+      await t.query(api.testing.email.getSentEmails, {
+        to: 'native2@example.com',
+      }),
+    ).toHaveLength(1);
+  });
+
+  it('an email present as both native purchaser and imported entry receives exactly one send', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminEventWithOrg(t);
+
+    const sharedEmail = 'shared@example.com';
+    await seedTicketHolder(t, eventId, sharedEmail);
+    await asAdmin.mutation(api.events.imported_tickets.importBatch, {
+      eventId,
+      batchKey: 'bc-dedup-1',
+      dedupMode: 'skip',
+      rows: [
+        // Same email as the native purchaser (different case to prove
+        // normalized-email dedup), plus a distinct imported recipient.
+        {name: 'Dup', email: sharedEmail.toUpperCase(), externalRef: 'D1'},
+        {name: 'Distinct', email: 'distinct@example.com', externalRef: 'D2'},
+      ],
+    });
+
+    const result = await asAdmin.mutation(api.events.broadcasts.send, {
+      eventId,
+      subject: 'Once',
+      message: 'You should see this once',
+    });
+    expect(result.success).toBe(true);
+    // native(shared) + distinct = 2 unique; the imported shared collides.
+    if (result.success) expect(result.recipientCount).toBe(2);
+
+    const capturedShared = await t.query(api.testing.email.getSentEmails, {
+      to: sharedEmail,
+    });
+    expect(capturedShared).toHaveLength(1);
+  });
+
+  it('leaves native + guest recipients unaffected by imported inclusion', async () => {
+    const t = convexTest();
+    const {eventId, asAdmin} = await seedAdminEventWithOrg(t);
+
+    await seedTicketHolder(t, eventId, 'nativeholder@example.com');
+    await seedGuest(t, eventId, {name: 'A Guest', email: 'guest@example.com'});
+    // No imported entries at all — the toggle path must not disturb the base.
+    const result = await asAdmin.query(api.events.broadcasts.getAudience, {
+      eventId,
+    });
+    expect(result.recipientCount).toBe(2);
+    expect(result.importedReachableCount).toBe(0);
+    expect(result.importedUnreachableCount).toBe(0);
   });
 });

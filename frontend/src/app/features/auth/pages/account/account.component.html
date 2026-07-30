@@ -45,10 +45,13 @@
   } @else {
     <div class="grid grid-cols-1 gap-8 md:grid-cols-2">
       <!-- Profile Section -->
-      <z-card class="fade-in border-border bg-card/80" [zTitle]="profileTitle">
+      <z-card
+        class="animate-in slide-in-from-bottom-2 border-border bg-card/80 duration-400"
+        [zTitle]="profileTitle"
+      >
         <ng-template #profileTitle>
           <span
-            class="flex items-center gap-2 font-display text-sm tracking-widest uppercase"
+            class="flex items-center gap-2 font-display text-sm tracking-widest text-foreground uppercase"
           >
             <z-icon zType="user" zSize="sm" class="text-secondary" /> PROFILE
           </span>
@@ -61,7 +64,7 @@
           <div class="space-y-1">
             <label
               for="profile-name"
-              class="font-mono text-2xs tracking-widest text-muted-foreground uppercase"
+              class="font-mono text-2xs tracking-widest text-foreground uppercase"
               >Display Name</label
             >
             <input
@@ -81,7 +84,7 @@
               ) {
                 <p
                   data-testid="profile-name-required"
-                  class="mono-label text-2xs text-destructive"
+                  class="mono-label text-2xs text-destructive-text"
                 >
                   DISPLAY NAME IS REQUIRED
                 </p>
@@ -92,7 +95,7 @@
               ) {
                 <p
                   data-testid="profile-name-maxlength"
-                  class="mono-label text-2xs text-destructive"
+                  class="mono-label text-2xs text-destructive-text"
                 >
                   DISPLAY NAME MUST BE AT MOST 100 CHARACTERS
                 </p>
@@ -121,7 +124,7 @@
             </div>
             <div role="alert" aria-live="assertive">
               @if (profileError()) {
-                <p class="mono-label mt-2 text-2xs text-destructive">
+                <p class="mono-label mt-2 text-2xs text-destructive-text">
                   {{ profileError() }}
                 </p>
               }
@@ -131,10 +134,13 @@
       </z-card>
 
       <!-- Identity / Email Section -->
-      <z-card class="fade-in border-border bg-card/80" [zTitle]="identityTitle">
+      <z-card
+        class="animate-in slide-in-from-bottom-2 border-border bg-card/80 duration-400"
+        [zTitle]="identityTitle"
+      >
         <ng-template #identityTitle>
           <span
-            class="flex items-center gap-2 font-display text-sm tracking-widest uppercase"
+            class="flex items-center gap-2 font-display text-sm tracking-widest text-foreground uppercase"
           >
             <z-icon zType="mail" zSize="sm" class="text-secondary" /> EMAIL
             ADDRESS
@@ -182,14 +188,14 @@
                 [zLoading]="cancelEmailLoading()"
                 [zDisabled]="cancelEmailLoading()"
                 (click)="onCancelEmailChange()"
-                class="font-mono text-2xs text-destructive hover:text-destructive"
+                class="font-mono text-2xs text-destructive-text hover:text-destructive-text"
               >
                 CANCEL REQUEST
               </button>
               @if (cancelEmailError()) {
                 <p
                   data-testid="cancel-email-error"
-                  class="mono-label text-2xs text-destructive"
+                  class="mono-label text-2xs text-destructive-text"
                 >
                   {{ cancelEmailError() }}
                 </p>
@@ -226,7 +232,7 @@
                   ) {
                     <p
                       data-testid="email-required"
-                      class="mono-label text-2xs text-destructive"
+                      class="mono-label text-2xs text-destructive-text"
                     >
                       EMAIL IS REQUIRED
                     </p>
@@ -237,7 +243,7 @@
                   ) {
                     <p
                       data-testid="email-invalid"
-                      class="mono-label text-2xs text-destructive"
+                      class="mono-label text-2xs text-destructive-text"
                     >
                       ENTER A VALID EMAIL ADDRESS
                     </p>
@@ -249,7 +255,7 @@
                   ) {
                     <p
                       data-testid="email-same-as-current"
-                      class="mono-label text-2xs text-destructive"
+                      class="mono-label text-2xs text-destructive-text"
                     >
                       NEW EMAIL MUST BE DIFFERENT FROM YOUR CURRENT EMAIL
                     </p>
@@ -282,7 +288,7 @@
                 </div>
                 <div role="alert" aria-live="assertive">
                   @if (emailError()) {
-                    <p class="mono-label mt-2 text-2xs text-destructive">
+                    <p class="mono-label mt-2 text-2xs text-destructive-text">
                       {{ emailError() }}
                     </p>
                   }
@@ -294,10 +300,13 @@
       </z-card>
 
       <!-- Social Accounts -->
-      <z-card class="fade-in border-border bg-card/80" [zTitle]="socialTitle">
+      <z-card
+        class="animate-in slide-in-from-bottom-2 border-border bg-card/80 duration-400"
+        [zTitle]="socialTitle"
+      >
         <ng-template #socialTitle>
           <span
-            class="flex items-center gap-2 font-display text-sm tracking-widest uppercase"
+            class="flex items-center gap-2 font-display text-sm tracking-widest text-foreground uppercase"
           >
             <z-icon zType="link" zSize="sm" class="text-secondary" /> SOCIAL
             ACCOUNTS
@@ -312,7 +321,7 @@
           @if (providerWarning()) {
             <p
               data-testid="provider-warning"
-              class="mono-label text-2xs text-destructive"
+              class="mono-label text-2xs text-destructive-text"
             >
               {{ providerWarning() }}
             </p>
@@ -363,7 +372,7 @@
                     providerStatusFor(provider.provider).state === 'error'
                   ) {
                     <p
-                      class="provider-message-text mt-1 font-mono text-xs text-destructive"
+                      class="provider-message-text mt-1 font-mono text-xs text-destructive-text"
                       [attr.data-testid]="
                         'provider-message-' + provider.provider
                       "
@@ -444,12 +453,12 @@
 
       <!-- Security / Password Section -->
       <z-card
-        class="fade-in-delay-1 border-border bg-card/80"
+        class="animate-in slide-in-from-bottom-2 border-border bg-card/80 delay-100 duration-400"
         [zTitle]="credsTitle"
       >
         <ng-template #credsTitle>
           <span
-            class="flex items-center gap-2 font-display text-sm tracking-widest uppercase"
+            class="flex items-center gap-2 font-display text-sm tracking-widest text-foreground uppercase"
           >
             <z-icon zType="key" zSize="sm" class="text-secondary" /> PASSWORD &
             SECURITY
@@ -486,7 +495,7 @@
                 <button
                   type="button"
                   (click)="oldPasswordVisible.set(!oldPasswordVisible())"
-                  class="absolute top-1/2 right-3 flex min-h-6 min-w-6 -translate-y-1/2 items-center justify-center rounded-sm p-1 text-muted-foreground hover:text-foreground/80 focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none"
+                  class="absolute top-1/2 right-2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:ring-4 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
                   [attr.aria-label]="
                     oldPasswordVisible() ? 'Hide password' : 'Show password'
                   "
@@ -504,7 +513,7 @@
                 ) {
                   <p
                     data-testid="old-password-required"
-                    class="mono-label text-2xs text-destructive"
+                    class="mono-label text-2xs text-destructive-text"
                   >
                     CURRENT PASSWORD IS REQUIRED
                   </p>
@@ -535,7 +544,7 @@
                 <button
                   type="button"
                   (click)="newPasswordVisible.set(!newPasswordVisible())"
-                  class="absolute top-1/2 right-3 flex min-h-6 min-w-6 -translate-y-1/2 items-center justify-center rounded-sm p-1 text-muted-foreground hover:text-foreground/80 focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none"
+                  class="absolute top-1/2 right-2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:ring-4 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
                   [attr.aria-label]="
                     newPasswordVisible() ? 'Hide password' : 'Show password'
                   "
@@ -553,7 +562,7 @@
                 ) {
                   <p
                     data-testid="new-password-required"
-                    class="mono-label text-2xs text-destructive"
+                    class="mono-label text-2xs text-destructive-text"
                   >
                     NEW PASSWORD IS REQUIRED
                   </p>
@@ -564,7 +573,7 @@
                 ) {
                   <p
                     data-testid="new-password-validation"
-                    class="mono-label text-2xs text-destructive"
+                    class="mono-label text-2xs text-destructive-text"
                   >
                     PASSWORD MUST BE AT LEAST 8 CHARACTERS
                   </p>
@@ -575,7 +584,7 @@
                 ) {
                   <p
                     data-testid="new-password-maxlength-validation"
-                    class="mono-label text-2xs text-destructive"
+                    class="mono-label text-2xs text-destructive-text"
                   >
                     PASSWORD MUST BE AT MOST 72 CHARACTERS
                   </p>
@@ -609,7 +618,7 @@
                   (click)="
                     confirmPasswordVisible.set(!confirmPasswordVisible())
                   "
-                  class="absolute top-1/2 right-3 flex min-h-6 min-w-6 -translate-y-1/2 items-center justify-center rounded-sm p-1 text-muted-foreground hover:text-foreground/80 focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none"
+                  class="absolute top-1/2 right-2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:ring-4 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
                   [attr.aria-label]="
                     confirmPasswordVisible() ? 'Hide password' : 'Show password'
                   "
@@ -627,7 +636,7 @@
                 ) {
                   <p
                     data-testid="confirm-password-required"
-                    class="mono-label text-2xs text-destructive"
+                    class="mono-label text-2xs text-destructive-text"
                   >
                     CONFIRM PASSWORD IS REQUIRED
                   </p>
@@ -635,7 +644,7 @@
                 @if (passwordsMismatch()) {
                   <p
                     data-testid="password-mismatch"
-                    class="mono-label text-2xs text-destructive"
+                    class="mono-label text-2xs text-destructive-text"
                   >
                     PASSWORDS DO NOT MATCH
                   </p>
@@ -657,7 +666,7 @@
             @if (passwordSubmitBlockerMessage()) {
               <p
                 data-testid="password-submit-blocker"
-                class="mono-label text-2xs text-destructive"
+                class="mono-label text-2xs text-destructive-text"
               >
                 {{ passwordSubmitBlockerMessage() }}
               </p>
@@ -666,7 +675,7 @@
               @if (passwordError()) {
                 <p
                   data-testid="password-error"
-                  class="mono-label mt-2 text-2xs text-destructive"
+                  class="mono-label mt-2 text-2xs text-destructive-text"
                 >
                   {{ passwordError() }}
                 </p>
@@ -709,7 +718,7 @@
                 <button
                   type="button"
                   (click)="setPasswordVisible.set(!setPasswordVisible())"
-                  class="absolute top-1/2 right-3 flex min-h-6 min-w-6 -translate-y-1/2 items-center justify-center rounded-sm p-1 text-muted-foreground hover:text-foreground/80 focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none"
+                  class="absolute top-1/2 right-2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:ring-4 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
                   [attr.aria-label]="
                     setPasswordVisible() ? 'Hide password' : 'Show password'
                   "
@@ -727,7 +736,7 @@
                 ) {
                   <p
                     data-testid="set-password-required"
-                    class="mono-label text-2xs text-destructive"
+                    class="mono-label text-2xs text-destructive-text"
                   >
                     PASSWORD IS REQUIRED
                   </p>
@@ -738,7 +747,7 @@
                 ) {
                   <p
                     data-testid="set-password-minlength"
-                    class="mono-label text-2xs text-destructive"
+                    class="mono-label text-2xs text-destructive-text"
                   >
                     PASSWORD MUST BE AT LEAST 8 CHARACTERS
                   </p>
@@ -749,7 +758,7 @@
                 ) {
                   <p
                     data-testid="set-password-maxlength"
-                    class="mono-label text-2xs text-destructive"
+                    class="mono-label text-2xs text-destructive-text"
                   >
                     PASSWORD MUST BE AT MOST 72 CHARACTERS
                   </p>
@@ -784,7 +793,7 @@
                   (click)="
                     setPasswordConfirmVisible.set(!setPasswordConfirmVisible())
                   "
-                  class="absolute top-1/2 right-3 flex min-h-6 min-w-6 -translate-y-1/2 items-center justify-center rounded-sm p-1 text-muted-foreground hover:text-foreground/80 focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none"
+                  class="absolute top-1/2 right-2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:ring-4 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
                   [attr.aria-label]="
                     setPasswordConfirmVisible()
                       ? 'Hide password'
@@ -804,7 +813,7 @@
                 ) {
                   <p
                     data-testid="set-password-confirm-required"
-                    class="mono-label text-2xs text-destructive"
+                    class="mono-label text-2xs text-destructive-text"
                   >
                     CONFIRM PASSWORD IS REQUIRED
                   </p>
@@ -812,7 +821,7 @@
                 @if (setPasswordPasswordsMismatch()) {
                   <p
                     data-testid="set-password-mismatch"
-                    class="mono-label text-2xs text-destructive"
+                    class="mono-label text-2xs text-destructive-text"
                   >
                     PASSWORDS DO NOT MATCH
                   </p>
@@ -839,7 +848,7 @@
             @if (setPasswordSubmitBlockerMessage()) {
               <p
                 data-testid="set-password-submit-blocker"
-                class="mono-label text-2xs text-destructive"
+                class="mono-label text-2xs text-destructive-text"
               >
                 {{ setPasswordSubmitBlockerMessage() }}
               </p>
@@ -859,7 +868,7 @@
               @if (setPasswordError()) {
                 <p
                   data-testid="set-password-error"
-                  class="mono-label mt-2 text-2xs text-destructive"
+                  class="mono-label mt-2 text-2xs text-destructive-text"
                 >
                   {{ setPasswordError() }}
                 </p>
@@ -871,14 +880,14 @@
 
       <!-- Email Preferences -->
       <z-card
-        class="fade-in border-border bg-card/80 md:col-span-2"
+        class="animate-in slide-in-from-bottom-2 border-border bg-card/80 duration-400 md:col-span-2"
         [zTitle]="emailPrefTitle"
         data-testid="email-preferences-card"
         id="email-preferences"
       >
         <ng-template #emailPrefTitle>
           <span
-            class="flex items-center gap-2 font-display text-sm tracking-widest uppercase"
+            class="flex items-center gap-2 font-display text-sm tracking-widest text-foreground uppercase"
           >
             <z-icon zType="mail" zSize="sm" class="text-secondary" /> EMAIL
             PREFERENCES
@@ -899,7 +908,7 @@
                   Some communities are still enabled
                 </p>
                 <p
-                  class="mt-1 text-warning/70"
+                  class="mt-1 text-warning"
                   data-testid="global-optout-banner-body"
                 >
                   You've opted out of marketing emails from new communities.
@@ -919,7 +928,7 @@
                   Marketing emails are paused
                 </p>
                 <p
-                  class="mt-1 text-warning/70"
+                  class="mt-1 text-warning"
                   data-testid="global-optout-banner-body"
                 >
                   You've opted out of all community marketing emails. New
@@ -954,6 +963,22 @@
             <p class="animate-pulse font-mono text-sm text-muted-foreground">
               Loading…
             </p>
+          } @else if (emailPrefs.error()) {
+            <div
+              data-testid="email-prefs-error"
+              role="alert"
+              aria-live="assertive"
+              class="space-y-2 py-4 text-center"
+            >
+              <h3
+                class="font-display text-lg font-bold tracking-tight text-destructive-text uppercase"
+              >
+                hit a snag
+              </h3>
+              <p class="font-sans text-sm text-muted-foreground">
+                couldn't load your email preferences — refresh to try again
+              </p>
+            </div>
           } @else if (displayedEmailPrefs().length === 0) {
             <p
               class="font-mono text-sm text-muted-foreground"
@@ -1021,7 +1046,7 @@
               zSize="sm"
               (click)="unsubscribeFromAll()"
               [zLoading]="unsubAllLoading()"
-              class="text-destructive hover:text-destructive"
+              class="text-destructive-text hover:text-destructive-text"
               data-testid="unsub-all-btn"
             >
               Unsubscribe from all

@@ -1,15 +1,15 @@
 import {cva, type VariantProps} from 'class-variance-authority';
 
 export const alertVariants = cva(
-  'relative w-full rounded-lg border px-4 py-3 text-sm flex items-start gap-3',
+  'relative flex w-full items-start gap-3 rounded-lg border px-4 py-3 text-sm',
   {
     variants: {
       zType: {
         default: 'bg-card text-card-foreground',
         success: 'text-success',
         warning: 'text-warning',
-        error: 'text-destructive',
-        info: 'text-info',
+        error: 'text-destructive-text',
+        info: 'text-info-text',
       },
       zAppearance: {
         outline: '',
@@ -22,12 +22,12 @@ export const alertVariants = cva(
       {
         zType: 'default',
         zAppearance: 'soft',
-        class: 'bg-muted border-transparent',
+        class: 'border-transparent bg-muted',
       },
       {
         zType: 'default',
         zAppearance: 'fill',
-        class: 'bg-foreground text-background border-transparent',
+        class: 'border-transparent bg-foreground text-background',
       },
       {
         zType: 'success',
@@ -37,12 +37,12 @@ export const alertVariants = cva(
       {
         zType: 'success',
         zAppearance: 'soft',
-        class: 'bg-success/10 border-transparent',
+        class: 'border-transparent bg-success/10',
       },
       {
         zType: 'success',
         zAppearance: 'fill',
-        class: 'bg-success text-success-foreground border-transparent',
+        class: 'border-transparent bg-success text-success-foreground',
       },
       {
         zType: 'warning',
@@ -52,12 +52,12 @@ export const alertVariants = cva(
       {
         zType: 'warning',
         zAppearance: 'soft',
-        class: 'bg-warning/10 border-transparent',
+        class: 'border-transparent bg-warning/10',
       },
       {
         zType: 'warning',
         zAppearance: 'fill',
-        class: 'bg-warning text-warning-foreground border-transparent',
+        class: 'border-transparent bg-warning text-warning-foreground',
       },
       {
         zType: 'error',
@@ -67,23 +67,23 @@ export const alertVariants = cva(
       {
         zType: 'error',
         zAppearance: 'soft',
-        class: 'bg-destructive/10 border-transparent',
+        class: 'border-transparent bg-destructive/10',
       },
       {
         zType: 'error',
         zAppearance: 'fill',
-        class: 'bg-destructive text-destructive-foreground border-transparent',
+        class: 'border-transparent bg-destructive text-destructive-foreground',
       },
       {zType: 'info', zAppearance: 'outline', class: 'border-info/30 bg-card'},
       {
         zType: 'info',
         zAppearance: 'soft',
-        class: 'bg-info/10 border-transparent',
+        class: 'border-transparent bg-info/10',
       },
       {
         zType: 'info',
         zAppearance: 'fill',
-        class: 'bg-info text-info-foreground border-transparent',
+        class: 'border-transparent bg-info text-info-foreground',
       },
     ],
     defaultVariants: {
@@ -94,19 +94,39 @@ export const alertVariants = cva(
 );
 
 export const alertDescriptionVariants = cva(
-  'text-sm leading-relaxed mt-1 [&:first-child]:mt-0',
+  'mt-1 text-sm leading-relaxed [&:first-child]:mt-0',
   {
     variants: {
       zType: {
         default: 'text-muted-foreground',
-        success: 'text-success/90',
-        warning: 'text-warning/90',
-        error: 'text-destructive/90',
-        info: 'text-info/90',
+        success: 'text-success',
+        warning: 'text-warning',
+        error: 'text-destructive-text',
+        info: 'text-info-text',
+      },
+      zAppearance: {
+        outline: '',
+        soft: '',
+        fill: '',
       },
     },
+    // On fill the per-type text color would sit on its own fill color
+    // (text-success on bg-success ≈ 1:1) — use the paired -foreground token
+    // instead. Never alpha-modify AA-calibrated text tokens.
+    compoundVariants: [
+      {zType: 'default', zAppearance: 'fill', class: 'text-background/90'},
+      {zType: 'success', zAppearance: 'fill', class: 'text-success-foreground'},
+      {zType: 'warning', zAppearance: 'fill', class: 'text-warning-foreground'},
+      {
+        zType: 'error',
+        zAppearance: 'fill',
+        class: 'text-destructive-foreground',
+      },
+      {zType: 'info', zAppearance: 'fill', class: 'text-info-foreground'},
+    ],
     defaultVariants: {
       zType: 'default',
+      zAppearance: 'outline',
     },
   },
 );

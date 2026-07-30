@@ -120,50 +120,6 @@ describe('EventsService', () => {
     });
   });
 
-  describe('getBatchAvailability', () => {
-    it('should return empty object without querying when no IDs are provided', async () => {
-      const result = await service.getBatchAvailability([]);
-
-      expect(result).toEqual({});
-      expect(convexClientMock.client.query).not.toHaveBeenCalledWith(
-        api.events.public.getBatchAvailability,
-        expect.anything(),
-      );
-    });
-
-    it('should chunk IDs into batches of 50 and merge responses', async () => {
-      const ids = Array.from({length: 120}, (_, i) => `event-${i + 1}`);
-      convexClientMock.client.query.mockImplementation(
-        (_fn, args: {eventIds: string[]; now: number}) =>
-          Object.fromEntries(
-            args.eventIds.map((id) => [id, {isSoldOut: false}]),
-          ),
-      );
-
-      const result = await service.getBatchAvailability(ids);
-
-      expect(convexClientMock.client.query).toHaveBeenCalledTimes(3);
-      expect(convexClientMock.client.query).toHaveBeenNthCalledWith(
-        1,
-        api.events.public.getBatchAvailability,
-        expect.objectContaining({eventIds: ids.slice(0, 50)}),
-      );
-      expect(convexClientMock.client.query).toHaveBeenNthCalledWith(
-        2,
-        api.events.public.getBatchAvailability,
-        expect.objectContaining({eventIds: ids.slice(50, 100)}),
-      );
-      expect(convexClientMock.client.query).toHaveBeenNthCalledWith(
-        3,
-        api.events.public.getBatchAvailability,
-        expect.objectContaining({eventIds: ids.slice(100, 120)}),
-      );
-      expect(Object.keys(result)).toHaveLength(120);
-      expect(result['event-1']).toEqual({isSoldOut: false});
-      expect(result['event-120']).toEqual({isSoldOut: false});
-    });
-  });
-
   describe('createWithPoster', () => {
     it('should include organizerId when provided', async () => {
       convexClientMock.mutation.mockResolvedValue('new-event-id');
@@ -525,6 +481,88 @@ describe('EventsService', () => {
         api.storage.files.confirmUpload,
         expect.objectContaining({storageId: 'storage-abc'}),
       );
+    });
+  });
+
+  describe('uploadRichTextImage', () => {
+    const xhrState = {
+      status: 200,
+      responseText: JSON.stringify({storageId: 'storage-abc'}),
+      capturedLoadHandler: undefined as (() => void) | undefined,
+    };
+
+    const noopProgress = (): void => undefined;
+
+    beforeEach(() => {
+      xhrState.capturedLoadHandler = undefined;
+      xhrState.status = 200;
+      xhrState.responseText = JSON.stringify({storageId: 'storage-abc'});
+
+      function MockXHR(this: Record<string, unknown>) {
+        this.open = vi.fn();
+        this.setRequestHeader = vi.fn();
+        this.upload = {addEventListener: vi.fn()};
+        this.addEventListener = vi.fn((event: string, handler: () => void) => {
+          if (event === 'load') xhrState.capturedLoadHandler = handler;
+        });
+        this.abort = vi.fn();
+        this.send = vi.fn(() => xhrState.capturedLoadHandler?.());
+        Object.defineProperty(this, 'status', {get: () => xhrState.status});
+        Object.defineProperty(this, 'responseText', {
+          get: () => xhrState.responseText,
+        });
+      }
+      vi.stubGlobal('XMLHttpRequest', MockXHR);
+
+      // validateUpload, then generateUploadUrl
+      convexClientMock.mutation
+        .mockResolvedValueOnce({valid: true})
+        .mockResolvedValueOnce('https://upload.example.com');
+    });
+
+    it('resolves to the storageId + preview url when confirmUpload returns valid: true', async () => {
+      convexClientMock.action.mockResolvedValue({
+        valid: true,
+        storageId: 'storage-abc' as Id<'_storage'>,
+        url: 'https://files.example.com/storage-abc.png',
+      });
+
+      const file = new File(['png-bytes'], 'inline.png', {type: 'image/png'});
+      const {storageId, url} = await service.uploadRichTextImage(
+        file,
+        noopProgress,
+      );
+
+      expect(storageId).toBe('storage-abc');
+      expect(url).toBe('https://files.example.com/storage-abc.png');
+      expect(convexClientMock.action).toHaveBeenCalledWith(
+        api.storage.files.confirmUpload,
+        {storageId: 'storage-abc', mimeType: 'image/png'},
+      );
+    });
+
+    it('rejects with the server error when confirmUpload returns valid: false', async () => {
+      convexClientMock.action.mockResolvedValue({
+        valid: false,
+        error: 'Magic bytes do not match declared MIME type',
+      });
+
+      const file = new File(['bad-bytes'], 'fake.png', {type: 'image/png'});
+      await expect(
+        service.uploadRichTextImage(file, noopProgress),
+      ).rejects.toThrow('Magic bytes do not match declared MIME type');
+    });
+
+    it('rejects when confirmUpload is valid but returns no url', async () => {
+      convexClientMock.action.mockResolvedValue({
+        valid: true,
+        storageId: 'storage-abc' as Id<'_storage'>,
+      });
+
+      const file = new File(['png-bytes'], 'inline.png', {type: 'image/png'});
+      await expect(
+        service.uploadRichTextImage(file, noopProgress),
+      ).rejects.toThrow('image upload failed');
     });
   });
 });

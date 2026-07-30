@@ -1,0 +1,28 @@
+[mcp_servers.convex]
+command = "npx"
+args = ["-y", "convex@latest", "mcp", "start"]
+
+[mcp_servers.angular-cli]
+command = "npx"
+args = ["-y", "@angular/cli", "mcp"]
+
+[mcp_servers.better-auth]
+command = "npx"
+args = ["-y", "@better-auth/mcp"]
+
+[mcp_servers.better-auth-docs]
+url = "https://mcp.better-auth.com/mcp"
+
+[mcp_servers.sentry]
+url = "https://mcp.sentry.dev/mcp"
+
+[mcp_servers.cloudflare]
+command = "npx"
+args = ["-y", "mcp-remote@latest", "https://bindings.mcp.cloudflare.com/mcp"]
+
+[mcp_servers.eslint]
+command = "npx"
+args = ["-y", "@eslint/mcp"]
+
+[mcp_servers.stripe]
+url = "https://mcp.stripe.com"

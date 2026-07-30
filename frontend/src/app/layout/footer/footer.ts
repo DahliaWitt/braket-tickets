@@ -16,39 +16,39 @@ import {HELP_CENTER_FOOTER_LINKS} from '@/features/help/help-center.footer-link.
     >
       <nav
         aria-label="Footer"
-        class="grid grid-cols-3 gap-x-8 gap-y-3 text-center md:flex md:gap-8"
+        class="grid grid-cols-3 gap-x-8 gap-y-3 text-center text-foreground md:flex md:gap-8"
       >
         <a
           routerLink="/terms"
-          class="rounded-sm py-1 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+          class="rounded-sm py-1 text-foreground hover:underline hover:decoration-2 hover:underline-offset-4 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
           >Terms</a
         >
         <a
           routerLink="/privacy"
-          class="rounded-sm py-1 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+          class="rounded-sm py-1 text-foreground hover:underline hover:decoration-2 hover:underline-offset-4 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
           >Privacy</a
         >
         <a
           routerLink="/support"
-          class="rounded-sm py-1 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+          class="rounded-sm py-1 text-foreground hover:underline hover:decoration-2 hover:underline-offset-4 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
           >Support</a
         >
         <a
           routerLink="/about"
-          class="rounded-sm py-1 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+          class="rounded-sm py-1 text-foreground hover:underline hover:decoration-2 hover:underline-offset-4 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
           >About</a
         >
         @for (link of helpCenterFooterLinks; track link.routerLink) {
           <a
             [routerLink]="link.routerLink"
-            class="rounded-sm py-1 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+            class="rounded-sm py-1 text-foreground hover:underline hover:decoration-2 hover:underline-offset-4 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
             >{{ link.label }}</a
           >
         }
         <button
           type="button"
           (click)="openFeedback()"
-          class="cursor-pointer rounded-sm py-1 uppercase transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+          class="cursor-pointer rounded-sm py-1 text-foreground uppercase hover:underline hover:decoration-2 hover:underline-offset-4 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
         >
           Feedback
         </button>
@@ -70,12 +70,12 @@ export class FooterComponent {
       .open()
       .then((opened) => {
         if (!opened) {
-          this.toast.error('Feedback is unavailable right now.');
+          this.toast.error('feedback is unavailable right now');
         }
       })
       .catch((error: unknown) => {
         logger.error('Failed to open Sentry feedback', error);
-        this.toast.error('Feedback is unavailable right now.');
+        this.toast.error('feedback is unavailable right now');
       });
   }
 }

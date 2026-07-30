@@ -33,12 +33,6 @@ interface InviteComponentWithRedeem {
   redirectTimeoutId: ReturnType<typeof setTimeout> | null;
 }
 
-interface InviteValidationPayload {
-  valid: boolean;
-  communityName?: string;
-  error?: string;
-}
-
 interface RedeemMutationResult {
   alreadyMember: boolean;
   alreadyRedeemed: boolean;
@@ -82,7 +76,7 @@ describe('InviteComponent', () => {
         onData({
           valid: true,
           communityName: 'Signal House',
-        } as InviteValidationPayload);
+        });
         return () => undefined;
       },
     );
@@ -131,7 +125,7 @@ describe('InviteComponent', () => {
     );
 
     expect(vi.mocked(toast.success)).toHaveBeenCalledWith(
-      'Welcome! You are now part of the community.',
+      "you're in — welcome to the community",
     );
 
     fixture.destroy();

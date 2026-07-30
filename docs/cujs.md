@@ -51,7 +51,7 @@ These are foundational. They sit underneath every other journey on the platform.
 
 1. User opens `/login` and switches to the Register tab.
 2. User enters name, email, and password.
-3. The system checks the email isn't already in use. If it is, the user sees an error and stays on the form.
+3. The system rejects passwords found in known breaches and checks that the email isn't already in use. If either check fails, the user sees an error and stays on the form.
 4. The system creates the account and sends a verification email. The user is redirected to `/login?registered=true` with a "check your email" message.
 5. User opens the verification email and clicks the link. The link routes to `/confirm/verification/:token`.
 6. On success, the user can sign in. From there they're prompted to apply to a community before they can buy authenticated tickets.
@@ -59,13 +59,15 @@ These are foundational. They sit underneath every other journey on the platform.
 **Failure modes**
 
 - Email already in use: blocked at step 3 with a clear error.
+- Password appears in a known breach: blocked before account creation; the user must choose a different password.
+- Breach-check provider outage: signup fails closed. Operators can temporarily use the documented `AUTH_HIBP_DISABLED` incident switch.
 - Verification link expired or already used: user lands on a page that lets them request a new link.
 - Verification email never arrives: there is no in-app retry surface today. Recovery is out of band.
 
 **Code anchors**
 
 - Routes: [login.component.ts](frontend/src/app/features/auth/pages/login/login.component.ts), [confirm-verification.component.ts](frontend/src/app/features/auth/pages/confirm/confirm-verification.component.ts)
-- Backend: [auth/public.ts](backend/convex/auth/public.ts)
+- Backend: [auth/public.ts](backend/convex/auth/public.ts), [lib/better_auth.ts](backend/convex/lib/better_auth.ts) (`HIBP_CHECKED_PATHS`)
 
 ### 1.2 Sign in with email and password
 
@@ -138,11 +140,12 @@ These are foundational. They sit underneath every other journey on the platform.
 
 - Token expired or already used: user sees a clear error and can request a fresh link.
 - Password fails strength check: form-level validation, no submission.
+- Password appears in a known breach: reset is rejected and the user must choose another password.
 
 **Code anchors**
 
 - Routes: [login.component.ts](frontend/src/app/features/auth/pages/login/login.component.ts), [confirm-password-reset.component.ts](frontend/src/app/features/auth/pages/confirm/confirm-password-reset.component.ts)
-- Backend: [auth/public.ts](backend/convex/auth/public.ts)
+- Backend: [auth/public.ts](backend/convex/auth/public.ts), [lib/better_auth.ts](backend/convex/lib/better_auth.ts) (`HIBP_CHECKED_PATHS`)
 
 ### 1.5 Link or unlink a social provider
 
@@ -246,7 +249,7 @@ A user can apply to multiple communities. Status is tracked per-community.
 **Failure modes**
 
 - User abandons partway through the form: no record is saved.
-- Application stays pending too long: admins are nudged via the digest in 7.4. (Note: the platform-admin reminder in 8.2 nudges users who never applied at all, not pending applicants. There is no automated reminder for pending applications today.)
+- Application stays pending too long: admins are nudged via the digest in 7.4. There is no automated reminder for pending applicants today.
 - User applies to a community that already approved them: the form short-circuits to the existing approved state.
 
 **Code anchors**
@@ -328,7 +331,7 @@ This is the most critical journey on the platform. If buying a ticket breaks, th
 **Path**
 
 1. Unauthenticated user opens a public event page.
-2. User enters name, email, and pays. No password, no email verification step.
+2. User enters an email address, explicitly accepts the Terms of Service and Privacy Policy, and pays. No password or email-verification step is required.
 3. A guest session token is created. The user is taken through embedded Stripe Checkout and the ticket is issued.
 4. Confirmation email includes a magic link the guest can use to come back to their tickets.
 5. If the guest later signs up with the same email, the tickets purchased as guest are migrated silently into the new account.
@@ -337,10 +340,11 @@ This is the most critical journey on the platform. If buying a ticket breaks, th
 
 - Guest closes the tab during checkout: see 3.3 (resume).
 - Email typo blocks delivery: there is no in-app recovery; the guest must check spelling and try again from a new flow.
+- Terms are not accepted: the purchase action stays disabled and the backend rejects a forged unaccepted request.
 
 **Code anchors**
 
-- Route: [event-details.component.ts](frontend/src/app/features/tickets/pages/event-details/event-details.component.ts)
+- Route: [event-details.component.ts](frontend/src/app/features/tickets/pages/event-details/event-details.component.ts), [checkout-sidebar.component.ts](frontend/src/app/features/tickets/components/checkout-sidebar/checkout-sidebar.component.ts)
 - Backend: [orders/core.ts](backend/convex/orders/core.ts) (`openForGuest`), [guest_sessions/core.ts](backend/convex/guest_sessions/core.ts), [guest_sessions/actions.ts](backend/convex/guest_sessions/actions.ts) (`initiateGuestSession`)
 
 ### 3.3 Resume an abandoned guest checkout
@@ -376,13 +380,15 @@ This is the most critical journey on the platform. If buying a ticket breaks, th
 **Path**
 
 1. User picks a free tier on the event page. The checkout sidebar surfaces a "claim" CTA instead of "buy."
-2. The system claims the ticket directly via the free-claim mutation. No Stripe Checkout is mounted.
-3. The ticket is issued and a confirmation email is sent.
+2. A guest enters an email address and explicitly accepts the Terms of Service and Privacy Policy. An authenticated member does not repeat this guest assent step.
+3. The system claims the ticket directly via the free-claim mutation. No Stripe Checkout is mounted.
+4. The ticket is issued and a confirmation email is sent.
 
 **Failure modes**
 
 - User has already hit `maxTicketsPerUser` for this event: claim refused.
 - Tier price is non-zero: the free-claim path is not offered; the user goes through normal paid checkout instead.
+- Guest terms are not accepted: the claim action stays disabled and the backend rejects a forged unaccepted request.
 
 **Code anchors**
 
@@ -558,13 +564,13 @@ Door staff are the people who actually let attendees in. The journey is short bu
 
 **Who**: door staff and admins.
 **Criticality**: ops. Mistakes happen and need a fast undo.
-**Entry points**: `/scanner` activity feed, attendee detail.
+**Entry points**: `/scanner`, checked-in ticket row in the manual roster.
 **Successful outcome**: the ticket returns to valid. The check-in timestamp is cleared.
 
 **Path**
 
-1. Staff sees a recent check-in in the activity feed (or finds the attendee).
-2. Staff clicks revert and confirms.
+1. Staff selects the event and finds the checked-in attendee in the ticket roster.
+2. Staff clicks Undo on that row and confirms.
 3. The ticket transitions back to valid. The attendee can be re-checked-in.
 
 **Failure modes**
@@ -573,20 +579,21 @@ Door staff are the people who actually let attendees in. The journey is short bu
 
 **Code anchors**
 
+- Frontend: [check-in.component.ts](frontend/src/app/features/admin/pages/check-in/check-in.component.ts) (`confirmTicketCheckInRevert`)
 - Backend: [events/check_in.ts](backend/convex/events/check_in.ts) (`revertCheckIn`)
 
-### 5.4 Review check-in activity, attendee roster, and export
+### 5.4 Search attendee status and export the roster
 
 **Who**: door staff and admins.
-**Criticality**: ops. After-action review for accountability and operations.
+**Criticality**: ops. Door staff need a fast roster lookup, and organizers need an operational export.
 **Entry points**: `/scanner`, event management page.
-**Successful outcome**: the team can see live check-in throughput, search the attendee list, and export a CSV roster.
+**Successful outcome**: door staff can select an event, search its attendee list, and see check-in status; an organizer can export the event roster as CSV from event management.
 
 **Path**
 
-1. During the event: staff sees a live activity feed and a summary strip with check-ins per minute and percentage admitted.
-2. Staff can search the roster by name or email.
-3. After the event: admins see post-mortem stats and can export a roster CSV.
+1. Staff opens `/scanner`, selects the event, and chooses the relevant ticket or guest roster.
+2. Staff searches by attendee name or email and sees the matching row's current status.
+3. An organizer opens the event-management analytics/roster surface and exports the CSV.
 
 **Failure modes**
 
@@ -594,6 +601,8 @@ Door staff are the people who actually let attendees in. The journey is short bu
 
 **Code anchors**
 
+- Scanner: [check-in.component.ts](frontend/src/app/features/admin/pages/check-in/check-in.component.ts)
+- Export UI: [attendee-roster-table.component.ts](frontend/src/app/features/admin/components/attendee-roster-table/attendee-roster-table.component.ts)
 - Backend: [events/analytics.ts](backend/convex/events/analytics.ts), [events/analytics_export.ts](backend/convex/events/analytics_export.ts) (`exportEventRosterCsv`)
 
 ---
@@ -642,8 +651,8 @@ This is the organizer's full arc, from connecting Stripe to receiving the payout
 
 1. Admin opens the event editor.
 2. Admin uploads a flyer (4:5 or 1:1).
-3. Admin fills in title, date, location, base price, total inventory, ticketing options (NOTAFLOF tier with min/max, supporter tier, max tickets per user, resale enabled or not, resale fee).
-4. Form validates required fields and the relationship between supporter and base prices.
+3. Admin fills in title, start date/time, an optional end date/time, location, base price, total inventory, and ticketing options (NOTAFLOF tier with min/max, supporter tier, max tickets per user, resale enabled or not, resale fee).
+4. Form validates required fields, the relationship between supporter and base prices, and that any complete end date/time falls after the start.
 5. Admin optionally composes an announcement to schedule alongside publish. If provided, the system queues a marketing announcement at the chosen send time. (This is the same flow as 9.1, just initiated from the event editor.)
 6. Admin publishes. The event appears on the community's public event list and on member dashboards.
 
@@ -655,6 +664,7 @@ Publishing an event requires the parent community to be published. Publishing th
 
 - Parent community is in draft: event publish is blocked.
 - Image fails upload: form retains state, admin can retry.
+- Only one end field is set, or the end is not after the start: save is blocked with a field-level error.
 
 **Code anchors**
 
@@ -671,13 +681,13 @@ Publishing an event requires the parent community to be published. Publishing th
 **Path**
 
 1. Admin opens the event editor for an existing event.
-2. Admin updates fields (location, inventory, prices, image).
+2. Admin updates fields (location, start/end time, inventory, prices, image). They can add, change, or clear the optional end date/time.
 3. Admin saves. Changes propagate via Convex subscriptions to all viewers in real time.
 
 **Failure modes**
 
 - Reducing inventory below the already-sold count: blocked at the inventory guard.
-- Cancellation as part of an edit (status → cancelled) triggers open-order release and auto-cancels any scheduled marketing announcement for the event. See 6.8.
+- An incomplete or invalid end date/time is blocked; moving the start past the stored end also requires a matching end update.
 
 **Code anchors**
 
@@ -720,20 +730,50 @@ Publishing an event requires the parent community to be published. Publishing th
 
 1. Admin opens the Guests tab on the event management page.
 2. Admin adds a guest with name, optional email, type, and optional notes. (This is the organizer adding a person, not a ticket holder bringing a +1; the platform does not currently expose a self-service plus-one feature.)
-3. Admin can remove guests at any time.
-4. Door staff see guests alongside ticket holders in the check-in roster (see 5.2 / 5.4). Broadcasts and reminders include them when the guest has an email.
+3. For a larger list, the admin pastes or uploads CSV data, reviews valid, duplicate, and invalid rows, then confirms the valid batch.
+4. Admin can remove guests at any time.
+5. Door staff see guests alongside ticket holders in the check-in roster (see 5.2 / 5.4). Broadcasts and reminders include them when the guest has an email.
 
 **Failure modes**
 
 - Name, email, or notes exceed length caps: rejected with a validation error.
 - Guest with no email: still on the door roster, but not addressable for broadcasts or reminders.
+- Duplicate or invalid import rows: identified in preview and skipped unless corrected before confirmation.
 
 **Code anchors**
 
 - Component: [event-management-guests-tab.component.ts](frontend/src/app/features/admin/pages/event-management/components/event-management-guests-tab/event-management-guests-tab.component.ts)
-- Backend: [events/guests.ts](backend/convex/events/guests.ts) (`add`, `remove`, `listByEvent`)
+- Import UI: [import-surface.component.ts](frontend/src/app/features/admin/import/import-surface.component.ts)
+- Backend: [events/guests.ts](backend/convex/events/guests.ts) (`add`, `addMany`, `remove`, `listByEvent`)
 
-### 6.6 Send a broadcast to ticket holders
+### 6.6 Import externally sold ticket holders
+
+**Who**: community admins.
+**Criticality**: ops. Tickets sold through another platform still need to appear at the door without polluting Braket revenue totals.
+**Entry points**: event management page, Buyers tab.
+**Successful outcome**: valid external-holder rows are grouped by source in event management and are searchable/check-in eligible at the door.
+
+**Path**
+
+1. Admin opens the Buyers tab and starts an external-ticket import.
+2. Admin pastes or uploads the source CSV, maps columns, labels the source, and reviews valid, duplicate, and invalid rows.
+3. Admin confirms the valid batch. Imported entries appear in the buyer-management attendance section but do not become Braket purchases or revenue.
+4. Door staff can search by holder details or barcode and check the imported attendee in.
+5. The admin may include reachable imported holders in a broadcast or remove the whole import batch.
+
+**Failure modes**
+
+- Missing or overlong holder name: row is invalid in preview and is not imported.
+- Optional fields are validated when present: a malformed email or overlong barcode is rejected, but a barcode may be omitted.
+- Duplicate rows: identified before confirmation according to the selected deduplication mode.
+- Imported holder has no email: remains door-eligible but cannot receive a broadcast.
+
+**Code anchors**
+
+- Import UI: [event-management-buyers-tab.component.ts](frontend/src/app/features/admin/pages/event-management/components/event-management-buyers-tab/event-management-buyers-tab.component.ts), [import-surface.component.ts](frontend/src/app/features/admin/import/import-surface.component.ts)
+- Backend: [events/imported_tickets.ts](backend/convex/events/imported_tickets.ts) (`importBatch`, `listByEvent`, `removeBatch`), [events/check_in.ts](backend/convex/events/check_in.ts)
+
+### 6.7 Send a broadcast to ticket holders
 
 **Who**: community admins.
 **Criticality**: ops, safety. Last-mile communication to people who hold tickets (venue change, weather, schedule). Often time-sensitive.
@@ -744,21 +784,24 @@ Publishing an event requires the parent community to be published. Publishing th
 
 1. Admin opens the broadcast tab on the event management page.
 2. Page shows the audience preview count.
-3. Admin enters subject and message.
-4. Admin sends. Each recipient gets exactly one copy regardless of how many tickets they hold.
-5. History tab shows past broadcasts with recipient counts and timestamps.
+3. Admin enters a subject and composes a rich message with supported formatting, links, and owned inline images. They can choose whether reachable imported holders are included.
+4. The editor validates links and waits for inline-image uploads before enabling send.
+5. Admin sends. Each recipient gets exactly one copy regardless of how many tickets they hold.
+6. History tab shows past broadcasts with recipient counts and timestamps.
 
 **Failure modes**
 
 - No active ticket holders: send is blocked.
+- Unsafe links, unsupported rich content, or an unfinished image upload: send is blocked with validation feedback.
 - Per-recipient bounces are recorded for observability. Send-time suppression is handled by the email provider; see 9.3.
 
 **Code anchors**
 
+- Component: [broadcast-email-tab.component.ts](frontend/src/app/features/admin/components/broadcast-email-tab/broadcast-email-tab.component.ts)
 - Backend: [events/broadcasts.ts](backend/convex/events/broadcasts.ts) (`getAudience`, `send`, `listHistory`)
 - Email: `eventBroadcastTemplate` in [email/templates.ts](backend/convex/email/templates.ts)
 
-### 6.7 Send a pre-event reminder to ticket holders
+### 6.8 Send a pre-event reminder to ticket holders
 
 **Who**: community admins.
 **Criticality**: ops. Reduces no-shows and surfaces last-minute logistics.
@@ -769,41 +812,23 @@ Publishing an event requires the parent community to be published. Publishing th
 
 1. Admin opens the ticket reminder tab.
 2. Audience preview shows current ticket holders.
-3. Admin sends. Recipients receive a reminder email distinct from a broadcast.
+3. Admin enters a subject and composes a rich message with supported formatting, links, and owned inline images.
+4. The editor validates links and waits for inline-image uploads before enabling send.
+5. Admin sends. Recipients receive a reminder email distinct from a broadcast.
 
 **Failure modes**
 
 - Sent too late to matter: not enforced.
+- Unsafe links, unsupported rich content, or an unfinished image upload: send is blocked with validation feedback.
 
 **Code anchors**
 
 - Component: [ticket-reminder-tab](frontend/src/app/features/admin/components/ticket-reminder-tab/)
 - Backend: [events/reminders.ts](backend/convex/events/reminders.ts) (`getTicketReminderAudience`, `sendTicketPurchaseReminder`)
 
-### 6.8 Cancel an event
+### Deferred product work: event cancellation UI
 
-**Who**: community admins.
-**Criticality**: ops, safety. Cancellation is a stressful path; clarity matters more than feature breadth.
-**Entry points**: event management page.
-**Successful outcome**: the event status is `cancelled`, it is hidden from public listings, no new purchases are accepted, and existing ticket holders are notified.
-
-**Path**
-
-1. Admin sets the event's status to cancelled. (Cancellation is a status transition through the standard event update path, not a separate mutation.)
-2. The event is removed from public lists. New purchases are blocked.
-3. Open ticket orders (people mid-checkout) are released. They will not be charged. The released-order state surfaces to the buyer at the next page check, but no automated cancellation email is sent today.
-4. Any scheduled marketing announcement for this event is auto-cancelled.
-5. Existing ticket holders keep their tickets until refunds are processed. They are not automatically emailed about the cancellation; the admin uses the broadcast feature (6.6) to notify them, then follows the [Event Change Refunds](runbooks/event-change-refunds.md) runbook to process cancellation refunds.
-6. If a payment completes after cancellation (delayed Stripe webhook), the buyer is refunded automatically through the late-payment path.
-
-**Failure modes**
-
-- Cancellation race with in-progress payments: the late-payment refund handles this. No silent charge for a cancelled event.
-- Admin forgets to broadcast: ticket holders don't hear about the cancellation until they check `/tickets` or notice the event is gone. This is a real product gap; consider it part of the playbook for any cancellation.
-
-**Code anchors**
-
-- Route: [event-management.ts](frontend/src/app/features/admin/pages/event-management/event-management.ts)
+Event cancellation is not part of the current canonical release coverage. The backend can represent a cancelled event, release open orders, and cancel scheduled marketing, but no frontend action exposes that transition. A future implementation must pair the status change with buyer communication, the [Event Change Refunds](runbooks/event-change-refunds.md) playbook, and late-payment safety. This pre-existing gap is deferred rather than a regression in this release.
 
 ### 6.9 Refund a purchase
 
@@ -1106,30 +1131,6 @@ Root admins set up new communities and resolve cross-community concerns. Most pr
 
 - Route: [community-editor.component.ts](frontend/src/app/features/admin/pages/communities/community-editor/community-editor.component.ts)
 - Backend: [communities/profile.ts](backend/convex/communities/profile.ts), [communities/admins.ts](backend/convex/communities/admins.ts)
-
-### 8.2 Send a vetting reminder to users who haven't applied anywhere
-
-**Who**: platform admin only.
-**Criticality**: ops. Conversion nudge for users who registered but never applied to a community.
-**Entry points**: admin reminders page.
-**Successful outcome**: users who have an account but no application receive a reminder email prompting them to apply.
-
-**Path**
-
-1. Platform admin opens the reminders page and views the audience preview (count of registered users with zero applications).
-2. Admin enters subject and message and sends.
-3. Recipients receive the reminder. Each is opted into the platform marketing organizer (or already opted out, in which case they are skipped).
-
-**Failure modes**
-
-- Audience is empty: no email is sent.
-- Recipient has globally opted out of marketing: skipped.
-
-**Code anchors**
-
-- Frontend: [components/reminders](frontend/src/app/features/admin/components/reminders/)
-- Backend: [communities/management/reminders.ts](backend/convex/communities/management/reminders.ts) (`getVettingReminderAudience`, `sendVettingReminder`)
-- Email: `vettingReminderTemplate` in [email/templates.ts](backend/convex/email/templates.ts)
 
 ---
 

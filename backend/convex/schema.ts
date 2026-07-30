@@ -258,6 +258,13 @@ const schemaTables = {
      * validateISODate in lib/validation.ts.
      */
     date: v.string(),
+    /**
+     * Optional event end instant, same ISO 8601 UTC format as `date` and
+     * validated to be after it. When absent, the event is treated as ending
+     * at midnight (event timezone) after its start date — see hasEventEnded
+     * in shared/event-time.ts.
+     */
+    endDate: v.optional(v.string()),
     location: v.optional(v.string()),
     poster: v.optional(v.string()), // URL or Storage ID
     /**
@@ -641,26 +648,25 @@ const schemaTables = {
      */
     trustSource: callerTrustSourceValidator,
     trustViaOrganizerId: v.optional(v.id('organizers')),
+    // ToS assent evidence for guest purchases (BRA-455)
+    tosAcceptedAt: v.optional(v.number()),
+    tosVersion: v.optional(v.string()),
+    /**
+     * Client-supplied idempotency key for free-ticket claims. A fresh key is
+     * minted per claim attempt on the frontend and reused verbatim across the
+     * Convex client's automatic mutation retries, so a genuine network retry
+     * replays the same completed order while a deliberate new claim (a new
+     * attempt, hence a new key) issues a fresh ticket. Absent on paid checkout
+     * orders and on rows created before this field existed.
+     */
+    idempotencyKey: v.optional(v.string()),
   })
     .index('by_owner_user_event_state', ['userId', 'eventId', 'state'])
     .index('by_owner_guest_event_state', ['guestSessionId', 'eventId', 'state'])
-    .index('by_owner_user_event_state_kind_amountCents_tier_quantity', [
-      'userId',
-      'eventId',
-      'state',
-      'kind',
-      'amountCents',
-      'tier',
-      'quantity',
-    ])
-    .index('by_owner_guest_event_state_kind_amountCents_tier_quantity', [
+    .index('by_owner_user_idempotencyKey', ['userId', 'idempotencyKey'])
+    .index('by_owner_guest_idempotencyKey', [
       'guestSessionId',
-      'eventId',
-      'state',
-      'kind',
-      'amountCents',
-      'tier',
-      'quantity',
+      'idempotencyKey',
     ])
     .index('by_event_and_state', ['eventId', 'state'])
     .index('by_stripeCheckoutSessionId', ['stripeCheckoutSessionId'])
@@ -779,9 +785,12 @@ const schemaTables = {
     /**
      * Timestamp of the most recent claim. Reclaim path refreshes this when a
      * stale pending row is taken over by a subsequent delivery. The transient
-     * retry path (`releaseWebhookClaimForRetry`) zeroes this so the next
-     * Stripe retry reclaims immediately instead of waiting for the stale
-     * threshold.
+     * retry path (`releaseWebhookClaimForRetry`) backdates this by exactly
+     * `STALE_CLAIM_THRESHOLD_MS` so the next Stripe retry reclaims immediately
+     * — while keeping the row recent enough that the failure reaper
+     * (`REAPER_FAILURE_TIMEOUT_MS`) does not poison it. It must NOT be zeroed:
+     * `claimedAt: 0` reads as "ancient" to the reaper and gets promoted to
+     * `failed`, short-circuiting Stripe's pending retries.
      */
     claimedAt: v.number(),
     completedAt: v.optional(v.number()),
@@ -979,6 +988,68 @@ const schemaTables = {
   }).index('by_event', ['eventId']),
 
   /**
+   * External ticket holders imported from other platforms (e.g. Resident
+   * Advisor). These are inert admission records — NEVER linked to Braket user
+   * accounts, orders, or the purchase/ticket tables. Every string field is
+   * treated as untrusted input (buyer names are attacker-controllable on the
+   * external platform) and length-capped server-side.
+   *
+   * - `externalRef` is the barcode: the only strong dedup / scan key.
+   * - `orderRef` is metadata only (one order spans many rows), never a dedup key.
+   * - `purchaseDateRaw` is the raw source string, display-only, never parsed.
+   * - `batchKey` ties the entry to the import batch it arrived in.
+   */
+  importedTicketHolders: defineTable({
+    eventId: v.id('events'),
+    name: v.string(),
+    email: v.optional(v.string()),
+    externalRef: v.optional(v.string()),
+    // Normalized (trim + lowercase) form of externalRef used for dedup and
+    // scanner matching, so a barcode's case can never split it into duplicate
+    // admission records or miss at the door. externalRef stays verbatim for
+    // display. Set iff externalRef is present.
+    externalRefKey: v.optional(v.string()),
+    orderRef: v.optional(v.string()),
+    ticketTypeLabel: v.optional(v.string()),
+    purchaseDateRaw: v.optional(v.string()),
+    sourceLabel: v.string(),
+    batchKey: v.string(),
+    checkedInAt: v.optional(v.number()),
+    checkedInBy: v.optional(v.id('users')),
+  })
+    .index('by_event', ['eventId'])
+    .index('by_event_external_ref_key', ['eventId', 'externalRefKey'])
+    .index('by_event_batch_key', ['eventId', 'batchKey']),
+
+  /**
+   * One record per committed bulk import (guest bulk-add or external
+   * ticket-holder import). Backs idempotent replay (a repeated batch key is a
+   * no-op returning the original result), batch-level audit, and batch removal.
+   * Skipped-row outcomes cannot be reconstructed from the entries table, so
+   * this is the durable source of the import report.
+   */
+  importBatches: defineTable({
+    eventId: v.id('events'),
+    batchKey: v.string(),
+    target: v.union(v.literal('guests'), v.literal('importedTickets')),
+    result: v.object({
+      insertedCount: v.number(),
+      skippedCount: v.number(),
+      outcomes: v.array(
+        v.object({
+          rowIndex: v.number(),
+          status: v.union(
+            v.literal('inserted'),
+            v.literal('skipped'),
+            v.literal('invalid'),
+          ),
+          reason: v.optional(v.string()),
+        }),
+      ),
+    }),
+  }).index('by_event_batch_key_target', ['eventId', 'batchKey', 'target']),
+
+  /**
    * Temporary table for E2E testing to capture emails.
    * Should not be used in production logic.
    */
@@ -1016,11 +1087,27 @@ const schemaTables = {
     .index('by_storageId', ['storageId'])
     .index('by_storageId_and_uploaderUserId', ['storageId', 'uploaderUserId']),
 
+  /**
+   * Registry of inline images actually published in a SENT rich email
+   * (broadcast or ticket reminder). Written atomically in the send transaction.
+   * The public, unauthenticated `/api/images/{storageId}` route serves ONLY
+   * images with a row here — a confirmed upload that was never emailed (e.g. an
+   * event poster or an abandoned composer draft) stays private to the signed
+   * getUrl flow. Also serves as the reference registry for storage GC.
+   */
+  richEmailImages: defineTable({
+    storageId: v.id('_storage'),
+    firstPublishedAt: v.number(),
+  }).index('by_storageId', ['storageId']),
+
   eventBroadcasts: defineTable({
     eventId: v.id('events'),
     adminId: v.id('users'),
     subject: v.string(),
+    /** Plain-text message body. For rich sends this is the plain text extracted from bodyJson. */
     message: v.string(),
+    /** Optional serialized ProseMirror JSON rich body (see lib/email/rich_text_validator.ts). */
+    bodyJson: v.optional(v.string()),
     recipientCount: v.number(),
     sentAt: v.number(),
   })
@@ -1056,7 +1143,10 @@ const schemaTables = {
     eventId: v.id('events'),
     adminId: v.id('users'),
     subject: v.string(),
+    /** Plain-text message body. For rich sends this is the plain text extracted from bodyJson. */
     message: v.string(),
+    /** Optional serialized ProseMirror JSON rich body (see lib/email/rich_text_validator.ts). */
+    bodyJson: v.optional(v.string()),
     recipientCount: v.number(),
     sentAt: v.number(),
   })
@@ -1190,7 +1280,14 @@ const schemaTables = {
     .index('by_sessionTokenDigest', ['sessionTokenDigest'])
     .index('by_pendingSessionTokenDigest', ['pendingSessionTokenDigest'])
     .index('by_magicLink', ['magicLinkId'])
-    .index('by_expiresAt', ['expiresAt']),
+    .index('by_expiresAt', ['expiresAt'])
+    // Cleanup reads only deletable rows: convertedToUserId === undefined
+    // (converted sessions are preserved for audit trail) with expiresAt in the
+    // past. Equality on convertedToUserId first, range on expiresAt second.
+    .index('by_convertedToUserId_expiresAt', [
+      'convertedToUserId',
+      'expiresAt',
+    ]),
 
   /**
    * Per-user, per-community marketing email opt-in preference.

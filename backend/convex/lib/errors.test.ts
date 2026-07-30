@@ -17,6 +17,7 @@ import {
   throwInvalidState,
   throwConflict,
   getAppErrorMessage,
+  getAppErrorCode,
 } from './errors';
 
 describe('appErrorData', () => {
@@ -197,5 +198,30 @@ describe('getAppErrorMessage', () => {
 
   it('returns null when there is no message', () => {
     expect(getAppErrorMessage({})).toBeNull();
+  });
+});
+
+describe('getAppErrorCode', () => {
+  it('extracts the structured code from a ConvexError payload', () => {
+    const error = new ConvexError(
+      appErrorData('INVALID_INPUT', 'Subject is required'),
+    );
+    expect(getAppErrorCode(error)).toBe('INVALID_INPUT');
+  });
+
+  it('returns null for legacy string ConvexError data', () => {
+    expect(getAppErrorCode(new ConvexError('legacy message'))).toBeNull();
+  });
+
+  it('returns null for a ConvexError without a string code', () => {
+    expect(
+      getAppErrorCode(new ConvexError({message: 'no code here'})),
+    ).toBeNull();
+  });
+
+  it('returns null for non-Convex errors', () => {
+    expect(getAppErrorCode(new Error('plain error'))).toBeNull();
+    expect(getAppErrorCode({code: 'X'})).toBeNull();
+    expect(getAppErrorCode(null)).toBeNull();
   });
 });

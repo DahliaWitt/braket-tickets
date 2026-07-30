@@ -67,18 +67,24 @@ describe('SharedVettingTableComponent', () => {
           _args: unknown,
           onData: (data: unknown) => void,
         ) => {
-          // For testing, just return data based on call order
-          // First call -> organizers, second -> outgoing, third -> incoming
+          // Emit asynchronously: injectQueries records the active subscription
+          // AFTER calling onUpdate, and settle() early-returns when the
+          // subscription isn't recorded yet, so a synchronous emission is
+          // dropped. Route by call order captured at call time.
+          // First call -> organizers, second -> outgoing, third -> incoming.
           updateCount++;
-          if (updateCount === 1) {
-            onData(mockOrganizers);
-          } else if (updateCount === 2) {
-            onData(outgoing);
-          } else if (updateCount === 3) {
-            onData(incoming);
-          } else {
-            onData([]);
-          }
+          const call = updateCount;
+          queueMicrotask(() => {
+            if (call === 1) {
+              onData(mockOrganizers);
+            } else if (call === 2) {
+              onData(outgoing);
+            } else if (call === 3) {
+              onData(incoming);
+            } else {
+              onData([]);
+            }
+          });
           return () => void 0;
         },
       );
@@ -168,7 +174,7 @@ describe('SharedVettingTableComponent', () => {
       .calls[0][0] as BraDialogOptions<unknown, unknown>;
     expect(dialogConfig.zOkDestructive).toBe(true);
     expect(dialogConfig.zTitle).toBe('Remove Trust Link');
-    await dialogConfig.zOnOk?.(undefined as never);
+    await dialogConfig.zOnOk?.(undefined);
     expect(trustLinksServiceMock.remove).toHaveBeenCalledWith(orgA, orgB);
   });
 
@@ -192,7 +198,7 @@ describe('SharedVettingTableComponent', () => {
       .calls[0][0] as BraDialogOptions<unknown, unknown>;
     expect(dialogConfig.zOkDestructive).toBeUndefined();
     expect(dialogConfig.zTitle).toBe('Create Trust Link');
-    await dialogConfig.zOnOk?.(undefined as never);
+    await dialogConfig.zOnOk?.(undefined);
     expect(trustLinksServiceMock.create).toHaveBeenCalledWith(orgA, orgB);
   });
 

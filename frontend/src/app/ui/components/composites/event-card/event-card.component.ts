@@ -15,12 +15,14 @@ import {ZardButtonComponent} from '@ui/components/primitives/button/button.compo
 import {ZardCardComponent} from '@ui/components/primitives/card/card.component';
 import type {EventVisibility} from '@shared/domain/event-visibility';
 import {EventDatePipe} from '@/utils/event-date.pipe';
+import {EventEndTimePipe} from '@/utils/event-end-time.pipe';
 
 export interface EventCardData {
   _id: string; // intentionally string, not Id<'events'> — UI components don't import Convex types
   title: string;
   description?: string;
   date: string;
+  endDate?: string;
   location?: string;
   price: number;
   slidingScaleEnabled?: boolean;
@@ -40,6 +42,7 @@ export interface EventCardData {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     EventDatePipe,
+    EventEndTimePipe,
     RouterLink,
     NgOptimizedImage,
     ZardButtonComponent,
@@ -92,7 +95,7 @@ export interface EventCardData {
           ></div>
           <div class="absolute inset-0 flex items-center justify-center">
             <span
-              class="line-clamp-3 px-4 text-center font-display text-4xl leading-none font-black tracking-tighter text-foreground/10 uppercase select-none @[600px]:text-5xl"
+              class="line-clamp-3 px-4 text-center font-display text-4xl leading-none font-extrabold tracking-tighter text-foreground/10 uppercase select-none @[600px]:text-5xl"
             >
               {{ event().title }}
             </span>
@@ -120,7 +123,8 @@ export interface EventCardData {
             class="font-mono text-sm font-bold text-muted-foreground"
           >
             {{ event().date | eventDate: 'mediumDate' }},
-            {{ event().date | eventDate: 'shortTime' }}
+            {{ event().date | eventDate: 'shortTime'
+            }}{{ event().endDate | eventEndTime: event().date }}
           </p>
           @if (event().location) {
             <p
@@ -135,13 +139,13 @@ export interface EventCardData {
         <p
           class="mb-6 line-clamp-3 grow font-sans text-sm text-card-foreground/80 @[600px]:line-clamp-4"
         >
-          {{ event().description || 'No description provided.' }}
+          {{ event().description || 'no description provided' }}
         </p>
 
         @if (isSoldOut()) {
           <span
             data-testid="event-card-sold-out"
-            class="mb-3 inline-block rounded-full border border-destructive px-2 py-0.5 font-mono text-xs tracking-widest text-destructive uppercase"
+            class="mb-3 inline-block rounded-full border border-destructive px-2 py-0.5 font-mono text-xs tracking-widest text-destructive-text uppercase"
           >
             SOLD OUT
           </span>
@@ -159,7 +163,7 @@ export interface EventCardData {
             class="flex-1"
             [attr.aria-label]="'More information about ' + event().title"
           >
-            More Info
+            more info
           </a>
           @if (showBuyButton()) {
             <a
@@ -172,7 +176,7 @@ export interface EventCardData {
               [attr.aria-label]="buyButtonAriaLabel()"
               [zDisabled]="isBuyDisabled()"
             >
-              Tickets
+              tickets
             </a>
           }
         </div>

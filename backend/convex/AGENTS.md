@@ -38,7 +38,7 @@ Follow these rules so we do not recreate god files:
 - Feature code imports `convex/lib/access.ts` for all `can*` and `require*` authorization checks — never `authz.ts` directly for access decisions
 - Access module functions use verb-first naming: `canViewEvent`, `requireViewEvent`, `canEditEvent`, `requireEditEvent`. Follow this convention when adding new access functions.
 - Only `convex/lib/authz.ts` may call `components.authz.*`; only authz-management modules (membership, magic links, admin invites) may call `addMember`/`removeMember`/`grantRole`/`revokeRole`
-- Enumeration helpers (`listOrganizerMembers`, `listCommunityAdminIds`, `getCommunityMembers`, `getUserCommunities`) in `authz.ts` are data queries, not authorization decisions — direct import is permitted
+- Enumeration helpers (`listOrganizerMembers`, `countOrganizerMembers`, `listCommunityAdminIds`, `getCommunityMembers`, `getUserCommunities`) in `authz.ts` are data queries, not authorization decisions — direct import is permitted
 - Visibility helpers (`isPubliclyVisible`, `isOpenAccess`) live in `convex/lib/access.ts`. Read-model code may import these directly from `access.ts` for filtering and display purposes.
 - Do not inline visibility checks, permission checks, or trust resolution in handlers — use the matching `access.ts` function
 - Internal-only code should continue to use `internalQuery` / `internalMutation` where appropriate

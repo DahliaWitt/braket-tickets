@@ -48,7 +48,7 @@ describe('EventPublishDialogComponent', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    vi.spyOn(toast, 'error').mockImplementation(() => '' as string & number);
+    vi.spyOn(toast, 'error').mockImplementation(() => '');
 
     await TestBed.configureTestingModule({
       imports: [EventPublishDialogComponent],

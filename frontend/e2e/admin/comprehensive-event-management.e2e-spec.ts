@@ -840,13 +840,13 @@ test.describe('Comprehensive Admin Event Management', () => {
 
       // Scroll into view on mobile where the card may be below the fold
       await removeButton.scrollIntoViewIfNeeded();
+      await removeButton.click();
 
-      // Use once('dialog') + click in parallel so the confirm() is accepted immediately.
-      // This avoids timing issues on WebKit where `page.on('dialog')` can race with the click.
-      await Promise.all([
-        adminPage.waitForEvent('dialog').then((dialog) => dialog.accept()),
-        removeButton.click(),
-      ]);
+      // Guest removal confirms through the branded alert dialog (no native confirm()).
+      const confirmDialog = adminPage.getByRole('alertdialog');
+      await expect(confirmDialog).toBeVisible({timeout: 5000});
+      await confirmDialog.getByRole('button', {name: 'remove guest'}).click();
+      await expect(confirmDialog).not.toBeVisible({timeout: 5000});
 
       // Verify guest is removed
       await expect(

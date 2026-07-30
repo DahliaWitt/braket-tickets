@@ -16,6 +16,7 @@ import {
 } from '../../../testing/mock-types';
 import {AUTH_CLIENT, type AuthClient} from './auth-client.token';
 import {AUTH_SETTLE_TIMEOUT_MS} from './auth.service.helpers';
+import {COMPROMISED_PASSWORD_MESSAGE} from '@shared/constants';
 import {BraToastService} from '@ui/components/composites/toast/toast.service';
 
 const authClient = {
@@ -75,6 +76,7 @@ describe('AuthService', () => {
   let mutationMock: ReturnType<typeof vi.fn>;
   const userSignal = signal<UserModel | null>(null);
   const userLoadingSignal = signal(false);
+  const userErrorSignal = signal<Error | undefined>(undefined);
   const scannerStaffSignal = signal<boolean | undefined>(undefined);
   const scannerStaffLoadingSignal = signal(false);
 
@@ -114,11 +116,13 @@ describe('AuthService', () => {
         userQuery: {
           data: typeof userSignal;
           isLoading: typeof userLoadingSignal;
+          error: typeof userErrorSignal;
         };
       }
     ).userQuery = {
       data: userSignal,
       isLoading: userLoadingSignal,
+      error: userErrorSignal,
     };
     (
       target as unknown as {
@@ -158,7 +162,7 @@ describe('AuthService', () => {
       data: null,
       error: null,
     });
-    vi.mocked(authClient.signOut).mockResolvedValue(undefined as never);
+    vi.mocked(authClient.signOut).mockResolvedValue(undefined);
     vi.mocked(authClient.getSession).mockResolvedValue({
       data: null,
       error: null,
@@ -203,6 +207,7 @@ describe('AuthService', () => {
     attachTestQueries(service);
     setSession(null);
     userLoadingSignal.set(false);
+    userErrorSignal.set(undefined);
     scannerStaffSignal.set(undefined);
     scannerStaffLoadingSignal.set(false);
   });
@@ -641,6 +646,33 @@ describe('AuthService', () => {
       });
     });
 
+    it('maps a compromised-password rejection to the shared brand-voice message', async () => {
+      vi.mocked(authClient.signUp.email).mockResolvedValue({
+        data: null,
+        error: {
+          message: 'The password you entered has been compromised.',
+          code: 'PASSWORD_COMPROMISED',
+        } as Error & {code: string},
+      });
+
+      await expect(
+        service.signup('test@e.com', 'breached-pass', 'breached-pass', 'Name'),
+      ).rejects.toThrow(COMPROMISED_PASSWORD_MESSAGE);
+      expect(routerSpy.navigate).not.toHaveBeenCalled();
+    });
+
+    it('maps a thrown compromised-password rejection from the auth client', async () => {
+      vi.mocked(authClient.signUp.email).mockRejectedValueOnce(
+        Object.assign(new Error('Password compromised'), {
+          code: 'PASSWORD_COMPROMISED',
+        }),
+      );
+
+      await expect(
+        service.signup('test@e.com', 'breached-pass', 'breached-pass', 'Name'),
+      ).rejects.toThrow(COMPROMISED_PASSWORD_MESSAGE);
+    });
+
     it('navigates to success page when duplicate signup throws from the auth client', async () => {
       vi.mocked(authClient.signUp.email).mockRejectedValueOnce(
         new Error('FAILED_TO_CREATE_USER: Failed to create user'),
@@ -742,7 +774,7 @@ describe('AuthService', () => {
 
   describe('logout', () => {
     it('should call authClient.signOut and navigate', async () => {
-      vi.mocked(authClient.signOut).mockResolvedValue(undefined as never);
+      vi.mocked(authClient.signOut).mockResolvedValue(undefined);
 
       await service.logout();
 
@@ -754,14 +786,107 @@ describe('AuthService', () => {
   });
 
   describe('session initialization', () => {
+    function createServiceWithInit(): AuthService {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          AuthService,
+          {provide: Router, useValue: routerSpy},
+          {provide: CONVEX, useValue: convexClientMock},
+          {provide: AUTH_CLIENT, useValue: authClient as unknown as AuthClient},
+          {provide: BraToastService, useValue: toastSpy},
+        ],
+      });
+      const created = TestBed.inject(AuthService);
+      attachTestQueries(created);
+      return created;
+    }
+
+    it('retries a transient getSession backend error instead of settling as logged out', async () => {
+      const session = {
+        user: {email: 'valid@example.com', name: 'Valid User'},
+        session: {id: 'session-123'},
+      };
+      // A returned {data: null, error} with NO retryable keyword in its message:
+      // recovery must come from promoting the returned error to a throw, not
+      // from string-matching the message.
+      vi.mocked(authClient.getSession)
+        .mockReset()
+        .mockResolvedValueOnce({data: null, error: {status: 503}})
+        .mockResolvedValueOnce({data: session, error: null});
+      // Keep the user query resolved so missing-user repair short-circuits.
+      userSignal.set({
+        _id: 'u1' as unknown,
+        name: 'Valid User',
+        _creationTime: 1,
+      } as UserModel);
+
+      vi.useFakeTimers();
+      try {
+        const initService = createServiceWithInit();
+
+        // Flush the first attempt: the transient error must NOT settle auth into
+        // a confident "unauthenticated" state — the whole point of the fix.
+        await vi.advanceTimersByTimeAsync(0);
+        expect(initService.authInitialized()).toBe(false);
+        expect(initService.isAuthenticated()).toBe(false);
+
+        // Advance through the first retry backoff (delaysMs[1] = 500ms).
+        await vi.advanceTimersByTimeAsync(500);
+
+        expect(authClient.getSession).toHaveBeenCalledTimes(2);
+        expect(initService.authInitialized()).toBe(true);
+        expect(initService.isAuthenticated()).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('settles as unauthenticated when getSession returns no session and no error', async () => {
+      vi.mocked(authClient.getSession)
+        .mockReset()
+        .mockResolvedValue({data: null, error: null});
+
+      const initService = createServiceWithInit();
+
+      await vi.waitFor(() => {
+        expect(initService.authInitialized()).toBe(true);
+      });
+      // A genuine "no session" must settle immediately without retrying.
+      expect(authClient.getSession).toHaveBeenCalledTimes(1);
+      expect(initService.isAuthenticated()).toBe(false);
+    });
+
+    it('exhausts bounded retries on a persistent backend error, then fails closed', async () => {
+      vi.mocked(authClient.getSession)
+        .mockReset()
+        .mockResolvedValue({data: null, error: {status: 503}});
+
+      vi.useFakeTimers();
+      try {
+        const initService = createServiceWithInit();
+
+        // Drain every backoff window: delaysMs = [0, 500, 1000, 2000, 4000].
+        await vi.advanceTimersByTimeAsync(0 + 500 + 1000 + 2000 + 4000 + 10);
+
+        // Bounded to five attempts — no infinite retry loop.
+        expect(authClient.getSession).toHaveBeenCalledTimes(5);
+        // Terminal fail-closed: guards are released (initialized) and the user
+        // is treated as unauthenticated only after retries are exhausted.
+        expect(initService.authInitialized()).toBe(true);
+        expect(initService.isAuthenticated()).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('ignores a stale initSession result after logout wins the race', async () => {
       const staleSession = {
         user: {id: '123', email: 'stale@example.com', name: 'Stale Session'},
         session: {id: 'session-123'},
       };
       let resolveGetSession:
-        | ((value: {data: typeof staleSession; error: null}) => void)
-        | undefined;
+        ((value: {data: typeof staleSession; error: null}) => void) | undefined;
       const pendingGetSession = new Promise<{
         data: typeof staleSession;
         error: null;
@@ -943,6 +1068,86 @@ describe('AuthService', () => {
 
       expect(mutationMock).toHaveBeenCalledTimes(1);
     });
+
+    it('terminates the repair loop instead of polling forever when the current-user query errors persistently', async () => {
+      vi.useFakeTimers();
+      try {
+        const session = {
+          user: {email: 'session@example.com', name: 'Session User'},
+          session: {id: 'session-123'},
+        };
+
+        vi.mocked(authClient.getSession).mockResolvedValue({
+          data: session,
+          error: null,
+        });
+        setAuthInitialized(true);
+        // `injectQuery` clears `isLoading` and leaves `data` undefined when a
+        // fresh subscription rejects — the exact stuck state that used to loop
+        // forever as 'pending'.
+        userLoadingSignal.set(false);
+        userSignal.set(undefined as unknown as UserModel | null);
+        userErrorSignal.set(new Error('profile query failed'));
+
+        await service.refreshSessionFromServer({syncUser: false});
+        // Backoff caps at 1s; advance well past the bounded retry budget.
+        await vi.advanceTimersByTimeAsync(10_000);
+
+        // Repair mutation is never attempted while the query is broken...
+        expect(mutationMock).not.toHaveBeenCalled();
+        // ...and the loop gives up rather than spinning for the session lifetime.
+        expect(logger.warn).toHaveBeenCalledWith(
+          expect.stringContaining('Abandoning missing app-user repair'),
+          expect.any(Error),
+        );
+
+        // Proof of termination: no further work happens after the bail-out.
+        vi.mocked(logger.warn).mockClear();
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(logger.warn).not.toHaveBeenCalled();
+        expect(mutationMock).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('still repairs a genuinely missing app user after a transient current-user query error clears', async () => {
+      vi.useFakeTimers();
+      try {
+        const session = {
+          user: {email: 'session@example.com', name: 'Session User'},
+          session: {id: 'session-123'},
+        };
+
+        vi.mocked(authClient.getSession).mockResolvedValue({
+          data: session,
+          error: null,
+        });
+        setAuthInitialized(true);
+        userLoadingSignal.set(false);
+        userSignal.set(undefined as unknown as UserModel | null);
+        userErrorSignal.set(new Error('transient blip'));
+
+        await service.refreshSessionFromServer({syncUser: false});
+        // A few errored polls, comfortably under the bail-out bound.
+        await vi.advanceTimersByTimeAsync(200);
+        expect(mutationMock).not.toHaveBeenCalled();
+
+        // Query recovers and confirms the app user is genuinely missing (null).
+        userErrorSignal.set(undefined);
+        userSignal.set(null);
+        await vi.advanceTimersByTimeAsync(1000);
+
+        expect(mutationMock).toHaveBeenCalledTimes(1);
+        expect(mutationMock.mock.calls.at(-1)?.[1]).toEqual({});
+        expect(logger.warn).not.toHaveBeenCalledWith(
+          expect.stringContaining('Abandoning missing app-user repair'),
+          expect.anything(),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   describe('confirmVerification', () => {
@@ -1075,7 +1280,6 @@ describe('AuthService', () => {
       await expect(
         service.handleOAuthCallback('ott-token', {
           navigateOnSuccess: false,
-          syncUserToApp: true,
         }),
       ).resolves.toEqual({requiresSocialSignupCompletion: true});
 
@@ -1124,7 +1328,6 @@ describe('AuthService', () => {
         await expect(
           service.handleOAuthCallback('ott-token', {
             navigateOnSuccess: false,
-            syncUserToApp: true,
           }),
         ).rejects.toEqual(new SocialAuthBlockedError(blockedReason));
 
@@ -1269,7 +1472,7 @@ describe('AuthService', () => {
     }
 
     it('should process a valid LOGOUT message and clear auth state', async () => {
-      vi.mocked(authClient.signOut).mockResolvedValue(undefined as never);
+      vi.mocked(authClient.signOut).mockResolvedValue(undefined);
 
       dispatchMessage({type: 'LOGOUT'});
 

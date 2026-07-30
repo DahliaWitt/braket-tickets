@@ -102,7 +102,19 @@ import {queryLoadState} from '@/utils/resource';
                   }
                 </div>
               } @else {
-                <app-empty-state title="No communities found" />
+                <app-empty-state
+                  data-testid="community-picker-empty"
+                  title="no communities listed yet"
+                  description="new communities land here first — check back soon."
+                >
+                  <a
+                    data-testid="community-picker-empty-home"
+                    routerLink="/"
+                    class="mt-2 inline-flex min-h-6 items-center font-mono text-xs tracking-widest text-primary uppercase transition-colors hover:text-primary/80"
+                  >
+                    &larr; back home
+                  </a>
+                </app-empty-state>
               }
             </div>
           }
@@ -112,9 +124,12 @@ import {queryLoadState} from '@/utils/resource';
               data-testid="community-events-error"
               class="flex flex-col items-center justify-center gap-4 py-20"
             >
-              <z-icon zType="circle-alert" class="h-12 w-12 text-destructive" />
+              <z-icon
+                zType="circle-alert"
+                class="h-12 w-12 text-destructive-text"
+              />
               <h1
-                class="font-display text-2xl font-bold tracking-tight text-destructive uppercase"
+                class="font-display text-2xl font-bold tracking-tight text-destructive-text uppercase"
               >
                 Community Not Found
               </h1>
@@ -208,7 +223,19 @@ import {queryLoadState} from '@/utils/resource';
               </div>
             }
             <div data-testid="community-events-empty">
-              <app-empty-state title="No upcoming events found" />
+              <app-empty-state
+                title="nothing coming up"
+                description="no events on the calendar yet — check back soon."
+              >
+                <a
+                  data-testid="community-events-empty-browse"
+                  routerLink="/events"
+                  class="mt-2 inline-flex min-h-6 items-center gap-1 font-mono text-xs tracking-widest text-primary uppercase transition-colors hover:text-primary/80"
+                >
+                  browse other communities
+                  <span aria-hidden="true">&rarr;</span>
+                </a>
+              </app-empty-state>
             </div>
           }
 

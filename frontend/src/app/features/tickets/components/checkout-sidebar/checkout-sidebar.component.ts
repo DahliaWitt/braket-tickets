@@ -14,7 +14,7 @@ import {
   type ElementRef,
   viewChild,
 } from '@angular/core';
-import {CurrencyPipe} from '@angular/common';
+import {CurrencyPipe, NgTemplateOutlet} from '@angular/common';
 import {Router, RouterLink} from '@angular/router';
 import {A11yModule} from '@angular/cdk/a11y';
 import {form, FormField, required, email} from '@angular/forms/signals';
@@ -37,6 +37,7 @@ import {type EventDetail} from '@/core/models/event.types';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     CurrencyPipe,
+    NgTemplateOutlet,
     RouterLink,
     A11yModule,
     FormField,
@@ -60,6 +61,10 @@ export class CheckoutSidebarComponent {
   readonly isGuest = input(false);
   readonly guestEmail = input<string | null>(null);
   readonly guestEmailCollected = output<string>();
+
+  // Guest terms-of-service assent (BRA-455) — parent owns the state
+  readonly termsAccepted = input(false);
+  readonly termsAcceptedChange = output<boolean>();
 
   // Guest email form state
   private readonly guestEmailSubmitted = signal(false);
@@ -183,6 +188,13 @@ export class CheckoutSidebarComponent {
     this.customAmountInput.emit(value);
   }
 
+  protected onTermsToggle(event: globalThis.Event): void {
+    const target = event.target;
+    if (target instanceof HTMLInputElement) {
+      this.termsAcceptedChange.emit(target.checked);
+    }
+  }
+
   readonly maxTicketsNotice = computed(() => {
     const remaining = this.maxTickets();
     const base =
@@ -238,10 +250,16 @@ export class CheckoutSidebarComponent {
     return Math.max(base * 3, 200);
   });
 
-  // Slider max for community tier: the regular price (ensures users pick "less than regular")
+  // Slider max for community tier: the regular price (ensures users pick "less
+  // than regular"), capped at slidingScaleMax so the slider never offers an
+  // amount the backend (validateTierPricing) rejects. slidingScaleMax is
+  // optional — undefined means no ceiling, mirroring the backend guard.
   readonly communitySliderMax = computed(() => {
     const evt = this.event();
     if (!evt) return 100;
-    return (evt.price || 0) / 100;
+    const priceDollars = (evt.price || 0) / 100;
+    const maxCents = evt.slidingScaleMax;
+    if (maxCents === undefined) return priceDollars;
+    return Math.min(priceDollars, maxCents / 100);
   });
 }

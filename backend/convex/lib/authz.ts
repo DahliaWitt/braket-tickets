@@ -15,7 +15,6 @@ export const PERMISSIONS = definePermissions({
   platform: {admin: true},
   community: {view: true, members: true, admin: true},
   event: {
-    view: true,
     purchase: true,
     roster: true,
     create: true,
@@ -25,23 +24,42 @@ export const PERMISSIONS = definePermissions({
   },
 });
 
+// There is no `event:view` permission. Read access to an event is NOT a single
+// grant: publicly visible published events need no permission; published
+// private events in live communities resolve through `event:purchase` (see
+// `resolvePurchaseAccessForUser`); and restricted-visibility events (draft,
+// cancelled, orphaned, or in an unpublished community) are gated in
+// `canViewEvent` on `event:manage`/`event:edit` — i.e. only organizers who can
+// modify the event (community admins, and root admins via the global fallback).
+//
+// This deliberately withholds restricted-event reads from `member` and
+// `community_scanner`. An earlier design granted those roles an `event:view`
+// permission that was consulted only by the restricted branch, which let every
+// vetted member and door-staff scanner read the full detail of a community's
+// unpublished/cancelled events — inverting the visibility ladder (a scanner is
+// already denied a published *private* event, yet gained the strictly-less-
+// public draft). Gating on manage/edit closes that leak and, unlike a view
+// permission, cannot be reopened by stale materialized permission rows: members
+// and scanners never held manage/edit. Scanners still work *published* events
+// via `event:roster`/`event:scan`, both lifecycle-gated to `published` in
+// `canViewEventRoster`/`canScanEvent`.
 export const ROLES = defineRoles(PERMISSIONS, {
   root_admin: {
     platform: ['admin'],
     community: ['view', 'members', 'admin'],
-    event: ['view', 'purchase', 'roster', 'create', 'edit', 'manage', 'scan'],
+    event: ['purchase', 'roster', 'create', 'edit', 'manage', 'scan'],
   },
   community_admin: {
     community: ['view', 'members', 'admin'],
-    event: ['view', 'purchase', 'roster', 'create', 'edit', 'manage', 'scan'],
+    event: ['purchase', 'roster', 'create', 'edit', 'manage', 'scan'],
   },
   community_scanner: {
     community: ['view'],
-    event: ['view', 'roster', 'scan'],
+    event: ['roster', 'scan'],
   },
   member: {
     community: ['view'],
-    event: ['view', 'purchase'],
+    event: ['purchase'],
   },
 });
 
@@ -116,16 +134,33 @@ async function listRoleUserIds(
   return assignments.map((assignment) => assignment.userId);
 }
 
+async function fetchOrganizerMemberUserIds(
+  ctx: AuthzCtx,
+  organizerId: Id<'organizers'>,
+): Promise<string[]> {
+  return listRoleUserIds(ctx, 'member', organizerScope(organizerId));
+}
+
+function warnIfApproachingMemberCap(
+  organizerId: Id<'organizers'>,
+  memberCount: number,
+): void {
+  if (memberCount >= AUTHZ_RELATION_QUERY_WARN_THRESHOLD) {
+    logger.warn(
+      'authz',
+      `Community ${organizerId} approaching member cap: ${memberCount}/${AUTHZ_RELATION_QUERY_CAP}`,
+    );
+  }
+}
+
 export async function listOrganizerMembers(
   ctx: AuthzCtx,
   organizerId: Id<'organizers'>,
 ): Promise<string[]> {
-  const userIds = await listRoleUserIds(
-    ctx,
-    'member',
-    organizerScope(organizerId),
-  );
+  const userIds = await fetchOrganizerMemberUserIds(ctx, organizerId);
 
+  // Throw before warning: an at-cap community must fail hard here, matching the
+  // original behavior where the cap throw pre-empts the "approaching cap" warn.
   if (userIds.length >= AUTHZ_RELATION_QUERY_CAP) {
     throwAppError(
       'MEMBER_CAP_EXCEEDED',
@@ -133,14 +168,31 @@ export async function listOrganizerMembers(
     );
   }
 
-  if (userIds.length >= AUTHZ_RELATION_QUERY_WARN_THRESHOLD) {
-    logger.warn(
-      'authz',
-      `Community ${organizerId} approaching member cap: ${userIds.length}/${AUTHZ_RELATION_QUERY_CAP}`,
-    );
-  }
+  warnIfApproachingMemberCap(organizerId, userIds.length);
 
   return userIds;
+}
+
+/**
+ * Count an organizer's members for callers that only need the size (e.g. display
+ * counts), without enumerating them for downstream use.
+ *
+ * Unlike {@link listOrganizerMembers}, this never throws `MEMBER_CAP_EXCEEDED`
+ * when an organizer reaches the enumeration cap. The count is clamped to
+ * {@link AUTHZ_RELATION_QUERY_CAP} so a single at-cap community cannot break a
+ * page that aggregates member counts across many organizers (e.g. the
+ * trust-links management view). Below the cap the count is exact; at or above
+ * the cap it is reported as the cap.
+ */
+export async function countOrganizerMembers(
+  ctx: AuthzCtx,
+  organizerId: Id<'organizers'>,
+): Promise<number> {
+  const userIds = await fetchOrganizerMemberUserIds(ctx, organizerId);
+
+  warnIfApproachingMemberCap(organizerId, userIds.length);
+
+  return Math.min(userIds.length, AUTHZ_RELATION_QUERY_CAP);
 }
 
 export async function listDirectTrustedOrganizers(

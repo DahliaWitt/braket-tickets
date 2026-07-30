@@ -1,4 +1,20 @@
-import type {OverlayRef} from '@angular/cdk/overlay';
+/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion --
+   These specs cast vi.fn mocks to the callback/return types the dialog API
+   expects; tsconfig.spec.json requires the casts even though the lint config
+   considers them redundant. */
+import {
+  Overlay,
+  OverlayModule,
+  type OverlayRef,
+} from '@angular/cdk/overlay';
+import {ComponentPortal, PortalModule} from '@angular/cdk/portal';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  PLATFORM_ID,
+  provideZonelessChangeDetection,
+} from '@angular/core';
+import {TestBed} from '@angular/core/testing';
 import {Subject} from 'rxjs';
 import {vi} from 'vitest';
 import {BraDialogOptions, type OnClickCallback} from './dialog.component';
@@ -23,6 +39,7 @@ interface DialogContainerStub {
 
 interface OverlayStub {
   outsidePointerEvents: ReturnType<typeof vi.fn>;
+  keydownEvents: ReturnType<typeof vi.fn>;
   hasAttached: ReturnType<typeof vi.fn>;
   detachBackdrop: ReturnType<typeof vi.fn>;
   dispose: ReturnType<typeof vi.fn>;
@@ -44,6 +61,7 @@ const createDialogRefHarness = (
   configOverrides: Partial<BraDialogOptions<DialogContent, unknown>> = {},
 ) => {
   const outsidePointerEvents$ = new Subject<PointerEvent>();
+  const keydownEvents$ = new Subject<KeyboardEvent>();
   const hostElement = document.createElement('div');
   const contentInstance: DialogContent = {id: 'content'};
 
@@ -55,6 +73,7 @@ const createDialogRefHarness = (
 
   const overlayRef: OverlayStub = {
     outsidePointerEvents: vi.fn(() => outsidePointerEvents$.asObservable()),
+    keydownEvents: vi.fn(() => keydownEvents$.asObservable()),
     hasAttached: vi.fn(() => true),
     detachBackdrop: vi.fn(),
     dispose: vi.fn(),
@@ -79,6 +98,7 @@ const createDialogRefHarness = (
     overlayRef,
     container,
     outsidePointerEvents$,
+    keydownEvents$,
     contentInstance,
     hostElement,
   };
@@ -112,14 +132,39 @@ describe('BraDialogRef', () => {
     expect(harness.overlayRef.dispose).not.toHaveBeenCalled();
   });
 
-  it('should close on Escape key in browser mode', async () => {
+  it('should close on Escape delivered through the overlay keydown stream', async () => {
+    vi.useFakeTimers();
+    const harness = createDialogRefHarness('browser');
+
+    harness.keydownEvents$.next(new KeyboardEvent('keydown', {key: 'Escape'}));
+    await vi.runAllTimersAsync();
+
+    expect(harness.overlayRef.keydownEvents).toHaveBeenCalledTimes(1);
+    expect(harness.overlayRef.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('should ignore non-Escape keys on the overlay keydown stream', async () => {
+    vi.useFakeTimers();
+    const harness = createDialogRefHarness('browser');
+
+    harness.keydownEvents$.next(new KeyboardEvent('keydown', {key: 'Enter'}));
+    harness.keydownEvents$.next(new KeyboardEvent('keydown', {key: 'a'}));
+    await vi.runAllTimersAsync();
+
+    expect(harness.overlayRef.dispose).not.toHaveBeenCalled();
+  });
+
+  it('should not close on a raw document Escape (no document-level listener)', async () => {
+    // Regression: the dialog previously listened on `document` for keydown, so
+    // an Escape anywhere — including inside an inner overlay or a lower stacked
+    // dialog — closed it. It must now react only to its own overlay's stream.
     vi.useFakeTimers();
     const harness = createDialogRefHarness('browser');
 
     document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'}));
     await vi.runAllTimersAsync();
 
-    expect(harness.overlayRef.dispose).toHaveBeenCalledTimes(1);
+    expect(harness.overlayRef.dispose).not.toHaveBeenCalled();
   });
 
   it('should not register browser-only listeners on server platform', async () => {
@@ -237,5 +282,153 @@ describe('BraDialogRef', () => {
     expect(harness.overlayRef.detachBackdrop).not.toHaveBeenCalled();
     expect(harness.overlayRef.dispose).toHaveBeenCalledTimes(1);
     expect(afterClosedValues).toEqual(['first']);
+  });
+});
+
+@Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: '',
+})
+class OverlayBodyComponent {}
+
+/**
+ * Integration coverage using the real CDK OverlayKeyboardDispatcher, which
+ * routes a document keydown to the topmost attached overlay only. These prove
+ * the Escape-scoping fix end-to-end: a lone dialog closes, an inner overlay (an
+ * open z-select dropdown) intercepts Escape so the dialog stays open, and only
+ * the topmost of stacked dialogs closes.
+ */
+describe('BraDialogRef Escape scoping with real CDK overlays', () => {
+  let overlay: Overlay;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      imports: [OverlayModule, PortalModule, OverlayBodyComponent],
+      providers: [
+        provideZonelessChangeDetection(),
+        {provide: PLATFORM_ID, useValue: 'browser'},
+      ],
+    });
+    overlay = TestBed.inject(Overlay);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  // Attaching a portal registers the overlay with the keyboard dispatcher, so
+  // `keydownEvents()` receives document keydowns while it is the topmost overlay.
+  const openDialog = () => {
+    const overlayRef = overlay.create({
+      positionStrategy: overlay.position().global(),
+      hasBackdrop: false,
+    });
+    overlayRef.attach(new ComponentPortal(OverlayBodyComponent));
+
+    const hostElement = document.createElement('div');
+    const container = {
+      cancelTriggered: createTestOutput<void>(),
+      okTriggered: createTestOutput<void>(),
+      getNativeElement: () => hostElement,
+    };
+
+    const dialogRef = new BraDialogRef(
+      overlayRef,
+      new BraDialogOptions(),
+      container as never,
+      'browser' as unknown as object,
+    );
+
+    let closed = false;
+    dialogRef.afterClosed$.subscribe(() => {
+      closed = true;
+    });
+
+    return {
+      dialogRef,
+      overlayRef,
+      isClosed: () => closed,
+    };
+  };
+
+  // Opens a bare CDK overlay on top of the dialog, whose panel stops keydown
+  // propagation on Escape — modelling the fixed z-select dropdown, which uses
+  // `(keydown.{...}.prevent-with-stop)` so a consumed Escape never bubbles to
+  // the CDK keyboard dispatcher on <body>.
+  const openInnerSelectLikeOverlay = (): {ref: OverlayRef; panel: HTMLElement} => {
+    const innerRef = overlay.create({
+      positionStrategy: overlay.position().global(),
+      hasBackdrop: false,
+    });
+    innerRef.attach(new ComponentPortal(OverlayBodyComponent));
+
+    const panel = document.createElement('div');
+    panel.tabIndex = -1;
+    panel.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    });
+    innerRef.overlayElement.appendChild(panel);
+    return {ref: innerRef, panel};
+  };
+
+  // The CDK OverlayKeyboardDispatcher listens on <body>, so a realistic Escape
+  // must bubble up to <body> to be routed to the topmost overlay.
+  const dispatchEscapeFrom = (target: EventTarget) => {
+    target.dispatchEvent(
+      new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}),
+    );
+  };
+
+  it('closes a single open dialog on Escape', async () => {
+    vi.useFakeTimers();
+    const dialog = openDialog();
+
+    dispatchEscapeFrom(document.body);
+    await vi.runAllTimersAsync();
+
+    expect(dialog.isClosed()).toBe(true);
+
+    dialog.overlayRef.dispose();
+  });
+
+  it('does not close the dialog when an inner select dropdown consumes Escape', async () => {
+    vi.useFakeTimers();
+    const dialog = openDialog();
+    const inner = openInnerSelectLikeOverlay();
+
+    // Escape originates inside the open dropdown; the dropdown consumes it and
+    // stops propagation, so it never reaches the dialog's overlay.
+    dispatchEscapeFrom(inner.panel);
+    await vi.runAllTimersAsync();
+
+    expect(dialog.isClosed()).toBe(false);
+
+    inner.ref.dispose();
+    dialog.overlayRef.dispose();
+  });
+
+  it('closes only the topmost of stacked dialogs on Escape', async () => {
+    vi.useFakeTimers();
+    const lower = openDialog();
+    const upper = openDialog();
+
+    dispatchEscapeFrom(document.body);
+    await vi.runAllTimersAsync();
+
+    expect(upper.isClosed()).toBe(true);
+    expect(lower.isClosed()).toBe(false);
+
+    // A second Escape now reaches the previously-lower dialog, which is topmost.
+    dispatchEscapeFrom(document.body);
+    await vi.runAllTimersAsync();
+
+    expect(lower.isClosed()).toBe(true);
+
+    lower.overlayRef.dispose();
+    upper.overlayRef.dispose();
   });
 });

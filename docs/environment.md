@@ -253,7 +253,7 @@ Sandbox fixture reseed (local/staging):
 pnpm seed:fixture
 
 # Staging
-doppler run --config stg -- pnpm seed:fixture
+pnpm seed:sandbox:fixture
 ```
 
 Sandbox contract tests (deterministic backend lane, no Stripe iframe automation):

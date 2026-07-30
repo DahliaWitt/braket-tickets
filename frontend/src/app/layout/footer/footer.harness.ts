@@ -1,4 +1,4 @@
-import { ComponentHarness } from '@angular/cdk/testing';
+import {ComponentHarness} from '@angular/cdk/testing';
 
 export class FooterHarness extends ComponentHarness {
   static hostSelector = 'app-footer';
@@ -6,8 +6,13 @@ export class FooterHarness extends ComponentHarness {
   private readonly getFooterElement = this.locatorFor('footer');
   private readonly getNavElement = this.locatorFor('nav');
   private readonly getNavLinks = this.locatorForAll('nav a');
-  private readonly getFeedbackButton = this.locatorFor('nav button[type="button"]');
-  private readonly getAboutLink = this.locatorForOptional('a[routerLink="/about"]');
+  private readonly getNavActions = this.locatorForAll('nav a, nav button');
+  private readonly getFeedbackButton = this.locatorFor(
+    'nav button[type="button"]',
+  );
+  private readonly getAboutLink = this.locatorForOptional(
+    'a[routerLink="/about"]',
+  );
 
   async clickFeedback(): Promise<void> {
     const button = await this.getFeedbackButton();
@@ -27,6 +32,26 @@ export class FooterHarness extends ComponentHarness {
     const nav = await this.getNavElement();
     const ariaLabel = await nav.getAttribute('aria-label');
     return ariaLabel === 'Footer';
+  }
+
+  async navActionsUseForegroundToken(): Promise<boolean> {
+    const actions = await this.getNavActions();
+    const classNames = await Promise.all(
+      actions.map((action) => action.getAttribute('class')),
+    );
+    return classNames.every((classes) =>
+      classes?.split(/\s+/u).includes('text-foreground'),
+    );
+  }
+
+  async navActionsHaveHoverAffordance(): Promise<boolean> {
+    const actions = await this.getNavActions();
+    const classNames = await Promise.all(
+      actions.map((action) => action.getAttribute('class')),
+    );
+    return classNames.every((classes) =>
+      classes?.split(/\s+/u).includes('hover:underline'),
+    );
   }
 
   async getAboutHref(): Promise<string | null> {

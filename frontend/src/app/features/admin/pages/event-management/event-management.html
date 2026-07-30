@@ -2,22 +2,54 @@
   class="min-h-screen space-y-8 bg-background p-6 font-sans text-foreground selection:bg-primary/30 md:p-10"
 >
   @if (isLoading()) {
-    <div class="space-y-4">
-      <div class="h-8 w-64 animate-pulse rounded-md bg-muted/60"></div>
-      <z-progress-bar [zIndeterminate]="true" />
+    <!-- Skeleton mirror of the loaded layout: header, summary cards, tabs, panel -->
+    <div
+      class="space-y-8"
+      data-testid="management-loading"
+      aria-busy="true"
+      aria-label="Loading event management"
+    >
+      <div
+        class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
+      >
+        <div class="space-y-3">
+          <z-skeleton class="h-4 w-28" />
+          <z-skeleton class="h-9 w-64" />
+          <z-skeleton class="h-4 w-48" />
+        </div>
+        <div class="flex gap-2">
+          <z-skeleton class="h-11 w-28" />
+          <z-skeleton class="h-11 w-28" />
+        </div>
+      </div>
+      <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        @for (i of [1, 2, 3, 4]; track i) {
+          <div class="space-y-4 rounded-lg border border-border bg-card/80 p-6">
+            <z-skeleton class="h-3 w-24" />
+            <z-skeleton class="h-8 w-20" />
+            <z-skeleton class="h-3 w-full" />
+          </div>
+        }
+      </div>
+      <div class="flex gap-6 overflow-x-auto border-b border-border pb-3">
+        @for (i of [1, 2, 3, 4, 5]; track i) {
+          <z-skeleton class="h-4 w-20 shrink-0" />
+        }
+      </div>
+      <z-skeleton class="h-64 w-full" />
     </div>
   } @else if (errorMessage()) {
     <div
       data-testid="management-load-error"
       role="alert"
       aria-live="assertive"
-      class="flex flex-col items-start gap-4 rounded-xl border border-destructive/40 bg-destructive/10 p-6 text-destructive"
+      class="flex flex-col items-start gap-4 rounded-lg border border-destructive/40 bg-destructive/10 p-6 text-destructive-text"
     >
       <p>{{ errorMessage() }}</p>
       <a
         [routerLink]="backLink()"
         [queryParams]="routeQueryParams() ?? undefined"
-        class="group flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
+        class="group flex min-h-6 items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
       >
         <span class="transform transition-transform group-hover:-translate-x-1"
           >←</span
@@ -33,7 +65,7 @@
         <a
           [routerLink]="backLink()"
           [queryParams]="routeQueryParams() ?? undefined"
-          class="group flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
+          class="group flex min-h-6 items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
         >
           <span
             class="transform transition-transform group-hover:-translate-x-1"
@@ -80,42 +112,46 @@
     <!-- Ticket Sales Status Banner -->
     @if (isSoldOut()) {
       <div
-        class="flex items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/10 p-4"
+        class="flex items-center gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-4"
       >
-        <z-icon zType="circle-alert" class="text-destructive" />
+        <z-icon zType="circle-alert" class="text-destructive-text" />
         <div>
-          <p class="font-display tracking-wider text-destructive uppercase">
+          <p
+            class="font-display tracking-wider text-destructive-text uppercase"
+          >
             Sold Out
           </p>
-          <p class="font-mono text-xs text-destructive/70">
+          <p class="font-mono text-xs text-destructive-text">
             All tickets have been sold for this event.
           </p>
         </div>
       </div>
     } @else if (ticketSalesStatus() === 'paused') {
       <div
-        class="flex items-center gap-3 rounded-xl border border-warning/40 bg-warning/10 p-4"
+        class="flex items-center gap-3 rounded-lg border border-warning/40 bg-warning/10 p-4"
       >
         <z-icon zType="clock" class="text-warning" />
         <div>
           <p class="font-display tracking-wider text-warning uppercase">
             Ticket Sales Paused
           </p>
-          <p class="font-mono text-xs text-warning/70">
+          <p class="font-mono text-xs text-warning">
             Users cannot purchase tickets while sales are paused.
           </p>
         </div>
       </div>
     } @else if (ticketSalesStatus() === 'ended') {
       <div
-        class="flex items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/10 p-4"
+        class="flex items-center gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-4"
       >
-        <z-icon zType="circle-alert" class="text-destructive" />
+        <z-icon zType="circle-alert" class="text-destructive-text" />
         <div>
-          <p class="font-display tracking-wider text-destructive uppercase">
+          <p
+            class="font-display tracking-wider text-destructive-text uppercase"
+          >
             Ticket Sales Ended
           </p>
-          <p class="font-mono text-xs text-destructive/70">
+          <p class="font-mono text-xs text-destructive-text">
             Ticket sales have been permanently ended for this event.
           </p>
         </div>
@@ -125,7 +161,13 @@
     <!-- Payout Status Banner -->
     @if (payoutStatus(); as status) {
       <z-alert
-        [zType]="status.state === 'paid' ? 'success' : 'info'"
+        [zType]="
+          status.state === 'paid'
+            ? 'success'
+            : status.state === 'error'
+              ? 'warning'
+              : 'info'
+        "
         zAppearance="soft"
         [zTitle]="
           status.state === 'paid'
@@ -134,7 +176,9 @@
               ? 'Payout Scheduled'
               : status.state === 'processing'
                 ? 'Payout Processing'
-                : 'Payout Policy'
+                : status.state === 'error'
+                  ? 'Payout Needs Attention'
+                  : 'Payout Policy'
         "
         [zDescription]="payoutStatusDescription()"
       />
@@ -151,6 +195,7 @@
           [soldCount]="data.soldCount"
           [heldCount]="data.heldCount"
           [totalTickets]="data.totalTickets"
+          [externalCount]="data.imported.total"
         />
       </z-card>
 
@@ -416,6 +461,7 @@
         [eventDate]="data.event.date"
         [purchases]="purchases()"
         [guests]="guests()"
+        [importedEntries]="importedTickets()"
         [reloadToken]="reloadToken()"
         (dataChanged)="reloadData()"
       />
@@ -480,6 +526,6 @@
       </div>
     }
   } @else {
-    <div class="font-mono text-muted-foreground">No event selected.</div>
+    <app-empty-state title="no event selected" />
   }
 </div>

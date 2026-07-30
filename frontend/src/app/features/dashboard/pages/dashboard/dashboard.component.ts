@@ -21,12 +21,15 @@ import {
   type BuyerPricingInput,
 } from '@shared/pricing/pricing-summary';
 import {EventDatePipe} from '@/utils/event-date.pipe';
+import {EventEndTimePipe} from '@/utils/event-end-time.pipe';
+import {outlineMonoCta} from '@/features/shared/outline-cta';
 
 @Component({
   selector: 'app-dashboard',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     EventDatePipe,
+    EventEndTimePipe,
     RouterLink,
     NgOptimizedImage,
     ContentLayoutComponent,
@@ -39,6 +42,18 @@ import {EventDatePipe} from '@/utils/event-date.pipe';
 })
 export class DashboardComponent {
   auth = inject(AuthService);
+
+  // Outline-mono CTA treatments (shared helper — see features/shared/outline-cta).
+  // Layout classes are composed here so each `[class]` binding is self-contained.
+  /** Community "apply" chip in the discover grid (group-hover fill). */
+  protected readonly applyChipClass = `flex-shrink-0 ${outlineMonoCta({trigger: 'group', size: 'sm'})}`;
+  /** Compact community "apply" chip in the sidebar list (group-hover fill). */
+  protected readonly compactApplyChipClass = `flex-shrink-0 ${outlineMonoCta({trigger: 'group', size: 'xs'})}`;
+  /** Vetting "revise answers" resubmit link. */
+  protected readonly resubmitCtaClass = `inline-flex w-fit items-center ${outlineMonoCta({trigger: 'hover', size: 'md'})}`;
+  /** Featured-event "get tickets" button. */
+  protected readonly getTicketsCtaClass = `inline-block ${outlineMonoCta({trigger: 'hover', size: 'lg'})}`;
+
   private dashboardData = inject(DashboardDataService);
   private dashboardPageData = inject(DashboardPageDataService);
   private readonly browser = inject(BrowserPlatformService);
@@ -266,10 +281,17 @@ export class DashboardComponent {
 
   // Next event per community
   readonly nextEventByOrganizer = computed(() => {
-    const map = new Map<string, {title: string; date: string}>();
+    const map = new Map<
+      string,
+      {title: string; date: string; endDate?: string}
+    >();
     for (const event of this.sortedRawEvents()) {
       if (event.organizerId && !map.has(event.organizerId)) {
-        map.set(event.organizerId, {title: event.title, date: event.date});
+        map.set(event.organizerId, {
+          title: event.title,
+          date: event.date,
+          endDate: event.endDate,
+        });
       }
     }
     return map;
@@ -282,8 +304,8 @@ export class DashboardComponent {
 
   /**
    * View Model for Dashboard Events.
-   * Pre-calculates status, color, and ability to purchase for each event.
-   * This removes complex logic from the template and runs only when data changes.
+   * Pre-calculates whether each event is purchasable: backend purchase access
+   * granted, not sold out, sales active, and per-user ticket limit not hit.
    */
   readonly dashboardEvents = computed(() => {
     const events = this.rawEvents();
@@ -291,41 +313,17 @@ export class DashboardComponent {
 
     return events.map((event) => {
       const availability = availabilityMap[event._id];
+      const isLimitReached =
+        (availability?.userTicketCount ?? 0) >= (event.maxTicketsPerUser ?? 4);
+      const canPurchase =
+        availability != null &&
+        availability.purchaseAccess.allowed &&
+        !availability.isSoldOut &&
+        availability.ticketSalesStatus !== 'paused' &&
+        availability.ticketSalesStatus !== 'ended' &&
+        !isLimitReached;
 
-      let status: {message: string; color: string} | null = null;
-      let canPurchase = false;
-      let isLimitReached = false;
-
-      if (availability) {
-        // Calculate Limit Reached
-        const count = availability.userTicketCount ?? 0;
-        isLimitReached = count >= (event.maxTicketsPerUser ?? 4);
-
-        // Calculate Status
-        if (availability.isSoldOut) {
-          status = {message: 'Sold Out', color: 'red'};
-        } else if (availability.ticketSalesStatus === 'paused') {
-          status = {message: 'Ticket Sales Are Paused', color: 'yellow'};
-        } else if (availability.ticketSalesStatus === 'ended') {
-          status = {message: 'Ticket Sales Have Ended', color: 'red'};
-        } else if (isLimitReached) {
-          status = {
-            message: `Limit Reached (${count} owned)`,
-            color: 'success',
-          };
-        }
-
-        if (availability.purchaseAccess.allowed && !isLimitReached && !status) {
-          canPurchase = true;
-        }
-      }
-
-      return {
-        ...event,
-        uiStatus: status,
-        isLimitReached,
-        canPurchase,
-      };
+      return {...event, canPurchase};
     });
   });
 

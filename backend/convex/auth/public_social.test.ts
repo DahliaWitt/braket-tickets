@@ -1,4 +1,6 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
+import {APIError} from 'better-auth/api';
+import {ConvexError} from 'convex/values';
 
 const adapterFindManyMock = vi.hoisted(() => vi.fn());
 
@@ -22,6 +24,27 @@ type BetterAuthUser = NonNullable<
   Awaited<ReturnType<typeof authComponent.safeGetAuthUser>>
 >;
 
+/**
+ * convex-test serializes a thrown `ConvexError`'s structured `data` to a JSON
+ * string across the mutation boundary (the real Convex client deserializes it
+ * back to an object for the frontend). Normalize both shapes for assertions.
+ */
+function parseAppErrorData(error: unknown): {code: string; message: string} {
+  const raw: unknown = (error as {data?: unknown}).data;
+  const parsed: unknown = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  if (
+    typeof parsed !== 'object' ||
+    parsed === null ||
+    typeof (parsed as {code?: unknown}).code !== 'string' ||
+    typeof (parsed as {message?: unknown}).message !== 'string'
+  ) {
+    throw new Error(
+      `Unexpected ConvexError data shape: ${JSON.stringify(raw)}`,
+    );
+  }
+  return parsed as {code: string; message: string};
+}
+
 describe('social auth public flows', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -32,6 +55,92 @@ describe('social auth public flows', () => {
     vi.restoreAllMocks();
     delete process.env.AUTH_BASE_URL;
     delete process.env.SITE_URL;
+  });
+
+  it('maps a last-account unlink APIError by machine code', async () => {
+    const t = convexTest();
+    const userId = (await t.mutation(api.testing.users.createUserDirectly, {
+      email: 'linked@example.com',
+      name: 'Linked User',
+      betterAuthUserId: 'ba-user-linked',
+      authEmailVerified: true,
+    })) as Id<'users'>;
+
+    const unlinkAccountMock = vi.fn().mockRejectedValue(
+      // Real code from better-auth account.mjs unlink-account; message rewritten
+      // to prove routing is by code, not substring.
+      APIError.from('BAD_REQUEST', {
+        code: 'FAILED_TO_UNLINK_LAST_ACCOUNT',
+        message: 'wording that would not match any legacy substring',
+      }),
+    );
+    vi.spyOn(authComponent, 'getAuth').mockResolvedValue({
+      auth: {api: {unlinkAccount: unlinkAccountMock}} as never,
+      headers: new Headers(),
+    });
+
+    const asUser = t.withIdentity({
+      subject: userId,
+      email: 'linked@example.com',
+      name: 'Linked User',
+    });
+
+    let caught: unknown;
+    try {
+      await asUser.mutation(api.auth.public.unlinkSocialAccount, {
+        provider: 'google',
+      });
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeInstanceOf(ConvexError);
+    const data = parseAppErrorData(caught);
+    expect(data.code).toBe('AUTH_UNLINK_ACCOUNT_FAILED');
+    expect(data.message).toBe('Cannot remove the last login method.');
+  });
+
+  it('maps an already-linked link APIError by machine code', async () => {
+    const t = convexTest();
+    const userId = (await t.mutation(api.testing.users.createUserDirectly, {
+      email: 'linked@example.com',
+      name: 'Linked User',
+      betterAuthUserId: 'ba-user-linked',
+      authEmailVerified: true,
+    })) as Id<'users'>;
+
+    const linkSocialAccountMock = vi.fn().mockRejectedValue(
+      APIError.from('BAD_REQUEST', {
+        code: 'SOCIAL_ACCOUNT_ALREADY_LINKED',
+        message: 'rewritten message with no matching substring',
+      }),
+    );
+    vi.spyOn(authComponent, 'getAuth').mockResolvedValue({
+      auth: {api: {linkSocialAccount: linkSocialAccountMock}} as never,
+      headers: new Headers(),
+    });
+
+    const asUser = t.withIdentity({
+      subject: userId,
+      email: 'linked@example.com',
+      name: 'Linked User',
+    });
+
+    let caught: unknown;
+    try {
+      await asUser.mutation(api.auth.public.linkSocialAccount, {
+        provider: 'google',
+      });
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeInstanceOf(ConvexError);
+    const data = parseAppErrorData(caught);
+    expect(data.code).toBe('AUTH_LINK_ACCOUNT_FAILED');
+    expect(data.message).toBe(
+      'This provider cannot be connected to this account right now.',
+    );
   });
 
   it('does not rewrite emailVerificationTime during normal verified sign-in sync', async () => {
@@ -78,7 +187,7 @@ describe('social auth public flows', () => {
     });
   });
 
-  it('returns cleared onboarding state after a credential account is added', async () => {
+  it('returns cleared onboarding state after a credential account is added with accepted terms', async () => {
     const t = convexTest();
     const userId = (await t.mutation(api.testing.users.createUserDirectly, {
       email: 'linked@example.com',
@@ -86,6 +195,7 @@ describe('social auth public flows', () => {
       betterAuthUserId: 'ba-user-linked',
       authEmailVerified: true,
       socialSignupCompletionRequired: true,
+      termsAcceptedAt: 1720000000000,
     })) as Id<'users'>;
 
     vi.spyOn(authComponent, 'safeGetAuthUser').mockResolvedValue({
@@ -293,7 +403,71 @@ describe('social auth public flows', () => {
     });
   });
 
-  it('clears social signup completion once a credential account exists', async () => {
+  it('clears social signup completion once a credential account exists with accepted terms', async () => {
+    const t = convexTest();
+
+    await t.mutation(api.testing.users.createUserDirectly, {
+      email: 'social@example.com',
+      name: 'Social User',
+      betterAuthUserId: 'ba-user-social',
+      authEmailVerified: true,
+      socialSignupCompletionRequired: true,
+      termsAcceptedAt: 1720000000000,
+    });
+
+    adapterFindManyMock.mockImplementation(async (_ctx, args) => {
+      if (args.model === 'user') {
+        return [
+          {
+            _id: 'ba-user-social',
+            email: 'social@example.com',
+            emailVerified: true,
+            name: 'Social User',
+            image: null,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+        ];
+      }
+
+      if (args.model === 'account') {
+        return [
+          {providerId: 'credential', userId: 'ba-user-social'},
+          {providerId: 'google', userId: 'ba-user-social'},
+        ];
+      }
+
+      return [];
+    });
+
+    await t.run(async (ctx) => {
+      await ctx.runMutation(internal.lib.better_auth.onCreate, {
+        model: 'account',
+        doc: {
+          _id: 'credential-account-id',
+          _creationTime: Date.now(),
+          accountId: 'credential-account-id',
+          providerId: 'credential',
+          userId: 'ba-user-social',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      } as never);
+    });
+
+    await t.run(async (ctx) => {
+      const user = await ctx.db
+        .query('users')
+        .withIndex('by_betterAuthUserId', (q) =>
+          q.eq('betterAuthUserId', 'ba-user-social'),
+        )
+        .unique();
+
+      expect(user?.socialSignupCompletionRequired).toBe(false);
+    });
+  });
+
+  it('keeps social signup completion when a credential account appears before terms are accepted', async () => {
     const t = convexTest();
 
     await t.mutation(api.testing.users.createUserDirectly, {
@@ -352,7 +526,90 @@ describe('social auth public flows', () => {
         )
         .unique();
 
-      expect(user?.socialSignupCompletionRequired).toBe(false);
+      expect(user?.socialSignupCompletionRequired).toBe(true);
+      expect(user?.termsAcceptedAt).toBeUndefined();
+    });
+  });
+
+  it('refuses setPassword while social signup onboarding is incomplete', async () => {
+    const t = convexTest();
+    const userId = (await t.mutation(api.testing.users.createUserDirectly, {
+      email: 'social@example.com',
+      name: 'Social User',
+      betterAuthUserId: 'ba-user-social',
+      authEmailVerified: true,
+      socialSignupCompletionRequired: true,
+    })) as Id<'users'>;
+
+    const getAuthSpy = vi.spyOn(authComponent, 'getAuth');
+
+    const asUser = t.withIdentity({
+      subject: userId,
+      email: 'social@example.com',
+      name: 'Social User',
+    });
+
+    let caught: unknown;
+    try {
+      await asUser.mutation(api.auth.public.setPassword, {
+        newPassword: 'sufficiently-long-password',
+      });
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeInstanceOf(ConvexError);
+    const data = parseAppErrorData(caught);
+    expect(data.code).toBe('AUTH_SET_PASSWORD_FAILED');
+    expect(data.message).toBe('Finish signing up before adding a password.');
+    // The credential account must never be created, so the account.onCreate
+    // sync path is never reached.
+    expect(getAuthSpy).not.toHaveBeenCalled();
+
+    await t.run(async (ctx) => {
+      const user = await ctx.db.get(userId);
+      expect(user?.socialSignupCompletionRequired).toBe(true);
+      expect(user?.termsAcceptedAt).toBeUndefined();
+    });
+  });
+
+  it('allows setPassword after social signup onboarding is complete', async () => {
+    const t = convexTest();
+    const userId = (await t.mutation(api.testing.users.createUserDirectly, {
+      email: 'social@example.com',
+      name: 'Social User',
+      betterAuthUserId: 'ba-user-social',
+      authEmailVerified: true,
+    })) as Id<'users'>;
+
+    const asUser = t.withIdentity({
+      subject: userId,
+      email: 'social@example.com',
+      name: 'Social User',
+    });
+
+    await asUser.mutation(api.auth.public.completeSocialSignupOnboarding, {});
+
+    const setPasswordMock = vi.fn().mockResolvedValue({status: true});
+    vi.spyOn(authComponent, 'getAuth').mockResolvedValue({
+      auth: {api: {setPassword: setPasswordMock}} as never,
+      headers: new Headers(),
+    });
+
+    await asUser.mutation(api.auth.public.setPassword, {
+      newPassword: 'sufficiently-long-password',
+    });
+
+    expect(setPasswordMock).toHaveBeenCalledTimes(1);
+
+    await t.run(async (ctx) => {
+      const latestAudit = await ctx.db
+        .query('adminAuditLogs')
+        .withIndex('by_adminId', (q) => q.eq('adminId', userId))
+        .order('desc')
+        .first();
+
+      expect(latestAudit?.action).toBe('account.password.created');
     });
   });
 

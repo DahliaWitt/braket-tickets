@@ -75,7 +75,7 @@ describe('AdminMembersTableComponent', () => {
       name: 'testuser',
       email: 'test@example.com',
       _creationTime: 1234567890,
-    } as Doc<'users'>,
+    },
     application: {
       _id: 'a1' as Id<'applications'>,
       status: 'pending',
@@ -90,7 +90,7 @@ describe('AdminMembersTableComponent', () => {
       name: 'approved-member',
       email: 'trust@example.com',
       _creationTime: 1234567890,
-    } as Doc<'users'>,
+    },
     application: {
       _id: 'a2' as Id<'applications'>,
       status: 'approved',
@@ -106,7 +106,7 @@ describe('AdminMembersTableComponent', () => {
       name: 'rejected-user',
       email: 'rejected@example.com',
       _creationTime: 1234567890,
-    } as Doc<'users'>,
+    },
     application: {
       _id: 'a4' as Id<'applications'>,
       status: 'rejected',
@@ -118,12 +118,8 @@ describe('AdminMembersTableComponent', () => {
   beforeEach(async () => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
-    toastSuccessSpy = vi
-      .spyOn(toast, 'success')
-      .mockImplementation(() => '' as string & number);
-    toastErrorSpy = vi
-      .spyOn(toast, 'error')
-      .mockImplementation(() => '' as string & number);
+    toastSuccessSpy = vi.spyOn(toast, 'success').mockImplementation(() => '');
+    toastErrorSpy = vi.spyOn(toast, 'error').mockImplementation(() => '');
 
     mockMembersService = {
       revokeMembership: vi.fn().mockResolvedValue({}),
@@ -138,9 +134,9 @@ describe('AdminMembersTableComponent', () => {
     const userSignal: WritableSignal<Doc<'users'> | undefined> = signal({
       _id: 'admin1' as Id<'users'>,
       _creationTime: 1234567890,
-    } as Doc<'users'>);
+    });
     mockAuthService = {
-      user: userSignal as Signal<Doc<'users'> | undefined>,
+      user: userSignal,
       currentUser: computed(() => userSignal() ?? null),
     };
 
@@ -237,7 +233,7 @@ describe('AdminMembersTableComponent', () => {
         name: 'shared-user',
         email: 'shared@example.com',
         _creationTime: 1234567890,
-      } as Doc<'users'>,
+      },
       application: null,
       communityAccessSource: 'shared',
       trustedViaOrganizerName: 'Partner Community',
@@ -312,7 +308,7 @@ describe('AdminMembersTableComponent', () => {
         name: 'magic-user',
         email: 'magic@example.com',
         _creationTime: 1234567890,
-      } as Doc<'users'>,
+      },
       application: null,
       communityAccessSource: 'magic_link',
     };
@@ -371,7 +367,7 @@ describe('AdminMembersTableComponent', () => {
         name: 'direct-user',
         email: 'direct@example.com',
         _creationTime: 1234567890,
-      } as Doc<'users'>,
+      },
       application: null,
       communityAccessSource: 'direct_member',
     };
@@ -381,7 +377,7 @@ describe('AdminMembersTableComponent', () => {
   });
 
   it('should pass organizerId to query when input is set', async () => {
-    fixture.componentRef.setInput('organizerId', 'org42' as unknown);
+    fixture.componentRef.setInput('organizerId', 'org42');
     fixture.detectChanges();
     await fixture.whenStable();
 
@@ -458,7 +454,7 @@ describe('AdminMembersTableComponent', () => {
       paginationComponent.loadMore();
 
       expect(loadMoreSpy).toHaveBeenCalledWith(20);
-      expect(toastErrorSpy).toHaveBeenCalledWith('Failed to load more members');
+      expect(toastErrorSpy).toHaveBeenCalledWith('failed to load more members');
     });
   });
 
@@ -511,7 +507,7 @@ describe('AdminMembersTableComponent', () => {
       undefined,
     );
     expect(mockMembersService.revokeMembership).not.toHaveBeenCalled();
-    expect(toastSuccessSpy).toHaveBeenCalledWith('Membership revoked');
+    expect(toastSuccessSpy).toHaveBeenCalledWith('membership revoked');
   });
 
   it('should pass reason to revoke when dialog returns a value', async () => {
@@ -533,7 +529,7 @@ describe('AdminMembersTableComponent', () => {
   });
 
   it('should pass organizerId to revokeMembership when member has no application', async () => {
-    fixture.componentRef.setInput('organizerId', 'org1' as unknown);
+    fixture.componentRef.setInput('organizerId', 'org1');
     fixture.detectChanges();
 
     const memberNoApp: MemberWithApplication = {
@@ -542,7 +538,7 @@ describe('AdminMembersTableComponent', () => {
         name: 'noapp',
         email: 'no@app.com',
         _creationTime: 0,
-      } as Doc<'users'>,
+      },
       application: null,
       communityAccessSource: 'direct_member',
     };
@@ -603,8 +599,30 @@ describe('AdminMembersTableComponent', () => {
     await component.updateAppStatus(mockMember, 'approved');
     expect(mockAppsService.approve).toHaveBeenCalledWith('a1', 'u1', 'admin1');
     expect(toastSuccessSpy).toHaveBeenCalledWith(
-      'Membership application approved',
+      'membership application approved',
     );
+  });
+
+  it('guards against double-firing approve while the mutation is in flight', async () => {
+    let resolveApprove!: (value: unknown) => void;
+    (mockAppsService.approve as unknown as Mock).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveApprove = resolve;
+        }),
+    );
+
+    component.updateAppStatus(mockMember, 'approved');
+    expect(component.isRowPending(mockMember)).toBe(true);
+    expect(component.isActionPending(mockMember, 'approved')).toBe(true);
+
+    // A second click on the same row is swallowed by the row-pending guard.
+    component.updateAppStatus(mockMember, 'approved');
+    expect(mockAppsService.approve).toHaveBeenCalledTimes(1);
+
+    resolveApprove({});
+    await fixture.whenStable();
+    expect(component.isRowPending(mockMember)).toBe(false);
   });
 
   it('should reject application with reason dialog', async () => {
@@ -632,7 +650,7 @@ describe('AdminMembersTableComponent', () => {
       'Not eligible',
     );
     expect(toastSuccessSpy).toHaveBeenCalledWith(
-      'Membership application rejected',
+      'membership application rejected',
     );
   });
 
@@ -642,7 +660,7 @@ describe('AdminMembersTableComponent', () => {
     expect(mockAppsService.approve).not.toHaveBeenCalled();
     expect(mockDialogService.create).not.toHaveBeenCalled();
     expect(toastErrorSpy).toHaveBeenCalledWith(
-      'Only pending applications can be approved or rejected',
+      'only pending applications can be approved or rejected',
     );
   });
 
@@ -721,7 +739,7 @@ describe('AdminMembersTableComponent', () => {
 
       expect(await harness.getRowCount()).toBe(0);
       expect(await harness.hasEmptyState()).toBe(true);
-      expect(await harness.getEmptyStateText()).toContain('NO MEMBERS FOUND');
+      expect(await harness.getEmptyStateText()).toContain('no members found');
     });
 
     it('rejected applicant: row is excluded from member-management rows', async () => {
@@ -788,7 +806,7 @@ describe('AdminMembersTableComponent', () => {
           name: 'current-admin',
           email: 'admin@example.com',
           _creationTime: 1234567890,
-        } as Doc<'users'>,
+        },
         application: {
           _id: 'a99' as Id<'applications'>,
           status: 'approved',
@@ -804,7 +822,7 @@ describe('AdminMembersTableComponent', () => {
           name: 'other-member',
           email: 'other@example.com',
           _creationTime: 1234567890,
-        } as Doc<'users'>,
+        },
         application: null,
         communityAccessSource: 'magic_link',
       };
@@ -867,7 +885,7 @@ describe('AdminMembersTableComponent', () => {
           _id: 'u5' as Id<'users'>,
           name: 'no-email-user',
           _creationTime: 1234567890,
-        } as Doc<'users'>,
+        },
         application: null,
         communityAccessSource: 'magic_link',
       };
@@ -937,7 +955,7 @@ describe('AdminMembersTableComponent', () => {
         name: 'Alice Wonderland',
         email: 'alice@example.com',
         _creationTime: 1234567890,
-      } as Doc<'users'>,
+      },
       application: null,
       communityAccessSource: 'approved_application',
     };
@@ -948,7 +966,7 @@ describe('AdminMembersTableComponent', () => {
         name: 'Bob Builder',
         email: 'bob@builder.org',
         _creationTime: 1234567890,
-      } as Doc<'users'>,
+      },
       application: null,
       communityAccessSource: 'direct_member',
     };
@@ -959,7 +977,7 @@ describe('AdminMembersTableComponent', () => {
         name: 'Charlie Shared',
         email: 'charlie@shared.com',
         _creationTime: 1234567890,
-      } as Doc<'users'>,
+      },
       application: null,
       communityAccessSource: 'shared',
       trustedViaOrganizerName: 'Partner Org',
@@ -1109,7 +1127,7 @@ describe('AdminMembersTableComponent', () => {
       expect(await searchHarness.getRowCount()).toBe(0);
       expect(await searchHarness.hasEmptyState()).toBe(true);
       const emptyText = await searchHarness.getEmptyStateText();
-      expect(emptyText).toContain('NO RESULTS FOR');
+      expect(emptyText).toContain('no results for');
       expect(emptyText).toContain('nonexistent');
     });
   });

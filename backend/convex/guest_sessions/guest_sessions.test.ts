@@ -895,6 +895,8 @@ describe('guest_sessions', () => {
           eventId,
           quantity: 1,
           tier: 'regular',
+          termsAccepted: true,
+          idempotencyKey: 'idem-converted-order',
         }),
       ).rejects.toThrow('Unauthenticated');
     });
@@ -1465,6 +1467,214 @@ describe('guest_sessions', () => {
           )
           .unique(),
       );
+      expect(userPref).not.toBeNull();
+      expect(userPref!.optedIn).toBe(false);
+    });
+
+    test('does not re-subscribe a user who explicitly opted out when an address opt-in default exists', async () => {
+      const t = convexTest();
+      const userId = await createUser(t, 'explicit-optout@test.com');
+      const asUser = t.withIdentity({subject: userId});
+
+      const prefOrgId = await t.mutation(
+        api.testing.communities.seedOrganizer,
+        {
+          name: 'Explicit Opt Out Org',
+          slug: 'test-org-explicit-optout',
+        },
+      );
+
+      // User explicitly opts out of this organizer's marketing (user-level).
+      await asUser.mutation(api.marketing.emails.updateMarketingPreference, {
+        organizerId: prefOrgId,
+        optedIn: false,
+      });
+
+      // Later, logged out, the same email buys a guest ticket and a broadcast
+      // lazily mints an address preference defaulting to optedIn:true.
+      await t.mutation(api.testing.marketing.seedAddressMarketingPreference, {
+        email: 'explicit-optout@test.com',
+        organizerId: prefOrgId,
+        optedIn: true,
+        unsubToken: 'explicit-optout-address-token',
+      });
+
+      const sessionId = await t.mutation(
+        api.testing.guest_sessions.seedGuestSession,
+        {
+          email: 'explicit-optout@test.com',
+          sessionToken: 'migrate-explicit-optout-token',
+        },
+      );
+
+      await t.mutation(internal.guest_sessions.core.migrateOneSession, {
+        sessionId,
+        userId,
+      });
+
+      const userPref = await t.run(async (ctx) =>
+        ctx.db
+          .query('marketingEmailPreferences')
+          .withIndex('by_user_and_organizer', (q) =>
+            q.eq('userId', userId).eq('organizerId', prefOrgId),
+          )
+          .unique(),
+      );
+      // The explicit opt-out must survive migration — no silent re-subscribe.
+      expect(userPref).not.toBeNull();
+      expect(userPref!.optedIn).toBe(false);
+    });
+
+    test('creates an opted-in user preference from an address opt-in when the user has no prior preference', async () => {
+      const t = convexTest();
+      const userId = await createUser(t, 'new-optin@test.com');
+
+      const prefOrgId = await t.mutation(
+        api.testing.communities.seedOrganizer,
+        {
+          name: 'New Opt In Org',
+          slug: 'test-org-new-optin',
+        },
+      );
+
+      // No user-level preference exists yet; only an address-level opt-in.
+      await t.mutation(api.testing.marketing.seedAddressMarketingPreference, {
+        email: 'new-optin@test.com',
+        organizerId: prefOrgId,
+        optedIn: true,
+        unsubToken: 'new-optin-address-token',
+      });
+
+      const sessionId = await t.mutation(
+        api.testing.guest_sessions.seedGuestSession,
+        {
+          email: 'new-optin@test.com',
+          sessionToken: 'migrate-new-optin-token',
+        },
+      );
+
+      await t.mutation(internal.guest_sessions.core.migrateOneSession, {
+        sessionId,
+        userId,
+      });
+
+      const userPref = await t.run(async (ctx) =>
+        ctx.db
+          .query('marketingEmailPreferences')
+          .withIndex('by_user_and_organizer', (q) =>
+            q.eq('userId', userId).eq('organizerId', prefOrgId),
+          )
+          .unique(),
+      );
+      // Genuine new opt-ins are preserved for users with no prior choice.
+      expect(userPref).not.toBeNull();
+      expect(userPref!.optedIn).toBe(true);
+    });
+
+    test('carries an address-level unsubscribe over an existing user opt-in', async () => {
+      const t = convexTest();
+      const userId = await createUser(t, 'optin-then-unsub@test.com');
+      const asUser = t.withIdentity({subject: userId});
+
+      const prefOrgId = await t.mutation(
+        api.testing.communities.seedOrganizer,
+        {
+          name: 'Opt In Then Unsub Org',
+          slug: 'test-org-optin-then-unsub',
+        },
+      );
+
+      // User is opted in at the user level.
+      await asUser.mutation(api.marketing.emails.updateMarketingPreference, {
+        organizerId: prefOrgId,
+        optedIn: true,
+      });
+
+      // As a guest, they unsubscribed against the address (optedIn:false).
+      await t.mutation(api.testing.marketing.seedAddressMarketingPreference, {
+        email: 'optin-then-unsub@test.com',
+        organizerId: prefOrgId,
+        optedIn: false,
+        unsubToken: 'optin-then-unsub-address-token',
+      });
+
+      const sessionId = await t.mutation(
+        api.testing.guest_sessions.seedGuestSession,
+        {
+          email: 'optin-then-unsub@test.com',
+          sessionToken: 'migrate-optin-then-unsub-token',
+        },
+      );
+
+      await t.mutation(internal.guest_sessions.core.migrateOneSession, {
+        sessionId,
+        userId,
+      });
+
+      const userPref = await t.run(async (ctx) =>
+        ctx.db
+          .query('marketingEmailPreferences')
+          .withIndex('by_user_and_organizer', (q) =>
+            q.eq('userId', userId).eq('organizerId', prefOrgId),
+          )
+          .unique(),
+      );
+      // The unsubscribe wins — migration propagates opt-outs.
+      expect(userPref).not.toBeNull();
+      expect(userPref!.optedIn).toBe(false);
+    });
+
+    test('address opt-out wins over a later user opt-in (recency-independent suppression)', async () => {
+      const t = convexTest();
+      const userId = await createUser(t, 'unsub-then-optin@test.com');
+      const asUser = t.withIdentity({subject: userId});
+
+      const prefOrgId = await t.mutation(
+        api.testing.communities.seedOrganizer,
+        {
+          name: 'Unsub Then Opt In Org',
+          slug: 'test-org-unsub-then-optin',
+        },
+      );
+
+      // Guest unsubscribe is recorded first (address-level opt-out).
+      await t.mutation(api.testing.marketing.seedAddressMarketingPreference, {
+        email: 'unsub-then-optin@test.com',
+        organizerId: prefOrgId,
+        optedIn: false,
+        unsubToken: 'unsub-then-optin-address-token',
+      });
+
+      // The user later opts in at the user level (more recent updatedAt).
+      await asUser.mutation(api.marketing.emails.updateMarketingPreference, {
+        organizerId: prefOrgId,
+        optedIn: true,
+      });
+
+      const sessionId = await t.mutation(
+        api.testing.guest_sessions.seedGuestSession,
+        {
+          email: 'unsub-then-optin@test.com',
+          sessionToken: 'migrate-unsub-then-optin-token',
+        },
+      );
+
+      await t.mutation(internal.guest_sessions.core.migrateOneSession, {
+        sessionId,
+        userId,
+      });
+
+      const userPref = await t.run(async (ctx) =>
+        ctx.db
+          .query('marketingEmailPreferences')
+          .withIndex('by_user_and_organizer', (q) =>
+            q.eq('userId', userId).eq('organizerId', prefOrgId),
+          )
+          .unique(),
+      );
+      // Deliberate consent-first precedence: a recorded unsubscribe suppresses
+      // regardless of which signal is newer. Suppression carries no legal risk;
+      // emailing an unsubscriber does.
       expect(userPref).not.toBeNull();
       expect(userPref!.optedIn).toBe(false);
     });

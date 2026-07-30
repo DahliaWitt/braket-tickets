@@ -213,7 +213,7 @@ type CheckInResult = FunctionReturnType<typeof api.events.check_in.checkIn>;
                   stroke-width="2"
                   stroke-linecap="round"
                   stroke-linejoin="round"
-                  class="mt-0.5 text-destructive"
+                  class="mt-0.5 text-destructive-text"
                   aria-hidden="true"
                 >
                   <circle cx="12" cy="12" r="10" />
@@ -222,12 +222,12 @@ type CheckInResult = FunctionReturnType<typeof api.events.check_in.checkIn>;
                 </svg>
                 <div class="space-y-1">
                   <p
-                    class="font-mono text-xs font-bold text-destructive uppercase"
+                    class="font-mono text-xs font-bold text-destructive-text uppercase"
                   >
                     {{ cameraError() }}
                   </p>
                   <p
-                    class="text-2xs leading-relaxed text-destructive/80 uppercase"
+                    class="text-2xs leading-relaxed text-destructive-text/80 uppercase"
                   >
                     Check browser camera permission, close other apps using the
                     camera, then try again.
@@ -293,7 +293,7 @@ type CheckInResult = FunctionReturnType<typeof api.events.check_in.checkIn>;
                           stroke-width="3"
                           stroke-linecap="round"
                           stroke-linejoin="round"
-                          class="text-destructive"
+                          class="text-destructive-text"
                         >
                           <line x1="18" x2="6" y1="6" y2="18" />
                           <line x1="6" x2="18" y1="6" y2="18" />
@@ -301,11 +301,11 @@ type CheckInResult = FunctionReturnType<typeof api.events.check_in.checkIn>;
                       </div>
                       <div>
                         <span
-                          class="block font-mono text-sm font-black tracking-tighter text-destructive uppercase"
+                          class="block font-mono text-sm font-black tracking-tighter text-destructive-text uppercase"
                           >INVALID</span
                         >
                         <span
-                          class="text-2xs font-bold tracking-widest text-destructive uppercase"
+                          class="text-2xs font-bold tracking-widest text-destructive-text uppercase"
                           >Not checked in</span
                         >
                       </div>
@@ -377,6 +377,56 @@ type CheckInResult = FunctionReturnType<typeof api.events.check_in.checkIn>;
                         <span
                           class="font-mono text-2xs text-muted-foreground"
                           >{{ t._id.slice(-8).toUpperCase() }}</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                }
+
+                <!-- External (imported) ticket-holder result. Door-legibility
+                     first: large holder name readable at arm's length in the
+                     dark; the surrounding card border already carries the
+                     unambiguous state color (success vs destructive). The mono
+                     source badge marks it as an external ticket. -->
+                @if (lastResult()?.imported; as m) {
+                  <div
+                    class="space-y-3 rounded-lg border border-border/50 bg-muted/40 p-4 dark:bg-background/80"
+                    data-testid="scan-result-imported"
+                  >
+                    <div class="flex flex-col">
+                      <span
+                        class="mb-1 font-mono text-[9px] tracking-[0.2em] text-muted-foreground uppercase"
+                        >Name</span
+                      >
+                      <span
+                        class="truncate text-2xl leading-tight font-black text-foreground"
+                        data-testid="scan-result-imported-name"
+                        >{{ m.name }}</span
+                      >
+                    </div>
+                    <div
+                      class="grid grid-cols-2 gap-4 border-t border-border/80 pt-3"
+                    >
+                      <div class="flex flex-col">
+                        <span
+                          class="mono-label mb-1 text-[9px] text-muted-foreground"
+                          >Source</span
+                        >
+                        <span
+                          class="w-fit rounded border border-border/70 bg-background/60 px-2 py-0.5 font-mono text-2xs tracking-widest text-foreground uppercase"
+                          data-testid="scan-result-imported-source"
+                          >{{ m.sourceLabel }}</span
+                        >
+                      </div>
+                      <div class="flex flex-col items-end">
+                        <span
+                          class="mono-label mb-1 text-[9px] text-muted-foreground"
+                          >Ticket Type</span
+                        >
+                        <span
+                          class="font-mono text-xs font-black text-primary uppercase"
+                          data-testid="scan-result-imported-type"
+                          >{{ m.ticketTypeLabel || 'external ticket' }}</span
                         >
                       </div>
                     </div>

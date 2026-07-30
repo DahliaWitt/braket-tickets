@@ -34,6 +34,7 @@ import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton
 import {ZardSelectComponent} from '@ui/components/primitives/select/select.component';
 import {ZardSelectItemComponent} from '@ui/components/primitives/select/select-item.component';
 import {ZardInputDirective} from '@ui/components/primitives/input/input.directive';
+import {EmptyStateComponent} from '@ui/components/primitives/empty-state/empty-state.component';
 import {type Doc, type Id} from '@convex/_generated/dataModel';
 import {api} from '@convex/_generated/api';
 import type {CommunityPublicationStatus} from '@shared/domain/community-publication-status';
@@ -89,6 +90,7 @@ const COMMUNITY_SLUG_ERROR =
     ZardSelectItemComponent,
     ZardInputDirective,
     StripeConnectEmbedComponent,
+    EmptyStateComponent,
   ],
   templateUrl: './community-editor.component.html',
 })
@@ -111,6 +113,7 @@ export class AdminCommunityEditorComponent {
     contactInfo: '',
     description: '',
     isPublicDirectory: false,
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- narrows the literal to the enum so the mutable form object stays assignable to the save payload (ng build)
     status: 'draft' as CommunityPublicationStatus,
     vettingQuestions: [] as VettingQuestionFormValue[],
   });
@@ -423,6 +426,12 @@ export class AdminCommunityEditorComponent {
         await this.communitiesService.update({
           id: this.communityId()!,
           ...payload,
+          // Explicit `null` clears these optional fields on update; `payload`
+          // uses `undefined` (create-safe), which the backend would treat as
+          // "leave unchanged", so cleared values never persisted.
+          email: formValue.email || null,
+          contactInfo: formValue.contactInfo || null,
+          description: formValue.description || null,
         });
       } else {
         await this.communitiesService.create(payload);

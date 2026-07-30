@@ -2,6 +2,7 @@ import {CurrencyPipe, DatePipe} from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   inject,
   input,
   output,
@@ -12,6 +13,7 @@ import {AdminEventsService} from '@/features/admin/services/admin-events.service
 import {
   type EventManagementPurchase,
   type Guest,
+  type ImportedTicketHolder,
 } from '@/features/admin/models/event-management.model';
 import {BraAlertDialogService} from '@ui/components/composites/alert-dialog/alert-dialog.service';
 import {BraDialogService} from '@ui/components/composites/dialog/dialog.service';
@@ -19,12 +21,28 @@ import {
   ExportDialogComponent,
   type ExportDialogData,
 } from '../export-dialog/export-dialog.component';
+import {BraStatusBadgeComponent} from '@ui/components/primitives/status-badge/status-badge.component';
+import {EmptyStateComponent} from '@ui/components/primitives/empty-state/empty-state.component';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 import {ZardCardComponent} from '@ui/components/primitives/card/card.component';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
+import {ZardTooltipDirective} from '@ui/components/primitives/tooltip/tooltip';
 import {logger} from '@/utils/logger';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
 import {formatEventDate} from '@/utils/event-date-format';
+import {ADMIN_DATETIME} from '@/features/admin/utils/date-formats';
+
+/**
+ * An import batch grouped for display: its key, the source label (from the
+ * first entry — one batch has one source), its entries, and the checked-in
+ * count. Batch removal operates on the whole group.
+ */
+export interface ImportedBatchGroup {
+  readonly batchKey: string;
+  readonly sourceLabel: string;
+  readonly entries: readonly ImportedTicketHolder[];
+  readonly checkedInCount: number;
+}
 
 @Component({
   selector: 'app-event-management-purchases-panel',
@@ -32,9 +50,12 @@ import {formatEventDate} from '@/utils/event-date-format';
   imports: [
     CurrencyPipe,
     DatePipe,
+    BraStatusBadgeComponent,
+    EmptyStateComponent,
     ZardButtonComponent,
     ZardCardComponent,
     ZardIconComponent,
+    ZardTooltipDirective,
   ],
   templateUrl: './event-management-purchases-panel.component.html',
 })
@@ -44,11 +65,120 @@ export class EventManagementPurchasesPanelComponent {
   private readonly alertDialog = inject(BraAlertDialogService);
   private readonly browser = inject(BrowserPlatformService);
 
+  /** Shared admin datetime format for both desktop and mobile timestamps. */
+  protected readonly ADMIN_DATETIME = ADMIN_DATETIME;
+
   readonly eventTitle = input.required<string>();
   readonly eventDate = input.required<string>();
   readonly purchases = input.required<EventManagementPurchase[]>();
   readonly guests = input<Guest[]>([]);
+  readonly importedEntries = input<ImportedTicketHolder[]>([]);
   readonly dataChanged = output<void>();
+
+  /** Entry currently being removed (id) — disables its row affordances. */
+  readonly removingEntryId = signal<string | null>(null);
+  /** Batch currently being removed (batchKey) — disables the batch affordance. */
+  readonly removingBatchKey = signal<string | null>(null);
+
+  /**
+   * Imported entries grouped by their import batch, in stable creation order.
+   * Each batch renders together so the "remove batch" affordance and its
+   * checked-in warning apply to a coherent set.
+   */
+  readonly importedBatches = computed<ImportedBatchGroup[]>(() => {
+    const byBatch = new Map<string, ImportedTicketHolder[]>();
+    for (const entry of this.importedEntries()) {
+      const existing = byBatch.get(entry.batchKey);
+      if (existing) {
+        existing.push(entry);
+      } else {
+        byBatch.set(entry.batchKey, [entry]);
+      }
+    }
+    return [...byBatch.entries()].map(([batchKey, entries]) => ({
+      batchKey,
+      sourceLabel: entries[0]?.sourceLabel ?? 'External',
+      entries,
+      checkedInCount: entries.filter((e) => e.checkedInAt !== undefined).length,
+    }));
+  });
+
+  readonly hasImportedEntries = computed(
+    () => this.importedEntries().length > 0,
+  );
+
+  importedEntryActionLabel(entry: ImportedTicketHolder): string {
+    const name = entry.name || entry.email || 'ticket holder';
+    const email = entry.email && entry.email !== name ? `, ${entry.email}` : '';
+    const ref = entry.externalRef ? `, ${entry.externalRef}` : '';
+    return `${name}${email}${ref}`;
+  }
+
+  async removeImportedEntry(entry: ImportedTicketHolder): Promise<void> {
+    // Refuse while ANY removal (single or batch) is in flight so a single-entry
+    // delete can't race a batch delete that also contains this entry.
+    if (this.removingEntryId() || this.removingBatchKey()) return;
+    this.removingEntryId.set(entry._id);
+    try {
+      await this.adminEventsService.removeImportedEntry(entry._id);
+      toast.success('external ticket removed');
+      this.dataChanged.emit();
+    } catch (error) {
+      logger.error('Failed to remove imported ticket entry', error);
+      toast.error("couldn't remove that ticket");
+    } finally {
+      this.removingEntryId.set(null);
+    }
+  }
+
+  removeImportedBatch(batch: ImportedBatchGroup): void {
+    // Refuse while ANY removal is in flight (see removeImportedEntry).
+    if (this.removingEntryId() || this.removingBatchKey()) return;
+
+    const count = batch.entries.length;
+    const ticketLabel = count === 1 ? 'ticket' : 'tickets';
+    const checkedIn = batch.checkedInCount;
+    // A batch with checked-in entries is removable, but warn — the door totals
+    // drop accordingly and the audit entry records the checked-in count.
+    const warning =
+      checkedIn > 0
+        ? ` heads up: ${checkedIn} of these ${checkedIn === 1 ? 'has' : 'have'} already checked in — removing drops them from the door count.`
+        : '';
+
+    this.alertDialog.confirm({
+      zTitle: 'remove import batch',
+      zDescription: `remove all ${count} external ${ticketLabel} from the "${batch.sourceLabel}" import?${warning} this can't be undone.`,
+      zOkText: 'remove batch',
+      zCancelText: 'keep them',
+      zOkDestructive: true,
+      zMaskClosable: false,
+      zOnOk: () => {
+        void this.performBatchRemoval(batch);
+      },
+    });
+  }
+
+  private async performBatchRemoval(batch: ImportedBatchGroup): Promise<void> {
+    // A single-entry removal may have started while the confirm dialog was open.
+    if (this.removingEntryId() || this.removingBatchKey()) return;
+    this.removingBatchKey.set(batch.batchKey);
+    try {
+      const result = await this.adminEventsService.removeImportedBatch(
+        // The batch's entries all share one event; the panel is event-scoped.
+        batch.entries[0]?.eventId ?? '',
+        batch.batchKey,
+      );
+      toast.success(
+        `removed ${result.removedCount} external ${result.removedCount === 1 ? 'ticket' : 'tickets'}`,
+      );
+      this.dataChanged.emit();
+    } catch (error) {
+      logger.error('Failed to remove imported ticket batch', error);
+      toast.error("couldn't remove that batch");
+    } finally {
+      this.removingBatchKey.set(null);
+    }
+  }
 
   readonly isGeneratingPdf = signal<string | null>(null);
   readonly isRefunding = signal<string | null>(null);
@@ -64,13 +194,14 @@ export class EventManagementPurchasesPanelComponent {
     const dialogData: ExportDialogData = {
       purchases: this.purchases(),
       guests: this.guests(),
+      importedEntries: this.importedEntries(),
       eventTitle: this.eventTitle(),
       eventDate: formatEventDate(this.eventDate(), 'fullDate') ?? undefined,
     };
 
     this.dialogService.create({
       zTitle: 'Export Attendee List',
-      zDescription: `Export ${this.purchases().length} attendees to CSV or PDF`,
+      zDescription: `Export ${this.purchases().length + this.guests().length + this.importedEntries().length} attendees to CSV or PDF`,
       zContent: ExportDialogComponent,
       zData: dialogData,
       zHideFooter: true,
@@ -108,13 +239,13 @@ export class EventManagementPurchasesPanelComponent {
       );
       if (!this.browser.openPdfPreview(pdfDataUrl, 'Ticket PDF')) {
         logger.error('Popup blocked');
-        toast.error('Popup blocked. Please allow popups to view the ticket.');
+        toast.error('popup blocked — allow popups to view the ticket');
       } else {
-        toast.success('Ticket PDF opened.');
+        toast.success('ticket pdf opened');
       }
     } catch (error) {
       logger.error('Failed to generate ticket PDF', error);
-      toast.error('Failed to generate ticket PDF.');
+      toast.error('failed to generate ticket pdf');
     } finally {
       this.isGeneratingPdf.set(null);
     }
@@ -273,16 +404,12 @@ export class EventManagementPurchasesPanelComponent {
     this.isRefunding.set(purchase.id);
     try {
       await this.adminEventsService.refundPayment(purchase.id);
-      toast.success(
-        isFree
-          ? 'Tickets cancelled successfully'
-          : 'Payment refunded successfully',
-      );
+      toast.success(isFree ? 'tickets cancelled' : 'payment refunded');
       this.dataChanged.emit();
     } catch (error) {
       logger.error('Failed to refund payment', error);
       toast.error(
-        isFree ? 'Failed to cancel tickets' : 'Failed to refund payment',
+        isFree ? 'failed to cancel tickets' : 'failed to refund payment',
       );
     } finally {
       this.isRefunding.set(null);
@@ -299,11 +426,11 @@ export class EventManagementPurchasesPanelComponent {
     this.isRefunding.set(purchase.id);
     try {
       await this.adminEventsService.forceRefundAll(purchase.id);
-      toast.success('Full payment refunded successfully');
+      toast.success('full payment refunded');
       this.dataChanged.emit();
     } catch (error) {
       logger.error('Failed to force refund payment', error);
-      toast.error('Failed to force refund payment');
+      toast.error('failed to force refund payment');
     } finally {
       this.isRefunding.set(null);
       this.finishPurchaseRefund(purchase.id);
@@ -350,15 +477,11 @@ export class EventManagementPurchasesPanelComponent {
     this.isRefundingTicket.set(ticketId);
     try {
       await this.adminEventsService.refundTicket(ticketId);
-      toast.success(
-        isFree
-          ? 'Ticket cancelled successfully'
-          : 'Ticket refunded successfully',
-      );
+      toast.success(isFree ? 'ticket cancelled' : 'ticket refunded');
       this.dataChanged.emit();
     } catch (error) {
       logger.error('Single ticket refund failed', error);
-      toast.error('Failed to refund ticket');
+      toast.error('failed to refund ticket');
     } finally {
       this.isRefundingTicket.set(null);
       this.finishPurchaseRefund(purchaseId);

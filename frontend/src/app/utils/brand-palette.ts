@@ -16,6 +16,10 @@
  *   --border               320  6% 82%  →  #d4ced2
  *   --destructive          0  84% 42%     → #c51111
  *   --success              160 84% 22%  →  #096748
+ *
+ * Not mirrored here (no SDK consumes them yet — add on first use):
+ *   --accent-text (light)  25  80% 32%  →  #934710
+ *   --accent-text (dark)   25  80% 60%  →  #eb8b47
  */
 // LINT.IfChange
 export const BRAND_THEME_PALETTE = {
@@ -42,7 +46,7 @@ export const BRAND_THEME_PALETTE = {
     muted: '#2f282d',
     border: '#372f34',
     destructive: '#7f1d1d',
-    destructiveText: '#f23154',
+    destructiveText: '#f37272',
     white: '#ffffff',
   },
 } as const;

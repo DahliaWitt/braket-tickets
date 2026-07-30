@@ -15,12 +15,15 @@ import {PublicCommunitiesService} from '@/core/services/public-communities.servi
 import {PublicEventsService} from '@/core/services/public-events.service';
 import {Router, RouterLink} from '@angular/router';
 import {ContentLayoutComponent} from '@/layout/content-layout/content-layout.component';
+import {OUTLINE_MONO_CTA_CLASS} from '@/features/shared/outline-cta';
 import {BraCommunityAvatarComponent} from '@ui/components/primitives/community-avatar/community-avatar.component';
+import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton.component';
 import {logger} from '@/utils/logger';
 import {safeResourceValue} from '@/utils/resource';
 import type {PublicEventCard} from '@shared/contracts/public-event';
 import {getBuyerPricingSummary} from '@shared/pricing/pricing-summary';
 import {EventDatePipe} from '@/utils/event-date.pipe';
+import {EventEndTimePipe} from '@/utils/event-end-time.pipe';
 
 @Component({
   selector: 'app-landing',
@@ -29,8 +32,10 @@ import {EventDatePipe} from '@/utils/event-date.pipe';
     RouterLink,
     ContentLayoutComponent,
     EventDatePipe,
+    EventEndTimePipe,
     NgOptimizedImage,
     BraCommunityAvatarComponent,
+    ZardSkeletonComponent,
   ],
   template: `
     <app-content-layout>
@@ -66,16 +71,49 @@ import {EventDatePipe} from '@/utils/event-date.pipe';
               type="button"
               (click)="login()"
               data-testid="landing-login-btn"
-              class="focus-ring border-2 border-primary px-8 py-3 font-mono text-2xs tracking-widest text-foreground uppercase transition-colors hover:bg-primary hover:text-white"
+              [class]="ctaClass"
               aria-label="Navigate to login page"
             >
-              Log In / Sign Up
+              log in / sign up
             </button>
           </div>
         </section>
 
         <!-- Events -->
-        @if (visibleEvents().length > 0) {
+        @if (eventsLoading()) {
+          <section
+            data-testid="landing-events-loading"
+            class="fade-in fade-in-delay-1 border-t border-border"
+            aria-hidden="true"
+          >
+            <div class="px-1 py-3">
+              <z-skeleton class="h-4 w-36" />
+            </div>
+            <div class="border-t border-border">
+              @for (row of skeletonRows; track row) {
+                <div
+                  class="grid grid-cols-1 border-b border-border last:border-b-0 md:grid-cols-[auto_1fr]"
+                >
+                  <z-skeleton class="h-64 w-full md:h-56 md:w-48 lg:w-56" />
+                  <div class="space-y-3 px-5 py-5 md:px-6 md:py-6">
+                    <z-skeleton class="h-7 w-2/3" />
+                    <z-skeleton class="h-4 w-1/2" />
+                    <z-skeleton class="h-4 w-3/4" />
+                  </div>
+                </div>
+              }
+            </div>
+          </section>
+        } @else if (eventsError()) {
+          <section
+            data-testid="landing-events-error"
+            class="fade-in fade-in-delay-1 border-t border-border py-6"
+          >
+            <p class="text-sm text-muted-foreground">
+              events aren't loading right now — refresh to try again
+            </p>
+          </section>
+        } @else if (visibleEvents().length > 0) {
           <section
             data-testid="landing-events"
             class="fade-in fade-in-delay-1 border-t border-border"
@@ -132,7 +170,8 @@ import {EventDatePipe} from '@/utils/event-date.pipe';
                     </h2>
                     <p class="mono-label text-2xs text-muted-foreground">
                       {{ event.date | eventDate: 'mediumDate' }},
-                      {{ event.date | eventDate: 'shortTime' }}
+                      {{ event.date | eventDate: 'shortTime'
+                      }}{{ event.endDate | eventEndTime: event.date }}
                       @if (event.location) {
                         <span> · {{ event.location }}</span>
                       }
@@ -172,7 +211,7 @@ import {EventDatePipe} from '@/utils/event-date.pipe';
                       ? ['/communities', community.slug]
                       : ['/communities']
                   "
-                  class="flex flex-shrink-0 items-center gap-1.5 transition-colors hover:text-primary"
+                  class="flex min-h-6 flex-shrink-0 items-center gap-1.5 transition-colors hover:text-primary"
                   [attr.aria-label]="'View ' + community.name + ' community'"
                 >
                   <bra-community-avatar
@@ -190,7 +229,7 @@ import {EventDatePipe} from '@/utils/event-date.pipe';
             </div>
             <a
               routerLink="/communities"
-              class="flex-shrink-0 font-mono text-2xs tracking-widest text-primary uppercase transition-colors hover:text-primary/80"
+              class="inline-flex min-h-6 flex-shrink-0 items-center font-mono text-2xs tracking-widest text-primary uppercase transition-colors hover:text-primary/80"
             >
               All →
             </a>
@@ -227,7 +266,26 @@ export class LandingComponent {
 
   readonly visibleEvents = computed(() => this.publicEvents().slice(0, 4));
   readonly showBrowseAll = computed(() => this.publicEvents().length > 4);
-  readonly shouldCenter = computed(() => this.publicEvents().length === 0);
+  readonly eventsLoading = computed(() =>
+    this.publicEventsResource.isLoading(),
+  );
+  readonly eventsError = computed(
+    () => this.publicEventsResource.error() !== undefined,
+  );
+  /**
+   * Center the hero only when the events query has settled and is genuinely
+   * empty. Centering during load caused a layout jump on every cold load the
+   * moment the resource resolved with data.
+   */
+  readonly shouldCenter = computed(
+    () =>
+      !this.eventsLoading() &&
+      !this.eventsError() &&
+      this.publicEvents().length === 0,
+  );
+
+  protected readonly ctaClass = OUTLINE_MONO_CTA_CLASS;
+  protected readonly skeletonRows = [0, 1];
 
   constructor() {
     effect(() => {

@@ -26,7 +26,12 @@ import {
   extractErrorMessage,
   isRetryableAuthBackendError,
 } from '@/core/utils/auth.utils';
-import {isRecord} from '@shared/type-guards';
+import {COMPROMISED_PASSWORD_MESSAGE} from '@shared/constants';
+import {
+  isCompromisedPasswordError,
+  isDuplicateSignupError,
+  isVerificationRequiredError,
+} from '@/core/utils/auth-error-codes';
 import {PasswordService} from '@/core/services/password.service';
 import {UserProfileService} from '@/core/services/user-profile.service';
 import {
@@ -37,19 +42,15 @@ import {AuthSessionSync} from './auth-session-sync';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
 import {
   AUTH_SETTLE_TIMEOUT_MS,
-  type ConvexActionMethod,
+  MISSING_USER_REPAIR_MAX_QUERY_ERRORS,
   type ConvexClientWithErrorHandling,
-  type ConvexMutationMethod,
-  type ConvexQueryMethod,
   type SessionChannelMessage,
   requiresSocialSignupCompletion,
 } from './auth.service.helpers';
 import {BraToastService} from '@ui/components/composites/toast/toast.service';
 import {AUTH_CLIENT} from './auth-client.token';
 import {
-  authCookieStorageKey,
-  authSessionDataStorageKey,
-  interpretAuthStorage,
+  narrowCachedSession,
   type CachedSessionPeek,
 } from '../../../lib/auth-storage';
 import {environment} from '../../../environments/environment';
@@ -68,8 +69,7 @@ export class UnverifiedEmailError extends Error {
 export class SocialAuthBlockedError extends Error {
   constructor(
     public readonly reason:
-      | 'provider_email_missing'
-      | 'provider_email_unverified',
+      'provider_email_missing' | 'provider_email_unverified',
   ) {
     super(
       reason === 'provider_email_missing'
@@ -89,58 +89,27 @@ interface BetterAuthSession {
   session?: {id?: string | null} | null;
 }
 
-/**
- * Collects searchable error text from a Better Auth error response or a
- * thrown error.  Accesses typed fields directly when the structured error
- * shape is detected; falls back to the shared error message extractor for
- * thrown Error objects and other shapes.
- */
-function collectAuthErrorText(error: unknown): string {
-  const parts: string[] = [];
-
-  const visit = (value: unknown): void => {
-    if (isRecord(value)) {
-      if (typeof value['message'] === 'string') parts.push(value['message']);
-      if (typeof value['code'] === 'string') parts.push(value['code']);
-      if (typeof value['statusText'] === 'string')
-        parts.push(value['statusText']);
-      if (value['cause'] !== undefined) visit(value['cause']);
-      return;
-    }
-
-    if (value instanceof Error) {
-      parts.push(value.message);
-      if (value.cause !== undefined) visit(value.cause);
-      return;
-    }
-
-    parts.push(extractErrorMessage(value));
-  };
-
-  visit(error);
-  return parts.join(' ').toLowerCase();
-}
-
-function isVerificationRequiredError(error: unknown): boolean {
-  const text = collectAuthErrorText(error);
-  return text.includes('verif') || text.includes('not verified');
-}
-
-function isDuplicateSignupError(error: unknown): boolean {
-  const text = collectAuthErrorText(error);
-  return (
-    text.includes('account with this email already exists') ||
-    text.includes('user already exists') ||
-    text.includes('already in use') ||
-    text.includes('user_already_exists') ||
-    text.includes('failed_to_create_user')
-  );
-}
-
 class SessionNotReadyError extends Error {
   constructor(context: string) {
     super(`${context} session is not ready yet`);
     this.name = 'SessionNotReadyError';
+  }
+}
+
+/**
+ * Raised when `getSession()` resolves with a returned `error` (a transient HTTP
+ * failure such as a 5xx/429 during cold load). Better Auth's better-fetch
+ * client surfaces these as `{data: null, error}` WITHOUT throwing, so a
+ * genuinely unauthenticated user (`{data: null, error: null}`) is
+ * indistinguishable from a backend blip unless the returned error is promoted
+ * to a throw. This marker lets the init retry loop retry the fetch regardless
+ * of the error's message content, instead of settling into a confident
+ * "logged out" state on a recoverable outage.
+ */
+class SessionInitBackendError extends Error {
+  constructor(message: string, options?: {cause?: unknown}) {
+    super(message, options);
+    this.name = 'SessionInitBackendError';
   }
 }
 
@@ -330,11 +299,20 @@ export class AuthService implements ConvexAuthProvider {
    * guards can decide the common cases without awaiting the async
    * `getSession()` round-trip.
    *
-   * Only meaningful in crossDomain mode, where the localStorage credential is
-   * authoritative: an empty credential provably means logged out (the buyer
-   * default), letting the landing page render with zero network wait. In
-   * cookie/E2E mode the credential is an httpOnly cookie invisible to JS, so
-   * this returns `known: false` and callers must fall back to the async settle.
+   * Reads through the crossDomain plugin's own client actions —
+   * `getCookie()` (serialized non-expired cookies, `''` when none is usable)
+   * and `getSessionData()` (the cached `/get-session` snapshot, `null` for
+   * `{}`/corrupt) — so the peek can never disagree with what the plugin would
+   * actually send on a request. `getCookie() !== ''` mirrors the plugin's own
+   * expiry filter, so an all-expired credential provably reads as logged out.
+   *
+   * Only meaningful in crossDomain mode. In cookie/E2E mode the credential is
+   * an httpOnly cookie invisible to JS, the crossDomain plugin is not
+   * registered, and its actions are absent — this returns `known: false` and
+   * callers must fall back to the authoritative async settle. The
+   * `isE2E || !hasLocalStorage()` guard mirrors the plugin registration
+   * condition in `auth.client.ts`; the action-presence check below is a
+   * defensive backstop against those two conditions drifting apart.
    *
    * This drives routing UX only — never authorization. Every Convex call is
    * still authorized server-side, so a forged snapshot buys nothing but a
@@ -345,10 +323,19 @@ export class AuthService implements ConvexAuthProvider {
       return {known: false, hasCredential: false, session: null};
     }
 
-    return interpretAuthStorage(
-      this.browser.getLocalStorageItem(authCookieStorageKey()),
-      this.browser.getLocalStorageItem(authSessionDataStorageKey()),
-    );
+    const client = this.authClient;
+    if (
+      typeof client.getCookie !== 'function' ||
+      typeof client.getSessionData !== 'function'
+    ) {
+      return {known: false, hasCredential: false, session: null};
+    }
+
+    return {
+      known: true,
+      hasCredential: client.getCookie() !== '',
+      session: narrowCachedSession(client.getSessionData()),
+    };
   }
 
   /**
@@ -442,8 +429,8 @@ export class AuthService implements ConvexAuthProvider {
       return;
     }
 
-    const originalQuery = convex.query as ConvexQueryMethod;
-    convex.query = (async <Query extends FunctionReference<'query'>>(
+    const originalQuery = convex.query;
+    convex.query = async <Query extends FunctionReference<'query'>>(
       query: Query,
       args: Query['_args'],
     ): Promise<Awaited<Query['_returnType']>> => {
@@ -453,10 +440,10 @@ export class AuthService implements ConvexAuthProvider {
         this.handleFatalConvexAuthError(err);
         throw err;
       }
-    }) as typeof convex.query;
+    };
 
-    const originalMutation = convex.mutation as ConvexMutationMethod;
-    convex.mutation = (async <Mutation extends FunctionReference<'mutation'>>(
+    const originalMutation = convex.mutation;
+    convex.mutation = async <Mutation extends FunctionReference<'mutation'>>(
       mutation: Mutation,
       args: FunctionArgs<Mutation>,
       options?: MutationOptions,
@@ -467,10 +454,10 @@ export class AuthService implements ConvexAuthProvider {
         this.handleFatalConvexAuthError(err);
         throw err;
       }
-    }) as typeof convex.mutation;
+    };
 
-    const originalAction = convex.action as ConvexActionMethod;
-    convex.action = (async <Action extends FunctionReference<'action'>>(
+    const originalAction = convex.action;
+    convex.action = async <Action extends FunctionReference<'action'>>(
       action: Action,
       args: FunctionArgs<Action>,
     ): Promise<Awaited<FunctionReturnType<Action>>> => {
@@ -480,18 +467,18 @@ export class AuthService implements ConvexAuthProvider {
         this.handleFatalConvexAuthError(err);
         throw err;
       }
-    }) as typeof convex.action;
+    };
 
     const originalOnUpdate = convex.onUpdate.bind(convex);
-    convex.onUpdate = ((query, args, onResult, onError) =>
+    convex.onUpdate = (query, args, onResult, onError) =>
       originalOnUpdate(query, args, onResult, (err) => {
         this.handleFatalConvexAuthError(err);
         onError?.(err);
-      })) as typeof convex.onUpdate;
+      });
 
     const originalOnPaginatedUpdate =
       convex.onPaginatedUpdate_experimental.bind(convex);
-    convex.onPaginatedUpdate_experimental = ((
+    convex.onPaginatedUpdate_experimental = (
       query,
       args,
       options,
@@ -501,7 +488,7 @@ export class AuthService implements ConvexAuthProvider {
       originalOnPaginatedUpdate(query, args, options, onResult, (err) => {
         this.handleFatalConvexAuthError(err);
         onError?.(err);
-      })) as typeof convex.onPaginatedUpdate_experimental;
+      });
 
     Object.defineProperty(convex, '__braketAuthWrapped', {
       configurable: false,
@@ -583,6 +570,14 @@ export class AuthService implements ConvexAuthProvider {
 
   private async repairMissingUserForSession(sessionKey: string): Promise<void> {
     let waitMs = 0;
+    // Cumulative count of decisions observed while the profile query is errored.
+    // A persistent query error would otherwise keep the loop polling forever
+    // (data() stays undefined, authSyncFailed stays false); bounding it here
+    // guarantees a terminal state. Counting cumulatively — rather than
+    // consecutively — is deliberate: an errored subscription can oscillate
+    // between 'error' and 'pending' while Convex re-evaluates it, and resetting
+    // on 'pending' would let it evade the bound indefinitely.
+    let queryErrorCount = 0;
 
     for (;;) {
       const repairDecision = this.getMissingUserRepairDecision(sessionKey);
@@ -594,6 +589,16 @@ export class AuthService implements ConvexAuthProvider {
         await this.syncUserToApp({markAuthSyncFailedOnError: false});
         return;
       }
+      if (repairDecision === 'error') {
+        queryErrorCount += 1;
+        if (queryErrorCount >= MISSING_USER_REPAIR_MAX_QUERY_ERRORS) {
+          logger.warn(
+            '[AuthService] Abandoning missing app-user repair: current-user profile query kept erroring',
+            this.userQuery.error(),
+          );
+          return;
+        }
+      }
 
       waitMs = waitMs === 0 ? 50 : Math.min(waitMs * 2, 1000);
       await new Promise<void>((resolve) => setTimeout(resolve, waitMs));
@@ -602,7 +607,7 @@ export class AuthService implements ConvexAuthProvider {
 
   private getMissingUserRepairDecision(
     sessionKey: string,
-  ): 'pending' | 'repair' | 'skip' {
+  ): 'pending' | 'repair' | 'skip' | 'error' {
     const session = this.session();
     if (
       !session ||
@@ -621,6 +626,18 @@ export class AuthService implements ConvexAuthProvider {
 
     if (this.authSyncFailed()) {
       return 'skip';
+    }
+
+    // The profile query failed and left no usable data (fresh subscription that
+    // rejected). `injectQuery` clears `isLoading` and preserves `data` on error,
+    // so this state — error set, data still undefined — is otherwise
+    // indistinguishable from "still loading" and would loop forever as
+    // 'pending'. Surface it as 'error' so the repair loop can bound its retries.
+    if (
+      this.userQuery.error() !== undefined &&
+      this.userQuery.data() === undefined
+    ) {
+      return 'error';
     }
 
     const currentUser = this.userQuery.data();
@@ -758,7 +775,22 @@ export class AuthService implements ConvexAuthProvider {
         delaysMs: retryDelaysMs,
         run: async () => {
           logger.info('[initSession] Starting session initialization');
-          const {data} = await this.authClient.getSession();
+          const {data, error} = await this.authClient.getSession();
+          if (error) {
+            // Better Auth's better-fetch client returns HTTP failures (transient
+            // 5xx/429, backend restart, brief outage) as `{data: null, error}`
+            // WITHOUT throwing. Swallowing that error and running
+            // `setSessionState(null)` would flip auth into a confident
+            // "logged out" state for a user with a perfectly valid session.
+            // Promote it to a throw so the retry loop below engages; a genuinely
+            // unauthenticated user resolves as `{data: null, error: null}` and
+            // does NOT reach this branch. Matches the returned-error handling in
+            // refreshSessionFromServer/loadSessionAfterAuth/fetchAccessToken.
+            throw new SessionInitBackendError(
+              error.message || 'Failed to initialize session',
+              {cause: error},
+            );
+          }
           logger.info(
             '[initSession] getSession returned:',
             data ? 'session found' : 'no session',
@@ -787,13 +819,19 @@ export class AuthService implements ConvexAuthProvider {
           }
         },
         shouldRetry: (err, attemptIndex) => {
-          const isNetworkError =
-            err instanceof TypeError && err.message.includes('fetch');
+          // Retry both thrown network failures (rejected fetch → TypeError) and
+          // returned backend errors promoted to SessionInitBackendError above.
+          // Without the marker, a returned 5xx whose message lacks a magic
+          // keyword would slip past isRetryableAuthBackendError and never retry.
+          const isTransientBackendError =
+            err instanceof SessionInitBackendError ||
+            isRetryableAuthBackendError(err) ||
+            (err instanceof TypeError && err.message.includes('fetch'));
           const shouldRetry =
-            isNetworkError && attemptIndex < retryDelaysMs.length - 1;
+            isTransientBackendError && attemptIndex < retryDelaysMs.length - 1;
           if (shouldRetry) {
             logger.warn(
-              `[initSession] Network error on attempt ${attemptIndex + 1}/${retryDelaysMs.length}, retrying...`,
+              `[initSession] Transient backend error on attempt ${attemptIndex + 1}/${retryDelaysMs.length}, retrying...`,
             );
           }
           return shouldRetry;
@@ -937,8 +975,16 @@ export class AuthService implements ConvexAuthProvider {
           return;
         }
 
-        logger.error('Signup failed', error);
-        registrationError = new Error('Registration failed', {cause: error});
+        if (isCompromisedPasswordError(error)) {
+          // haveIBeenPwned plugin rejected the password. Safe to surface —
+          // reveals nothing about the account, only about the password.
+          registrationError = new Error(COMPROMISED_PASSWORD_MESSAGE, {
+            cause: error,
+          });
+        } else {
+          logger.error('Signup failed', error);
+          registrationError = new Error('Registration failed', {cause: error});
+        }
       } else {
         // If signup returned session data and user is verified, sync to app
         // With requireEmailVerification: true, user won't be verified yet
@@ -979,8 +1025,14 @@ export class AuthService implements ConvexAuthProvider {
         return;
       }
 
-      logger.error('Signup failed', err);
-      registrationError = new Error('Registration failed', {cause: err});
+      if (isCompromisedPasswordError(err)) {
+        registrationError = new Error(COMPROMISED_PASSWORD_MESSAGE, {
+          cause: err,
+        });
+      } else {
+        logger.error('Signup failed', err);
+        registrationError = new Error('Registration failed', {cause: err});
+      }
     }
 
     if (registrationError) {
@@ -1222,11 +1274,10 @@ export class AuthService implements ConvexAuthProvider {
    */
   async handleOAuthCallback(
     ott: string,
-    options: {navigateOnSuccess?: boolean; syncUserToApp?: boolean} = {},
+    options: {navigateOnSuccess?: boolean} = {},
   ): Promise<SocialAuthCompletionState> {
     try {
       const navigateOnSuccess = options.navigateOnSuccess ?? true;
-      const shouldSyncUserToApp = options.syncUserToApp ?? true;
       let completionState: SocialAuthCompletionState = {
         requiresSocialSignupCompletion: false,
       };
@@ -1246,9 +1297,7 @@ export class AuthService implements ConvexAuthProvider {
         this.setSessionState(session);
         this.notifyConvexAuthChanged();
 
-        if (shouldSyncUserToApp) {
-          completionState = await this.syncUserToApp();
-        }
+        completionState = await this.syncUserToApp();
 
         // Notify other tabs about login
         this.broadcastSessionChange('LOGIN');

@@ -11,25 +11,31 @@ import {ActivatedRoute, Router, RouterLink} from '@angular/router';
 import {toSignal} from '@angular/core/rxjs-interop';
 import {map} from 'rxjs/operators';
 import {AuthService} from '@/core/services/auth.service';
-import { injectConvex, injectQuery, skipToken } from 'convex-angular';
+import {injectConvex, injectQuery, skipToken} from 'convex-angular';
 import {api} from '@convex/_generated/api';
 import {toast} from 'ngx-sonner';
 import {logger} from '@/utils/logger';
+import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
+import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
 
 type ViewState = 'loading' | 'error' | 'options' | 'redeeming' | 'success';
 
 @Component({
   selector: 'app-invite',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink],
+  imports: [RouterLink, ZardButtonComponent, ZardIconComponent],
   template: `
     @switch (viewState()) {
       @case ('loading') {
-        <div data-testid="invite-loading" class="min-h-screen flex items-center justify-center">
+        <div
+          data-testid="invite-loading"
+          class="flex min-h-screen items-center justify-center"
+        >
           <div role="status">
-            <div
-              class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"
-            ></div>
+            <z-icon
+              zType="loader-circle"
+              class="h-8 w-8 animate-spin text-primary"
+            />
             <span class="sr-only">Loading...</span>
           </div>
         </div>
@@ -37,69 +43,71 @@ type ViewState = 'loading' | 'error' | 'options' | 'redeeming' | 'success';
       @case ('error') {
         <div
           data-testid="invite-error"
-          class="min-h-screen flex flex-col items-center justify-center gap-6 px-6"
+          class="flex min-h-screen flex-col items-center justify-center gap-6 px-6"
         >
           <div
-            class="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center"
+            class="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10"
           >
-            <span class="text-destructive text-2xl">&#x2715;</span>
+            <z-icon zType="x" class="h-8 w-8 text-destructive-text" />
           </div>
           <h1
-            class="text-2xl sm:text-3xl font-bold font-display tracking-tight uppercase text-center"
+            class="text-center font-display text-2xl font-bold tracking-tight uppercase sm:text-3xl"
           >
             Link Unavailable
           </h1>
           <p
             data-testid="invite-error-message"
-            class="text-muted-foreground mono-label text-xs text-center"
+            class="mono-label text-center text-xs text-muted-foreground"
           >
             {{ errorMessage() }}
           </p>
           <a
             routerLink="/"
-            class="mt-4 text-primary hover:underline font-mono text-sm uppercase tracking-wider"
+            class="mt-4 inline-flex min-h-11 items-center gap-2 font-mono text-sm tracking-wider text-primary uppercase hover:underline"
           >
-            &larr; Back to Home
+            <z-icon zType="arrow-left" class="h-4 w-4" /> Back to Home
           </a>
         </div>
       }
       @case ('options') {
         <div
           data-testid="invite-options"
-          class="min-h-screen flex flex-col items-center justify-center gap-6 px-6"
+          class="flex min-h-screen flex-col items-center justify-center gap-6 px-6"
         >
-          <div class="text-center space-y-3">
-            <p
-              class="mono-label text-2xs text-muted-foreground"
-            >
-              invitation
-            </p>
+          <div class="space-y-3 text-center">
+            <p class="mono-label text-2xs text-muted-foreground">invitation</p>
             <h1
-              class="text-3xl sm:text-4xl font-bold font-display tracking-tight uppercase"
+              class="font-display text-3xl font-bold tracking-tight uppercase sm:text-4xl"
             >
               You're Invited
             </h1>
-            <p class="text-muted-foreground max-w-md">
+            <p class="max-w-md text-muted-foreground">
               This link will automatically vet you
               @if (communityName()) {
-                for <span data-testid="invite-community-name" class="text-foreground font-semibold">{{ communityName() }}</span>.
+                for
+                <span
+                  data-testid="invite-community-name"
+                  class="font-semibold text-foreground"
+                  >{{ communityName() }}</span
+                >.
               } @else {
                 for this community.
               }
-              <span class="font-bold text-foreground">Only share with trusted comrades.</span>
+              <span class="font-bold text-foreground"
+                >Only share with trusted comrades.</span
+              >
             </p>
-            <p
-              class="text-muted-foreground mono-label text-2xs"
-            >
+            <p class="mono-label text-2xs text-muted-foreground">
               Do not post in public channels like Discord
             </p>
           </div>
-          <div class="flex flex-col sm:flex-row gap-4">
+          <div class="flex flex-col gap-4 sm:flex-row">
             <a
               data-testid="invite-sign-in"
               [routerLink]="['/login']"
               [queryParams]="{returnUrl: '/invite/' + token()}"
-              class="inline-flex items-center justify-center rounded-md bg-primary px-6 py-3 text-sm font-mono uppercase tracking-wider text-primary-foreground hover:bg-primary/90 transition-colors w-full sm:w-auto"
+              z-button
+              class="w-full font-mono text-sm tracking-wider uppercase sm:w-auto"
             >
               Sign In
             </a>
@@ -107,7 +115,9 @@ type ViewState = 'loading' | 'error' | 'options' | 'redeeming' | 'success';
               data-testid="invite-create-account"
               [routerLink]="['/login']"
               [queryParams]="{signup: 'true', returnUrl: '/invite/' + token()}"
-              class="inline-flex items-center justify-center rounded-md border border-border px-6 py-3 text-sm font-mono uppercase tracking-wider text-foreground hover:bg-accent transition-colors w-full sm:w-auto"
+              z-button
+              zType="outline"
+              class="w-full font-mono text-sm tracking-wider uppercase sm:w-auto"
             >
               Create Account
             </a>
@@ -117,12 +127,13 @@ type ViewState = 'loading' | 'error' | 'options' | 'redeeming' | 'success';
       @case ('redeeming') {
         <div
           data-testid="invite-redeeming"
-          class="min-h-screen flex flex-col items-center justify-center gap-4"
+          class="flex min-h-screen flex-col items-center justify-center gap-4"
         >
           <div role="status" class="flex flex-col items-center gap-4">
-            <div
-              class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"
-            ></div>
+            <z-icon
+              zType="loader-circle"
+              class="h-8 w-8 animate-spin text-primary"
+            />
             <span class="sr-only">Verifying access...</span>
           </div>
           <p
@@ -136,28 +147,24 @@ type ViewState = 'loading' | 'error' | 'options' | 'redeeming' | 'success';
       @case ('success') {
         <div
           data-testid="invite-success"
-          class="min-h-screen flex flex-col items-center justify-center gap-6 px-6"
+          class="flex min-h-screen flex-col items-center justify-center gap-6 px-6"
         >
           <div
-            class="w-16 h-16 rounded-full bg-secondary/10 flex items-center justify-center"
+            class="flex h-16 w-16 items-center justify-center rounded-full bg-success/10"
           >
-            <span class="text-secondary text-2xl">&#x2713;</span>
+            <z-icon zType="check" class="h-8 w-8 text-success" />
           </div>
           <h1
-            class="text-2xl sm:text-3xl font-bold font-display tracking-tight uppercase"
+            class="font-display text-2xl font-bold tracking-tight uppercase sm:text-3xl"
           >
             Welcome
           </h1>
-          <p
-            class="text-muted-foreground mono-label text-xs"
-          >
-            access granted
-          </p>
+          <p class="mono-label text-xs text-muted-foreground">access granted</p>
           <a
             routerLink="/"
-            class="mt-4 text-primary hover:underline font-mono text-sm uppercase tracking-wider"
+            class="mt-4 inline-flex min-h-11 items-center gap-2 font-mono text-sm tracking-wider text-primary uppercase hover:underline"
           >
-            Go to Home &rarr;
+            Go to Home <z-icon zType="arrow-right" class="h-4 w-4" />
           </a>
         </div>
       }
@@ -188,7 +195,9 @@ export class InviteComponent {
   );
 
   /** Tracks the redemption lifecycle to prevent double-calls and drive view state. */
-  readonly redemptionStatus = signal<'idle' | 'redeeming' | 'success' | 'error'>('idle');
+  readonly redemptionStatus = signal<
+    'idle' | 'redeeming' | 'success' | 'error'
+  >('idle');
 
   readonly viewState = computed<ViewState>(() => {
     // Still loading the validation query
@@ -283,7 +292,10 @@ export class InviteComponent {
     this.redemptionStatus.set('redeeming');
 
     try {
-      const result = await this.convex.mutation(api.communities.invite_links.redeem, {token});
+      const result = await this.convex.mutation(
+        api.communities.invite_links.redeem,
+        {token},
+      );
 
       this.redemptionStatus.set('success');
 
@@ -292,7 +304,7 @@ export class InviteComponent {
       } else if (result.alreadyRedeemed) {
         toast.success("You've already used this link");
       } else {
-        toast.success('Welcome! You are now part of the community.');
+        toast.success("you're in — welcome to the community");
       }
 
       // Redirect to home after a brief delay so the user sees the success state

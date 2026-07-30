@@ -3,14 +3,7 @@ import type {MutationCtx, QueryCtx} from '../../_generated/server';
 import {scheduleBroadcastCatchup} from '../../lib/broadcast_catchup';
 import {internal} from '../../_generated/api';
 import {throwNotFound} from '../../lib/errors';
-import {
-  validateEmail,
-  validateRequiredString,
-  validateStringLength,
-  MAX_GUEST_NAME_LENGTH,
-  MAX_GUEST_EMAIL_LENGTH,
-  MAX_GUEST_NOTES_LENGTH,
-} from '../../lib/validation';
+import {validateGuestFieldsAndNormalizeEmail} from '../../lib/events/guest_fields';
 import {requireEventForEdit, requireEventForRoster} from '../../lib/access';
 import {ADMIN_AUDIT_ACTIONS} from '../../lib/admin_audit_actions';
 import {insertAdminAuditLog} from '../../lib/admin_audit_log';
@@ -28,24 +21,17 @@ export async function add(
 ): Promise<Id<'guests'>> {
   const {user, event} = await requireEventForEdit(ctx, args.eventId);
 
-  validateRequiredString(args.name, 'Name');
-  validateStringLength(args.name, 'Name', MAX_GUEST_NAME_LENGTH);
-  validateStringLength(args.email, 'Email', MAX_GUEST_EMAIL_LENGTH);
-  validateStringLength(args.notes, 'Notes', MAX_GUEST_NOTES_LENGTH);
-
-  // The admin UI trims and requires a plausible address before submitting;
-  // enforce the same here so direct API calls cannot enqueue broadcast
-  // sends (immediate or catch-up) to non-address strings.
-  const trimmedEmail = args.email?.trim();
-  if (trimmedEmail) {
-    validateEmail(trimmedEmail, 'Email');
-  }
+  // Validate all fields and get the trimmed email. The guest paths apply the
+  // shared lenient `@`-presence rule (not the strict RFC regex) so unusual but
+  // valid addresses the admin UI accepts are not rejected here; trimming keeps
+  // the stored value aligned with scheduling and broadcast audience lookups.
+  const email = validateGuestFieldsAndNormalizeEmail(args);
 
   // Persist the trimmed, validated email so the stored record matches the
   // value used by scheduling and the broadcast audience lookups downstream.
   const guestId = await ctx.db.insert('guests', {
     ...args,
-    email: trimmedEmail || undefined,
+    email,
   });
 
   await insertAdminAuditLog(
@@ -64,7 +50,7 @@ export async function add(
   // catch them up on anything already sent.
   await scheduleBroadcastCatchup(ctx, {
     eventId: args.eventId,
-    email: trimmedEmail,
+    email,
   });
 
   return guestId;
@@ -85,18 +71,24 @@ export async function update(
 
   const {user, event} = await requireEventForEdit(ctx, guest.eventId);
 
-  validateRequiredString(args.name, 'Name');
-  validateStringLength(args.name, 'Name', MAX_GUEST_NAME_LENGTH);
-  validateStringLength(args.email, 'Email', MAX_GUEST_EMAIL_LENGTH);
-  validateStringLength(args.notes, 'Notes', MAX_GUEST_NOTES_LENGTH);
+  // Validate all fields and get the trimmed email, matching guests.add so an
+  // update cannot persist an untrimmed value that would drift from what
+  // scheduling and broadcast audience lookups use downstream. Uses the shared
+  // lenient `@`-presence email rule the guest paths deliberately apply.
+  const email = validateGuestFieldsAndNormalizeEmail(args);
 
   await ctx.db.replace('guests', args.id, {
     eventId: guest.eventId,
     name: args.name,
-    email: args.email,
+    email,
     type: args.type,
     notes: args.notes,
     emailedAt: guest.emailedAt,
+    // Carry the in-flight ticket-send lock through the replace. Omitting it
+    // would drop the field (replace overwrites the whole document), silently
+    // clearing a lock a concurrent `sendTicket` action is holding and allowing
+    // a duplicate ticket email. See `beginGuestTicketSend` for the lock's role.
+    emailSendLockedAt: guest.emailSendLockedAt,
     checkedInAt: guest.checkedInAt,
     checkedInBy: guest.checkedInBy,
   });
@@ -264,8 +256,10 @@ export async function markAsEmailed(
  * the failure path so a failed send can be retried immediately instead of
  * waiting out the staleness window. Only clears the lock when this attempt
  * still owns it (`emailSendLockedAt === lockToken`), so an older attempt cannot
- * release a newer reclaimed lock. `null` (not `undefined`) is used because
- * `ctx.db.patch` does not clear fields set to `undefined` in this codebase.
+ * release a newer reclaimed lock. `null` (not `undefined`) is used to keep a
+ * released lock distinguishable from a never-claimed one (absent field) — see
+ * the schema doc for `guests.emailSendLockedAt`. (`ctx.db.patch` would remove
+ * the field entirely if set to `undefined`.)
  */
 export async function clearGuestTicketSendLock(
   ctx: MutationCtx,

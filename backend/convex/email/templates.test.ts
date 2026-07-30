@@ -241,6 +241,62 @@ describe('purchasedTicketTemplate', () => {
     expect(html).not.toContain('2026-02-27T07:30:00.000Z');
   });
 
+  it('renders a next-day overnight end as end time only (no end date)', () => {
+    const {html} = purchasedTicketTemplate(
+      {
+        title: 'Overnight Ticket',
+        date: '2026-02-27T06:00:00.000Z', // 10pm Feb 26 event-local
+        endDate: '2026-02-27T14:00:00.000Z', // 6am Feb 27 event-local
+        location: 'Afterhours',
+      },
+      'Guest',
+      'https://qr.example/ticket.png',
+      true,
+    );
+
+    const normalized = html.replace(/\s+/g, ' ');
+    // Start day + time, then just the end time — the next-day date is omitted.
+    expect(normalized).toContain('Thu, Feb 26, 2026, 10:00 PM – 6:00 AM PST');
+    expect(normalized).not.toContain('Feb 27, 2026');
+  });
+
+  it('renders a multi-day event as a full range with both dates', () => {
+    const {html} = purchasedTicketTemplate(
+      {
+        title: 'Weekender Ticket',
+        date: '2026-02-27T06:00:00.000Z', // 10pm Feb 26 event-local
+        endDate: '2026-03-01T04:00:00.000Z', // 8pm Feb 28 event-local
+        location: 'Afterhours',
+      },
+      'Guest',
+      'https://qr.example/ticket.png',
+      true,
+    );
+
+    const normalized = html.replace(/\s+/g, ' ');
+    // Two calendar days apart -> the end date is shown to disambiguate.
+    expect(normalized).toContain('Feb 26, 2026');
+    expect(normalized).toContain('Feb 28, 2026');
+    expect(normalized).toContain('PST');
+  });
+
+  it('ignores an end date that is not after the start', () => {
+    const {html} = purchasedTicketTemplate(
+      {
+        title: 'Zero-Length Ticket',
+        date: '2026-02-27T07:30:00.000Z',
+        endDate: '2026-02-27T07:30:00.000Z',
+        location: 'Afterhours',
+      },
+      'Guest',
+      'https://qr.example/ticket.png',
+      true,
+    );
+
+    expect(html).toContain('Thu, Feb 26, 2026, 11:30 PM PST');
+    expect(html.replace(/\s+/g, ' ')).not.toContain('PST – ');
+  });
+
   it('formats legacy date-only event rows as platform-local dates', () => {
     const {html} = purchasedTicketTemplate(
       {
@@ -390,6 +446,27 @@ describe('ticketPurchaseReminderTemplate', () => {
     expect(text).not.toContain('Fri, Feb 27');
     expect(html).not.toContain('2026-02-27T07:30:00.000Z');
     expect(text).not.toContain('2026-02-27T07:30:00.000Z');
+  });
+
+  it('injects the rich HTML body verbatim and keeps the plain message for the text part', () => {
+    const {html, text} = ticketPurchaseReminderTemplate({
+      event: {
+        _id: 'evt_late',
+        title: 'Late Night Reminder',
+        date: '2026-02-27T07:30:00.000Z',
+        location: 'Afterhours',
+      },
+      organizer: {id: 'org_late', name: 'Night Shift'},
+      message: 'Still available',
+      bodyHtml: '<p><strong>Still</strong> available</p>',
+      siteUrl: 'https://braket.gay',
+      unsubToken: 'reminder-unsub-token',
+      preferenceCenterUrl: 'https://braket.gay/account#email-preferences',
+    });
+
+    expect(html).toContain('<p><strong>Still</strong> available</p>');
+    expect(html).not.toContain('&lt;p&gt;');
+    expect(text).toContain('Still available');
   });
 });
 describe('applicationApprovedTemplate', () => {
@@ -573,6 +650,49 @@ describe('eventBroadcastTemplate', () => {
     expect(headers['List-Unsubscribe']).toContain(
       'http://127.0.0.1:3211/api/unsubscribe/one-click?token=broadcast-unsub-token',
     );
+  });
+
+  it('injects the rich HTML body verbatim and keeps the plain message for the text part', () => {
+    const {html, text} = eventBroadcastTemplate({
+      event: {
+        _id: 'evt_456',
+        title: 'Basement Assembly',
+        date: '2026-06-20T21:00:00.000Z',
+        location: 'Sublevel',
+      },
+      organizer: {id: 'org_456', name: 'Night Signal'},
+      message: 'Heading\n\nbody line',
+      bodyHtml: '<h2 style="color: #FAFAFA;">Heading</h2><p>body line</p>',
+      siteUrl: 'https://braket.gay',
+      unsubToken: 'broadcast-unsub-token',
+      preferenceCenterUrl: 'https://braket.gay/account#email-preferences',
+    });
+
+    // Rich fragment injected as-is (block-level elements survive, unescaped).
+    expect(html).toContain('<h2 style="color: #FAFAFA;">Heading</h2>');
+    expect(html).toContain('<p>body line</p>');
+    expect(html).not.toContain('&lt;h2');
+    // Plain-text part still uses the extracted message.
+    expect(text).toContain('Heading');
+    expect(text).toContain('body line');
+  });
+
+  it('escapes the plain message (no rich body) so HTML cannot be injected', () => {
+    const {html} = eventBroadcastTemplate({
+      event: {
+        _id: 'evt_456',
+        title: 'Basement Assembly',
+        date: '2026-06-20T21:00:00.000Z',
+      },
+      organizer: {id: 'org_456', name: 'Night Signal'},
+      message: '<script>alert(1)</script>',
+      siteUrl: 'https://braket.gay',
+      unsubToken: 'broadcast-unsub-token',
+      preferenceCenterUrl: 'https://braket.gay/account#email-preferences',
+    });
+
+    expect(html).not.toContain('<script>alert(1)</script>');
+    expect(html).toContain('&lt;script&gt;');
   });
 });
 

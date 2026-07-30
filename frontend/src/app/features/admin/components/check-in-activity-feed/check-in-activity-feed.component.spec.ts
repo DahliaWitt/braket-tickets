@@ -157,6 +157,30 @@ describe('CheckInActivityFeedComponent', () => {
     expect(await harness.getMostRecentEntryTimestamp()).toBe('23:30:15');
   });
 
+  it('keeps check-in timestamps readable throughout the entry animation', async () => {
+    await setup(
+      makeMockConvex([
+        {
+          ticketId: 'ticket-1' as Id<'tickets'>,
+          attendeeName: 'Cheryl Tunt',
+          tierName: 'REGULAR',
+          checkedInAt: Date.parse('2026-02-27T07:30:15.000Z'),
+          checkedInByName: null,
+        },
+      ]),
+    );
+    const harness = await getHarness(fixture);
+
+    const entryClasses = await harness.getMostRecentEntryClasses();
+    expect(entryClasses).toContain('animate-in');
+    expect(entryClasses).toContain('slide-in-from-top-3');
+    expect(entryClasses).not.toContain('fade-in');
+
+    const timestampClasses = await harness.getMostRecentEntryTimestampClasses();
+    expect(timestampClasses).toContain('text-accent-text');
+    expect(timestampClasses).not.toContain('text-accent');
+  });
+
   it('should show null for most recent entry name when empty', async () => {
     await setup(makeMockConvex([]));
     const harness = await getHarness(fixture);

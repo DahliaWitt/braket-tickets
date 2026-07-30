@@ -297,6 +297,123 @@ describe('canViewEvent', () => {
     expect(await t.run((ctx) => canViewEvent(ctx, userId, event))).toBe(false);
   });
 
+  it('member CANNOT view private draft event', async () => {
+    // Regression: restricted-visibility events are gated on event:manage/edit,
+    // which a vetted `member` does not hold, so a member can never see its
+    // community's unpublished (draft) events. Before the fix the branch checked
+    // `event:view`, which `member` carried, leaking draft/cancelled detail.
+    const t = convexTest();
+    const userId = await createUser(t, 'Member');
+    const orgId = await createOrganizer(t, 'Org');
+    await assignMember(t, userId, orgId);
+    const eventId = await createEvent(t, orgId, {
+      visibility: 'private',
+      status: 'draft',
+    });
+    const event = await loadEvent(t, eventId);
+
+    expect(await t.run((ctx) => canViewEvent(ctx, userId, event))).toBe(false);
+  });
+
+  it('scanner CANNOT view private draft event', async () => {
+    // Regression: a door-staff `community_scanner` holds neither
+    // event:manage nor event:edit. It is already denied a published *private*
+    // event and must not gain access to the strictly-less-public draft.
+    // Mirrors the lifecycle gate in canScanEvent/canViewEventRoster.
+    const t = convexTest();
+    const userId = await createUser(t, 'Scanner');
+    const orgId = await createOrganizer(t, 'Org');
+    await assignCommunityScanner(t, userId, orgId);
+    const eventId = await createEvent(t, orgId, {
+      visibility: 'private',
+      status: 'draft',
+    });
+    const event = await loadEvent(t, eventId);
+
+    expect(await t.run((ctx) => canViewEvent(ctx, userId, event))).toBe(false);
+  });
+
+  it('member CANNOT view orphaned event (organizer missing)', async () => {
+    // The restricted-visibility branch also fires when the organizer doc is
+    // gone (organizer === null). A member of the (former) community must not
+    // read a published event whose organizer no longer resolves.
+    const t = convexTest();
+    const userId = await createUser(t, 'Member');
+    const orgId = await createOrganizer(t, 'Org');
+    await assignMember(t, userId, orgId);
+    const eventId = await createEvent(t, orgId, {
+      visibility: 'public',
+      status: 'published',
+    });
+    const event = await loadEvent(t, eventId);
+
+    expect(
+      await t.run((ctx) => canViewEvent(ctx, userId, event, {organizer: null})),
+    ).toBe(false);
+  });
+
+  it('scanner CANNOT view orphaned event (organizer missing)', async () => {
+    const t = convexTest();
+    const userId = await createUser(t, 'Scanner');
+    const orgId = await createOrganizer(t, 'Org');
+    await assignCommunityScanner(t, userId, orgId);
+    const eventId = await createEvent(t, orgId, {
+      visibility: 'public',
+      status: 'published',
+    });
+    const event = await loadEvent(t, eventId);
+
+    expect(
+      await t.run((ctx) => canViewEvent(ctx, userId, event, {organizer: null})),
+    ).toBe(false);
+  });
+
+  it('admin CAN view orphaned event (organizer missing)', async () => {
+    // Community admins retain restricted-view access via event:manage even when
+    // the organizer doc no longer resolves.
+    const t = convexTest();
+    const userId = await createUser(t, 'Admin');
+    const orgId = await createOrganizer(t, 'Org');
+    await assignCommunityAdmin(t, userId, orgId);
+    const eventId = await createEvent(t, orgId, {
+      visibility: 'public',
+      status: 'published',
+    });
+    const event = await loadEvent(t, eventId);
+
+    expect(
+      await t.run((ctx) => canViewEvent(ctx, userId, event, {organizer: null})),
+    ).toBe(true);
+  });
+
+  it('member CANNOT view cancelled event', async () => {
+    const t = convexTest();
+    const userId = await createUser(t, 'Member');
+    const orgId = await createOrganizer(t, 'Org');
+    await assignMember(t, userId, orgId);
+    const eventId = await createEvent(t, orgId, {
+      visibility: 'private',
+      status: 'cancelled',
+    });
+    const event = await loadEvent(t, eventId);
+
+    expect(await t.run((ctx) => canViewEvent(ctx, userId, event))).toBe(false);
+  });
+
+  it('scanner CANNOT view cancelled event', async () => {
+    const t = convexTest();
+    const userId = await createUser(t, 'Scanner');
+    const orgId = await createOrganizer(t, 'Org');
+    await assignCommunityScanner(t, userId, orgId);
+    const eventId = await createEvent(t, orgId, {
+      visibility: 'private',
+      status: 'cancelled',
+    });
+    const event = await loadEvent(t, eventId);
+
+    expect(await t.run((ctx) => canViewEvent(ctx, userId, event))).toBe(false);
+  });
+
   it('admin CAN view draft event', async () => {
     const t = convexTest();
     const userId = await createUser(t, 'Admin');

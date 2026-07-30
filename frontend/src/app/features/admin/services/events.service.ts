@@ -17,7 +17,10 @@ import {
 
 type CreateEventArgs = FunctionArgs<typeof api.events.management.create>;
 type UpdateEventArgs = FunctionArgs<typeof api.events.management.update>;
-const MAX_EVENT_IDS_PER_BATCH = 50;
+/** Backend contract for {@link api.storage.files.confirmUpload}. Never redefine. */
+type ConfirmUploadResult = FunctionReturnType<
+  typeof api.storage.files.confirmUpload
+>;
 const EVENT_READ_RETRY_DELAYS_MS = [0, 250, 750, 1500, 3000] as const;
 
 function parseUploadStorageId(responseText: string): string {
@@ -38,7 +41,6 @@ export type EventAvailability = FunctionReturnType<
 export type BatchAvailability = FunctionReturnType<
   typeof api.events.public.getBatchAvailability
 >;
-export const EMPTY_BATCH_AVAILABILITY: BatchAvailability = {};
 
 /**
  * Service for managing events in the ticket platform.
@@ -141,37 +143,6 @@ export class EventsService {
   }
 
   /**
-   * Fetches ticket availability for multiple events in a single query.
-   * More efficient than calling getAvailability for each event.
-   *
-   * @param ids - Array of event IDs
-   * @returns Map of event ID to availability info
-   */
-  getBatchAvailability(ids: string[]): Promise<BatchAvailability> {
-    if (ids.length === 0) {
-      return Promise.resolve(EMPTY_BATCH_AVAILABILITY);
-    }
-
-    const now = Math.floor(Date.now() / 60000) * 60000;
-    const chunks: Id<'events'>[][] = [];
-    for (let i = 0; i < ids.length; i += MAX_EVENT_IDS_PER_BATCH) {
-      chunks.push(ids.slice(i, i + MAX_EVENT_IDS_PER_BATCH) as Id<'events'>[]);
-    }
-
-    return Promise.all(
-      chunks.map((eventIds) =>
-        this.convex.query(api.events.public.getBatchAvailability, {
-          eventIds,
-          now,
-        }),
-      ),
-    ).then(
-      (results) =>
-        Object.assign({}, ...(results as object[])) as BatchAvailability,
-    );
-  }
-
-  /**
    * Creates a new event without a poster image.
    * Use createWithPoster() when uploading a poster.
    *
@@ -246,19 +217,24 @@ export class EventsService {
   }
 
   /**
-   * Uploads a poster image file to Convex storage.
+   * Shared upload core: validateUpload -> generateUploadUrl -> XHR PUT (with
+   * progress) -> confirmUpload. Resolves with the confirmUpload result (valid or
+   * not) plus the parsed storageId so callers can decide how to surface failures.
+   *
+   * Rejects only on transport-level failures (validation-precheck failure,
+   * non-2xx upload, network error, abort, or the confirmUpload action throwing).
+   * A `{valid: false}` confirmation resolves normally — the caller inspects it.
    *
    * @param file - The image file to upload
-   * @param onProgress - Optional progress callback
+   * @param onProgress - Optional progress callback (integer percent 0-100)
    * @param signal - Optional AbortSignal to cancel the upload
-   * @returns The storage ID for the uploaded file
-   * @throws Error if upload fails or is aborted
+   * @throws Error if the upload fails, is aborted, or confirmUpload throws
    */
-  private async uploadPoster(
+  private async uploadAndConfirm(
     file: File,
     onProgress?: (pct: number) => void,
     signal?: AbortSignal,
-  ): Promise<Id<'_storage'>> {
+  ): Promise<{result: ConfirmUploadResult; storageId: Id<'_storage'>}> {
     const validation = await this.convex.mutation(
       api.storage.files.validateUpload,
       {
@@ -288,7 +264,10 @@ export class EventsService {
     logger.debug('Uploading to:', uploadUrl);
     const contentType = file.type || 'application/octet-stream';
 
-    return new Promise<Id<'_storage'>>((resolve, reject) => {
+    return new Promise<{
+      result: ConfirmUploadResult;
+      storageId: Id<'_storage'>;
+    }>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open('POST', uploadUrl);
       xhr.setRequestHeader('Content-Type', contentType);
@@ -327,11 +306,7 @@ export class EventsService {
                 mimeType: contentType,
               })
               .then((result) => {
-                if (!result.valid) {
-                  reject(new Error(result.error ?? 'File validation failed'));
-                } else {
-                  resolve(typedStorageId);
-                }
+                resolve({result, storageId: typedStorageId});
               })
               .catch((err: unknown) => {
                 reject(
@@ -345,17 +320,67 @@ export class EventsService {
           }
         } else {
           logger.error('Upload failed:', xhr.status, xhr.statusText);
-          reject(new Error('Failed to upload poster image'));
+          reject(new Error('Failed to upload file'));
         }
       });
 
       xhr.addEventListener('error', () => {
         logger.error('Upload network error');
-        reject(new Error('Failed to upload poster image'));
+        reject(new Error('Failed to upload file'));
       });
 
       xhr.send(file);
     });
+  }
+
+  /**
+   * Uploads a poster image file to Convex storage.
+   *
+   * @param file - The image file to upload
+   * @param onProgress - Optional progress callback
+   * @param signal - Optional AbortSignal to cancel the upload
+   * @returns The storage ID for the uploaded file
+   * @throws Error if upload fails or is aborted
+   */
+  private async uploadPoster(
+    file: File,
+    onProgress?: (pct: number) => void,
+    signal?: AbortSignal,
+  ): Promise<Id<'_storage'>> {
+    const {result, storageId} = await this.uploadAndConfirm(
+      file,
+      onProgress,
+      signal,
+    );
+    if (!result.valid) {
+      throw new Error(result.error ?? 'File validation failed');
+    }
+    return storageId;
+  }
+
+  /**
+   * Uploads an inline image for the rich-text email editor and resolves to the
+   * confirmed upload's `storageId` plus a signed preview `url`.
+   *
+   * The `storageId` is the durable reference persisted into the email body and
+   * verified against `confirmedUploads` on send. The `url` is a short-lived
+   * signed storage URL used ONLY for composer preview — it is never emailed; the
+   * backend re-derives a durable server-owned image src from the storageId.
+   *
+   * @param file - The image file to upload (already MIME-validated by the editor)
+   * @param onProgress - Progress callback (integer percent 0-100)
+   * @returns The confirmed `storageId` and a signed preview `url`
+   * @throws Error if validation fails, confirmation is invalid, or no URL was returned
+   */
+  async uploadRichTextImage(
+    file: File,
+    onProgress: (p: number) => void,
+  ): Promise<{storageId: Id<'_storage'>; url: string}> {
+    const {result, storageId} = await this.uploadAndConfirm(file, onProgress);
+    if (!result.valid || !result.url) {
+      throw new Error(result.error ?? 'image upload failed');
+    }
+    return {storageId, url: result.url};
   }
 
   /**

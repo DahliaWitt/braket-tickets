@@ -5,7 +5,6 @@ import {
   signal,
   computed,
   ChangeDetectionStrategy,
-  resource,
   Injector,
   runInInjectionContext,
 } from '@angular/core';
@@ -25,21 +24,19 @@ import {EmptyStateComponent} from '@ui/components/primitives/empty-state/empty-s
 import {ContentLayoutComponent} from '@/layout/content-layout/content-layout.component';
 import {toast} from 'ngx-sonner';
 import {logger} from '@/utils/logger';
-import {safeResourceValue} from '@/utils/resource';
 import {api} from '@convex/_generated/api';
 import type {Id} from '@convex/_generated/dataModel';
-import {injectQuery, skipToken} from 'convex-angular';
+import type {FunctionArgs} from 'convex/server';
+import {injectQuery, injectQueries, skipToken} from 'convex-angular';
 
 import {type Ticket} from '../../models/ticket.model';
-import {
-  EMPTY_BATCH_AVAILABILITY,
-  EventsService,
-  type BatchAvailability,
-} from '@/features/admin/services/events.service';
+import {type BatchAvailability} from '@/features/admin/services/events.service';
 import type {ResaleListingStatus} from '@shared/domain/resale-listing-status';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
 import {formatUsdCents} from '@shared/pricing/pricing-summary';
 import {EventDatePipe} from '@/utils/event-date.pipe';
+import {EventEndTimePipe} from '@/utils/event-end-time.pipe';
+import {MAX_EVENT_IDS_PER_BATCH} from '@/core/models/event.types';
 
 /** Resale listing data mapped to a ticket */
 interface TicketResaleInfo {
@@ -52,6 +49,7 @@ interface TicketResaleInfo {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     EventDatePipe,
+    EventEndTimePipe,
     UpperCasePipe,
     RouterLink,
     ZardCardComponent,
@@ -100,7 +98,7 @@ interface TicketResaleInfo {
               class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-destructive/20"
             >
               <svg
-                class="h-10 w-10 text-destructive"
+                class="h-10 w-10 text-destructive-text"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -115,7 +113,7 @@ interface TicketResaleInfo {
               </svg>
             </div>
             <h2
-              class="mb-4 font-display text-2xl font-bold tracking-tight text-destructive uppercase md:text-3xl"
+              class="mb-4 font-display text-2xl font-bold tracking-tight text-destructive-text uppercase md:text-3xl"
             >
               hit a snag
             </h2>
@@ -168,7 +166,11 @@ interface TicketResaleInfo {
                       >
                         @if (ticket.resolvedEvent?.date; as eventDate) {
                           {{ eventDate | eventDate: 'longDate' }},
-                          {{ eventDate | eventDate: 'shortTime' }}
+                          {{ eventDate | eventDate: 'shortTime'
+                          }}{{
+                            ticket.resolvedEvent.endDate
+                              | eventEndTime: eventDate
+                          }}
                         }
                       </p>
                       <p
@@ -184,7 +186,7 @@ interface TicketResaleInfo {
                         @case ('listed') {
                           <span
                             data-testid="ticket-status-badge"
-                            class="rounded border border-info/30 bg-info/10 px-2 py-0.5 font-mono text-2xs text-info"
+                            class="rounded border border-info/30 bg-info/10 px-2 py-0.5 font-mono text-2xs text-info-text"
                           >
                             LISTED
                           </span>
@@ -316,17 +318,17 @@ interface TicketResaleInfo {
                             <div class="flex items-start gap-2">
                               <z-icon
                                 zType="info"
-                                class="mt-0.5 shrink-0 text-info"
+                                class="mt-0.5 shrink-0 text-info-text"
                               />
                               <p
-                                class="font-mono text-xs leading-relaxed text-info/80"
+                                class="font-mono text-xs leading-relaxed text-info-text/80"
                               >
                                 Your ticket is queued for resale. It becomes
                                 available for purchase when the event sells out.
                               </p>
                             </div>
                             <p
-                              class="ml-6 font-mono text-2xs tracking-widest text-info/60 uppercase"
+                              class="ml-6 font-mono text-2xs tracking-widest text-info-text uppercase"
                             >
                               {{ getResaleQueueCount(ticket.eventId) }}
                               listing{{
@@ -343,7 +345,7 @@ interface TicketResaleInfo {
                           type="button"
                           z-button
                           zType="outline"
-                          class="mt-3 min-h-11 w-full border-destructive/30 font-mono text-xs tracking-widest text-destructive uppercase hover:bg-destructive/10"
+                          class="mt-3 min-h-11 w-full border-destructive/30 font-mono text-xs tracking-widest text-destructive-text uppercase hover:bg-destructive/10"
                           aria-label="Cancel resale listing"
                           (click)="
                             cancelResaleListing(resale.listingId, ticket._id)
@@ -568,7 +570,6 @@ export class TicketsComponent {
   private auth = inject(AuthService);
   private paymentService = inject(PaymentService);
   private resaleService = inject(ResaleService);
-  private eventsService = inject(EventsService);
   private browser = inject(BrowserPlatformService);
   private injector = inject(Injector);
 
@@ -606,23 +607,52 @@ export class TicketsComponent {
     return [...ids];
   });
 
-  /** Availability data per event loaded via chunking-aware service */
-  private readonly availabilityResource = resource({
-    params: () => ({eventIds: this.uniqueEventIds()}),
-    loader: ({params}): Promise<BatchAvailability> => {
-      if (params.eventIds.length === 0) {
-        return Promise.resolve(EMPTY_BATCH_AVAILABILITY);
+  /**
+   * Live availability subscriptions, one per chunk of event ids. `now` is
+   * frozen at subscribe time (Date.now() is not a signal), mirroring
+   * event-details' availabilityQuery: the callback re-runs only when
+   * uniqueEventIds() changes, so there is no minute-timer resubscribe.
+   */
+  private readonly availabilityQueries = injectQueries(() => {
+    const eventIds = this.uniqueEventIds();
+    if (eventIds.length === 0) return {};
+    const now = Math.floor(Date.now() / 60000) * 60000;
+    const defs: Record<
+      string,
+      {
+        query: typeof api.events.public.getBatchAvailability;
+        args: FunctionArgs<typeof api.events.public.getBatchAvailability>;
       }
-
-      return this.eventsService.getBatchAvailability(params.eventIds);
-    },
+    > = {};
+    for (let i = 0; i < eventIds.length; i += MAX_EVENT_IDS_PER_BATCH) {
+      const chunk = eventIds.slice(
+        i,
+        i + MAX_EVENT_IDS_PER_BATCH,
+      ) as Id<'events'>[];
+      defs[`chunk_${i / MAX_EVENT_IDS_PER_BATCH}`] = {
+        query: api.events.public.getBatchAvailability,
+        args: {eventIds: chunk, now},
+      };
+    }
+    return defs;
   });
 
-  /** True when either the tickets query or the availability batch has errored */
+  /** Merged availability map across all chunk subscriptions. */
+  private readonly availabilityMap = computed<BatchAvailability>(() => {
+    const merged: BatchAvailability = {};
+    for (const chunk of Object.values(this.availabilityQueries.results())) {
+      if (chunk) Object.assign(merged, chunk);
+    }
+    return merged;
+  });
+
+  /** True when either the tickets query or any availability chunk has errored */
   readonly hasLoadError = computed(
     () =>
       !!this.paymentService.ticketsResource.error() ||
-      this.availabilityResource.status() === 'error',
+      Object.values(this.availabilityQueries.statuses()).some(
+        (s) => s === 'error',
+      ),
   );
 
   /** Realtime resale listings for the user's tickets, keyed by event */
@@ -675,37 +705,31 @@ export class TicketsComponent {
     if (eventDoc && 'resaleEnabled' in eventDoc) {
       return eventDoc.resaleEnabled === true;
     }
-    // Fallback to availability data — helper returns undefined while errored/loading
-    const avail = safeResourceValue(this.availabilityResource);
-    if (avail) {
-      const eventAvail = avail[ticket.eventId];
-      if (eventAvail && 'resaleEnabled' in eventAvail) {
-        return eventAvail.resaleEnabled === true;
-      }
+    // Fallback to availability data — map is {} while chunks load
+    const avail = this.availabilityMap();
+    const eventAvail = avail[ticket.eventId];
+    if (eventAvail && 'resaleEnabled' in eventAvail) {
+      return eventAvail.resaleEnabled === true;
     }
     return false;
   }
 
   /** Check if an event is sold out */
   isEventSoldOut(eventId: string): boolean {
-    const avail = safeResourceValue(this.availabilityResource);
-    if (avail) {
-      const eventAvail = avail[eventId];
-      if (eventAvail && 'isSoldOut' in eventAvail) {
-        return eventAvail.isSoldOut;
-      }
+    const avail = this.availabilityMap();
+    const eventAvail = avail[eventId];
+    if (eventAvail && 'isSoldOut' in eventAvail) {
+      return eventAvail.isSoldOut;
     }
     return false;
   }
 
   /** Get the number of resale listings in queue for an event */
   getResaleQueueCount(eventId: string): number {
-    const avail = safeResourceValue(this.availabilityResource);
-    if (avail) {
-      const eventAvail = avail[eventId];
-      if (eventAvail && 'resaleAvailable' in eventAvail) {
-        return eventAvail.resaleAvailable ?? 0;
-      }
+    const avail = this.availabilityMap();
+    const eventAvail = avail[eventId];
+    if (eventAvail && 'resaleAvailable' in eventAvail) {
+      return eventAvail.resaleAvailable ?? 0;
     }
     return 0;
   }

@@ -29,6 +29,19 @@ describe('HeaderComponent', () => {
     expect(text).toContain('Skip to main content');
   });
 
+  it('renders the square logo at matching responsive width and height', async () => {
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      HeaderHarness,
+    );
+
+    const logoClass = await harness.getLogoClass();
+    expect(logoClass).toContain('h-10');
+    expect(logoClass).toContain('w-10');
+    expect(logoClass).toContain('md:h-14');
+    expect(logoClass).toContain('md:w-14');
+  });
+
   describe('focus restoration (BRA-341)', () => {
     const navItems: NavItem[] = [{label: 'Events', routerLink: '/events'}];
     let harness: HeaderHarness;

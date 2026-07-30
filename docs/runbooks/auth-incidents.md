@@ -27,6 +27,7 @@ Jump to:
 - [Restore missing social buttons](#restore-missing-social-buttons)
 - [Repair password reset delivery or confirmation](#repair-password-reset-delivery-or-confirmation)
 - [Fix password creation or password-change failures](#fix-password-creation-or-password-change-failures)
+- [Handle breached-password rejections or an HIBP outage](#handle-breached-password-rejections-or-an-hibp-outage)
 - [Repair email-change requests or confirmation](#repair-email-change-requests-or-confirmation)
 - [Handle blocked social sign-in](#handle-blocked-social-sign-in)
 - [Repair auth sync after sign-in](#repair-auth-sync-after-sign-in)
@@ -88,21 +89,74 @@ If the user reports a generic reset failure after clicking the link, inspect the
 
 ## Fix password creation or password-change failures
 
-The current password mutations are:
+The current password operations are:
 
 - `auth.public.setPassword`
-- `auth.public.changePassword`
+- `auth.public.changePasswordV2` (action)
 
-Use `setPassword` for an authenticated account that does not already have a password. Use `changePassword` for an authenticated account that must present the current password.
+Use `setPassword` for an authenticated account that does not already have a password. Use `changePasswordV2` for an authenticated account that must present the current password. The legacy `auth.public.changePassword` mutation remains addressable only for stale generated clients, but it fails closed with `Refresh this page before changing your password` and never verifies or changes a password. This avoids both Convex's one-second mutation budget and a transactional rate-limit rollback on wrong-current-password failures.
 
 Use this checklist:
 
-1. Confirm that the user is authenticated before you troubleshoot either mutation.
+1. Confirm that the user is authenticated before you troubleshoot either operation.
 2. Confirm that the client and server both treat mismatched new passwords as a local validation error.
 3. Check whether the UI mapped the backend failure to `Current password is incorrect`.
-4. Check Convex logs for repeated `changePassword` or `setPassword` failures if the UI keeps retrying.
+4. Check Convex logs for `changePasswordV2` or `setPassword` failures. The current UI makes one password-change action call and does not replay it after an ambiguous response, because the first call may already have changed the password.
 
-`changePassword` currently passes `revokeOtherSessions: true`, so session churn after a successful password change is expected.
+`changePasswordV2` charges the per-user rate limit in a committed internal mutation before calling Better Auth, so failed current-password attempts count toward the three-per-hour limit. It currently passes `revokeOtherSessions: true`, so session churn after a successful password change is expected.
+
+The direct Better Auth HTTP endpoint `/api/auth/change-password` is disabled and returns 404. This is intentional: browser clients must use `auth.public.changePasswordV2`, while that server action continues to call Better Auth's `auth.api.changePassword` method internally.
+
+## Handle breached-password rejections or an HIBP outage
+
+New passwords on sign-up and password reset are checked against the
+HaveIBeenPwned range API through the Better Auth `haveIBeenPwned` plugin,
+registered in `backend/convex/lib/better_auth.ts` (`HIBP_CHECKED_PATHS`).
+The check uses k-anonymity: only the first five characters of the password's
+SHA-1 hash are sent to `https://api.pwnedpasswords.com/range/<prefix>`.
+
+Scope:
+
+- Checked: `/sign-up/email` and `/reset-password` (Better Auth HTTP routes,
+  which run as Convex httpActions where outbound fetch is permitted).
+- Not checked: `auth.public.changePasswordV2`, its rollout-only legacy
+  `auth.public.changePassword` mutation, and `auth.public.setPassword`. These
+  operations are deliberately excluded from `HIBP_CHECKED_PATHS`; only the
+  Better Auth HTTP routes listed above invoke the external breach check.
+- Disabled entirely when `IS_TEST=true` (E2E and local test runs never call
+  the external API) and when the `AUTH_HIBP_DISABLED` kill switch is set.
+- Local dev (`pnpm dev`) runs with `IS_TEST=false`
+  (`scripts/lib/ConvexBackend.ts`), so signups and `pnpm seed` (which signs
+  up through the real route) DO call the live HIBP API and fail closed when
+  offline. Set `AUTH_HIBP_DISABLED=true` in the `local` Doppler config to
+  work offline.
+
+Expected rejection behavior: a breached password fails with HTTP 400 and the
+user sees the shared copy from `COMPROMISED_PASSWORD_MESSAGE` in
+`shared/constants.ts` on the signup and reset forms. This is working as
+intended — ask the user to pick a different password.
+
+Failure mode — the plugin fails closed. If the HIBP API is down or
+unreachable, sign-up and password reset fail with HTTP 500 and the message
+`Failed to check password`. Symptoms: a spike of failed sign-ups and reset
+confirmations while sign-in, password change, and social auth keep working.
+Confirm in Convex logs by filtering for `Failed to check password` on the
+auth HTTP routes.
+
+To disable the check during an HIBP outage:
+
+1. Set `AUTH_HIBP_DISABLED=true` in the affected Doppler config.
+2. Sync it to the deployment: `pnpm sync:env:dev` for the dev deployment, or
+   the production sync flow (`DOPPLER_CONFIG=prd pnpm sync:env:prod`) for
+   production. `backend/scripts/sync-env.ts` lists the key. For the GitHub
+   Actions path instead: set the `AUTH_HIBP_DISABLED` **variable** (not
+   secret) in the matching GitHub environment — the deploy workflows map it
+   from `vars.AUTH_HIBP_DISABLED` — and re-run the Deploy Backend job.
+3. No code deploy is needed; the flag is read on each auth request.
+
+To re-enable after the outage, set `AUTH_HIBP_DISABLED=false` (or any value
+other than `true`) and sync again. Only the exact string `true` disables the
+check (`isHibpPasswordCheckDisabled` in `backend/convex/lib/environment.ts`).
 
 ## Repair email-change requests or confirmation
 
@@ -185,6 +239,16 @@ After a successful sync, the backend can still require a signup-completion step.
 - completion clears `socialSignupCompletionRequired`
 - completion also sets `termsAcceptedAt` if the field is missing
 
+The gate is enforced server-side, not just by the frontend redirect:
+
+- auth sync (`backend/convex/auth/_impl/sync.ts`) only clears
+  `socialSignupCompletionRequired` for an existing user when `termsAcceptedAt`
+  is already set. A credential account appearing on the Better Auth side (for
+  example through a password reset) no longer ends the gate on its own.
+- `auth.public.setPassword` refuses with `AUTH_SET_PASSWORD_FAILED` while
+  `socialSignupCompletionRequired` is `true`, so a direct API call cannot
+  create a credential account to skip terms acceptance.
+
 If a user returns to the completion screen repeatedly:
 
 1. Check the `users` row for `socialSignupCompletionRequired`.
@@ -209,13 +273,25 @@ The current mutations are:
 - `auth.public.linkSocialAccount`
 - `auth.public.unlinkSocialAccount`
 
-The frontend returns to `/confirm/social-link` after the provider flow. If linking or unlinking fails:
+The frontend returns to `/confirm/social-link` after the provider flow. Unlike
+`/confirm/social-signin`, this redirect carries **no `ott` parameter**: Better
+Auth's OAuth callback only creates a session (which the crossDomain plugin
+converts into an OTT) for sign-in flows, never for link flows. The page
+confirms the link with the user's existing session by reading
+`users.profile.getConnectedAccounts` — an `ott` on this route is neither
+expected nor required. If linking or unlinking fails:
 
 1. Confirm that the user can still authenticate with the primary account.
 2. Confirm that the provider returns to `/confirm/social-link`.
 3. Check the mapped Convex error before you retry.
+4. Check Account Settings before assuming the link failed: the backend links
+   the account during the provider callback, before the browser returns to
+   the frontend, so a confirmation-page error can be a false negative while
+   the `account.provider.linked` audit row already exists.
 
 Unlinking records the audit action `account.provider.unlinked`. If the UI reports success but the audit trail never appears, investigate the audit path as a second problem.
+
+If a user reports landing on the site root (or the default `/confirm/*` path) instead of their expected page after linking or verification, the requested `callbackURL` resolved to an origin outside the frontend allowlist and was replaced with the safe fallback. This is by design: `sanitizeFrontendCallbackUrl` in `backend/convex/lib/better_auth.ts` only permits same-origin/relative paths (plus trusted local-dev origins) and rejects protocol-relative, absolute-external, and backslash-obfuscated values (e.g. `/\evil.com`) to prevent open redirects. In production only `SITE_URL` is trusted, so any localhost/other-origin callbackURL falls back — not a bug.
 
 ## Reproduce the issue locally
 

@@ -59,6 +59,7 @@ const app: ReturnType<typeof defineApp> = defineApp({
     // failure — env/deploy changes are high-risk, so we validate presence, not
     // the exact boolean spelling.
     ALLOW_LOCALHOST_CORS: v.optional(v.string()),
+    AUTH_HIBP_DISABLED: v.optional(v.string()),
     IS_TEST: v.optional(v.string()),
     DEV_SEED: v.optional(v.string()),
     DEV_SEED_TOKEN: v.optional(v.string()),

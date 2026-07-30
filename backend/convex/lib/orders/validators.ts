@@ -45,6 +45,11 @@ export const ticketOrderDocFields = {
   connectedAccountId: v.optional(v.string()),
   trustSource: callerTrustSourceValidator,
   trustViaOrganizerId: v.optional(v.id('organizers')),
+  // ToS assent evidence for guest purchases (BRA-455)
+  tosAcceptedAt: v.optional(v.number()),
+  tosVersion: v.optional(v.string()),
+  // Client idempotency key for free-ticket claims; absent on paid orders.
+  idempotencyKey: v.optional(v.string()),
 };
 
 export const ticketOrderDocValidator = v.object(ticketOrderDocFields);

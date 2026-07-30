@@ -3,7 +3,10 @@ import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
 import {ChangeDetectionStrategy, Component, input} from '@angular/core';
 import {BraStatusBadgeComponent} from './status-badge.component';
 import {BraStatusBadgeHarness} from './status-badge.harness';
-import type {BraStatusBadgeVariants} from './status-badge.variants';
+import {
+  statusBadgeVariants,
+  type BraStatusBadgeVariants,
+} from './status-badge.variants';
 
 type StatusBadgeStatus = NonNullable<BraStatusBadgeVariants['status']>;
 
@@ -76,5 +79,23 @@ describe('BraStatusBadgeComponent', () => {
   it('should have role="status" when live is true', async () => {
     const {harness} = await setup({live: true});
     expect(await harness.getRole()).toBe('status');
+  });
+});
+
+describe('statusBadgeVariants self-tinted text tokens', () => {
+  const tokens = (classes: string): string[] => classes.split(/\s+/);
+
+  it('uses the AA-calibrated secondary text token on the secondary tint', () => {
+    const list = tokens(statusBadgeVariants({status: 'secondary'}));
+    expect(list).toContain('text-secondary-text');
+    // bare text-secondary fails AA on the bg-secondary/10 underlay
+    expect(list).not.toContain('text-secondary');
+  });
+
+  it('uses the AA-calibrated accent text token on the accent tint', () => {
+    const list = tokens(statusBadgeVariants({status: 'accent'}));
+    expect(list).toContain('text-accent-text');
+    // bare text-accent fails AA on the bg-accent/10 underlay
+    expect(list).not.toContain('text-accent');
   });
 });

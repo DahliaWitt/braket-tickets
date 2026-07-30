@@ -10,6 +10,9 @@ export class CheckInComponentHarness extends ComponentHarness {
   protected getSelectedEventOption = this.locatorForOptional(
     'select[aria-label="Select event"] option:checked',
   );
+  protected getAvailableEventOptions = this.locatorForAll(
+    'select[aria-label="Select event"] option:not([value=""])',
+  );
   protected getTabs = this.locatorForAll('[role="tab"]');
   protected getSearchInput = this.locatorFor(
     'input[aria-label="Filter attendees"]',
@@ -17,8 +20,10 @@ export class CheckInComponentHarness extends ComponentHarness {
   // Camera buttons use z-button custom element; not needed for spec (camera functionality tested separately)
   protected getActionButtons = this.locatorForAll('z-button');
   protected getVideoElement = this.locatorForOptional('video');
-  // Camera error has no testid; <p class="text-destructive"> inside a destructive alert div
-  protected getCameraError = this.locatorForOptional('.bg-destructive\\/5 p');
+  // Manual check-in feedback message (rendered inside the [data-testid="manual-check-in-feedback"] alert)
+  protected getCameraError = this.locatorForOptional(
+    '[data-testid="manual-check-in-feedback"] p',
+  );
   protected getLastResult = this.locatorForOptional('[role="alert"]');
   protected getListItems = this.locatorForAll('[data-testid="buyer-entry"]');
   protected getCardContents = this.locatorForAll('[data-slot="card-content"]');
@@ -26,6 +31,9 @@ export class CheckInComponentHarness extends ComponentHarness {
     this.locatorFor('.overflow-y-auto');
   protected getCheckInButtons = this.locatorForAll(
     '[data-testid="buyer-entry"] button[aria-label^="Check in"]',
+  );
+  protected getTicketRevertButtons = this.locatorForAll(
+    '[data-testid="ticket-revert-button"]',
   );
   protected getManualFeedback = this.locatorForOptional(
     '[data-testid="manual-check-in-feedback"]',
@@ -40,6 +48,24 @@ export class CheckInComponentHarness extends ComponentHarness {
     '[data-testid="event-empty-state"]',
   );
   protected getScannerPanel = this.locatorForOptional('app-check-in-scanner');
+  protected getImportedSection = this.locatorForOptional(
+    '[data-testid="imported-section"]',
+  );
+  protected getImportedEntries = this.locatorForAll(
+    '[data-testid="imported-entry"]',
+  );
+  protected getImportedSourceBadges = this.locatorForAll(
+    '[data-testid="imported-source-badge"]',
+  );
+  protected getImportedSourceCounts = this.locatorForOptional(
+    '[data-testid="imported-source-counts"]',
+  );
+  protected getImportedSourceCountItems = this.locatorForAll(
+    '[data-testid="imported-source-count"]',
+  );
+  protected getImportedCheckInButtons = this.locatorForAll(
+    '[data-testid="imported-entry"] button[aria-label^="Check in external"]',
+  );
 
   async selectEventByLabel(label: string): Promise<void> {
     await waitForHarnessCondition(
@@ -88,6 +114,11 @@ export class CheckInComponentHarness extends ComponentHarness {
   async getSelectedEventValue(): Promise<string> {
     const select = await this.getEventSelector();
     return select.getProperty('value');
+  }
+
+  async getAvailableEventOptionsCount(): Promise<number> {
+    const options = await this.getAvailableEventOptions();
+    return options.length;
   }
 
   async hasEventEmptyState(): Promise<boolean> {
@@ -176,6 +207,35 @@ export class CheckInComponentHarness extends ComponentHarness {
     );
   }
 
+  async getTicketRevertButtonLabels(): Promise<string[]> {
+    const buttons = await this.getTicketRevertButtons();
+    return Promise.all(
+      buttons.map(
+        async (button) => (await button.getAttribute('aria-label')) ?? '',
+      ),
+    );
+  }
+
+  async clickTicketRevertOnItem(index: number): Promise<void> {
+    const buttons = await this.getTicketRevertButtons();
+    if (!buttons[index]) {
+      throw new Error(`Ticket revert button ${index} not found`);
+    }
+    await buttons[index].click();
+  }
+
+  async getTicketRevertButtonText(index: number): Promise<string | null> {
+    const buttons = await this.getTicketRevertButtons();
+    return buttons[index] ? (await buttons[index].text()).trim() : null;
+  }
+
+  async isTicketRevertButtonDisabled(index: number): Promise<boolean> {
+    const buttons = await this.getTicketRevertButtons();
+    return buttons[index]
+      ? ((await buttons[index].getProperty<boolean>('disabled')) ?? false)
+      : true;
+  }
+
   async getManualFeedbackText(): Promise<string | null> {
     const feedback = await this.getManualFeedback();
     return feedback ? feedback.text() : null;
@@ -226,6 +286,58 @@ export class CheckInComponentHarness extends ComponentHarness {
     const button = await this.getSoundToggle();
     if (button) {
       await button.click();
+    }
+  }
+
+  async hasImportedSection(): Promise<boolean> {
+    return Boolean(await this.getImportedSection());
+  }
+
+  async getImportedEntryCount(): Promise<number> {
+    const entries = await this.getImportedEntries();
+    return entries.length;
+  }
+
+  async getImportedEntryTextByName(name: string): Promise<string | null> {
+    const entries = await this.getImportedEntries();
+    for (const entry of entries) {
+      const text = await entry.text();
+      if (text.includes(name)) return text;
+    }
+    return null;
+  }
+
+  async getImportedSourceBadgeTexts(): Promise<string[]> {
+    const badges = await this.getImportedSourceBadges();
+    return Promise.all(
+      badges.map(async (badge) => (await badge.text()).trim()),
+    );
+  }
+
+  async getImportedSourceCountsText(): Promise<string | null> {
+    const el = await this.getImportedSourceCounts();
+    return el ? (await el.text()).replace(/\s+/g, ' ').trim() : null;
+  }
+
+  /** Per-source door count chips (one per distinct imported source label). */
+  async getImportedSourceCountTexts(): Promise<string[]> {
+    const items = await this.getImportedSourceCountItems();
+    return Promise.all(
+      items.map(async (item) =>
+        (await item.text()).replace(/\s+/g, ' ').trim(),
+      ),
+    );
+  }
+
+  async clickImportedCheckInByName(name: string): Promise<void> {
+    // The check-in button's aria-label ends with "for <name>", so match on it.
+    const buttons = await this.getImportedCheckInButtons();
+    for (const button of buttons) {
+      const label = (await button.getAttribute('aria-label')) ?? '';
+      if (label.includes(name)) {
+        await button.click();
+        return;
+      }
     }
   }
 

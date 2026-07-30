@@ -5,49 +5,81 @@ import {
   inject,
   input,
   output,
-  resource,
   signal,
+  viewChild,
 } from '@angular/core';
-import { form, FormField, maxLength, required } from '@angular/forms/signals';
-import { toast } from 'ngx-sonner';
-import { injectConvex } from 'convex-angular';
-import type { FunctionReturnType } from 'convex/server';
-import { AdminEventsService } from '@/features/admin/services/admin-events.service';
-import { api } from '@convex/_generated/api';
-import type { Id } from '@convex/_generated/dataModel';
+import {form, FormField, maxLength, required} from '@angular/forms/signals';
+import {
+  RichTextEditorComponent,
+  type RichTextImageUploadFn,
+} from '../rich-text-editor/rich-text-editor.component';
+import {toast} from 'ngx-sonner';
+import {injectQuery, skipToken} from 'convex-angular';
+import {AdminEventsService} from '@/features/admin/services/admin-events.service';
+import {EventsService} from '@/features/admin/services/events.service';
+import {api} from '@convex/_generated/api';
+import type {Id} from '@convex/_generated/dataModel';
 import {
   MAX_TICKET_REMINDER_MESSAGE_LENGTH,
   MAX_TICKET_REMINDER_SUBJECT_LENGTH,
 } from '@shared/constants';
-import { ZardButtonComponent } from '@ui/components/primitives/button/button.component';
-import { ZardCardComponent } from '@ui/components/primitives/card/card.component';
-import { BraDialogService } from '@ui/components/composites/dialog/dialog.service';
-import { ZardIconComponent } from '@ui/components/primitives/icon/icon.component';
-import { logger } from '@/utils/logger';
-import { safeResourceValue } from '@/utils/resource';
-
-type TicketReminderAudience = FunctionReturnType<typeof api.events.reminders.getTicketReminderAudience>;
+import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
+import {ZardCardComponent} from '@ui/components/primitives/card/card.component';
+import {ZardInputDirective} from '@ui/components/primitives/input/input.directive';
+import {BraDialogService} from '@ui/components/composites/dialog/dialog.service';
+import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
+import {logger} from '@/utils/logger';
 
 @Component({
   selector: 'app-ticket-reminder-tab',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormField, ZardButtonComponent, ZardCardComponent, ZardIconComponent],
+  imports: [
+    FormField,
+    RichTextEditorComponent,
+    ZardButtonComponent,
+    ZardCardComponent,
+    ZardInputDirective,
+    ZardIconComponent,
+  ],
   templateUrl: './ticket-reminder-tab.component.html',
 })
 export class TicketReminderTabComponent {
   private adminEventsService = inject(AdminEventsService);
   private dialogService = inject(BraDialogService);
-  private convex = injectConvex();
+  private eventsService = inject(EventsService);
+
+  /**
+   * Inline-image uploader handed to the rich-text editor. Bound to this instance
+   * so the editor can enable its image button and stream uploads through Convex
+   * storage, resolving to the confirmed `storageId` (persisted into the email
+   * body) plus a signed preview url (display-only).
+   */
+  readonly imageUpload: RichTextImageUploadFn = async (file, onProgress) => {
+    const {storageId, url} = await this.eventsService.uploadRichTextImage(
+      file,
+      onProgress,
+    );
+    return {storageId, previewUrl: url};
+  };
 
   readonly eventId = input.required<string>();
   readonly communityId = input.required<string>();
+  // Retained for the parent template binding; the live injectQuery subscription below no longer needs a reload token. Removal is deferred — see follow-up note.
   readonly reloadToken = input<number>(0);
   readonly eventTitle = input<string>('');
   readonly dataChanged = output();
 
-  readonly reminderFormModel = signal({ subject: '', message: '' });
+  /**
+   * Compose state. `subject` is bound to the subject input; `message` mirrors the
+   * rich-text editor's best-effort plaintext (drives required + length checks and
+   * is sent as the fallback text part); `bodyJson` is the serialized ProseMirror
+   * document the backend renders and re-derives its canonical plaintext from.
+   */
+  readonly reminderFormModel = signal({subject: '', message: '', bodyJson: ''});
   readonly maxTicketReminderSubjectLength = MAX_TICKET_REMINDER_SUBJECT_LENGTH;
   readonly maxTicketReminderMessageLength = MAX_TICKET_REMINDER_MESSAGE_LENGTH;
+
+  private readonly bodyEditor = viewChild(RichTextEditorComponent);
 
   readonly reminderForm = form(this.reminderFormModel, (f) => {
     required(f.subject);
@@ -60,35 +92,47 @@ export class TicketReminderTabComponent {
     });
   });
 
-  private readonly reminderAudienceReloadToken = signal(0);
+  /** Mirrors the editor's serialized ProseMirror JSON into the compose state. */
+  onBodyJsonChange(bodyJson: string): void {
+    this.reminderFormModel.update((model) => ({...model, bodyJson}));
+  }
 
-  readonly reminderAudienceResource = resource({
-    params: () => ({
-      eventId: this.eventId() || null,
-      parentReloadToken: this.reloadToken(),
-      localReloadToken: this.reminderAudienceReloadToken(),
-    }),
-    loader: ({ params }): Promise<TicketReminderAudience | null> => {
-      if (!params.eventId) return Promise.resolve(null);
-      return this.convex.query(api.events.reminders.getTicketReminderAudience, {
-        eventId: params.eventId as Id<'events'>,
-      });
+  /** Mirrors the editor's best-effort plaintext into the compose state. */
+  onBodyTextChange(message: string): void {
+    this.reminderFormModel.update((model) => ({...model, message}));
+  }
+
+  readonly reminderAudienceQuery = injectQuery(
+    api.events.reminders.getTicketReminderAudience,
+    () => {
+      const eventId = this.eventId();
+      return eventId ? {eventId: eventId as Id<'events'>} : skipToken;
     },
-  });
+  );
 
   readonly reminderAudience = computed(
-    () => safeResourceValue(this.reminderAudienceResource) ?? null,
+    () => this.reminderAudienceQuery.data() ?? null,
   );
-  readonly isLoadingReminderAudience = this.reminderAudienceResource.isLoading;
+  readonly isLoadingReminderAudience = this.reminderAudienceQuery.isLoading;
 
-  readonly reminderSubjectLength = computed(() => this.reminderFormModel().subject.length);
-  readonly reminderMessageLength = computed(() => this.reminderFormModel().message.length);
-  readonly reminderSubjectTrimmed = computed(() => this.reminderFormModel().subject.trim());
-  readonly reminderMessageTrimmed = computed(() => this.reminderFormModel().message.trim());
+  readonly reminderSubjectLength = computed(
+    () => this.reminderFormModel().subject.length,
+  );
+  readonly reminderMessageLength = computed(
+    () => this.reminderFormModel().message.length,
+  );
+  readonly reminderSubjectTrimmed = computed(() =>
+    this.reminderFormModel().subject.trim(),
+  );
+  readonly reminderMessageTrimmed = computed(() =>
+    this.reminderFormModel().message.trim(),
+  );
 
-  readonly reminderRecipientCount = computed(() => this.reminderAudience()?.recipientCount ?? 0);
+  readonly reminderRecipientCount = computed(
+    () => this.reminderAudience()?.recipientCount ?? 0,
+  );
   readonly reminderAudienceError = computed(() => {
-    const error = this.reminderAudienceResource.error();
+    const error = this.reminderAudienceQuery.error();
     if (!error) return null;
     return error instanceof Error && error.message
       ? `couldn't load reminder audience — ${error.message}`
@@ -106,6 +150,9 @@ export class TicketReminderTabComponent {
     () =>
       !this.eventId() ||
       this.isSendingTicketReminder() ||
+      // Block send while an inline image is still uploading, so the send can't
+      // race ahead of (and drop) the image the organizer just added.
+      (this.bodyEditor()?.isUploadingImage() ?? false) ||
       this.isLoadingReminderAudience() ||
       !!this.reminderAudienceError() ||
       this.reminderMissingCommunity() ||
@@ -145,27 +192,40 @@ export class TicketReminderTabComponent {
 
     const subject = this.reminderSubjectTrimmed();
     const message = this.reminderMessageTrimmed();
+    const bodyJson = this.reminderFormModel().bodyJson;
     if (!subject || !message) return;
 
     this.isSendingTicketReminder.set(true);
     try {
+      // Backend re-derives the canonical plaintext from bodyJson; the trimmed
+      // message is sent as a best-effort fallback for the text part.
       const result = await this.adminEventsService.sendTicketPurchaseReminder(
         eventId,
         subject,
         message,
+        bodyJson,
       );
       const label = result.recipientCount === 1 ? 'recipient' : 'recipients';
       toast.success(`Reminder sent to ${result.recipientCount} ${label}`);
-      this.reminderFormModel.set({ subject: '', message: '' });
-      this.reminderAudienceReloadToken.update((count) => count + 1);
+      this.resetComposeState();
       this.dataChanged.emit();
     } catch (error) {
       logger.error('Failed to send ticket reminder', error);
       const messageText =
-        error instanceof Error ? error.message : 'Failed to send ticket reminder';
+        error instanceof Error
+          ? error.message
+          : 'Failed to send ticket reminder';
       toast.error(messageText);
     } finally {
       this.isSendingTicketReminder.set(false);
     }
+  }
+
+  /** Clears the editor document and compose fields after a successful send. */
+  private resetComposeState(): void {
+    // reset() also invalidates any in-flight image upload so a late insert
+    // cannot land in the cleared draft.
+    this.bodyEditor()?.reset();
+    this.reminderFormModel.set({subject: '', message: '', bodyJson: ''});
   }
 }

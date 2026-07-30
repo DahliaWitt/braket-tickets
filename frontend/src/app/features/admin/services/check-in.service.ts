@@ -1,14 +1,22 @@
-import { DOCUMENT } from '@angular/common';
-import { DestroyRef, Injectable, inject, signal } from '@angular/core';
-import { injectConvex } from 'convex-angular';
-import { api } from '@convex/_generated/api';
-import { type Id } from '@convex/_generated/dataModel';
-import { type FunctionReturnType } from 'convex/server';
-import { logger } from '@/utils/logger';
-import { parseQRScanData } from '../pages/check-in/qr-parse';
-import { WEB_HAPTICS_CTOR } from './web-haptics.token';
+import {DOCUMENT} from '@angular/common';
+import {DestroyRef, Injectable, inject, signal} from '@angular/core';
+import {injectConvex} from 'convex-angular';
+import {api} from '@convex/_generated/api';
+import {type Id} from '@convex/_generated/dataModel';
+import {type FunctionArgs, type FunctionReturnType} from 'convex/server';
+import {logger} from '@/utils/logger';
+import {parseQRScanData} from '../pages/check-in/qr-parse';
+import {WEB_HAPTICS_CTOR} from './web-haptics.token';
 
-type CheckInResult = FunctionReturnType<typeof api.events.check_in.checkIn> & { error?: string };
+type CheckInResult = FunctionReturnType<typeof api.events.check_in.checkIn> & {
+  error?: string;
+};
+type RevertCheckInResult = FunctionReturnType<
+  typeof api.events.check_in.revertCheckIn
+>;
+type RevertCheckInTicketId = FunctionArgs<
+  typeof api.events.check_in.revertCheckIn
+>['ticketId'];
 
 /**
  * Feature-scoped service for check-in operations.
@@ -41,7 +49,8 @@ export class CheckInService {
   readonly showEnableSoundFallback = signal(false);
 
   initAudio(): void {
-    if (typeof Audio === 'undefined' || this.successAudio || this.failureAudio) return;
+    if (typeof Audio === 'undefined' || this.successAudio || this.failureAudio)
+      return;
 
     this.successAudio = this.createAudio('/yipee.mp3');
     this.failureAudio = this.createAudio('/ticketscanfail.mp3');
@@ -68,14 +77,21 @@ export class CheckInService {
     await this.primeAudioOnGesture();
   }
 
-  /** Check in via QR scan data (ticket ID or guest ID encoded in the scan). */
-  async checkIn(scanData: string): Promise<void> {
+  /**
+   * Check in via QR scan data (ticket ID or guest ID encoded in the scan).
+   *
+   * `eventId` is the scanned event context. It is forwarded to the mutation so
+   * that when native ticket/guest resolution fails, the raw payload can be
+   * exact-matched against external (imported) ticket barcodes for THIS event
+   * only. Passing it is what enables scanning RA-style external tickets.
+   */
+  async checkIn(scanData: string, eventId?: string): Promise<void> {
     if (!scanData || this.isProcessing()) return;
 
     const parsed = parseQRScanData(scanData);
     if (!parsed) return;
 
-    const { ticketId, guestId } = parsed;
+    const {ticketId, guestId} = parsed;
     if (!ticketId && !guestId) return;
 
     this.isProcessing.set(true);
@@ -83,8 +99,14 @@ export class CheckInService {
 
     try {
       const res = await (ticketId
-        ? this.convex.mutation(api.events.check_in.checkIn, { ticketId: ticketId as Id<'tickets'> })
-        : this.convex.mutation(api.events.check_in.checkIn, { guestId: guestId as Id<'guests'> }));
+        ? this.convex.mutation(api.events.check_in.checkIn, {
+            ticketId: ticketId,
+            ...(eventId ? {eventId} : {}),
+          })
+        : this.convex.mutation(api.events.check_in.checkIn, {
+            guestId: guestId as Id<'guests'>,
+            ...(eventId ? {eventId} : {}),
+          }));
 
       this.lastResult.set(res);
 
@@ -113,7 +135,7 @@ export class CheckInService {
 
     try {
       const res = await this.convex.mutation(api.events.check_in.checkIn, {
-        guestId: guestId as Id<'guests'>,
+        guestId: guestId,
       });
       this.lastResult.set(res);
 
@@ -127,9 +149,81 @@ export class CheckInService {
       logger.error('Operation failed', err);
       this.lastResult.set({
         success: false,
-        message: err instanceof Error ? err.message : 'Failed to check in guest',
+        message:
+          err instanceof Error ? err.message : 'Failed to check in guest',
       });
       this.playFailure();
+    } finally {
+      this.isProcessing.set(false);
+    }
+  }
+
+  /** Undo a native ticket check-in from the door roster. */
+  async revertCheckIn(
+    ticketId: RevertCheckInTicketId,
+  ): Promise<RevertCheckInResult | null> {
+    if (this.isProcessing()) return null;
+    this.isProcessing.set(true);
+
+    try {
+      const result = await this.convex.mutation(
+        api.events.check_in.revertCheckIn,
+        {ticketId},
+      );
+      if (!result.success) {
+        this.playFailure();
+      }
+      return result;
+    } catch (err: unknown) {
+      logger.error('Failed to undo ticket check-in', err);
+      this.playFailure();
+      return {
+        success: false,
+        message: err instanceof Error ? err.message : 'Failed to undo check-in',
+      };
+    } finally {
+      this.isProcessing.set(false);
+    }
+  }
+
+  /**
+   * Check in an external (imported) ticket holder directly by id, from the
+   * imported roster tap. Mirrors the guest path: idempotent on the backend
+   * (an already-checked-in entry returns its existing state), plays the same
+   * audio/haptic feedback. Returns the raw result so the caller can update the
+   * roster row and feedback.
+   */
+  async checkInImported(
+    id: string,
+  ): Promise<FunctionReturnType<
+    typeof api.events.imported_tickets.checkIn
+  > | null> {
+    if (this.isProcessing()) return null;
+    this.isProcessing.set(true);
+
+    try {
+      const res = await this.convex.mutation(
+        api.events.imported_tickets.checkIn,
+        {id: id as Id<'importedTicketHolders'>},
+      );
+
+      if (res.success) {
+        void this.haptics.trigger('medium');
+        this.playSuccess();
+      } else {
+        this.playFailure();
+      }
+      return res;
+    } catch (err) {
+      logger.error('Operation failed', err);
+      this.playFailure();
+      return {
+        success: false,
+        message:
+          err instanceof Error
+            ? err.message
+            : 'Failed to check in external ticket holder',
+      };
     } finally {
       this.isProcessing.set(false);
     }
@@ -184,7 +278,12 @@ export class CheckInService {
       void this.primeAudioOnGesture();
     };
 
-    for (const eventName of ['pointerdown', 'touchend', 'keydown', 'click'] as const) {
+    for (const eventName of [
+      'pointerdown',
+      'touchend',
+      'keydown',
+      'click',
+    ] as const) {
       this.document.addEventListener(eventName, primeAudioOnGesture, true);
       this.audioPrimeCleanup.push(() => {
         this.document.removeEventListener(eventName, primeAudioOnGesture, true);
@@ -247,7 +346,10 @@ export class CheckInService {
     }
   }
 
-  private handlePlaybackFailure(err: unknown, audioType: 'success' | 'failure'): void {
+  private handlePlaybackFailure(
+    err: unknown,
+    audioType: 'success' | 'failure',
+  ): void {
     if (this.shouldShowEnableSoundFallback(err)) {
       this.isAudioPrimed = false;
       this.showEnableSoundFallback.set(true);
@@ -269,7 +371,11 @@ export class CheckInService {
 
     if (err instanceof Error) {
       const message = err.message.toLowerCase();
-      return message.includes('gesture') || message.includes('user') || message.includes('notallowed');
+      return (
+        message.includes('gesture') ||
+        message.includes('user') ||
+        message.includes('notallowed')
+      );
     }
 
     return false;

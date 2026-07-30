@@ -37,11 +37,8 @@ const PAYMENT_ERROR_MESSAGES = {
     'Tickets are unavailable — the organizer\u2019s payment account onboarding is incomplete. Please contact the organizer.',
   ORDER_CONNECTED_ACCOUNT_MISMATCH:
     'Checkout configuration changed. Please close the checkout and try again.',
+  TERMS_NOT_ACCEPTED: 'Please accept the terms of service to continue',
 } satisfies Record<PaymentErrorCode, string>;
-
-function mapPaymentErrorCode(code: string): string {
-  return isPaymentErrorCode(code) ? PAYMENT_ERROR_MESSAGES[code] : code;
-}
 
 export function extractPaymentErrorMessage(err: unknown): string {
   let message = '';
@@ -53,10 +50,22 @@ export function extractPaymentErrorMessage(err: unknown): string {
     } else {
       const obj = asRecord(data);
       if (obj) {
-        if (typeof obj['message'] === 'string') {
-          message = obj['message'];
-        } else if (typeof obj['code'] === 'string') {
-          message = mapPaymentErrorCode(obj['code']);
+        const code = typeof obj['code'] === 'string' ? obj['code'] : null;
+        const rawMessage =
+          typeof obj['message'] === 'string' ? obj['message'] : '';
+
+        // Prefer the buyer-facing copy for known payment codes. The backend
+        // always sends both `code` and `message` (see appErrorData in
+        // backend/convex/lib/errors.ts), and the raw message can leak internal
+        // diagnostics (e.g. PRICE_MISMATCH carries raw cent amounts), so a
+        // known code must win over the message. Fall back to the message for
+        // unknown/absent codes, and to the code itself only as a last resort.
+        if (code !== null && isPaymentErrorCode(code)) {
+          message = PAYMENT_ERROR_MESSAGES[code];
+        } else if (rawMessage !== '') {
+          message = rawMessage;
+        } else if (code !== null) {
+          message = code;
         }
       }
     }

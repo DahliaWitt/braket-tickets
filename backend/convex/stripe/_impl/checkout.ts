@@ -1,10 +1,12 @@
 'use node';
 
+import {createHash} from 'node:crypto';
 import type Stripe from 'stripe';
 import type {CheckoutThemeMode} from '../../lib/orders/validators';
 // eslint-disable-next-line @convex-dev/import-wrong-runtime -- importer is 'use node'; plugin heuristic misses that. Same pattern as stripe/actions.ts.
 import {getStripeClient} from '../../lib/stripe_node';
 import {PLATFORM_FEE_PERCENT, calculatePlatformFee} from '../../lib/stripe';
+import {generateStripeIdempotencyKey} from '../../lib/payments/refunds';
 import {sanitizeStatementDescriptor} from './constants';
 
 type CheckoutSessionCreateParams = NonNullable<
@@ -137,6 +139,58 @@ function toStripeSessionResult(
   };
 }
 
+/**
+ * Stable JSON serialization with recursively sorted object keys so a
+ * fingerprint is independent of property insertion order.
+ */
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(',')}]`;
+  }
+  if (value !== null && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return `{${entries
+      .map(([k, v]) => `${JSON.stringify(k)}:${stableStringify(v)}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
+}
+
+/**
+ * Derive a Stripe idempotency key that is stable for identical Checkout
+ * Session parameters but changes whenever any session-defining parameter
+ * changes.
+ *
+ * Stripe stores idempotency keys for at least 24h and rejects a replay of the
+ * same key with *different* parameters with an `idempotency_error` (HTTP 400).
+ * A Checkout Session for one still-open order is legitimately re-created with
+ * different parameters mid-flight: the buyer flips the checkout theme
+ * (`branding_settings` + `metadata.checkoutBrandingVersion` change) or the hold
+ * is extended (`expires_at` advances with the wall clock). A fixed
+ * `braket-checkout-${orderId}` key therefore wedges every restart with a 400,
+ * and the wedge persists until the 30-minute hold expires. Folding the full
+ * request body (plus the connected-account routing, which changes the target
+ * account) into the key gives each distinct session its own key while keeping
+ * true retries — `withRetry`'s transient-network replays send byte-identical
+ * params — collapsed onto a single key so a lost response never double-creates.
+ */
+function buildCheckoutIdempotencyKey(
+  orderId: string,
+  params: CheckoutSessionCreateParams,
+  requestOptions: {stripeAccount?: string},
+): string {
+  const fingerprint = stableStringify({
+    params,
+    stripeAccount: requestOptions.stripeAccount ?? null,
+  });
+  const digest = createHash('sha256').update(fingerprint).digest('hex');
+  // Reuse the shared key builder so the checkout key stays on the same
+  // `braket-${operation}-${subjectId}-${suffix}` convention as refunds/payouts.
+  return generateStripeIdempotencyKey(orderId, 'checkout', digest.slice(0, 32));
+}
+
 function buildTicketLineItem(args: {
   amountCents: number;
   quantity: number;
@@ -198,38 +252,42 @@ export async function createDirectChargeCheckoutSession(
     checkoutBrandingVersion: brandingVersion,
   };
 
-  const session = await stripe.checkout.sessions.create(
-    {
-      mode: 'payment',
-      ui_mode: 'embedded_page',
-      redirect_on_completion: 'never',
-      branding_settings: brandingSettings,
-      client_reference_id: args.orderId,
-      ...(args.buyerEmail ? {customer_email: args.buyerEmail} : {}),
-      expires_at: Math.floor(args.expiresAtMs / 1000),
-      line_items: [
-        buildTicketLineItem({
-          amountCents: args.amountCents,
-          quantity: args.quantity,
-          eventName: args.eventName,
-          ticketDescription: args.ticketDescription,
-        }),
-      ],
-      payment_intent_data: {
-        capture_method: 'automatic',
-        application_fee_amount: applicationFee,
-        ...(descriptorSuffix
-          ? {statement_descriptor_suffix: descriptorSuffix}
-          : {}),
-        metadata,
-      },
+  const sessionParams: CheckoutSessionCreateParams = {
+    mode: 'payment',
+    ui_mode: 'embedded_page',
+    redirect_on_completion: 'never',
+    branding_settings: brandingSettings,
+    client_reference_id: args.orderId,
+    ...(args.buyerEmail ? {customer_email: args.buyerEmail} : {}),
+    expires_at: Math.floor(args.expiresAtMs / 1000),
+    line_items: [
+      buildTicketLineItem({
+        amountCents: args.amountCents,
+        quantity: args.quantity,
+        eventName: args.eventName,
+        ticketDescription: args.ticketDescription,
+      }),
+    ],
+    payment_intent_data: {
+      capture_method: 'automatic',
+      application_fee_amount: applicationFee,
+      ...(descriptorSuffix
+        ? {statement_descriptor_suffix: descriptorSuffix}
+        : {}),
       metadata,
     },
-    {
-      stripeAccount: args.connectedAccountId,
-      idempotencyKey: `braket-checkout-${args.orderId}`,
-    },
-  );
+    metadata,
+  };
+  const requestOptions = {stripeAccount: args.connectedAccountId};
+
+  const session = await stripe.checkout.sessions.create(sessionParams, {
+    ...requestOptions,
+    idempotencyKey: buildCheckoutIdempotencyKey(
+      args.orderId,
+      sessionParams,
+      requestOptions,
+    ),
+  });
 
   return toStripeSessionResult(session);
 }
@@ -252,36 +310,35 @@ export async function createPlatformCheckoutSession(
     checkoutBrandingVersion: brandingVersion,
   };
 
-  const session = await stripe.checkout.sessions.create(
-    {
-      mode: 'payment',
-      ui_mode: 'embedded_page',
-      redirect_on_completion: 'never',
-      branding_settings: brandingSettings,
-      client_reference_id: args.orderId,
-      ...(args.buyerEmail ? {customer_email: args.buyerEmail} : {}),
-      expires_at: Math.floor(args.expiresAtMs / 1000),
-      line_items: [
-        buildTicketLineItem({
-          amountCents: args.amountCents,
-          quantity: args.quantity,
-          eventName: args.eventName,
-          ticketDescription: args.ticketDescription,
-        }),
-      ],
-      payment_intent_data: {
-        capture_method: 'automatic',
-        ...(descriptorSuffix
-          ? {statement_descriptor_suffix: descriptorSuffix}
-          : {}),
-        metadata,
-      },
+  const sessionParams: CheckoutSessionCreateParams = {
+    mode: 'payment',
+    ui_mode: 'embedded_page',
+    redirect_on_completion: 'never',
+    branding_settings: brandingSettings,
+    client_reference_id: args.orderId,
+    ...(args.buyerEmail ? {customer_email: args.buyerEmail} : {}),
+    expires_at: Math.floor(args.expiresAtMs / 1000),
+    line_items: [
+      buildTicketLineItem({
+        amountCents: args.amountCents,
+        quantity: args.quantity,
+        eventName: args.eventName,
+        ticketDescription: args.ticketDescription,
+      }),
+    ],
+    payment_intent_data: {
+      capture_method: 'automatic',
+      ...(descriptorSuffix
+        ? {statement_descriptor_suffix: descriptorSuffix}
+        : {}),
       metadata,
     },
-    {
-      idempotencyKey: `braket-checkout-${args.orderId}`,
-    },
-  );
+    metadata,
+  };
+
+  const session = await stripe.checkout.sessions.create(sessionParams, {
+    idempotencyKey: buildCheckoutIdempotencyKey(args.orderId, sessionParams, {}),
+  });
 
   return toStripeSessionResult(session);
 }

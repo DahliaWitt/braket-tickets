@@ -28,10 +28,23 @@ import {
 import {functionReferenceMatches} from '@/testing/convex-reference-matchers';
 import {api} from '@convex/_generated/api';
 import {toast} from 'ngx-sonner';
+import {createDeferred} from '@/testing/deferred';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+// Emit a Convex subscription result asynchronously (next microtask), mirroring
+// the real ConvexReactClient / ConvexTestingClient, which never invoke the
+// onUpdate callback synchronously from within onUpdate(). injectQueries()
+// registers each key's subscription *after* calling convex.onUpdate(...), and
+// its staleness guard drops any emission that arrives before registration
+// completes. A synchronous emit would therefore be silently discarded. Every
+// initial mock emission below must go through this so injectQueries() observes
+// it. `await fixture.whenStable()` flushes the microtask.
+function emitAsync(fn: () => void): void {
+  queueMicrotask(fn);
+}
 
 function makeCommunityContextMock(options: {
   isLoading?: boolean;
@@ -119,16 +132,6 @@ function makeMagicLink(
   };
 }
 
-function createDeferred<T>() {
-  let resolve!: (value: T | PromiseLike<T>) => void;
-  let reject!: (reason?: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return {promise, resolve, reject};
-}
-
 function createActivatedRouteMock(
   queryParams: Record<string, string | null>,
   routeParams: Record<string, string | null> = {},
@@ -171,6 +174,8 @@ async function setup(options: {
     slug?: string | null;
   } | null;
   magicLinksController?: MagicLinksQueryController;
+  failLinks?: boolean;
+  failLinksPast?: boolean;
   routerUrl?: string;
   spyOnNavigate?: boolean;
 }) {
@@ -199,24 +204,33 @@ async function setup(options: {
   const onUpdate = vi
     .fn()
     .mockImplementation(
-      (_query: unknown, args: unknown, onData: (data: unknown) => void) => {
+      (
+        _query: unknown,
+        args: unknown,
+        onData: (data: unknown) => void,
+        onError?: (err: Error) => void,
+      ) => {
         if (
           functionReferenceMatches(
             _query,
             api.communities.invite_links.listMyLinks,
           )
         ) {
+          if (options.failLinks) {
+            emitAsync(() => onError?.(new Error('active links boom')));
+            return () => void 0;
+          }
           const controller = options.magicLinksController;
           if (controller) {
             const subscriber = onData as (links: MagicLinksList) => void;
             controller.activeSubscribers.push(subscriber);
-            subscriber(controller.active);
+            emitAsync(() => subscriber(controller.active));
             return () => {
               controller.activeSubscribers =
                 controller.activeSubscribers.filter((cb) => cb !== subscriber);
             };
           }
-          onData([]);
+          emitAsync(() => onData([]));
           return () => void 0;
         }
 
@@ -226,18 +240,22 @@ async function setup(options: {
             api.communities.invite_links.listPastMyLinks,
           )
         ) {
+          if (options.failLinksPast) {
+            emitAsync(() => onError?.(new Error('past links boom')));
+            return () => void 0;
+          }
           const controller = options.magicLinksController;
           if (controller) {
             const subscriber = onData as (links: PastMagicLinksList) => void;
             controller.pastSubscribers.push(subscriber);
-            subscriber(controller.past);
+            emitAsync(() => subscriber(controller.past));
             return () => {
               controller.pastSubscribers = controller.pastSubscribers.filter(
                 (cb) => cb !== subscriber,
               );
             };
           }
-          onData([]);
+          emitAsync(() => onData([]));
           return () => void 0;
         }
 
@@ -247,23 +265,27 @@ async function setup(options: {
           'id' in args &&
           !('organizerId' in args);
         if (looksLikeCommunitiesGetArgs && options.communityLogo) {
-          onData({
-            _id: FAKE_ORG_ID,
-            name: options.selectedName ?? 'Test Community',
-            logoUrl: options.communityLogo,
-            slug: options.communitySlug ?? null,
-            status: 'published',
-          });
+          emitAsync(() =>
+            onData({
+              _id: FAKE_ORG_ID,
+              name: options.selectedName ?? 'Test Community',
+              logoUrl: options.communityLogo,
+              slug: options.communitySlug ?? null,
+              status: 'published',
+            }),
+          );
           return () => void 0;
         }
         if (looksLikeCommunitiesGetArgs) {
-          onData({
-            _id: options.selectedId ?? FAKE_ORG_ID,
-            name: options.selectedName ?? 'Test Community',
-            logoUrl: null,
-            slug: options.communitySlug ?? null,
-            status: 'published',
-          });
+          emitAsync(() =>
+            onData({
+              _id: options.selectedId ?? FAKE_ORG_ID,
+              name: options.selectedName ?? 'Test Community',
+              logoUrl: null,
+              slug: options.communitySlug ?? null,
+              status: 'published',
+            }),
+          );
           return () => void 0;
         }
 
@@ -272,11 +294,11 @@ async function setup(options: {
           args !== null &&
           Object.keys(args).length === 0;
         if (looksLikeMagicLinksArgs) {
-          onData([]);
+          emitAsync(() => onData([]));
           return () => void 0;
         }
 
-        onData(undefined);
+        emitAsync(() => onData(undefined));
         return () => void 0;
       },
     );
@@ -436,6 +458,23 @@ describe('CommunityAdminComponent', () => {
       });
 
       expect(fixture.componentInstance.activeTab()).toBe('history');
+    });
+
+    it('keeps the mobile section selector aligned with live route params', async () => {
+      const routeParamMap$ = new BehaviorSubject(
+        convertToParamMap({tab: 'events'}),
+      );
+      const {fixture, harness} = await setup({
+        tab: 'pending',
+        routeParamMap$,
+      });
+
+      expect(await harness.getSelectedMobileSectionValue()).toBe('events');
+
+      routeParamMap$.next(convertToParamMap({tab: 'settings'}));
+      await fixture.whenStable();
+
+      expect(await harness.getSelectedMobileSectionValue()).toBe('settings');
     });
 
     it('sets activeTab to "members" when tab input is "members"', async () => {
@@ -786,6 +825,20 @@ describe('CommunityAdminComponent', () => {
       expect(text).toContain('A shortcut past the application process');
     });
 
+    it('uses level-two headings for mobile magic-link cards', async () => {
+      const link = makeMagicLink({
+        _id: 'link-heading' as Id<'magic_links'>,
+        label: 'Heading Check',
+      });
+      const controller = createMagicLinksQueryController([link]);
+      const {harness} = await setup({
+        tab: 'magic-links',
+        magicLinksController: controller,
+      });
+
+      expect(await harness.getMagicLinkMobileHeadingTags()).toEqual(['H2']);
+    });
+
     it('scopes magic link queries to the selected community', async () => {
       const selectedId = 'org-selected' as Id<'organizers'>;
       const {convexMock} = await setup({
@@ -825,16 +878,18 @@ describe('CommunityAdminComponent', () => {
           _args: unknown,
           onData: (data: unknown[]) => void,
         ) => {
-          onData([
-            {
-              _id: 'link-1',
-              _creationTime: Date.now(),
-              tokenPrefix: 'abc123de',
-              status: 'active',
-              redemptionCount: 0,
-              label: 'Test Link',
-            },
-          ]);
+          emitAsync(() =>
+            onData([
+              {
+                _id: 'link-1',
+                _creationTime: Date.now(),
+                tokenPrefix: 'abc123de',
+                status: 'active',
+                redemptionCount: 0,
+                label: 'Test Link',
+              },
+            ]),
+          );
           return () => void 0;
         },
       );
@@ -926,16 +981,18 @@ describe('CommunityAdminComponent', () => {
           _args: unknown,
           onData: (data: unknown[]) => void,
         ) => {
-          onData([
-            {
-              _id: 'link-1',
-              _creationTime: Date.now(),
-              tokenPrefix: 'abc123de',
-              status: 'active',
-              redemptionCount: 0,
-              label: 'VIP Access',
-            },
-          ]);
+          emitAsync(() =>
+            onData([
+              {
+                _id: 'link-1',
+                _creationTime: Date.now(),
+                tokenPrefix: 'abc123de',
+                status: 'active',
+                redemptionCount: 0,
+                label: 'VIP Access',
+              },
+            ]),
+          );
           return () => void 0;
         },
       );
@@ -997,16 +1054,18 @@ describe('CommunityAdminComponent', () => {
           _args: unknown,
           onData: (data: unknown[]) => void,
         ) => {
-          onData([
-            {
-              _id: 'link-1',
-              _creationTime: Date.now(),
-              tokenPrefix: 'abc123de',
-              status: 'active',
-              redemptionCount: 0,
-              label: 'Test Link',
-            },
-          ]);
+          emitAsync(() =>
+            onData([
+              {
+                _id: 'link-1',
+                _creationTime: Date.now(),
+                tokenPrefix: 'abc123de',
+                status: 'active',
+                redemptionCount: 0,
+                label: 'Test Link',
+              },
+            ]),
+          );
           return () => void 0;
         },
       );
@@ -1038,16 +1097,18 @@ describe('CommunityAdminComponent', () => {
           _args: unknown,
           onData: (data: unknown[]) => void,
         ) => {
-          onData([
-            {
-              _id: 'link-1',
-              _creationTime: Date.now(),
-              tokenPrefix: 'abc123de',
-              status: 'active',
-              redemptionCount: 0,
-              label: 'Test Link',
-            },
-          ]);
+          emitAsync(() =>
+            onData([
+              {
+                _id: 'link-1',
+                _creationTime: Date.now(),
+                tokenPrefix: 'abc123de',
+                status: 'active',
+                redemptionCount: 0,
+                label: 'Test Link',
+              },
+            ]),
+          );
           return () => void 0;
         },
       );
@@ -1076,6 +1137,45 @@ describe('CommunityAdminComponent', () => {
       expect(await newHarness.hasCreateDialog()).toBe(false);
     });
 
+    it('keeps the create-dialog backdrop non-focusable and hidden from assistive tech', async () => {
+      const {convexMock} = await setup({tab: 'magic-links'});
+
+      convexMock.client.onUpdate.mockImplementation(
+        (
+          _query: unknown,
+          _args: unknown,
+          onData: (data: unknown[]) => void,
+        ) => {
+          emitAsync(() => onData([]));
+          return () => void 0;
+        },
+      );
+
+      const newFixture = TestBed.createComponent(CommunityAdminComponent);
+      newFixture.componentRef.setInput('tab', 'magic-links');
+      newFixture.detectChanges();
+      await newFixture.whenStable();
+
+      newFixture.componentInstance.openCreateDialog();
+      newFixture.detectChanges();
+      await newFixture.whenStable();
+
+      const newHarness = await TestbedHarnessEnvironment.harnessForFixture(
+        newFixture,
+        CommunityAdminHarness,
+      );
+      expect(await newHarness.hasCreateDialog()).toBe(true);
+      // Decorative dismiss surface: out of the a11y tree and tab order.
+      expect(await newHarness.getDialogBackdropAriaHidden()).toBe('true');
+      expect(await newHarness.getDialogBackdropTabIndex()).toBeNull();
+
+      // Pointer dismissal still works.
+      await newHarness.clickDialogBackdrop();
+      newFixture.detectChanges();
+      await newFixture.whenStable();
+      expect(await newHarness.hasCreateDialog()).toBe(false);
+    });
+
     it('applies truncate class to desktop label cell to prevent overflow', async () => {
       const {convexMock} = await setup({tab: 'magic-links'});
 
@@ -1085,16 +1185,18 @@ describe('CommunityAdminComponent', () => {
           _args: unknown,
           onData: (data: unknown[]) => void,
         ) => {
-          onData([
-            {
-              _id: 'link-1',
-              _creationTime: Date.now(),
-              tokenPrefix: 'abc123de',
-              status: 'active',
-              redemptionCount: 0,
-              label: 'A'.repeat(100),
-            },
-          ]);
+          emitAsync(() =>
+            onData([
+              {
+                _id: 'link-1',
+                _creationTime: Date.now(),
+                tokenPrefix: 'abc123de',
+                status: 'active',
+                redemptionCount: 0,
+                label: 'A'.repeat(100),
+              },
+            ]),
+          );
           return () => void 0;
         },
       );
@@ -1122,15 +1224,17 @@ describe('CommunityAdminComponent', () => {
           _args: unknown,
           onData: (data: unknown[]) => void,
         ) => {
-          onData([
-            {
-              _id: 'link-2',
-              _creationTime: Date.now(),
-              tokenPrefix: 'xyz789gh',
-              status: 'active',
-              redemptionCount: 0,
-            },
-          ]);
+          emitAsync(() =>
+            onData([
+              {
+                _id: 'link-2',
+                _creationTime: Date.now(),
+                tokenPrefix: 'xyz789gh',
+                status: 'active',
+                redemptionCount: 0,
+              },
+            ]),
+          );
           return () => void 0;
         },
       );
@@ -1162,17 +1266,19 @@ describe('CommunityAdminComponent', () => {
           _args: unknown,
           onData: (data: unknown[]) => void,
         ) => {
-          onData([
-            {
-              _id: 'link-3',
-              _creationTime: Date.now(),
-              tokenPrefix: 'unlimit',
-              status: 'active',
-              redemptionCount: 7,
-              label: 'Unlimited Link',
-              // no maxRedemptions field
-            },
-          ]);
+          emitAsync(() =>
+            onData([
+              {
+                _id: 'link-3',
+                _creationTime: Date.now(),
+                tokenPrefix: 'unlimit',
+                status: 'active',
+                redemptionCount: 7,
+                label: 'Unlimited Link',
+                // no maxRedemptions field
+              },
+            ]),
+          );
           return () => void 0;
         },
       );
@@ -1246,7 +1352,7 @@ describe('CommunityAdminComponent', () => {
       const confirmSpy = vi
         .spyOn(alertDialogService, 'confirm')
         .mockImplementation((config) => {
-          config.zOnOk?.(undefined as never);
+          config.zOnOk?.(undefined);
           return {} as ReturnType<BraAlertDialogService['confirm']>;
         });
       const successSpy = vi
@@ -1511,7 +1617,7 @@ describe('CommunityAdminComponent', () => {
       });
       const alertDialogService = TestBed.inject(BraAlertDialogService);
       vi.spyOn(alertDialogService, 'confirm').mockImplementation((config) => {
-        config.zOnOk?.(undefined as never);
+        config.zOnOk?.(undefined);
         return {} as ReturnType<BraAlertDialogService['confirm']>;
       });
       const errorSpy = vi
@@ -1551,17 +1657,19 @@ describe('CommunityAdminComponent', () => {
           _args: unknown,
           onData: (data: unknown[]) => void,
         ) => {
-          onData([
-            {
-              _id: 'link-4',
-              _creationTime: Date.now(),
-              tokenPrefix: 'zerocap',
-              status: 'active',
-              redemptionCount: 0,
-              label: 'Zero Cap Link',
-              maxRedemptions: 0,
-            },
-          ]);
+          emitAsync(() =>
+            onData([
+              {
+                _id: 'link-4',
+                _creationTime: Date.now(),
+                tokenPrefix: 'zerocap',
+                status: 'active',
+                redemptionCount: 0,
+                label: 'Zero Cap Link',
+                maxRedemptions: 0,
+              },
+            ]),
+          );
           return () => void 0;
         },
       );
@@ -1578,6 +1686,56 @@ describe('CommunityAdminComponent', () => {
 
       // A link with maxRedemptions: 0 (invalid DB state) should NOT show "Unlimited"
       expect(await newHarness.hasUnlimitedCapDisplay()).toBe(false);
+    });
+
+    it('routes the active magic-links query error to its own toast', async () => {
+      const errorSpy = vi
+        .spyOn(toast, 'error')
+        .mockImplementation(() => 'toast-id');
+      const {fixture} = await setup({tab: 'magic-links', failLinks: true});
+      await fixture.whenStable();
+
+      // Consolidated onError must map the 'links' key to the active-links copy,
+      // not the past-links copy.
+      expect(errorSpy).toHaveBeenCalledWith('Failed to load your magic links');
+      expect(errorSpy).not.toHaveBeenCalledWith(
+        'Failed to load past magic links',
+      );
+    });
+
+    it('routes the past magic-links query error to its own toast', async () => {
+      const errorSpy = vi
+        .spyOn(toast, 'error')
+        .mockImplementation(() => 'toast-id');
+      const {fixture} = await setup({tab: 'magic-links', failLinksPast: true});
+      await fixture.whenStable();
+
+      expect(errorSpy).toHaveBeenCalledWith('Failed to load past magic links');
+      expect(errorSpy).not.toHaveBeenCalledWith(
+        'Failed to load your magic links',
+      );
+    });
+
+    it('does not toast for the isMemberOf or community keys when they are the only active queries', async () => {
+      const errorSpy = vi
+        .spyOn(toast, 'error')
+        .mockImplementation(() => 'toast-id');
+      // On a non-magic-links tab the links/linksPast keys are skipToken, so the
+      // consolidated onError never fires magic-link toasts here.
+      const {fixture} = await setup({tab: 'pending'});
+      await fixture.whenStable();
+
+      expect(errorSpy).not.toHaveBeenCalled();
+    });
+
+    it('keeps isLoading tied to the links query, not the aggregate of all four queries', async () => {
+      // On a non-magic-links tab the links key is skipToken (status 'skipped'),
+      // so isLoading must be false even though isMemberOf/community subscribe.
+      // An aggregate isLoading would leak those queries' pending state here.
+      const {fixture} = await setup({tab: 'pending'});
+      await fixture.whenStable();
+
+      expect(fixture.componentInstance.isLoading()).toBe(false);
     });
   });
 
@@ -1647,7 +1805,7 @@ describe('CommunityAdminComponent', () => {
 
     it('isAdminOverride is false for admin users when isMemberOf data is not yet loaded', async () => {
       const {fixture} = await setup({userRole: 'root_admin'});
-      // isMemberOfQuery.data() returns undefined when not loaded, so isAdminOverride should be false
+      // communityQueries.results().isMemberOf is undefined when not loaded, so isAdminOverride should be false
       expect(fixture.componentInstance.isAdminOverride()).toBe(false);
     });
   });
@@ -1693,7 +1851,7 @@ describe('CommunityAdminComponent', () => {
       const confirmSpy = vi
         .spyOn(alertDialogService, 'confirm')
         .mockImplementation((config) => {
-          config.zOnOk?.(undefined as never);
+          config.zOnOk?.(undefined);
           return {} as ReturnType<BraAlertDialogService['confirm']>;
         });
 
@@ -1719,7 +1877,7 @@ describe('CommunityAdminComponent', () => {
       const {fixture} = await setup({tab: 'settings'});
       const alertDialogService = TestBed.inject(BraAlertDialogService);
       vi.spyOn(alertDialogService, 'confirm').mockImplementation((config) => {
-        config.zOnCancel?.(undefined as never);
+        config.zOnCancel?.(undefined);
         return {} as ReturnType<BraAlertDialogService['confirm']>;
       });
 

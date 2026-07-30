@@ -7,6 +7,8 @@ import {convex, crossDomain} from '@convex-dev/better-auth/plugins';
 import {betterAuth, type BetterAuthPlugin} from 'better-auth';
 import {createAuthMiddleware} from 'better-auth/api';
 import {generateRandomString} from 'better-auth/crypto';
+import {haveIBeenPwned} from 'better-auth/plugins';
+import {COMPROMISED_PASSWORD_MESSAGE} from '@shared/constants';
 
 import {components, internal} from '../_generated/api';
 import type {DataModel, Doc} from '../_generated/dataModel';
@@ -32,13 +34,12 @@ import {hasConfiguredCriticalEmailCredentials} from './email_delivery_mode';
 import {resolveSiteUrl} from './site_url';
 import {normalizeEmail, sanitizeName} from './validation';
 import {logger} from './logger';
-import {isTestEnvironment} from './environment';
+import {isHibpPasswordCheckDisabled, isTestEnvironment} from './environment';
 
 type EmailSendPayload = {
   to: string;
   subject: string;
   html: string;
-  requireDelivery?: boolean;
 };
 
 const LOCAL_FRONTEND_PORTS = ['4200', '4201', '4202'] as const;
@@ -46,6 +47,7 @@ const LOCAL_FRONTEND_PORTS = ['4200', '4201', '4202'] as const;
 async function dispatchEmailSend(
   ctx: GenericCtx<DataModel>,
   payload: EmailSendPayload,
+  options: {requireDelivery?: boolean} = {},
 ): Promise<void> {
   const metadata = {
     source: 'auth' as const,
@@ -55,6 +57,7 @@ async function dispatchEmailSend(
     sourceId: 'dispatch',
     recipient: payload.to,
     critical: true,
+    requireDelivery: options.requireDelivery,
   };
   if ('runAction' in ctx) {
     await sendEmailDeliveryNow(ctx, payload, metadata);
@@ -63,7 +66,7 @@ async function dispatchEmailSend(
 
   if ('scheduler' in ctx) {
     if (
-      payload.requireDelivery &&
+      options.requireDelivery &&
       !isTestEnvironment() &&
       !hasConfiguredCriticalEmailCredentials()
     ) {
@@ -77,9 +80,47 @@ async function dispatchEmailSend(
 }
 
 /**
+ * Sends the email-change confirmation to the user's CURRENT address.
+ *
+ * Exported so contract tests can exercise the exact production dispatch —
+ * template, requireDelivery flag, and provider args — end to end. The vitest
+ * setup mocks authComponent.getAuth (Better Auth's HTTP layer), so nothing
+ * above this function is reachable in convex-test; this is the highest
+ * production-shaped entry point for the email-change delivery contract.
+ */
+export async function dispatchEmailChangeConfirmation(
+  ctx: GenericCtx<DataModel>,
+  args: {to: string; newEmail: string; url: string},
+): Promise<void> {
+  const {subject, html} = emailChangeConfirmationTemplate(
+    args.newEmail,
+    args.url,
+  );
+  await dispatchEmailSend(
+    ctx,
+    {to: args.to, subject, html},
+    {requireDelivery: true},
+  );
+}
+
+/**
  * Custom plugin to add OTT (one-time token) to verify-email redirects.
- * The @convex-dev/better-auth crossDomain plugin only handles OTT for OAuth and magic-link,
- * but not for email verification. This plugin fills that gap.
+ *
+ * DELIBERATE reimplementation, NOT dead code — do not delete. The
+ * @convex-dev/better-auth 0.12.5 crossDomain plugin attaches its OTT after-hook
+ * only to `/callback`, `/oauth2/callback`, and `/magic-link/verify` (see its
+ * `crossDomain` server plugin), and never to `/verify-email`. Without this
+ * plugin, cross-domain email-verification sign-in silently loses the session on
+ * the redirect back to the app: the browser lands on the app origin with no
+ * usable credential because the crossDomain flow relies on the OTT query param,
+ * not a third-party cookie.
+ *
+ * This gap is masked in E2E, which runs in cookie mode (crossDomain disabled on
+ * both client and server), so no automated test would catch a regression here.
+ *
+ * Retire this plugin ONLY once upstream's crossDomain OTT hook covers
+ * `/verify-email` redirects. Tracking: the PR that introduced this refactor
+ * drafts an upstream issue for get-convex/better-auth requesting exactly that.
  */
 const verifyEmailOttPlugin = (): BetterAuthPlugin => ({
   id: 'verify-email-ott',
@@ -273,22 +314,43 @@ export function sanitizeFrontendCallbackUrl(
     return fallback;
   }
 
-  if (rawValue.startsWith('/')) {
-    if (rawValue.startsWith('//')) {
-      return fallback;
-    }
-    return new URL(rawValue, frontendUrl).toString();
+  // Reject backslashes outright. The WHATWG URL parser (and every browser)
+  // normalizes `\` to `/` for http/https, so inputs like `/\evil.com`,
+  // `/\/evil.com`, or `\/\/evil.com` resolve to a protocol-relative external
+  // origin and slip past a naive `startsWith('//')` guard. No legitimate
+  // in-app callback path contains a backslash.
+  if (rawValue.includes('\\')) {
+    return fallback;
   }
 
+  // Resolve the value against the frontend origin and accept it only when the
+  // fully-resolved origin is on the allowlist. Resolving first, then checking
+  // the origin, uniformly rejects protocol-relative (`//host`),
+  // absolute-external, userinfo (`user@host`), and opaque-scheme
+  // (`javascript:`/`data:`, whose origin is "null") URLs regardless of how they
+  // are spelled, while preserving same-origin relative paths and trusted
+  // absolute URLs. The origin — not a string prefix — is authoritative for
+  // where the browser will navigate.
+  let resolved: URL;
   try {
-    const parsed = new URL(rawValue);
-    if (!allowedOrigins.has(parsed.origin)) {
-      return fallback;
-    }
-    return parsed.toString();
+    resolved = new URL(rawValue, frontendUrl);
   } catch {
     return fallback;
   }
+
+  // Only http(s) redirect targets are valid in-app navigations. A value such as
+  // `blob:https://app.example.com/<uuid>` resolves to a trusted `origin` and
+  // would otherwise pass the allowlist, yet it is not a real page navigation.
+  // The frontend allowlist itself only ever contains http/https origins.
+  if (resolved.protocol !== 'https:' && resolved.protocol !== 'http:') {
+    return fallback;
+  }
+
+  if (!allowedOrigins.has(resolved.origin)) {
+    return fallback;
+  }
+
+  return resolved.toString();
 }
 
 export function buildFrontendCallbackUrl(
@@ -483,6 +545,22 @@ function getAuthConfig() {
 }
 
 /**
+ * Better Auth paths guarded by the haveIBeenPwned breach check.
+ *
+ * Both are served through Better Auth HTTP routes registered as Convex
+ * httpActions (backend/convex/http.ts), so the plugin's outbound fetch to
+ * the HIBP range API is permitted. The /change-password HTTP route is
+ * disabled below; the V2 action invokes auth.api.changePassword directly and
+ * intentionally keeps the existing no-HIBP policy. The mutation-context
+ * /set-password flow must never appear here because Convex mutations cannot
+ * fetch and the plugin fails closed.
+ */
+export const HIBP_CHECKED_PATHS = [
+  '/sign-up/email',
+  '/reset-password',
+] as const;
+
+/**
  * Creates a Better Auth instance with Convex integration.
  */
 export const createAuth = (ctx: GenericCtx<DataModel>) => {
@@ -495,6 +573,11 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
     baseURL: AUTH_BASE_URL,
     database: authComponent.adapter(ctx),
     trustedOrigins,
+    // Password changes must pass through auth.public.changePasswordV2 so the
+    // committed per-user rate limit cannot roll back on an invalid password.
+    // disabledPaths affects only Better Auth's HTTP router; the V2 action can
+    // still invoke auth.api.changePassword directly on the server.
+    disabledPaths: ['/change-password'],
     advanced: {
       useSecureCookies: !isLocalDevelopment,
     },
@@ -547,15 +630,10 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
       changeEmail: {
         enabled: true,
         sendChangeEmailConfirmation: async ({user, newEmail, url}) => {
-          const {subject, html} = emailChangeConfirmationTemplate(
+          await dispatchEmailChangeConfirmation(ctx, {
+            to: user.email,
             newEmail,
             url,
-          );
-          await dispatchEmailSend(ctx, {
-            to: user.email,
-            subject,
-            html,
-            requireDelivery: true,
           });
         },
       },
@@ -598,6 +676,29 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
       }),
       ...(isE2ETest ? [] : [crossDomain({siteUrl: FRONTEND_URL})]),
       ...(isE2ETest ? [] : [verifyEmailOttPlugin()]),
+      // Breached-password check via the HIBP range API (k-anonymity; only a
+      // 5-char SHA-1 prefix leaves the deployment). Excluded in E2E/local
+      // test runs so tests never depend on an external service, and behind
+      // AUTH_HIBP_DISABLED as an incident kill switch because the plugin
+      // fails closed when the HIBP API is unreachable.
+      ...(isE2ETest || isHibpPasswordCheckDisabled()
+        ? []
+        : [
+            haveIBeenPwned({
+              // Only paths served through Better Auth HTTP routes (Convex
+              // httpActions, where outbound fetch is permitted). Deliberately
+              // drops /change-password from the plugin defaults: breach
+              // screening is intentionally scoped to sign-up and password
+              // reset, not authenticated password changes. The legacy
+              // HTTP route is disabled, and the rollout-only legacy mutation
+              // rejects stale clients before reaching Better Auth. V2 runs as
+              // an action but preserves the same screening policy.
+              // /set-password (also mutation context) was never a plugin
+              // default and remains out.
+              paths: [...HIBP_CHECKED_PATHS],
+              customPasswordCompromisedMessage: COMPROMISED_PASSWORD_MESSAGE,
+            }),
+          ]),
     ],
   });
 };

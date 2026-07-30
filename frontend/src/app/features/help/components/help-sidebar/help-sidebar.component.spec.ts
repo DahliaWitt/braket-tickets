@@ -1,12 +1,12 @@
-import { TestBed } from '@angular/core/testing';
-import { provideZonelessChangeDetection, signal } from '@angular/core';
-import { provideRouter } from '@angular/router';
-import { By } from '@angular/platform-browser';
-import { describe, it, expect, beforeEach } from 'vitest';
-import { HelpSidebarComponent } from './help-sidebar.component';
-import { type HelpArticle } from '../../models/help.models';
-import { type ComponentFixture } from '@angular/core/testing';
-import { AuthService } from '../../../../core/services/auth.service';
+import {TestBed} from '@angular/core/testing';
+import {provideZonelessChangeDetection, signal} from '@angular/core';
+import {provideRouter} from '@angular/router';
+import {By} from '@angular/platform-browser';
+import {describe, it, expect, beforeEach} from 'vitest';
+import {HelpSidebarComponent} from './help-sidebar.component';
+import {type HelpArticle} from '../../models/help.models';
+import {type ComponentFixture} from '@angular/core/testing';
+import {AuthService} from '../../../../core/services/auth.service';
 
 const MOCK_ARTICLES: HelpArticle[] = [
   {
@@ -90,20 +90,32 @@ describe('HelpSidebarComponent', () => {
       fixture.componentRef.setInput('activeSection', 'developers');
       await fixture.whenStable();
 
-      const links = fixture.debugElement.queryAll(By.css('[data-testid="help-section-link"]'));
+      const links = fixture.debugElement.queryAll(
+        By.css('[data-testid="help-section-link"]'),
+      );
       expect(links.length).toBe(2);
-      expect((links[0].nativeElement as HTMLElement).textContent).toContain('User Guide');
-      expect((links[1].nativeElement as HTMLElement).textContent).toContain('Developer Guide');
+      expect((links[0].nativeElement as HTMLElement).textContent).toContain(
+        'user guide',
+      );
+      expect((links[1].nativeElement as HTMLElement).textContent).toContain(
+        'developer guide',
+      );
     });
 
     it('shows User Guide + Admin Guide for admin on /help', async () => {
       userRoleSignal.set('root_admin');
       await fixture.whenStable();
 
-      const links = fixture.debugElement.queryAll(By.css('[data-testid="help-section-link"]'));
+      const links = fixture.debugElement.queryAll(
+        By.css('[data-testid="help-section-link"]'),
+      );
       expect(links.length).toBe(2);
-      expect((links[0].nativeElement as HTMLElement).textContent).toContain('User Guide');
-      expect((links[1].nativeElement as HTMLElement).textContent).toContain('Admin Guide');
+      expect((links[0].nativeElement as HTMLElement).textContent).toContain(
+        'user guide',
+      );
+      expect((links[1].nativeElement as HTMLElement).textContent).toContain(
+        'admin guide',
+      );
     });
 
     it('shows all three sections for admin on /help/developers', async () => {
@@ -111,21 +123,35 @@ describe('HelpSidebarComponent', () => {
       fixture.componentRef.setInput('activeSection', 'developers');
       await fixture.whenStable();
 
-      const links = fixture.debugElement.queryAll(By.css('[data-testid="help-section-link"]'));
+      const links = fixture.debugElement.queryAll(
+        By.css('[data-testid="help-section-link"]'),
+      );
       expect(links.length).toBe(3);
-      expect((links[0].nativeElement as HTMLElement).textContent).toContain('User Guide');
-      expect((links[1].nativeElement as HTMLElement).textContent).toContain('Admin Guide');
-      expect((links[2].nativeElement as HTMLElement).textContent).toContain('Developer Guide');
+      expect((links[0].nativeElement as HTMLElement).textContent).toContain(
+        'user guide',
+      );
+      expect((links[1].nativeElement as HTMLElement).textContent).toContain(
+        'admin guide',
+      );
+      expect((links[2].nativeElement as HTMLElement).textContent).toContain(
+        'developer guide',
+      );
     });
 
     it('shows admin guide for community_admin role', async () => {
       userRoleSignal.set('community_admin');
       await fixture.whenStable();
 
-      const links = fixture.debugElement.queryAll(By.css('[data-testid="help-section-link"]'));
+      const links = fixture.debugElement.queryAll(
+        By.css('[data-testid="help-section-link"]'),
+      );
       expect(links.length).toBe(2);
-      expect((links[0].nativeElement as HTMLElement).textContent).toContain('User Guide');
-      expect((links[1].nativeElement as HTMLElement).textContent).toContain('Admin Guide');
+      expect((links[0].nativeElement as HTMLElement).textContent).toContain(
+        'user guide',
+      );
+      expect((links[1].nativeElement as HTMLElement).textContent).toContain(
+        'admin guide',
+      );
     });
   });
 
@@ -152,9 +178,9 @@ describe('HelpSidebarComponent', () => {
         By.css('[data-testid="help-article-link"]'),
       );
       expect(articleLinks.length).toBe(1);
-      expect((articleLinks[0].nativeElement as HTMLElement).textContent).toContain(
-        'Managing Events',
-      );
+      expect(
+        (articleLinks[0].nativeElement as HTMLElement).textContent,
+      ).toContain('Managing Events');
     });
   });
 
@@ -192,7 +218,9 @@ describe('HelpSidebarComponent', () => {
         By.css('[data-testid="help-category-index-link"]'),
       );
       expect(indexLinks.length).toBe(1);
-      expect((indexLinks[0].nativeElement as HTMLElement).textContent?.trim()).toBe('Runbooks');
+      expect(
+        (indexLinks[0].nativeElement as HTMLElement).textContent?.trim(),
+      ).toBe('Runbooks');
       const articleLinks = fixture.debugElement.queryAll(
         By.css('[data-testid="help-article-link"]'),
       );
@@ -213,7 +241,26 @@ describe('HelpSidebarComponent', () => {
         By.css('[data-testid="help-category-toggle"]'),
       );
       expect(toggles.length).toBe(1);
-      expect((toggles[0].nativeElement as HTMLElement).getAttribute('aria-expanded')).toBe('true');
+      expect(
+        (toggles[0].nativeElement as HTMLElement).getAttribute('aria-expanded'),
+      ).toBe('true');
+    });
+
+    it('renders the toggle with a 24px hit area and an icon chevron', () => {
+      const toggle = fixture.debugElement.query(
+        By.css('[data-testid="help-category-toggle"]'),
+      ).nativeElement as HTMLButtonElement;
+
+      // h-6/w-6 = 24px — WCAG 2.2 AA minimum touch target
+      expect(toggle.className).toContain('h-6');
+      expect(toggle.className).toContain('w-6');
+      expect(toggle.getAttribute('aria-label')).toContain('Collapse');
+
+      const icon = fixture.debugElement.query(
+        By.css('[data-testid="help-category-toggle"] z-icon'),
+      );
+      expect(icon).toBeTruthy();
+      expect(toggle.textContent?.trim()).not.toContain('▸');
     });
 
     it('hides article links and flips aria-expanded when category toggled', async () => {

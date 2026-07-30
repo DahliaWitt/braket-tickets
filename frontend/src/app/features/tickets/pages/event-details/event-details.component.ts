@@ -16,7 +16,7 @@ import {toSignal} from '@angular/core/rxjs-interop';
 import {NgOptimizedImage} from '@angular/common';
 import {ActivatedRoute, Router, RouterLink} from '@angular/router';
 import {AuthService} from '@/core/services/auth.service';
-import {injectQuery, skipToken} from 'convex-angular';
+import {injectQueries, injectQuery, skipToken} from 'convex-angular';
 import {PaymentService} from '@/features/tickets/services/payment.service';
 import {ApplicationsService} from '@/features/vetting/services/applications.service';
 import {type Application} from '@/features/vetting/models/application.model';
@@ -51,6 +51,7 @@ import {CheckoutStore} from './checkout-store';
 import {getContactDialogDescription} from './event-details-copy';
 import {getBuyerPricingSummary} from '@shared/pricing/pricing-summary';
 import {EventDatePipe} from '@/utils/event-date.pipe';
+import {EventEndTimePipe} from '@/utils/event-end-time.pipe';
 
 type EventOrganizer = NonNullable<EventDetail['organizer']>;
 
@@ -59,6 +60,7 @@ type EventOrganizer = NonNullable<EventDetail['organizer']>;
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     EventDatePipe,
+    EventEndTimePipe,
     RouterLink,
     NgOptimizedImage,
     ZardButtonComponent,
@@ -96,17 +98,19 @@ export class EventDetailsComponent {
     return this.auth.userRole() === 'root_admin';
   }
 
-  private readonly eventQuery = injectQuery(api.events.public.get, () => ({
-    id: this.eventId(),
+  private readonly queries = injectQueries(() => ({
+    event: {
+      query: api.events.public.get,
+      args: {id: this.eventId()},
+    },
+    availability: {
+      query: api.events.public.getAvailability,
+      args: {
+        eventId: this.eventId(),
+        now: Math.floor(Date.now() / 60000) * 60000,
+      },
+    },
   }));
-
-  private readonly availabilityQuery = injectQuery(
-    api.events.public.getAvailability,
-    () => ({
-      eventId: this.eventId(),
-      now: Math.floor(Date.now() / 60000) * 60000,
-    }),
-  );
 
   private readonly organizerResource = resource({
     params: () => {
@@ -143,7 +147,7 @@ export class EventDetailsComponent {
     () => {
       const evt = this.event();
       const user = this.auth.user();
-      const organizerId = evt?.organizerId as Id<'organizers'> | undefined;
+      const organizerId = evt?.organizerId;
 
       if (!evt || !user?._id || !organizerId) {
         return null;
@@ -182,11 +186,18 @@ export class EventDetailsComponent {
     api.communities.trust_links.checkUserTrust,
     () => {
       const user = this.auth.user();
-      const event = this.eventQuery.data();
+      // Read through the memoized `event` computed rather than
+      // `queries.results().event` directly: `results()` emits a new object on
+      // every settle of any key (event OR availability), so reading it here
+      // would re-run this argsFn — and resubscribe the trust query — on every
+      // availability push. The `event` computed is Object.is-stable across
+      // availability-only updates, preserving the original narrow dependency
+      // on the event document alone.
+      const event = this.event();
       if (event?.visibility === EVENT_VISIBILITY.PUBLIC) return skipToken;
       if (!user?._id || !event) return skipToken;
       return {
-        organizerId: event.organizerId as Id<'organizers'>,
+        organizerId: event.organizerId,
       };
     },
   );
@@ -199,12 +210,12 @@ export class EventDetailsComponent {
     return null;
   });
   readonly event = computed<EventDetail | null>(
-    () => this.eventQuery.data() ?? null,
+    () => this.queries.results().event ?? null,
   );
   readonly hasLoadError = computed(
     () =>
-      !!this.eventQuery.error() ||
-      !!this.availabilityQuery.error() ||
+      !!this.queries.errors().event ||
+      !!this.queries.errors().availability ||
       !!this.organizerResource.error() ||
       !!this.appStatusResource.error(),
   );
@@ -223,7 +234,7 @@ export class EventDetailsComponent {
     () => safeResourceValue(this.appStatusResource)?.status ?? null,
   );
   readonly loading = computed(() => {
-    if (this.eventQuery.isLoading() || this.availabilityQuery.isLoading()) {
+    if (this.queries.isLoading()) {
       return true;
     }
 
@@ -233,7 +244,9 @@ export class EventDetailsComponent {
     );
   });
 
-  readonly availability = computed(() => this.availabilityQuery.data() ?? null);
+  readonly availability = computed(
+    () => this.queries.results().availability ?? null,
+  );
 
   readonly remainingTickets = computed(() => {
     const avail = this.availability();
@@ -301,6 +314,7 @@ export class EventDetailsComponent {
   readonly guestEmail = this.checkoutStore.guestEmail;
   readonly buyerEmail = this.checkoutStore.buyerEmail;
   readonly guestSessionToken = this.checkoutStore.guestSessionToken;
+  readonly guestTermsAccepted = this.checkoutStore.guestTermsAccepted;
 
   private readonly queryParamMap = toSignal(this.route.queryParamMap, {
     requireSync: true,
@@ -482,6 +496,10 @@ export class EventDetailsComponent {
     }
   }
 
+  onGuestTermsAcceptedChange(accepted: boolean): void {
+    this.checkoutStore.setGuestTermsAccepted(accepted);
+  }
+
   onSidebarOpenChange(isOpen: boolean): void {
     if (!isOpen) {
       this.closePaymentSidebar();
@@ -582,47 +600,59 @@ export class EventDetailsComponent {
     const amount = this.totalAmount();
     const checkoutTheme =
       this.darkMode.themeMode() === EDarkModes.DARK ? 'dark' : 'light';
-    if (!this.auth.user()) {
-      const sessionToken = this.guestSessionToken();
-      if (!sessionToken) throw new Error('Guest session not initialized');
 
-      const result = await this.paymentService.startGuestCheckoutSession(
-        this.event()!._id,
-        this.checkoutQuantity(),
-        tier,
-        amount,
-        sessionToken,
-        checkoutTheme,
-      );
+    // Lock the priced selection (quantity/tier/amount controls) the instant
+    // session creation starts so the buyer cannot drift it during the
+    // order-open + Stripe round trip. On success setActiveCheckoutSession keeps
+    // it locked via the active session id; the finally releases the in-flight
+    // flag either way so an error/cancel re-enables the controls.
+    this.checkoutStore.beginSessionCreation();
+    try {
+      if (!this.auth.user()) {
+        const sessionToken = this.guestSessionToken();
+        if (!sessionToken) throw new Error('Guest session not initialized');
+
+        const result = await this.paymentService.startGuestCheckoutSession(
+          this.event()!._id,
+          this.checkoutQuantity(),
+          tier,
+          amount,
+          sessionToken,
+          checkoutTheme,
+          this.guestTermsAccepted(),
+        );
+        this.checkoutStore.setActiveCheckoutSession(result);
+        return {
+          clientSecret: result.clientSecret,
+          connectedAccountId: result.connectedAccountId,
+          orderId: result.orderId,
+        };
+      }
+
+      const result = this.isResalePurchase()
+        ? await this.paymentService.startResaleCheckoutSession(
+            this.event()!._id,
+            tier,
+            amount,
+            checkoutTheme,
+          )
+        : await this.paymentService.startPrimaryCheckoutSession(
+            this.event()!._id,
+            this.checkoutQuantity(),
+            tier,
+            amount,
+            checkoutTheme,
+          );
+
       this.checkoutStore.setActiveCheckoutSession(result);
       return {
         clientSecret: result.clientSecret,
         connectedAccountId: result.connectedAccountId,
         orderId: result.orderId,
       };
+    } finally {
+      this.checkoutStore.endSessionCreation();
     }
-
-    const result = this.isResalePurchase()
-      ? await this.paymentService.startResaleCheckoutSession(
-          this.event()!._id,
-          tier,
-          amount,
-          checkoutTheme,
-        )
-      : await this.paymentService.startPrimaryCheckoutSession(
-          this.event()!._id,
-          this.checkoutQuantity(),
-          tier,
-          amount,
-          checkoutTheme,
-        );
-
-    this.checkoutStore.setActiveCheckoutSession(result);
-    return {
-      clientSecret: result.clientSecret,
-      connectedAccountId: result.connectedAccountId,
-      orderId: result.orderId,
-    };
   };
   async onStripePaymentConfirmed() {
     const orderId = this.activeOrderId();
@@ -677,6 +707,10 @@ export class EventDetailsComponent {
     await this.paymentGuard.guard(async () => {
       if (!this.event()) return;
       if (this.totalAmount() > 0) return;
+      // A below-minimum custom amount collapses totalAmount to 0 but leaves a
+      // validation error set. Never route that through the free-claim path —
+      // the backend rejects it as below the sliding-scale/supporter minimum.
+      if (this.slidingScaleError()) return;
 
       this.paymentStatus.set('processing');
 
@@ -689,6 +723,7 @@ export class EventDetailsComponent {
             this.checkoutQuantity(),
             this.selectedTier(),
             sessionToken,
+            this.guestTermsAccepted(),
           );
         } else {
           await this.paymentService.claimFreeTicket(

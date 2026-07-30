@@ -2,6 +2,11 @@ import {type Routes} from '@angular/router';
 import {authGuard, authenticatedMatch} from '@/core/guards/auth.guards';
 import {HELP_CENTER_ROUTES} from './features/help/help-center.routes.generated';
 
+/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion --
+   The redirect handlers below cast queryParams for URLSearchParams; the app
+   build needs the cast and this route array is coupled to
+   e2e/audit/audit-routes.ts via LINT.IfChange, so exempt the file rather than
+   churn the coupled region. */
 // LINT.IfChange
 export const routes: Routes = [
   // === Chrome-less routes (no header/footer) ===

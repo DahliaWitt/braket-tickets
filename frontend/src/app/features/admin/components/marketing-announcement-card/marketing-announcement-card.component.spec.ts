@@ -14,16 +14,7 @@ import {
 import {MarketingAnnouncementCardComponent} from './marketing-announcement-card.component';
 import {MarketingAnnouncementCardHarness} from './marketing-announcement-card.component.harness';
 import {functionReferenceMatches} from '@/testing/convex-reference-matchers';
-
-function createDeferred<T>() {
-  let resolve!: (value: T) => void;
-  let reject!: (reason?: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return {promise, resolve, reject};
-}
+import {createDeferred} from '@/testing/deferred';
 
 function toExpectedDateValue(timestamp: number): string {
   const date = new Date(timestamp);
@@ -81,32 +72,36 @@ describe('MarketingAnnouncementCardComponent', () => {
     createHarness?: boolean;
   } = {}) => {
     convexMock = createMockConvexClient();
-    const queryMock = vi.fn((queryRef: unknown) => {
-      if (
-        functionReferenceMatches(
-          queryRef,
-          api.marketing.emails.getAnnouncementStatus,
-        )
-      ) {
-        return announcementStatusQuery();
-      }
-      if (
-        functionReferenceMatches(
-          queryRef,
-          api.marketing.emails.getRecipientCount,
-        )
-      ) {
-        return Promise.resolve(recipientCount);
-      }
-      if (
-        functionReferenceMatches(queryRef, api.communities.trust_links.list)
-      ) {
-        return Promise.resolve(trustLinks);
-      }
-      return Promise.resolve(null);
-    });
-    convexMock.query = queryMock;
-    convexMock.client.query = convexMock.query;
+    const onUpdate = vi.fn(
+      (queryRef: unknown, _args: unknown, onData: (value: unknown) => void) => {
+        // injectQueries only registers the subscription in its internal map
+        // AFTER convex.onUpdate returns, and its settle callback drops any
+        // emission that arrives before that. Emit asynchronously (microtask)
+        // so onData runs once the subscription is live.
+        if (
+          functionReferenceMatches(
+            queryRef,
+            api.marketing.emails.getAnnouncementStatus,
+          )
+        ) {
+          void announcementStatusQuery().then((value) => onData(value));
+        } else if (
+          functionReferenceMatches(
+            queryRef,
+            api.marketing.emails.getRecipientCount,
+          )
+        ) {
+          void Promise.resolve().then(() => onData(recipientCount));
+        } else if (
+          functionReferenceMatches(queryRef, api.communities.trust_links.list)
+        ) {
+          void Promise.resolve().then(() => onData(trustLinks));
+        }
+        return () => undefined;
+      },
+    );
+    convexMock.onUpdate = onUpdate;
+    convexMock.client.onUpdate = onUpdate;
     convexMock.mutation.mockResolvedValue('record-1');
     convexMock.client.mutation = convexMock.mutation;
 
@@ -139,8 +134,8 @@ describe('MarketingAnnouncementCardComponent', () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
-    vi.spyOn(toast, 'success').mockImplementation(() => '' as string & number);
-    vi.spyOn(toast, 'error').mockImplementation(() => '' as string & number);
+    vi.spyOn(toast, 'success').mockImplementation(() => '');
+    vi.spyOn(toast, 'error').mockImplementation(() => '');
     marketingStatus = null;
     recipientCount = {
       count: 7,
@@ -170,6 +165,15 @@ describe('MarketingAnnouncementCardComponent', () => {
     await createComponent();
 
     expect(await harness.usesEmailCardSpacingContract()).toBe(true);
+  });
+
+  it('labels the schedule date and time inputs', async () => {
+    await createComponent();
+
+    expect(await harness.getScheduleDateLabelText()).toBe('send date');
+    expect(await harness.getScheduleTimeLabelText()).toBe('send time');
+    expect(await harness.isScheduleDateLabelAssociated()).toBe(true);
+    expect(await harness.isScheduleTimeLabelAssociated()).toBe(true);
   });
 
   it('keeps management actions hidden while announcement status is loading', async () => {

@@ -37,3 +37,41 @@ const _emailDeliverySourceValidatorMatchesType: AssertEqual<
   Infer<typeof emailDeliverySourceValidator>,
   EmailDeliverySource
 > = true;
+
+export const emailAttachmentValidator = v.object({
+  filename: v.string(),
+  content: v.string(),
+  encoding: v.optional(v.string()),
+  contentType: v.optional(v.string()),
+  cid: v.optional(v.string()),
+});
+
+/**
+ * Renderable email payload fields shared by the provider delivery contract.
+ */
+const emailPayloadArgs = {
+  to: v.string(),
+  subject: v.string(),
+  html: v.string(),
+  text: v.optional(v.string()),
+  headers: v.optional(v.record(v.string(), v.string())),
+  attachments: v.optional(v.array(emailAttachmentValidator)),
+} as const;
+
+/**
+ * The single delivery contract for provider dispatch actions
+ * (smtp.sendPreview, resend_actions.send): the renderable payload plus
+ * delivery-tracking metadata. Internal-only dispatch flags such as
+ * `requireDelivery` are NOT part of this contract — the wrapper in
+ * lib/email_delivery_wrapper.ts folds them into `critical` before dispatch,
+ * and provider validators reject extra fields. (Sole exception: for one
+ * release, resend_actions.send tolerates and ignores `requireDelivery` so
+ * jobs scheduled by the pre-contract wrapper survive the deploy window.)
+ */
+export const providerEmailDeliveryArgs = {
+  ...emailPayloadArgs,
+  source: emailDeliverySourceValidator,
+  sourceId: v.string(),
+  recipient: v.string(),
+  critical: v.optional(v.boolean()),
+} as const;

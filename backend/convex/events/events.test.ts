@@ -958,6 +958,160 @@ describe('Event date validation', () => {
   });
 });
 
+describe('Event end date', () => {
+  async function setupEndDateContext() {
+    const t = convexTest();
+    const adminId = await createRootAdmin(t, 'Admin');
+    const organizerId = await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {
+        name: 'End Date Org',
+      },
+    );
+    return {t, asAdmin: t.withIdentity({subject: adminId}), organizerId};
+  }
+
+  const baseCreateArgs = {
+    title: 'Overnight Event',
+    date: '2030-12-15T20:00:00.000Z',
+    price: 1000,
+    totalTickets: 50,
+    status: 'draft',
+    visibility: 'private',
+  } as const;
+
+  it('create stores a valid endDate after the start', async () => {
+    const {t, asAdmin, organizerId} = await setupEndDateContext();
+
+    const eventId = await asAdmin.mutation(api.events.management.create, {
+      ...baseCreateArgs,
+      organizerId,
+      endDate: '2030-12-16T06:00:00.000Z',
+    });
+
+    const event = await t.run(async (ctx) => ctx.db.get('events', eventId));
+    expect(event?.endDate).toBe('2030-12-16T06:00:00.000Z');
+
+    // Read models must project endDate through, or the editor would render
+    // empty end fields and clear the stored value on the next save.
+    const editable = await asAdmin.query(api.events.management.getForEdit, {
+      id: eventId,
+    });
+    expect(editable.endDate).toBe('2030-12-16T06:00:00.000Z');
+
+    const adminList = await asAdmin.query(api.events.management.adminList, {
+      organizerId,
+    });
+    expect(adminList.find((e) => e._id === eventId)?.endDate).toBe(
+      '2030-12-16T06:00:00.000Z',
+    );
+  });
+
+  it('create rejects an endDate at or before the start', async () => {
+    const {asAdmin, organizerId} = await setupEndDateContext();
+
+    await expect(
+      asAdmin.mutation(api.events.management.create, {
+        ...baseCreateArgs,
+        organizerId,
+        endDate: '2030-12-15T20:00:00.000Z',
+      }),
+    ).rejects.toThrow(/after the event start/);
+    await expect(
+      asAdmin.mutation(api.events.management.create, {
+        ...baseCreateArgs,
+        organizerId,
+        endDate: '2030-12-15T18:00:00.000Z',
+      }),
+    ).rejects.toThrow(/after the event start/);
+  });
+
+  it('create rejects an invalid endDate format', async () => {
+    const {asAdmin, organizerId} = await setupEndDateContext();
+
+    await expect(
+      asAdmin.mutation(api.events.management.create, {
+        ...baseCreateArgs,
+        organizerId,
+        endDate: 'Dec 16, 2030',
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('create rejects an endDate more than the max duration after the start', async () => {
+    const {asAdmin, organizerId} = await setupEndDateContext();
+
+    // baseCreateArgs.date is 2030-12-15T20:00; ~120 days later exceeds the cap.
+    await expect(
+      asAdmin.mutation(api.events.management.create, {
+        ...baseCreateArgs,
+        organizerId,
+        endDate: '2031-04-14T20:00:00.000Z',
+      }),
+    ).rejects.toThrow(/within \d+ days of the event start/);
+
+    // A span within the cap is accepted.
+    await expect(
+      asAdmin.mutation(api.events.management.create, {
+        ...baseCreateArgs,
+        organizerId,
+        endDate: '2030-12-18T06:00:00.000Z',
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it('update sets, revalidates, and clears endDate', async () => {
+    const {t, asAdmin, organizerId} = await setupEndDateContext();
+    const eventId = await asAdmin.mutation(api.events.management.create, {
+      ...baseCreateArgs,
+      organizerId,
+    });
+
+    // Set an end date.
+    await asAdmin.mutation(api.events.management.update, {
+      id: eventId,
+      endDate: '2030-12-16T06:00:00.000Z',
+    });
+    let event = await t.run(async (ctx) => ctx.db.get('events', eventId));
+    expect(event?.endDate).toBe('2030-12-16T06:00:00.000Z');
+
+    // Reject an end date before the stored start.
+    await expect(
+      asAdmin.mutation(api.events.management.update, {
+        id: eventId,
+        endDate: '2030-12-15T10:00:00.000Z',
+      }),
+    ).rejects.toThrow(/after the event start/);
+
+    // Reject moving the start past the stored end date.
+    await expect(
+      asAdmin.mutation(api.events.management.update, {
+        id: eventId,
+        date: '2030-12-17T20:00:00.000Z',
+      }),
+    ).rejects.toThrow(/after the event start/);
+
+    // Moving the start together with a matching later end date is allowed.
+    await asAdmin.mutation(api.events.management.update, {
+      id: eventId,
+      date: '2030-12-17T20:00:00.000Z',
+      endDate: '2030-12-18T06:00:00.000Z',
+    });
+    event = await t.run(async (ctx) => ctx.db.get('events', eventId));
+    expect(event?.date).toBe('2030-12-17T20:00:00.000Z');
+    expect(event?.endDate).toBe('2030-12-18T06:00:00.000Z');
+
+    // Clearing with null removes the stored field entirely.
+    await asAdmin.mutation(api.events.management.update, {
+      id: eventId,
+      endDate: null,
+    });
+    event = await t.run(async (ctx) => ctx.db.get('events', eventId));
+    expect(event?.endDate).toBeUndefined();
+    expect(event ? 'endDate' in event : true).toBe(false);
+  });
+});
+
 describe('Event write validation', () => {
   async function setupEventWriteValidation() {
     const t = convexTest();
@@ -1108,6 +1262,123 @@ describe('events.listByOrganizer', () => {
     expect(result.events[0].posterUrl).toBeNull();
     expect(result.events[0].soldCount).toBe(4);
     expect(result.events[0]).toMatchObject({isSoldOut: true});
+  });
+
+  it('keeps a running multi-day event whose start is past but end is future', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-06-10T20:00:00.000Z'));
+      const t = convexTest();
+      const userId = await t.mutation(api.testing.users.createUserDirectly, {
+        name: 'Test User',
+        email: 'test-user-lbo-running@test-events.com',
+      });
+      const asUser = t.withIdentity({subject: userId});
+      const organizerId = await t.mutation(
+        api.testing.communities.seedOrganizer,
+        {name: 'Weekender Organizer'},
+      );
+
+      await t.mutation(api.testing.events.seedEvent, {
+        title: 'Organizer Running Weekender',
+        date: '2026-06-08T20:00:00.000Z',
+        endDate: '2026-06-11T20:00:00.000Z',
+        price: 2000,
+        totalTickets: 50,
+        status: 'published',
+        visibility: 'public',
+        organizerId,
+      });
+      await t.mutation(api.testing.events.seedEvent, {
+        title: 'Organizer Ended Weekender',
+        date: '2026-06-01T20:00:00.000Z',
+        endDate: '2026-06-05T20:00:00.000Z',
+        price: 2000,
+        totalTickets: 50,
+        status: 'published',
+        visibility: 'public',
+        organizerId,
+      });
+
+      // A different organizer's running event must never leak into this
+      // organizer's page — the running source is scoped by organizerId.
+      const otherOrganizerId = await t.mutation(
+        api.testing.communities.seedOrganizer,
+        {name: 'Unrelated Organizer'},
+      );
+      await t.mutation(api.testing.events.seedEvent, {
+        title: 'Other Org Running Weekender',
+        date: '2026-06-08T20:00:00.000Z',
+        endDate: '2026-06-11T20:00:00.000Z',
+        price: 2000,
+        totalTickets: 50,
+        status: 'published',
+        visibility: 'public',
+        organizerId: otherOrganizerId,
+      });
+
+      const result = await asUser.query(api.events.public.listByOrganizer, {
+        organizerId,
+      });
+      assert(result);
+      const titles = result.events.map((event) => event.title);
+      expect(titles).toContain('Organizer Running Weekender');
+      expect(titles).not.toContain('Organizer Ended Weekender');
+      expect(titles).not.toContain('Other Org Running Weekender');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not let a burst of ended lookback events hide upcoming ones', async () => {
+    const t = convexTest();
+    const userId = await t.mutation(api.testing.users.createUserDirectly, {
+      name: 'Pagination User',
+      email: 'pagination-lbo@test-events.com',
+    });
+    const asUser = t.withIdentity({subject: userId});
+    const organizerId = await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {name: 'High Volume Organizer'},
+    );
+    const DAY_MS = 24 * 60 * 60 * 1000;
+
+    await t.run(async (ctx) => {
+      // More ended events inside the lookback window than the per-visibility
+      // cap (500). Ordered before the upcoming event by start date, they would
+      // fill a fixed `.take()` and hide the headliner without pagination. They
+      // are filtered out before availability, so no inventory row is needed.
+      for (let i = 0; i < 520; i += 1) {
+        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- bulk insert of 520 ended events; seedEvent per row would be prohibitively slow
+        await ctx.db.insert('events', {
+          title: `Ended ${i + 1}`,
+          date: new Date(Date.now() - (1 + (i % 28)) * DAY_MS).toISOString(),
+          price: 1000,
+          totalTickets: 50,
+          status: 'published',
+          visibility: 'public',
+          organizerId,
+        });
+      }
+    });
+    // The surviving upcoming event needs a full inventory row for availability.
+    await t.mutation(api.testing.events.seedEvent, {
+      title: 'Future Headliner',
+      date: new Date(Date.now() + 5 * DAY_MS).toISOString(),
+      price: 1000,
+      totalTickets: 50,
+      status: 'published',
+      visibility: 'public',
+      organizerId,
+    });
+
+    const result = await asUser.query(api.events.public.listByOrganizer, {
+      organizerId,
+    });
+    assert(result);
+    const titles = result.events.map((event) => event.title);
+    expect(titles).toContain('Future Headliner');
+    expect(titles.some((title) => title.startsWith('Ended '))).toBe(false);
   });
 
   it('returns organizerDescription when organizer has a description', async () => {
@@ -2195,9 +2466,138 @@ describe('Event listing pagination', () => {
       vi.useRealTimers();
     }
   });
+
+  it('upcoming keeps a running multi-day event whose start is past but end is future', async () => {
+    vi.useFakeTimers();
+    try {
+      // "Now" is mid-event: 2026-06-10 13:00 in Los Angeles.
+      vi.setSystemTime(new Date('2026-06-10T20:00:00.000Z'));
+      const t = convexTest();
+      const organizerId = await t.mutation(
+        api.testing.communities.seedOrganizer,
+        {name: 'Weekender Crew', isPublicDirectory: true},
+      );
+
+      // Started 2 days ago, ends tomorrow -> still ongoing, must appear.
+      await t.mutation(api.testing.events.seedEvent, {
+        title: 'Running Weekender',
+        date: '2026-06-08T20:00:00.000Z',
+        endDate: '2026-06-11T20:00:00.000Z',
+        price: 2000,
+        totalTickets: 50,
+        status: 'published',
+        visibility: 'public',
+        organizerId,
+      });
+      // Multi-day that already ended -> must be excluded by the filter.
+      await t.mutation(api.testing.events.seedEvent, {
+        title: 'Ended Weekender',
+        date: '2026-06-01T20:00:00.000Z',
+        endDate: '2026-06-05T20:00:00.000Z',
+        price: 2000,
+        totalTickets: 50,
+        status: 'published',
+        visibility: 'public',
+        organizerId,
+      });
+      // Single-night event 2 days ago (no endDate) -> ended, excluded.
+      await t.mutation(api.testing.events.seedEvent, {
+        title: 'Past Single Night',
+        date: '2026-06-08T20:00:00.000Z',
+        price: 2000,
+        totalTickets: 50,
+        status: 'published',
+        visibility: 'public',
+        organizerId,
+      });
+
+      const titles = (await t.query(api.events.public.upcoming, {})).map(
+        (event) => event.title,
+      );
+      expect(titles).toContain('Running Weekender');
+      expect(titles).not.toContain('Ended Weekender');
+      expect(titles).not.toContain('Past Single Night');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('upcoming keeps a running event whose start is weeks deep in the lookback', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-06-10T20:00:00.000Z'));
+      const t = convexTest();
+      const organizerId = await t.mutation(
+        api.testing.communities.seedOrganizer,
+        {name: 'Long Run Crew', isPublicDirectory: true},
+      );
+
+      // Started 20 days ago, ends in two days (a 22-day run, within the cap).
+      // Its start is well past `date >= today`, so only the lookback window
+      // reaches it — and the window can't crowd it out.
+      await t.mutation(api.testing.events.seedEvent, {
+        title: 'Long Running Festival',
+        date: '2026-05-21T20:00:00.000Z',
+        endDate: '2026-06-12T20:00:00.000Z',
+        price: 2000,
+        totalTickets: 50,
+        status: 'published',
+        visibility: 'public',
+        organizerId,
+      });
+
+      const titles = (await t.query(api.events.public.upcoming, {})).map(
+        (event) => event.title,
+      );
+      expect(titles).toContain('Long Running Festival');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('listPublicUpcomingInternal', () => {
+  it('keeps a running multi-day event whose start is past but end is future', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-06-10T20:00:00.000Z'));
+      const t = convexTest();
+      const organizerId = await t.mutation(
+        api.testing.communities.seedOrganizer,
+        {name: 'Weekender Cards Crew', isPublicDirectory: true},
+      );
+
+      await t.mutation(api.testing.events.seedEvent, {
+        title: 'Running Weekender Card',
+        date: '2026-06-08T20:00:00.000Z',
+        endDate: '2026-06-11T20:00:00.000Z',
+        price: 2000,
+        totalTickets: 50,
+        status: 'published',
+        visibility: 'public',
+        organizerId,
+      });
+      await t.mutation(api.testing.events.seedEvent, {
+        title: 'Ended Weekender Card',
+        date: '2026-06-01T20:00:00.000Z',
+        endDate: '2026-06-05T20:00:00.000Z',
+        price: 2000,
+        totalTickets: 50,
+        status: 'published',
+        visibility: 'public',
+        organizerId,
+      });
+
+      const titles = (
+        await t.query(internal.events.public.listPublicUpcomingInternal, {})
+      ).map((event) => event.title);
+      expect(titles).toContain('Running Weekender Card');
+      expect(titles).not.toContain('Ended Weekender Card');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('returns only publicly visible upcoming published events', async () => {
     const t = convexTest();
 
@@ -2900,5 +3300,125 @@ describe('event publish — community draft guard', () => {
     ).rejects.toThrow(
       'Cannot publish an event while the community is in draft mode',
     );
+  });
+});
+
+describe('Event update clearable optional fields', () => {
+  async function seedClearableEvent(
+    t: ReturnType<typeof convexTest>,
+  ): Promise<{eventId: Id<'events'>; adminId: Id<'users'>}> {
+    const adminId = await createRootAdmin(t, 'Clear Admin');
+    const organizerId = await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {name: 'Clear Org'},
+    );
+    const asAdmin = t.withIdentity({subject: adminId});
+    const eventId = await asAdmin.mutation(api.events.management.create, {
+      title: 'Clearable Event',
+      date: '2027-06-01T20:00:00.000Z',
+      price: 2000,
+      totalTickets: 20,
+      status: 'draft',
+      visibility: 'public',
+      organizerId,
+      location: 'Old Venue',
+      description: 'Old description',
+      supporterDefaultPrice: 2500,
+      maxTicketsPerUser: 4,
+    });
+    return {eventId, adminId};
+  }
+
+  it('removes location, description, supporterDefaultPrice, and maxTicketsPerUser when passed null', async () => {
+    const t = convexTest();
+    const {eventId, adminId} = await seedClearableEvent(t);
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    const before = await t.run(async (ctx) => ctx.db.get('events', eventId));
+    expect(before?.location).toBe('Old Venue');
+    expect(before?.description).toBe('Old description');
+    expect(before?.supporterDefaultPrice).toBe(2500);
+    expect(before?.maxTicketsPerUser).toBe(4);
+
+    await asAdmin.mutation(api.events.management.update, {
+      id: eventId,
+      location: null,
+      description: null,
+      supporterDefaultPrice: null,
+      maxTicketsPerUser: null,
+    });
+
+    const after = await t.run(async (ctx) => ctx.db.get('events', eventId));
+    expect(after?.location).toBeUndefined();
+    expect(after?.description).toBeUndefined();
+    expect(after?.supporterDefaultPrice).toBeUndefined();
+    expect(after?.maxTicketsPerUser).toBeUndefined();
+  });
+
+  it('leaves clearable fields unchanged when their keys are omitted', async () => {
+    const t = convexTest();
+    const {eventId, adminId} = await seedClearableEvent(t);
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    await asAdmin.mutation(api.events.management.update, {
+      id: eventId,
+      title: 'Renamed Event',
+    });
+
+    const after = await t.run(async (ctx) => ctx.db.get('events', eventId));
+    expect(after?.title).toBe('Renamed Event');
+    expect(after?.location).toBe('Old Venue');
+    expect(after?.description).toBe('Old description');
+    expect(after?.supporterDefaultPrice).toBe(2500);
+    expect(after?.maxTicketsPerUser).toBe(4);
+  });
+
+  it('updates a clearable field to a new value when a value is provided', async () => {
+    const t = convexTest();
+    const {eventId, adminId} = await seedClearableEvent(t);
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    await asAdmin.mutation(api.events.management.update, {
+      id: eventId,
+      location: 'New Venue',
+      supporterDefaultPrice: 3000,
+    });
+
+    const after = await t.run(async (ctx) => ctx.db.get('events', eventId));
+    expect(after?.location).toBe('New Venue');
+    expect(after?.supporterDefaultPrice).toBe(3000);
+    // Untouched clearable fields stay put.
+    expect(after?.description).toBe('Old description');
+    expect(after?.maxTicketsPerUser).toBe(4);
+  });
+
+  it('is a safe no-op when clearing a field that was never set', async () => {
+    const t = convexTest();
+    const adminId = await createRootAdmin(t, 'Clear Admin');
+    const organizerId = await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {name: 'Clear Org'},
+    );
+    const asAdmin = t.withIdentity({subject: adminId});
+    const eventId = await asAdmin.mutation(api.events.management.create, {
+      title: 'No Optionals Event',
+      date: '2027-06-01T20:00:00.000Z',
+      price: 2000,
+      totalTickets: 20,
+      status: 'draft',
+      visibility: 'public',
+      organizerId,
+      // location / supporterDefaultPrice intentionally omitted (never set).
+    });
+
+    await asAdmin.mutation(api.events.management.update, {
+      id: eventId,
+      location: null,
+      supporterDefaultPrice: null,
+    });
+
+    const after = await t.run(async (ctx) => ctx.db.get('events', eventId));
+    expect(after?.location).toBeUndefined();
+    expect(after?.supporterDefaultPrice).toBeUndefined();
   });
 });

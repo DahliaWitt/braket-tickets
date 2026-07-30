@@ -182,6 +182,20 @@ describe('AttendeeRosterTableComponent', () => {
     expect(await harness.getVisibleRowCount()).toBe(2);
   });
 
+  it('exposes the horizontally scrollable roster as a named keyboard region', async () => {
+    await setup(makeMockConvex([]));
+    const harness = await getHarness(fixture);
+
+    expect(await harness.getScrollRegionAttributes()).toEqual({
+      role: 'region',
+      label: 'Event attendee roster',
+      tabindex: '0',
+    });
+
+    await harness.focusScrollRegion();
+    expect(await harness.isScrollRegionFocused()).toBe(true);
+  });
+
   it('should show export button when canExport is true', async () => {
     await setup(makeMockConvex([]), true);
     const harness = await getHarness(fixture);

@@ -576,13 +576,13 @@ describe('DashboardComponent', () => {
         _id: '10' as Id<'events'>,
         title: 'Later Event',
         date: '2025-06-01',
-      } as never;
+      };
       const earlierEvent: UpcomingEvent = {
         ...mockEvent,
         _id: '11' as Id<'events'>,
         title: 'Earlier Event',
         date: '2024-01-01',
-      } as never;
+      };
       setup({
         approvals: mockApprovals,
         events: [laterEvent, earlierEvent],
@@ -599,7 +599,7 @@ describe('DashboardComponent', () => {
       const posterEvent: UpcomingEvent = {
         ...mockEvent,
         posterUrl: 'https://example.com/poster.jpg',
-      } as never;
+      };
       setup({
         approvals: mockApprovals,
         events: [posterEvent],
@@ -616,7 +616,7 @@ describe('DashboardComponent', () => {
       const posterEvent: UpcomingEvent = {
         ...mockEvent,
         posterUrl: 'https://example.com/poster.jpg',
-      } as never;
+      };
       setup({
         approvals: mockApprovals,
         events: [posterEvent],
@@ -642,7 +642,7 @@ describe('DashboardComponent', () => {
       const posterEvent: UpcomingEvent = {
         ...mockEvent,
         posterUrl: 'https://example.com/poster.jpg',
-      } as never;
+      };
       setup({
         approvals: mockApprovals,
         events: [posterEvent],
@@ -668,7 +668,7 @@ describe('DashboardComponent', () => {
       const posterEvent: UpcomingEvent = {
         ...mockEvent,
         posterUrl: 'https://example.com/poster.jpg',
-      } as never;
+      };
       setup({
         approvals: mockApprovals,
         events: [posterEvent],
@@ -773,6 +773,57 @@ describe('DashboardComponent', () => {
 
       expect(await harness.hasGetTicketsCta()).toBe(false);
       expect(await harness.getGetTicketsHrefs()).toEqual([]);
+    });
+
+    it('should render "View Event" as a real link when the event is not purchasable', async () => {
+      setup({
+        approvals: mockApprovals,
+        events: [mockEvent],
+        eventAvailability: {
+          '1': {
+            isSoldOut: true,
+            userTicketCount: 0,
+            ticketSalesStatus: 'active',
+            purchaseAccess: {allowed: true, source: 'direct'},
+          },
+        },
+      });
+      await createComponent();
+
+      expect(await harness.hasGetTicketsCta()).toBe(false);
+      expect(await harness.getViewEventHrefs()).toEqual(['/events/1']);
+    });
+
+    it('should not render the "View Event" fallback when the event is purchasable', async () => {
+      setup({
+        approvals: mockApprovals,
+        events: [mockEvent],
+        eventAvailability: purchaseAccessFor([mockEvent]),
+      });
+      await createComponent();
+
+      expect(await harness.hasGetTicketsCta()).toBe(true);
+      expect(await harness.getViewEventHrefs()).toEqual([]);
+    });
+
+    it('should render a lock badge on vetting-required event posters instead of dimming the card', async () => {
+      // Viewable (vetting-required) events render in the new-user branch.
+      setup({
+        approvals: [],
+        myApplications: [],
+        events: [mockViewableEvent],
+        eventAvailability: {
+          [mockViewableEvent._id]: {
+            isSoldOut: false,
+            userTicketCount: 0,
+            ticketSalesStatus: 'active',
+            purchaseAccess: {allowed: false},
+          },
+        },
+      });
+      await createComponent();
+
+      expect(await harness.getVettingLockCount()).toBe(1);
     });
 
     it('should hide events when availability is unavailable', async () => {
@@ -881,7 +932,7 @@ describe('DashboardComponent', () => {
         title: 'Approved Later',
         date: '2024-06-01',
         organizerId: ORG_ID_A,
-      } as never;
+      };
       const openAccessEvent: UpcomingEvent = {
         ...mockEvent,
         _id: 'e-open' as Id<'events'>,
@@ -921,13 +972,13 @@ describe('DashboardComponent', () => {
         _id: 'e-early' as Id<'events'>,
         title: 'Earlier',
         date: '2024-01-01',
-      } as never;
+      };
       const later: UpcomingEvent = {
         ...mockEvent,
         _id: 'e-late' as Id<'events'>,
         title: 'Later',
         date: '2024-06-01',
-      } as never;
+      };
       setup({
         approvals: mockApprovals,
         events: [later, earlier],
@@ -1002,7 +1053,7 @@ describe('DashboardComponent', () => {
       const viewableFromApprovedOrg: UpcomingEvent = {
         ...mockViewableEvent,
         organizerId: ORG_ID_B,
-      } as never;
+      };
       setup({
         approvals: [],
         events: [viewableFromApprovedOrg],
@@ -1078,6 +1129,63 @@ describe('DashboardComponent', () => {
 
       expect(fixture.componentInstance.dashboardEvents()[0]?.canPurchase).toBe(
         true,
+      );
+    });
+
+    it('should not allow ticket purchase when sales are paused', async () => {
+      setup({
+        approvals: mockApprovals,
+        eventAvailability: {
+          [mockEvent._id]: {
+            isSoldOut: false,
+            userTicketCount: 0,
+            ticketSalesStatus: 'paused',
+            purchaseAccess: {allowed: true, source: 'direct'},
+          },
+        },
+      });
+      await createComponent();
+
+      expect(fixture.componentInstance.dashboardEvents()[0]?.canPurchase).toBe(
+        false,
+      );
+    });
+
+    it('should not allow ticket purchase when sales have ended', async () => {
+      setup({
+        approvals: mockApprovals,
+        eventAvailability: {
+          [mockEvent._id]: {
+            isSoldOut: false,
+            userTicketCount: 0,
+            ticketSalesStatus: 'ended',
+            purchaseAccess: {allowed: true, source: 'direct'},
+          },
+        },
+      });
+      await createComponent();
+
+      expect(fixture.componentInstance.dashboardEvents()[0]?.canPurchase).toBe(
+        false,
+      );
+    });
+
+    it('should not allow ticket purchase when the per-user limit is reached', async () => {
+      setup({
+        approvals: mockApprovals,
+        eventAvailability: {
+          [mockEvent._id]: {
+            isSoldOut: false,
+            userTicketCount: 4,
+            ticketSalesStatus: 'active',
+            purchaseAccess: {allowed: true, source: 'direct'},
+          },
+        },
+      });
+      await createComponent();
+
+      expect(fixture.componentInstance.dashboardEvents()[0]?.canPurchase).toBe(
+        false,
       );
     });
 

@@ -179,11 +179,13 @@ export async function queueTicketPurchaseReminderEmails(
   args: {
     event: Pick<
       Doc<'events'>,
-      '_id' | 'title' | 'date' | 'location' | 'organizerId'
+      '_id' | 'title' | 'date' | 'endDate' | 'location' | 'organizerId'
     >;
     recipients: TicketReminderRecipient[];
     subject: string;
     message: string;
+    /** Optional pre-rendered rich HTML fragment (shared across recipients). */
+    bodyHtml?: string;
     organizerName: string;
   },
 ): Promise<number> {
@@ -217,6 +219,7 @@ export async function queueTicketPurchaseReminderEmails(
           _id: args.event._id as string,
           title: args.event.title,
           date: args.event.date,
+          endDate: args.event.endDate,
           location: args.event.location,
         },
         organizer: {
@@ -224,6 +227,7 @@ export async function queueTicketPurchaseReminderEmails(
           name: args.organizerName,
         },
         message: args.message,
+        bodyHtml: args.bodyHtml,
         siteUrl,
         apiSiteUrl,
         unsubToken,

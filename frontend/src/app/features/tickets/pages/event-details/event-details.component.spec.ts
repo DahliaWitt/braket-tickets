@@ -37,6 +37,15 @@ import {
   type ContactCommunityDialogData,
 } from './contact-community-dialog.component';
 
+// convex-angular's injectQueries registers its per-key staleness guard AFTER
+// `onUpdate()` returns, so any mock that invokes the data callback synchronously
+// inside `onUpdate` has that first emission rejected. Real ConvexReactClient
+// never emits synchronously from `onUpdate`; mirror that contract by deferring
+// the initial emission to a microtask so the subscription is registered first.
+const emitAsync = (onData: (data: unknown) => void, value: unknown): void => {
+  queueMicrotask(() => onData(value));
+};
+
 interface MockAuthServiceForEventDetails {
   user: () => {_id: string; name: string} | null;
   userRole: () => string;
@@ -198,7 +207,10 @@ describe('EventDetailsComponent', () => {
     totalTickets: 100,
     slidingScaleEnabled: true,
     slidingScaleMin: 500,
-    slidingScaleMax: 0,
+    // A defined slidingScaleMax is a real ceiling (backend pricing.ts enforces
+    // when `!== undefined`); "no max" is the field being absent, not 0. Use the
+    // realistic editor default ($10 = the event price) so $10 stays valid.
+    slidingScaleMax: 1000,
     supporterDefaultPrice: 4000,
     status: 'published',
     organizerId: 'org1',
@@ -248,13 +260,16 @@ describe('EventDetailsComponent', () => {
 
         if ('id' in typedArgs) {
           const eventId = typedArgs.id;
-          onData(eventDocsById.get(eventId) ?? eventDocsById.get('1') ?? null);
+          emitAsync(
+            onData,
+            eventDocsById.get(eventId) ?? eventDocsById.get('1') ?? null,
+          );
           return () => void 0;
         }
 
         if ('eventId' in typedArgs) {
           const eventId = typedArgs.eventId;
-          onData(availabilityByEventId.get(eventId) ?? null);
+          emitAsync(onData, availabilityByEventId.get(eventId) ?? null);
           return () => void 0;
         }
 
@@ -264,11 +279,11 @@ describe('EventDetailsComponent', () => {
           !('eventId' in typedArgs) &&
           !('id' in typedArgs)
         ) {
-          onData({trusted: true, source: 'direct', via: null});
+          emitAsync(onData, {trusted: true, source: 'direct', via: null});
           return () => void 0;
         }
 
-        onData(null);
+        emitAsync(onData, null);
         return () => void 0;
       });
 
@@ -347,7 +362,7 @@ describe('EventDetailsComponent', () => {
         logoUrl: '/braket.svg',
         email: 'hello@voidcollective.test',
         contactInfo: 'Signal-only contact hours: Tuesdays and Thursdays.',
-      } as Community),
+      }),
     };
     mockDarkMode = {
       themeMode: signal(EDarkModes.LIGHT),
@@ -963,11 +978,14 @@ describe('EventDetailsComponent', () => {
           void queryRef;
           const typedArgs = args as Record<string, string>;
           if ('id' in typedArgs) {
-            onData(eventDocsById.get(typedArgs.id) ?? null);
+            emitAsync(onData, eventDocsById.get(typedArgs.id) ?? null);
             return () => void 0;
           }
           if ('eventId' in typedArgs) {
-            onData(availabilityByEventId.get(typedArgs.eventId) ?? null);
+            emitAsync(
+              onData,
+              availabilityByEventId.get(typedArgs.eventId) ?? null,
+            );
             return () => void 0;
           }
           if (
@@ -975,10 +993,10 @@ describe('EventDetailsComponent', () => {
             !('eventId' in typedArgs) &&
             !('id' in typedArgs)
           ) {
-            onData({trusted: false, source: 'direct', via: null});
+            emitAsync(onData, {trusted: false, source: 'direct', via: null});
             return () => void 0;
           }
-          onData(null);
+          emitAsync(onData, null);
           return () => void 0;
         },
       );
@@ -1051,13 +1069,18 @@ describe('EventDetailsComponent', () => {
             const typedArgs = args as Record<string, string>;
 
             if ('id' in typedArgs) {
-              onData(eventDocsById.get(typedArgs.id) ?? null);
+              emitAsync(onData, eventDocsById.get(typedArgs.id) ?? null);
               return () => void 0;
             }
 
             if ('eventId' in typedArgs) {
+              // Capture the raw callback for later manual (post-subscription)
+              // emissions; defer only the initial emission.
               emitAvailabilityUpdate = onData;
-              onData(availabilityByEventId.get(typedArgs.eventId) ?? null);
+              emitAsync(
+                onData,
+                availabilityByEventId.get(typedArgs.eventId) ?? null,
+              );
               return () => void 0;
             }
 
@@ -1067,11 +1090,11 @@ describe('EventDetailsComponent', () => {
               !('id' in typedArgs)
             ) {
               emitTrustUpdate = onData;
-              onData({trusted: false, source: 'direct', via: null});
+              emitAsync(onData, {trusted: false, source: 'direct', via: null});
               return () => void 0;
             }
 
-            onData(null);
+            emitAsync(onData, null);
             return () => void 0;
           },
         );
@@ -1303,6 +1326,77 @@ describe('EventDetailsComponent', () => {
     });
   });
 
+  describe('checkout selection lock during session creation (m25)', () => {
+    it('locks the priced selection the moment session creation starts and keeps it locked on success', async () => {
+      await fixture.whenStable();
+      expect(component.checkoutLocked()).toBe(false);
+
+      let resolveSession!: (value: {
+        orderId: string;
+        stripeCheckoutSessionId: string;
+        clientSecret: string;
+        connectedAccountId: string | null;
+      }) => void;
+      mockPaymentService.startPrimaryCheckoutSession.mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveSession = resolve;
+        }),
+      );
+
+      const pending = component.createCheckoutSession();
+      // In-flight: the lock must engage before the session id lands, so the
+      // buyer cannot drift quantity/tier/amount away from the opened order.
+      expect(component.checkoutLocked()).toBe(true);
+      expect(component.activeCheckoutSessionId()).toBeNull();
+
+      resolveSession({
+        orderId: 'order_123',
+        stripeCheckoutSessionId: 'cs_123',
+        clientSecret: 'secret_123',
+        connectedAccountId: null,
+      });
+      await pending;
+
+      // Still locked, now via the active session id.
+      expect(component.checkoutLocked()).toBe(true);
+      expect(component.activeCheckoutSessionId()).toBe('cs_123');
+    });
+
+    it('releases the lock when session creation fails so controls re-enable', async () => {
+      await fixture.whenStable();
+
+      mockPaymentService.startPrimaryCheckoutSession.mockRejectedValueOnce(
+        new Error('stripe unavailable'),
+      );
+
+      await expect(component.createCheckoutSession()).rejects.toThrow(
+        'stripe unavailable',
+      );
+
+      expect(component.checkoutLocked()).toBe(false);
+      expect(component.activeCheckoutSessionId()).toBeNull();
+    });
+  });
+
+  describe('free-claim guard for invalid amounts (m24)', () => {
+    it('does not claim a free ticket when a below-min amount leaves a validation error', async () => {
+      await fixture.whenStable();
+
+      // Paid event, community tier, buyer entered $0 → below the $5 min: total
+      // collapses to 0 but a validation error is set. The free-claim path must
+      // refuse rather than hard-fail against the backend minimum.
+      component.selectTier('notaflof');
+      component.customAmount.set(0);
+      component.slidingScaleError.set('Minimum amount is $5.00');
+      expect(component.totalAmount()).toBe(0);
+
+      await component.onFreeTicketClaimed();
+
+      expect(mockPaymentService.triggerRefresh).not.toHaveBeenCalled();
+      expect(component.paymentStatus()).toBe('idle');
+    });
+  });
+
   describe('checkout settlement', () => {
     it('polls checkout status until the backend reports completion', async () => {
       vi.useFakeTimers();
@@ -1478,7 +1572,8 @@ describe('EventDetailsComponent', () => {
 
           if ('id' in typedArgs) {
             const eventId = typedArgs.id;
-            onData(
+            emitAsync(
+              onData,
               eventDocsById.get(eventId) ?? eventDocsById.get('1') ?? null,
             );
             return () => void 0;
@@ -1486,7 +1581,7 @@ describe('EventDetailsComponent', () => {
 
           if ('eventId' in typedArgs) {
             const eventId = typedArgs.eventId;
-            onData(availabilityByEventId.get(eventId) ?? null);
+            emitAsync(onData, availabilityByEventId.get(eventId) ?? null);
             return () => void 0;
           }
 
@@ -1496,11 +1591,11 @@ describe('EventDetailsComponent', () => {
             !('eventId' in typedArgs) &&
             !('id' in typedArgs)
           ) {
-            onData({trusted: false, source: 'direct', via: null});
+            emitAsync(onData, {trusted: false, source: 'direct', via: null});
             return () => void 0;
           }
 
-          onData(null);
+          emitAsync(onData, null);
           return () => void 0;
         },
       );
@@ -1530,7 +1625,8 @@ describe('EventDetailsComponent', () => {
 
           if ('id' in typedArgs) {
             const eventId = typedArgs.id;
-            onData(
+            emitAsync(
+              onData,
               eventDocsById.get(eventId) ?? eventDocsById.get('1') ?? null,
             );
             return () => void 0;
@@ -1538,7 +1634,7 @@ describe('EventDetailsComponent', () => {
 
           if ('eventId' in typedArgs) {
             const eventId = typedArgs.eventId;
-            onData(availabilityByEventId.get(eventId) ?? null);
+            emitAsync(onData, availabilityByEventId.get(eventId) ?? null);
             return () => void 0;
           }
 
@@ -1547,11 +1643,11 @@ describe('EventDetailsComponent', () => {
             !('eventId' in typedArgs) &&
             !('id' in typedArgs)
           ) {
-            onData({trusted: false, source: 'direct', via: null});
+            emitAsync(onData, {trusted: false, source: 'direct', via: null});
             return () => void 0;
           }
 
-          onData(null);
+          emitAsync(onData, null);
           return () => void 0;
         },
       );

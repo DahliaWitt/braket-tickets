@@ -9,7 +9,9 @@ import {
 } from '@angular/core';
 import {ActivatedRoute, RouterLink, type Params} from '@angular/router';
 import {toSignal} from '@angular/core/rxjs-interop';
+import {ContentLayoutComponent} from '@/layout/content-layout/content-layout.component';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
+import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton.component';
 import {logger} from '@/utils/logger';
 import {safeResourceValue} from '@/utils/resource';
 import {toast} from 'ngx-sonner';
@@ -23,177 +25,213 @@ import {
 @Component({
   selector: 'app-unsubscribe',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, ZardButtonComponent],
+  imports: [
+    RouterLink,
+    ContentLayoutComponent,
+    ZardButtonComponent,
+    ZardSkeletonComponent,
+  ],
   template: `
-    <main class="ph-no-capture mx-auto mt-10 max-w-2xl px-4 pb-10">
-      <div class="mb-8">
-        <h1
-          class="font-display text-2xl font-bold tracking-tight text-foreground uppercase"
-        >
-          Email Preferences
-        </h1>
-      </div>
-
-      @if (hasError()) {
-        <div
-          data-testid="unsub-error"
-          class="space-y-4 rounded-xl border border-destructive/30 p-6"
-        >
-          <p
-            class="font-mono text-sm tracking-widest text-destructive uppercase"
+    <app-content-layout>
+      <div class="ph-no-capture mx-auto w-full max-w-2xl py-8 md:py-10">
+        <div class="mb-8">
+          <h1
+            class="font-display text-2xl font-bold tracking-tight text-foreground uppercase"
           >
-            Invalid unsubscribe link
-          </p>
-          <p class="text-sm text-muted-foreground">
-            This link may have expired or already been used. Sign in to manage
-            your preferences, or contact support if you need help.
-          </p>
-          <a
-            routerLink="/account"
-            fragment="email-preferences"
-            class="inline-block font-mono text-sm text-primary underline"
-          >
-            Manage preferences in your account settings &rarr;
-          </a>
-          <a
-            href="mailto:contact@braket.gay?subject=Unsubscribe%20help"
-            class="block font-mono text-sm text-primary underline"
-            data-testid="unsub-support-link"
-          >
-            Email support &rarr;
-          </a>
+            Email Preferences
+          </h1>
         </div>
-      } @else if (preferencesLoading()) {
-        <div
-          data-testid="unsub-loading"
-          class="rounded-xl border border-border p-6"
-        >
-          <p
-            class="font-mono text-sm tracking-widest text-muted-foreground uppercase"
+
+        @if (hasError()) {
+          <div
+            data-testid="unsub-error"
+            class="space-y-4 rounded-lg border border-destructive/30 p-6"
           >
-            Loading preferences...
-          </p>
-        </div>
-      } @else if (initialPreferences()) {
-        <div data-testid="unsub-confirmation" class="space-y-6">
-          @if (isDone()) {
-            @if (unsubscribedFrom()) {
-              <div
-                class="rounded-lg border border-success/30 bg-success/10 p-4"
-              >
-                <p class="font-sans text-sm text-foreground">
-                  You've been unsubscribed from
-                  <strong data-testid="unsub-org-name">{{
-                    unsubscribedFrom()!.organizerName
-                  }}</strong
-                  >.
-                </p>
-                <p class="mt-1 font-sans text-sm text-muted-foreground">
-                  You'll still receive transactional emails for tickets you've
-                  purchased.
-                </p>
-              </div>
-            } @else {
-              <div
-                class="rounded-lg border border-success/30 bg-success/10 p-4"
-              >
-                <p class="font-sans text-sm text-foreground">
-                  You've been unsubscribed from marketing emails.
-                </p>
-              </div>
-            }
-          } @else {
-            <div
-              class="rounded-lg border border-secondary/30 bg-secondary/10 p-4"
-              data-testid="unsub-preferences-intro"
+            <p
+              class="font-mono text-sm tracking-widest text-destructive-text uppercase"
             >
-              <p class="font-sans text-sm text-foreground">
-                Manage your email preferences below. Changes only affect
-                marketing email; ticket and account emails still go through.
-              </p>
-            </div>
-          }
-
-          @if (globalMarketingOptOut()) {
-            <div
-              class="rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-warning"
-              data-testid="global-optout-banner"
+              Invalid unsubscribe link
+            </p>
+            <p class="text-sm text-muted-foreground">
+              This link may have expired or already been used. Sign in to manage
+              your preferences, or contact support if you need help.
+            </p>
+            <a
+              routerLink="/account"
+              fragment="email-preferences"
+              class="inline-block font-mono text-sm text-primary underline"
             >
-              <p class="font-medium">
-                You've unsubscribed from eligible communities.
-              </p>
-              <p class="mt-1 text-warning/70">
-                To re-enable marketing emails, visit your
-                <a
-                  routerLink="/account"
-                  fragment="email-preferences"
-                  class="underline hover:text-warning"
-                  >account settings</a
-                >.
-              </p>
-            </div>
-          }
-
-          @if (otherOptedIn().length > 0) {
-            <div class="space-y-3">
-              <p class="mono-label text-2xs text-muted-foreground">
-                Other communities you're opted in to
-              </p>
-              <div class="space-y-2" data-testid="other-prefs-list">
-                @for (pref of preferences(); track pref.organizerId) {
-                  @if (pref.optedIn) {
-                    <div
-                      class="flex items-center justify-between rounded-lg border border-border/50 bg-muted/40 p-3"
-                    >
-                      <span class="font-sans text-sm text-foreground">{{
-                        pref.organizerName
-                      }}</span>
-                      <label class="flex cursor-pointer items-center gap-2">
-                        <input
-                          type="checkbox"
-                          [checked]="pref.optedIn"
-                          [disabled]="pref.isAdmin"
-                          (change)="onTogglePref($event, pref.organizerId)"
-                          class="h-4 w-4 accent-primary"
-                          [attr.aria-label]="
-                            'Marketing emails from ' + pref.organizerName
-                          "
-                        />
-                        <span
-                          class="font-mono text-2xs text-muted-foreground uppercase"
-                          >{{ pref.isAdmin ? 'ADMIN' : 'ON' }}</span
-                        >
-                      </label>
-                    </div>
-                  }
-                }
-              </div>
-            </div>
-          }
-
-          @if (hasAnyOptedIn()) {
+              Manage preferences in your account settings &rarr;
+            </a>
+            <a
+              href="mailto:contact@braket.gay?subject=Unsubscribe%20help"
+              class="block font-mono text-sm text-primary underline"
+              data-testid="unsub-support-link"
+            >
+              Email support &rarr;
+            </a>
+          </div>
+        } @else if (preferencesLoading()) {
+          <div data-testid="unsub-loading" class="space-y-3" aria-hidden="true">
+            <z-skeleton class="h-16 w-full" />
+            <z-skeleton class="h-14 w-full" />
+            <z-skeleton class="h-14 w-full" />
+          </div>
+        } @else if (loadFailed()) {
+          <div
+            data-testid="unsub-load-error"
+            class="space-y-4 rounded-lg border border-destructive/30 p-6"
+          >
+            <p
+              class="font-mono text-sm tracking-widest text-destructive-text uppercase"
+            >
+              couldn't load your preferences
+            </p>
+            <p class="text-sm text-muted-foreground">
+              something went wrong on our end — your link is still good. try
+              again in a moment.
+            </p>
             <button
               type="button"
               z-button
-              zVariant="ghost"
+              zType="outline"
               zSize="sm"
-              (click)="unsubscribeAll()"
-              [zLoading]="unsubAllLoading()"
-              class="text-destructive hover:text-destructive"
-              data-testid="unsub-all-btn"
+              (click)="retryLoad()"
+              data-testid="unsub-retry-btn"
             >
-              Unsubscribe from eligible communities
+              try again
             </button>
-          }
-        </div>
-      }
-    </main>
+          </div>
+        } @else if (initialPreferences()) {
+          <div data-testid="unsub-confirmation" class="space-y-6">
+            @if (isDone()) {
+              @if (unsubscribedFrom()) {
+                <div
+                  class="rounded-lg border border-success/30 bg-success/10 p-4"
+                >
+                  <p class="font-sans text-sm text-foreground">
+                    You've been unsubscribed from
+                    <strong data-testid="unsub-org-name">{{
+                      unsubscribedFrom()!.organizerName
+                    }}</strong
+                    >.
+                  </p>
+                  <p class="mt-1 font-sans text-sm text-muted-foreground">
+                    You'll still receive transactional emails for tickets you've
+                    purchased.
+                  </p>
+                </div>
+              } @else {
+                <div
+                  class="rounded-lg border border-success/30 bg-success/10 p-4"
+                >
+                  <p class="font-sans text-sm text-foreground">
+                    You've been unsubscribed from marketing emails.
+                  </p>
+                </div>
+              }
+            } @else {
+              <div
+                class="rounded-lg border border-secondary/30 bg-secondary/10 p-4"
+                data-testid="unsub-preferences-intro"
+              >
+                <p class="font-sans text-sm text-foreground">
+                  Manage your email preferences below. Changes only affect
+                  marketing email; ticket and account emails still go through.
+                </p>
+              </div>
+            }
+
+            @if (globalMarketingOptOut()) {
+              <div
+                class="rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-warning"
+                data-testid="global-optout-banner"
+              >
+                <p class="font-medium">
+                  You've unsubscribed from eligible communities.
+                </p>
+                <p class="mt-1">
+                  To re-enable marketing emails, visit your
+                  <a
+                    routerLink="/account"
+                    fragment="email-preferences"
+                    class="underline"
+                    >account settings</a
+                  >.
+                </p>
+              </div>
+            }
+
+            @if (otherOptedIn().length > 0) {
+              <div class="space-y-3">
+                <p class="mono-label text-2xs text-muted-foreground">
+                  Other communities you're opted in to
+                </p>
+                <div class="space-y-2" data-testid="other-prefs-list">
+                  @for (pref of preferences(); track pref.organizerId) {
+                    @if (pref.optedIn) {
+                      <div
+                        class="flex items-center justify-between rounded-lg border border-border/50 bg-muted/40 p-3"
+                      >
+                        <span class="font-sans text-sm text-foreground">{{
+                          pref.organizerName
+                        }}</span>
+                        <label
+                          class="flex min-h-11 cursor-pointer items-center gap-2"
+                        >
+                          <input
+                            type="checkbox"
+                            [checked]="pref.optedIn"
+                            [disabled]="
+                              pref.isAdmin ||
+                              pendingToggles().has(pref.organizerId)
+                            "
+                            (change)="onTogglePref($event, pref.organizerId)"
+                            class="h-6 w-6 accent-primary"
+                            [attr.data-testid]="
+                              'pref-toggle-' + pref.organizerId
+                            "
+                            [attr.aria-label]="
+                              'Marketing emails from ' + pref.organizerName
+                            "
+                          />
+                          <span
+                            class="font-mono text-2xs text-muted-foreground uppercase"
+                            >{{ pref.isAdmin ? 'ADMIN' : 'ON' }}</span
+                          >
+                        </label>
+                      </div>
+                    }
+                  }
+                </div>
+              </div>
+            }
+
+            @if (hasAnyOptedIn()) {
+              <button
+                type="button"
+                z-button
+                zType="ghost"
+                zSize="sm"
+                (click)="unsubscribeAll()"
+                [zLoading]="unsubAllLoading()"
+                class="text-destructive-text hover:text-destructive-text"
+                data-testid="unsub-all-btn"
+              >
+                Unsubscribe from eligible communities
+              </button>
+            }
+          </div>
+        }
+      </div>
+    </app-content-layout>
   `,
 })
 export class UnsubscribeComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly preferencesService = inject(UnsubscribePreferencesService);
   private readonly queryParams = toSignal(this.route.queryParams, {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- types the signal as Params so queryParams()['token'|'error'|'done'] index access typechecks (ng build)
     initialValue: {} as Params,
   });
 
@@ -221,10 +259,19 @@ export class UnsubscribeComponent {
   readonly preferencesLoading = computed(() =>
     this.preferencesResource.isLoading(),
   );
+  /**
+   * Transient fetch failure (network, 5xx, bad payload). The token itself
+   * may be perfectly valid, so this branches into a retry state instead of
+   * the invalid-link state.
+   */
+  readonly loadFailed = computed(
+    () => this.preferencesResource.error() !== undefined,
+  );
   readonly hasError = computed(() => {
     if (this.queryParams()['error']) return true;
     if (!this.token()) return true;
-    return !this.preferencesLoading() && !this.initialPreferences();
+    if (this.preferencesLoading() || this.loadFailed()) return false;
+    return !this.initialPreferences();
   });
 
   readonly unsubscribedFrom = linkedSignal<{
@@ -248,18 +295,31 @@ export class UnsubscribeComponent {
     this.preferences().some((p) => p.optedIn && !p.isAdmin),
   );
   readonly unsubAllLoading = signal(false);
+  readonly pendingToggles = signal<ReadonlySet<string>>(new Set<string>());
+
+  retryLoad(): void {
+    this.preferencesResource.reload();
+  }
 
   onTogglePref(event: Event, organizerId: string): void {
     const checked = readInputChecked(event.target);
     if (checked === null) return;
-    void this.togglePref(organizerId, checked);
+    const input =
+      event.target instanceof HTMLInputElement ? event.target : null;
+    void this.togglePref(organizerId, checked, input);
   }
 
-  async togglePref(organizerId: string, optedIn: boolean): Promise<void> {
+  async togglePref(
+    organizerId: string,
+    optedIn: boolean,
+    input: HTMLInputElement | null = null,
+  ): Promise<void> {
     const token = this.token();
     if (!token) return;
+    if (this.pendingToggles().has(organizerId)) return;
     const pref = this.preferences().find((p) => p.organizerId === organizerId);
     if (pref?.isAdmin && !optedIn) return;
+    this.pendingToggles.update((pending) => new Set(pending).add(organizerId));
     try {
       await this.preferencesService.togglePreference(
         token,
@@ -271,7 +331,17 @@ export class UnsubscribeComponent {
       );
     } catch (err) {
       logger.error('Failed to toggle preference', err);
-      toast.error('Failed to update preference. Please try again.');
+      // Zoneless change detection will not rewrite the native checkbox: the
+      // [checked] binding value never changed, so reset it by hand to keep
+      // the box in sync with server state.
+      if (input) input.checked = !optedIn;
+      toast.error("couldn't update preference, try again");
+    } finally {
+      this.pendingToggles.update((pending) => {
+        const next = new Set(pending);
+        next.delete(organizerId);
+        return next;
+      });
     }
   }
 
@@ -284,10 +354,10 @@ export class UnsubscribeComponent {
       this.preferences.update((prefs) =>
         prefs.map((p) => (p.isAdmin ? p : {...p, optedIn: false})),
       );
-      toast.success('Unsubscribed from eligible marketing emails.');
+      toast.success('unsubscribed from eligible communities');
     } catch (err) {
       logger.error('Failed to unsubscribe all', err);
-      toast.error('Failed to unsubscribe. Please try again.');
+      toast.error("couldn't unsubscribe, try again");
     } finally {
       this.unsubAllLoading.set(false);
     }

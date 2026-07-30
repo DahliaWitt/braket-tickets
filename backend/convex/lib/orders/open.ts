@@ -11,6 +11,7 @@ import {
 import {
   assertValidListingTransition,
   buildAcquirePatch,
+  isPendingResaleListingStatus,
 } from '../../lib/resale_listing_transitions';
 import {
   isActiveTicketStatus,
@@ -221,6 +222,63 @@ async function findEligibleResaleListing(
   return null;
 }
 
+/**
+ * Find an existing open resale order this buyer can resume on retry.
+ *
+ * A buyer who re-enters resale checkout (page reload, or a client retry after
+ * a transient failure) must be able to resume the hold they already own rather
+ * than be rejected with `LISTING_UNAVAILABLE`. Their own in-flight order keeps
+ * the sole listing in `pending`, so `findEligibleResaleListing` — which scans
+ * only `listed` rows — would otherwise find nothing and the throw would fire
+ * before any idempotent return. This mirrors the primary flow's dedup
+ * (`openPrimaryOrderState`), which returns the caller's equivalent open order
+ * before creating a new hold.
+ *
+ * Returns the matching order only when its listing is still `pending`, still
+ * pinned to this exact order (`pendingOrderId`), and still held by this buyer
+ * (`buyerId`). Orders whose args no longer match (different tier / amount) or
+ * whose listing has since been reopened fall through, so they are superseded
+ * by the normal acquire path instead of resumed.
+ */
+async function findResumableResaleOrder(
+  db: MutationCtx['db'],
+  existingOrders: Array<Doc<'ticket_orders'>>,
+  args: {
+    buyerUserId: Id<'users'>;
+    tier: TicketTier;
+    amountCents: number;
+  },
+): Promise<Doc<'ticket_orders'> | null> {
+  for (const order of existingOrders) {
+    if (order.kind !== 'resale' || !order.resaleListingId) {
+      continue;
+    }
+    if (
+      !isEquivalentOpenOrder(order, {
+        kind: 'resale',
+        quantity: 1,
+        tier: args.tier,
+        amountCents: args.amountCents,
+        resaleListingId: order.resaleListingId,
+      })
+    ) {
+      continue;
+    }
+
+    const listing = await db.get('resale_listings', order.resaleListingId);
+    if (
+      listing &&
+      isPendingResaleListingStatus(listing.status) &&
+      listing.pendingOrderId === order._id &&
+      listing.buyerId === args.buyerUserId
+    ) {
+      return order;
+    }
+  }
+
+  return null;
+}
+
 export async function openPrimaryOrderState(
   ctx: MutationCtx,
   args: {
@@ -230,6 +288,19 @@ export async function openPrimaryOrderState(
     tier: TicketTier;
     amountCents: number;
     now?: number;
+    /**
+     * ToS assent evidence for guest purchases (BRA-455). Server-derived only
+     * — callers must never pass a client-supplied timestamp or version.
+     * Signed-in callers omit these; evidence is account-level for them.
+     */
+    tosAcceptedAt?: number;
+    tosVersion?: string;
+    /**
+     * Client idempotency key for free-ticket claims. Stored on the order so a
+     * retry of the same claim attempt can replay it instead of issuing a new
+     * ticket. Omitted for paid checkout opens.
+     */
+    idempotencyKey?: string;
   },
 ): Promise<Doc<'ticket_orders'>> {
   assertPositiveInteger(args.quantity, 'Quantity');
@@ -262,6 +333,18 @@ export async function openPrimaryOrderState(
         amountCents: args.amountCents,
       })
     ) {
+      // If a free claim dedups onto a pre-existing open hold, persist the
+      // claim's idempotency key so the completed order remains discoverable on
+      // retry. Without this, a retry would miss the key and double-issue.
+      if (
+        args.idempotencyKey !== undefined &&
+        order.idempotencyKey !== args.idempotencyKey
+      ) {
+        await ctx.db.patch('ticket_orders', order._id, {
+          idempotencyKey: args.idempotencyKey,
+        });
+        return {...order, idempotencyKey: args.idempotencyKey};
+      }
       return order;
     }
   }
@@ -310,6 +393,13 @@ export async function openPrimaryOrderState(
     trustSource: trust.trustSource,
     trustViaOrganizerId: trust.trustViaOrganizerId,
     ...(connectedAccountId !== undefined ? {connectedAccountId} : {}),
+    ...(args.tosAcceptedAt !== undefined
+      ? {tosAcceptedAt: args.tosAcceptedAt}
+      : {}),
+    ...(args.tosVersion !== undefined ? {tosVersion: args.tosVersion} : {}),
+    ...(args.idempotencyKey !== undefined
+      ? {idempotencyKey: args.idempotencyKey}
+      : {}),
   });
 
   await ctx.scheduler.runAfter(
@@ -378,6 +468,25 @@ export async function openResaleOrderState(
     event,
   );
   assertOrderTrustMetadata(trust);
+
+  // Idempotent resume: if the buyer re-enters checkout while already holding a
+  // matching open resale order, return it before the availability gate. The
+  // buyer's own hold pins the sole listing to `pending`, so requiring a
+  // `listed` listing first (below) would wrongly reject them as
+  // `LISTING_UNAVAILABLE` and strand the hold for its full TTL.
+  const resumableOrder = await findResumableResaleOrder(
+    ctx.db,
+    existingOrders,
+    {
+      buyerUserId: args.identity.userId,
+      tier: args.tier,
+      amountCents: args.amountCents,
+    },
+  );
+  if (resumableOrder) {
+    return resumableOrder;
+  }
+
   validateTierPricing(event, {
     tier: args.tier,
     totalAmount: args.amountCents,
@@ -406,20 +515,9 @@ export async function openResaleOrderState(
   const listedListing = eligibleListing.listing;
   const listingTier = eligibleListing.sellerTicket.tier;
 
-  for (const order of existingOrders) {
-    if (
-      isEquivalentOpenOrder(order, {
-        kind: 'resale',
-        quantity: 1,
-        tier: listingTier,
-        amountCents: args.amountCents,
-        resaleListingId: listedListing._id,
-      })
-    ) {
-      return order;
-    }
-  }
-
+  // Any still-open orders that did not qualify for resume above (mismatched
+  // args, or a listing that is no longer pending) are superseded before we
+  // acquire the freshly found listing.
   for (const order of existingOrders) {
     await releaseOpenOrder(ctx.db, order, 'superseded', now);
   }

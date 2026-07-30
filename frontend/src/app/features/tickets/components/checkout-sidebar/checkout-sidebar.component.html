@@ -85,7 +85,7 @@
             </div>
             @if (isGuestEmailInvalid()) {
               <p
-                class="font-mono text-xs tracking-wide text-destructive uppercase"
+                class="font-mono text-xs tracking-wide text-destructive-text uppercase"
                 role="alert"
               >
                 enter a valid email address
@@ -332,7 +332,7 @@
                     </div>
                     @if (slidingScaleError()) {
                       <p
-                        class="ml-1 font-mono text-xs tracking-wide text-destructive uppercase"
+                        class="ml-1 font-mono text-xs tracking-wide text-destructive-text uppercase"
                       >
                         {{ slidingScaleError() }}
                       </p>
@@ -413,7 +413,7 @@
                       </div>
                       @if (slidingScaleError()) {
                         <p
-                          class="ml-1 font-mono text-xs tracking-wide text-destructive uppercase"
+                          class="ml-1 font-mono text-xs tracking-wide text-destructive-text uppercase"
                         >
                           {{ slidingScaleError() }}
                         </p>
@@ -517,7 +517,9 @@
                 </div>
               </div>
             </div>
-          } @else if (event().organizerPaymentReady === false) {
+          } @else if (
+            event().organizerPaymentReady === false && totalAmount() > 0
+          ) {
             <div
               data-testid="payment-setup-incomplete"
               class="rounded-lg border border-border p-6 text-center"
@@ -526,29 +528,64 @@
                 Tickets unavailable — payment setup incomplete
               </p>
             </div>
+          } @else if (slidingScaleError()) {
+            <!--
+              Invalid custom amount (below the tier minimum or above
+              slidingScaleMax). Show a disabled paid CTA with the validation
+              message — never the free "GET TICKET" claim path (which the
+              backend rejects) and never a live Stripe form for an amount the
+              server will refuse.
+            -->
+            <div class="space-y-4" data-testid="checkout-amount-invalid">
+              <z-button
+                data-testid="checkout-amount-invalid-cta"
+                [zDisabled]="true"
+                class="w-full border-none bg-primary py-6 font-display tracking-widest uppercase opacity-60 shadow-[0_0_20px_-5px_hsl(var(--primary)/0.4)]"
+              >
+                Continue to Secure Checkout
+              </z-button>
+              <p
+                role="alert"
+                data-testid="checkout-amount-invalid-message"
+                class="text-center font-mono text-xs tracking-wide text-destructive-text uppercase"
+              >
+                {{ slidingScaleError() }}
+              </p>
+            </div>
           } @else if (totalAmount() > 0) {
             <div class="relative z-10 space-y-4">
-              <app-stripe-payment
-                [publishableKey]="stripeConfig.publishableKey"
-                [resetKey]="stripeResetKey()"
-                [checkoutSessionFetcher]="checkoutSessionFetcher()"
-                [connectedAccountId]="connectedAccountId()"
-                [mockPayments]="stripeConfig.mockPayments"
-                [amount]="totalAmount()"
-                [buyerEmail]="buyerEmail()"
-                [paymentLabel]="event().title || 'Ticket Purchase'"
-                (paymentConfirmed)="paymentConfirmed.emit()"
-                (paymentError)="paymentError.emit($event)"
-              />
+              @if (isGuest()) {
+                <ng-container [ngTemplateOutlet]="guestTermsAssent" />
+              }
+              @if (!isGuest() || termsAccepted()) {
+                <app-stripe-payment
+                  [publishableKey]="stripeConfig.publishableKey"
+                  [resetKey]="stripeResetKey()"
+                  [checkoutSessionFetcher]="checkoutSessionFetcher()"
+                  [connectedAccountId]="connectedAccountId()"
+                  [mockPayments]="stripeConfig.mockPayments"
+                  [amount]="totalAmount()"
+                  [buyerEmail]="buyerEmail()"
+                  [paymentLabel]="event().title || 'Ticket Purchase'"
+                  (paymentConfirmed)="paymentConfirmed.emit()"
+                  (paymentError)="paymentError.emit($event)"
+                />
+              }
             </div>
           } @else {
-            <z-button
-              data-testid="checkout-free-ticket"
-              (click)="freeTicketClaimed.emit()"
-              class="w-full border-none bg-success py-6 font-display tracking-widest uppercase shadow-[0_0_20px_-5px_hsl(var(--success)/0.4)] hover:bg-success/90"
-            >
-              GET TICKET
-            </z-button>
+            <div class="space-y-4">
+              @if (isGuest()) {
+                <ng-container [ngTemplateOutlet]="guestTermsAssent" />
+              }
+              <z-button
+                data-testid="checkout-free-ticket"
+                (click)="freeTicketClaimed.emit()"
+                [zDisabled]="isGuest() && !termsAccepted()"
+                class="w-full border-none bg-success py-6 font-display tracking-widest text-success-foreground uppercase shadow-[0_0_20px_-5px_hsl(var(--success)/0.4)] hover:bg-success/90"
+              >
+                GET TICKET
+              </z-button>
+            </div>
           }
         </div>
       }
@@ -629,16 +666,16 @@
         <div
           class="mb-4 flex h-20 w-20 items-center justify-center rounded-full border border-destructive/20 bg-destructive/10"
         >
-          <span class="font-display text-4xl text-destructive">!</span>
+          <span class="font-display text-4xl text-destructive-text">!</span>
         </div>
         <div class="space-y-2">
           <h3
-            class="font-display text-2xl tracking-tight text-destructive uppercase"
+            class="font-display text-2xl tracking-tight text-destructive-text uppercase"
           >
             Transaction Failed
           </h3>
           <p
-            class="mx-auto max-w-[250px] font-mono text-sm wrap-break-word text-destructive/80"
+            class="mx-auto max-w-[250px] font-mono text-sm wrap-break-word text-destructive-text/80"
           >
             {{ paymentErrorMessage() }}
           </p>
@@ -662,3 +699,43 @@
     aria-hidden="true"
   ></div>
 }
+
+<!-- Guest ToS assent block (BRA-455) — shared by the paid and free ticket gates -->
+<ng-template #guestTermsAssent>
+  <div
+    class="flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-4"
+    data-testid="checkout-terms"
+  >
+    <input
+      id="checkout-terms-checkbox"
+      type="checkbox"
+      data-testid="checkout-terms-checkbox"
+      [checked]="termsAccepted()"
+      (change)="onTermsToggle($event)"
+      class="focus-ring mt-0.5 h-6 w-6 shrink-0 cursor-pointer rounded border-muted-foreground bg-background text-primary focus:ring-primary focus:ring-offset-background"
+    />
+    <label
+      for="checkout-terms-checkbox"
+      class="cursor-pointer font-sans text-sm leading-relaxed text-muted-foreground"
+    >
+      i'm 18 or older and agree to the
+      <a
+        routerLink="/terms"
+        data-testid="checkout-terms-link"
+        target="_blank"
+        rel="noopener"
+        class="text-primary hover:underline"
+        >terms of service</a
+      >
+      and
+      <a
+        routerLink="/privacy"
+        data-testid="checkout-privacy-link"
+        target="_blank"
+        rel="noopener"
+        class="text-primary hover:underline"
+        >privacy policy</a
+      >
+    </label>
+  </div>
+</ng-template>

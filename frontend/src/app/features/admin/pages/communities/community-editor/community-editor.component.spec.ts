@@ -623,6 +623,58 @@ describe('AdminCommunityEditorComponent', () => {
     );
   });
 
+  it('onSubmit sends null for cleared email, contactInfo, and description on edit', async () => {
+    component.communityModel.set({
+      name: 'Test Community',
+      slug: 'test-community',
+      email: '',
+      contactInfo: '',
+      description: '',
+      isPublicDirectory: false,
+      status: 'draft',
+      vettingQuestions: [],
+    });
+    component.communityId.set('org_123' as Id<'organizers'>);
+
+    await component.onSubmit();
+
+    // Explicit null (not undefined) is the wire signal that persists a clear.
+    expect(communitiesServiceMock.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'org_123',
+        email: null,
+        contactInfo: null,
+        description: null,
+      }),
+    );
+  });
+
+  it('onSubmit omits null on create so create-only validators are not broken', async () => {
+    component.communityModel.set({
+      name: 'Fresh Community',
+      slug: 'fresh-community',
+      email: '',
+      contactInfo: '',
+      description: '',
+      isPublicDirectory: false,
+      status: 'draft',
+      vettingQuestions: [],
+    });
+    // No communityId → create mode.
+
+    await component.onSubmit();
+
+    expect(communitiesServiceMock.create).toHaveBeenCalledTimes(1);
+    const createArgs = communitiesServiceMock.create.mock.calls[0][0] as Record<
+      string,
+      unknown
+    >;
+    expect(createArgs['email']).toBeUndefined();
+    expect(createArgs['contactInfo']).toBeUndefined();
+    expect(createArgs['description']).toBeUndefined();
+    expect(createArgs['email']).not.toBeNull();
+  });
+
   it('onSubmit blocks publishing when there are no vetting questions', async () => {
     const toastSpy = vi.spyOn(toast, 'error').mockImplementation(() => '');
     component.communityModel.set({

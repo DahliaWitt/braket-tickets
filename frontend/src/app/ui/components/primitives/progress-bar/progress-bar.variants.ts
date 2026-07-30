@@ -1,32 +1,35 @@
-import { cva, type VariantProps } from 'class-variance-authority';
+import {cva, type VariantProps} from 'class-variance-authority';
 
-export const containerProgressBarVariants = cva('w-full transition-[width,height]', {
-  variants: {
-    zType: {
-      default: 'bg-primary/20',
-      destructive: 'bg-destructive/20',
-      accent: 'bg-chart-1/20',
+export const containerProgressBarVariants = cva(
+  'w-full transition-[width,height]',
+  {
+    variants: {
+      zType: {
+        default: 'bg-primary/20',
+        destructive: 'bg-destructive/20',
+        accent: 'bg-accent/20',
+      },
+      zSize: {
+        default: 'h-2',
+        sm: 'h-1.5',
+        lg: 'h-5',
+      },
+      zShape: {
+        default: 'rounded-full',
+        square: 'rounded-none',
+      },
+      zIndeterminate: {
+        true: 'relative',
+      },
     },
-    zSize: {
-      default: 'h-2',
-      sm: 'h-3',
-      lg: 'h-5',
-    },
-    zShape: {
-      default: 'rounded-full',
-      square: 'rounded-none',
-    },
-    zIndeterminate: {
-      true: 'relative',
+
+    defaultVariants: {
+      zType: 'default',
+      zSize: 'default',
+      zShape: 'default',
     },
   },
-
-  defaultVariants: {
-    zType: 'default',
-    zSize: 'default',
-    zShape: 'default',
-  },
-});
+);
 export type ZardProgressBarSizeVariants = NonNullable<
   VariantProps<typeof containerProgressBarVariants>['zSize']
 >;
@@ -36,7 +39,7 @@ export const progressBarVariants = cva('h-full transition-[width]', {
     zType: {
       default: 'bg-primary',
       destructive: 'bg-destructive',
-      accent: 'bg-chart-1',
+      accent: 'bg-accent',
     },
     zShape: {
       default: 'rounded-full',

@@ -6,10 +6,9 @@ import {
   effect,
   input,
   output,
-  resource,
   signal,
 } from '@angular/core';
-import {injectConvex} from 'convex-angular';
+import {injectConvex, injectQueries, skipToken} from 'convex-angular';
 import {toast} from 'ngx-sonner';
 import {api} from '@convex/_generated/api';
 import {type Id} from '@convex/_generated/dataModel';
@@ -18,8 +17,8 @@ import {ZardButtonComponent} from '@ui/components/primitives/button/button.compo
 import {ZardCardComponent} from '@ui/components/primitives/card/card.component';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
 import {logger} from '@/utils/logger';
-import {safeResourceValue} from '@/utils/resource';
 import {readInputValue} from '@ui/utils/dom-event';
+import {ADMIN_DATETIME} from '@/features/admin/utils/date-formats';
 
 interface MarketingScheduleState {
   date: Date;
@@ -125,7 +124,7 @@ function humanizeMarketingError(
 
         @if (statusError()) {
           <p
-            class="font-mono text-xs text-destructive"
+            class="font-mono text-xs text-destructive-text"
             data-testid="marketing-announcement-error"
             role="alert"
           >
@@ -183,7 +182,7 @@ function humanizeMarketingError(
                 class="font-mono text-xs text-muted-foreground"
                 data-testid="marketing-announcement-scheduled-for"
               >
-                Sends {{ status.scheduledFor | date: 'medium' }}
+                Sends {{ status.scheduledFor | date: ADMIN_DATETIME }}
               </p>
             }
 
@@ -192,7 +191,9 @@ function humanizeMarketingError(
                 class="font-mono text-xs text-muted-foreground"
                 data-testid="marketing-announcement-sent-at"
               >
-                Sent {{ status.sentAt ?? status.scheduledFor | date: 'medium' }}
+                Sent {{
+                  status.sentAt ?? status.scheduledFor | date: ADMIN_DATETIME
+                }}
                 @if (status.recipientCount !== undefined) {
                   to {{ status.recipientCount }} recipient{{
                     status.recipientCount === 1 ? '' : 's'
@@ -247,9 +248,9 @@ function humanizeMarketingError(
 
         @if (hasTrustLinks()) {
           <fieldset class="space-y-2" data-testid="audience-scope-fieldset">
-            <legend class="text-plum-200 text-sm font-medium">Send to</legend>
+            <legend class="text-sm font-medium text-foreground">Send to</legend>
             <label
-              class="text-plum-300 flex cursor-pointer items-center gap-2 text-sm"
+              class="flex cursor-pointer items-center gap-2 text-sm text-foreground"
             >
               <input
                 type="radio"
@@ -257,12 +258,12 @@ function humanizeMarketingError(
                 value="community"
                 [checked]="audienceScope() === 'community'"
                 (change)="audienceScope.set('community')"
-                class="accent-amber-500"
+                class="accent-primary"
               />
               My community
             </label>
             <label
-              class="text-plum-300 flex cursor-pointer items-center gap-2 text-sm"
+              class="flex cursor-pointer items-center gap-2 text-sm text-foreground"
             >
               <input
                 type="radio"
@@ -270,7 +271,7 @@ function humanizeMarketingError(
                 value="community_and_trusted"
                 [checked]="audienceScope() === 'community_and_trusted'"
                 (change)="audienceScope.set('community_and_trusted')"
-                class="accent-amber-500"
+                class="accent-primary"
               />
               My community + trusted communities
             </label>
@@ -279,7 +280,7 @@ function humanizeMarketingError(
 
         @if (recipientCountError()) {
           <p
-            class="font-mono text-xs text-destructive"
+            class="font-mono text-xs text-destructive-text"
             data-testid="marketing-recipient-error"
             role="alert"
           >
@@ -307,7 +308,7 @@ function humanizeMarketingError(
             audience.trustLinkedCount
           ) {
             <p
-              class="text-plum-400 text-xs"
+              class="text-xs text-muted-foreground"
               data-testid="marketing-recipient-breakdown"
             >
               {{ audience.directCount }} from your community +
@@ -318,20 +319,38 @@ function humanizeMarketingError(
 
         @if (canManageAnnouncement()) {
           <div class="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
-            <input
-              type="date"
-              [value]="scheduledDateIso()"
-              (change)="onScheduledDateChange($event)"
-              class="w-full rounded-md border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              data-testid="marketing-schedule-date"
-            />
-            <input
-              type="time"
-              [value]="scheduledTime()"
-              (input)="onScheduledTimeChange($event)"
-              class="w-full rounded-md border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              data-testid="marketing-schedule-time"
-            />
+            <div class="space-y-1.5">
+              <label
+                for="marketing-schedule-date"
+                class="mono-label block pl-1 text-2xs text-muted-foreground"
+                data-testid="marketing-schedule-date-label"
+                >send date</label
+              >
+              <input
+                id="marketing-schedule-date"
+                type="date"
+                [value]="scheduledDateIso()"
+                (change)="onScheduledDateChange($event)"
+                class="w-full rounded-md border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                data-testid="marketing-schedule-date"
+              />
+            </div>
+            <div class="space-y-1.5">
+              <label
+                for="marketing-schedule-time"
+                class="mono-label block pl-1 text-2xs text-muted-foreground"
+                data-testid="marketing-schedule-time-label"
+                >send time</label
+              >
+              <input
+                id="marketing-schedule-time"
+                type="time"
+                [value]="scheduledTime()"
+                (input)="onScheduledTimeChange($event)"
+                class="w-full rounded-md border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                data-testid="marketing-schedule-time"
+              />
+            </div>
             <button
               z-button
               zType="outline"
@@ -340,7 +359,7 @@ function humanizeMarketingError(
               (click)="scheduleForLater()"
               [zDisabled]="isScheduleDisabled()"
               data-testid="marketing-schedule-submit"
-              class="w-full border-primary/50 text-primary hover:bg-primary/10 md:w-auto"
+              class="w-full self-end border-primary/50 text-primary hover:bg-primary/10 md:w-auto"
             >
               {{ isScheduled() ? 'Reschedule' : 'Schedule' }}
             </button>
@@ -370,7 +389,7 @@ function humanizeMarketingError(
                 (click)="cancelScheduledAnnouncement()"
                 [zDisabled]="isActionLoading()"
                 data-testid="marketing-cancel-scheduled"
-                class="text-destructive hover:text-destructive"
+                class="text-destructive-text hover:text-destructive-text"
               >
                 Cancel scheduled send
               </button>
@@ -386,14 +405,14 @@ function humanizeMarketingError(
   `,
 })
 export class MarketingAnnouncementCardComponent {
+  protected readonly ADMIN_DATETIME = ADMIN_DATETIME;
+
   private readonly convex = injectConvex();
 
   readonly eventId = input.required<string>();
   readonly organizerId = input<string | null>(null);
   readonly reloadToken = input(0);
   readonly dataChanged = output<void>();
-
-  private readonly localReloadToken = signal(0);
 
   readonly userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -411,68 +430,55 @@ export class MarketingAnnouncementCardComponent {
     return current ? formatLocalDateInput(current) : '';
   });
 
-  readonly recipientCountResource = resource({
-    params: () => ({
-      eventId: this.eventId() || null,
-      parentReloadToken: this.reloadToken(),
-      localReloadToken: this.localReloadToken(),
-      audienceScope: this.audienceScope(),
-    }),
-    loader: ({params}) => {
-      if (!params.eventId) return Promise.resolve(null);
-      return this.convex.query(api.marketing.emails.getRecipientCount, {
-        eventId: params.eventId as Id<'events'>,
-        audienceScope: params.audienceScope,
-      });
-    },
-  });
-
-  readonly trustLinksResource = resource({
-    params: () => ({
-      organizerId: this.organizerId() || null,
-      parentReloadToken: this.reloadToken(),
-      localReloadToken: this.localReloadToken(),
-    }),
-    loader: ({params}) => {
-      if (!params.organizerId) return Promise.resolve(null);
-      return this.convex.query(api.communities.trust_links.list, {
-        organizerId: params.organizerId as Id<'organizers'>,
-        direction: 'outgoing',
-      });
-    },
-  });
-
-  readonly announcementStatusResource = resource({
-    params: () => ({
-      eventId: this.eventId() || null,
-      parentReloadToken: this.reloadToken(),
-      localReloadToken: this.localReloadToken(),
-    }),
-    loader: ({params}) => {
-      if (!params.eventId) return Promise.resolve(null);
-      return this.convex.query(api.marketing.emails.getAnnouncementStatus, {
-        eventId: params.eventId as Id<'events'>,
-      });
-    },
+  readonly queries = injectQueries(() => {
+    const eventId = this.eventId() || null;
+    const organizerId = this.organizerId() || null;
+    const audienceScope = this.audienceScope();
+    return {
+      recipientCount: eventId
+        ? {
+            query: api.marketing.emails.getRecipientCount,
+            args: {eventId: eventId as Id<'events'>, audienceScope},
+          }
+        : skipToken,
+      trustLinks: organizerId
+        ? {
+            query: api.communities.trust_links.list,
+            args: {
+              organizerId: organizerId as Id<'organizers'>,
+              direction: 'outgoing' as const,
+            },
+          }
+        : skipToken,
+      announcementStatus: eventId
+        ? {
+            query: api.marketing.emails.getAnnouncementStatus,
+            args: {eventId: eventId as Id<'events'>},
+          }
+        : skipToken,
+    };
   });
 
   readonly recipientCountState = computed(
-    () => safeResourceValue(this.recipientCountResource) ?? null,
+    () => this.queries.results().recipientCount ?? null,
   );
   readonly announcementStatus = computed(
-    () => safeResourceValue(this.announcementStatusResource) ?? null,
+    () => this.queries.results().announcementStatus ?? null,
   );
-  readonly isLoadingRecipientCount = this.recipientCountResource.isLoading;
-  readonly isLoadingAnnouncementStatus =
-    this.announcementStatusResource.isLoading;
+  readonly isLoadingRecipientCount = computed(
+    () => this.queries.statuses().recipientCount === 'pending',
+  );
+  readonly isLoadingAnnouncementStatus = computed(
+    () => this.queries.statuses().announcementStatus === 'pending',
+  );
 
   readonly hasTrustLinks = computed(() => {
-    const links = safeResourceValue(this.trustLinksResource);
+    const links = this.queries.results().trustLinks;
     return (links?.length ?? 0) > 0;
   });
 
   readonly recipientCountError = computed(() => {
-    const error = this.recipientCountResource.error();
+    const error = this.queries.errors().recipientCount;
     if (!error) return null;
     return error instanceof Error && error.message
       ? `couldn't load marketing audience — ${error.message}`
@@ -480,7 +486,7 @@ export class MarketingAnnouncementCardComponent {
   });
 
   readonly statusError = computed(() => {
-    const error = this.announcementStatusResource.error();
+    const error = this.queries.errors().announcementStatus;
     if (!error) return null;
     return error instanceof Error && error.message
       ? `couldn't load announcement status — ${error.message}`
@@ -598,7 +604,7 @@ export class MarketingAnnouncementCardComponent {
         eventMarketingEmailId: status._id,
       });
       toast.success('Scheduled marketing announcement cancelled.');
-      this.refreshData();
+      this.dataChanged.emit();
     } catch (error) {
       logger.error('Failed to cancel marketing announcement', error);
       toast.error(
@@ -658,7 +664,7 @@ export class MarketingAnnouncementCardComponent {
         audienceScope: this.audienceScope(),
       });
       toast.success(successMessage);
-      this.refreshData();
+      this.dataChanged.emit();
     } catch (error) {
       logger.error('Failed to schedule marketing announcement', error);
       toast.error(
@@ -670,10 +676,5 @@ export class MarketingAnnouncementCardComponent {
     } finally {
       this.isActionLoading.set(false);
     }
-  }
-
-  private refreshData(): void {
-    this.localReloadToken.update((count) => count + 1);
-    this.dataChanged.emit();
   }
 }

@@ -285,7 +285,7 @@ export const ValidationState: Story = {
             <z-select-item zValue="artist guest">Artist Guest</z-select-item>
             <z-select-item zValue="staff">Staff</z-select-item>
           </z-select>
-          <p class="text-xs text-destructive uppercase tracking-wider">Guest type is required</p>
+          <p class="text-xs text-destructive-text uppercase tracking-wider">Guest type is required</p>
           <p class="text-xs text-muted-foreground font-sans">
             This matches the error-first composition used around required admin fields.
           </p>

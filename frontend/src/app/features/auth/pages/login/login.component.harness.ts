@@ -1,4 +1,4 @@
-import {ComponentHarness} from '@angular/cdk/testing';
+import {ComponentHarness, TestKey} from '@angular/cdk/testing';
 import {waitForHarnessCondition} from '@/testing/harness-wait';
 
 export class LoginComponentHarness extends ComponentHarness {
@@ -49,6 +49,33 @@ export class LoginComponentHarness extends ComponentHarness {
   private getRegisterTermsError = this.locatorForOptional(
     '#register-terms-error',
   );
+
+  /** Sends an arrow key to a tab button so the tablist roving-tabindex keydown handler runs. */
+  async pressArrowKeyOnTab(
+    tab: 'login' | 'register',
+    direction: 'right' | 'left',
+  ): Promise<void> {
+    const tabButton =
+      tab === 'login' ? await this.getLoginTab() : await this.getRegisterTab();
+    await tabButton.focus();
+    await tabButton.sendKeys(
+      direction === 'right' ? TestKey.RIGHT_ARROW : TestKey.LEFT_ARROW,
+    );
+  }
+
+  async isLoginPanelVisible(): Promise<boolean> {
+    return (await this.locatorForOptional('#login-panel')()) !== null;
+  }
+
+  async isRegisterPanelVisible(): Promise<boolean> {
+    return (await this.locatorForOptional('#register-panel')()) !== null;
+  }
+
+  async getTabTabindex(tab: 'login' | 'register'): Promise<string | null> {
+    const tabButton =
+      tab === 'login' ? await this.getLoginTab() : await this.getRegisterTab();
+    return tabButton.getAttribute('tabindex');
+  }
 
   async switchToRegister(): Promise<void> {
     const tab = await this.getRegisterTab();

@@ -1,11 +1,9 @@
 import '../../../../../../test-setup';
 import {TestBed} from '@angular/core/testing';
 import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
-import {manualChangeDetection} from '@angular/cdk/testing';
 import {Subject} from 'rxjs';
 import {AdminCommunityListComponent} from './community-list.component';
 import {AdminCommunityListComponentHarness} from './community-list.component.harness';
-import {CommunitiesService} from '@/core/services/communities.service';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -13,6 +11,12 @@ import {
 } from '@angular/core';
 import {provideRouter, Router} from '@angular/router';
 import {vi} from 'vitest';
+import {CONVEX} from 'convex-angular';
+import {api} from '@convex/_generated/api';
+import {
+  createMockConvexClient,
+  type MockConvexClient,
+} from '@/testing/mock-types';
 import {BraDialogService} from '@ui/components/composites/dialog/dialog.service';
 import {
   InviteAdminDialogComponent,
@@ -29,14 +33,44 @@ class RouteStubComponent {}
 // Setup helpers
 // ---------------------------------------------------------------------------
 
-async function setup() {
-  const communitiesServiceMock = {
-    list: vi
-      .fn()
-      .mockResolvedValue([
-        {_id: '1', name: 'Community 1', email: 'test@community.com'},
-      ]),
+/**
+ * Build a Convex client mock for `api.communities.list.list` that supports:
+ * - synchronous initial delivery on subscribe (mirrors a warm WebSocket emit),
+ * - live re-emission on the active subscription (`emit`),
+ * - refetch counting (`onUpdate` is called again on each resubscribe).
+ */
+function makeCommunitiesConvexMock(initial: unknown[]): {
+  convex: MockConvexClient;
+  onUpdate: ReturnType<typeof vi.fn>;
+  emit: (v: unknown) => void;
+} {
+  const convex = createMockConvexClient();
+  let latestOnData: ((v: unknown) => void) | undefined;
+  let current: unknown = initial;
+  const onUpdate = vi.fn(
+    (_query: unknown, _args: unknown, onData: (v: unknown) => void) => {
+      latestOnData = onData;
+      onData(current); // deliver synchronously, mirroring a warm WebSocket emit
+      return () => void 0;
+    },
+  );
+  convex.onUpdate = onUpdate;
+  convex.client.onUpdate = onUpdate;
+  return {
+    convex,
+    onUpdate,
+    /** Push new live data on the active subscription (no refetch). */
+    emit: (v: unknown) => {
+      current = v;
+      latestOnData?.(v);
+    },
   };
+}
+
+async function setup() {
+  const {convex, onUpdate, emit} = makeCommunitiesConvexMock([
+    {_id: '1', name: 'Community 1', email: 'test@community.com'},
+  ]);
   const dialogAfterClosed$ = new Subject<
     InviteAdminDialogCloseResult | undefined
   >();
@@ -53,7 +87,7 @@ async function setup() {
         {path: 'community-admin/pending', component: RouteStubComponent},
         {path: 'admin/communities/:id/edit', component: RouteStubComponent},
       ]),
-      {provide: CommunitiesService, useValue: communitiesServiceMock},
+      {provide: CONVEX, useValue: convex},
       {provide: BraDialogService, useValue: dialogMock},
     ],
   }).compileComponents();
@@ -72,20 +106,17 @@ async function setup() {
     fixture,
     component,
     harness,
-    communitiesServiceMock,
+    convex,
+    onUpdate,
+    emit,
     dialogAfterClosed$,
     dialogMock,
   };
 }
 
 async function setupLoading() {
-  const loadingService = {
-    list: vi.fn().mockReturnValue(
-      new Promise(() => {
-        /* never resolves */
-      }),
-    ), // never resolves
-  };
+  // Default onUpdate never delivers → isLoading stays true → skeletons render.
+  const convex = createMockConvexClient();
   const loadingDialogMock = {
     create: vi.fn(() => ({
       afterClosed$: new Subject<InviteAdminDialogCloseResult | undefined>(),
@@ -97,22 +128,16 @@ async function setupLoading() {
     providers: [
       provideZonelessChangeDetection(),
       provideRouter([]),
-      {provide: CommunitiesService, useValue: loadingService},
+      {provide: CONVEX, useValue: convex},
       {provide: BraDialogService, useValue: loadingDialogMock},
     ],
   }).compileComponents();
 
   const loadingFixture = TestBed.createComponent(AdminCommunityListComponent);
   loadingFixture.detectChanges();
-
-  // Use manualChangeDetection to bypass harness stabilization (which calls whenStable()).
-  // whenStable() would hang indefinitely because the resource's loader promise never resolves —
-  // this is by design to keep the component in loading state for the skeleton tests.
-  const loadingHarness = await manualChangeDetection(() =>
-    TestbedHarnessEnvironment.harnessForFixture(
-      loadingFixture,
-      AdminCommunityListComponentHarness,
-    ),
+  const loadingHarness = await TestbedHarnessEnvironment.harnessForFixture(
+    loadingFixture,
+    AdminCommunityListComponentHarness,
   );
 
   return {loadingFixture, loadingHarness};
@@ -128,8 +153,14 @@ describe('AdminCommunityListComponent', () => {
   });
 
   it('should load communities on init', async () => {
-    const {communitiesServiceMock, component} = await setup();
-    expect(communitiesServiceMock.list).toHaveBeenCalled();
+    const {onUpdate, component} = await setup();
+    expect(onUpdate).toHaveBeenCalled();
+    expect(onUpdate).toHaveBeenCalledWith(
+      api.communities.list.list,
+      {},
+      expect.any(Function),
+      expect.any(Function),
+    );
     expect(component.communities().length).toBe(1);
     expect(
       (component as unknown as {isLoading: () => boolean}).isLoading(),
@@ -144,6 +175,18 @@ describe('AdminCommunityListComponent', () => {
     expect(await harness.getEditActionCount()).toBe(4);
     // Each layout has 1 Manage button × 2 layouts = 2 total
     expect(await harness.getManageActionCount()).toBe(2);
+  });
+
+  it('uses the accessible foreground token for Manage actions in both layouts', async () => {
+    const {harness} = await setup();
+
+    const manageActionClasses = await harness.getManageActionClasses();
+    expect(manageActionClasses).toHaveLength(2);
+    expect(
+      manageActionClasses.every((classes) =>
+        classes.includes('text-foreground'),
+      ),
+    ).toBe(true);
   });
 
   it('should stack the header actions on mobile and keep each action full width', async () => {
@@ -169,13 +212,8 @@ describe('AdminCommunityListComponent', () => {
   });
 
   it('should open the invite admin flow through the shared dialog service and refresh on close', async () => {
-    const {
-      harness,
-      dialogMock,
-      dialogAfterClosed$,
-      fixture,
-      communitiesServiceMock,
-    } = await setup();
+    const {harness, dialogMock, dialogAfterClosed$, fixture, onUpdate} =
+      await setup();
     await harness.clickInviteAdmin();
 
     expect(dialogMock.create).toHaveBeenCalledWith(
@@ -187,35 +225,35 @@ describe('AdminCommunityListComponent', () => {
 
     dialogAfterClosed$.next({refreshCommunities: true});
     await fixture.whenStable();
+    fixture.detectChanges();
 
-    expect(communitiesServiceMock.list).toHaveBeenCalledTimes(2);
+    expect(onUpdate).toHaveBeenCalledTimes(2);
   });
 
   it('should not refresh communities when the invite dialog closes without a refresh result', async () => {
-    const {harness, dialogAfterClosed$, fixture, communitiesServiceMock} =
-      await setup();
+    const {harness, dialogAfterClosed$, fixture, onUpdate} = await setup();
     await harness.clickInviteAdmin();
 
     dialogAfterClosed$.next(undefined);
     await fixture.whenStable();
+    fixture.detectChanges();
 
-    expect(communitiesServiceMock.list).toHaveBeenCalledTimes(1);
+    expect(onUpdate).toHaveBeenCalledTimes(1);
   });
 
   describe('status badge', () => {
-    it('shows "Published" for a community with no status field', async () => {
+    it('shows "published" for a community with no status field', async () => {
       const {harness} = await setup();
       // Default mock already has no status (undefined → treated as published)
       const texts = await harness.getStatusBadgeTexts();
       // 1 community × 2 layouts = 2 badges
       expect(texts).toHaveLength(2);
-      expect(texts.every((t) => t.trim() === 'Published')).toBe(true);
+      expect(texts.every((t) => t.trim() === 'published')).toBe(true);
     });
 
-    it('shows "Published" for a community with status: published', async () => {
-      const {component, fixture, harness, communitiesServiceMock} =
-        await setup();
-      communitiesServiceMock.list.mockResolvedValue([
+    it('shows "published" for a community with status: published', async () => {
+      const {emit, fixture, harness} = await setup();
+      emit([
         {
           _id: '1',
           name: 'Live Community',
@@ -223,18 +261,15 @@ describe('AdminCommunityListComponent', () => {
           status: 'published',
         },
       ]);
-      component.loadCommunities();
-      await fixture.whenStable();
       fixture.detectChanges();
 
       const texts = await harness.getStatusBadgeTexts();
-      expect(texts.every((t) => t.trim() === 'Published')).toBe(true);
+      expect(texts.every((t) => t.trim() === 'published')).toBe(true);
     });
 
-    it('shows "Draft" for a community with status: draft', async () => {
-      const {component, fixture, harness, communitiesServiceMock} =
-        await setup();
-      communitiesServiceMock.list.mockResolvedValue([
+    it('shows "draft" for a community with status: draft', async () => {
+      const {emit, fixture, harness} = await setup();
+      emit([
         {
           _id: '2',
           name: 'Draft Community',
@@ -242,18 +277,15 @@ describe('AdminCommunityListComponent', () => {
           status: 'draft',
         },
       ]);
-      component.loadCommunities();
-      await fixture.whenStable();
       fixture.detectChanges();
 
       const texts = await harness.getStatusBadgeTexts();
-      expect(texts.every((t) => t.trim() === 'Draft')).toBe(true);
+      expect(texts.every((t) => t.trim() === 'draft')).toBe(true);
     });
 
     it('renders correct badges when both published and draft communities are present', async () => {
-      const {component, fixture, harness, communitiesServiceMock} =
-        await setup();
-      communitiesServiceMock.list.mockResolvedValue([
+      const {emit, fixture, harness} = await setup();
+      emit([
         {
           _id: '1',
           name: 'Live Community',
@@ -267,23 +299,20 @@ describe('AdminCommunityListComponent', () => {
           status: 'draft',
         },
       ]);
-      component.loadCommunities();
-      await fixture.whenStable();
       fixture.detectChanges();
 
       const texts = await harness.getStatusBadgeTexts();
       // 2 communities × 2 layouts = 4 badges; order is desktop-first then mobile
       const normalised = texts.map((t) => t.trim());
-      expect(normalised.filter((t) => t === 'Published')).toHaveLength(2);
-      expect(normalised.filter((t) => t === 'Draft')).toHaveLength(2);
+      expect(normalised.filter((t) => t === 'published')).toHaveLength(2);
+      expect(normalised.filter((t) => t === 'draft')).toHaveLength(2);
     });
   });
 
   describe('manage link query params', () => {
     it('uses slug in ?community= param when community has a slug', async () => {
-      const {component, fixture, harness, communitiesServiceMock} =
-        await setup();
-      communitiesServiceMock.list.mockResolvedValue([
+      const {emit, fixture, harness} = await setup();
+      emit([
         {
           _id: 'someorgid123456789012345678901234',
           name: 'Lot 45',
@@ -291,8 +320,6 @@ describe('AdminCommunityListComponent', () => {
           slug: 'lot-45',
         },
       ]);
-      component.loadCommunities();
-      await fixture.whenStable();
       fixture.detectChanges();
 
       const hrefs = await harness.getManageLinkHrefs();
@@ -303,14 +330,9 @@ describe('AdminCommunityListComponent', () => {
     });
 
     it('falls back to _id in ?community= param when community has no slug', async () => {
-      const {component, fixture, harness, communitiesServiceMock} =
-        await setup();
+      const {emit, fixture, harness} = await setup();
       const fakeId = 'abcdefghijklmnopqrstuvwxyz123456';
-      communitiesServiceMock.list.mockResolvedValue([
-        {_id: fakeId, name: 'No Slug Community', email: 'ns@example.com'},
-      ]);
-      component.loadCommunities();
-      await fixture.whenStable();
+      emit([{_id: fakeId, name: 'No Slug Community', email: 'ns@example.com'}]);
       fixture.detectChanges();
 
       const hrefs = await harness.getManageLinkHrefs();
@@ -321,9 +343,8 @@ describe('AdminCommunityListComponent', () => {
     });
 
     it('clicking Manage navigates to community-admin with the slug param', async () => {
-      const {component, fixture, harness, communitiesServiceMock} =
-        await setup();
-      communitiesServiceMock.list.mockResolvedValue([
+      const {emit, fixture, harness} = await setup();
+      emit([
         {
           _id: 'someorgid123456789012345678901234',
           name: 'Lot 45',
@@ -331,8 +352,6 @@ describe('AdminCommunityListComponent', () => {
           slug: 'lot-45',
         },
       ]);
-      component.loadCommunities();
-      await fixture.whenStable();
       fixture.detectChanges();
 
       const router = TestBed.inject(Router);
@@ -344,10 +363,9 @@ describe('AdminCommunityListComponent', () => {
     });
 
     it('clicking Edit navigates to the community edit route', async () => {
-      const {component, fixture, harness, communitiesServiceMock} =
-        await setup();
+      const {emit, fixture, harness} = await setup();
       const fakeId = 'someorgid123456789012345678901234';
-      communitiesServiceMock.list.mockResolvedValue([
+      emit([
         {
           _id: fakeId,
           name: 'Editable Community',
@@ -355,8 +373,6 @@ describe('AdminCommunityListComponent', () => {
           slug: 'editable-community',
         },
       ]);
-      component.loadCommunities();
-      await fixture.whenStable();
       fixture.detectChanges();
 
       const router = TestBed.inject(Router);
@@ -371,32 +387,24 @@ describe('AdminCommunityListComponent', () => {
   describe('loading skeleton', () => {
     it('should show skeleton rows in desktop table while loading', async () => {
       const {loadingHarness} = await setupLoading();
-      const [isShowing, rowCount] = await manualChangeDetection(async () => [
-        await loadingHarness.isShowingSkeleton(),
-        await loadingHarness.getDesktopSkeletonRowCount(),
-      ]);
+      const isShowing = await loadingHarness.isShowingSkeleton();
+      const rowCount = await loadingHarness.getDesktopSkeletonRowCount();
       expect(isShowing).toBe(true);
       expect(rowCount).toBe(5);
     });
 
     it('should show skeleton cards on mobile while loading', async () => {
       const {loadingHarness} = await setupLoading();
-      const cardCount = await manualChangeDetection(() =>
-        loadingHarness.getMobileSkeletonCardCount(),
-      );
+      const cardCount = await loadingHarness.getMobileSkeletonCardCount();
       expect(cardCount).toBe(3);
     });
 
     it('should use shimmer animation on skeleton elements', async () => {
       const {loadingHarness} = await setupLoading();
-      const skeletons = await manualChangeDetection(() =>
-        loadingHarness.getSkeletonHarnesses(),
-      );
+      const skeletons = await loadingHarness.getSkeletonHarnesses();
       expect(skeletons.length).toBeGreaterThan(0);
       for (const skeleton of skeletons) {
-        expect(await manualChangeDetection(() => skeleton.getAnimation())).toBe(
-          'shimmer',
-        );
+        expect(await skeleton.getAnimation()).toBe('shimmer');
       }
     });
   });

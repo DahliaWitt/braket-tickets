@@ -46,10 +46,14 @@ import {
 
 type Tab = 'login' | 'register';
 
+/** Single source for the invalid-email format message across all three login-page forms. */
+export const INVALID_EMAIL_MESSAGE = 'Please enter a valid email address';
+
 interface LoginRouteState {
   readonly signupRequested: boolean;
   readonly registeredMessageRequested: boolean;
   readonly oauthCallbackRequested: boolean;
+  readonly verificationCallbackError: boolean;
   readonly returnUrl: string;
 }
 
@@ -87,6 +91,7 @@ export class LoginComponent {
   readonly message = signal<string | null>(null);
 
   readonly socialProviders = CONNECTED_PROVIDERS;
+  readonly invalidEmailMessage = INVALID_EMAIL_MESSAGE;
   readonly loginSubmitted = signal(false);
   readonly registerSubmitted = signal(false);
   readonly resetSubmitted = signal(false);
@@ -193,10 +198,19 @@ export class LoginComponent {
     const code = queryParamMap.get('code');
     const state = queryParamMap.get('state');
 
+    // OAuth (social) callbacks carry `ott`/`code`/`state`. A bare `error`
+    // param with none of those is not an OAuth callback — it comes from
+    // Better Auth's email-verification redirect (e.g. an expired resend link
+    // landing on `/login?error=TOKEN_EXPIRED`). Forwarding it to the social
+    // sign-in error page shows the wrong context, so classify it separately
+    // and route it to the verification-outcome page instead.
+    const hasOAuthParams = Boolean(ott || code || state);
+
     return {
       signupRequested: queryParamMap.get('signup') === 'true',
       registeredMessageRequested: queryParamMap.get('registered') === 'true',
-      oauthCallbackRequested: Boolean(error || ott || code || state),
+      oauthCallbackRequested: hasOAuthParams,
+      verificationCallbackError: Boolean(error) && !hasOAuthParams,
       returnUrl: sanitizeInternalReturnUrl(queryParamMap.get('returnUrl')),
     };
   });
@@ -206,6 +220,7 @@ export class LoginComponent {
   private readonly signupQueryParamHandled = signal(false);
   private readonly registeredQueryParamHandled = signal(false);
   private readonly oauthRedirectHandled = signal(false);
+  private readonly verificationErrorRedirectHandled = signal(false);
 
   constructor() {
     // Cleanup interval on destroy
@@ -238,6 +253,22 @@ export class LoginComponent {
       }
 
       this.oauthRedirectHandled.set(false);
+
+      // An email-verification callback error (e.g. an expired resend link that
+      // Better Auth redirected to `/login?error=...`) belongs on the
+      // verification-outcome page, not the social sign-in error page.
+      if (routeState.verificationCallbackError) {
+        if (!untracked(() => this.verificationErrorRedirectHandled())) {
+          this.verificationErrorRedirectHandled.set(true);
+          void this.router.navigate(['/confirm/verification'], {
+            queryParams,
+            replaceUrl: true,
+          });
+        }
+        return;
+      }
+
+      this.verificationErrorRedirectHandled.set(false);
 
       if (routeState.registeredMessageRequested) {
         if (!untracked(() => this.registeredQueryParamHandled())) {
@@ -505,7 +536,7 @@ export class LoginComponent {
 
     this.resetSubmitted.set(true);
     if (this.resetForm().invalid()) {
-      this.error.set('Please enter a valid email address.');
+      this.error.set(INVALID_EMAIL_MESSAGE);
       return;
     }
 
@@ -561,7 +592,7 @@ export class LoginComponent {
 
     try {
       await this.passwordService.requestVerificationEmail(email);
-      this.message.set('Verification email sent! Check your inbox.');
+      this.message.set('verification email sent. check your inbox.');
       this.startResendCooldown();
     } catch (err: unknown) {
       const error =

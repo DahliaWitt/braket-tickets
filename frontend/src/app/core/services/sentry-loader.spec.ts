@@ -256,7 +256,7 @@ describe('sentry-loader', () => {
       callback({
         didTimeout: false,
         timeRemaining: () => 42,
-      } as IdleDeadline);
+      });
       return 1;
     });
 
@@ -282,7 +282,7 @@ describe('sentry-loader', () => {
       callback({
         didTimeout: false,
         timeRemaining: () => 42,
-      } as IdleDeadline);
+      });
       return 1;
     });
     const unhandledRejectionSpy = vi.fn();
