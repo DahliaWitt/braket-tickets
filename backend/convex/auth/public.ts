@@ -6,10 +6,11 @@
 
 import {v} from 'convex/values';
 
-import {mutation} from '../_generated/server';
+import {action, internalMutation, mutation} from '../_generated/server';
 import {
   cancelEmailChangeHandler,
   changePasswordHandler,
+  changePasswordV2Handler,
   completeSocialSignupOnboardingHandler,
   linkSocialAccountHandler,
   requestEmailChangeHandler,
@@ -17,6 +18,7 @@ import {
   syncCurrentUserHandler,
   unlinkSocialAccountHandler,
 } from './_impl/public';
+import {rateLimiter} from '../lib/rate_limits';
 
 const socialProviderValidator = v.union(
   v.literal('google'),
@@ -52,6 +54,36 @@ export const changePassword = mutation({
   },
   returns: v.null(),
   handler: changePasswordHandler,
+});
+
+/**
+ * Action-based password change for the current client contract. Better Auth
+ * uses scrypt password verification/hashing, which can exceed Convex's
+ * one-second mutation budget. The legacy mutation above remains addressable
+ * for stale generated clients but fails closed with a refresh instruction;
+ * only this action services password changes and durably charges failed
+ * current-password attempts against the rate limit.
+ */
+export const changePasswordV2 = action({
+  args: {
+    currentPassword: v.string(),
+    newPassword: v.string(),
+    revokeOtherSessions: v.optional(v.boolean()),
+  },
+  returns: v.null(),
+  handler: changePasswordV2Handler,
+});
+
+export const applyChangePasswordRateLimit = internalMutation({
+  args: {userId: v.id('users')},
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await rateLimiter.limit(ctx, 'changePassword', {
+      key: args.userId,
+      throws: true,
+    });
+    return null;
+  },
 });
 
 export const linkSocialAccount = mutation({

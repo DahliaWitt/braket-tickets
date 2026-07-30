@@ -98,6 +98,24 @@ export class DashboardComponentHarness extends ComponentHarness {
     return !!el;
   }
 
+  /** Get all "View Event" fallback link hrefs (non-purchasable events). */
+  async getViewEventHrefs(): Promise<string[]> {
+    const els = await this.locatorForAll(
+      '[data-testid="dashboard-view-event"]',
+    )();
+    const hrefs: string[] = [];
+    for (const el of els) {
+      const href = await el.getAttribute('href');
+      if (href) hrefs.push(href);
+    }
+    return hrefs;
+  }
+
+  /** Count the lock badges on vetting-required event posters. */
+  async getVettingLockCount(): Promise<number> {
+    return this.countByTestId('dashboard-vetting-lock');
+  }
+
   /** Get the "find your people" heading text (new user state). */
   async getNewUserHeading(): Promise<string | null> {
     const headings = await this.locatorForAll('h1')();

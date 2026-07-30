@@ -62,6 +62,15 @@ export class CheckoutSidebarHarness extends ComponentHarness {
   private _freeTicket = this.locatorForOptional(
     '[data-testid="checkout-free-ticket"]',
   );
+  private _amountInvalid = this.locatorForOptional(
+    '[data-testid="checkout-amount-invalid"]',
+  );
+  private _amountInvalidCta = this.locatorForOptional(
+    '[data-testid="checkout-amount-invalid-cta"]',
+  );
+  private _amountInvalidMessage = this.locatorForOptional(
+    '[data-testid="checkout-amount-invalid-message"]',
+  );
   private _termsCheckbox = this.locatorForOptional(
     '[data-testid="checkout-terms-checkbox"]',
   );
@@ -282,6 +291,25 @@ export class CheckoutSidebarHarness extends ComponentHarness {
   async isFreeTicketVisible(): Promise<boolean> {
     const el = await this._freeTicket();
     return el !== null;
+  }
+
+  // --- Invalid custom amount CTA (below-min / above-max) ---
+  async isAmountInvalidVisible(): Promise<boolean> {
+    const el = await this._amountInvalid();
+    return el !== null;
+  }
+
+  async isAmountInvalidCtaDisabled(): Promise<boolean> {
+    const btn = await this._amountInvalidCta();
+    if (!btn) return false;
+    // ZardButton reflects zDisabled via the data-disabled host attribute
+    // (empty string when disabled, absent when enabled).
+    return (await btn.getAttribute('data-disabled')) !== null;
+  }
+
+  async getAmountInvalidMessage(): Promise<string | null> {
+    const el = await this._amountInvalidMessage();
+    return el ? (await el.text()).trim() : null;
   }
 
   async isFreeTicketEnabled(): Promise<boolean> {

@@ -1,9 +1,14 @@
-import { expect, type Page, type ConsoleMessage } from '@playwright/test';
+import {expect, type Page, type ConsoleMessage} from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { mkdirSync, readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import type { AuditRoute, AuditFinding, AuditRouteResult, Severity } from './audit-types';
-import { createLlmProvider } from './audit-llm';
+import {mkdirSync, readFileSync} from 'node:fs';
+import {dirname, resolve} from 'node:path';
+import type {
+  AuditRoute,
+  AuditFinding,
+  AuditRouteResult,
+  Severity,
+} from './audit-types';
+import {createLlmProvider} from './audit-llm';
 
 export interface RunChecksConfig {
   llmProvider: 'openrouter' | 'claude' | 'skip';
@@ -17,332 +22,548 @@ export interface RunChecksConfig {
 
 /** Verify h1 exists and heading levels don't skip (e.g., h1 → h3 with no h2). */
 async function checkHeadingHierarchy(page: Page): Promise<AuditFinding[]> {
-  return page.evaluate((): Array<{ check: string; severity: string; message: string; element?: string; suggestion?: string }> => {
-    const headings = Array.from(document.querySelectorAll('h1, h2, h3, h4, h5, h6'));
-    const findings: Array<{ check: string; severity: string; message: string; element?: string; suggestion?: string }> = [];
+  return page.evaluate(
+    (): Array<{
+      check: string;
+      severity: string;
+      message: string;
+      element?: string;
+      suggestion?: string;
+    }> => {
+      const headings = Array.from(
+        document.querySelectorAll('h1, h2, h3, h4, h5, h6'),
+      );
+      const findings: Array<{
+        check: string;
+        severity: string;
+        message: string;
+        element?: string;
+        suggestion?: string;
+      }> = [];
 
-    if (headings.length === 0) {
-      findings.push({
-        check: 'heading-hierarchy',
-        severity: 'serious',
-        message: 'No headings found on the page.',
-        suggestion: 'Add at least one <h1> element to establish page structure.',
-      });
-      return findings;
-    }
-
-    const h1s = headings.filter((h) => h.tagName === 'H1');
-    if (h1s.length === 0) {
-      findings.push({
-        check: 'heading-hierarchy',
-        severity: 'serious',
-        message: 'Page has no <h1> element.',
-        suggestion: 'Add an <h1> to define the main page heading.',
-      });
-    }
-
-    // Check for skipped levels
-    const levels = headings.map((h) => parseInt(h.tagName.slice(1), 10));
-    for (let i = 1; i < levels.length; i++) {
-      const prev = levels[i - 1];
-      const curr = levels[i];
-      if (curr > prev + 1) {
-        const el = headings[i];
-        const selector = el.id
-          ? `#${el.id}`
-          : el.tagName.toLowerCase() + (el.className ? '.' + el.className.split(' ')[0] : '');
+      if (headings.length === 0) {
         findings.push({
           check: 'heading-hierarchy',
           severity: 'serious',
-          message: `Heading level skipped: h${prev} followed by h${curr}.`,
-          element: selector,
-          suggestion: `Use h${prev + 1} instead of h${curr} to avoid skipping heading levels.`,
+          message: 'No headings found on the page.',
+          suggestion:
+            'Add at least one <h1> element to establish page structure.',
+        });
+        return findings;
+      }
+
+      const h1s = headings.filter((h) => h.tagName === 'H1');
+      if (h1s.length === 0) {
+        findings.push({
+          check: 'heading-hierarchy',
+          severity: 'serious',
+          message: 'Page has no <h1> element.',
+          suggestion: 'Add an <h1> to define the main page heading.',
         });
       }
-    }
 
-    return findings;
-  }) as Promise<AuditFinding[]>;
+      // Check for skipped levels
+      const levels = headings.map((h) => parseInt(h.tagName.slice(1), 10));
+      for (let i = 1; i < levels.length; i++) {
+        const prev = levels[i - 1];
+        const curr = levels[i];
+        if (curr > prev + 1) {
+          const el = headings[i];
+          const selector = el.id
+            ? `#${el.id}`
+            : el.tagName.toLowerCase() +
+              (el.className ? '.' + el.className.split(' ')[0] : '');
+          findings.push({
+            check: 'heading-hierarchy',
+            severity: 'serious',
+            message: `Heading level skipped: h${prev} followed by h${curr}.`,
+            element: selector,
+            suggestion: `Use h${prev + 1} instead of h${curr} to avoid skipping heading levels.`,
+          });
+        }
+      }
+
+      return findings;
+    },
+  ) as Promise<AuditFinding[]>;
 }
 
 /**
- * Tiered touch target check based on WCAG 2.2 SC 2.5.8 (AA).
+ * Touch target check based on WCAG 2.2 SC 2.5.8 (AA).
  *
- * Thresholds per element type:
- *   - Primary CTA (submit, purchase buttons): 36px — critical user paths
- *   - All other interactive elements: 24px — WCAG 2.2 AA minimum
+ * The WCAG threshold is 24px for every interactive element. Primary CTAs also
+ * receive separate, non-critical 36px usability guidance.
  *
  * WCAG 2.5.8 exceptions implemented:
- *   - Inline text links (inside <p>, <li>, <td>, <span>) — fully exempt
+ *   - Links genuinely embedded in adjacent prose — fully exempt
  *   - Native browser controls (unstyled <select>, native checkboxes) — exempt
  *   - Visually hidden / sr-only elements — exempt
  *   - Spacing exception: undersized target OK if 24px circle doesn't overlap neighbors
  */
-async function checkTouchTargets(page: Page): Promise<AuditFinding[]> {
-  return page.evaluate((): Array<{ check: string; severity: string; message: string; element?: string; suggestion?: string }> => {
-    const WCAG_AA_MIN = 24;
-    const CTA_MIN = 36;
-    const CTA_PATTERNS = /submit|purchase|buy|checkout|pay|confirm|sign.?up|log.?in|register|create.?account|get.?ticket/i;
+export async function checkTouchTargets(page: Page): Promise<AuditFinding[]> {
+  return page.evaluate(
+    (): Array<{
+      check: string;
+      severity: string;
+      message: string;
+      element?: string;
+      suggestion?: string;
+    }> => {
+      const WCAG_AA_MIN = 24;
+      const CTA_MIN = 36;
+      const CTA_PATTERNS =
+        /submit|purchase|buy|checkout|pay|confirm|sign.?up|log.?in|register|create.?account|get.?ticket/i;
 
-    const selectors = ['button', 'a[href]', 'input', 'select', 'textarea', '[role="button"]', '[role="link"]'];
-    const allInteractive = Array.from(document.querySelectorAll(selectors.join(', ')));
-    const findings: Array<{ check: string; severity: string; message: string; element?: string; suggestion?: string }> = [];
+      const selectors = [
+        'button',
+        'a[href]',
+        'input',
+        'select',
+        'textarea',
+        '[role="button"]',
+        '[role="link"]',
+      ];
+      const allInteractive = Array.from(
+        document.querySelectorAll(selectors.join(', ')),
+      );
+      const findings: Array<{
+        check: string;
+        severity: string;
+        message: string;
+        element?: string;
+        suggestion?: string;
+      }> = [];
 
-    // Collect all interactive element rects (indexed) for the spacing exception check.
-    // We use the same array for iteration and comparison to avoid the reference-equality
-    // bug where getBoundingClientRect() returns a new object each call.
-    const interactiveRects = allInteractive.map((el) => el.getBoundingClientRect());
+      // Collect all interactive element rects (indexed) for the spacing exception check.
+      // We use the same array for iteration and comparison to avoid the reference-equality
+      // bug where getBoundingClientRect() returns a new object each call.
+      const interactiveRects = allInteractive.map((el) =>
+        el.getBoundingClientRect(),
+      );
 
-    for (let i = 0; i < allInteractive.length; i++) {
-      const el = allInteractive[i];
-      const htmlEl = el as HTMLElement;
-      const rect = interactiveRects[i];
+      for (let i = 0; i < allInteractive.length; i++) {
+        const el = allInteractive[i];
+        const htmlEl = el as HTMLElement;
+        const rect = interactiveRects[i];
 
-      // Skip hidden or zero-size elements
-      if (rect.width === 0 && rect.height === 0) continue;
-      if (htmlEl.offsetParent === null && el.tagName !== 'BODY') continue;
+        // Skip hidden or zero-size elements
+        if (rect.width === 0 && rect.height === 0) continue;
+        if (htmlEl.offsetParent === null && el.tagName !== 'BODY') continue;
 
-      // Skip visually hidden elements (screen-reader-only)
-      const style = window.getComputedStyle(htmlEl);
-      if (
-        (rect.width <= 1 && rect.height <= 1) ||
-        style.clip === 'rect(0px, 0px, 0px, 0px)' ||
-        style.getPropertyValue('clip-path') === 'inset(50%)' ||
-        (style.position === 'absolute' && style.overflow === 'hidden' && (rect.width <= 1 || rect.height <= 1))
-      ) {
-        continue;
-      }
-
-      // WCAG 2.5.8 "Inline" exception: links within prose are exempt
-      if (el.tagName === 'A') {
-        const parent = el.parentElement;
-        if (parent && /^(P|LI|TD|TH|SPAN|LABEL|BLOCKQUOTE|FIGCAPTION)$/.test(parent.tagName)) {
-          continue;
-        }
-      }
-
-      // Determine threshold: CTA buttons get a higher bar
-      const text = (htmlEl.textContent ?? '').trim() + ' ' + (htmlEl.getAttribute('aria-label') ?? '');
-      const isCta = (el.tagName === 'BUTTON' || htmlEl.getAttribute('role') === 'button') && CTA_PATTERNS.test(text);
-      const threshold = isCta ? CTA_MIN : WCAG_AA_MIN;
-
-      const shortDim = Math.min(rect.width, rect.height);
-      if (shortDim >= threshold) continue;
-
-      // WCAG 2.5.8 "Spacing" exception: target is OK if a 24px-diameter circle
-      // centered on it doesn't overlap any adjacent target's 24px circle
-      const cx = rect.left + rect.width / 2;
-      const cy = rect.top + rect.height / 2;
-      const radius = WCAG_AA_MIN / 2; // 12px
-      let hasOverlap = false;
-      for (let j = 0; j < interactiveRects.length; j++) {
-        if (j === i) continue;
-        const other = interactiveRects[j];
-        const ox = other.left + other.width / 2;
-        const oy = other.top + other.height / 2;
-        const dist = Math.sqrt((cx - ox) ** 2 + (cy - oy) ** 2);
-        if (dist < radius * 2) { // circles overlap if distance < 24px
-          hasOverlap = true;
-          break;
-        }
-      }
-      // If no overlap with neighbors, the spacing exception applies — skip
-      if (!hasOverlap && !isCta) continue;
-
-      const severity = isCta ? 'critical' : (shortDim < 16 ? 'serious' : 'moderate');
-      const selector = htmlEl.id
-        ? `#${htmlEl.id}`
-        : `${htmlEl.tagName.toLowerCase()}${htmlEl.className ? '.' + htmlEl.className.split(' ')[0] : ''}`;
-      const label = isCta ? 'CTA' : 'interactive element';
-
-      findings.push({
-        check: 'touch-target-size',
-        severity,
-        message: `${label}: ${Math.round(rect.width)}×${Math.round(rect.height)}px (minimum ${threshold}×${threshold}px).`,
-        element: selector,
-        suggestion: isCta
-          ? 'Primary action buttons should be at least 36×36px for usability on touch devices.'
-          : shortDim < 16
-            ? 'This element is very small and likely unusable on touch devices. Increase size or add padding.'
-            : 'Increase the element size or add padding to meet the 24px WCAG 2.2 AA minimum.',
-      });
-    }
-
-    return findings;
-  }) as Promise<AuditFinding[]>;
-}
-
-/** Find elements where scrollWidth > clientWidth (horizontal text overflow). */
-async function checkTextOverflow(page: Page): Promise<AuditFinding[]> {
-  return page.evaluate((): Array<{ check: string; severity: string; message: string; element?: string; suggestion?: string }> => {
-    const findings: Array<{ check: string; severity: string; message: string; element?: string; suggestion?: string }> = [];
-    const elements = Array.from(document.querySelectorAll('p, span, h1, h2, h3, h4, h5, h6, li, td, th, label, a'));
-
-    for (const el of elements) {
-      const htmlEl = el as HTMLElement;
-      if (htmlEl.scrollWidth > htmlEl.clientWidth + 2) {
-        const rect = htmlEl.getBoundingClientRect();
+        // Skip visually hidden elements (screen-reader-only)
         const style = window.getComputedStyle(htmlEl);
-
-        // Skip visually hidden / sr-only elements — overflow is by design
         if (
           (rect.width <= 1 && rect.height <= 1) ||
           style.clip === 'rect(0px, 0px, 0px, 0px)' ||
           style.getPropertyValue('clip-path') === 'inset(50%)' ||
-          (style.position === 'absolute' && style.overflow === 'hidden' && (rect.width <= 1 || rect.height <= 1))
+          (style.position === 'absolute' &&
+            style.overflow === 'hidden' &&
+            (rect.width <= 1 || rect.height <= 1))
         ) {
           continue;
         }
 
-        // Skip elements that already handle overflow gracefully (truncate, ellipsis).
-        // scrollWidth > clientWidth is expected for these — they're deliberately clipping text.
-        if (style.textOverflow === 'ellipsis' || style.overflow === 'hidden' || style.overflowX === 'hidden') {
-          continue;
-        }
+        // WCAG 2.5.8 "Inline" exception: links genuinely embedded in prose are
+        // exempt. A generic container alone (for example <span> or <td>) is not
+        // enough; require adjacent prose at the same inline formatting level.
+        if (el.tagName === 'A') {
+          const proseContainerTags = new Set([
+            'P',
+            'LI',
+            'BLOCKQUOTE',
+            'FIGCAPTION',
+            'LABEL',
+          ]);
+          const inlineFormattingTags = new Set([
+            'ABBR',
+            'B',
+            'CITE',
+            'CODE',
+            'EM',
+            'I',
+            'MARK',
+            'Q',
+            'S',
+            'SMALL',
+            'STRONG',
+            'U',
+          ]);
+          let inlineNode: Element = el;
+          let proseContainer = el.parentElement;
+          let hasOnlyInlineFormattingWrappers = true;
 
-        // Skip elements inside an overflow-hidden ancestor with text-overflow handling.
-        // Common pattern: parent has truncate, child span inherits clipped layout.
-        let ancestor = htmlEl.parentElement;
-        let ancestorHandlesOverflow = false;
-        while (ancestor && ancestor !== document.body) {
-          const aStyle = window.getComputedStyle(ancestor);
-          if (
-            (aStyle.overflow === 'hidden' || aStyle.overflowX === 'hidden') &&
-            (aStyle.textOverflow === 'ellipsis' || ancestor.classList.contains('truncate'))
+          while (
+            proseContainer &&
+            !proseContainerTags.has(proseContainer.tagName)
           ) {
-            ancestorHandlesOverflow = true;
-            break;
+            if (!inlineFormattingTags.has(proseContainer.tagName)) {
+              hasOnlyInlineFormattingWrappers = false;
+              break;
+            }
+            inlineNode = proseContainer;
+            proseContainer = proseContainer.parentElement;
           }
-          ancestor = ancestor.parentElement;
+
+          const hasAdjacentProse = [
+            inlineNode.previousSibling,
+            inlineNode.nextSibling,
+          ].some(
+            (node) =>
+              node?.nodeType === Node.TEXT_NODE &&
+              (node.textContent ?? '').trim().length > 0,
+          );
+
+          if (
+            style.display === 'inline' &&
+            hasOnlyInlineFormattingWrappers &&
+            proseContainer !== null &&
+            proseContainerTags.has(proseContainer.tagName) &&
+            hasAdjacentProse
+          ) {
+            continue;
+          }
         }
-        if (ancestorHandlesOverflow) continue;
 
-        const selector = htmlEl.id
-          ? `#${htmlEl.id}`
-          : `${htmlEl.tagName.toLowerCase()}${htmlEl.className ? '.' + htmlEl.className.split(' ')[0] : ''}`;
-        findings.push({
-          check: 'text-overflow',
-          severity: 'moderate',
-          message: `Element has horizontal text overflow: scrollWidth (${htmlEl.scrollWidth}px) > clientWidth (${htmlEl.clientWidth}px).`,
-          element: selector,
-          suggestion: 'Add overflow:hidden, text-overflow:ellipsis, or word-break:break-word to contain text.',
-        });
+        // Determine threshold: CTA buttons get a higher bar
+        const text =
+          (htmlEl.textContent ?? '').trim() +
+          ' ' +
+          (htmlEl.getAttribute('aria-label') ?? '');
+        const isCta =
+          (el.tagName === 'BUTTON' ||
+            htmlEl.getAttribute('role') === 'button') &&
+          CTA_PATTERNS.test(text);
+        const shortDim = Math.min(rect.width, rect.height);
+
+        if (shortDim < WCAG_AA_MIN) {
+          // WCAG 2.5.8 "Spacing" exception: target is OK if a 24px-diameter
+          // circle centered on it doesn't overlap any adjacent target's circle.
+          const cx = rect.left + rect.width / 2;
+          const cy = rect.top + rect.height / 2;
+          const radius = WCAG_AA_MIN / 2; // 12px
+          let hasOverlap = false;
+          for (let j = 0; j < interactiveRects.length; j++) {
+            if (j === i) continue;
+            const other = interactiveRects[j];
+            const ox = other.left + other.width / 2;
+            const oy = other.top + other.height / 2;
+            const dist = Math.sqrt((cx - ox) ** 2 + (cy - oy) ** 2);
+            if (dist < radius * 2) {
+              // circles overlap if distance < 24px
+              hasOverlap = true;
+              break;
+            }
+          }
+
+          if (hasOverlap) {
+            const severity = shortDim < 16 ? 'serious' : 'moderate';
+            const selector = htmlEl.id
+              ? `#${htmlEl.id}`
+              : `${htmlEl.tagName.toLowerCase()}${htmlEl.className ? '.' + htmlEl.className.split(' ')[0] : ''}`;
+
+            findings.push({
+              check: 'touch-target-size',
+              severity,
+              message: `Interactive element: ${Math.round(rect.width)}×${Math.round(rect.height)}px (minimum ${WCAG_AA_MIN}×${WCAG_AA_MIN}px).`,
+              element: selector,
+              suggestion:
+                shortDim < 16
+                  ? 'This element is very small and likely unusable on touch devices. Increase size or add padding.'
+                  : 'Increase the element size or add padding to meet the 24px WCAG 2.2 AA minimum.',
+            });
+          }
+        }
+
+        if (isCta && shortDim < CTA_MIN) {
+          const selector = htmlEl.id
+            ? `#${htmlEl.id}`
+            : `${htmlEl.tagName.toLowerCase()}${htmlEl.className ? '.' + htmlEl.className.split(' ')[0] : ''}`;
+
+          findings.push({
+            check: 'cta-touch-target-guidance',
+            severity: 'minor',
+            message: `CTA: ${Math.round(rect.width)}×${Math.round(rect.height)}px (36×36px recommended).`,
+            element: selector,
+            suggestion:
+              'Consider making primary action buttons at least 36×36px for improved touch usability.',
+          });
+        }
       }
-    }
 
-    return findings;
-  }) as Promise<AuditFinding[]>;
+      return findings;
+    },
+  ) as Promise<AuditFinding[]>;
+}
+
+/** Find elements where scrollWidth > clientWidth (horizontal text overflow). */
+async function checkTextOverflow(page: Page): Promise<AuditFinding[]> {
+  return page.evaluate(
+    (): Array<{
+      check: string;
+      severity: string;
+      message: string;
+      element?: string;
+      suggestion?: string;
+    }> => {
+      const findings: Array<{
+        check: string;
+        severity: string;
+        message: string;
+        element?: string;
+        suggestion?: string;
+      }> = [];
+      const elements = Array.from(
+        document.querySelectorAll(
+          'p, span, h1, h2, h3, h4, h5, h6, li, td, th, label, a',
+        ),
+      );
+
+      for (const el of elements) {
+        const htmlEl = el as HTMLElement;
+        if (htmlEl.scrollWidth > htmlEl.clientWidth + 2) {
+          const rect = htmlEl.getBoundingClientRect();
+          const style = window.getComputedStyle(htmlEl);
+
+          // Skip visually hidden / sr-only elements — overflow is by design
+          if (
+            (rect.width <= 1 && rect.height <= 1) ||
+            style.clip === 'rect(0px, 0px, 0px, 0px)' ||
+            style.getPropertyValue('clip-path') === 'inset(50%)' ||
+            (style.position === 'absolute' &&
+              style.overflow === 'hidden' &&
+              (rect.width <= 1 || rect.height <= 1))
+          ) {
+            continue;
+          }
+
+          // Skip elements that already handle overflow gracefully (truncate, ellipsis).
+          // scrollWidth > clientWidth is expected for these — they're deliberately clipping text.
+          if (
+            style.textOverflow === 'ellipsis' ||
+            style.overflow === 'hidden' ||
+            style.overflowX === 'hidden'
+          ) {
+            continue;
+          }
+
+          // Skip elements inside an overflow-hidden ancestor with text-overflow handling.
+          // Common pattern: parent has truncate, child span inherits clipped layout.
+          let ancestor = htmlEl.parentElement;
+          let ancestorHandlesOverflow = false;
+          while (ancestor && ancestor !== document.body) {
+            const aStyle = window.getComputedStyle(ancestor);
+            if (
+              (aStyle.overflow === 'hidden' || aStyle.overflowX === 'hidden') &&
+              (aStyle.textOverflow === 'ellipsis' ||
+                ancestor.classList.contains('truncate'))
+            ) {
+              ancestorHandlesOverflow = true;
+              break;
+            }
+            ancestor = ancestor.parentElement;
+          }
+          if (ancestorHandlesOverflow) continue;
+
+          const selector = htmlEl.id
+            ? `#${htmlEl.id}`
+            : `${htmlEl.tagName.toLowerCase()}${htmlEl.className ? '.' + htmlEl.className.split(' ')[0] : ''}`;
+          findings.push({
+            check: 'text-overflow',
+            severity: 'moderate',
+            message: `Element has horizontal text overflow: scrollWidth (${htmlEl.scrollWidth}px) > clientWidth (${htmlEl.clientWidth}px).`,
+            element: selector,
+            suggestion:
+              'Add overflow:hidden, text-overflow:ellipsis, or word-break:break-word to contain text.',
+          });
+        }
+      }
+
+      return findings;
+    },
+  ) as Promise<AuditFinding[]>;
 }
 
 /** Find <img> elements with naturalWidth === 0 and non-empty src (broken images). */
 async function checkBrokenImages(page: Page): Promise<AuditFinding[]> {
-  return page.evaluate((): Array<{ check: string; severity: string; message: string; element?: string; suggestion?: string }> => {
-    const images = Array.from(document.querySelectorAll('img'));
-    const findings: Array<{ check: string; severity: string; message: string; element?: string; suggestion?: string }> = [];
+  return page.evaluate(
+    (): Array<{
+      check: string;
+      severity: string;
+      message: string;
+      element?: string;
+      suggestion?: string;
+    }> => {
+      const images = Array.from(document.querySelectorAll('img'));
+      const findings: Array<{
+        check: string;
+        severity: string;
+        message: string;
+        element?: string;
+        suggestion?: string;
+      }> = [];
 
-    for (const img of images) {
-      if (img.src && img.naturalWidth === 0 && img.complete) {
-        const selector = img.id
-          ? `#${img.id}`
-          : `img[src="${img.getAttribute('src')?.slice(0, 40)}"]`;
-        findings.push({
-          check: 'broken-image',
-          severity: 'serious',
-          message: `Broken image: src="${img.getAttribute('src')?.slice(0, 80)}".`,
-          element: selector,
-          suggestion: 'Verify the image source URL is correct and accessible.',
-        });
+      for (const img of images) {
+        if (img.src && img.naturalWidth === 0 && img.complete) {
+          const selector = img.id
+            ? `#${img.id}`
+            : `img[src="${img.getAttribute('src')?.slice(0, 40)}"]`;
+          findings.push({
+            check: 'broken-image',
+            severity: 'serious',
+            message: `Broken image: src="${img.getAttribute('src')?.slice(0, 80)}".`,
+            element: selector,
+            suggestion:
+              'Verify the image source URL is correct and accessible.',
+          });
+        }
       }
-    }
 
-    return findings;
-  }) as Promise<AuditFinding[]>;
+      return findings;
+    },
+  ) as Promise<AuditFinding[]>;
 }
 
 /** Find <img> elements without an alt attribute. */
 async function checkMissingAltText(page: Page): Promise<AuditFinding[]> {
-  return page.evaluate((): Array<{ check: string; severity: string; message: string; element?: string; suggestion?: string }> => {
-    const images = Array.from(document.querySelectorAll('img'));
-    const findings: Array<{ check: string; severity: string; message: string; element?: string; suggestion?: string }> = [];
+  return page.evaluate(
+    (): Array<{
+      check: string;
+      severity: string;
+      message: string;
+      element?: string;
+      suggestion?: string;
+    }> => {
+      const images = Array.from(document.querySelectorAll('img'));
+      const findings: Array<{
+        check: string;
+        severity: string;
+        message: string;
+        element?: string;
+        suggestion?: string;
+      }> = [];
 
-    for (const img of images) {
-      if (!img.hasAttribute('alt')) {
-        const selector = img.id
-          ? `#${img.id}`
-          : `img[src="${img.getAttribute('src')?.slice(0, 40) ?? ''}"]`;
-        findings.push({
-          check: 'missing-alt-text',
-          severity: 'serious',
-          message: 'Image is missing the alt attribute.',
-          element: selector,
-          suggestion: 'Add alt="" for decorative images or a descriptive alt text for informative images.',
-        });
+      for (const img of images) {
+        if (!img.hasAttribute('alt')) {
+          const selector = img.id
+            ? `#${img.id}`
+            : `img[src="${img.getAttribute('src')?.slice(0, 40) ?? ''}"]`;
+          findings.push({
+            check: 'missing-alt-text',
+            severity: 'serious',
+            message: 'Image is missing the alt attribute.',
+            element: selector,
+            suggestion:
+              'Add alt="" for decorative images or a descriptive alt text for informative images.',
+          });
+        }
       }
-    }
 
-    return findings;
-  }) as Promise<AuditFinding[]>;
+      return findings;
+    },
+  ) as Promise<AuditFinding[]>;
 }
 
 /** Find <button> elements with no text content and no aria-label. */
 async function checkEmptyButtons(page: Page): Promise<AuditFinding[]> {
-  return page.evaluate((): Array<{ check: string; severity: string; message: string; element?: string; suggestion?: string }> => {
-    const buttons = Array.from(document.querySelectorAll('button, [role="button"]'));
-    const findings: Array<{ check: string; severity: string; message: string; element?: string; suggestion?: string }> = [];
+  return page.evaluate(
+    (): Array<{
+      check: string;
+      severity: string;
+      message: string;
+      element?: string;
+      suggestion?: string;
+    }> => {
+      const buttons = Array.from(
+        document.querySelectorAll('button, [role="button"]'),
+      );
+      const findings: Array<{
+        check: string;
+        severity: string;
+        message: string;
+        element?: string;
+        suggestion?: string;
+      }> = [];
 
-    for (const btn of buttons) {
-      const htmlBtn = btn as HTMLElement;
-      const hasText = (htmlBtn.textContent ?? '').trim().length > 0;
-      const hasAriaLabel = htmlBtn.hasAttribute('aria-label') && (htmlBtn.getAttribute('aria-label') ?? '').trim().length > 0;
-      const hasAriaLabelledBy = htmlBtn.hasAttribute('aria-labelledby');
-      const hasTitle = htmlBtn.hasAttribute('title') && (htmlBtn.getAttribute('title') ?? '').trim().length > 0;
+      for (const btn of buttons) {
+        const htmlBtn = btn as HTMLElement;
+        const hasText = (htmlBtn.textContent ?? '').trim().length > 0;
+        const hasAriaLabel =
+          htmlBtn.hasAttribute('aria-label') &&
+          (htmlBtn.getAttribute('aria-label') ?? '').trim().length > 0;
+        const hasAriaLabelledBy = htmlBtn.hasAttribute('aria-labelledby');
+        const hasTitle =
+          htmlBtn.hasAttribute('title') &&
+          (htmlBtn.getAttribute('title') ?? '').trim().length > 0;
 
-      if (!hasText && !hasAriaLabel && !hasAriaLabelledBy && !hasTitle) {
-        const selector = htmlBtn.id
-          ? `#${htmlBtn.id}`
-          : `${htmlBtn.tagName.toLowerCase()}${htmlBtn.className ? '.' + htmlBtn.className.split(' ')[0] : ''}`;
-        findings.push({
-          check: 'empty-button',
-          severity: 'serious',
-          message: 'Button has no accessible label (no text content, aria-label, aria-labelledby, or title).',
-          element: selector,
-          suggestion: 'Add aria-label or visible text content to the button.',
-        });
+        if (!hasText && !hasAriaLabel && !hasAriaLabelledBy && !hasTitle) {
+          const selector = htmlBtn.id
+            ? `#${htmlBtn.id}`
+            : `${htmlBtn.tagName.toLowerCase()}${htmlBtn.className ? '.' + htmlBtn.className.split(' ')[0] : ''}`;
+          findings.push({
+            check: 'empty-button',
+            severity: 'serious',
+            message:
+              'Button has no accessible label (no text content, aria-label, aria-labelledby, or title).',
+            element: selector,
+            suggestion: 'Add aria-label or visible text content to the button.',
+          });
+        }
       }
-    }
 
-    return findings;
-  }) as Promise<AuditFinding[]>;
+      return findings;
+    },
+  ) as Promise<AuditFinding[]>;
 }
 
 /** Find <a> elements with no text content and no aria-label. */
 async function checkEmptyLinks(page: Page): Promise<AuditFinding[]> {
-  return page.evaluate((): Array<{ check: string; severity: string; message: string; element?: string; suggestion?: string }> => {
-    const links = Array.from(document.querySelectorAll('a[href]'));
-    const findings: Array<{ check: string; severity: string; message: string; element?: string; suggestion?: string }> = [];
+  return page.evaluate(
+    (): Array<{
+      check: string;
+      severity: string;
+      message: string;
+      element?: string;
+      suggestion?: string;
+    }> => {
+      const links = Array.from(document.querySelectorAll('a[href]'));
+      const findings: Array<{
+        check: string;
+        severity: string;
+        message: string;
+        element?: string;
+        suggestion?: string;
+      }> = [];
 
-    for (const link of links) {
-      const htmlLink = link as HTMLElement;
-      const hasText = (htmlLink.textContent ?? '').trim().length > 0;
-      const hasAriaLabel = htmlLink.hasAttribute('aria-label') && (htmlLink.getAttribute('aria-label') ?? '').trim().length > 0;
-      const hasAriaLabelledBy = htmlLink.hasAttribute('aria-labelledby');
-      const hasTitle = htmlLink.hasAttribute('title') && (htmlLink.getAttribute('title') ?? '').trim().length > 0;
+      for (const link of links) {
+        const htmlLink = link as HTMLElement;
+        const hasText = (htmlLink.textContent ?? '').trim().length > 0;
+        const hasAriaLabel =
+          htmlLink.hasAttribute('aria-label') &&
+          (htmlLink.getAttribute('aria-label') ?? '').trim().length > 0;
+        const hasAriaLabelledBy = htmlLink.hasAttribute('aria-labelledby');
+        const hasTitle =
+          htmlLink.hasAttribute('title') &&
+          (htmlLink.getAttribute('title') ?? '').trim().length > 0;
 
-      if (!hasText && !hasAriaLabel && !hasAriaLabelledBy && !hasTitle) {
-        const href = htmlLink.getAttribute('href') ?? '';
-        const selector = htmlLink.id ? `#${htmlLink.id}` : `a[href="${href.slice(0, 40)}"]`;
-        findings.push({
-          check: 'empty-link',
-          severity: 'serious',
-          message: `Link has no accessible label (no text, aria-label, aria-labelledby, or title). href="${href.slice(0, 80)}".`,
-          element: selector,
-          suggestion: 'Add descriptive text content or aria-label to the link.',
-        });
+        if (!hasText && !hasAriaLabel && !hasAriaLabelledBy && !hasTitle) {
+          const href = htmlLink.getAttribute('href') ?? '';
+          const selector = htmlLink.id
+            ? `#${htmlLink.id}`
+            : `a[href="${href.slice(0, 40)}"]`;
+          findings.push({
+            check: 'empty-link',
+            severity: 'serious',
+            message: `Link has no accessible label (no text, aria-label, aria-labelledby, or title). href="${href.slice(0, 80)}".`,
+            element: selector,
+            suggestion:
+              'Add descriptive text content or aria-label to the link.',
+          });
+        }
       }
-    }
 
-    return findings;
-  }) as Promise<AuditFinding[]>;
+      return findings;
+    },
+  ) as Promise<AuditFinding[]>;
 }
 
 /**
@@ -350,82 +571,109 @@ async function checkEmptyLinks(page: Page): Promise<AuditFinding[]> {
  * This catches layout bugs where fixed-width children push the page wider
  * than the screen, causing unwanted horizontal scroll on mobile.
  */
-async function checkViewportOverflow(page: Page): Promise<AuditFinding[]> {
-  return page.evaluate((): Array<{ check: string; severity: string; message: string; element?: string; suggestion?: string }> => {
-    const viewportWidth = document.documentElement.clientWidth;
-    const findings: Array<{ check: string; severity: string; message: string; element?: string; suggestion?: string }> = [];
-    // Check semantic containers and common layout elements — not every single element
-    const selectors = 'section, nav, header, footer, main, aside, article, div, form, table, ul, ol';
-    const elements = Array.from(document.querySelectorAll(selectors));
-    const seen = new Set<string>();
+export async function checkViewportOverflow(
+  page: Page,
+): Promise<AuditFinding[]> {
+  return page.evaluate(
+    (): Array<{
+      check: string;
+      severity: string;
+      message: string;
+      element?: string;
+      suggestion?: string;
+    }> => {
+      const viewportWidth = document.documentElement.clientWidth;
+      const findings: Array<{
+        check: string;
+        severity: string;
+        message: string;
+        element?: string;
+        suggestion?: string;
+      }> = [];
+      const viewportHeight = document.documentElement.clientHeight;
+      // Check semantic containers and common layout elements — not every single element
+      const selectors =
+        'section, nav, header, footer, main, aside, article, div, form, table, ul, ol';
+      const elements = Array.from(document.querySelectorAll(selectors));
+      const seen = new Set<string>();
 
-    for (const el of elements) {
-      const htmlEl = el as HTMLElement;
-      const rect = htmlEl.getBoundingClientRect();
+      for (const el of elements) {
+        const htmlEl = el as HTMLElement;
+        const rect = htmlEl.getBoundingClientRect();
 
-      // Skip elements that don't overflow the viewport
-      if (rect.right <= viewportWidth + 1) continue;
-      // Skip zero-size or hidden elements
-      if (rect.width === 0 || rect.height === 0) continue;
-      if (htmlEl.offsetParent === null && htmlEl.tagName !== 'BODY') continue;
+        // Skip elements that don't overflow the viewport
+        if (rect.right <= viewportWidth + 1) continue;
+        // Skip zero-size or hidden elements
+        if (rect.width === 0 || rect.height === 0) continue;
+        if (htmlEl.offsetParent === null && htmlEl.tagName !== 'BODY') continue;
 
-      // Skip elements positioned off-screen via CSS transforms (e.g., drawers/slide-overs
-      // using translate-x-full). These exist in the DOM but are visually hidden.
-      // Tailwind v4 uses the CSS `translate` property (not `transform`) for translate-x-*,
-      // so we must check both.
-      const hasOffscreenTransform = (el: Element) => {
-        const s = window.getComputedStyle(el);
-        if (s.transform && s.transform !== 'none') return true;
-        if (s.translate && s.translate !== 'none') return true;
-        return false;
-      };
-      if (hasOffscreenTransform(htmlEl)) continue;
-      let transformedAncestor = htmlEl.parentElement;
-      let insideTransform = false;
-      while (transformedAncestor) {
-        if (hasOffscreenTransform(transformedAncestor)) {
-          insideTransform = true;
-          break;
+        // Skip transformed drawers/slide-overs only when their final bounding box
+        // is fully outside the viewport. Visible transforms (scale, animation,
+        // positioning) still need overflow reporting.
+        const hasOffscreenTransform = (el: Element) => {
+          const s = window.getComputedStyle(el);
+          const hasTransform =
+            (s.transform && s.transform !== 'none') ||
+            (s.translate && s.translate !== 'none');
+          if (!hasTransform) return false;
+
+          const transformedRect = el.getBoundingClientRect();
+          return (
+            transformedRect.right <= 0 ||
+            transformedRect.left >= viewportWidth ||
+            transformedRect.bottom <= 0 ||
+            transformedRect.top >= viewportHeight
+          );
+        };
+        if (hasOffscreenTransform(htmlEl)) continue;
+        let transformedAncestor = htmlEl.parentElement;
+        let insideTransform = false;
+        while (transformedAncestor) {
+          if (hasOffscreenTransform(transformedAncestor)) {
+            insideTransform = true;
+            break;
+          }
+          transformedAncestor = transformedAncestor.parentElement;
         }
-        transformedAncestor = transformedAncestor.parentElement;
-      }
-      if (insideTransform) continue;
+        if (insideTransform) continue;
 
-      // Skip elements inside overflow-x-auto/scroll containers (intentional scroll)
-      let parent = htmlEl.parentElement;
-      let inScrollContainer = false;
-      while (parent) {
-        const parentOverflow = window.getComputedStyle(parent).overflowX;
-        if (parentOverflow === 'auto' || parentOverflow === 'scroll') {
-          inScrollContainer = true;
-          break;
+        // Skip elements inside overflow-x-auto/scroll containers (intentional scroll)
+        let parent = htmlEl.parentElement;
+        let inScrollContainer = false;
+        while (parent) {
+          const parentOverflow = window.getComputedStyle(parent).overflowX;
+          if (parentOverflow === 'auto' || parentOverflow === 'scroll') {
+            inScrollContainer = true;
+            break;
+          }
+          parent = parent.parentElement;
         }
-        parent = parent.parentElement;
+        if (inScrollContainer) continue;
+
+        const selector = htmlEl.id
+          ? `#${htmlEl.id}`
+          : htmlEl.getAttribute('data-testid')
+            ? `[data-testid="${htmlEl.getAttribute('data-testid')}"]`
+            : `${htmlEl.tagName.toLowerCase()}${htmlEl.className ? '.' + String(htmlEl.className).split(' ')[0] : ''}`;
+
+        // Dedupe — many nested children of the same overflowing parent will all flag
+        if (seen.has(selector)) continue;
+        seen.add(selector);
+
+        const overflow = Math.round(rect.right - viewportWidth);
+        findings.push({
+          check: 'viewport-overflow',
+          severity: 'serious',
+          message: `Element extends ${overflow}px beyond viewport width (${viewportWidth}px). Right edge at ${Math.round(rect.right)}px.`,
+          element: selector,
+          suggestion:
+            'Add overflow-hidden, max-w-full, or min-w-0 to contain this element within the viewport.',
+        });
       }
-      if (inScrollContainer) continue;
 
-      const selector = htmlEl.id
-        ? `#${htmlEl.id}`
-        : htmlEl.getAttribute('data-testid')
-          ? `[data-testid="${htmlEl.getAttribute('data-testid')}"]`
-          : `${htmlEl.tagName.toLowerCase()}${htmlEl.className ? '.' + String(htmlEl.className).split(' ')[0] : ''}`;
-
-      // Dedupe — many nested children of the same overflowing parent will all flag
-      if (seen.has(selector)) continue;
-      seen.add(selector);
-
-      const overflow = Math.round(rect.right - viewportWidth);
-      findings.push({
-        check: 'viewport-overflow',
-        severity: 'serious',
-        message: `Element extends ${overflow}px beyond viewport width (${viewportWidth}px). Right edge at ${Math.round(rect.right)}px.`,
-        element: selector,
-        suggestion: 'Add overflow-hidden, max-w-full, or min-w-0 to contain this element within the viewport.',
-      });
-    }
-
-    return findings;
-  }) as Promise<AuditFinding[]>;
+      return findings;
+    },
+  ) as Promise<AuditFinding[]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -439,16 +687,110 @@ const CONSOLE_NOISE_PATTERNS = [
   /Angular is running in development mode/i,
   /favicon\.ico/i,
   /Lit is in dev mode/i,
-  /NG0\d{3}/,  // Angular dev-mode warnings
+  // Observed in the audit environment for intentionally lazy event artwork.
+  // Keep this exact warning shape narrow so runtime errors such as NG0100,
+  // NG0200, and NG0201 remain visible.
+  /^NG0913: An image with src .+ is the Largest Contentful Paint \(LCP\) element but was given a "loading" value of "lazy", which can negatively impact application loading performance\. This warning can be addressed by changing the loading value of the LCP image to "eager", or by using the NgOptimizedImage directive's prioritization utilities\. For more information about addressing or disabling this warning, see https:\/\/v22\.angular\.dev\/errors\/NG0913\. Find more at https:\/\/v22\.angular\.dev\/errors\/NG0913$/,
 ];
 
-function isNoisyConsoleError(text: string): boolean {
+export function isNoisyConsoleError(text: string): boolean {
   return CONSOLE_NOISE_PATTERNS.some((pattern) => pattern.test(text));
 }
 
 // ---------------------------------------------------------------------------
 // Main pipeline
 // ---------------------------------------------------------------------------
+
+const ANIMATION_SETTLE_TIMEOUT_MS = 2_000;
+
+/**
+ * Wait until finite document animations have finished before sampling the DOM.
+ *
+ * The predicate is polled on animation frames and must be stable for two
+ * consecutive frames. Infinite animations (spinners, pulses, scan lines) and
+ * idle/paused animations are intentionally non-blocking. On timeout, callers
+ * get a warning and can continue the audit instead of hanging the entire run.
+ */
+export async function waitForFiniteAnimationsToSettle(
+  page: Page,
+  routeLabel: string,
+  timeoutMs = ANIMATION_SETTLE_TIMEOUT_MS,
+): Promise<boolean> {
+  const stableFramesProperty = '__braketAuditStableAnimationFrames';
+
+  try {
+    await page.evaluate((property) => {
+      delete (window as unknown as Record<string, unknown>)[property];
+    }, stableFramesProperty);
+
+    await page.waitForFunction(
+      ({property, requiredStableFrames}) => {
+        const state = window as unknown as Record<string, number | undefined>;
+        const hasPendingFiniteAnimation = document
+          .getAnimations()
+          .some((animation) => {
+            if (
+              animation.playState === 'idle' ||
+              animation.playState === 'paused' ||
+              animation.playState === 'finished' ||
+              animation.playbackRate === 0
+            ) {
+              return false;
+            }
+
+            const endTime = animation.effect?.getComputedTiming().endTime;
+            return typeof endTime === 'number' && Number.isFinite(endTime);
+          });
+
+        state[property] = hasPendingFiniteAnimation
+          ? 0
+          : (state[property] ?? 0) + 1;
+
+        return state[property] >= requiredStableFrames;
+      },
+      {property: stableFramesProperty, requiredStableFrames: 2},
+      {polling: 'raf', timeout: timeoutMs},
+    );
+
+    return true;
+  } catch (err) {
+    let pendingCount: number | 'unknown' = 'unknown';
+    try {
+      pendingCount = await page.evaluate(
+        () =>
+          document.getAnimations().filter((animation) => {
+            if (
+              animation.playState === 'idle' ||
+              animation.playState === 'paused' ||
+              animation.playState === 'finished' ||
+              animation.playbackRate === 0
+            ) {
+              return false;
+            }
+
+            const endTime = animation.effect?.getComputedTiming().endTime;
+            return typeof endTime === 'number' && Number.isFinite(endTime);
+          }).length,
+      );
+    } catch {
+      // The page may have navigated or closed while gathering timeout details.
+    }
+
+    console.warn(
+      `[runChecks] Finite animations did not settle within ${timeoutMs}ms on "${routeLabel}" (${pendingCount} still pending) — proceeding anyway`,
+      err,
+    );
+    return false;
+  } finally {
+    try {
+      await page.evaluate((property) => {
+        delete (window as unknown as Record<string, unknown>)[property];
+      }, stableFramesProperty);
+    } catch {
+      // The page may have navigated or closed after the timeout.
+    }
+  }
+}
 
 export async function runChecks(
   page: Page,
@@ -497,7 +839,9 @@ export async function runChecks(
   }
 
   await page.goto(route.path);
-  await expect(page.locator(route.readyLocator).first()).toBeVisible({ timeout: 30000 });
+  await expect(page.locator(route.readyLocator).first()).toBeVisible({
+    timeout: 30000,
+  });
 
   // Force-apply theme classes on <html> after Angular has initialised.
   if (theme) {
@@ -513,10 +857,13 @@ export async function runChecks(
   // Stage 3: Handle postNavAction
   if (route.postNavAction === 'click-register-tab') {
     try {
-      await page.getByRole('tab', { name: /register|create|sign up/i }).click();
-      await expect(page.getByRole('heading')).toBeVisible({ timeout: 10000 });
+      await page.getByRole('tab', {name: /register|create|sign up/i}).click();
+      await expect(page.getByRole('heading')).toBeVisible({timeout: 10000});
     } catch (err) {
-      console.warn(`[runChecks] postNavAction 'click-register-tab' failed on "${route.label}":`, err);
+      console.warn(
+        `[runChecks] postNavAction 'click-register-tab' failed on "${route.label}":`,
+        err,
+      );
     }
   }
 
@@ -531,15 +878,22 @@ export async function runChecks(
       () =>
         document.querySelectorAll('z-skeleton').length === 0 &&
         document.querySelectorAll('[data-testid="loading-state"]').length === 0,
-      { timeout: 15_000 },
+      undefined,
+      {timeout: 15_000},
     );
   } catch {
-    console.warn(`[runChecks] Loading indicators still visible after 15s on "${route.label}" — proceeding anyway`);
+    console.warn(
+      `[runChecks] Loading indicators still visible after 15s on "${route.label}" — proceeding anyway`,
+    );
   }
 
-  // Stage 5: axe-core WCAG 2.1 AA audit
+  // Stage 5: Wait for route/view-transition and entry animations to settle so
+  // axe and geometry checks sample the final rendered state.
+  await waitForFiniteAnimationsToSettle(page, route.label);
+
+  // Stage 6: axe-core WCAG 2.1 AA audit
   try {
-    const axeResults = await new AxeBuilder({ page })
+    const axeResults = await new AxeBuilder({page})
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
       .analyze();
 
@@ -550,20 +904,31 @@ export async function runChecks(
         moderate: 'moderate',
         minor: 'minor',
       };
-      const severity: Severity = axeImpactMap[violation.impact ?? ''] ?? 'moderate';
+      const severity: Severity =
+        axeImpactMap[violation.impact ?? ''] ?? 'moderate';
       findings.push({
         check: `axe-${violation.id}`,
         severity,
         message: violation.description,
-        element: (() => { const rawTarget = violation.nodes[0]?.target?.[0]; return typeof rawTarget === 'string' ? rawTarget : Array.isArray(rawTarget) ? rawTarget[0] : undefined; })(),
+        element: (() => {
+          const rawTarget = violation.nodes[0]?.target?.[0];
+          return typeof rawTarget === 'string'
+            ? rawTarget
+            : Array.isArray(rawTarget)
+              ? rawTarget[0]
+              : undefined;
+        })(),
         suggestion: violation.help,
       });
     }
   } catch (err) {
-    console.warn(`[runChecks] axe-core analysis failed on "${route.label}":`, err);
+    console.warn(
+      `[runChecks] axe-core analysis failed on "${route.label}":`,
+      err,
+    );
   }
 
-  // Stage 6: Static DOM checks
+  // Stage 7: Static DOM checks
   const simpleChecks: Array<(page: Page) => Promise<AuditFinding[]>> = [
     checkHeadingHierarchy,
     checkTextOverflow,
@@ -579,7 +944,10 @@ export async function runChecks(
       const checkFindings = await check(page);
       findings.push(...checkFindings);
     } catch (err) {
-      console.warn(`[runChecks] Static check "${check.name}" failed on "${route.label}":`, err);
+      console.warn(
+        `[runChecks] Static check "${check.name}" failed on "${route.label}":`,
+        err,
+      );
     }
   }
 
@@ -589,7 +957,10 @@ export async function runChecks(
     const touchFindings = await checkTouchTargets(page);
     findings.push(...touchFindings);
   } catch (err) {
-    console.warn(`[runChecks] Static check "checkTouchTargets" failed on "${route.label}":`, err);
+    console.warn(
+      `[runChecks] Static check "checkTouchTargets" failed on "${route.label}":`,
+      err,
+    );
   }
 
   // Stage 8: Hide dev-only overlays before screenshot (they confuse LLM review)
@@ -603,8 +974,8 @@ export async function runChecks(
   const themeSuffix = theme ? `-${theme}` : '';
   const screenshotPath = `${config.screenshotDir}/${safeLabel}-${viewport}${themeSuffix}.png`;
   try {
-    mkdirSync(dirname(screenshotPath), { recursive: true });
-    await page.screenshot({ path: screenshotPath, fullPage: true });
+    mkdirSync(dirname(screenshotPath), {recursive: true});
+    await page.screenshot({path: screenshotPath, fullPage: true});
   } catch (err) {
     console.warn(`[runChecks] Screenshot failed on "${route.label}":`, err);
   }
@@ -613,7 +984,7 @@ export async function runChecks(
   const result: AuditRouteResult = {
     route,
     viewport,
-    ...(theme !== undefined ? { theme } : {}),
+    ...(theme !== undefined ? {theme} : {}),
     timestamp,
     screenshotPath,
     consoleErrors,
@@ -625,10 +996,20 @@ export async function runChecks(
   if (config.llmProvider !== 'skip') {
     try {
       const provider = createLlmProvider(config.llmProvider);
-      const designContext = readFileSync(resolve(__dirname, '..', '..', '..', '.impeccable.md'), 'utf-8');
+      const designContext = readFileSync(
+        resolve(__dirname, '..', '..', '..', '.impeccable.md'),
+        'utf-8',
+      );
       const screenshotBase64 = readFileSync(screenshotPath, 'base64');
-      const reviewLabel = theme ? `${route.label} (${theme} mode)` : route.label;
-      const review = await provider.reviewScreenshot(screenshotBase64, reviewLabel, viewport, designContext);
+      const reviewLabel = theme
+        ? `${route.label} (${theme} mode)`
+        : route.label;
+      const review = await provider.reviewScreenshot(
+        screenshotBase64,
+        reviewLabel,
+        viewport,
+        designContext,
+      );
       if (review) {
         result.llmScore = review.overallScore;
         result.llmSummary = review.summary;

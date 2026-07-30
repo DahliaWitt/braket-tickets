@@ -19,7 +19,7 @@
                   ? 'settlement-report-unavailable'
                   : null
               "
-              class="border-primary/50 text-primary hover:bg-primary/10"
+              class="border-primary text-foreground hover:bg-primary/10"
             >
               @if (isGeneratingSettlement()) {
                 <z-icon zType="loader-circle" class="animate-spin" />
@@ -312,12 +312,17 @@
             class="flex h-64 animate-pulse items-center justify-center rounded-lg border border-border/60 bg-muted/40"
           >
             <p class="font-mono text-xs text-muted-foreground">
-              Loading chart...
+              loading chart...
             </p>
           </div>
         }
       } @else {
-        <div class="font-mono text-sm text-muted-foreground">No sales yet.</div>
+        <div
+          class="font-mono text-sm text-muted-foreground"
+          data-testid="sales-empty-state"
+        >
+          no sales yet — spread the word
+        </div>
       }
     </div>
   </z-card>
@@ -335,7 +340,7 @@
             class="flex h-64 animate-pulse items-center justify-center rounded-lg border border-border/60 bg-muted/40"
           >
             <p class="font-mono text-xs text-muted-foreground">
-              Loading chart...
+              loading chart...
             </p>
           </div>
         }

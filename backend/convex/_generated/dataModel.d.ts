@@ -522,6 +522,7 @@ export type DataModel = {
   eventBroadcasts: {
     document: {
       adminId: Id<"users">;
+      bodyJson?: string;
       eventId: Id<"events">;
       message: string;
       recipientCount: number;
@@ -534,6 +535,7 @@ export type DataModel = {
       | "_creationTime"
       | "_id"
       | "adminId"
+      | "bodyJson"
       | "eventId"
       | "message"
       | "recipientCount"
@@ -702,6 +704,11 @@ export type DataModel = {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_clientKey: ["clientKey", "_creationTime"];
+      by_convertedToUserId_expiresAt: [
+        "convertedToUserId",
+        "expiresAt",
+        "_creationTime",
+      ];
       by_email: ["email", "_creationTime"];
       by_expiresAt: ["expiresAt", "_creationTime"];
       by_magicLink: ["magicLinkId", "_creationTime"];
@@ -1715,6 +1722,22 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  richEmailImages: {
+    document: {
+      firstPublishedAt: number;
+      storageId: Id<"_storage">;
+      _id: Id<"richEmailImages">;
+      _creationTime: number;
+    };
+    fieldPaths: "_creationTime" | "_id" | "firstPublishedAt" | "storageId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_storageId: ["storageId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   stripe_webhook_events: {
     document: {
       attempts: number;
@@ -1794,6 +1817,7 @@ export type DataModel = {
       eventId: Id<"events">;
       expiresAt: number;
       guestSessionId?: Id<"guest_sessions">;
+      idempotencyKey?: string;
       kind: "primary" | "resale";
       quantity: number;
       releaseReason?:
@@ -1827,6 +1851,7 @@ export type DataModel = {
       | "eventId"
       | "expiresAt"
       | "guestSessionId"
+      | "idempotencyKey"
       | "kind"
       | "quantity"
       | "releasedAt"
@@ -1852,14 +1877,9 @@ export type DataModel = {
         "state",
         "_creationTime",
       ];
-      by_owner_guest_event_state_kind_amountCents_tier_quantity: [
+      by_owner_guest_idempotencyKey: [
         "guestSessionId",
-        "eventId",
-        "state",
-        "kind",
-        "amountCents",
-        "tier",
-        "quantity",
+        "idempotencyKey",
         "_creationTime",
       ];
       by_owner_user_event_state: [
@@ -1868,14 +1888,9 @@ export type DataModel = {
         "state",
         "_creationTime",
       ];
-      by_owner_user_event_state_kind_amountCents_tier_quantity: [
+      by_owner_user_idempotencyKey: [
         "userId",
-        "eventId",
-        "state",
-        "kind",
-        "amountCents",
-        "tier",
-        "quantity",
+        "idempotencyKey",
         "_creationTime",
       ];
       by_stripeCheckoutSessionId: ["stripeCheckoutSessionId", "_creationTime"];
@@ -1887,6 +1902,7 @@ export type DataModel = {
   ticketReminderSends: {
     document: {
       adminId: Id<"users">;
+      bodyJson?: string;
       eventId: Id<"events">;
       message: string;
       recipientCount: number;
@@ -1899,6 +1915,7 @@ export type DataModel = {
       | "_creationTime"
       | "_id"
       | "adminId"
+      | "bodyJson"
       | "eventId"
       | "message"
       | "recipientCount"

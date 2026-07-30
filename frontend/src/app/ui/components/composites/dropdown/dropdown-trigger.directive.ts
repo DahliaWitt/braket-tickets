@@ -1,6 +1,7 @@
 import {
   afterNextRender,
   computed,
+  DestroyRef,
   Directive,
   ElementRef,
   inject,
@@ -24,8 +25,8 @@ let nextDropdownId = 0;
     '[attr.aria-controls]': 'isExpanded() ? menuId : null',
     '[attr.aria-disabled]': 'zDisabled()',
     '(click.prevent-with-stop)': 'onClick()',
-    '(mouseenter)': 'onHoverToggle()',
-    '(mouseleave)': 'onHoverToggle()',
+    '(mouseenter)': 'onHoverEnter()',
+    '(mouseleave)': 'onHoverLeave()',
     '(keydown.{enter,space}.prevent-with-stop)': 'toggleDropdown()',
     '(keydown.arrowdown.prevent)': 'openDropdown()',
   },
@@ -34,6 +35,7 @@ let nextDropdownId = 0;
 export class BraDropdownDirective {
   private readonly elementRef = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly viewContainerRef = inject(ViewContainerRef);
+  private readonly destroyRef = inject(DestroyRef);
   protected readonly dropdownService = inject(BraDropdownService);
 
   private readonly dropdownId = nextDropdownId++;
@@ -45,6 +47,11 @@ export class BraDropdownDirective {
   readonly braDropdownMenu = input<BraDropdownMenuContentComponent>();
   readonly zTrigger = input<'click' | 'hover'>('click');
   readonly zDisabled = input<boolean>(false);
+  /**
+   * Grace period (ms) before a hover menu closes after the pointer leaves the
+   * trigger, giving it time to travel across the gap into the menu.
+   */
+  readonly zHoverGrace = input<number>(200);
 
   protected readonly isExpanded = computed(
     () =>
@@ -62,6 +69,14 @@ export class BraDropdownDirective {
         element.setAttribute('aria-label', label?.length ? label : 'Open menu');
       }
     });
+
+    // If this trigger is destroyed while its hover menu is open (or a close is
+    // pending), dispose the overlay and cancel the timer so nothing leaks.
+    this.destroyRef.onDestroy(() => {
+      if (this.isExpanded()) {
+        this.dropdownService.close();
+      }
+    });
   }
 
   protected onClick() {
@@ -72,12 +87,34 @@ export class BraDropdownDirective {
     this.toggleDropdown();
   }
 
-  protected onHoverToggle() {
+  protected onHoverEnter() {
+    if (this.zTrigger() !== 'hover' || this.zDisabled()) {
+      return;
+    }
+
+    const menuContent = this.braDropdownMenu();
+    if (!menuContent) {
+      return;
+    }
+
+    this.dropdownService.openHover(
+      this.elementRef,
+      menuContent.contentTemplate(),
+      this.viewContainerRef,
+      this.menuId,
+      this.triggerId,
+      this.zHoverGrace(),
+    );
+  }
+
+  protected onHoverLeave() {
     if (this.zTrigger() !== 'hover') {
       return;
     }
 
-    this.toggleDropdown();
+    // Delay the close so the pointer can reach the menu; entering the menu (or
+    // re-entering the trigger) cancels it.
+    this.dropdownService.scheduleHoverClose();
   }
 
   protected toggleDropdown() {

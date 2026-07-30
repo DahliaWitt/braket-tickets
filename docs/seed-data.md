@@ -28,6 +28,8 @@ Remote/local seed calls are gated by a short-lived token. The seed script tempor
 
 Remote seed commands are limited to the known staging Convex deployment. If a future dev/staging deployment needs seed access, add it to the script and backend seed-authorization allowlists together.
 
+Remote seed env setup and cleanup use the deployment-scoped `CONVEX_DEPLOY_KEY` from Doppler. Before changing any `DEV_SEED` env var, the script requires an exact HTTPS Convex cloud RPC URL and the current `dev:<deployment-name>|<token>` key form, verifies that the key's deployment matches the `CONVEX_URL` hostname, and verifies that deployment against the staging allowlist. Production, preview, project-scoped, legacy, malformed, missing, or mismatched keys and non-HTTPS or decorated remote URLs fail closed without printing the token. The script deliberately omits `--deployment` from those Convex CLI calls and from any manual cleanup commands it prints. Local cleanup continues to use an explicit local URL and admin key.
+
 ## Seed a local or dev deployment
 
 All commands run from the repo root.

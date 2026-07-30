@@ -1,11 +1,18 @@
-import { ComponentHarness } from '@angular/cdk/testing';
+import {ComponentHarness} from '@angular/cdk/testing';
 
 export class HeaderHarness extends ComponentHarness {
   static hostSelector = 'app-header';
 
-  private readonly getSkipLinkEl = this.locatorForOptional('a[href="#main-content"]');
+  private readonly getSkipLinkEl = this.locatorForOptional(
+    'a[href="#main-content"]',
+  );
   private readonly getMobileNavEl = this.locatorForOptional('nav.mobile-menu');
-  private readonly getMenuToggleBtnEl = this.locatorForOptional('[data-testid="mobile-menu-toggle"]');
+  private readonly getMenuToggleBtnEl = this.locatorForOptional(
+    '[data-testid="mobile-menu-toggle"]',
+  );
+  private readonly getLogoEl = this.locatorForOptional(
+    '[data-testid="header-logo"]',
+  );
 
   async getSkipLinkText(): Promise<string | null> {
     const link = await this.getSkipLinkEl();
@@ -33,5 +40,10 @@ export class HeaderHarness extends ComponentHarness {
     const btn = await this.getMenuToggleBtnEl();
     if (!btn) return false;
     return btn.isFocused();
+  }
+
+  async getLogoClass(): Promise<string | null> {
+    const logo = await this.getLogoEl();
+    return logo ? logo.getAttribute('class') : null;
   }
 }

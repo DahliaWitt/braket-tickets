@@ -162,11 +162,6 @@ export class EventManagementHarness extends ComponentHarness {
     await reminderTab.setSubject(value);
   }
 
-  async setReminderMessage(value: string): Promise<void> {
-    const reminderTab = await this.getReminderTabHarness();
-    await reminderTab.setMessage(value);
-  }
-
   private getResaleToggle = this.locatorForOptional(
     '[data-testid="resale-toggle"]',
   );
@@ -380,9 +375,6 @@ export class EventManagementHarness extends ComponentHarness {
   private getBroadcastSubjectInput = this.locatorFor(
     '[data-testid="broadcast-subject"]',
   );
-  private getBroadcastMessageInput = this.locatorFor(
-    '[data-testid="broadcast-message"]',
-  );
   private getBroadcastAudienceError = this.locatorForOptional(
     '[data-testid="broadcast-audience-error"]',
   );
@@ -438,12 +430,6 @@ export class EventManagementHarness extends ComponentHarness {
 
   async setBroadcastSubject(value: string): Promise<void> {
     const input = await this.getBroadcastSubjectInput();
-    await input.clear();
-    await input.sendKeys(value);
-  }
-
-  async setBroadcastMessage(value: string): Promise<void> {
-    const input = await this.getBroadcastMessageInput();
     await input.clear();
     await input.sendKeys(value);
   }

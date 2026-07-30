@@ -24,12 +24,16 @@ import {ReasonDialogComponent} from '../reason-dialog/reason-dialog.component';
 import {ZardInputDirective} from '@ui/components/primitives/input/input.directive';
 import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton.component';
 import {BraStatusBadgeComponent} from '@ui/components/primitives/status-badge/status-badge.component';
+import {EmptyStateComponent} from '@ui/components/primitives/empty-state/empty-state.component';
 import {toast} from 'ngx-sonner';
 import {logger} from '@/utils/logger';
 import {api} from '@convex/_generated/api';
 import {type Id} from '@convex/_generated/dataModel';
+import {ADMIN_DATE} from '@/features/admin/utils/date-formats';
 
 type MemberFilter = 'all' | 'ours' | 'shared';
+
+type MemberRowAction = 'approved' | 'rejected' | 'revoke';
 
 @Component({
   selector: 'app-admin-members-table',
@@ -42,6 +46,7 @@ type MemberFilter = 'all' | 'ours' | 'shared';
     ZardInputDirective,
     ZardSkeletonComponent,
     BraStatusBadgeComponent,
+    EmptyStateComponent,
   ],
   templateUrl: './members-table.component.html',
 })
@@ -64,6 +69,23 @@ export class AdminMembersTableComponent {
   readonly memberFilter = signal<MemberFilter>('all');
   /** Immediate signal for binding to the input value. */
   readonly searchQuery = signal('');
+
+  /** Shared admin date format for the joined column (desktop + mobile). */
+  protected readonly ADMIN_DATE = ADMIN_DATE;
+
+  /**
+   * Rows with a mutation in flight, keyed by member user id. Guards the
+   * approve/reject/revoke buttons against double-fire in zoneless mode.
+   */
+  private readonly pendingActions = signal<
+    ReadonlyMap<string, MemberRowAction>
+  >(new Map());
+
+  /** One empty-state string for both the desktop table and the mobile cards. */
+  readonly emptyStateMessage = computed(() => {
+    const query = this.searchQuery();
+    return query ? `no results for “${query}”` : 'no members found';
+  });
   /** Debounced signal sent to the Convex query. */
   private readonly debouncedSearch = signal<string | undefined>(undefined);
 
@@ -84,8 +106,8 @@ export class AdminMembersTableComponent {
         logger.error('Operation failed', error);
         toast.error(
           this.showLoadMoreErrorToast()
-            ? 'Failed to load more members'
-            : 'Failed to load members',
+            ? 'failed to load more members'
+            : 'failed to load members',
         );
         this.showLoadMoreErrorToast.set(false);
       },
@@ -222,8 +244,36 @@ export class AdminMembersTableComponent {
     return member.application?.status === 'pending';
   }
 
+  /** True when any action for this row is in flight. */
+  isRowPending(member: MemberWithApplication): boolean {
+    return this.pendingActions().has(member.user._id);
+  }
+
+  /** True when this specific action for this row is in flight. */
+  isActionPending(
+    member: MemberWithApplication,
+    action: MemberRowAction,
+  ): boolean {
+    return this.pendingActions().get(member.user._id) === action;
+  }
+
+  private setRowPending(
+    member: MemberWithApplication,
+    action: MemberRowAction | null,
+  ): void {
+    this.pendingActions.update((current) => {
+      const next = new Map(current);
+      if (action === null) {
+        next.delete(member.user._id);
+      } else {
+        next.set(member.user._id, action);
+      }
+      return next;
+    });
+  }
+
   revokeMembership(member: MemberWithApplication): void {
-    if (!this.canRevokeMembership(member)) {
+    if (!this.canRevokeMembership(member) || this.isRowPending(member)) {
       return;
     }
 
@@ -245,6 +295,8 @@ export class AdminMembersTableComponent {
   }
 
   private async performRevoke(member: MemberWithApplication, reason?: string) {
+    if (this.isRowPending(member)) return;
+    this.setRowPending(member, 'revoke');
     try {
       if (this.shouldRevokeViaApplication(member) && member.application) {
         // applications.revoke is the canonical direct-approval revocation path.
@@ -265,7 +317,7 @@ export class AdminMembersTableComponent {
         );
       }
 
-      toast.success('Membership revoked');
+      toast.success('membership revoked');
       this.refreshData();
     } catch (e: unknown) {
       logger.error('Operation failed', e);
@@ -281,6 +333,8 @@ export class AdminMembersTableComponent {
       } else {
         toast.error('failed to revoke membership');
       }
+    } finally {
+      this.setRowPending(member, null);
     }
   }
 
@@ -288,9 +342,9 @@ export class AdminMembersTableComponent {
     member: MemberWithApplication,
     status: 'approved' | 'rejected',
   ): void {
-    if (!member.application) return;
+    if (!member.application || this.isRowPending(member)) return;
     if (!this.canReviewApplication(member)) {
-      toast.error('Only pending applications can be approved or rejected');
+      toast.error('only pending applications can be approved or rejected');
       return;
     }
 
@@ -325,7 +379,8 @@ export class AdminMembersTableComponent {
     status: 'approved' | 'rejected',
     denyReason?: string,
   ) {
-    if (!member.application) return;
+    if (!member.application || this.isRowPending(member)) return;
+    this.setRowPending(member, status);
 
     try {
       const processorId = this.auth.currentUser()?._id;
@@ -343,11 +398,13 @@ export class AdminMembersTableComponent {
           denyReason,
         );
       }
-      toast.success(`Membership application ${status}`);
+      toast.success(`membership application ${status}`);
       this.refreshData();
     } catch (e) {
       logger.error('Operation failed', e);
-      toast.error(`Failed to ${status}`);
+      toast.error(`failed to ${status === 'approved' ? 'approve' : 'reject'}`);
+    } finally {
+      this.setRowPending(member, null);
     }
   }
 

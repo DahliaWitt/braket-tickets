@@ -13,10 +13,7 @@ export interface BuyerPricingInput {
 }
 
 export type BuyerPricingKind =
-  | 'regular'
-  | 'sliding_scale'
-  | 'resale'
-  | 'sign_in_required';
+  'regular' | 'sliding_scale' | 'resale' | 'sign_in_required';
 
 export interface BuyerPricingSummary {
   kind: BuyerPricingKind;
@@ -30,8 +27,13 @@ export interface BuyerPricingSummary {
 const USD_FORMATTER = new Intl.NumberFormat('en-US', {
   style: 'currency',
   currency: 'USD',
-  minimumFractionDigits: 0,
+  // Whole-dollar amounts render without cents ("$25"); any fractional amount
+  // renders both decimal places ("$10.50", "$10.05"). `stripIfInteger` drops
+  // the fraction only when the value is a whole number, so trailing zeros on
+  // half-dollar prices are preserved instead of collapsing to "$10.5".
+  minimumFractionDigits: 2,
   maximumFractionDigits: 2,
+  trailingZeroDisplay: 'stripIfInteger',
 });
 
 export function formatUsdCents(cents: number): string {

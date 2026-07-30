@@ -2,8 +2,6 @@ import {Injectable, inject} from '@angular/core';
 import {injectConvex} from 'convex-angular';
 import {api} from '@convex/_generated/api';
 import {logger} from '@/utils/logger';
-import {retryWithDelays} from '@/utils/async-control';
-import {isRetryableAuthBackendError} from '@/core/utils/auth.utils';
 import {isCompromisedPasswordError} from '@/core/utils/auth-error-codes';
 import {COMPROMISED_PASSWORD_MESSAGE} from '@shared/constants';
 import {AUTH_CLIENT} from './auth-client.token';
@@ -85,7 +83,7 @@ export class PasswordService {
 
   /**
    * Changes password for the currently authenticated user.
-   * Calls a Convex mutation which wraps the Better Auth changePassword API.
+   * Calls a Convex action which wraps the Better Auth changePassword API.
    * Direct client calls don't work with the cross-domain auth setup.
    */
   async updatePassword(
@@ -98,30 +96,12 @@ export class PasswordService {
     }
 
     try {
-      const retryDelaysMs = [0, 300, 900, 1800, 3000] as const;
-      await retryWithDelays({
-        delaysMs: retryDelaysMs,
-        run: async () => {
-          await this.convex.mutation(api.auth.public.changePassword, {
-            currentPassword: oldPassword,
-            newPassword,
-            revokeOtherSessions: true,
-          });
-          logger.info('Password updated successfully');
-        },
-        shouldRetry: (err, attemptIndex) => {
-          const shouldRetry =
-            isRetryableAuthBackendError(err) &&
-            attemptIndex < retryDelaysMs.length - 1;
-          if (shouldRetry) {
-            logger.warn(
-              `[updatePassword] Attempt ${attemptIndex + 1}/${retryDelaysMs.length} failed; retrying`,
-              err,
-            );
-          }
-          return shouldRetry;
-        },
+      await this.convex.action(api.auth.public.changePasswordV2, {
+        currentPassword: oldPassword,
+        newPassword,
+        revokeOtherSessions: true,
       });
+      logger.info('Password updated successfully');
     } catch (err) {
       logger.error('Password update failed:', err);
       const message = err instanceof Error ? err.message : String(err);
@@ -143,11 +123,18 @@ export class PasswordService {
 
   /**
    * Requests a new verification email for an unverified account.
+   *
+   * The callback targets `/confirm/verification` (matching the signup flow in
+   * AuthService.signup) so that Better Auth's `/verify-email` redirect lands on
+   * the page built to explain verification outcomes. Using `/login` here caused
+   * expired/invalid-token redirects (`/login?error=TOKEN_EXPIRED`) to be
+   * misclassified as OAuth callbacks and forwarded to the social sign-in error
+   * page, which shows the wrong error context.
    */
   async requestVerificationEmail(email: string): Promise<void> {
     const {error} = await this.authClient.sendVerificationEmail({
       email,
-      callbackURL: this.browser.absoluteUrl('/login'),
+      callbackURL: this.browser.absoluteUrl('/confirm/verification'),
     });
 
     if (error) {

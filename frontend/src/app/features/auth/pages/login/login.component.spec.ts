@@ -1,7 +1,7 @@
 import {type ComponentFixture, TestBed} from '@angular/core/testing';
 import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
 import {provideZonelessChangeDetection} from '@angular/core';
-import {LoginComponent} from './login.component';
+import {LoginComponent, INVALID_EMAIL_MESSAGE} from './login.component';
 import {LoginComponentHarness} from './login.component.harness';
 import {AuthService, UnverifiedEmailError} from '@/core/services/auth.service';
 import {PasswordService} from '@/core/services/password.service';
@@ -113,6 +113,41 @@ describe('LoginComponent', () => {
     component.activeTab.set('register');
     fixture.detectChanges();
     expect(component.activeTab()).toBe('register');
+  });
+
+  describe('tablist keyboard navigation', () => {
+    it('switches to the register tab on ArrowRight from the login tab', async () => {
+      await harness.pressArrowKeyOnTab('login', 'right');
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(component.activeTab()).toBe('register');
+      expect(await harness.isRegisterPanelVisible()).toBe(true);
+      expect(await harness.getTabTabindex('register')).toBe('0');
+      expect(await harness.getTabTabindex('login')).toBe('-1');
+    });
+
+    it('switches back to the login tab on ArrowLeft from the register tab', async () => {
+      await harness.switchToRegister();
+
+      await harness.pressArrowKeyOnTab('register', 'left');
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(component.activeTab()).toBe('login');
+      expect(await harness.isLoginPanelVisible()).toBe(true);
+      expect(await harness.getTabTabindex('login')).toBe('0');
+      expect(await harness.getTabTabindex('register')).toBe('-1');
+    });
+
+    it('wraps ArrowLeft from the login tab around to the register tab', async () => {
+      await harness.pressArrowKeyOnTab('login', 'left');
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(component.activeTab()).toBe('register');
+      expect(await harness.isRegisterPanelVisible()).toBe(true);
+    });
   });
 
   it('should call auth.loginWithPassword on login submit', async () => {
@@ -243,7 +278,7 @@ describe('LoginComponent', () => {
       await component.resendVerificationEmail();
       fixture.detectChanges();
 
-      expect(component.message()).toContain('Verification email sent');
+      expect(component.message()).toContain('verification email sent');
     });
 
     it('cancels the registered cleanup timer when destroyed', async () => {
@@ -290,10 +325,7 @@ describe('LoginComponent', () => {
         .mockImplementation(
           (
             intervalId:
-              | string
-              | number
-              | ReturnType<typeof setTimeout>
-              | undefined,
+              string | number | ReturnType<typeof setTimeout> | undefined,
           ) => {
             if (typeof intervalId === 'number') {
               intervalCallbacks.delete(intervalId);
@@ -738,7 +770,7 @@ describe('LoginComponent', () => {
       await fixture.whenStable();
 
       expect(await harness.getResetEmailErrorText()).toContain(
-        'Enter a valid email address.',
+        INVALID_EMAIL_MESSAGE,
       );
       expect(await harness.getResetEmailDescribedBy()).toBe(
         'reset-email-error',
@@ -764,7 +796,7 @@ describe('LoginComponent', () => {
       await fixture.whenStable();
 
       expect(await harness.getResetEmailErrorText()).toContain(
-        'Enter a valid email address.',
+        INVALID_EMAIL_MESSAGE,
       );
       expect(authServiceMock.requestPasswordReset).not.toHaveBeenCalled();
     });
@@ -884,5 +916,115 @@ describe('LoginComponent', () => {
 
       expect(authServiceMock.loginWithSocial).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+// This block deliberately provides a mock Router (instead of `provideRouter`)
+// so the ActivatedRoute mock actually delivers query params to the component —
+// `provideRouter` supplies its own root ActivatedRoute that shadows the mock.
+describe('LoginComponent query-param routing', () => {
+  let routerMock: {
+    navigate: ReturnType<typeof vi.fn>;
+    navigateByUrl: ReturnType<typeof vi.fn>;
+  };
+
+  async function createWithQueryParams(
+    queryParams: Record<string, string>,
+  ): Promise<void> {
+    const authServiceMock = {
+      loginWithPassword: vi.fn().mockResolvedValue(undefined),
+      signup: vi.fn().mockResolvedValue(undefined),
+      requestPasswordReset: vi.fn().mockResolvedValue(undefined),
+      loginWithSocial: vi.fn().mockResolvedValue(undefined),
+      requestVerificationEmail: vi.fn().mockResolvedValue(undefined),
+      currentUser: vi.fn(() => null),
+      userRole: vi.fn(() => 'user'),
+      authInitialized: vi.fn(() => false),
+      isAuthenticated: vi.fn(() => false),
+      user: vi.fn(() => null),
+    };
+    routerMock = {
+      navigate: vi.fn().mockResolvedValue(true),
+      navigateByUrl: vi.fn().mockResolvedValue(true),
+    };
+
+    await TestBed.configureTestingModule({
+      imports: [LoginComponent],
+      providers: [
+        provideZonelessChangeDetection(),
+        {provide: AuthService, useValue: authServiceMock},
+        {provide: PasswordService, useValue: authServiceMock},
+        {provide: Router, useValue: routerMock},
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            get queryParams() {
+              return of({...queryParams});
+            },
+            get queryParamMap() {
+              return of(createQueryParamMap(queryParams));
+            },
+          },
+        },
+      ],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(LoginComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+  }
+
+  it('routes a bare verification-callback error to the verification page, not social sign-in', async () => {
+    // Better Auth redirects an expired resend-verification link to
+    // `/login?error=TOKEN_EXPIRED` (no OAuth ott/code/state). It must land on
+    // the verification-outcome page, not the social sign-in error page, and
+    // must forward the callback params (error + any returnUrl) intact.
+    await createWithQueryParams({
+      error: 'TOKEN_EXPIRED',
+      returnUrl: '/tickets',
+    });
+
+    expect(routerMock.navigate).toHaveBeenCalledWith(
+      ['/confirm/verification'],
+      {
+        queryParams: {error: 'TOKEN_EXPIRED', returnUrl: '/tickets'},
+        replaceUrl: true,
+      },
+    );
+    expect(routerMock.navigate).not.toHaveBeenCalledWith(
+      ['/confirm/social-signin'],
+      expect.anything(),
+    );
+  });
+
+  it('routes a genuine OAuth callback (code/state) to the social sign-in page', async () => {
+    await createWithQueryParams({code: 'oauth-code', state: 'oauth-state'});
+
+    expect(routerMock.navigate).toHaveBeenCalledWith(
+      ['/confirm/social-signin'],
+      expect.objectContaining({replaceUrl: true}),
+    );
+    expect(routerMock.navigate).not.toHaveBeenCalledWith(
+      ['/confirm/verification'],
+      expect.anything(),
+    );
+  });
+
+  it('routes an OAuth error accompanied by a one-time token to the social sign-in page', async () => {
+    // A failed cross-domain OAuth exchange carries `ott` alongside `error`; it is
+    // still an OAuth callback and must not be reclassified as a verification error.
+    await createWithQueryParams({
+      error: 'access_denied',
+      ott: 'one-time-token',
+    });
+
+    expect(routerMock.navigate).toHaveBeenCalledWith(
+      ['/confirm/social-signin'],
+      expect.objectContaining({replaceUrl: true}),
+    );
+    expect(routerMock.navigate).not.toHaveBeenCalledWith(
+      ['/confirm/verification'],
+      expect.anything(),
+    );
   });
 });

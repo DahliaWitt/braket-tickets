@@ -710,12 +710,12 @@ export class CommunityAdminSettingsComponent {
 
   confirmRemoveAdmin(userId: Id<'users'>): void {
     this.dialog.create({
-      zTitle: 'Remove Admin',
+      zTitle: 'remove admin',
       zDescription:
         'Are you sure you want to remove this admin? They will lose access to manage this community.',
-      zOkText: 'Yes, Remove',
+      zOkText: 'yes, remove',
       zOkDestructive: true,
-      zCancelText: 'Cancel',
+      zCancelText: 'cancel',
       zOnOk: () => {
         void this.revokeAdmin(userId);
       },
@@ -799,12 +799,12 @@ export class CommunityAdminSettingsComponent {
 
   confirmRemoveScanner(userId: Id<'users'>): void {
     this.dialog.create({
-      zTitle: 'Remove Scanner',
+      zTitle: 'remove scanner',
       zDescription:
         'Are you sure you want to remove this scanner? They will lose the ability to check in guests.',
-      zOkText: 'Yes, Remove',
+      zOkText: 'yes, remove',
       zOkDestructive: true,
-      zCancelText: 'Cancel',
+      zCancelText: 'cancel',
       zOnOk: () => {
         void this.revokeScanner(userId);
       },

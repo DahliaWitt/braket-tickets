@@ -445,7 +445,7 @@
             hasBlockedPublishedState()
           "
         >
-          Save Changes
+          save changes
         </button>
       </div>
     </div>
@@ -576,29 +576,62 @@
             <div
               class="mono-label grid grid-cols-1 gap-3 text-xs text-muted-foreground sm:grid-cols-3"
             >
-              <div class="flex items-center gap-2">
+              <div
+                class="flex items-center gap-2"
+                data-testid="stripe-status-charges"
+              >
                 <span
                   class="inline-flex h-2.5 w-2.5 rounded-full"
+                  aria-hidden="true"
                   [class.bg-success]="stripeStatus()!.chargesEnabled"
                   [class.bg-muted]="!stripeStatus()!.chargesEnabled"
                 ></span>
                 Charges
+                <span
+                  data-testid="stripe-status-charges-state"
+                  [class.text-success]="stripeStatus()!.chargesEnabled"
+                  >{{
+                    stripeStatus()!.chargesEnabled ? 'enabled' : 'pending'
+                  }}</span
+                >
               </div>
-              <div class="flex items-center gap-2">
+              <div
+                class="flex items-center gap-2"
+                data-testid="stripe-status-payouts"
+              >
                 <span
                   class="inline-flex h-2.5 w-2.5 rounded-full"
+                  aria-hidden="true"
                   [class.bg-success]="stripeStatus()!.payoutsEnabled"
                   [class.bg-muted]="!stripeStatus()!.payoutsEnabled"
                 ></span>
                 Payouts
+                <span
+                  data-testid="stripe-status-payouts-state"
+                  [class.text-success]="stripeStatus()!.payoutsEnabled"
+                  >{{
+                    stripeStatus()!.payoutsEnabled ? 'enabled' : 'pending'
+                  }}</span
+                >
               </div>
-              <div class="flex items-center gap-2">
+              <div
+                class="flex items-center gap-2"
+                data-testid="stripe-status-user-steps"
+              >
                 <span
                   class="inline-flex h-2.5 w-2.5 rounded-full"
+                  aria-hidden="true"
                   [class.bg-success]="stripeStatus()!.userRequirementsClear"
                   [class.bg-muted]="!stripeStatus()!.userRequirementsClear"
                 ></span>
                 User Steps
+                <span
+                  data-testid="stripe-status-user-steps-state"
+                  [class.text-success]="stripeStatus()!.userRequirementsClear"
+                  >{{
+                    stripeStatus()!.userRequirementsClear ? 'clear' : 'pending'
+                  }}</span
+                >
               </div>
             </div>
           }
@@ -653,7 +686,7 @@
             type="button"
           >
             <z-icon zType="plus" class="mr-2" />
-            Add Question
+            add question
           </button>
         </div>
       </div>
@@ -734,7 +767,7 @@
                     [checked]="question.required"
                     [id]="'settings-req-' + i"
                     (change)="onRequiredChange(i, $event)"
-                    class="h-4 w-4 rounded border-border bg-muted text-primary accent-primary focus:ring-primary/30"
+                    class="h-6 w-6 rounded border-border bg-muted text-primary accent-primary focus:ring-primary/30"
                   />
                   <label
                     [for]="'settings-req-' + i"
@@ -806,7 +839,7 @@
                 vettingModel().length === 0)
             "
           >
-            Save Questions
+            save questions
           </button>
         </div>
       }
@@ -848,7 +881,7 @@
             [zLoading]="isGrantingAdmin()"
             class="min-h-11"
           >
-            Grant
+            add
           </button>
         </div>
 
@@ -1135,9 +1168,9 @@
           (click)="saveNotificationPreference()"
           [zLoading]="notifSaving()"
           [zDisabled]="notifSaving()"
-          class="bg-primary text-primary-foreground hover:bg-primary/90"
+          class="bg-foreground text-background hover:bg-foreground/90 dark:bg-foreground dark:hover:bg-foreground/90"
         >
-          Save Notifications
+          save notifications
         </button>
       </div>
     </div>

@@ -9,6 +9,7 @@ import type {
   ManagementSummary,
 } from './types';
 import {requireUser} from '../../lib/auth_identity';
+import {applyClearableField} from '../../lib/patch';
 import {insertAdminAuditLog} from '../../lib/admin_audit_log';
 import {getAuditRequestFields} from '../../lib/request_metadata';
 import {pruneNoopEventPatch, resolveEditableEventForCaller} from './editor';
@@ -454,10 +455,34 @@ export async function update(
     updateArgs as UpdateEventInput,
   );
   const patch = pruneNoopEventPatch(event, preparedPatch);
-  if (args.endDate === null && event.endDate !== undefined) {
-    // Explicit undefined removes the field in ctx.db.patch. This must bypass
-    // pruneNoopEventPatch, which drops undefined values.
-    patch.endDate = undefined;
+  // Explicit `null` on a clearable optional field removes it. This must run
+  // after pruneNoopEventPatch, which drops the `undefined` sentinel that
+  // ctx.db.patch uses to delete a field. applyClearableField skips a clear when
+  // the field is already absent, so no no-op key is added.
+  if (args.endDate === null) {
+    applyClearableField(patch, 'endDate', null, event.endDate);
+  }
+  if (args.description === null) {
+    applyClearableField(patch, 'description', null, event.description);
+  }
+  if (args.location === null) {
+    applyClearableField(patch, 'location', null, event.location);
+  }
+  if (args.supporterDefaultPrice === null) {
+    applyClearableField(
+      patch,
+      'supporterDefaultPrice',
+      null,
+      event.supporterDefaultPrice,
+    );
+  }
+  if (args.maxTicketsPerUser === null) {
+    applyClearableField(
+      patch,
+      'maxTicketsPerUser',
+      null,
+      event.maxTicketsPerUser,
+    );
   }
   const hasPatch = Object.keys(patch).length > 0;
   if (!hasPatch && announcement === undefined) {

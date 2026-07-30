@@ -724,6 +724,152 @@ describe('VettingComponent', () => {
     });
   });
 
+  describe('Optional boolean answers', () => {
+    // Rebuilds the fixture against a community whose only boolean question is
+    // OPTIONAL, plus a required text question so the form can be submitted.
+    // No code of conduct → conduct agreement is not required.
+    async function setupOptionalBooleanCommunity(): Promise<void> {
+      fixture.destroy();
+      (
+        communitiesServiceMock as {getBySlugOrId: ReturnType<typeof vi.fn>}
+      ).getBySlugOrId.mockResolvedValue({
+        _id: 'optbool-community',
+        name: 'Optional Boolean Community',
+        status: 'published',
+        vettingQuestions: [
+          {
+            id: 'referral',
+            question: 'How did you hear about us?',
+            type: 'text',
+            required: true,
+          },
+          {
+            id: 'attended',
+            question: 'Have you attended one of our events before?',
+            type: 'boolean',
+            required: false,
+          },
+        ],
+      });
+
+      fixture = TestBed.createComponent(VettingComponent);
+      fixture.componentRef.setInput('id', 'optbool-community');
+      fixture.detectChanges();
+      await waitForVettingResource();
+      harness = await TestbedHarnessEnvironment.harnessForFixture(
+        fixture,
+        VettingComponentHarness,
+      );
+
+      await harness.setReferral('Friend recommended me');
+      fixture.detectChanges();
+      await fixture.whenStable();
+    }
+
+    function submittedAnswers(): Record<string, unknown> {
+      const createMock = (appsServiceMock as {create: ReturnType<typeof vi.fn>})
+        .create;
+      expect(createMock).toHaveBeenCalledTimes(1);
+      const arg = createMock.mock.calls[0][0] as {
+        answers: Record<string, unknown>;
+      };
+      return arg.answers;
+    }
+
+    it('omits an untouched optional boolean instead of sending false', async () => {
+      await setupOptionalBooleanCommunity();
+
+      expect(await harness.isSubmitDisabled()).toBe(false);
+
+      await fixture.componentInstance.onSubmit();
+      await fixture.whenStable();
+
+      const answers = submittedAnswers();
+      // The untouched optional boolean must NOT appear at all — an omitted key
+      // is the only way the backend records it as "unanswered" (its answers
+      // validator has no null branch).
+      expect(answers).not.toHaveProperty('attended');
+      expect(answers['referral']).toBe('Friend recommended me');
+      expect(answers['source']).toBe('web');
+    });
+
+    it('sends false when the optional boolean No radio is explicitly chosen', async () => {
+      await setupOptionalBooleanCommunity();
+
+      await harness.clickBooleanRadio('attended', 'false');
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      await fixture.componentInstance.onSubmit();
+      await fixture.whenStable();
+
+      const answers = submittedAnswers();
+      expect(answers['attended']).toBe(false);
+    });
+
+    it('sends true when the optional boolean Yes radio is explicitly chosen', async () => {
+      await setupOptionalBooleanCommunity();
+
+      await harness.clickBooleanRadio('attended', 'true');
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      await fixture.componentInstance.onSubmit();
+      await fixture.whenStable();
+
+      const answers = submittedAnswers();
+      expect(answers['attended']).toBe(true);
+    });
+
+    it('still blocks submission when a required boolean is left untouched', async () => {
+      fixture.destroy();
+      (
+        communitiesServiceMock as {getBySlugOrId: ReturnType<typeof vi.fn>}
+      ).getBySlugOrId.mockResolvedValue({
+        _id: 'reqbool-community',
+        name: 'Required Boolean Community',
+        status: 'published',
+        vettingQuestions: [
+          {
+            id: 'referral',
+            question: 'How did you hear about us?',
+            type: 'text',
+            required: true,
+          },
+          {
+            id: 'notACop',
+            question: 'Are you not a cop?',
+            type: 'boolean',
+            required: true,
+          },
+        ],
+      });
+
+      fixture = TestBed.createComponent(VettingComponent);
+      fixture.componentRef.setInput('id', 'reqbool-community');
+      fixture.detectChanges();
+      await waitForVettingResource();
+      harness = await TestbedHarnessEnvironment.harnessForFixture(
+        fixture,
+        VettingComponentHarness,
+      );
+
+      await harness.setReferral('Friend recommended me');
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      // Required boolean untouched → form invalid → submit is a no-op.
+      expect(await harness.isSubmitDisabled()).toBe(true);
+
+      await fixture.componentInstance.onSubmit();
+      await fixture.whenStable();
+
+      expect(
+        (appsServiceMock as {create: ReturnType<typeof vi.fn>}).create,
+      ).not.toHaveBeenCalled();
+    });
+  });
+
   describe('Form Submission', () => {
     beforeEach(async () => {
       await harness.setReferral('Friend recommended me');

@@ -1,6 +1,11 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {api, internal} from '../_generated/api';
-import {convexTest, finishAllScheduledFunctions} from '../setup.testing';
+import {
+  convexTest,
+  finishAllScheduledFunctions,
+  restoreEnv,
+  snapshotEnv,
+} from '../setup.testing';
 import {
   enqueueEmailDelivery,
   sendEmailDeliveryNow,
@@ -17,27 +22,6 @@ const ENV_KEYS = [
   'SMTP_USER',
   'SMTP_PASS',
 ] as const;
-
-function snapshotEnv(): Partial<Record<(typeof ENV_KEYS)[number], string>> {
-  return Object.fromEntries(
-    ENV_KEYS.map((key) => [key, process.env[key]]).filter(
-      (entry): entry is [(typeof ENV_KEYS)[number], string] =>
-        entry[1] !== undefined,
-    ),
-  );
-}
-
-function restoreEnv(
-  snapshot: Partial<Record<(typeof ENV_KEYS)[number], string>>,
-) {
-  for (const key of ENV_KEYS) {
-    if (snapshot[key] === undefined) {
-      delete process.env[key];
-    } else {
-      process.env[key] = snapshot[key];
-    }
-  }
-}
 
 describe('Resend email delivery wrapper', () => {
   afterEach(() => {
@@ -119,7 +103,7 @@ describe('Resend email delivery wrapper', () => {
   });
 
   it('does not capture queued emails when IS_TEST is set on a production-like deployment', async () => {
-    const env = snapshotEnv();
+    const env = snapshotEnv(ENV_KEYS);
     vi.useFakeTimers();
     process.env.IS_TEST = 'true';
     process.env.CONVEX_CLOUD_URL = 'https://prod.example.convex.cloud';
@@ -171,7 +155,7 @@ describe('Resend email delivery wrapper', () => {
       });
     } finally {
       vi.useRealTimers();
-      restoreEnv(env);
+      restoreEnv(ENV_KEYS, env);
     }
   });
 
@@ -231,7 +215,7 @@ describe('Resend email delivery wrapper', () => {
   });
 
   it('sends manual attachment payloads through Resend with cid mapped to contentId', async () => {
-    const env = snapshotEnv();
+    const env = snapshotEnv(ENV_KEYS);
     process.env.IS_TEST = 'false';
     process.env.CONVEX_CLOUD_URL = 'https://prod.example.convex.cloud';
     process.env.RESEND_API_KEY = 're_test_key';
@@ -308,12 +292,12 @@ describe('Resend email delivery wrapper', () => {
         fallback: false,
       });
     } finally {
-      restoreEnv(env);
+      restoreEnv(ENV_KEYS, env);
     }
   });
 
   it('does not capture manual sends when IS_TEST is set on a production-like deployment', async () => {
-    const env = snapshotEnv();
+    const env = snapshotEnv(ENV_KEYS);
     process.env.IS_TEST = 'true';
     process.env.CONVEX_CLOUD_URL = 'https://prod.example.convex.cloud';
     process.env.RESEND_API_KEY = 're_test_key';
@@ -356,12 +340,12 @@ describe('Resend email delivery wrapper', () => {
         fallback: false,
       });
     } finally {
-      restoreEnv(env);
+      restoreEnv(ENV_KEYS, env);
     }
   });
 
   it('records a preview SMTP failure in non-production without Resend config', async () => {
-    const env = snapshotEnv();
+    const env = snapshotEnv(ENV_KEYS);
     process.env.IS_TEST = 'false';
     delete process.env.RESEND_API_KEY;
     delete process.env.CONVEX_CLOUD_URL;
@@ -393,12 +377,12 @@ describe('Resend email delivery wrapper', () => {
       });
       expect(failures[0].error).toContain('Preview SMTP failed');
     } finally {
-      restoreEnv(env);
+      restoreEnv(ENV_KEYS, env);
     }
   });
 
   it('records a config failure without SMTP fallback when production Resend config is missing', async () => {
-    const env = snapshotEnv();
+    const env = snapshotEnv(ENV_KEYS);
     process.env.IS_TEST = 'false';
     process.env.CONVEX_CLOUD_URL = 'https://prod.example.convex.cloud';
     delete process.env.RESEND_API_KEY;
@@ -430,12 +414,12 @@ describe('Resend email delivery wrapper', () => {
         error: 'Email delivery is not configured (missing RESEND_API_KEY)',
       });
     } finally {
-      restoreEnv(env);
+      restoreEnv(ENV_KEYS, env);
     }
   });
 
   it('records a config failure before consulting an open circuit', async () => {
-    const env = snapshotEnv();
+    const env = snapshotEnv(ENV_KEYS);
     process.env.IS_TEST = 'false';
     process.env.CONVEX_CLOUD_URL = 'https://prod.example.convex.cloud';
     delete process.env.RESEND_API_KEY;
@@ -476,12 +460,12 @@ describe('Resend email delivery wrapper', () => {
         error: 'Email delivery is not configured (missing RESEND_API_KEY)',
       });
     } finally {
-      restoreEnv(env);
+      restoreEnv(ENV_KEYS, env);
     }
   });
 
   it('records a missing sender config failure before open-circuit fallback', async () => {
-    const env = snapshotEnv();
+    const env = snapshotEnv(ENV_KEYS);
     process.env.IS_TEST = 'false';
     process.env.CONVEX_CLOUD_URL = 'https://prod.example.convex.cloud';
     process.env.RESEND_API_KEY = 're_test_key';
@@ -524,12 +508,12 @@ describe('Resend email delivery wrapper', () => {
         error: 'Email delivery is not configured (missing EMAIL_FROM)',
       });
     } finally {
-      restoreEnv(env);
+      restoreEnv(ENV_KEYS, env);
     }
   });
 
   it('records a delivery failure when fallback SMTP fails after a Resend transient failure', async () => {
-    const env = snapshotEnv();
+    const env = snapshotEnv(ENV_KEYS);
     process.env.IS_TEST = 'false';
     process.env.CONVEX_CLOUD_URL = 'https://prod.example.convex.cloud';
     process.env.RESEND_API_KEY = 're_test_key';
@@ -568,7 +552,7 @@ describe('Resend email delivery wrapper', () => {
       });
       expect(failures[0].error).toContain('Fallback SMTP failed');
     } finally {
-      restoreEnv(env);
+      restoreEnv(ENV_KEYS, env);
     }
   });
 

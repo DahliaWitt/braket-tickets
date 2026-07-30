@@ -217,4 +217,60 @@ describe('parseImportText', () => {
     if (!result.ok) return;
     expect(result.rows).toHaveLength(4);
   });
+
+  it('does not drop trailing data rows when blank lines are interspersed under the cap', () => {
+    // 5 real data rows exactly at maxRows, plus 3 interspersed/trailing blank
+    // lines (8 physical records). Blanks must NOT consume cap slots — before the
+    // fix, maxRecords = maxRows + 2 = 7 stopped tokenization mid-file and the
+    // last real rows were silently dropped.
+    const input = 'Name\ng0\ng1\n\ng2\ng3\n\ng4\n\n';
+    const result = parseImportText(input, {
+      acceptedFields: guestFields,
+      maxRows: 5,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.rows).toHaveLength(5);
+    expect(result.rows.map((r) => r.cells.name)).toEqual([
+      'g0',
+      'g1',
+      'g2',
+      'g3',
+      'g4',
+    ]);
+  });
+
+  it('still flags an over-cap paste even when a blank line precedes the data', () => {
+    // Blank line right after the header. Before the fix the blank consumed a cap
+    // slot, so a genuinely over-cap file tokenized to exactly maxRows data rows
+    // and the over-cap guard (rows.length > maxRows) was bypassed. After the fix
+    // the blank is free and we still get maxRows + 1 rows to trip the guard.
+    const input =
+      'Name\n\n' + Array.from({length: 10}, (_, i) => `g${i}`).join('\n');
+    const result = parseImportText(input, {
+      acceptedFields: guestFields,
+      maxRows: 3,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // maxRows + 1 = 4 → strictly greater than maxRows, so over-cap is detectable.
+    expect(result.rows.length).toBeGreaterThan(3);
+    expect(result.rows).toHaveLength(4);
+  });
+
+  it('does not treat a blank line inside a quoted field as a record separator or cap slot', () => {
+    // The quoted Notes cell contains an embedded blank line. It is one record,
+    // not two, and must not count as a blank line against the cap.
+    const input = 'Name,Notes\n"zoe","line one\n\nline three"\nsam,plain';
+    const result = parseImportText(input, {
+      acceptedFields: guestFields,
+      maxRows: 5,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.rows).toHaveLength(2);
+    expect(result.rows[0].cells.name).toBe('zoe');
+    expect(result.rows[0].cells.notes).toBe('line one\n\nline three');
+    expect(result.rows[1].cells.name).toBe('sam');
+  });
 });

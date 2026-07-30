@@ -4,16 +4,13 @@ export class SupportComponentHarness extends ComponentHarness {
   static hostSelector = 'app-support';
 
   private getEmailSupportButton = this.locatorForOptional(
-    '[data-testid="email-support-link"]',
-  );
-  private getContactAddressEl = this.locatorForOptional(
-    '[data-testid="manual-contact-link"]',
+    '[data-testid="email-support-button"]',
   );
   private getEventSupportSection = this.locatorForOptional(
     'h2:has(z-icon[zType="calendar"])',
   );
   private getPlatformSupportSection = this.locatorForOptional(
-    'h2 + p + [data-testid="email-support-link"]',
+    'h2 + p + [data-testid="email-support-button"]',
   );
   private getMainHeading = this.locatorForOptional('h1');
   private getAllH2s = this.locatorForAll('h2');
@@ -31,22 +28,6 @@ export class SupportComponentHarness extends ComponentHarness {
     if (btn) {
       await btn.click();
     }
-  }
-
-  /** Returns the obfuscated contact address text displayed on the page. */
-  async getContactAddressText(): Promise<string | null> {
-    const el = await this.getContactAddressEl();
-    return el ? el.text() : null;
-  }
-
-  async getEmailSupportHref(): Promise<string | null> {
-    const el = await this.getEmailSupportButton();
-    return el ? el.getAttribute('href') : null;
-  }
-
-  async getManualContactHref(): Promise<string | null> {
-    const el = await this.getContactAddressEl();
-    return el ? el.getAttribute('href') : null;
   }
 
   /** Whether the "Event Questions?" section is visible. */

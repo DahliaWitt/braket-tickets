@@ -33,6 +33,16 @@ export declare const api: {
         },
         null
       >;
+      changePasswordV2: FunctionReference<
+        "action",
+        "public",
+        {
+          currentPassword: string;
+          newPassword: string;
+          revokeOtherSessions?: boolean;
+        },
+        null
+      >;
       completeSocialSignupOnboarding: FunctionReference<
         "mutation",
         "public",
@@ -638,9 +648,9 @@ export declare const api: {
         "public",
         {
           codeOfConduct?: string;
-          contactInfo?: string;
-          description?: string;
-          email?: string;
+          contactInfo?: string | null;
+          description?: string | null;
+          email?: string | null;
           id: Id<"organizers">;
           isPublicDirectory?: boolean;
           logoStorageId?: Id<"_storage"> | null;
@@ -654,7 +664,7 @@ export declare const api: {
             required: boolean;
             type: "text" | "long_text" | "boolean" | "select" | "checkbox";
           }>;
-          website?: string;
+          website?: string | null;
         },
         null
       >;
@@ -983,6 +993,7 @@ export declare const api: {
         "mutation",
         "public",
         {
+          bodyJson?: string;
           eventId: Id<"events">;
           includeExternalTicketHolders?: boolean;
           message: string;
@@ -1546,11 +1557,11 @@ export declare const api: {
             | { mode: "now" }
             | { mode: "scheduled"; scheduledFor: number };
           date?: string;
-          description?: string;
+          description?: string | null;
           endDate?: string | null;
           id: Id<"events">;
-          location?: string;
-          maxTicketsPerUser?: number;
+          location?: string | null;
+          maxTicketsPerUser?: number | null;
           organizerId?: Id<"organizers">;
           poster?: string;
           price?: number;
@@ -1561,7 +1572,7 @@ export declare const api: {
           slidingScaleMax?: number;
           slidingScaleMin?: number;
           status?: "draft" | "published" | "cancelled";
-          supporterDefaultPrice?: number;
+          supporterDefaultPrice?: number | null;
           ticketSalesStatus?: "active" | "paused" | "ended";
           title?: string;
           totalTickets?: number;
@@ -1859,7 +1870,12 @@ export declare const api: {
       sendTicketPurchaseReminder: FunctionReference<
         "mutation",
         "public",
-        { eventId: Id<"events">; message: string; subject: string },
+        {
+          bodyJson?: string;
+          eventId: Id<"events">;
+          message: string;
+          subject: string;
+        },
         { recipientCount: number; segment: "approved_no_ticket" }
       >;
     };
@@ -2305,6 +2321,7 @@ export declare const api: {
         "public",
         {
           eventId: Id<"events">;
+          idempotencyKey?: string;
           quantity: number;
           tier: "regular" | "notaflof" | "supporter";
         },
@@ -2315,6 +2332,7 @@ export declare const api: {
         "public",
         {
           eventId: Id<"events">;
+          idempotencyKey?: string;
           quantity: number;
           sessionToken: string;
           termsAccepted: boolean;
@@ -2725,7 +2743,12 @@ export declare const api: {
         "action",
         "public",
         { mimeType: string; storageId: Id<"_storage"> },
-        { error?: string; storageId?: Id<"_storage">; valid: boolean }
+        {
+          error?: string;
+          storageId?: Id<"_storage">;
+          url?: string;
+          valid: boolean;
+        }
       >;
       generateUploadUrl: FunctionReference<"mutation", "public", {}, string>;
       validateUpload: FunctionReference<
@@ -2998,6 +3021,12 @@ export declare const api: {
           website?: string;
         },
         Id<"organizers">
+      >;
+      seedOrganizerMemberRolesAtScale: FunctionReference<
+        "mutation",
+        "public",
+        { count: number; organizerId: Id<"organizers"> },
+        null
       >;
       seedOrganizerNoVetting: FunctionReference<
         "mutation",
@@ -3400,12 +3429,22 @@ export declare const api: {
         },
         Id<"resale_listings">
       >;
+      setResaleListingStatus: FunctionReference<
+        "mutation",
+        "public",
+        {
+          listingId: Id<"resale_listings">;
+          status: "listed" | "pending" | "completed" | "cancelled";
+        },
+        null
+      >;
     };
     tickets: {
       seedTicket: FunctionReference<
         "mutation",
         "public",
         {
+          checkedInAt?: number;
           eventId: Id<"events">;
           guestSessionId?: Id<"guest_sessions">;
           orderId?: Id<"ticket_orders">;
@@ -3524,6 +3563,12 @@ export declare const api: {
         "mutation",
         "public",
         { email: string; name?: string },
+        Id<"users">
+      >;
+      seedEmaillessUser: FunctionReference<
+        "mutation",
+        "public",
+        { name: string },
         Id<"users">
       >;
       setRootAdminStatus: FunctionReference<
@@ -3961,6 +4006,14 @@ export declare const api: {
  */
 export declare const internal: {
   auth: {
+    public: {
+      applyChangePasswordRateLimit: FunctionReference<
+        "mutation",
+        "internal",
+        { userId: Id<"users"> },
+        null
+      >;
+    };
     sync: {
       backfillAuthUserLinks: FunctionReference<
         "mutation",
@@ -4530,25 +4583,6 @@ export declare const internal: {
       >;
     };
     smtp: {
-      sendFallback: FunctionReference<
-        "action",
-        "internal",
-        {
-          attachments?: Array<{
-            cid?: string;
-            content: string;
-            contentType?: string;
-            encoding?: string;
-            filename: string;
-          }>;
-          headers?: Record<string, string>;
-          html: string;
-          subject: string;
-          text?: string;
-          to: string;
-        },
-        null
-      >;
       sendPreview: FunctionReference<
         "action",
         "internal",
@@ -5366,6 +5400,7 @@ export declare const internal: {
             maximumRowsRead?: number;
             numItems: number;
           };
+          windowStartMs?: number;
         },
         null
       >;
@@ -5725,6 +5760,7 @@ export declare const internal: {
           eventId: Id<"events">;
           expiresAt: number;
           guestSessionId?: Id<"guest_sessions">;
+          idempotencyKey?: string;
           kind: "primary" | "resale";
           quantity: number;
           releaseReason?:
@@ -5761,6 +5797,7 @@ export declare const internal: {
           eventId: Id<"events">;
           expiresAt: number;
           guestSessionId?: Id<"guest_sessions">;
+          idempotencyKey?: string;
           kind: "primary" | "resale";
           quantity: number;
           releaseReason?:
@@ -5810,6 +5847,7 @@ export declare const internal: {
           eventId: Id<"events">;
           expiresAt: number;
           guestSessionId?: Id<"guest_sessions">;
+          idempotencyKey?: string;
           kind: "primary" | "resale";
           quantity: number;
           releaseReason?:
@@ -6070,7 +6108,7 @@ export declare const internal: {
       _cleanupOrphanedUploads: FunctionReference<
         "mutation",
         "internal",
-        {},
+        { afterCreationTime?: number; nowMs?: number },
         null
       >;
       _deleteStoredFile: FunctionReference<
@@ -6084,6 +6122,12 @@ export declare const internal: {
         "internal",
         { storageId: Id<"_storage">; uploaderUserId: Id<"users"> },
         null
+      >;
+      getPublishedEmailImage: FunctionReference<
+        "query",
+        "internal",
+        { storageId: string },
+        null | { contentType: string; storageId: Id<"_storage"> }
       >;
     };
   };

@@ -145,9 +145,8 @@ Removal is idempotent. If a team removes a link and later wants to restore trust
 
 Operational limit:
 
-- Outgoing trust-link rows compute `trustedMemberCount` via the authz membership relation query in `backend/convex/lib/authz.ts`.
-- That query hard-fails at `1,000` members with `MEMBER_CAP_EXCEEDED` instead of returning a silently truncated count.
-- Treat that error as an intentional cap until relation pagination exists.
+- Outgoing trust-link rows compute `trustedMemberCount` via [`countOrganizerMembers`](../../backend/convex/lib/authz.ts) — see that file for the current cap value and clamping behavior. It never throws, so one at-cap trusted community cannot fail the whole trust-links page.
+- The stricter enumeration helper [`listOrganizerMembers`](../../backend/convex/lib/authz.ts) still hard-fails at the cap with `MEMBER_CAP_EXCEEDED`; that throw is intentional for callers that must read the full member list (roster, directory rebuild, marketing audience) until relation pagination exists.
 
 ## Explain event visibility
 
@@ -159,7 +158,7 @@ Event visibility is enforced centrally by `backend/convex/lib/access.ts`. Do not
 | `public_viewable` | anonymous users can view         | vetted users only                |
 | `public`          | anonymous users can view         | no vetting required              |
 
-Draft, cancelled, and draft-community events are visible only to callers with scoped `event:view` access. Public event list queries and event detail queries should agree because they both route through the same access helper.
+Draft, cancelled, and draft-community events are visible only to organizers who can modify the event — scoped `event:manage`/`event:edit`, held by community admins and root admins. Members and door-staff scanners hold neither, so they cannot read unpublished or cancelled events (a scanner denied a published private event must not gain access to its draft). Public event list queries and event detail queries should agree because they both route through the same access helper.
 
 ## Explain why a user still cannot access a trusted community
 

@@ -1,8 +1,13 @@
 import type {Doc, Id} from '../../_generated/dataModel';
 import type {MutationCtx, QueryCtx} from '../../_generated/server';
 import {getCommunityMembers} from '../../lib/authz';
+import {applicationsByOrganizerStatusQuery} from '../applications/loaders';
 import {getLatestApplicationForOrganizer} from '../applications/read_models';
-import {stripCommunityAdminFields, stripSensitiveUserFields} from './helpers';
+import {
+  filterMembersByEmailPrefix,
+  stripCommunityAdminFields,
+  stripSensitiveUserFields,
+} from './helpers';
 
 type UsersDirectoryCtx = QueryCtx | MutationCtx;
 type UsersDirectoryDb = QueryCtx['db'] | MutationCtx['db'];
@@ -66,6 +71,29 @@ async function filterUsersByApprovedOrganizerMembership(
   );
 }
 
+/**
+ * Enumerates the distinct users who currently hold at least one `approved`
+ * application for the organizer, using the `by_organizer_status` index. This is
+ * the organizer's approved-membership set, bounded by community size — the
+ * search scopes the email branch to it so recall never depends on the global
+ * `users` table. Callers must still confirm the member's *latest* application is
+ * approved (an older approved row may be superseded by a newer decision).
+ */
+async function listApprovedOrganizerMemberIds(
+  db: UsersDirectoryDb,
+  organizerId: OrganizerId,
+): Promise<Id<'users'>[]> {
+  const memberIds = new Set<Id<'users'>>();
+  for await (const application of applicationsByOrganizerStatusQuery(
+    db,
+    organizerId,
+    'approved',
+  )) {
+    memberIds.add(application.userId);
+  }
+  return [...memberIds];
+}
+
 async function searchApprovedOrganizerMembersByNameOrEmail(
   db: UsersDirectoryDb,
   organizerId: OrganizerId,
@@ -75,7 +103,9 @@ async function searchApprovedOrganizerMembersByNameOrEmail(
   const matches: Doc<'users'>[] = [];
   const seen = new Set<Doc<'users'>['_id']>();
 
-  const pushApprovedMatches = async (users: AsyncIterable<Doc<'users'>>) => {
+  const pushApprovedMatches = async (
+    users: AsyncIterable<Doc<'users'>> | Iterable<Doc<'users'>>,
+  ) => {
     for await (const user of users) {
       if (seen.has(user._id)) {
         continue;
@@ -107,14 +137,20 @@ async function searchApprovedOrganizerMembersByNameOrEmail(
   );
 
   if (matches.length < 50) {
+    // Email branch: match the prefix WITHIN the organizer's approved membership
+    // instead of scanning the global `users` email index and then
+    // scope-filtering. Enumerating approved members first keeps reads bounded
+    // by community size and, unlike a capped global scan, can never drop an
+    // in-scope member just because unrelated platform users share the prefix
+    // and sort ahead of them. `pushApprovedMatches` still re-checks each
+    // candidate against the *latest* application, so an older approved row
+    // cannot surface a member whose current status is no longer approved.
+    const approvedMemberIds = await listApprovedOrganizerMemberIds(
+      db,
+      organizerId,
+    );
     await pushApprovedMatches(
-      db
-        .query('users')
-        .withIndex('email', (emailQuery) =>
-          emailQuery
-            .gte('email', lowerQuery)
-            .lt('email', lowerQuery + '\uffff'),
-        ),
+      await filterMembersByEmailPrefix(db, approvedMemberIds, lowerQuery),
     );
   }
 

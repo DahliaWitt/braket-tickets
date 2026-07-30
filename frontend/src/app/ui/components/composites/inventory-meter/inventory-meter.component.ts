@@ -17,8 +17,8 @@ import {
  *
  * Visual language:
  * - SOLD segment: solid fill, primary (plum) — permanent state
- * - HELD segment: diagonal stripe pattern, violet — transient/warning language
- *   (like barricade tape — "count this later")
+ * - HELD segment: diagonal stripe pattern, secondary (violet) — transient/warning
+ *   language (like barricade tape — "count this later")
  * - FREE segment: muted base with subtle tick marks
  *
  * The stripe pattern makes the held segment legible without relying on color alone.
@@ -65,6 +65,7 @@ import {
       <div
         class="inventory-meter-track relative h-2.5 w-full overflow-hidden border border-border bg-muted/60"
         role="progressbar"
+        [attr.aria-label]="label()"
         [attr.aria-valuemin]="0"
         [attr.aria-valuemax]="totalTickets()"
         [attr.aria-valuenow]="occupiedCount()"
@@ -108,7 +109,7 @@ import {
           <span class="text-muted-foreground/60 select-none" aria-hidden="true"
             >·</span
           >
-          <span class="text-[color:var(--chart-4,theme(colors.violet.400))]">
+          <span class="text-secondary-text">
             <span class="tabular-nums">{{ heldCount() }}</span>
             in checkout
           </span>
@@ -132,10 +133,9 @@ import {
   styles: `
     .inventory-meter-held {
       /* Violet with diagonal stripes — held = transient, "count this later".
-         Uses chart-4 (violet) if the theme defines it, falls back to a hard
-         violet so tests and consumers without Pulp tokens still render a
-         visually distinct segment. */
-      background-color: var(--chart-4, #a78bfa);
+         Uses the Pulp --secondary token (violet) so the segment follows
+         light/dark theming instead of a hardcoded hex. */
+      background-color: hsl(var(--secondary));
       background-image: repeating-linear-gradient(
         -45deg,
         transparent 0,

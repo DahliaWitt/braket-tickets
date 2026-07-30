@@ -22,6 +22,7 @@ import {ZardInputDirective} from '@ui/components/primitives/input/input.directiv
 import {CheckInService} from '@/features/admin/services/check-in.service';
 import {readInputValue} from '@ui/utils/dom-event';
 import {EventDatePipe} from '@/utils/event-date.pipe';
+import {BraAlertDialogService} from '@ui/components/composites/alert-dialog/alert-dialog.service';
 
 import {type Id} from '@convex/_generated/dataModel';
 import {type FunctionReturnType} from 'convex/server';
@@ -67,14 +68,19 @@ interface ManualFeedback {
 export class CheckInComponent implements OnInit {
   auth = inject(AuthService);
   checkInService = inject(CheckInService);
+  private readonly alertDialog = inject(BraAlertDialogService);
 
   isProcessing = this.checkInService.isProcessing;
   lastResult = this.checkInService.lastResult;
   readonly isScannerExpanded = signal(false);
   readonly manualFeedback = signal<ManualFeedback | null>(null);
   private readonly recentTicketCheckIns = signal<Record<string, number>>({});
+  private readonly recentTicketReverts = signal<Record<string, number | null>>(
+    {},
+  );
   private readonly recentGuestCheckIns = signal<Record<string, number>>({});
   private readonly recentImportedCheckIns = signal<Record<string, number>>({});
+  readonly revertingTicketId = signal<string | null>(null);
 
   // Config
   private readonly isRootAdmin = computed(
@@ -293,8 +299,10 @@ export class CheckInComponent implements OnInit {
       this.checkInService.lastResult.set(null);
       this.manualFeedback.set(null);
       this.recentTicketCheckIns.set({});
+      this.recentTicketReverts.set({});
       this.recentGuestCheckIns.set({});
       this.recentImportedCheckIns.set({});
+      this.revertingTicketId.set(null);
     });
 
     // Clear stale dropdown selection when the selected event disappears from
@@ -353,6 +361,29 @@ export class CheckInComponent implements OnInit {
     this.applyManualCheckInResult('ticket', scanData, this.lastResult());
   }
 
+  /** Ask for confirmation before undoing a native ticket check-in. */
+  confirmTicketCheckInRevert(ticket: Ticket): void {
+    if (
+      this.isProcessing() ||
+      this.revertingTicketId() ||
+      !this.isTicketCheckedIn(ticket)
+    ) {
+      return;
+    }
+
+    const attendee = this.ticketAttendeeName(ticket);
+    this.alertDialog.confirm({
+      zTitle: 'Undo check-in?',
+      zDescription: `Mark ${attendee}'s ticket as not checked in? They can be checked in again.`,
+      zOkText: 'Undo check-in',
+      zCancelText: 'Keep checked in',
+      zMaskClosable: false,
+      zOnOk: () => {
+        void this.revertTicketCheckIn(ticket);
+      },
+    });
+  }
+
   /** Check in a guest from the guest list. */
   async checkInGuest(guestId: string): Promise<void> {
     await this.checkInService.checkInGuest(guestId);
@@ -398,14 +429,14 @@ export class CheckInComponent implements OnInit {
   }
 
   ticketCheckInLabel(ticket: Ticket, rowIndex: number): string {
-    const attendee =
-      ticket.user?.name ||
-      ticket.user?.email ||
-      ticket.guestEmail ||
-      'attendee';
+    const attendee = this.ticketAttendeeName(ticket);
     const tier = ticket.tier || 'ticket';
-    const status = ticket.status || 'unknown status';
+    const status = this.ticketDisplayStatus(ticket) || 'unknown status';
     return `Check in ticket row ${rowIndex + 1}, ${tier} ticket, status ${status}, id ${this.idSuffix(ticket._id)}, for ${attendee}`;
+  }
+
+  ticketRevertLabel(ticket: Ticket, rowIndex: number): string {
+    return `Undo check-in for ticket row ${rowIndex + 1}, id ${this.idSuffix(ticket._id)}, for ${this.ticketAttendeeName(ticket)}`;
   }
 
   guestCheckInLabel(guest: Guest, rowIndex: number): string {
@@ -418,7 +449,19 @@ export class CheckInComponent implements OnInit {
     return this.recentTicketCheckIns()[ticketId] !== undefined;
   }
 
+  isTicketCheckedIn(ticket: Ticket): boolean {
+    return (
+      this.ticketDisplayStatus(ticket) === 'used' ||
+      this.isTicketRecentlyCheckedIn(ticket._id)
+    );
+  }
+
+  ticketDisplayStatus(ticket: Ticket): Ticket['status'] {
+    return this.isTicketLocallyReverted(ticket) ? 'valid' : ticket.status;
+  }
+
   ticketCheckedInAt(ticket: Ticket): number | undefined {
+    if (this.isTicketLocallyReverted(ticket)) return undefined;
     return ticket.checkedInAt ?? this.recentTicketCheckIns()[ticket._id];
   }
 
@@ -460,6 +503,11 @@ export class CheckInComponent implements OnInit {
     const timestamp = checkedInAt ?? Date.now();
 
     if (type === 'ticket') {
+      this.recentTicketReverts.update((current) => {
+        const next = {...current};
+        delete next[id];
+        return next;
+      });
       this.recentTicketCheckIns.update((current) => ({
         ...current,
         [id]: timestamp,
@@ -478,6 +526,69 @@ export class CheckInComponent implements OnInit {
           ? 'Ticket checked in. Row marked verified.'
           : 'Guest checked in. Row marked checked in.',
     });
+  }
+
+  private async revertTicketCheckIn(ticket: Ticket): Promise<void> {
+    if (this.isProcessing() || this.revertingTicketId()) {
+      this.manualFeedback.set({
+        kind: 'error',
+        message: 'Wait for the current door action to finish, then try again.',
+      });
+      return;
+    }
+
+    const ticketId = ticket._id;
+    const revertedCheckedInAt = this.ticketCheckedInAt(ticket) ?? null;
+    this.revertingTicketId.set(ticketId);
+    this.manualFeedback.set(null);
+
+    try {
+      const result = await this.checkInService.revertCheckIn(ticketId);
+      if (!result) {
+        this.manualFeedback.set({
+          kind: 'error',
+          message: 'Check-in undo did not start.',
+        });
+        return;
+      }
+      if (!result.success) {
+        this.manualFeedback.set({kind: 'error', message: result.message});
+        return;
+      }
+
+      this.recentTicketCheckIns.update((current) => {
+        const next = {...current};
+        delete next[ticketId];
+        return next;
+      });
+      this.recentTicketReverts.update((current) => ({
+        ...current,
+        [ticketId]: revertedCheckedInAt,
+      }));
+      this.manualFeedback.set({
+        kind: 'success',
+        message: 'Check-in undone. Ticket is valid again.',
+      });
+    } finally {
+      this.revertingTicketId.set(null);
+    }
+  }
+
+  private isTicketLocallyReverted(ticket: Ticket): boolean {
+    const recentReverts = this.recentTicketReverts();
+    if (!Object.hasOwn(recentReverts, ticket._id)) return false;
+
+    const revertedCheckedInAt = recentReverts[ticket._id];
+    return (
+      ticket.status === 'used' &&
+      (ticket.checkedInAt ?? null) === revertedCheckedInAt
+    );
+  }
+
+  private ticketAttendeeName(ticket: Ticket): string {
+    return (
+      ticket.user?.name || ticket.user?.email || ticket.guestEmail || 'attendee'
+    );
   }
 
   private idSuffix(id: string): string {

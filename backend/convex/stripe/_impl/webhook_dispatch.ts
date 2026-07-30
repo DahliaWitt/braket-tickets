@@ -31,7 +31,7 @@ import type {WebhookFailureReason} from './webhook_claims';
  *
  *   pending  ──(handler returns ok)────────────────▶ completed
  *   pending  ──(handler returns nonActionable)─────▶ failed (reason)
- *   pending  ──(handler throws)────────────────────▶ claimedAt=0 (retry)
+ *   pending  ──(handler throws)──▶ claimedAt backdated by STALE_CLAIM_THRESHOLD_MS (retry)
  *   pending  ──(reaper, REAPER_FAILURE_TIMEOUT_MS)─▶ failed (stale_timeout)
  *
  * A claim that's already `completed` / `failed` short-circuits with `skip`.
@@ -62,9 +62,7 @@ type HandlerResult = {
 };
 
 type OrderConnectedAccountValidation =
-  | 'ok'
-  | 'order_not_found'
-  | 'account_mismatch';
+  'ok' | 'order_not_found' | 'account_mismatch';
 
 type WebhookActionCtx = Pick<
   ActionCtx,
@@ -82,10 +80,12 @@ type WebhookActionCtx = Pick<
  *   in our db). Retries are pointless — the condition is terminal.
  * - Claim returns `in_flight` => throw retryable ConvexError so Stripe does
  *   not ACK this delivery while another attempt is still processing.
- * - Handler throws => claim's `claimedAt` is zeroed so the next Stripe
- *   retry (often within seconds) reclaims immediately via the stale path.
- *   Without the release, the pending row would read as `in_flight` for
- *   `STALE_CLAIM_THRESHOLD_MS` and the retry would be a no-op.
+ * - Handler throws => claim's `claimedAt` is backdated by
+ *   `STALE_CLAIM_THRESHOLD_MS` so the next Stripe retry (often within
+ *   seconds) reclaims immediately via the stale path. Without the release,
+ *   the pending row would read as `in_flight` for `STALE_CLAIM_THRESHOLD_MS`
+ *   and the retry would be a no-op. Backdating (not zeroing) keeps the row
+ *   clear of the failure reaper while Stripe still has retries queued.
  * - A truly stuck claim (handler crashes every retry) is eventually
  *   promoted to `failed (stale_timeout)` by `reapStaleStripeWebhookClaims`.
  */

@@ -99,7 +99,8 @@ export interface HeaderAction {
             width="56"
             height="56"
             priority
-            class="-my-2 h-10 md:-my-4 md:h-14 dark:invert"
+            data-testid="header-logo"
+            class="-my-2 h-10 w-10 md:-my-4 md:h-14 md:w-14 dark:invert"
           />
         </a>
 
@@ -157,7 +158,7 @@ export interface HeaderAction {
               zType="default"
               zSize="sm"
               [routerLink]="action.routerLink"
-              class="border border-primary/60 bg-primary font-mono text-[10px] tracking-widest text-primary-foreground uppercase hover:bg-primary/90"
+              class="border border-primary/60 bg-primary font-mono text-2xs tracking-widest text-primary-foreground uppercase hover:bg-primary/90"
             >
               {{ action.label }}
             </a>
@@ -201,7 +202,7 @@ export interface HeaderAction {
                   [queryParams]="item.queryParams"
                   routerLinkActive="bg-foreground/10 text-foreground"
                   [routerLinkActiveOptions]="{exact: !!item.exactMatch}"
-                  class="block w-full rounded-lg px-4 py-[14px] text-left font-mono text-sm tracking-widest text-muted-foreground uppercase transition-colors hover:bg-muted/50 hover:text-foreground"
+                  class="block w-full rounded px-4 py-3.5 text-left font-mono text-sm tracking-widest text-muted-foreground uppercase transition-colors hover:bg-muted/50 hover:text-foreground"
                   (click)="closeMobileMenu()"
                 >
                   {{ item.label }}
@@ -209,7 +210,7 @@ export interface HeaderAction {
               } @else {
                 <button
                   type="button"
-                  class="block w-full rounded-lg px-4 py-[14px] text-left font-mono text-sm tracking-widest text-muted-foreground uppercase transition-colors hover:bg-muted/50 hover:text-foreground"
+                  class="block w-full rounded px-4 py-3.5 text-left font-mono text-sm tracking-widest text-muted-foreground uppercase transition-colors hover:bg-muted/50 hover:text-foreground"
                   (click)="handleMobileClick(item)"
                 >
                   {{ item.label }}

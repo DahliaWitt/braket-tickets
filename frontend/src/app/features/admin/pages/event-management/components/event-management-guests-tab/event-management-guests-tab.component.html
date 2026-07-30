@@ -1,6 +1,6 @@
 <div class="ph-no-capture space-y-4">
   <div class="flex flex-wrap items-center justify-between gap-y-2">
-    <h2 class="font-display text-xl text-foreground">Guest List</h2>
+    <h2 class="font-display text-xl text-foreground">guest list</h2>
     <div class="flex flex-wrap items-center gap-3">
       <span
         class="font-mono text-xs tracking-widest text-muted-foreground uppercase"
@@ -41,7 +41,7 @@
         @if (!isSendingAll()) {
           <z-icon zType="mail" />
         }
-        Send All ({{ pendingSendGuests().length }})
+        send all ({{ pendingSendGuests().length }})
       </button>
       <button
         type="button"
@@ -53,14 +53,14 @@
         class="border-success/50 text-success hover:bg-success/10"
       >
         <z-icon zType="plus" class="mr-2" />
-        Add Guest
+        add guest
       </button>
     </div>
   </div>
 
   @if (isImporting()) {
     <div
-      class="overflow-hidden rounded-xl border border-border bg-card"
+      class="overflow-hidden rounded-lg border border-border bg-card"
       data-testid="guest-import-panel"
     >
       <div
@@ -98,7 +98,7 @@
   }
 
   <div
-    class="hidden overflow-hidden rounded-xl border border-border bg-card md:block"
+    class="hidden overflow-x-auto rounded-lg border border-border bg-card shadow-sm md:block"
   >
     <table class="w-full border-collapse text-left">
       <thead class="border-b border-border bg-muted">
@@ -162,12 +162,15 @@
             >
               <td class="px-6 py-4">
                 <div class="flex flex-col">
-                  <span class="text-sm font-medium text-foreground">{{
-                    guest.name
-                  }}</span>
-                  <span class="font-mono text-xs text-muted-foreground">{{
-                    guest.email || '—'
-                  }}</span>
+                  <span
+                    class="max-w-[220px] truncate text-sm font-medium text-foreground"
+                    >{{ guest.name }}</span
+                  >
+                  <span
+                    class="max-w-[220px] truncate font-mono text-xs text-muted-foreground"
+                    [title]="guest.email || null"
+                    >{{ guest.email || '—' }}</span
+                  >
                 </div>
               </td>
               <td class="px-6 py-4">
@@ -247,7 +250,7 @@
                   z-button
                   zType="ghost"
                   zSize="sm"
-                  (click)="removeGuest(guest._id)"
+                  (click)="removeGuest(guest)"
                   data-testid="remove-guest"
                   class="text-destructive-text hover:bg-destructive/10"
                   [attr.aria-label]="'Remove ' + guestActionLabel(guest)"
@@ -259,11 +262,8 @@
             </tr>
           } @empty {
             <tr>
-              <td
-                colspan="5"
-                class="px-6 py-12 text-center font-mono text-sm text-muted-foreground"
-              >
-                No guests added yet.
+              <td colspan="5">
+                <app-empty-state title="no guests yet" />
               </td>
             </tr>
           }
@@ -373,7 +373,7 @@
                 z-button
                 zType="outline"
                 zSize="sm"
-                (click)="removeGuest(guest._id)"
+                (click)="removeGuest(guest)"
                 data-testid="remove-guest"
                 class="border-destructive/30 text-destructive-text hover:bg-destructive/10"
                 [attr.aria-label]="'Remove ' + guestActionLabel(guest)"
@@ -385,11 +385,7 @@
           </div>
         </z-card>
       } @empty {
-        <div
-          class="rounded-lg border border-dashed border-border py-10 text-center font-mono text-muted-foreground"
-        >
-          No guests added yet.
-        </div>
+        <app-empty-state title="no guests yet" />
       }
     }
   </div>

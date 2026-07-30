@@ -96,14 +96,25 @@ test.describe('CSV import — external tickets & guest bulk add', () => {
       EventManagementGuestsTabHarness,
     );
     await guestsTab.clickImportButton();
+
+    // `isImportPanelOpen()` only proves that the outer panel has rendered.
+    // The child import surface is lazy and can mount on the following render;
+    // wait for the actual harness this test will interact with.
+    let importHarness: ImportSurfaceComponentHarness | null = null;
     await expect
-      .poll(() => guestsTab.isImportPanelOpen(), {timeout: 15000})
+      .poll(
+        async () => {
+          importHarness = await guestsTab.getImportSurfaceHarness();
+          return importHarness !== null;
+        },
+        {timeout: 15000},
+      )
       .toBe(true);
+    if (!importHarness) {
+      throw new Error('Guest import surface did not render');
+    }
 
     const guestName = uniqueName('Bulk Guest');
-    const importHarness = await createEnvironment(adminPage).getHarness(
-      ImportSurfaceComponentHarness,
-    );
     await importHarness.pasteText(
       `name,email,type,notes\n${guestName},${guestName.replace(/\s+/g, '.').toLowerCase()}@test.com,guest,vip row`,
     );
@@ -169,17 +180,28 @@ test.describe('CSV import — external tickets & guest bulk add', () => {
       EventManagementBuyersTabHarness,
     );
     await buyersTab.clickImportButton();
+
+    // As in the guest flow above, the outer panel can precede its lazy child.
+    // Synchronize on the import-surface harness rather than assuming both
+    // conditional renders commit in the same frame.
+    let importHarness: ImportSurfaceComponentHarness | null = null;
     await expect
-      .poll(() => buyersTab.isImportPanelOpen(), {timeout: 15000})
+      .poll(
+        async () => {
+          importHarness = await buyersTab.getImportSurfaceHarness();
+          return importHarness !== null;
+        },
+        {timeout: 15000},
+      )
       .toBe(true);
+    if (!importHarness) {
+      throw new Error('External-ticket import surface did not render');
+    }
 
     // A small RA-style CSV: one row per ticket, with a barcode we later scan.
     const holderName = uniqueName('RA Holder');
     const barcode = `BC${Date.now()}`;
     const sourceLabel = 'RA';
-    const importHarness = await createEnvironment(adminPage).getHarness(
-      ImportSurfaceComponentHarness,
-    );
     await importHarness.pasteText(
       [
         'Barcode,Billing name,Date purchased,Email,Order number,Ticket type',

@@ -1,13 +1,16 @@
 import type {Id} from '../../_generated/dataModel';
 import {internal} from '../../_generated/api';
 import type {ActionCtx, MutationCtx, QueryCtx} from '../../_generated/server';
-import {collectAllQueryUnsafe, collectMatchingInQuery} from '../../lib/query_scan';
+import {
+  collectAllQueryUnsafe,
+  collectMatchingInQuery,
+} from '../../lib/query_scan';
 import {
   loadAllTicketOrdersByGuestSession,
   loadAllTicketsByGuestSession,
   magicLinkRedemptionsByGuestSessionQuery,
 } from '../../lib/indexed_loaders';
-import {upsertMarketingPreference} from '../marketing_emails/preferences';
+import {carryOverAddressMarketingPreferenceToUser} from '../marketing_emails/preferences';
 
 type SessionMigrationArgs = {
   sessionId: Id<'guest_sessions'>;
@@ -45,7 +48,10 @@ export async function migrateOneGuestSessionToUser(
   );
 
   // ticket_orders mirror the same guest → user ownership transfer.
-  const guestOrders = await loadAllTicketOrdersByGuestSession(ctx.db, session._id);
+  const guestOrders = await loadAllTicketOrdersByGuestSession(
+    ctx.db,
+    session._id,
+  );
   await Promise.all(
     guestOrders.map((order) =>
       ctx.db.patch('ticket_orders', order._id, {
@@ -61,11 +67,16 @@ export async function migrateOneGuestSessionToUser(
   );
   await Promise.all(
     unmigratedRedemptions.map((redemption) =>
-      ctx.db.patch('magic_link_redemption_log', redemption._id, {userId: args.userId}),
+      ctx.db.patch('magic_link_redemption_log', redemption._id, {
+        userId: args.userId,
+      }),
     ),
   );
 
-  // Carry over any address-level marketing opt-out so unsubscribes are not lost.
+  // Carry over address-level marketing signals without ever re-subscribing a
+  // user. An address row defaults to optedIn:true on first send, so a blind
+  // upsert would silently flip a user's explicit opt-out back on. The helper
+  // only creates a new preference or propagates an unsubscribe (CAN-SPAM).
   const addressPreferences = await collectAllQueryUnsafe(
     ctx.db
       .query('emailAddressMarketingPreferences')
@@ -73,24 +84,29 @@ export async function migrateOneGuestSessionToUser(
   );
   await Promise.all(
     addressPreferences.map((preference) =>
-      upsertMarketingPreference(ctx.db, {
+      carryOverAddressMarketingPreferenceToUser(ctx.db, {
         userId: args.userId,
         organizerId: preference.organizerId,
-        optedIn: preference.optedIn,
+        addressOptedIn: preference.optedIn,
       }),
     ),
   );
 
-  await ctx.db.patch('guest_sessions', args.sessionId, {convertedToUserId: args.userId});
+  await ctx.db.patch('guest_sessions', args.sessionId, {
+    convertedToUserId: args.userId,
+  });
 }
 
 export async function migrateGuestSessionsForUser(
   ctx: ActionCtx,
   args: {email: string; userId: Id<'users'>},
 ): Promise<void> {
-  const sessions = await ctx.runQuery(internal.guest_sessions.core.getUnmigratedByEmail, {
-    email: args.email,
-  });
+  const sessions = await ctx.runQuery(
+    internal.guest_sessions.core.getUnmigratedByEmail,
+    {
+      email: args.email,
+    },
+  );
 
   for (const session of sessions) {
     await ctx.runMutation(internal.guest_sessions.core.migrateOneSession, {

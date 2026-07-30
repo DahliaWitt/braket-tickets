@@ -91,9 +91,9 @@ interface CommunityOption {
           <button
             type="button"
             z-button
-            zType="outline"
+            zType="secondary"
             data-testid="set-default-community"
-            class="shrink-0 border-border px-3 py-1.5 font-mono text-2xs tracking-widest text-muted-foreground uppercase hover:text-foreground"
+            class="shrink-0 px-3 py-1.5 font-mono text-2xs tracking-widest uppercase"
             [disabled]="isSelectedDefault() || isSavingDefault()"
             [attr.aria-pressed]="isSelectedDefault()"
             [attr.aria-label]="

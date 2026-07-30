@@ -170,6 +170,15 @@ const meta: Meta<BraDatePickerComponent> = {
       control: 'date',
       description: 'Latest selectable date in the calendar popover.',
     },
+    clearable: {
+      control: 'boolean',
+      description:
+        'Opt-in clear affordance for optional dates. Leave off for required fields.',
+    },
+    clearLabel: {
+      control: 'text',
+      description: 'Accessible label announced for the clear button.',
+    },
   },
   args: {
     zType: 'outline',
@@ -179,6 +188,8 @@ const meta: Meta<BraDatePickerComponent> = {
     value: null,
     minDate: null,
     maxDate: null,
+    clearable: false,
+    clearLabel: 'clear date',
   },
   render: (args) => ({
     props: {
@@ -197,6 +208,8 @@ const meta: Meta<BraDatePickerComponent> = {
           [value]="value"
           [minDate]="minDate"
           [maxDate]="maxDate"
+          [clearable]="clearable"
+          [clearLabel]="clearLabel"
         />
       </div>
     `,
@@ -259,6 +272,25 @@ export const RequiredValidationState: Story = {
       description: {
         story:
           'App-proven required-field validation state for event scheduling.',
+      },
+    },
+  },
+};
+
+export const ClearableOptionalDate: Story = {
+  args: {
+    zSize: 'sm',
+    zFormat: 'yyyy-MM-dd',
+    placeholder: 'Same night (optional)',
+    value: new Date('2026-06-21T00:00:00.000Z'),
+    clearable: true,
+    clearLabel: 'clear end date',
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Optional-date treatment used for the event end date: a populated clearable picker shows an accessible clear button that empties the value.',
       },
     },
   },

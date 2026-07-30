@@ -113,7 +113,8 @@ describe('claimWebhookEvent', () => {
     expect(second.disposition).toBe('skip');
     if (second.disposition !== 'skip') return;
     expect(second.reason).toBe('in_flight');
-    if (first.disposition !== 'proceed') throw new Error('first should proceed');
+    if (first.disposition !== 'proceed')
+      throw new Error('first should proceed');
     expect(second.existingClaimId).toBe(first.claimId);
   });
 
@@ -140,7 +141,8 @@ describe('claimWebhookEvent', () => {
     if (second.disposition !== 'proceed') return;
     expect(second.mode).toBe('reclaimed_stale');
     expect(second.attempts).toBe(2);
-    if (first.disposition !== 'proceed') throw new Error('first should proceed');
+    if (first.disposition !== 'proceed')
+      throw new Error('first should proceed');
     expect(second.claimId).toBe(first.claimId);
 
     const row = await t.run((ctx) => ctx.db.get(second.claimId));
@@ -275,15 +277,14 @@ describe('finalizeWebhookEvent', () => {
 });
 
 describe('releaseWebhookClaimForRetry', () => {
-  it('zeros claimedAt so the next call reclaims inside the stale window', async () => {
+  it('backdates claimedAt by the stale threshold so the next call reclaims immediately', async () => {
     const t = convexTest();
 
-    // Use a production-scale base timestamp. The claim freshness check
-    // is `now - claimedAt < STALE_CLAIM_THRESHOLD_MS`; with `claimedAt=0`
-    // (the release marker), `now` must be large enough that `now - 0`
-    // exceeds the threshold. In production `Date.now()` is always
-    // ~1.7e12 so this condition trivially holds, but fake-timer bases
-    // starting at tiny integers like `1_000` would fail the check.
+    // Use a production-scale base timestamp. The release backdates
+    // `claimedAt` to `now - STALE_CLAIM_THRESHOLD_MS`; the claim freshness
+    // check is `now - claimedAt < STALE_CLAIM_THRESHOLD_MS`. In production
+    // `Date.now()` is always ~1.7e12, so the backdated value is a large
+    // positive number well clear of the reaper cutoff.
     const base = 1_700_000_000_000;
 
     vi.setSystemTime(new Date(base));
@@ -296,20 +297,22 @@ describe('releaseWebhookClaimForRetry', () => {
     if (first.disposition !== 'proceed') throw new Error('expected proceed');
 
     // Handler "throws" — wrapper releases the claim.
-    vi.setSystemTime(new Date(base + 100));
+    const releaseAt = base + 100;
+    vi.setSystemTime(new Date(releaseAt));
     await t.run((ctx) =>
       releaseWebhookClaimForRetry(ctx.db, {claimId: first.claimId}),
     );
 
     const released = await t.run((ctx) => ctx.db.get(first.claimId));
-    expect(released?.claimedAt).toBe(0);
+    // Backdated by exactly one stale window, NOT zeroed. A zeroed
+    // `claimedAt` would be reaped as `stale_timeout` on the next cron tick.
+    expect(released?.claimedAt).toBe(releaseAt - STALE_CLAIM_THRESHOLD_MS);
     expect(released?.status).toBe('pending');
 
-    // Stripe retries ~200ms later — well inside STALE_CLAIM_THRESHOLD_MS
-    // relative to the original claimedAt, but the release zeroed it so
-    // the freshness check evaluates `now - 0` which is ~base, far beyond
-    // the threshold. Without the release, this call would skip as
-    // `in_flight`.
+    // Stripe retries ~200ms later. Relative to the backdated `claimedAt`,
+    // `now - claimedAt` already exceeds STALE_CLAIM_THRESHOLD_MS, so the
+    // retry reclaims via the stale path. Without the release, this call
+    // would skip as `in_flight`.
     vi.setSystemTime(new Date(base + 200));
     const retry = await t.run((ctx) =>
       claimWebhookEvent(ctx.db, {
@@ -323,6 +326,63 @@ describe('releaseWebhookClaimForRetry', () => {
     expect(retry.mode).toBe('reclaimed_stale');
     expect(retry.attempts).toBe(2);
     expect(retry.claimId).toBe(first.claimId);
+  });
+
+  it('survives a reaper pass after release and stays reclaimable by a later Stripe retry', async () => {
+    // Regression guard for the reaper-poisoning bug: a claim released for
+    // retry must NOT be promoted to `failed` by the reaper before Stripe's
+    // next retry lands, or that retry short-circuits as `already_failed` and
+    // Stripe's retry schedule is silently cancelled (lost payment webhook).
+    const t = convexTest();
+
+    const base = 1_700_000_000_000;
+
+    // Claim, then handler throws → release.
+    vi.setSystemTime(new Date(base));
+    const first = await t.run((ctx) =>
+      claimWebhookEvent(ctx.db, {
+        stripeEventId: 'evt_release_reaper_1',
+        stripeEventType: 'checkout.session.completed',
+      }),
+    );
+    if (first.disposition !== 'proceed') throw new Error('expected proceed');
+
+    vi.setSystemTime(new Date(base + 100));
+    await t.run((ctx) =>
+      releaseWebhookClaimForRetry(ctx.db, {claimId: first.claimId}),
+    );
+
+    // Reaper runs shortly after (well within Stripe's retry window, but far
+    // short of REAPER_FAILURE_TIMEOUT_MS). The released row must survive.
+    vi.setSystemTime(new Date(base + 30 * 60 * 1000));
+    const firstReap = await t.run((ctx) => reapStaleWebhookClaims(ctx.db));
+    expect(firstReap.reaped).toBe(0);
+
+    const afterReap = await t.run((ctx) => ctx.db.get(first.claimId));
+    expect(afterReap?.status).toBe('pending');
+
+    // Stripe's retry now lands and successfully reclaims + finalizes.
+    vi.setSystemTime(new Date(base + 30 * 60 * 1000 + 1_000));
+    const retry = await t.run((ctx) =>
+      claimWebhookEvent(ctx.db, {
+        stripeEventId: 'evt_release_reaper_1',
+        stripeEventType: 'checkout.session.completed',
+      }),
+    );
+    expect(retry.disposition).toBe('proceed');
+    if (retry.disposition !== 'proceed') return;
+    expect(retry.mode).toBe('reclaimed_stale');
+    expect(retry.attempts).toBe(2);
+    expect(retry.claimId).toBe(first.claimId);
+
+    await t.run((ctx) =>
+      finalizeWebhookEvent(ctx.db, {
+        claimId: retry.claimId,
+        outcome: 'completed',
+      }),
+    );
+    const finalized = await t.run((ctx) => ctx.db.get(first.claimId));
+    expect(finalized?.status).toBe('completed');
   });
 });
 
@@ -353,8 +413,10 @@ describe('reapStaleWebhookClaims', () => {
 
     expect(result.reaped).toBe(1);
 
-    if (staleClaim.disposition !== 'proceed') throw new Error('expected proceed');
-    if (freshClaim.disposition !== 'proceed') throw new Error('expected proceed');
+    if (staleClaim.disposition !== 'proceed')
+      throw new Error('expected proceed');
+    if (freshClaim.disposition !== 'proceed')
+      throw new Error('expected proceed');
 
     const stale = await t.run((ctx) => ctx.db.get(staleClaim.claimId));
     expect(stale?.status).toBe('failed');

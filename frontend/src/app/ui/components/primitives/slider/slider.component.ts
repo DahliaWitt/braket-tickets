@@ -1,4 +1,4 @@
-import { DOCUMENT } from '@angular/common';
+import {DOCUMENT} from '@angular/common';
 import {
   afterNextRender,
   booleanAttribute,
@@ -18,11 +18,11 @@ import {
   viewChild,
   ViewEncapsulation,
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { NG_VALUE_ACCESSOR } from '@angular/forms';
+import {takeUntilDestroyed} from '@angular/core/rxjs-interop';
+import {NG_VALUE_ACCESSOR} from '@angular/forms';
 
-import type { ClassValue } from 'clsx';
-import { filter, fromEvent, map, switchMap, takeUntil, tap } from 'rxjs';
+import type {ClassValue} from 'clsx';
+import {filter, fromEvent, map, switchMap, takeUntil, tap} from 'rxjs';
 
 import {
   sliderOrientationVariants,
@@ -32,9 +32,14 @@ import {
   sliderVariants,
 } from './slider.variants';
 
-import { mergeClasses } from '@ui/utils/merge-classes';
-import { clamp, convertValueToPercentage, roundToStep } from '@ui/utils/number';
-import { ControlValueAccessorBase } from '@ui/utils/control-value-accessor.base';
+import {mergeClasses} from '@ui/utils/merge-classes';
+import {
+  clamp,
+  convertValueToPercentage,
+  roundToStep,
+  roundToStepClamped,
+} from '@ui/utils/number';
+import {ControlValueAccessorBase} from '@ui/utils/control-value-accessor.base';
 
 @Component({
   selector: 'z-slider-track',
@@ -52,7 +57,8 @@ import { ControlValueAccessorBase } from '@ui/utils/control-value-accessor.base'
   changeDetection: ChangeDetectionStrategy.OnPush,
   encapsulation: ViewEncapsulation.None,
   host: {
-    '[class]': '"data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full"',
+    '[class]':
+      '"data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full"',
     '[attr.data-orientation]': 'orientation()',
   },
 })
@@ -61,10 +67,14 @@ export class ZSliderTrackComponent {
   readonly class = input<ClassValue>('');
 
   protected readonly classes = computed(() =>
-    mergeClasses(sliderTrackVariants({ zOrientation: this.orientation() }), this.class()),
+    mergeClasses(
+      sliderTrackVariants({zOrientation: this.orientation()}),
+      this.class(),
+    ),
   );
 
-  private readonly trackEl = viewChild.required<ElementRef<HTMLElement>>('track');
+  private readonly trackEl =
+    viewChild.required<ElementRef<HTMLElement>>('track');
 
   get nativeElement(): HTMLElement {
     return this.trackEl().nativeElement;
@@ -80,7 +90,9 @@ export class ZSliderTrackComponent {
       [attr.data-orientation]="orientation()"
       [class]="classes()"
       [style.left]="orientation() === 'horizontal' ? '0' : null"
-      [style.right]="orientation() === 'horizontal' ? 100 - percent() + '%' : null"
+      [style.right]="
+        orientation() === 'horizontal' ? 100 - percent() + '%' : null
+      "
       [style.bottom]="orientation() === 'vertical' ? '0' : null"
       [style.top]="orientation() === 'vertical' ? 100 - percent() + '%' : null"
     ></span>
@@ -95,7 +107,10 @@ export class ZSliderRangeComponent {
   readonly class = input<ClassValue>('');
 
   protected readonly classes = computed(() =>
-    mergeClasses(sliderRangeVariants({ zOrientation: this.orientation() }), this.class()),
+    mergeClasses(
+      sliderRangeVariants({zOrientation: this.orientation()}),
+      this.class(),
+    ),
   );
 }
 
@@ -138,14 +153,18 @@ export class ZSliderThumbComponent {
   readonly class = input<ClassValue>('');
 
   protected readonly classes = computed(() =>
-    mergeClasses(sliderThumbVariants({ disabled: this.disabled() }), this.class()),
+    mergeClasses(
+      sliderThumbVariants({disabled: this.disabled()}),
+      this.class(),
+    ),
   );
 
   protected readonly orientationClasses = computed(() =>
-    mergeClasses(sliderOrientationVariants({ zOrientation: this.orientation() })),
+    mergeClasses(sliderOrientationVariants({zOrientation: this.orientation()})),
   );
 
-  private readonly thumbEl = viewChild.required<ElementRef<HTMLElement>>('thumb');
+  private readonly thumbEl =
+    viewChild.required<ElementRef<HTMLElement>>('thumb');
 
   get nativeElement(): HTMLElement {
     return this.thumbEl().nativeElement;
@@ -154,7 +173,11 @@ export class ZSliderThumbComponent {
 
 @Component({
   selector: 'z-slider',
-  imports: [ZSliderTrackComponent, ZSliderRangeComponent, ZSliderThumbComponent],
+  imports: [
+    ZSliderTrackComponent,
+    ZSliderRangeComponent,
+    ZSliderThumbComponent,
+  ],
   template: `
     <span
       data-slot="slider"
@@ -162,7 +185,10 @@ export class ZSliderThumbComponent {
       class="flex data-[orientation=horizontal]:w-full data-[orientation=horizontal]:items-center data-[orientation=vertical]:h-full data-[orientation=vertical]:justify-center"
     >
       <z-slider-track [orientation]="zOrientation()">
-        <z-slider-range [orientation]="zOrientation()" [percent]="percentValue()" />
+        <z-slider-range
+          [orientation]="zOrientation()"
+          [percent]="percentValue()"
+        />
       </z-slider-track>
 
       <z-slider-thumb
@@ -174,7 +200,9 @@ export class ZSliderThumbComponent {
         [min]="zMin()"
         [max]="zMax()"
         [disabled]="disabled()"
-        (keydown.{home,end,arrowleft,arrowright,arrowdown,arrowup}.prevent)="handleKeydown($event)"
+        (keydown.{home,end,arrowleft,arrowright,arrowdown,arrowup}.prevent)="
+          handleKeydown($event)
+        "
       />
     </span>
   `,
@@ -196,12 +224,12 @@ export class ZSliderThumbComponent {
   exportAs: 'zSlider',
 })
 export class ZardSliderComponent extends ControlValueAccessorBase<number> {
-  readonly zMin = input(0, { transform: numberAttribute });
-  readonly zMax = input(100, { transform: numberAttribute });
-  readonly zDefault = input(0, { transform: numberAttribute });
-  readonly zValue = input(null, { transform: numberAttribute });
-  readonly zStep = input(1, { transform: numberAttribute });
-  readonly zDisabled = input(false, { transform: booleanAttribute });
+  readonly zMin = input(0, {transform: numberAttribute});
+  readonly zMax = input(100, {transform: numberAttribute});
+  readonly zDefault = input(0, {transform: numberAttribute});
+  readonly zValue = input(null, {transform: numberAttribute});
+  readonly zStep = input(1, {transform: numberAttribute});
+  readonly zDisabled = input(false, {transform: booleanAttribute});
 
   readonly zOrientation = input<'horizontal' | 'vertical'>('horizontal');
   readonly class = input<ClassValue>('');
@@ -216,7 +244,10 @@ export class ZardSliderComponent extends ControlValueAccessorBase<number> {
   private destroyRef = inject(DestroyRef);
 
   protected readonly classes = computed(() =>
-    mergeClasses(sliderVariants({ orientation: this.zOrientation() }), this.class()),
+    mergeClasses(
+      sliderVariants({orientation: this.zOrientation()}),
+      this.class(),
+    ),
   );
 
   readonly percentValue = signal(0);
@@ -252,7 +283,10 @@ export class ZardSliderComponent extends ControlValueAccessorBase<number> {
           const isTrack = this.trackRef().nativeElement.contains(target);
 
           if (isTrack && !isThumb) {
-            const coord = this.zOrientation() === 'vertical' ? event.clientY : event.clientX;
+            const coord =
+              this.zOrientation() === 'vertical'
+                ? event.clientY
+                : event.clientX;
             const clickPercentage = this.calculatePercentage(coord);
             this.updateSliderFromPercentage(clickPercentage);
             this.onTouched();
@@ -263,7 +297,10 @@ export class ZardSliderComponent extends ControlValueAccessorBase<number> {
         }),
       );
 
-      const pointerMove$ = fromEvent<PointerEvent>(this.document, 'pointermove');
+      const pointerMove$ = fromEvent<PointerEvent>(
+        this.document,
+        'pointermove',
+      );
       const pointerUp$ = fromEvent<PointerEvent>(this.document, 'pointerup');
 
       pointerDown$
@@ -272,7 +309,10 @@ export class ZardSliderComponent extends ControlValueAccessorBase<number> {
             pointerMove$.pipe(
               takeUntil(pointerUp$),
               map((event) => {
-                const coord = this.zOrientation() === 'vertical' ? event.clientY : event.clientX;
+                const coord =
+                  this.zOrientation() === 'vertical'
+                    ? event.clientY
+                    : event.clientX;
                 return this.calculatePercentage(coord);
               }),
             ),
@@ -299,8 +339,7 @@ export class ZardSliderComponent extends ControlValueAccessorBase<number> {
     const max = this.zMax();
     const step = this.zStep();
 
-    const clampedValue = clamp(value, [min, max]);
-    const roundedValue = roundToStep(clampedValue, min, step);
+    const roundedValue = roundToStepClamped(value, min, max, step);
 
     if (roundedValue === this.lastEmittedValue()) {
       return;
@@ -316,12 +355,19 @@ export class ZardSliderComponent extends ControlValueAccessorBase<number> {
     }
 
     const percent = this.percentValue();
-    const rawValue = this.zMin() + ((this.zMax() - this.zMin()) * percent) / 100;
+    const rawValue =
+      this.zMin() + ((this.zMax() - this.zMin()) * percent) / 100;
+    // Intentionally NOT clamped: roundToStep always lands on a step-grid point,
+    // so `currentValue ± zStep` stays grid-aligned. At an off-grid zMax the
+    // rounded value sits one grid point past the ceiling (e.g. 10 → 12), which
+    // makes ArrowLeft snap to the nearest grid value below the max (12-4 = 8),
+    // matching native <input type=range> step-down. The Math.max/Math.min bounds
+    // below already keep every emitted value within [zMin, zMax].
     const currentValue = roundToStep(rawValue, this.zMin(), this.zStep());
 
     let newValue: number;
 
-    const { key } = event as KeyboardEvent;
+    const {key} = event as KeyboardEvent;
 
     switch (key) {
       case 'Home':
@@ -344,7 +390,9 @@ export class ZardSliderComponent extends ControlValueAccessorBase<number> {
     }
 
     if (newValue !== currentValue) {
-      this.percentValue.set(convertValueToPercentage(newValue, this.zMin(), this.zMax()));
+      this.percentValue.set(
+        convertValueToPercentage(newValue, this.zMin(), this.zMax()),
+      );
       this.zSlideIndexChange.emit(newValue);
       this.lastEmittedValue.set(newValue);
       this.onChange(newValue);
@@ -354,10 +402,17 @@ export class ZardSliderComponent extends ControlValueAccessorBase<number> {
   private updateSliderFromPercentage(percentage: number): void {
     const clamped = clamp(percentage, [0, 1]);
     const rawValue = this.zMin() + (this.zMax() - this.zMin()) * clamped;
-    const value = roundToStep(rawValue, this.zMin(), this.zStep());
+    const value = roundToStepClamped(
+      rawValue,
+      this.zMin(),
+      this.zMax(),
+      this.zStep(),
+    );
 
     if (value !== this.lastEmittedValue()) {
-      this.percentValue.set(convertValueToPercentage(value, this.zMin(), this.zMax()));
+      this.percentValue.set(
+        convertValueToPercentage(value, this.zMin(), this.zMax()),
+      );
       this.zSlideIndexChange.emit(value);
       this.lastEmittedValue.set(value);
       this.onChange(value);
@@ -383,7 +438,7 @@ export class ZardSliderComponent extends ControlValueAccessorBase<number> {
     const raw = this.zValue();
     const value = raw != null && raw >= min && raw <= max ? raw : def;
 
-    const initial = roundToStep(value, min, step);
+    const initial = roundToStepClamped(value, min, max, step);
     this.percentValue.set(convertValueToPercentage(initial, min, max));
     this.lastEmittedValue.set(initial);
     this.thumbOffset.set(0);

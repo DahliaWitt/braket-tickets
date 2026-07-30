@@ -11,6 +11,10 @@ export class DashboardShellHarness extends ComponentHarness {
     '[data-testid="title-accent"]',
   );
   private getTabLinks = this.locatorForAll('[data-testid="tab-link"]');
+  private getTabIndicators = this.locatorForAll(
+    '[data-testid="tab-indicator"]',
+  );
+  private getTitle = this.locatorForOptional('h1');
   private getDesktopSectionNav = this.locatorForOptional(
     '[data-testid="desktop-section-nav"]',
   );
@@ -43,6 +47,28 @@ export class DashboardShellHarness extends ComponentHarness {
 
   async hasCustomHeader(): Promise<boolean> {
     return (await this.getCustomHeader()) !== null;
+  }
+
+  async getTitleClass(): Promise<string | null> {
+    const el = await this.getTitle();
+    return el ? el.getAttribute('class') : null;
+  }
+
+  async getTitleAccentClass(): Promise<string | null> {
+    const el = await this.getTitleAccent();
+    return el ? el.getAttribute('class') : null;
+  }
+
+  async getTabLinkClasses(): Promise<(string | null)[]> {
+    const tabs = await this.getTabLinks();
+    return Promise.all(tabs.map((tab) => tab.getAttribute('class')));
+  }
+
+  async getTabIndicatorClasses(): Promise<(string | null)[]> {
+    const indicators = await this.getTabIndicators();
+    return Promise.all(
+      indicators.map((indicator) => indicator.getAttribute('class')),
+    );
   }
 
   async getTabLabels(): Promise<string[]> {

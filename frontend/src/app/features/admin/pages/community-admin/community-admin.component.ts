@@ -45,6 +45,7 @@ import {ZardTooltipDirective} from '@ui/components/primitives/tooltip/tooltip';
 import {BraStatusBadgeComponent} from '@ui/components/primitives/status-badge/status-badge.component';
 import {logger} from '@/utils/logger';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
+import {ADMIN_DATE} from '@/features/admin/utils/date-formats';
 
 type CommunityAdminTab =
   | 'magic-links'
@@ -110,6 +111,8 @@ const COMMUNITY_ADMIN_TABS: DashboardTab[] = [
   templateUrl: './community-admin.component.html',
 })
 export class CommunityAdminComponent implements HasUnsavedChanges {
+  protected readonly ADMIN_DATE = ADMIN_DATE;
+
   private readonly auth = inject(AuthService);
   private readonly communitiesService = inject(CommunitiesService);
   private readonly convex = injectConvex();

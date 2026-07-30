@@ -1,54 +1,62 @@
-    <button
-      type="button"
-      [class]="triggerClasses()"
-      [disabled]="isDisabled()"
-      (click)="toggle()"
-      (keydown.{enter,space,arrowdown,arrowup,escape}.prevent)="onTriggerKeydown($event)"
-      [attr.aria-expanded]="isOpen()"
-      [attr.aria-haspopup]="'listbox'"
-      [attr.aria-label]="zAriaLabel() || null"
-      [attr.aria-labelledby]="zAriaLabelledBy() || null"
-      [attr.data-state]="isOpen() ? 'open' : 'closed'"
-      [attr.data-placeholder]="!zValue() ? '' : null"
-      [tabIndex]="0"
-      (focus)="onFocus()"
-      (blur)="!isOpen() && isFocus.set(false)"
-    >
-      <span class="flex flex-1 flex-wrap items-center gap-2">
-        @let labels = selectedLabels();
-        @for (label of labels; track $index; let index = $index) {
-          <ng-container *ngTemplateOutlet="labelsTemplate; context: { $implicit: label }" />
-        } @empty {
-          <span class="text-muted-foreground truncate">{{ zPlaceholder() }}</span>
-        }
-      </span>
-      <z-icon zType="chevron-down" zSize="lg" class="opacity-50" aria-hidden="true" />
-    </button>
+<button
+  type="button"
+  [class]="triggerClasses()"
+  [disabled]="isDisabled()"
+  (click)="toggle()"
+  (keydown.{enter,space,arrowdown,arrowup,escape}.prevent)="
+    onTriggerKeydown($event)
+  "
+  [attr.aria-expanded]="isOpen()"
+  [attr.aria-haspopup]="'listbox'"
+  [attr.aria-label]="zAriaLabel() || null"
+  [attr.aria-labelledby]="zAriaLabelledBy() || null"
+  [attr.data-state]="isOpen() ? 'open' : 'closed'"
+  [attr.data-placeholder]="!zValue() ? '' : null"
+  [tabIndex]="0"
+  (focus)="onFocus()"
+  (blur)="!isOpen() && isFocus.set(false)"
+>
+  <span class="flex flex-1 flex-wrap items-center gap-2">
+    @let labels = selectedLabels();
+    @for (label of labels; track $index; let index = $index) {
+      <ng-container
+        *ngTemplateOutlet="labelsTemplate; context: {$implicit: label}"
+      />
+    } @empty {
+      <span class="truncate text-muted-foreground">{{ zPlaceholder() }}</span>
+    }
+  </span>
+  <z-icon
+    zType="chevron-down"
+    zSize="lg"
+    class="opacity-50"
+    aria-hidden="true"
+  />
+</button>
 
-    <ng-template #labelsTemplate let-label>
-      @if (zMultiple()) {
-        <z-badge zType="secondary">
-          <span class="truncate">{{ label }}</span>
-        </z-badge>
-      } @else {
-        <span class="truncate">{{ label }}</span>
-      }
-    </ng-template>
+<ng-template #labelsTemplate let-label>
+  @if (zMultiple()) {
+    <z-badge zType="secondary">
+      <span class="truncate">{{ label }}</span>
+    </z-badge>
+  } @else {
+    <span class="truncate">{{ label }}</span>
+  }
+</ng-template>
 
-    <ng-template #dropdownTemplate>
-      <div
-        [class]="contentClasses()"
-        role="listbox"
-        [attr.aria-activedescendant]="focusedItemId()"
-        [attr.data-state]="'open'"
-        (keydown.{arrowdown,arrowup,enter,space,escape,home,end}.prevent)="
-          onDropdownKeydown($event)
-        "
-        tabindex="-1"
-      >
-        <div class="p-1">
-          <ng-content />
-        </div>
-      </div>
-    </ng-template>
-  
+<ng-template #dropdownTemplate>
+  <div
+    [class]="contentClasses()"
+    role="listbox"
+    [attr.aria-activedescendant]="focusedItemId()"
+    [attr.data-state]="'open'"
+    (keydown.{arrowdown,arrowup,enter,space,escape,home,end}.prevent-with-stop)="
+      onDropdownKeydown($event)
+    "
+    tabindex="-1"
+  >
+    <div class="p-1">
+      <ng-content />
+    </div>
+  </div>
+</ng-template>

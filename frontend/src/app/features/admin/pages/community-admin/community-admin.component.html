@@ -239,7 +239,7 @@
               class="shrink-0 self-start md:self-center"
             >
               <z-icon zType="plus" class="mr-2 h-4 w-4" />
-              CREATE LINK
+              create link
             </button>
           }
         </div>
@@ -297,10 +297,9 @@
               z-button
               zType="default"
               (click)="openCreateDialog()"
-              class="border-none bg-primary text-primary-foreground shadow-[0_0_20px_-5px_hsl(var(--primary)/0.4)] hover:bg-primary/90"
             >
               <z-icon zType="plus" class="mr-2 h-4 w-4" />
-              CREATE YOUR FIRST LINK
+              create your first link
             </button>
           </div>
         } @else {
@@ -484,13 +483,13 @@
                       <td
                         class="p-5 align-middle font-mono text-xs text-muted-foreground"
                       >
-                        {{ link._creationTime | date: 'mediumDate' }}
+                        {{ link._creationTime | date: ADMIN_DATE }}
                       </td>
                       <td
                         class="p-5 align-middle font-mono text-xs text-muted-foreground"
                       >
                         @if (link.lastUsedAt) {
-                          {{ link.lastUsedAt | date: 'mediumDate' }}
+                          {{ link.lastUsedAt | date: ADMIN_DATE }}
                         } @else {
                           <span class="text-muted-foreground">never</span>
                         }
@@ -499,7 +498,7 @@
                         class="p-5 align-middle font-mono text-xs text-muted-foreground"
                       >
                         @if (link.expiresAt) {
-                          {{ link.expiresAt | date: 'mediumDate' }}
+                          {{ link.expiresAt | date: ADMIN_DATE }}
                         } @else {
                           <span class="text-muted-foreground">—</span>
                         }
@@ -604,7 +603,7 @@
                   <!-- Card Header -->
                   <div class="flex items-start justify-between gap-3">
                     <div class="min-w-0">
-                      <h3
+                      <h2
                         class="truncate font-display text-lg font-bold tracking-wide text-foreground"
                         data-testid="magic-link-label"
                         [title]="
@@ -620,7 +619,7 @@
                               ? 'Link ' + link.tokenPrefix
                               : 'Link')
                         }}
-                      </h3>
+                      </h2>
                       <span
                         data-testid="magic-link-token-prefix"
                         class="mt-1 block font-mono text-xs text-muted-foreground"
@@ -686,7 +685,7 @@
                         Created
                       </p>
                       <p class="font-mono text-sm text-muted-foreground">
-                        {{ link._creationTime | date: 'shortDate' }}
+                        {{ link._creationTime | date: ADMIN_DATE }}
                       </p>
                     </div>
                     <div>
@@ -697,7 +696,7 @@
                       </p>
                       <p class="font-mono text-sm text-muted-foreground">
                         @if (link.lastUsedAt) {
-                          {{ link.lastUsedAt | date: 'shortDate' }}
+                          {{ link.lastUsedAt | date: ADMIN_DATE }}
                         } @else {
                           never
                         }
@@ -711,7 +710,7 @@
                       </p>
                       <p class="font-mono text-sm text-muted-foreground">
                         @if (link.expiresAt) {
-                          {{ link.expiresAt | date: 'shortDate' }}
+                          {{ link.expiresAt | date: ADMIN_DATE }}
                         } @else {
                           —
                         }
@@ -836,7 +835,7 @@
                 <tbody class="divide-y divide-border/50">
                   @for (link of pastLinks(); track link._id) {
                     <tr
-                      class="opacity-70 transition-colors hover:bg-muted/30"
+                      class="bg-muted/30 transition-colors hover:bg-muted/50"
                       data-testid="magic-link-past-row"
                     >
                       <td class="max-w-0 p-5 align-middle">
@@ -870,13 +869,13 @@
                       <td
                         class="p-5 align-middle font-mono text-xs text-muted-foreground"
                       >
-                        {{ link._creationTime | date: 'mediumDate' }}
+                        {{ link._creationTime | date: ADMIN_DATE }}
                       </td>
                       <td
                         class="p-5 align-middle font-mono text-xs text-muted-foreground"
                       >
                         @if (link.lastUsedAt) {
-                          {{ link.lastUsedAt | date: 'mediumDate' }}
+                          {{ link.lastUsedAt | date: ADMIN_DATE }}
                         } @else {
                           <span>never</span>
                         }
@@ -885,7 +884,7 @@
                         class="p-5 align-middle font-mono text-xs text-muted-foreground"
                       >
                         @if (link.expiresAt) {
-                          {{ link.expiresAt | date: 'mediumDate' }}
+                          {{ link.expiresAt | date: ADMIN_DATE }}
                         } @else {
                           <span>—</span>
                         }
@@ -893,7 +892,7 @@
                       <td
                         class="p-5 align-middle font-mono text-xs text-muted-foreground"
                       >
-                        {{ link.deletedAt | date: 'mediumDate' }}
+                        {{ link.deletedAt | date: ADMIN_DATE }}
                       </td>
                     </tr>
                   }
@@ -905,13 +904,14 @@
             <div class="ph-no-capture space-y-4 md:hidden">
               @for (link of pastLinks(); track link._id) {
                 <div
-                  class="space-y-3 rounded-xl border border-border/50 bg-card/80 p-5 opacity-70"
+                  class="space-y-3 rounded-xl border border-border/50 bg-muted/30 p-5"
                   data-testid="magic-link-past-card"
                 >
                   <div class="flex items-start justify-between gap-3">
                     <div class="min-w-0">
-                      <h3
+                      <h2
                         class="truncate font-display text-lg font-bold tracking-wide text-muted-foreground"
+                        data-testid="magic-link-mobile-heading"
                         [title]="
                           link.label ||
                           (link.tokenPrefix
@@ -925,7 +925,7 @@
                               ? 'Link ' + link.tokenPrefix
                               : 'Link')
                         }}
-                      </h3>
+                      </h2>
                       <p class="mt-1 font-mono text-xs text-muted-foreground">
                         {{ link.tokenPrefix || 'hidden' }}
                       </p>
@@ -954,7 +954,7 @@
                         Created
                       </p>
                       <p class="font-mono text-sm text-muted-foreground">
-                        {{ link._creationTime | date: 'shortDate' }}
+                        {{ link._creationTime | date: ADMIN_DATE }}
                       </p>
                     </div>
                     <div>
@@ -964,7 +964,7 @@
                         Deleted
                       </p>
                       <p class="font-mono text-sm text-muted-foreground">
-                        {{ link.deletedAt | date: 'shortDate' }}
+                        {{ link.deletedAt | date: ADMIN_DATE }}
                       </p>
                     </div>
                     <div>
@@ -975,7 +975,7 @@
                       </p>
                       <p class="font-mono text-sm text-muted-foreground">
                         @if (link.lastUsedAt) {
-                          {{ link.lastUsedAt | date: 'shortDate' }}
+                          {{ link.lastUsedAt | date: ADMIN_DATE }}
                         } @else {
                           never
                         }
@@ -997,13 +997,14 @@
             aria-labelledby="create-link-title"
             (keydown.escape)="closeCreateDialog()"
           >
-            <!-- Backdrop -->
+            <!-- Backdrop: decorative click-to-dismiss surface. Keyboard
+                 dismissal is Escape on the dialog container, so this stays
+                 out of the tab order and hidden from assistive tech. -->
             <div
               class="absolute inset-0 bg-background/80 backdrop-blur-sm"
+              data-testid="create-link-backdrop"
+              aria-hidden="true"
               (click)="closeCreateDialog()"
-              (keydown.enter)="closeCreateDialog()"
-              (keydown.space)="closeCreateDialog(); $event.preventDefault()"
-              tabindex="0"
             ></div>
             <!-- Dialog Content -->
             <div
@@ -1100,18 +1101,18 @@
                   class="flex-1"
                   (click)="closeCreateDialog()"
                 >
-                  CANCEL
+                  cancel
                 </button>
                 <button
                   type="button"
                   z-button
                   zType="default"
-                  class="flex-1 border-none bg-primary text-primary-foreground shadow-[0_0_20px_-5px_hsl(var(--primary)/0.4)] hover:bg-primary/90"
+                  class="flex-1"
                   [zLoading]="isCreating()"
                   [zDisabled]="isCreating()"
                   (click)="createLink()"
                 >
-                  CREATE
+                  create
                 </button>
               </div>
             </div>

@@ -28,6 +28,7 @@ import {
 import {functionReferenceMatches} from '@/testing/convex-reference-matchers';
 import {api} from '@convex/_generated/api';
 import {toast} from 'ngx-sonner';
+import {createDeferred} from '@/testing/deferred';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -129,16 +130,6 @@ function makeMagicLink(
     redemptionCount: 0,
     ...overrides,
   };
-}
-
-function createDeferred<T>() {
-  let resolve!: (value: T | PromiseLike<T>) => void;
-  let reject!: (reason?: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return {promise, resolve, reject};
 }
 
 function createActivatedRouteMock(
@@ -467,6 +458,23 @@ describe('CommunityAdminComponent', () => {
       });
 
       expect(fixture.componentInstance.activeTab()).toBe('history');
+    });
+
+    it('keeps the mobile section selector aligned with live route params', async () => {
+      const routeParamMap$ = new BehaviorSubject(
+        convertToParamMap({tab: 'events'}),
+      );
+      const {fixture, harness} = await setup({
+        tab: 'pending',
+        routeParamMap$,
+      });
+
+      expect(await harness.getSelectedMobileSectionValue()).toBe('events');
+
+      routeParamMap$.next(convertToParamMap({tab: 'settings'}));
+      await fixture.whenStable();
+
+      expect(await harness.getSelectedMobileSectionValue()).toBe('settings');
     });
 
     it('sets activeTab to "members" when tab input is "members"', async () => {
@@ -817,6 +825,20 @@ describe('CommunityAdminComponent', () => {
       expect(text).toContain('A shortcut past the application process');
     });
 
+    it('uses level-two headings for mobile magic-link cards', async () => {
+      const link = makeMagicLink({
+        _id: 'link-heading' as Id<'magic_links'>,
+        label: 'Heading Check',
+      });
+      const controller = createMagicLinksQueryController([link]);
+      const {harness} = await setup({
+        tab: 'magic-links',
+        magicLinksController: controller,
+      });
+
+      expect(await harness.getMagicLinkMobileHeadingTags()).toEqual(['H2']);
+    });
+
     it('scopes magic link queries to the selected community', async () => {
       const selectedId = 'org-selected' as Id<'organizers'>;
       const {convexMock} = await setup({
@@ -1112,6 +1134,45 @@ describe('CommunityAdminComponent', () => {
       newFixture.detectChanges();
       await newFixture.whenStable();
 
+      expect(await newHarness.hasCreateDialog()).toBe(false);
+    });
+
+    it('keeps the create-dialog backdrop non-focusable and hidden from assistive tech', async () => {
+      const {convexMock} = await setup({tab: 'magic-links'});
+
+      convexMock.client.onUpdate.mockImplementation(
+        (
+          _query: unknown,
+          _args: unknown,
+          onData: (data: unknown[]) => void,
+        ) => {
+          emitAsync(() => onData([]));
+          return () => void 0;
+        },
+      );
+
+      const newFixture = TestBed.createComponent(CommunityAdminComponent);
+      newFixture.componentRef.setInput('tab', 'magic-links');
+      newFixture.detectChanges();
+      await newFixture.whenStable();
+
+      newFixture.componentInstance.openCreateDialog();
+      newFixture.detectChanges();
+      await newFixture.whenStable();
+
+      const newHarness = await TestbedHarnessEnvironment.harnessForFixture(
+        newFixture,
+        CommunityAdminHarness,
+      );
+      expect(await newHarness.hasCreateDialog()).toBe(true);
+      // Decorative dismiss surface: out of the a11y tree and tab order.
+      expect(await newHarness.getDialogBackdropAriaHidden()).toBe('true');
+      expect(await newHarness.getDialogBackdropTabIndex()).toBeNull();
+
+      // Pointer dismissal still works.
+      await newHarness.clickDialogBackdrop();
+      newFixture.detectChanges();
+      await newFixture.whenStable();
       expect(await newHarness.hasCreateDialog()).toBe(false);
     });
 

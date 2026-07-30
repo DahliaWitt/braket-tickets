@@ -1,4 +1,4 @@
-import { ComponentHarness, type TestElement } from '@angular/cdk/testing';
+import {ComponentHarness, type TestElement} from '@angular/cdk/testing';
 
 export class BraCalendarGridComponentHarness extends ComponentHarness {
   static hostSelector = 'bra-calendar-grid';
@@ -14,6 +14,30 @@ export class BraCalendarGridComponentHarness extends ComponentHarness {
   async getAllDayLabels(): Promise<string[]> {
     const buttons = await this.getDayButtons();
     return Promise.all(buttons.map((b) => b.text()));
+  }
+
+  /**
+   * Returns the month and year the grid is actually rendering, derived from the
+   * in-month day cells (those whose aria-label is NOT marked "Outside month").
+   * Format: "February 2026". Returns null if it cannot be determined.
+   *
+   * This reads the rendered grid rather than the navigation header, so it can
+   * catch a grid/header disagreement (e.g. month rollover from a selected 31st).
+   */
+  async getRenderedMonthYear(): Promise<string | null> {
+    const buttons = await this.getDayButtons();
+    for (const btn of buttons) {
+      const ariaLabel = await btn.getAttribute('aria-label');
+      if (!ariaLabel || ariaLabel.includes('Outside month')) {
+        continue;
+      }
+      // aria-label format: "Wednesday, February 4, 2026" (weekday, month, day, year)
+      const match = /([A-Za-z]+)\s+\d{1,2},\s*(\d{4})/.exec(ariaLabel);
+      if (match) {
+        return `${match[1]} ${match[2]}`;
+      }
+    }
+    return null;
   }
 
   async getEnabledDayLabels(): Promise<string[]> {
@@ -44,7 +68,9 @@ export class BraCalendarGridComponentHarness extends ComponentHarness {
   async clickDayByIndex(index: number): Promise<void> {
     const buttons = await this.getDayButtons();
     if (index < 0 || index >= buttons.length) {
-      throw new Error(`Day button index ${index} out of range (0-${buttons.length - 1})`);
+      throw new Error(
+        `Day button index ${index} out of range (0-${buttons.length - 1})`,
+      );
     }
     await buttons[index].click();
   }

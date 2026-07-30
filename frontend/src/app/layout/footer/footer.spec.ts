@@ -53,6 +53,14 @@ describe('FooterComponent', () => {
     expect(await harness.hasFooterLandmark()).toBe(true);
   });
 
+  it('applies the foreground token directly to every navigation action', async () => {
+    expect(await harness.navActionsUseForegroundToken()).toBe(true);
+  });
+
+  it('keeps a visible hover affordance on every navigation action', async () => {
+    expect(await harness.navActionsHaveHoverAffordance()).toBe(true);
+  });
+
   it('does not render a help link', async () => {
     expect(await harness.getNavText()).not.toContain('Help');
   });
@@ -71,7 +79,7 @@ describe('FooterComponent', () => {
 
     await vi.waitFor(() =>
       expect(toastMock.error).toHaveBeenCalledWith(
-        'Feedback is unavailable right now.',
+        'feedback is unavailable right now',
       ),
     );
   });
@@ -85,7 +93,7 @@ describe('FooterComponent', () => {
 
     await vi.waitFor(() =>
       expect(toastMock.error).toHaveBeenCalledWith(
-        'Feedback is unavailable right now.',
+        'feedback is unavailable right now',
       ),
     );
   });

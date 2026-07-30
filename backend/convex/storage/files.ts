@@ -1,9 +1,15 @@
 import {v} from 'convex/values';
-import {action, internalMutation, mutation} from '../_generated/server';
+import {
+  action,
+  internalMutation,
+  internalQuery,
+  mutation,
+} from '../_generated/server';
 import {internal} from '../_generated/api';
 import {getAuthUserId, requireUser} from '../lib/auth_identity';
 import {getAppErrorMessage, throwUnauthenticated} from '../lib/errors';
 import {rateLimiter} from '../lib/rate_limits';
+import {findPublishedEmailImage} from '../lib/email/rich_text_images';
 
 // Allowed MIME types for file uploads
 const ALLOWED_MIME_TYPES = [
@@ -197,6 +203,12 @@ export const confirmUpload = action({
   returns: v.object({
     valid: v.boolean(),
     storageId: v.optional(v.id('_storage')),
+    // SIGNED, short-lived storage URL for the confirmed file. PREVIEW ONLY —
+    // used to display the image in the composer immediately after upload. It is
+    // NOT persisted or emailed: signed URLs expire, so emails embed the durable
+    // server-owned route (/api/images/{storageId}) instead, resolved at send
+    // time from the storageId. Present only on the success path.
+    url: v.optional(v.string()),
     error: v.optional(v.string()),
   }),
   handler: async (ctx, args) => {
@@ -278,7 +290,14 @@ export const confirmUpload = action({
       };
     }
 
-    return {valid: true, storageId: args.storageId};
+    // Resolve a SIGNED preview URL for the confirmed file so the composer can
+    // display it immediately. This is preview-only: it is never persisted or
+    // emailed (signed URLs expire). Emails embed the durable server-owned route
+    // /api/images/{storageId} instead. Null coalesces to undefined to satisfy
+    // the optional return validator.
+    const url = (await ctx.storage.getUrl(args.storageId)) ?? undefined;
+
+    return {valid: true, storageId: args.storageId, url};
   },
 });
 
@@ -324,34 +343,136 @@ export const _markUploadConfirmed = internalMutation({
   },
 });
 
+/**
+ * Resolves a PUBLISHED EMAIL image for the public image route.
+ *
+ * The gate is `richEmailImages` membership ALONE. A registry row is only ever
+ * written by a send handler AFTER the confirmed-upload + sender-ownership
+ * checks passed, so membership proves the file was magic-byte validated at
+ * send time. Deliberately NO live `confirmedUploads` requirement: sent emails
+ * embed durable `/api/images` URLs, and upload-lifecycle cleanup (e.g. a
+ * poster being replaced via `cleanupReplacedUpload`) must never retroactively
+ * break an already-delivered email. Published blobs are likewise pinned
+ * against deletion by that cleanup.
+ *
+ * Unpublished ids — event posters, community logos, abandoned composer drafts,
+ * any future upload category — return null and 404 on the route.
+ *
+ * The content type is read from the `_storage` system metadata and clamped to
+ * the image allowlist (see the clamp comment below).
+ */
+export const getPublishedEmailImage = internalQuery({
+  args: {storageId: v.string()},
+  returns: v.union(
+    v.null(),
+    v.object({
+      storageId: v.id('_storage'),
+      contentType: v.string(),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    // The published-image gate is centralized in `findPublishedEmailImage` so
+    // this serve route, upload-cleanup pinning, and the send path can never
+    // diverge on what counts as "published". A malformed id string can make the
+    // index comparison throw; treat any throw as "not found" so a forged id
+    // fails closed (404) rather than 500s.
+    let published;
+    try {
+      published = await findPublishedEmailImage(ctx, args.storageId);
+    } catch {
+      return null;
+    }
+    if (published === null) {
+      return null;
+    }
+
+    // published.storageId is a real stored id, so system.get is safe here.
+    const metadata = await ctx.db.system.get('_storage', published.storageId);
+    if (metadata === null) {
+      return null;
+    }
+
+    // Clamp to the validated image allowlist. `_storage` contentType is set by
+    // the client at upload time, so serving it verbatim would let a magic-byte-
+    // valid polyglot be served as e.g. text/html. Anything outside the image
+    // allowlist becomes a non-renderable octet-stream (paired with `nosniff` on
+    // the public route) so it can never execute as HTML.
+    const metaType = metadata.contentType ?? '';
+    return {
+      storageId: published.storageId,
+      contentType: isAllowedMimeType(metaType)
+        ? metaType
+        : 'application/octet-stream',
+    };
+  },
+});
+
 const ORPHAN_AGE_THRESHOLD_MS = 60 * 60 * 1000; // 1 hour
-const ORPHAN_DELETE_BATCH_SIZE = 50;
-const ORPHAN_SCAN_LIMIT = 500;
+// Files examined per transaction. Bounds reads (~2x this, counting the
+// per-file confirmedUploads lookup) and writes (at most this many deletes)
+// so a single mutation stays well within Convex transaction limits.
+const ORPHAN_SCAN_PAGE_SIZE = 200;
 
 /**
  * Deletes stored files that were never confirmed via confirmUpload.
  *
- * Iterates _storage entries older than 1 hour in ascending creation order.
+ * Walks _storage entries older than 1 hour in ascending creation order.
  * Files without a matching confirmedUploads record are orphans — uploaded
  * but never confirmed (abandoned uploads, client crashes, failed flows).
  *
- * Scans up to ORPHAN_SCAN_LIMIT entries and deletes at most
- * ORPHAN_DELETE_BATCH_SIZE orphans per run, so confirmed files don't
- * exhaust the batch budget. Registered as an hourly cron.
+ * Forward-progress design: confirmed files (event posters, community logos)
+ * are permanent and accumulate at the head of the creation-time ordering.
+ * A fixed from-the-head scan budget would be exhausted by that confirmed
+ * backlog and never reach newer orphans. Instead this scans a bounded page
+ * via the `by_creation_time` index starting strictly after `afterCreationTime`
+ * and, when a full page of aged files is consumed, reschedules itself with the
+ * cursor advanced to the last scanned file. The cursor is monotonically
+ * increasing (Convex `_creationTime` is unique and ordered within a table), so
+ * the sweep advances past any confirmed backlog and provably reaches every
+ * aged orphan. It terminates because the set of files older than `cutoff` is
+ * finite and fixed at sweep start — newly uploaded files have `_creationTime`
+ * at/after `now`, which is beyond `cutoff`, so they cannot extend the sweep.
+ *
+ * The initial (hourly cron) invocation passes no args: `afterCreationTime`
+ * defaults to 0 (scan from the head) and `nowMs` defaults to `Date.now()`.
  */
 export const _cleanupOrphanedUploads = internalMutation({
-  args: {},
+  args: {
+    // Creation-time cursor. Only files created strictly after this timestamp
+    // are scanned. Threaded across self-rescheduled continuations so the sweep
+    // advances instead of restarting from the head each run. Absent on the
+    // initial cron-triggered invocation (defaults to 0 = scan from the head).
+    afterCreationTime: v.optional(v.number()),
+    // Fixed "now" reference so every batch of a sweep shares one stable
+    // cutoff. The initial cron invocation omits it (resolves to Date.now());
+    // that resolved value is then threaded through every self-rescheduled
+    // continuation so the cutoff cannot drift forward mid-sweep. Tests pass it
+    // to age stored files deterministically.
+    nowMs: v.optional(v.number()),
+  },
   returns: v.null(),
-  handler: async (ctx) => {
-    const cutoff = Date.now() - ORPHAN_AGE_THRESHOLD_MS;
-    let deleted = 0;
-    let scanned = 0;
+  handler: async (ctx, args) => {
+    const now = args.nowMs ?? Date.now();
+    const cutoff = now - ORPHAN_AGE_THRESHOLD_MS;
+    const afterCreationTime = args.afterCreationTime ?? 0;
 
-    for await (const file of ctx.db.system.query('_storage')) {
-      if (file._creationTime >= cutoff) break;
-      if (deleted >= ORPHAN_DELETE_BATCH_SIZE) break;
-      if (scanned >= ORPHAN_SCAN_LIMIT) break;
-      scanned++;
+    const files = await ctx.db.system
+      .query('_storage')
+      .withIndex('by_creation_time', (q) =>
+        q.gt('_creationTime', afterCreationTime),
+      )
+      .take(ORPHAN_SCAN_PAGE_SIZE);
+
+    let lastScannedCreationTime = afterCreationTime;
+    let reachedYoungFile = false;
+
+    for (const file of files) {
+      // Ascending creation order: the first file at/after the cutoff means
+      // every remaining file is also too young. Stop the sweep here.
+      if (file._creationTime >= cutoff) {
+        reachedYoungFile = true;
+        break;
+      }
 
       const confirmed = await ctx.db
         .query('confirmedUploads')
@@ -360,8 +481,26 @@ export const _cleanupOrphanedUploads = internalMutation({
 
       if (!confirmed) {
         await ctx.storage.delete(file._id);
-        deleted++;
       }
+
+      lastScannedCreationTime = file._creationTime;
+    }
+
+    // Continue only when this page was full of aged files: more aged
+    // candidates may remain past the cursor. Advancing the cursor guarantees
+    // the next run makes forward progress instead of rescanning the head.
+    const shouldContinue =
+      !reachedYoungFile && files.length === ORPHAN_SCAN_PAGE_SIZE;
+
+    if (shouldContinue) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.storage.files._cleanupOrphanedUploads,
+        // Thread the resolved `now`, not `args.nowMs`, so a cron-started sweep
+        // (which omits nowMs) freezes its cutoff at the first batch instead of
+        // recomputing Date.now() and drifting forward across continuations.
+        {afterCreationTime: lastScannedCreationTime, nowMs: now},
+      );
     }
 
     return null;

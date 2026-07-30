@@ -798,6 +798,57 @@ describe('DashboardComponent', () => {
       expect(await harness.getGetTicketsHrefs()).toEqual([]);
     });
 
+    it('should render "View Event" as a real link when the event is not purchasable', async () => {
+      setup({
+        approvals: mockApprovals,
+        events: [mockEvent],
+        eventAvailability: {
+          '1': {
+            isSoldOut: true,
+            userTicketCount: 0,
+            ticketSalesStatus: 'active',
+            purchaseAccess: {allowed: true, source: 'direct'},
+          },
+        },
+      });
+      await createComponent();
+
+      expect(await harness.hasGetTicketsCta()).toBe(false);
+      expect(await harness.getViewEventHrefs()).toEqual(['/events/1']);
+    });
+
+    it('should not render the "View Event" fallback when the event is purchasable', async () => {
+      setup({
+        approvals: mockApprovals,
+        events: [mockEvent],
+        eventAvailability: purchaseAccessFor([mockEvent]),
+      });
+      await createComponent();
+
+      expect(await harness.hasGetTicketsCta()).toBe(true);
+      expect(await harness.getViewEventHrefs()).toEqual([]);
+    });
+
+    it('should render a lock badge on vetting-required event posters instead of dimming the card', async () => {
+      // Viewable (vetting-required) events render in the new-user branch.
+      setup({
+        approvals: [],
+        myApplications: [],
+        events: [mockViewableEvent],
+        eventAvailability: {
+          [mockViewableEvent._id]: {
+            isSoldOut: false,
+            userTicketCount: 0,
+            ticketSalesStatus: 'active',
+            purchaseAccess: {allowed: false},
+          },
+        },
+      });
+      await createComponent();
+
+      expect(await harness.getVettingLockCount()).toBe(1);
+    });
+
     it('should hide events when availability is unavailable', async () => {
       setup({
         approvals: mockApprovals,
@@ -1101,6 +1152,63 @@ describe('DashboardComponent', () => {
 
       expect(fixture.componentInstance.dashboardEvents()[0]?.canPurchase).toBe(
         true,
+      );
+    });
+
+    it('should not allow ticket purchase when sales are paused', async () => {
+      setup({
+        approvals: mockApprovals,
+        eventAvailability: {
+          [mockEvent._id]: {
+            isSoldOut: false,
+            userTicketCount: 0,
+            ticketSalesStatus: 'paused',
+            purchaseAccess: {allowed: true, source: 'direct'},
+          },
+        },
+      });
+      await createComponent();
+
+      expect(fixture.componentInstance.dashboardEvents()[0]?.canPurchase).toBe(
+        false,
+      );
+    });
+
+    it('should not allow ticket purchase when sales have ended', async () => {
+      setup({
+        approvals: mockApprovals,
+        eventAvailability: {
+          [mockEvent._id]: {
+            isSoldOut: false,
+            userTicketCount: 0,
+            ticketSalesStatus: 'ended',
+            purchaseAccess: {allowed: true, source: 'direct'},
+          },
+        },
+      });
+      await createComponent();
+
+      expect(fixture.componentInstance.dashboardEvents()[0]?.canPurchase).toBe(
+        false,
+      );
+    });
+
+    it('should not allow ticket purchase when the per-user limit is reached', async () => {
+      setup({
+        approvals: mockApprovals,
+        eventAvailability: {
+          [mockEvent._id]: {
+            isSoldOut: false,
+            userTicketCount: 4,
+            ticketSalesStatus: 'active',
+            purchaseAccess: {allowed: true, source: 'direct'},
+          },
+        },
+      });
+      await createComponent();
+
+      expect(fixture.componentInstance.dashboardEvents()[0]?.canPurchase).toBe(
+        false,
       );
     });
 

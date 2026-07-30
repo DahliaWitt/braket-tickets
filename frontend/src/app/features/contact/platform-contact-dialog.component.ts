@@ -24,16 +24,16 @@ export interface PlatformContactDialogData {
   imports: [ZardButtonComponent, ZardIconComponent],
   template: `
     <section class="flex flex-col gap-5" data-testid="platform-contact-dialog">
-      <div class="rounded-xl border border-border bg-muted/30 p-4">
+      <div class="rounded-lg border border-border bg-muted/30 p-4">
         <div class="flex items-start justify-between gap-4">
           <div class="min-w-0 space-y-1">
             <p
-              class="text-xs font-mono uppercase tracking-widest text-muted-foreground"
+              class="font-mono text-xs tracking-widest text-muted-foreground uppercase"
             >
               Email
             </p>
             <p
-              class="break-all text-sm font-medium text-foreground"
+              class="text-sm font-medium break-all text-foreground"
               data-testid="platform-contact-email"
             >
               {{ email() }}
@@ -44,22 +44,26 @@ export interface PlatformContactDialogData {
 
         <div class="mt-4 grid gap-2 sm:grid-cols-2">
           <a
+            z-button
+            zType="default"
+            zSize="lg"
             [href]="mailtoHref()"
             data-testid="platform-contact-open-mail"
-            class="inline-flex h-11 w-full cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-xs transition-[transform,color,background-color,opacity] outline-none hover:bg-primary/90 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 active:scale-97 dark:bg-primary/90 dark:hover:bg-primary/85 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+            class="w-full"
           >
-            <z-icon zType="mail" class="mr-2" />
+            <z-icon zType="mail" />
             Open mail client
           </a>
           <button
             type="button"
             z-button
             zType="outline"
+            zSize="lg"
             data-testid="platform-contact-copy-email"
             class="w-full"
             (click)="copyEmail()"
           >
-            <z-icon zType="copy" class="mr-2" />
+            <z-icon zType="copy" />
             Copy email
           </button>
         </div>
@@ -96,10 +100,10 @@ export class PlatformContactDialogComponent {
   async copyEmail(): Promise<void> {
     try {
       await this.browser.writeClipboardText(this.data.email);
-      toast.success('Email copied');
+      toast.success('email copied');
     } catch (error) {
       logger.error('Failed to copy email', error);
-      toast.error('Failed to copy email');
+      toast.error("couldn't copy email, try again");
     }
   }
 }

@@ -46,8 +46,8 @@ type ConfirmState = 'loading' | 'pending' | 'success' | 'error';
               <app-confirmation-state
                 iconId="success-icon"
                 icon="check"
-                title="Email Changed!"
-                description="Your email has been successfully updated."
+                title="email changed"
+                description="Your email has been updated."
                 variant="success"
               >
                 <a
@@ -218,10 +218,7 @@ export class ConfirmEmailChangeComponent {
     }
 
     try {
-      await this.auth.handleOAuthCallback(ott, {
-        navigateOnSuccess: false,
-        syncUserToApp: true,
-      });
+      await this.auth.handleOAuthCallback(ott, {navigateOnSuccess: false});
       this.callbackCompleted.set(true);
     } catch (err: unknown) {
       this.error.set(

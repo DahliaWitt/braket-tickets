@@ -1,5 +1,10 @@
-import {ComponentHarness, type TestElement} from '@angular/cdk/testing';
+import {
+  ComponentHarness,
+  HarnessPredicate,
+  type TestElement,
+} from '@angular/cdk/testing';
 import type {EventVisibility} from '@shared/domain/event-visibility';
+import {BraDatePickerComponentHarness} from '@/ui/components/composites/date-picker/date-picker.component.harness';
 
 export class EventEditorHarness extends ComponentHarness {
   static hostSelector = 'app-event-editor';
@@ -71,13 +76,10 @@ export class EventEditorHarness extends ComponentHarness {
   }
 
   private getTitleInput = this.locatorFor('input#title');
-  private getDatePicker = this.locatorFor('bra-date-picker');
   private getLocationInput = this.locatorFor('input#location');
   private getDescriptionTextArea = this.locatorFor('textarea#description');
   private getSaveButton = this.locatorFor('button[zType="default"]');
   private getCancelButton = this.locatorFor('button[z-button][zType="ghost"]');
-  private getFileInput = this.locatorFor('input[type="file"]');
-  private getSelectFileLabel = this.locatorFor('label.cursor-pointer');
   private getFileNameText = this.locatorFor('span.truncate');
   private getClearFileButton = this.locatorFor(
     '[data-testid="poster-clear-btn"]',
@@ -88,6 +90,9 @@ export class EventEditorHarness extends ComponentHarness {
   );
   private getSlidingScaleMaxInput = this.locatorForOptional(
     'input#slidingScaleMax',
+  );
+  private getSupporterPriceInput = this.locatorFor(
+    'input#supporterDefaultPrice',
   );
   private getMaxTicketsPerUserInput = this.locatorFor(
     'input#maxTicketsPerUser',
@@ -143,20 +148,21 @@ export class EventEditorHarness extends ComponentHarness {
     await input.blur();
   }
 
-  async setDate(_value: string) {
-    const _datePicker = await this.getDatePicker();
-    // Use the component instance to set value directly since interacting with
-    // the actual popover calendar in a unit test is very high ceremony.
-    const _host = await this.host();
-    // This expects the harness to be used with TestbedHarnessEnvironment
-    // and access to the component instance if needed.
-    // However, harnesses shouldn't ideally reach into internals.
-    // Let's try sending keys to the date picker's button if it supports it,
-    // but the component uses Reactive Forms, so setting value on the host
-    // or triggering events is better.
+  /**
+   * Types into the supporter-price field via real key events, so the native
+   * `(input)` handler (which marks the field user-edited) fires exactly as it
+   * would for a user.
+   */
+  async setSupporterPrice(value: string) {
+    const input = await this.getSupporterPriceInput();
+    await input.clear();
+    await input.sendKeys(value);
+    await input.blur();
+  }
 
-    // A better way for these Zard components is to use their public API if available.
-    // For now, let's keep it simple as a test helper.
+  async getSupporterPrice(): Promise<string> {
+    const input = await this.getSupporterPriceInput();
+    return input.getProperty('value');
   }
 
   async isSaveButtonDisabled() {
@@ -179,14 +185,6 @@ export class EventEditorHarness extends ComponentHarness {
   async clickCancel() {
     const button = await this.getCancelButton();
     await button.click();
-  }
-
-  async selectFile(_fileName: string) {
-    const _input = await this.getFileInput();
-    // Simulate file selection. testing-library or standard events might be needed for full realism,
-    // but we can try to trigger change event or manually set property if possible.
-    // In many cases, we mock the signal directly in the spec, but let's see if we can trigger it.
-    // Standard CDK testing sendKeys doesn't always work for file inputs.
   }
 
   async getFileName() {
@@ -342,6 +340,34 @@ export class EventEditorHarness extends ComponentHarness {
     await input.clear();
     await input.sendKeys(value);
     await input.blur();
+  }
+
+  async getEndTimeValue(): Promise<string> {
+    const input = await this.getEndTimeInput();
+    return input.getProperty('value');
+  }
+
+  /** The start-date picker (required — must never expose a clear affordance). */
+  getStartDatePicker(): Promise<BraDatePickerComponentHarness> {
+    return this.locatorFor(
+      new HarnessPredicate(BraDatePickerComponentHarness, {
+        selector: '[data-testid="start-date-picker"]',
+      }),
+    )();
+  }
+
+  /** The optional end-date picker (clearable). */
+  getEndDatePicker(): Promise<BraDatePickerComponentHarness> {
+    return this.locatorFor(
+      new HarnessPredicate(BraDatePickerComponentHarness, {
+        selector: '[data-testid="end-date-picker"]',
+      }),
+    )();
+  }
+
+  async clearEndDate(): Promise<void> {
+    const picker = await this.getEndDatePicker();
+    await picker.clear();
   }
 
   async getEndTimeErrorText() {

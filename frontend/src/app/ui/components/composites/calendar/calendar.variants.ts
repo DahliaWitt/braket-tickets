@@ -1,23 +1,23 @@
 import {cva} from 'class-variance-authority';
 
 export const calendarVariants = cva(
-  'bg-popover p-3 w-fit rounded-lg border border-border text-popover-foreground',
+  'w-fit rounded-lg border border-border bg-popover p-3 text-popover-foreground',
 );
 
 export const calendarNavVariants = cva(
-  'flex items-center justify-between gap-2 w-fit mb-4',
+  'mb-4 flex w-fit items-center justify-between gap-2',
 );
 
 export const calendarWeekdayVariants = cva(
-  'text-muted-foreground font-mono font-normal uppercase tracking-widest text-center text-[0.7rem] w-8',
+  'w-8 text-center font-mono text-[0.7rem] font-normal tracking-widest text-muted-foreground uppercase',
 );
 
 export const calendarDayVariants = cva(
-  'p-0 relative focus-within:relative focus-within:z-20 flex mt-1 h-8 w-8 text-sm',
+  'relative mt-1 flex h-8 w-8 p-0 text-sm focus-within:relative focus-within:z-20',
 );
 
 export const calendarDayButtonVariants = cva(
-  'p-0 font-mono font-normal flex items-center justify-center whitespace-nowrap rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/20 disabled:pointer-events-none disabled:opacity-40 hover:bg-primary/10 hover:text-foreground w-full h-full text-sm',
+  'flex h-full w-full cursor-pointer items-center justify-center rounded-md p-0 font-mono text-sm font-normal whitespace-nowrap transition-colors hover:bg-primary/10 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/20 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-40',
   {
     variants: {
       selected: {
@@ -33,7 +33,7 @@ export const calendarDayButtonVariants = cva(
         false: '',
       },
       disabled: {
-        true: 'text-muted-foreground opacity-50 cursor-not-allowed',
+        true: 'cursor-not-allowed text-muted-foreground opacity-50',
         false: '',
       },
       rangeStart: {

@@ -426,6 +426,12 @@ export class AdminCommunityEditorComponent {
         await this.communitiesService.update({
           id: this.communityId()!,
           ...payload,
+          // Explicit `null` clears these optional fields on update; `payload`
+          // uses `undefined` (create-safe), which the backend would treat as
+          // "leave unchanged", so cleared values never persisted.
+          email: formValue.email || null,
+          contactInfo: formValue.contactInfo || null,
+          description: formValue.description || null,
         });
       } else {
         await this.communitiesService.create(payload);

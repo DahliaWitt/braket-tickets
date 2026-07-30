@@ -120,7 +120,7 @@ crons.interval(
  * Reap Stale Stripe Webhook Claims
  *
  * Runs every 30 minutes to promote `stripe_webhook_events` rows that have
- * been stuck in `pending` past REAPER_FAILURE_TIMEOUT_MS (24h) to `failed`.
+ * been stuck in `pending` past REAPER_FAILURE_TIMEOUT_MS (96h) to `failed`.
  * This bounds the lifetime of claims abandoned by crashed actions whose
  * Stripe retries also exhausted, surfacing them for operator inspection.
  *
@@ -143,7 +143,9 @@ crons.interval(
  * Runs hourly to delete stored files that were never confirmed via
  * confirmUpload. Files older than 1 hour without a confirmedUploads
  * record are orphans from abandoned uploads or client crashes.
- * Scans up to 500 entries and deletes at most 50 per run.
+ * Sweeps the _storage creation-time index in bounded pages, advancing a
+ * cursor and self-rescheduling so the confirmed-file backlog cannot starve
+ * newer orphans.
  *
  * @see convex/storage/files.ts - _cleanupOrphanedUploads
  */

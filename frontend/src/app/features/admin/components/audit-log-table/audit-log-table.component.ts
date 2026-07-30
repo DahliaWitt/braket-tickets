@@ -5,8 +5,10 @@ import {
   input,
   signal,
 } from '@angular/core';
+import {formatDate} from '@angular/common';
 import {RouterLink} from '@angular/router';
 import {injectPaginatedQuery, skipToken} from 'convex-angular';
+import {ADMIN_DATETIME} from '@/features/admin/utils/date-formats';
 import {type FunctionReturnType} from 'convex/server';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
@@ -263,14 +265,12 @@ const TIME_WINDOW_OPTIONS = [
   styles: [
     `
       .audit-row-enter {
-        opacity: 0;
         transform: translateY(4px);
         animation: auditRowIn 300ms ease forwards;
       }
 
       @keyframes auditRowIn {
         to {
-          opacity: 1;
           transform: translateY(0);
         }
       }
@@ -292,7 +292,6 @@ const TIME_WINDOW_OPTIONS = [
       @media (prefers-reduced-motion: reduce) {
         .audit-row-enter {
           animation: none;
-          opacity: 1;
           transform: none;
         }
         .audit-detail-expand {
@@ -423,12 +422,6 @@ export class AuditLogTableComponent {
   }
 
   protected absoluteTime(timestamp: number): string {
-    return new Date(timestamp).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
+    return formatDate(timestamp, ADMIN_DATETIME, 'en-US');
   }
 }

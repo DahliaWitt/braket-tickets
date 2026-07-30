@@ -3,7 +3,7 @@ import {DestroyRef, Injectable, inject, signal} from '@angular/core';
 import {injectConvex} from 'convex-angular';
 import {api} from '@convex/_generated/api';
 import {type Id} from '@convex/_generated/dataModel';
-import {type FunctionReturnType} from 'convex/server';
+import {type FunctionArgs, type FunctionReturnType} from 'convex/server';
 import {logger} from '@/utils/logger';
 import {parseQRScanData} from '../pages/check-in/qr-parse';
 import {WEB_HAPTICS_CTOR} from './web-haptics.token';
@@ -11,6 +11,12 @@ import {WEB_HAPTICS_CTOR} from './web-haptics.token';
 type CheckInResult = FunctionReturnType<typeof api.events.check_in.checkIn> & {
   error?: string;
 };
+type RevertCheckInResult = FunctionReturnType<
+  typeof api.events.check_in.revertCheckIn
+>;
+type RevertCheckInTicketId = FunctionArgs<
+  typeof api.events.check_in.revertCheckIn
+>['ticketId'];
 
 /**
  * Feature-scoped service for check-in operations.
@@ -147,6 +153,34 @@ export class CheckInService {
           err instanceof Error ? err.message : 'Failed to check in guest',
       });
       this.playFailure();
+    } finally {
+      this.isProcessing.set(false);
+    }
+  }
+
+  /** Undo a native ticket check-in from the door roster. */
+  async revertCheckIn(
+    ticketId: RevertCheckInTicketId,
+  ): Promise<RevertCheckInResult | null> {
+    if (this.isProcessing()) return null;
+    this.isProcessing.set(true);
+
+    try {
+      const result = await this.convex.mutation(
+        api.events.check_in.revertCheckIn,
+        {ticketId},
+      );
+      if (!result.success) {
+        this.playFailure();
+      }
+      return result;
+    } catch (err: unknown) {
+      logger.error('Failed to undo ticket check-in', err);
+      this.playFailure();
+      return {
+        success: false,
+        message: err instanceof Error ? err.message : 'Failed to undo check-in',
+      };
     } finally {
       this.isProcessing.set(false);
     }

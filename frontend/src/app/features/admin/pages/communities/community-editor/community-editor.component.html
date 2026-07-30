@@ -46,7 +46,7 @@
       <div class="space-y-2">
         <a
           routerLink="/admin/communities"
-          class="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          class="flex min-h-6 items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <z-icon zType="arrow-left" class="h-4 w-4" />
           Back to Communities
@@ -232,7 +232,7 @@
                 [class]="
                   'rounded-md px-3 py-2 font-mono text-xs tracking-widest uppercase transition-colors ' +
                   (communityModel().status === 'draft'
-                    ? 'bg-primary text-primary-foreground'
+                    ? 'bg-primary text-primary-foreground dark:bg-primary/90'
                     : 'text-muted-foreground hover:text-foreground')
                 "
                 [attr.aria-pressed]="communityModel().status === 'draft'"
@@ -249,7 +249,7 @@
                 [class]="
                   'rounded-md px-3 py-2 font-mono text-xs tracking-widest uppercase transition-colors disabled:cursor-not-allowed disabled:opacity-60 ' +
                   (communityModel().status === 'published'
-                    ? 'bg-primary text-primary-foreground'
+                    ? 'bg-primary text-primary-foreground dark:bg-primary/90'
                     : canSetPublishedStatus()
                       ? 'text-muted-foreground hover:text-foreground'
                       : 'text-muted-foreground')
@@ -313,14 +313,14 @@
             let i = $index
           ) {
             <div
-              class="group relative space-y-4 rounded-lg border border-border bg-muted/50 p-4"
+              class="relative space-y-4 rounded-lg border border-border bg-muted/50 p-4"
               data-testid="vetting-question"
             >
               <button
                 type="button"
                 (click)="removeQuestion(i)"
                 [attr.aria-label]="'Remove question ' + (i + 1)"
-                class="absolute top-2 right-2 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-destructive-text"
+                class="absolute top-2 right-2 p-1 text-muted-foreground transition-colors hover:text-destructive-text"
               >
                 <z-icon zType="x" class="h-4 w-4" aria-hidden="true" />
               </button>

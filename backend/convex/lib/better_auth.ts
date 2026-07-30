@@ -40,7 +40,6 @@ type EmailSendPayload = {
   to: string;
   subject: string;
   html: string;
-  requireDelivery?: boolean;
 };
 
 const LOCAL_FRONTEND_PORTS = ['4200', '4201', '4202'] as const;
@@ -48,6 +47,7 @@ const LOCAL_FRONTEND_PORTS = ['4200', '4201', '4202'] as const;
 async function dispatchEmailSend(
   ctx: GenericCtx<DataModel>,
   payload: EmailSendPayload,
+  options: {requireDelivery?: boolean} = {},
 ): Promise<void> {
   const metadata = {
     source: 'auth' as const,
@@ -57,6 +57,7 @@ async function dispatchEmailSend(
     sourceId: 'dispatch',
     recipient: payload.to,
     critical: true,
+    requireDelivery: options.requireDelivery,
   };
   if ('runAction' in ctx) {
     await sendEmailDeliveryNow(ctx, payload, metadata);
@@ -65,7 +66,7 @@ async function dispatchEmailSend(
 
   if ('scheduler' in ctx) {
     if (
-      payload.requireDelivery &&
+      options.requireDelivery &&
       !isTestEnvironment() &&
       !hasConfiguredCriticalEmailCredentials()
     ) {
@@ -76,6 +77,30 @@ async function dispatchEmailSend(
   }
 
   throw new Error('Mutation or action context required for email delivery');
+}
+
+/**
+ * Sends the email-change confirmation to the user's CURRENT address.
+ *
+ * Exported so contract tests can exercise the exact production dispatch —
+ * template, requireDelivery flag, and provider args — end to end. The vitest
+ * setup mocks authComponent.getAuth (Better Auth's HTTP layer), so nothing
+ * above this function is reachable in convex-test; this is the highest
+ * production-shaped entry point for the email-change delivery contract.
+ */
+export async function dispatchEmailChangeConfirmation(
+  ctx: GenericCtx<DataModel>,
+  args: {to: string; newEmail: string; url: string},
+): Promise<void> {
+  const {subject, html} = emailChangeConfirmationTemplate(
+    args.newEmail,
+    args.url,
+  );
+  await dispatchEmailSend(
+    ctx,
+    {to: args.to, subject, html},
+    {requireDelivery: true},
+  );
 }
 
 /**
@@ -289,22 +314,43 @@ export function sanitizeFrontendCallbackUrl(
     return fallback;
   }
 
-  if (rawValue.startsWith('/')) {
-    if (rawValue.startsWith('//')) {
-      return fallback;
-    }
-    return new URL(rawValue, frontendUrl).toString();
+  // Reject backslashes outright. The WHATWG URL parser (and every browser)
+  // normalizes `\` to `/` for http/https, so inputs like `/\evil.com`,
+  // `/\/evil.com`, or `\/\/evil.com` resolve to a protocol-relative external
+  // origin and slip past a naive `startsWith('//')` guard. No legitimate
+  // in-app callback path contains a backslash.
+  if (rawValue.includes('\\')) {
+    return fallback;
   }
 
+  // Resolve the value against the frontend origin and accept it only when the
+  // fully-resolved origin is on the allowlist. Resolving first, then checking
+  // the origin, uniformly rejects protocol-relative (`//host`),
+  // absolute-external, userinfo (`user@host`), and opaque-scheme
+  // (`javascript:`/`data:`, whose origin is "null") URLs regardless of how they
+  // are spelled, while preserving same-origin relative paths and trusted
+  // absolute URLs. The origin — not a string prefix — is authoritative for
+  // where the browser will navigate.
+  let resolved: URL;
   try {
-    const parsed = new URL(rawValue);
-    if (!allowedOrigins.has(parsed.origin)) {
-      return fallback;
-    }
-    return parsed.toString();
+    resolved = new URL(rawValue, frontendUrl);
   } catch {
     return fallback;
   }
+
+  // Only http(s) redirect targets are valid in-app navigations. A value such as
+  // `blob:https://app.example.com/<uuid>` resolves to a trusted `origin` and
+  // would otherwise pass the allowlist, yet it is not a real page navigation.
+  // The frontend allowlist itself only ever contains http/https origins.
+  if (resolved.protocol !== 'https:' && resolved.protocol !== 'http:') {
+    return fallback;
+  }
+
+  if (!allowedOrigins.has(resolved.origin)) {
+    return fallback;
+  }
+
+  return resolved.toString();
 }
 
 export function buildFrontendCallbackUrl(
@@ -503,9 +549,11 @@ function getAuthConfig() {
  *
  * Both are served through Better Auth HTTP routes registered as Convex
  * httpActions (backend/convex/http.ts), so the plugin's outbound fetch to
- * the HIBP range API is permitted. Mutation-context password flows
- * (/change-password, /set-password) must never appear here: Convex
- * mutations cannot fetch, and the plugin fails closed.
+ * the HIBP range API is permitted. The /change-password HTTP route is
+ * disabled below; the V2 action invokes auth.api.changePassword directly and
+ * intentionally keeps the existing no-HIBP policy. The mutation-context
+ * /set-password flow must never appear here because Convex mutations cannot
+ * fetch and the plugin fails closed.
  */
 export const HIBP_CHECKED_PATHS = [
   '/sign-up/email',
@@ -525,6 +573,11 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
     baseURL: AUTH_BASE_URL,
     database: authComponent.adapter(ctx),
     trustedOrigins,
+    // Password changes must pass through auth.public.changePasswordV2 so the
+    // committed per-user rate limit cannot roll back on an invalid password.
+    // disabledPaths affects only Better Auth's HTTP router; the V2 action can
+    // still invoke auth.api.changePassword directly on the server.
+    disabledPaths: ['/change-password'],
     advanced: {
       useSecureCookies: !isLocalDevelopment,
     },
@@ -577,15 +630,10 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
       changeEmail: {
         enabled: true,
         sendChangeEmailConfirmation: async ({user, newEmail, url}) => {
-          const {subject, html} = emailChangeConfirmationTemplate(
+          await dispatchEmailChangeConfirmation(ctx, {
+            to: user.email,
             newEmail,
             url,
-          );
-          await dispatchEmailSend(ctx, {
-            to: user.email,
-            subject,
-            html,
-            requireDelivery: true,
           });
         },
       },
@@ -639,13 +687,14 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
             haveIBeenPwned({
               // Only paths served through Better Auth HTTP routes (Convex
               // httpActions, where outbound fetch is permitted). Deliberately
-              // drops /change-password from the plugin defaults: it runs
-              // through a Convex mutation (auth.public.changePassword calls
-              // auth.api.* in mutation context), where fetch is prohibited —
-              // including it would hard-fail every password change because
-              // the plugin fails closed. /set-password (also mutation
-              // context) was never a plugin default; it stays out of
-              // HIBP_CHECKED_PATHS for the same reason.
+              // drops /change-password from the plugin defaults: breach
+              // screening is intentionally scoped to sign-up and password
+              // reset, not authenticated password changes. The legacy
+              // HTTP route is disabled, and the rollout-only legacy mutation
+              // rejects stale clients before reaching Better Auth. V2 runs as
+              // an action but preserves the same screening policy.
+              // /set-password (also mutation context) was never a plugin
+              // default and remains out.
               paths: [...HIBP_CHECKED_PATHS],
               customPasswordCompromisedMessage: COMPROMISED_PASSWORD_MESSAGE,
             }),

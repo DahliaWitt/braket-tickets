@@ -168,6 +168,7 @@
                 placeholder="Pick a date"
                 zFormat="yyyy-MM-dd"
                 zSize="sm"
+                data-testid="start-date-picker"
                 class="!rounded-sm !border !border-b-0 !border-border !bg-background !py-2 !font-sans !text-sm"
                 [class.!border-destructive/50]="
                   isFieldInvalid(eventForm.date) ||
@@ -249,6 +250,9 @@
                 placeholder="Same night (optional)"
                 zFormat="yyyy-MM-dd"
                 zSize="sm"
+                clearable
+                clearLabel="clear end date"
+                (dateChange)="onEndDateChange($event)"
                 data-testid="end-date-picker"
                 class="!rounded-sm !border !border-b-0 !border-border !bg-background !py-2 !font-sans !text-sm"
                 [class.!border-destructive/50]="endWindowError()"
@@ -557,6 +561,7 @@
                 inputmode="decimal"
                 id="supporterDefaultPrice"
                 [formField]="eventForm.supporterDefaultPrice"
+                (input)="onSupporterPriceInput()"
                 (wheel)="preventNumericInputWheel($event)"
                 placeholder="0.00"
                 [class]="

@@ -116,6 +116,7 @@ export const seedTicket = testingMutation({
     guestSessionId: v.optional(v.id('guest_sessions')),
     trustSource: v.optional(callerTrustSourceValidator),
     trustViaOrganizerId: v.optional(v.id('organizers')),
+    checkedInAt: v.optional(v.number()),
   },
   returns: v.id('tickets'),
   handler: async (ctx, args) => {
@@ -151,6 +152,7 @@ export const seedTicket = testingMutation({
       status: args.status,
       tier: args.tier,
       guestSessionId: args.guestSessionId,
+      checkedInAt: args.checkedInAt,
     });
   },
 });

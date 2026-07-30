@@ -303,19 +303,23 @@ export const createEventArgs = {
 export const updateEventArgs = {
   id: v.id('events'),
   title: v.optional(v.string()),
-  description: v.optional(v.string()),
+  /** New description; `null` clears the stored description. */
+  description: v.optional(v.union(v.string(), v.null())),
   date: v.optional(v.string()),
   /** New end instant; `null` clears the stored endDate. */
   endDate: v.optional(v.union(v.string(), v.null())),
   status: v.optional(eventStatusValidator),
   totalTickets: v.optional(v.number()),
   price: v.optional(v.number()),
-  location: v.optional(v.string()),
+  /** New location; `null` clears the stored location. */
+  location: v.optional(v.union(v.string(), v.null())),
   poster: v.optional(v.string()),
   organizerId: v.optional(v.id('organizers')),
   ticketSalesStatus: ticketSalesStatusValidator,
-  supporterDefaultPrice: v.optional(v.number()),
-  maxTicketsPerUser: v.optional(v.number()),
+  /** New supporter default price; `null` clears the stored value. */
+  supporterDefaultPrice: v.optional(v.union(v.number(), v.null())),
+  /** New max tickets per user; `null` clears the stored value. */
+  maxTicketsPerUser: v.optional(v.union(v.number(), v.null())),
   slidingScaleEnabled: v.optional(v.boolean()),
   slidingScaleMin: v.optional(v.number()),
   slidingScaleMax: v.optional(v.number()),

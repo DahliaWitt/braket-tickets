@@ -331,6 +331,23 @@ describe('CommunitySelectorComponent', () => {
       expect(await harness.isSetDefaultButtonDisabled()).toBe(false);
     });
 
+    it('uses an opaque semantic button treatment with accessible dark-mode contrast', async () => {
+      const {harness} = await setup({
+        communities: [communityA, communityB],
+        selectedId: communityA,
+        selectedName: null,
+        hasMultiple: true,
+        isSelectedDefault: true,
+      });
+
+      expect(await harness.getSetDefaultButtonVariant()).toBe('secondary');
+      const classes = await harness.getSetDefaultButtonClasses();
+      expect(classes).toContain('bg-secondary');
+      expect(classes).toContain('text-secondary-foreground');
+      expect(classes).not.toContain('dark:bg-input/30');
+      expect(classes).not.toContain('text-muted-foreground');
+    });
+
     it('saves the selected community as the default', async () => {
       const {fixture, harness, defaultServiceMock} = await setup({
         communities: [communityA, communityB],

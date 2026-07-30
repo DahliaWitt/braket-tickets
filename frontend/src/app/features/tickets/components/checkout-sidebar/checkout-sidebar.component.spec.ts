@@ -305,6 +305,34 @@ describe('CheckoutSidebarComponent — logarithmic supporter slider', () => {
         '/events/event123?buy=true&source=sidebar#details',
       );
     });
+
+    it('keeps a genuinely free ticket available when organizer payment setup is incomplete', async () => {
+      fixture.componentRef.setInput(
+        'event',
+        stubEvent({price: 0, organizerPaymentReady: false}),
+      );
+      fixture.componentRef.setInput('selectedTier', 'regular');
+      fixture.componentRef.setInput('totalAmount', 0);
+      await fixture.whenStable();
+
+      expect(await harness.isPaymentSetupIncomplete()).toBe(false);
+      expect(await harness.isFreeTicketVisible()).toBe(true);
+      expect(await harness.isFreeTicketEnabled()).toBe(true);
+    });
+
+    it('still blocks paid checkout when organizer payment setup is incomplete', async () => {
+      fixture.componentRef.setInput(
+        'event',
+        stubEvent({price: 4000, organizerPaymentReady: false}),
+      );
+      fixture.componentRef.setInput('selectedTier', 'regular');
+      fixture.componentRef.setInput('totalAmount', 4000);
+      await fixture.whenStable();
+
+      expect(await harness.isPaymentSetupIncomplete()).toBe(true);
+      expect(await harness.isStripePaymentVisible()).toBe(false);
+      expect(await harness.isFreeTicketVisible()).toBe(false);
+    });
   });
 
   describe('max ticket notice copy', () => {
@@ -411,6 +439,87 @@ describe('CheckoutSidebarComponent — logarithmic supporter slider', () => {
     });
   });
 
+  describe('m24 — invalid custom amount CTA (never a free claim on a paid event)', () => {
+    it('shows a disabled paid CTA (not GET TICKET) when a below-min amount collapses the total to 0', async () => {
+      // Paid $40 event, community tier, buyer typed $0 → below the $5 min, so
+      // totalAmount is 0 but a validation error is set. This must NOT morph into
+      // the free "GET TICKET" claim path (which the backend rejects).
+      fixture.componentRef.setInput(
+        'event',
+        stubEvent({slidingScaleEnabled: true, slidingScaleMin: 500}),
+      );
+      fixture.componentRef.setInput('selectedTier', 'notaflof');
+      fixture.componentRef.setInput('customAmount', 0);
+      fixture.componentRef.setInput('totalAmount', 0);
+      fixture.componentRef.setInput(
+        'slidingScaleError',
+        'Minimum amount is $5.00',
+      );
+      fixture.detectChanges();
+
+      expect(await harness.isFreeTicketVisible()).toBe(false);
+      expect(await harness.isStripePaymentVisible()).toBe(false);
+      expect(await harness.isAmountInvalidVisible()).toBe(true);
+      expect(await harness.isAmountInvalidCtaDisabled()).toBe(true);
+      expect(await harness.getAmountInvalidMessage()).toContain(
+        'Minimum amount is $5.00',
+      );
+    });
+
+    it('shows the disabled CTA (not the live Stripe form) when an above-max amount keeps a positive total', async () => {
+      // Community tier, $15 chosen against a $10 max → totalAmount > 0 but
+      // invalid. The Stripe form must not mount for an amount the server rejects.
+      fixture.componentRef.setInput(
+        'event',
+        stubEvent({slidingScaleEnabled: true, slidingScaleMin: 500}),
+      );
+      fixture.componentRef.setInput('selectedTier', 'notaflof');
+      fixture.componentRef.setInput('customAmount', 1500);
+      fixture.componentRef.setInput('totalAmount', 1500);
+      fixture.componentRef.setInput(
+        'slidingScaleError',
+        'Maximum for community tier is $10.00',
+      );
+      fixture.detectChanges();
+
+      expect(await harness.isStripePaymentVisible()).toBe(false);
+      expect(await harness.isFreeTicketVisible()).toBe(false);
+      expect(await harness.isAmountInvalidVisible()).toBe(true);
+      expect(await harness.isAmountInvalidCtaDisabled()).toBe(true);
+    });
+
+    it('still shows the free GET TICKET path for a genuinely free ticket (no error)', async () => {
+      fixture.componentRef.setInput('selectedTier', 'regular');
+      fixture.componentRef.setInput('customAmount', 0);
+      fixture.componentRef.setInput('totalAmount', 0);
+      fixture.componentRef.setInput('slidingScaleError', null);
+      fixture.detectChanges();
+
+      expect(await harness.isAmountInvalidVisible()).toBe(false);
+      expect(await harness.isFreeTicketVisible()).toBe(true);
+    });
+
+    it('locks quantity controls while the checkout session is locked (m25)', async () => {
+      // Quantity 2 with room to move (not at max, above 1) so the disabled
+      // state is driven purely by checkoutLocked, not the min/max clamps.
+      fixture.componentRef.setInput('selectedTier', 'regular');
+      fixture.componentRef.setInput('ticketQuantity', 2);
+      fixture.componentRef.setInput('isAtMaxTickets', false);
+      fixture.componentRef.setInput('totalAmount', 8000);
+      fixture.componentRef.setInput('checkoutLocked', false);
+      fixture.detectChanges();
+
+      expect(await harness.isIncreaseDisabled()).toBe(false);
+      expect(await harness.isDecreaseDisabled()).toBe(false);
+
+      fixture.componentRef.setInput('checkoutLocked', true);
+      fixture.detectChanges();
+
+      expect(await harness.isIncreaseDisabled()).toBe(true);
+      expect(await harness.isDecreaseDisabled()).toBe(true);
+    });
+  });
+
   describe('success copy', () => {
     it('uses claimed copy for authenticated free tickets', async () => {
       fixture.componentRef.setInput('paymentStatus', 'success');
@@ -476,6 +585,27 @@ describe('CheckoutSidebarComponent — logarithmic supporter slider', () => {
 
       fixture.componentRef.setInput('termsAccepted', true);
       fixture.detectChanges();
+
+      expect(await harness.isFreeTicketEnabled()).toBe(true);
+    });
+
+    it('gates a free guest claim on terms even when organizer payment setup is incomplete', async () => {
+      asGuestWithEmail();
+      fixture.componentRef.setInput(
+        'event',
+        stubEvent({price: 0, organizerPaymentReady: false}),
+      );
+      fixture.componentRef.setInput('totalAmount', 0);
+      fixture.componentRef.setInput('termsAccepted', false);
+      await fixture.whenStable();
+
+      expect(await harness.isPaymentSetupIncomplete()).toBe(false);
+      expect(await harness.isTermsCheckboxVisible()).toBe(true);
+      expect(await harness.isFreeTicketVisible()).toBe(true);
+      expect(await harness.isFreeTicketEnabled()).toBe(false);
+
+      fixture.componentRef.setInput('termsAccepted', true);
+      await fixture.whenStable();
 
       expect(await harness.isFreeTicketEnabled()).toBe(true);
     });

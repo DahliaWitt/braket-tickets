@@ -42,6 +42,7 @@ import {AuthSessionSync} from './auth-session-sync';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
 import {
   AUTH_SETTLE_TIMEOUT_MS,
+  MISSING_USER_REPAIR_MAX_QUERY_ERRORS,
   type ConvexClientWithErrorHandling,
   type SessionChannelMessage,
   requiresSocialSignupCompletion,
@@ -68,8 +69,7 @@ export class UnverifiedEmailError extends Error {
 export class SocialAuthBlockedError extends Error {
   constructor(
     public readonly reason:
-      | 'provider_email_missing'
-      | 'provider_email_unverified',
+      'provider_email_missing' | 'provider_email_unverified',
   ) {
     super(
       reason === 'provider_email_missing'
@@ -93,6 +93,23 @@ class SessionNotReadyError extends Error {
   constructor(context: string) {
     super(`${context} session is not ready yet`);
     this.name = 'SessionNotReadyError';
+  }
+}
+
+/**
+ * Raised when `getSession()` resolves with a returned `error` (a transient HTTP
+ * failure such as a 5xx/429 during cold load). Better Auth's better-fetch
+ * client surfaces these as `{data: null, error}` WITHOUT throwing, so a
+ * genuinely unauthenticated user (`{data: null, error: null}`) is
+ * indistinguishable from a backend blip unless the returned error is promoted
+ * to a throw. This marker lets the init retry loop retry the fetch regardless
+ * of the error's message content, instead of settling into a confident
+ * "logged out" state on a recoverable outage.
+ */
+class SessionInitBackendError extends Error {
+  constructor(message: string, options?: {cause?: unknown}) {
+    super(message, options);
+    this.name = 'SessionInitBackendError';
   }
 }
 
@@ -413,7 +430,7 @@ export class AuthService implements ConvexAuthProvider {
     }
 
     const originalQuery = convex.query;
-    convex.query = (async <Query extends FunctionReference<'query'>>(
+    convex.query = async <Query extends FunctionReference<'query'>>(
       query: Query,
       args: Query['_args'],
     ): Promise<Awaited<Query['_returnType']>> => {
@@ -423,10 +440,10 @@ export class AuthService implements ConvexAuthProvider {
         this.handleFatalConvexAuthError(err);
         throw err;
       }
-    });
+    };
 
     const originalMutation = convex.mutation;
-    convex.mutation = (async <Mutation extends FunctionReference<'mutation'>>(
+    convex.mutation = async <Mutation extends FunctionReference<'mutation'>>(
       mutation: Mutation,
       args: FunctionArgs<Mutation>,
       options?: MutationOptions,
@@ -437,10 +454,10 @@ export class AuthService implements ConvexAuthProvider {
         this.handleFatalConvexAuthError(err);
         throw err;
       }
-    });
+    };
 
     const originalAction = convex.action;
-    convex.action = (async <Action extends FunctionReference<'action'>>(
+    convex.action = async <Action extends FunctionReference<'action'>>(
       action: Action,
       args: FunctionArgs<Action>,
     ): Promise<Awaited<FunctionReturnType<Action>>> => {
@@ -450,18 +467,18 @@ export class AuthService implements ConvexAuthProvider {
         this.handleFatalConvexAuthError(err);
         throw err;
       }
-    });
+    };
 
     const originalOnUpdate = convex.onUpdate.bind(convex);
-    convex.onUpdate = ((query, args, onResult, onError) =>
+    convex.onUpdate = (query, args, onResult, onError) =>
       originalOnUpdate(query, args, onResult, (err) => {
         this.handleFatalConvexAuthError(err);
         onError?.(err);
-      }));
+      });
 
     const originalOnPaginatedUpdate =
       convex.onPaginatedUpdate_experimental.bind(convex);
-    convex.onPaginatedUpdate_experimental = ((
+    convex.onPaginatedUpdate_experimental = (
       query,
       args,
       options,
@@ -471,7 +488,7 @@ export class AuthService implements ConvexAuthProvider {
       originalOnPaginatedUpdate(query, args, options, onResult, (err) => {
         this.handleFatalConvexAuthError(err);
         onError?.(err);
-      }));
+      });
 
     Object.defineProperty(convex, '__braketAuthWrapped', {
       configurable: false,
@@ -553,6 +570,14 @@ export class AuthService implements ConvexAuthProvider {
 
   private async repairMissingUserForSession(sessionKey: string): Promise<void> {
     let waitMs = 0;
+    // Cumulative count of decisions observed while the profile query is errored.
+    // A persistent query error would otherwise keep the loop polling forever
+    // (data() stays undefined, authSyncFailed stays false); bounding it here
+    // guarantees a terminal state. Counting cumulatively — rather than
+    // consecutively — is deliberate: an errored subscription can oscillate
+    // between 'error' and 'pending' while Convex re-evaluates it, and resetting
+    // on 'pending' would let it evade the bound indefinitely.
+    let queryErrorCount = 0;
 
     for (;;) {
       const repairDecision = this.getMissingUserRepairDecision(sessionKey);
@@ -564,6 +589,16 @@ export class AuthService implements ConvexAuthProvider {
         await this.syncUserToApp({markAuthSyncFailedOnError: false});
         return;
       }
+      if (repairDecision === 'error') {
+        queryErrorCount += 1;
+        if (queryErrorCount >= MISSING_USER_REPAIR_MAX_QUERY_ERRORS) {
+          logger.warn(
+            '[AuthService] Abandoning missing app-user repair: current-user profile query kept erroring',
+            this.userQuery.error(),
+          );
+          return;
+        }
+      }
 
       waitMs = waitMs === 0 ? 50 : Math.min(waitMs * 2, 1000);
       await new Promise<void>((resolve) => setTimeout(resolve, waitMs));
@@ -572,7 +607,7 @@ export class AuthService implements ConvexAuthProvider {
 
   private getMissingUserRepairDecision(
     sessionKey: string,
-  ): 'pending' | 'repair' | 'skip' {
+  ): 'pending' | 'repair' | 'skip' | 'error' {
     const session = this.session();
     if (
       !session ||
@@ -591,6 +626,18 @@ export class AuthService implements ConvexAuthProvider {
 
     if (this.authSyncFailed()) {
       return 'skip';
+    }
+
+    // The profile query failed and left no usable data (fresh subscription that
+    // rejected). `injectQuery` clears `isLoading` and preserves `data` on error,
+    // so this state — error set, data still undefined — is otherwise
+    // indistinguishable from "still loading" and would loop forever as
+    // 'pending'. Surface it as 'error' so the repair loop can bound its retries.
+    if (
+      this.userQuery.error() !== undefined &&
+      this.userQuery.data() === undefined
+    ) {
+      return 'error';
     }
 
     const currentUser = this.userQuery.data();
@@ -728,7 +775,22 @@ export class AuthService implements ConvexAuthProvider {
         delaysMs: retryDelaysMs,
         run: async () => {
           logger.info('[initSession] Starting session initialization');
-          const {data} = await this.authClient.getSession();
+          const {data, error} = await this.authClient.getSession();
+          if (error) {
+            // Better Auth's better-fetch client returns HTTP failures (transient
+            // 5xx/429, backend restart, brief outage) as `{data: null, error}`
+            // WITHOUT throwing. Swallowing that error and running
+            // `setSessionState(null)` would flip auth into a confident
+            // "logged out" state for a user with a perfectly valid session.
+            // Promote it to a throw so the retry loop below engages; a genuinely
+            // unauthenticated user resolves as `{data: null, error: null}` and
+            // does NOT reach this branch. Matches the returned-error handling in
+            // refreshSessionFromServer/loadSessionAfterAuth/fetchAccessToken.
+            throw new SessionInitBackendError(
+              error.message || 'Failed to initialize session',
+              {cause: error},
+            );
+          }
           logger.info(
             '[initSession] getSession returned:',
             data ? 'session found' : 'no session',
@@ -757,13 +819,19 @@ export class AuthService implements ConvexAuthProvider {
           }
         },
         shouldRetry: (err, attemptIndex) => {
-          const isNetworkError =
-            err instanceof TypeError && err.message.includes('fetch');
+          // Retry both thrown network failures (rejected fetch → TypeError) and
+          // returned backend errors promoted to SessionInitBackendError above.
+          // Without the marker, a returned 5xx whose message lacks a magic
+          // keyword would slip past isRetryableAuthBackendError and never retry.
+          const isTransientBackendError =
+            err instanceof SessionInitBackendError ||
+            isRetryableAuthBackendError(err) ||
+            (err instanceof TypeError && err.message.includes('fetch'));
           const shouldRetry =
-            isNetworkError && attemptIndex < retryDelaysMs.length - 1;
+            isTransientBackendError && attemptIndex < retryDelaysMs.length - 1;
           if (shouldRetry) {
             logger.warn(
-              `[initSession] Network error on attempt ${attemptIndex + 1}/${retryDelaysMs.length}, retrying...`,
+              `[initSession] Transient backend error on attempt ${attemptIndex + 1}/${retryDelaysMs.length}, retrying...`,
             );
           }
           return shouldRetry;
@@ -1208,11 +1276,10 @@ export class AuthService implements ConvexAuthProvider {
    */
   async handleOAuthCallback(
     ott: string,
-    options: {navigateOnSuccess?: boolean; syncUserToApp?: boolean} = {},
+    options: {navigateOnSuccess?: boolean} = {},
   ): Promise<SocialAuthCompletionState> {
     try {
       const navigateOnSuccess = options.navigateOnSuccess ?? true;
-      const shouldSyncUserToApp = options.syncUserToApp ?? true;
       let completionState: SocialAuthCompletionState = {
         requiresSocialSignupCompletion: false,
       };
@@ -1232,9 +1299,7 @@ export class AuthService implements ConvexAuthProvider {
         this.setSessionState(session);
         this.notifyConvexAuthChanged();
 
-        if (shouldSyncUserToApp) {
-          completionState = await this.syncUserToApp();
-        }
+        completionState = await this.syncUserToApp();
 
         // Notify other tabs about login
         this.broadcastSessionChange('LOGIN');

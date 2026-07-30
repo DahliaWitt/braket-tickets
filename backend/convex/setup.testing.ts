@@ -48,6 +48,38 @@ export const convexTest = (): ConvexTestInstance => {
 };
 
 /**
+ * Snapshot the current values of the given environment variables so a test
+ * can mutate them and restore afterwards with {@link restoreEnv}.
+ */
+export function snapshotEnv<K extends string>(
+  keys: readonly K[],
+): Partial<Record<K, string>> {
+  return Object.fromEntries(
+    keys
+      .map((key) => [key, process.env[key]] as const)
+      .filter((entry): entry is [K, string] => entry[1] !== undefined),
+  ) as Partial<Record<K, string>>;
+}
+
+/**
+ * Restore environment variables captured by {@link snapshotEnv}: keys absent
+ * from the snapshot are deleted, present keys are reset to their old values.
+ */
+export function restoreEnv<K extends string>(
+  keys: readonly K[],
+  snapshot: Partial<Record<K, string>>,
+): void {
+  for (const key of keys) {
+    const value = snapshot[key];
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  }
+}
+
+/**
  * Timer advance function compatible with workpool components.
  *
  * The workpool mainLoop polls at 100ms segment intervals. Using

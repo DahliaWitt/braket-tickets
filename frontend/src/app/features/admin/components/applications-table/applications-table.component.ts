@@ -15,17 +15,31 @@ import {ZardButtonComponent} from '@ui/components/primitives/button/button.compo
 import {ZardInputDirective} from '@ui/components/primitives/input/input.directive';
 import {EmptyStateComponent} from '@ui/components/primitives/empty-state/empty-state.component';
 import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton.component';
+import {BraStatusBadgeComponent} from '@ui/components/primitives/status-badge/status-badge.component';
+import {type BraStatusBadgeVariants} from '@ui/components/primitives/status-badge/status-badge.variants';
 import {BraDialogService} from '@ui/components/composites/dialog/dialog.service';
 import {ReasonDialogComponent} from '@/features/admin/components/reason-dialog/reason-dialog.component';
 import {toast} from 'ngx-sonner';
 import {logger} from '@/utils/logger';
 import {api} from '@convex/_generated/api';
 import {type Id} from '@convex/_generated/dataModel';
+import {ADMIN_DATETIME} from '@/features/admin/utils/date-formats';
 
 interface VettingAnswer {
   label: string;
   value: unknown;
 }
+
+type ApplicationRowAction = 'approved' | 'rejected' | 'reinstate';
+
+type StatusBadgeVariant = NonNullable<BraStatusBadgeVariants['status']>;
+
+const STATUS_BADGE_VARIANTS: Record<string, StatusBadgeVariant> = {
+  pending: 'warning',
+  approved: 'success',
+  rejected: 'destructive',
+  revoked: 'muted',
+};
 
 @Component({
   selector: 'app-admin-applications-table',
@@ -36,6 +50,7 @@ interface VettingAnswer {
     ZardInputDirective,
     ZardSkeletonComponent,
     EmptyStateComponent,
+    BraStatusBadgeComponent,
   ],
   templateUrl: './applications-table.component.html',
 })
@@ -60,7 +75,7 @@ export class AdminApplicationsTableComponent {
     {
       onError: (error) => {
         logger.error('Operation failed', error);
-        toast.error('Failed to load applications');
+        toast.error('failed to load applications');
       },
     },
   );
@@ -74,11 +89,22 @@ export class AdminApplicationsTableComponent {
 
   readonly searchQuery = signal('');
 
+  /** Shared admin datetime format for both desktop and mobile timestamps. */
+  protected readonly ADMIN_DATETIME = ADMIN_DATETIME;
+
+  /**
+   * Rows with a mutation in flight, keyed by application id. Guards the
+   * approve/reject/reinstate buttons against double-fire in zoneless mode.
+   */
+  private readonly pendingActions = signal<
+    ReadonlyMap<string, ApplicationRowAction>
+  >(new Map());
+
   readonly emptyStateMessage = computed(() => {
     const query = this.searchQuery();
     return query
-      ? `NO RESULTS FOR “${query}”`
-      : `NO ${this.tableType()} APPLICATIONS FOUND`;
+      ? `no results for “${query}”`
+      : `no ${this.tableType()} applications found`;
   });
 
   readonly filteredApplications = computed<Application[]>(() => {
@@ -174,7 +200,37 @@ export class AdminApplicationsTableComponent {
     this.searchQuery.set(target.value);
   }
 
+  statusBadgeVariant(status: string): StatusBadgeVariant {
+    return STATUS_BADGE_VARIANTS[status] ?? 'muted';
+  }
+
+  /** True when any action for this row is in flight. */
+  isRowPending(app: Application): boolean {
+    return this.pendingActions().has(app._id);
+  }
+
+  /** True when this specific action for this row is in flight. */
+  isActionPending(app: Application, action: ApplicationRowAction): boolean {
+    return this.pendingActions().get(app._id) === action;
+  }
+
+  private setRowPending(
+    app: Application,
+    action: ApplicationRowAction | null,
+  ): void {
+    this.pendingActions.update((current) => {
+      const next = new Map(current);
+      if (action === null) {
+        next.delete(app._id);
+      } else {
+        next.set(app._id, action);
+      }
+      return next;
+    });
+  }
+
   updateStatus(app: Application, status: 'approved' | 'rejected') {
+    if (this.isRowPending(app)) return;
     if (status === 'rejected') {
       this.dialog.create<
         ReasonDialogComponent,
@@ -215,6 +271,8 @@ export class AdminApplicationsTableComponent {
     status: 'approved' | 'rejected',
     denyReason?: string,
   ) {
+    if (this.isRowPending(app)) return;
+    this.setRowPending(app, status);
     try {
       const processorId = this.auth.currentUser()?._id;
       if (!processorId) throw new Error('No admin user found');
@@ -227,14 +285,19 @@ export class AdminApplicationsTableComponent {
         await this.appsService.reject(app._id, processorId, denyReason);
       }
 
-      toast.success(`Application ${status}`);
+      toast.success(`application ${status}`);
     } catch (e) {
       logger.error('Operation failed', e);
-      toast.error(`Failed to ${status} application`);
+      toast.error(
+        `failed to ${status === 'approved' ? 'approve' : 'reject'} application`,
+      );
+    } finally {
+      this.setRowPending(app, null);
     }
   }
 
   reinstateApplication(app: Application): void {
+    if (this.isRowPending(app)) return;
     this.dialog.create({
       zTitle: 'Reinstate Membership',
       zDescription: `Are you sure you want to reinstate ${app.user?.name || 'this user'}? This will restore their community access.`,
@@ -248,6 +311,9 @@ export class AdminApplicationsTableComponent {
   }
 
   private async performReinstate(app: Application, force: boolean) {
+    if (this.isRowPending(app)) return;
+    this.setRowPending(app, 'reinstate');
+    let clearedForConflictDialog = false;
     try {
       const result = await this.appsService.reinstate(
         app._id,
@@ -255,6 +321,10 @@ export class AdminApplicationsTableComponent {
       );
 
       if (result?.conflict === 'newer_application') {
+        // The conflict dialog re-enters this method with force=true; release
+        // the row guard first so that retry is not swallowed by it.
+        this.setRowPending(app, null);
+        clearedForConflictDialog = true;
         const status = result.newerStatus;
         const description =
           status === 'pending'
@@ -273,10 +343,16 @@ export class AdminApplicationsTableComponent {
         return;
       }
 
-      toast.success('Membership reinstated');
+      toast.success('membership reinstated');
     } catch (e) {
       logger.error('Operation failed', e);
-      toast.error('Failed to reinstate membership');
+      toast.error('failed to reinstate membership');
+    } finally {
+      // When the conflict dialog re-entered synchronously, the retry owns the
+      // row guard now — do not clear it out from under that in-flight call.
+      if (!clearedForConflictDialog) {
+        this.setRowPending(app, null);
+      }
     }
   }
 }

@@ -504,6 +504,116 @@ describe('guests.update', () => {
     expect(afterUpdate?.checkedInBy).toBe(adminId);
   });
 
+  it('preserves an in-flight ticket-send lock so an edit cannot enable a double-send', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Send In Flight',
+      email: 'in-flight@example.com',
+      type: 'guest',
+    });
+
+    // A send action claims the lock; the PDF build + email dispatch is in
+    // flight (the lock is held, not yet released).
+    const claim = await t.mutation(
+      internal.events.guests.beginGuestTicketSend,
+      {id: guestId, requireUnsent: true},
+    );
+    expect(claim.claimed).toBe(true);
+    const lockToken = claim.lockToken;
+    expect(typeof lockToken).toBe('number');
+
+    // A concurrent admin edit of an unrelated field must NOT clear the lock.
+    await asAdmin.mutation(api.events.guests.update, {
+      id: guestId,
+      name: 'Send In Flight (renamed)',
+      type: 'guest',
+    });
+
+    const afterUpdate = await t.run(async (ctx) => ctx.db.get(guestId));
+    expect(afterUpdate?.name).toBe('Send In Flight (renamed)');
+    expect(afterUpdate?.emailSendLockedAt).toBe(lockToken);
+
+    // Because the lock survived, a second send claim is still turned away as
+    // in-flight — the edit did not open a double-send window.
+    const second = await t.mutation(
+      internal.events.guests.beginGuestTicketSend,
+      {id: guestId, requireUnsent: false},
+    );
+    expect(second).toEqual({
+      claimed: false,
+      reason: 'in_flight',
+      lockToken: null,
+    });
+  });
+
+  it('preserves a released (null) send lock across an update', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Released Lock',
+      email: 'released@example.com',
+      type: 'guest',
+    });
+
+    // A completed send leaves emailSendLockedAt set to null (released, not
+    // absent). An update must not resurrect it to `undefined`.
+    const claim = await t.mutation(
+      internal.events.guests.beginGuestTicketSend,
+      {id: guestId, requireUnsent: true},
+    );
+    await t.mutation(internal.events.guests.markAsEmailed, {
+      id: guestId,
+      lockToken: claim.lockToken!,
+    });
+
+    await asAdmin.mutation(api.events.guests.update, {
+      id: guestId,
+      name: 'Released Lock (renamed)',
+      type: 'guest',
+    });
+
+    const afterUpdate = await t.run(async (ctx) => ctx.db.get(guestId));
+    expect(afterUpdate?.emailSendLockedAt).toBeNull();
+  });
+
+  it('leaves a never-claimed send lock absent after an update', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Never Sent',
+      type: 'guest',
+    });
+
+    const beforeUpdate = await t.run(async (ctx) => ctx.db.get(guestId));
+    expect(beforeUpdate?.emailSendLockedAt).toBeUndefined();
+
+    await asAdmin.mutation(api.events.guests.update, {
+      id: guestId,
+      name: 'Never Sent (renamed)',
+      type: 'guest',
+    });
+
+    // Carrying an absent lock through replace must not resurrect the field.
+    const afterUpdate = await t.run(async (ctx) => ctx.db.get(guestId));
+    expect(afterUpdate?.emailSendLockedAt).toBeUndefined();
+  });
+
   it('rejects non-admin users', async () => {
     const t = convexTest();
 
@@ -659,6 +769,107 @@ describe('guests.update', () => {
         type: 'guest',
       }),
     ).rejects.toThrow(/exceeds maximum length/);
+  });
+
+  it('rejects an email with no @ sign', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Guest',
+      type: 'guest',
+    });
+
+    // update shares the guest paths' lenient `@`-presence rule: a value with no
+    // `@` is obviously not an address and is rejected, but the strict RFC regex
+    // is deliberately NOT applied (see the accepts-unusual-address test below).
+    await expect(
+      asAdmin.mutation(api.events.guests.update, {
+        id: guestId,
+        name: 'Guest',
+        email: 'not-an-email',
+        type: 'guest',
+      }),
+    ).rejects.toThrow('Email is invalid');
+  });
+
+  it('accepts an unusual but valid @ address the strict regex would reject', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Guest',
+      type: 'guest',
+    });
+
+    // `user@localhost` has an `@` but no dotted domain, so the strict RFC regex
+    // rejects it. The guest paths intentionally accept it — matching the admin
+    // add/edit dialog, which submits any trimmed address containing `@`.
+    await asAdmin.mutation(api.events.guests.update, {
+      id: guestId,
+      name: 'Guest',
+      email: 'user@localhost',
+      type: 'guest',
+    });
+
+    const guest = await t.run(async (ctx) => ctx.db.get(guestId));
+    expect(guest?.email).toBe('user@localhost');
+  });
+
+  it('trims surrounding whitespace from a valid email', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Guest',
+      type: 'guest',
+    });
+
+    await asAdmin.mutation(api.events.guests.update, {
+      id: guestId,
+      name: 'Guest',
+      email: '  spaced@example.com  ',
+      type: 'guest',
+    });
+
+    const guest = await t.run(async (ctx) => ctx.db.get(guestId));
+    expect(guest?.email).toBe('spaced@example.com');
+  });
+
+  it('accepts a valid email', async () => {
+    const t = convexTest();
+
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Guest',
+      type: 'guest',
+    });
+
+    await asAdmin.mutation(api.events.guests.update, {
+      id: guestId,
+      name: 'Guest',
+      email: 'valid@example.com',
+      type: 'guest',
+    });
+
+    const guest = await t.run(async (ctx) => ctx.db.get(guestId));
+    expect(guest?.email).toBe('valid@example.com');
   });
 
   it('rejects a blank name', async () => {

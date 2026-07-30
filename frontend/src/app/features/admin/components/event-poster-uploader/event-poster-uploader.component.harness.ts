@@ -1,16 +1,29 @@
-import { ComponentHarness } from '@angular/cdk/testing';
+import {ComponentHarness} from '@angular/cdk/testing';
 
 export class EventPosterUploaderHarness extends ComponentHarness {
   static hostSelector = 'app-event-poster-uploader';
 
   private getUploadZone = this.locatorFor('[data-testid="poster-upload-zone"]');
-  private getPreviewImage = this.locatorForOptional('[data-testid="poster-preview-image"]');
-  private getCurrentImage = this.locatorForOptional('[data-testid="poster-current-image"]');
-  private getEmptyState = this.locatorForOptional('[data-testid="poster-empty"]');
-  private getClearBtn = this.locatorForOptional('[data-testid="poster-clear-btn"]');
+  private getBrowseHint = this.locatorFor('[data-testid="poster-browse-hint"]');
+  private getPreviewImage = this.locatorForOptional(
+    '[data-testid="poster-preview-image"]',
+  );
+  private getCurrentImage = this.locatorForOptional(
+    '[data-testid="poster-current-image"]',
+  );
+  private getEmptyState = this.locatorForOptional(
+    '[data-testid="poster-empty"]',
+  );
+  private getClearBtn = this.locatorForOptional(
+    '[data-testid="poster-clear-btn"]',
+  );
   private getFileInput = this.locatorFor('[data-testid="poster-file-input"]');
-  private getProgressOverlay = this.locatorForOptional('[data-testid="upload-progress-overlay"]');
-  private getDragOverOverlay = this.locatorForOptional('[data-testid="drag-over-overlay"]');
+  private getProgressOverlay = this.locatorForOptional(
+    '[data-testid="upload-progress-overlay"]',
+  );
+  private getDragOverOverlay = this.locatorForOptional(
+    '[data-testid="drag-over-overlay"]',
+  );
 
   async hasPreviewImage(): Promise<boolean> {
     return (await this.getPreviewImage()) !== null;
@@ -18,6 +31,11 @@ export class EventPosterUploaderHarness extends ComponentHarness {
 
   async hasCurrentImage(): Promise<boolean> {
     return (await this.getCurrentImage()) !== null;
+  }
+
+  async getCurrentImageLoading(): Promise<string | null> {
+    const image = await this.getCurrentImage();
+    return image ? image.getAttribute('loading') : null;
   }
 
   /** True when the upload zone is showing the empty / no-poster state. */
@@ -37,6 +55,39 @@ export class EventPosterUploaderHarness extends ComponentHarness {
   async getAcceptedMimeTypes(): Promise<string | null> {
     const input = await this.getFileInput();
     return input.getAttribute('accept');
+  }
+
+  async getUploadZoneRole(): Promise<string | null> {
+    const zone = await this.getUploadZone();
+    return zone.getAttribute('role');
+  }
+
+  async getFileInputAriaLabel(): Promise<string | null> {
+    const input = await this.getFileInput();
+    return input.getAttribute('aria-label');
+  }
+
+  async focusFileInput(): Promise<void> {
+    const input = await this.getFileInput();
+    await input.focus();
+  }
+
+  async isFileInputFocused(): Promise<boolean> {
+    const input = await this.getFileInput();
+    return input.isFocused();
+  }
+
+  async isFileInputDisabled(): Promise<boolean> {
+    const input = await this.getFileInput();
+    return input.getProperty<boolean>('disabled');
+  }
+
+  async browseHintUsesOpaqueMutedText(): Promise<boolean> {
+    const hint = await this.getBrowseHint();
+    return (
+      (await hint.hasClass('text-muted-foreground')) &&
+      !(await hint.hasClass('text-muted-foreground/60'))
+    );
   }
 
   async clickClear(): Promise<void> {
@@ -61,7 +112,7 @@ export class EventPosterUploaderHarness extends ComponentHarness {
    */
   async simulateDragEnter(): Promise<void> {
     const zone = await this.getUploadZone();
-    await zone.dispatchEvent('dragenter', { bubbles: true });
+    await zone.dispatchEvent('dragenter', {bubbles: true});
   }
 
   /**
@@ -69,6 +120,6 @@ export class EventPosterUploaderHarness extends ComponentHarness {
    */
   async simulateDragLeave(): Promise<void> {
     const zone = await this.getUploadZone();
-    await zone.dispatchEvent('dragleave', { bubbles: true });
+    await zone.dispatchEvent('dragleave', {bubbles: true});
   }
 }

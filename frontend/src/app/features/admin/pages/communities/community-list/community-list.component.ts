@@ -20,6 +20,7 @@ import {
   type InviteAdminDialogCloseResult,
 } from '@/features/admin/components/invite-admin-dialog/invite-admin-dialog.component';
 import {BraDialogService} from '@ui/components/composites/dialog/dialog.service';
+import {BraStatusBadgeComponent} from '@ui/components/primitives/status-badge/status-badge.component';
 
 @Component({
   selector: 'app-admin-community-list',
@@ -31,6 +32,7 @@ import {BraDialogService} from '@ui/components/composites/dialog/dialog.service'
     EmptyStateComponent,
     ZardSkeletonComponent,
     ZardCardComponent,
+    BraStatusBadgeComponent,
   ],
   template: `
     <div class="space-y-8">
@@ -140,17 +142,17 @@ import {BraDialogService} from '@ui/components/composites/dialog/dialog.service'
                     {{ community.email || '—' }}
                   </td>
                   <td class="px-6 py-4">
-                    <span
+                    <bra-status-badge
+                      [status]="
+                        community.status === 'draft' ? 'warning' : 'primary'
+                      "
                       [class]="
-                        'inline-flex items-center border px-2 py-0.5 font-mono text-2xs tracking-widest uppercase ' +
-                        (community.status === 'draft'
-                          ? 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                          : 'border-primary/40 bg-primary/10 text-primary')
+                        community.status === 'draft' ? '' : 'text-foreground'
                       "
                       data-testid="community-status-badge"
                       >{{
-                        community.status === 'draft' ? 'Draft' : 'Published'
-                      }}</span
+                        community.status === 'draft' ? 'draft' : 'published'
+                      }}</bra-status-badge
                     >
                   </td>
                   <td class="px-6 py-4 text-right">
@@ -162,7 +164,7 @@ import {BraDialogService} from '@ui/components/composites/dialog/dialog.service'
                       z-button
                       zType="ghost"
                       zSize="sm"
-                      class="font-mono text-2xs tracking-widest uppercase"
+                      class="font-mono text-2xs tracking-widest text-foreground uppercase"
                       data-testid="manage-community-btn"
                     >
                       Manage
@@ -259,17 +261,19 @@ import {BraDialogService} from '@ui/components/composites/dialog/dialog.service'
                       </div>
                     }
                   </div>
-                  <span
+                  <bra-status-badge
+                    [status]="
+                      community.status === 'draft' ? 'warning' : 'primary'
+                    "
                     [class]="
-                      'inline-flex shrink-0 items-center border px-2 py-0.5 font-mono text-2xs tracking-widest uppercase ' +
-                      (community.status === 'draft'
-                        ? 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                        : 'border-primary/40 bg-primary/10 text-primary')
+                      community.status === 'draft'
+                        ? 'shrink-0'
+                        : 'shrink-0 text-foreground'
                     "
                     data-testid="community-status-badge"
                     >{{
-                      community.status === 'draft' ? 'Draft' : 'Published'
-                    }}</span
+                      community.status === 'draft' ? 'draft' : 'published'
+                    }}</bra-status-badge
                   >
                 </div>
               </ng-template>
@@ -293,7 +297,7 @@ import {BraDialogService} from '@ui/components/composites/dialog/dialog.service'
                     z-button
                     zType="ghost"
                     zSize="sm"
-                    class="font-mono text-2xs tracking-widest uppercase"
+                    class="font-mono text-2xs tracking-widest text-foreground uppercase"
                     data-testid="manage-community-btn"
                   >
                     Manage

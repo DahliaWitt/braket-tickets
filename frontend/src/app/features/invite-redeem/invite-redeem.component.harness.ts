@@ -41,9 +41,7 @@ export class InviteRedeemComponentHarness extends ComponentHarness {
       '[data-testid="redeem-needs-login"]',
     )();
     if (!needsLogin) throw new Error('Needs-login state not visible');
-    const link = await this.locatorFor(
-      '[data-testid="redeem-needs-login"] a',
-    )();
+    const link = await this.locatorFor('[data-testid="redeem-sign-in"]')();
     await link.click();
   }
 
@@ -52,8 +50,28 @@ export class InviteRedeemComponentHarness extends ComponentHarness {
       '[data-testid="redeem-needs-login"]',
     )();
     if (!needsLogin) throw new Error('Needs-login state not visible');
+    const link = await this.locatorFor('[data-testid="redeem-sign-in"]')();
+    return link.getAttribute('href');
+  }
+
+  async clickCreateAccount(): Promise<void> {
+    const needsLogin = await this.locatorForOptional(
+      '[data-testid="redeem-needs-login"]',
+    )();
+    if (!needsLogin) throw new Error('Needs-login state not visible');
     const link = await this.locatorFor(
-      '[data-testid="redeem-needs-login"] a',
+      '[data-testid="redeem-create-account"]',
+    )();
+    await link.click();
+  }
+
+  async getCreateAccountHref(): Promise<string | null> {
+    const needsLogin = await this.locatorForOptional(
+      '[data-testid="redeem-needs-login"]',
+    )();
+    if (!needsLogin) throw new Error('Needs-login state not visible');
+    const link = await this.locatorFor(
+      '[data-testid="redeem-create-account"]',
     )();
     return link.getAttribute('href');
   }

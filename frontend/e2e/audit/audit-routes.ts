@@ -200,12 +200,6 @@ export const AUDIT_ROUTES: AuditRoute[] = [
     role: 'rootAdmin',
     readyLocator: 'role=heading[level=1]',
   },
-  {
-    label: 'Admin Door Staff',
-    path: '/admin/door-staff',
-    role: 'rootAdmin',
-    readyLocator: 'role=heading[level=1]',
-  },
   // ---------------------------------------------------------------------------
   // Scanner routes — scannerGuard
   // ---------------------------------------------------------------------------

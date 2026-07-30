@@ -6,11 +6,6 @@
       "sourceType": "github",
       "computedHash": "20b74ca9310c1339360b54916621f81abeac34576758bfffcd70062cfd1d73cd"
     },
-    "agent-browser": {
-      "source": "vercel-labs/agent-browser",
-      "sourceType": "github",
-      "computedHash": "c19a532a3777698b80b35270939a1dc559da451381971b3e1e78174d1ab54863"
-    },
     "angular-developer": {
       "source": "angular/skills",
       "sourceType": "github",
@@ -100,12 +95,6 @@
       "source": "pbakaus/impeccable",
       "sourceType": "github",
       "computedHash": "c94699590c44450c3520f7071642411247e685e65ce771ca5596911462001693"
-    },
-    "dogfood": {
-      "source": "mxyhi/ok-skills",
-      "ref": "main",
-      "sourceType": "github",
-      "computedHash": "055e73cddeec68e7eb75eab0c3f8490415384f72e98ac05405821427ed0e74b1"
     },
     "extract": {
       "source": "pbakaus/impeccable",

@@ -4,6 +4,7 @@ import {type ComponentFixture, TestBed} from '@angular/core/testing';
 import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
 import {provideZonelessChangeDetection} from '@angular/core';
 import {provideRouter, Router} from '@angular/router';
+import {RouterTestingHarness} from '@angular/router/testing';
 import {vi} from 'vitest';
 import {
   DashboardShellComponent,
@@ -22,6 +23,7 @@ import {DashboardShellHarness} from './dashboard-shell.component.harness';
       [titleAccent]="titleAccent"
       [tabs]="tabs"
       [selectedTabId]="selectedTabId()"
+      [overrideBorder]="overrideBorder()"
     >
       @if (showActions()) {
         <button type="button" dashboardActions>TEST ACTION</button>
@@ -53,6 +55,25 @@ class TestHostComponent {
   ];
   readonly showActions = signal(false);
   readonly selectedTabId = signal<string | null>(null);
+  readonly overrideBorder = signal(false);
+}
+
+@Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  selector: 'app-route-aware-host',
+  imports: [DashboardShellComponent],
+  template: `
+    <app-dashboard-shell [tabs]="tabs">
+      <div data-testid="projected-content">Route-aware content</div>
+    </app-dashboard-shell>
+  `,
+})
+class RouteAwareHostComponent {
+  readonly tabs: DashboardTab[] = [
+    {id: 'pending', label: 'Pending Apps', path: '/community-admin/pending'},
+    {id: 'events', label: 'Events', path: '/community-admin/events'},
+    {id: 'settings', label: 'Settings', path: '/community-admin/settings'},
+  ];
 }
 
 @Component({
@@ -134,6 +155,49 @@ describe('DashboardShellComponent', () => {
     expect(await harness.getTabCount()).toBe(8);
   });
 
+  it('renders the h1 as solid foreground text without gradient or glow effects', async () => {
+    const titleClass = await harness.getTitleClass();
+    expect(titleClass).toContain('text-foreground');
+    expect(titleClass).toContain('font-display');
+    expect(titleClass).toContain('text-2xl');
+    expect(titleClass).not.toContain('bg-clip-text');
+    expect(titleClass).not.toContain('drop-shadow');
+
+    const accentClass = await harness.getTitleAccentClass();
+    expect(accentClass ?? '').not.toContain('bg-clip-text');
+    expect(accentClass ?? '').not.toContain('text-transparent');
+  });
+
+  it('gives every desktop nav link a hover state', async () => {
+    const classes = await harness.getTabLinkClasses();
+    expect(classes.length).toBeGreaterThan(0);
+    for (const cls of classes) {
+      expect(cls).toContain('hover:text-foreground');
+    }
+  });
+
+  it('renders a solid primary active-tab indicator (no gradient)', async () => {
+    const classes = await harness.getTabIndicatorClasses();
+    expect(classes.length).toBeGreaterThan(0);
+    for (const cls of classes) {
+      expect(cls).toContain('bg-primary');
+      expect(cls).not.toContain('bg-linear');
+    }
+  });
+
+  it('toggles the semantic warning border via overrideBorder', async () => {
+    expect(await harness.getMainContentClass()).not.toContain(
+      'border-warning/40',
+    );
+
+    fixture.componentInstance.overrideBorder.set(true);
+    await fixture.whenStable();
+
+    const mainClass = await harness.getMainContentClass();
+    expect(mainClass).toContain('border-l-4');
+    expect(mainClass).toContain('border-warning/40');
+  });
+
   it('renders the desktop nav as a sticky vertical rail with overflow handling', async () => {
     const navClass = await harness.getDesktopSectionNavClass();
     expect(navClass).toContain('sticky');
@@ -201,6 +265,49 @@ describe('DashboardShellComponent', () => {
     fixture.detectChanges();
 
     expect(await harness.getSelectedMobileSectionValue()).toBe('members');
+  });
+});
+
+describe('DashboardShellComponent (route-aware mobile selection)', () => {
+  let routerHarness: RouterTestingHarness;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [RouteAwareHostComponent],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideRouter([
+          {
+            path: 'community-admin/:tab',
+            component: RouteAwareHostComponent,
+          },
+        ]),
+      ],
+    }).compileComponents();
+
+    routerHarness = await RouterTestingHarness.create();
+  });
+
+  async function navigateTo(path: string): Promise<DashboardShellHarness> {
+    await routerHarness.navigateByUrl(path, RouteAwareHostComponent);
+    await routerHarness.fixture.whenStable();
+    return TestbedHarnessEnvironment.loader(routerHarness.fixture).getHarness(
+      DashboardShellHarness,
+    );
+  }
+
+  it('selects the current section on a direct route load or reload', async () => {
+    const harness = await navigateTo('/community-admin/events');
+
+    expect(await harness.getSelectedMobileSectionValue()).toBe('events');
+  });
+
+  it('updates the selected section after route navigation', async () => {
+    let harness = await navigateTo('/community-admin/pending');
+    expect(await harness.getSelectedMobileSectionValue()).toBe('pending');
+
+    harness = await navigateTo('/community-admin/settings');
+    expect(await harness.getSelectedMobileSectionValue()).toBe('settings');
   });
 });
 

@@ -742,7 +742,7 @@ export class AccountComponent {
         newPassword: '',
         confirmPassword: '',
       });
-      toast.success('Password updated successfully. Please log in again.');
+      toast.success('password updated — log in again');
       // Do not await logout/navigation here. If routing stalls, keep UI responsive.
       void this.auth.logout();
     } catch (err: unknown) {
@@ -830,7 +830,7 @@ export class AccountComponent {
       await this.auth.updateProfile({
         name: trimmedName,
       });
-      this.profileMessage.set('Profile updated successfully!');
+      this.profileMessage.set('profile updated');
     } catch (err: unknown) {
       this.profileError.set(cleanErrorMessage(err, 'Failed to update profile'));
     } finally {

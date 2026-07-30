@@ -1,4 +1,4 @@
-import { ComponentHarness } from '@angular/cdk/testing';
+import {ComponentHarness} from '@angular/cdk/testing';
 
 export class ZardSliderHarness extends ComponentHarness {
   static hostSelector = 'z-slider';
@@ -8,6 +8,16 @@ export class ZardSliderHarness extends ComponentHarness {
   async getValue(): Promise<number> {
     const thumb = await this.thumb();
     return Number(await thumb.getAttribute('aria-valuenow'));
+  }
+
+  async getMax(): Promise<number> {
+    const thumb = await this.thumb();
+    return Number(await thumb.getAttribute('aria-valuemax'));
+  }
+
+  async getMin(): Promise<number> {
+    const thumb = await this.thumb();
+    return Number(await thumb.getAttribute('aria-valuemin'));
   }
 
   async isDisabled(): Promise<boolean> {

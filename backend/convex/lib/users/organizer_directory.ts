@@ -2,7 +2,7 @@ import type {Doc, Id} from '../../_generated/dataModel';
 import {internal} from '../../_generated/api';
 import type {MutationCtx, QueryCtx} from '../../_generated/server';
 import {getLatestApplicationForOrganizer} from '../applications/read_models';
-import {stripSensitiveUserFields} from './helpers';
+import {filterMembersByEmailPrefix, stripSensitiveUserFields} from './helpers';
 import {
   isCommunityAdmin,
   isCommunityMember,
@@ -32,10 +32,7 @@ type UserApplicationRow = {
   } | null;
   isCommunityAdmin?: boolean;
   communityAccessSource?:
-    | 'approved_application'
-    | 'magic_link'
-    | 'direct_member'
-    | 'shared';
+    'approved_application' | 'magic_link' | 'direct_member' | 'shared';
   trustedViaOrganizerName?: string;
 };
 
@@ -427,10 +424,32 @@ export async function enqueueMembershipPropagation(
 }
 
 /**
- * Searches the organizer directory by user name or email using the
- * `search_name_email` search index on the users table. Streams through global
- * matches and filters against the organizer directory so that the result cap
- * applies to *scoped* members, not pre-scope global users.
+ * Enumerates the user IDs in the organizer's admin-directory projection using
+ * the `by_organizer_and_user` index. This is the organizer's scoped membership
+ * roster (bounded by community size); directory search matches the email prefix
+ * within it so recall never depends on scanning the global `users` table.
+ */
+async function listOrganizerDirectoryMemberIds(
+  ctx: DirectoryCtx,
+  organizerId: Id<'organizers'>,
+): Promise<Id<'users'>[]> {
+  const userIds: Id<'users'>[] = [];
+  for await (const entry of ctx.db
+    .query('organizer_user_directory')
+    .withIndex('by_organizer_and_user', (query) =>
+      query.eq('organizerId', organizerId),
+    )) {
+    userIds.push(entry.userId);
+  }
+  return userIds;
+}
+
+/**
+ * Searches the organizer directory by user name or email. The name branch
+ * streams the `search_name_email` search index on the users table and filters
+ * against the organizer directory, so the result cap applies to *scoped*
+ * members, not pre-scope global users. The email branch matches the prefix
+ * within the organizer's directory membership (see the email branch below).
  *
  * Returns a single non-paginated page (`isDone: true`) capped at 50 scoped results.
  */
@@ -478,15 +497,24 @@ export async function searchUserApplicationsInDirectory(
     await tryAddUser(user);
   }
 
-  // Stream email prefix matches from regular index.
+  // Email branch: match the prefix WITHIN the organizer's directory membership
+  // instead of scanning the global `users` email index and then scope-filtering.
+  // The directory *is* the scoped roster, so enumerating it keeps reads bounded
+  // by community size and can never drop an in-scope member just because
+  // unrelated platform users share the prefix and sort ahead of them (a capped
+  // global scan would leave such a member beyond its window).
   if (entries.length < scopedLimit) {
-    for await (const user of ctx.db
-      .query('users')
-      .withIndex('email', (q) =>
-        q.gte('email', lowerTerm).lt('email', lowerTerm + '\uffff'),
-      )) {
+    const directoryMemberIds = await listOrganizerDirectoryMemberIds(
+      ctx,
+      organizerId,
+    );
+    const emailMatches = await filterMembersByEmailPrefix(
+      ctx.db,
+      directoryMemberIds,
+      lowerTerm,
+    );
+    for (const user of emailMatches) {
       if (entries.length >= scopedLimit) break;
-      if (!user.email?.toLowerCase().includes(lowerTerm)) continue;
       await tryAddUser(user);
     }
   }

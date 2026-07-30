@@ -166,7 +166,6 @@ export class ConfirmSocialSigninComponent {
       missingOttMessage:
         'This sign-in link is invalid or expired. Please try again.',
       fallbackErrorMessage: 'Sign-in could not be completed. Please try again.',
-      syncUserToApp: true,
     });
 
     if (!outcome.ok) {

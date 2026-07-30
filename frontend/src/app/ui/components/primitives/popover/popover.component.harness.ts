@@ -1,4 +1,4 @@
-import { ComponentHarness } from '@angular/cdk/testing';
+import {ComponentHarness} from '@angular/cdk/testing';
 
 export class PopoverTriggerHarness extends ComponentHarness {
   static hostSelector = 'button';
@@ -10,7 +10,7 @@ export class PopoverTriggerHarness extends ComponentHarness {
 
   async keydown(key: string): Promise<void> {
     const host = await this.host();
-    await host.dispatchEvent('keydown', { key });
+    await host.dispatchEvent('keydown', {key});
   }
 
   async mouseEnter(): Promise<void> {
@@ -40,5 +40,16 @@ export class PopoverContentHarness extends ComponentHarness {
   async getText(): Promise<string> {
     const host = await this.host();
     return host.text();
+  }
+
+  /**
+   * Simulates a real pointer interaction (pointerdown + click) originating from
+   * inside the popover content. The CDK outside-click dispatcher treats these as
+   * inside-overlay events and must NOT dismiss the popover.
+   */
+  async clickContent(): Promise<void> {
+    const host = await this.host();
+    await host.dispatchEvent('pointerdown');
+    await host.dispatchEvent('click');
   }
 }

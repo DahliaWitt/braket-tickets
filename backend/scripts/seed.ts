@@ -35,9 +35,12 @@ import {
 } from '../convex/stripe/_impl/accounts.ts';
 import type {Id} from '../convex/_generated/dataModel';
 import {
+  convexEnvTargetArgs,
   createSeedEnvSession,
-  getConvexCloudDeploymentName,
+  resolveSeedEnvTarget,
   type DevSeedEnvVar,
+  type SeedCleanupTarget,
+  type SeedEnvTarget,
 } from './seed-session.ts';
 import {
   createSeedClient,
@@ -224,31 +227,20 @@ function resolveLocalAdminKey(): string | undefined {
 }
 
 // ── convexEnvSet / convexEnvRemove ─────────────────────────────────────────────
-// Local backends need --admin-key and --url. Remote seed sessions use an
-// explicit deployment slug parsed from the Convex URL so --url overrides cannot
-// drift away from the deployment whose env vars are being changed.
-
-type ConvexEnvTarget = {
-  url?: string;
-  adminKey?: string;
-  deployment?: string;
-};
+// Local backends need --admin-key and --url. Remote seed sessions rely on the
+// deployment-scoped CONVEX_DEPLOY_KEY injected by Doppler and must not pass a
+// conflicting --deployment flag. resolveSeedEnvTarget validates that the key
+// and URL identify the same allowlisted dev deployment before these helpers
+// can receive a remote target.
 
 function convexEnvSet(
   name: string,
   value: string,
-  target: ConvexEnvTarget,
+  target: SeedEnvTarget,
 ): void {
   execFileSync(
     CONVEX_CLI,
-    [
-      'env',
-      'set',
-      name,
-      ...(target.adminKey ? ['--admin-key', target.adminKey] : []),
-      ...(target.url ? ['--url', target.url] : []),
-      ...(target.deployment ? ['--deployment', target.deployment] : []),
-    ],
+    ['env', 'set', name, ...convexEnvTargetArgs(target)],
     {
       cwd: PROJECT_ROOT,
       input: value,
@@ -258,18 +250,11 @@ function convexEnvSet(
   );
 }
 
-function convexEnvRemove(name: string, target: ConvexEnvTarget): boolean {
+function convexEnvRemove(name: string, target: SeedEnvTarget): boolean {
   try {
     execFileSync(
       CONVEX_CLI,
-      [
-        'env',
-        'remove',
-        name,
-        ...(target.adminKey ? ['--admin-key', target.adminKey] : []),
-        ...(target.url ? ['--url', target.url] : []),
-        ...(target.deployment ? ['--deployment', target.deployment] : []),
-      ],
+      ['env', 'remove', name, ...convexEnvTargetArgs(target)],
       {
         cwd: PROJECT_ROOT,
         encoding: 'utf-8',
@@ -849,6 +834,14 @@ async function main(): Promise<void> {
     }
   }
 
+  const envTarget = resolveSeedEnvTarget({
+    convexUrl,
+    isLocal: isLocalUrl(convexUrl),
+    adminKey,
+    deployKey: process.env['CONVEX_DEPLOY_KEY'],
+    allowedRemoteDeployments: [STAGING_DEPLOYMENT_SLUG],
+  });
+
   const seedClient = createSeedClient(convexUrl);
 
   console.log(
@@ -859,26 +852,14 @@ async function main(): Promise<void> {
   const seedExpiresAt = String(Date.now() + SEED_SESSION_TTL_MS);
 
   // Temporarily enable a token-gated seed session.
-  const localUrl = adminKey ? convexUrl : undefined;
-  const remoteDeployment = localUrl
-    ? undefined
-    : (getConvexCloudDeploymentName(convexUrl) ?? undefined);
-  if (isDev && !localUrl && remoteDeployment !== STAGING_DEPLOYMENT_SLUG) {
-    throw new Error(
-      `Refusing to enable DEV_SEED on non-staging remote deployment: ${convexUrl}`,
-    );
-  }
-  const envTarget = {
-    url: localUrl,
-    adminKey,
-    deployment: remoteDeployment,
-  };
-  const cleanupTarget = {
-    ...envTarget,
-    dopplerProject: process.env['DOPPLER_PROJECT'] ?? 'braket-tickets',
-    dopplerConfig:
-      isDev && !adminKey ? (process.env['DOPPLER_CONFIG'] ?? 'stg') : undefined,
-  };
+  const cleanupTarget: SeedCleanupTarget =
+    envTarget.kind === 'remote'
+      ? {
+          ...envTarget,
+          dopplerProject: process.env['DOPPLER_PROJECT'] ?? 'braket-tickets',
+          dopplerConfig: process.env['DOPPLER_CONFIG'] ?? 'stg',
+        }
+      : envTarget;
   const seedEnvSession = createSeedEnvSession({
     target: cleanupTarget,
     setEnv: (name: DevSeedEnvVar, value: string) =>

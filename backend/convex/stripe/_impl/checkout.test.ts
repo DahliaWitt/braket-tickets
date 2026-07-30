@@ -138,6 +138,186 @@ describe('Stripe Checkout session branding', () => {
     });
   });
 
+  it('reuses one idempotency key across byte-identical retries so a lost response never double-creates', async () => {
+    const args = {
+      connectedAccountId: 'acct_direct_idem',
+      orderId: baseMetadata.orderId,
+      amountCents: 2500,
+      quantity: 1,
+      checkoutTheme: 'light' as const,
+      eventName: 'Concrete & Wax',
+      ticketDescription: 'regular ticket',
+      expiresAtMs: 1893456000000,
+      metadata: baseMetadata,
+    };
+
+    await createDirectChargeCheckoutSession(args);
+    await createDirectChargeCheckoutSession(args);
+
+    const firstKey =
+      checkoutSessionsCreateMock.mock.calls[0]?.[1]?.idempotencyKey;
+    const secondKey =
+      checkoutSessionsCreateMock.mock.calls[1]?.[1]?.idempotencyKey;
+    expect(firstKey).toMatch(/^braket-checkout-order_test_123-[0-9a-f]{32}$/);
+    expect(secondKey).toBe(firstKey);
+  });
+
+  it('mints a distinct idempotency key when the checkout theme flips mid-order', async () => {
+    // Regression: a re-created session for the same open order changes
+    // branding_settings + metadata; a fixed `braket-checkout-${orderId}` key
+    // would replay with different params and Stripe returns idempotency_error,
+    // wedging the restart.
+    const base = {
+      connectedAccountId: 'acct_direct_idem',
+      orderId: baseMetadata.orderId,
+      amountCents: 2500,
+      quantity: 1,
+      eventName: 'Concrete & Wax',
+      ticketDescription: 'regular ticket',
+      expiresAtMs: 1893456000000,
+      metadata: baseMetadata,
+    };
+
+    await createDirectChargeCheckoutSession({...base, checkoutTheme: 'light'});
+    await createDirectChargeCheckoutSession({...base, checkoutTheme: 'dark'});
+
+    const lightKey =
+      checkoutSessionsCreateMock.mock.calls[0]?.[1]?.idempotencyKey;
+    const darkKey =
+      checkoutSessionsCreateMock.mock.calls[1]?.[1]?.idempotencyKey;
+    expect(lightKey).toBeDefined();
+    expect(darkKey).toBeDefined();
+    expect(darkKey).not.toBe(lightKey);
+  });
+
+  it('mints a distinct idempotency key when the hold is extended (expires_at advances)', async () => {
+    // Regression: the secondary wedge — reverting to the original theme still
+    // fails under a fixed key because safeExpiresAtMs advances with the wall
+    // clock, so expires_at (second granularity) differs across re-creates.
+    const base = {
+      connectedAccountId: 'acct_direct_idem',
+      orderId: baseMetadata.orderId,
+      amountCents: 2500,
+      quantity: 1,
+      checkoutTheme: 'light' as const,
+      eventName: 'Concrete & Wax',
+      ticketDescription: 'regular ticket',
+      metadata: baseMetadata,
+    };
+
+    await createDirectChargeCheckoutSession({
+      ...base,
+      expiresAtMs: 1893456000000,
+    });
+    await createDirectChargeCheckoutSession({
+      ...base,
+      expiresAtMs: 1893456060000,
+    });
+
+    const firstKey =
+      checkoutSessionsCreateMock.mock.calls[0]?.[1]?.idempotencyKey;
+    const secondKey =
+      checkoutSessionsCreateMock.mock.calls[1]?.[1]?.idempotencyKey;
+    expect(secondKey).not.toBe(firstKey);
+  });
+
+  it('separates platform and direct-charge sessions by connected-account routing', async () => {
+    const shared = {
+      orderId: baseMetadata.orderId,
+      amountCents: 2500,
+      quantity: 1,
+      checkoutTheme: 'light' as const,
+      eventName: 'Concrete & Wax',
+      ticketDescription: 'regular ticket',
+      expiresAtMs: 1893456000000,
+      metadata: baseMetadata,
+    };
+
+    await createPlatformCheckoutSession(shared);
+    await createDirectChargeCheckoutSession({
+      ...shared,
+      connectedAccountId: 'acct_direct_idem',
+    });
+
+    const platformKey =
+      checkoutSessionsCreateMock.mock.calls[0]?.[1]?.idempotencyKey;
+    const directKey =
+      checkoutSessionsCreateMock.mock.calls[1]?.[1]?.idempotencyKey;
+    // Both are for order_test_123 but route to different Stripe accounts;
+    // folding stripeAccount into the fingerprint keeps them distinct.
+    expect(platformKey).not.toBe(directKey);
+  });
+
+  it('folds the connected account into the key even when every body param is identical', async () => {
+    // Isolates stripeAccount: two direct-charge sessions with byte-identical
+    // bodies but different connected accounts. Without stripeAccount in the
+    // fingerprint these would collide onto one key and a re-route would wedge.
+    const base = {
+      orderId: baseMetadata.orderId,
+      amountCents: 2500,
+      quantity: 1,
+      checkoutTheme: 'light' as const,
+      eventName: 'Concrete & Wax',
+      ticketDescription: 'regular ticket',
+      expiresAtMs: 1893456000000,
+      metadata: baseMetadata,
+    };
+
+    await createDirectChargeCheckoutSession({
+      ...base,
+      connectedAccountId: 'acct_A',
+    });
+    await createDirectChargeCheckoutSession({
+      ...base,
+      connectedAccountId: 'acct_B',
+    });
+
+    const keyA = checkoutSessionsCreateMock.mock.calls[0]?.[1]?.idempotencyKey;
+    const keyB = checkoutSessionsCreateMock.mock.calls[1]?.[1]?.idempotencyKey;
+    expect(keyA).not.toBe(keyB);
+  });
+
+  it('derives a stable key regardless of metadata property insertion order', async () => {
+    // Guards stableStringify: the fingerprint sorts object keys, so the same
+    // logical request keyed with metadata inserted in a different order must
+    // still collapse onto one idempotency key (a true retry must dedup).
+    const base = {
+      connectedAccountId: 'acct_direct_idem',
+      orderId: baseMetadata.orderId,
+      amountCents: 2500,
+      quantity: 1,
+      checkoutTheme: 'light' as const,
+      eventName: 'Concrete & Wax',
+      ticketDescription: 'regular ticket',
+      expiresAtMs: 1893456000000,
+    };
+    const orderedMetadata = {
+      orderId: baseMetadata.orderId,
+      kind: baseMetadata.kind,
+      eventId: baseMetadata.eventId,
+    };
+    const reorderedMetadata = {
+      eventId: baseMetadata.eventId,
+      kind: baseMetadata.kind,
+      orderId: baseMetadata.orderId,
+    };
+
+    await createDirectChargeCheckoutSession({
+      ...base,
+      metadata: orderedMetadata,
+    });
+    await createDirectChargeCheckoutSession({
+      ...base,
+      metadata: reorderedMetadata,
+    });
+
+    const firstKey =
+      checkoutSessionsCreateMock.mock.calls[0]?.[1]?.idempotencyKey;
+    const secondKey =
+      checkoutSessionsCreateMock.mock.calls[1]?.[1]?.idempotencyKey;
+    expect(secondKey).toBe(firstKey);
+  });
+
   it('recognizes only sessions with the current requested branding theme', () => {
     const darkBranding = resolveCheckoutBranding('dark');
 

@@ -1,6 +1,7 @@
 # Convex Backend
 
 This folder has two jobs:
+
 - root files in `convex/` hold infra and configuration (`schema.ts`, `http.ts`, `crons.ts`, etc.)
 - feature directories define registered Convex functions with thin orchestration
 - internal subdirectories hold shared logic, validators, and private feature implementations
@@ -8,6 +9,7 @@ This folder has two jobs:
 ## Verify Before Coding
 
 Your training data for Convex is outdated. Before writing code:
+
 - Read `convex/_generated/ai/guidelines.md` first
 - Read `convex/schema.ts` for local schema and indexes
 - Use Convex MCP tools (`tables`, `functionSpec`) to verify live deployment state
@@ -16,6 +18,7 @@ Your training data for Convex is outdated. Before writing code:
 ## Structure Contract
 
 Follow these rules so we do not recreate god files:
+
 - Keep registered Convex exports in feature modules (e.g. `convex/events/*.ts`, `convex/stripe/*.ts`, `convex/payments/*.ts`)
 - Do not add new domain API files at the Convex root. Create or extend a feature folder instead.
 - Keep top-level API files thin: registration, auth, argument validation, return validation, and orchestration only
@@ -38,7 +41,7 @@ Follow these rules so we do not recreate god files:
 - Feature code imports `convex/lib/access.ts` for all `can*` and `require*` authorization checks — never `authz.ts` directly for access decisions
 - Access module functions use verb-first naming: `canViewEvent`, `requireViewEvent`, `canEditEvent`, `requireEditEvent`. Follow this convention when adding new access functions.
 - Only `convex/lib/authz.ts` may call `components.authz.*`; only authz-management modules (membership, magic links, admin invites) may call `addMember`/`removeMember`/`grantRole`/`revokeRole`
-- Enumeration helpers (`listOrganizerMembers`, `listCommunityAdminIds`, `getCommunityMembers`, `getUserCommunities`) in `authz.ts` are data queries, not authorization decisions — direct import is permitted
+- Enumeration helpers (`listOrganizerMembers`, `countOrganizerMembers`, `listCommunityAdminIds`, `getCommunityMembers`, `getUserCommunities`) in `authz.ts` are data queries, not authorization decisions — direct import is permitted
 - Visibility helpers (`isPubliclyVisible`, `isOpenAccess`) live in `convex/lib/access.ts`. Read-model code may import these directly from `access.ts` for filtering and display purposes.
 - Do not inline visibility checks, permission checks, or trust resolution in handlers — use the matching `access.ts` function
 - Internal-only code should continue to use `internalQuery` / `internalMutation` where appropriate
@@ -61,6 +64,7 @@ Tests live in `convex/**/*.test.ts` (edge-runtime environment).
 Use `convexTest()`, `t.run()`, `t.mutation()`, and `t.query()` rather than Playwright.
 Backend logic tests do not belong in `frontend/e2e/`.
 Run targeted backend checks while iterating:
+
 - `pnpm typecheck:convex`
 - `pnpm lint:convex`
 - `pnpm test:convex`
@@ -77,6 +81,7 @@ change when schema/validator changes affect required fields or enum vocabularies
 ## Debugging
 
 Use Convex MCP tools:
+
 - `data` to inspect live data
 - `runOneoffQuery` to test queries safely
 - `logs` to debug execution issues

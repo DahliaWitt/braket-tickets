@@ -9,6 +9,7 @@ import {
 import {logger} from '@/utils/logger';
 import {AUTH_CLIENT, type AuthClient} from './auth-client.token';
 import {COMPROMISED_PASSWORD_MESSAGE} from '@shared/constants';
+import {api} from '@convex/_generated/api';
 
 const authClient = {
   requestPasswordReset: vi.fn(),
@@ -30,7 +31,7 @@ describe('PasswordService', () => {
     vi.spyOn(logger, 'verbose').mockImplementation(() => undefined);
 
     convexClientMock = createMockConvexClient();
-    convexClientMock.mutation.mockResolvedValue(undefined);
+    convexClientMock.action.mockResolvedValue(undefined);
     authClient.requestPasswordReset.mockResolvedValue({error: null});
     authClient.resetPassword.mockResolvedValue({error: null});
     authClient.sendVerificationEmail.mockResolvedValue({error: null});
@@ -47,20 +48,44 @@ describe('PasswordService', () => {
   });
 
   describe('updatePassword', () => {
-    it('should retry transient backend timeout errors', async () => {
-      convexClientMock.mutation
-        .mockRejectedValueOnce(
-          new Error('Function execution timed out (maximum duration: 1s)'),
-        )
-        .mockResolvedValueOnce(undefined);
-
+    it('changes the password through the longer-running V2 action', async () => {
       await service.updatePassword(
         'old-password',
         'new-password',
         'new-password',
       );
 
-      expect(convexClientMock.mutation).toHaveBeenCalledTimes(2);
+      expect(convexClientMock.action).toHaveBeenCalledWith(
+        api.auth.public.changePasswordV2,
+        {
+          currentPassword: 'old-password',
+          newPassword: 'new-password',
+          revokeOtherSessions: true,
+        },
+      );
+      expect(convexClientMock.mutation).not.toHaveBeenCalled();
+    });
+
+    it('does not replay a password change when the action response is lost', async () => {
+      convexClientMock.action.mockRejectedValue(
+        new Error('Function execution timed out'),
+      );
+
+      await expect(
+        service.updatePassword('old-password', 'new-password', 'new-password'),
+      ).rejects.toThrow('Function execution timed out');
+
+      expect(convexClientMock.action).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the current-password error mapping for action failures', async () => {
+      convexClientMock.action.mockRejectedValue(
+        new Error('Current password is incorrect'),
+      );
+
+      await expect(
+        service.updatePassword('wrong', 'new-password', 'new-password'),
+      ).rejects.toThrow('Current password is incorrect');
     });
 
     it('should throw when new passwords do not match', async () => {
@@ -154,9 +179,14 @@ describe('PasswordService', () => {
 
       await service.requestVerificationEmail('user@example.com');
 
+      // Must match the signup flow's callback so Better Auth's `/verify-email`
+      // redirect lands on the verification-outcome page, not `/login` (where an
+      // error redirect would be misrouted to the social sign-in error page).
       expect(authClient.sendVerificationEmail).toHaveBeenCalledWith({
         email: 'user@example.com',
-        callbackURL: expect.stringContaining('/login') as unknown,
+        callbackURL: expect.stringContaining(
+          '/confirm/verification',
+        ) as unknown,
       });
     });
   });

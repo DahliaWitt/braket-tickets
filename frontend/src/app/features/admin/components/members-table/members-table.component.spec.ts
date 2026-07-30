@@ -118,12 +118,8 @@ describe('AdminMembersTableComponent', () => {
   beforeEach(async () => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
-    toastSuccessSpy = vi
-      .spyOn(toast, 'success')
-      .mockImplementation(() => '');
-    toastErrorSpy = vi
-      .spyOn(toast, 'error')
-      .mockImplementation(() => '');
+    toastSuccessSpy = vi.spyOn(toast, 'success').mockImplementation(() => '');
+    toastErrorSpy = vi.spyOn(toast, 'error').mockImplementation(() => '');
 
     mockMembersService = {
       revokeMembership: vi.fn().mockResolvedValue({}),
@@ -458,7 +454,7 @@ describe('AdminMembersTableComponent', () => {
       paginationComponent.loadMore();
 
       expect(loadMoreSpy).toHaveBeenCalledWith(20);
-      expect(toastErrorSpy).toHaveBeenCalledWith('Failed to load more members');
+      expect(toastErrorSpy).toHaveBeenCalledWith('failed to load more members');
     });
   });
 
@@ -511,7 +507,7 @@ describe('AdminMembersTableComponent', () => {
       undefined,
     );
     expect(mockMembersService.revokeMembership).not.toHaveBeenCalled();
-    expect(toastSuccessSpy).toHaveBeenCalledWith('Membership revoked');
+    expect(toastSuccessSpy).toHaveBeenCalledWith('membership revoked');
   });
 
   it('should pass reason to revoke when dialog returns a value', async () => {
@@ -603,8 +599,30 @@ describe('AdminMembersTableComponent', () => {
     await component.updateAppStatus(mockMember, 'approved');
     expect(mockAppsService.approve).toHaveBeenCalledWith('a1', 'u1', 'admin1');
     expect(toastSuccessSpy).toHaveBeenCalledWith(
-      'Membership application approved',
+      'membership application approved',
     );
+  });
+
+  it('guards against double-firing approve while the mutation is in flight', async () => {
+    let resolveApprove!: (value: unknown) => void;
+    (mockAppsService.approve as unknown as Mock).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveApprove = resolve;
+        }),
+    );
+
+    component.updateAppStatus(mockMember, 'approved');
+    expect(component.isRowPending(mockMember)).toBe(true);
+    expect(component.isActionPending(mockMember, 'approved')).toBe(true);
+
+    // A second click on the same row is swallowed by the row-pending guard.
+    component.updateAppStatus(mockMember, 'approved');
+    expect(mockAppsService.approve).toHaveBeenCalledTimes(1);
+
+    resolveApprove({});
+    await fixture.whenStable();
+    expect(component.isRowPending(mockMember)).toBe(false);
   });
 
   it('should reject application with reason dialog', async () => {
@@ -632,7 +650,7 @@ describe('AdminMembersTableComponent', () => {
       'Not eligible',
     );
     expect(toastSuccessSpy).toHaveBeenCalledWith(
-      'Membership application rejected',
+      'membership application rejected',
     );
   });
 
@@ -642,7 +660,7 @@ describe('AdminMembersTableComponent', () => {
     expect(mockAppsService.approve).not.toHaveBeenCalled();
     expect(mockDialogService.create).not.toHaveBeenCalled();
     expect(toastErrorSpy).toHaveBeenCalledWith(
-      'Only pending applications can be approved or rejected',
+      'only pending applications can be approved or rejected',
     );
   });
 
@@ -721,7 +739,7 @@ describe('AdminMembersTableComponent', () => {
 
       expect(await harness.getRowCount()).toBe(0);
       expect(await harness.hasEmptyState()).toBe(true);
-      expect(await harness.getEmptyStateText()).toContain('NO MEMBERS FOUND');
+      expect(await harness.getEmptyStateText()).toContain('no members found');
     });
 
     it('rejected applicant: row is excluded from member-management rows', async () => {
@@ -1109,7 +1127,7 @@ describe('AdminMembersTableComponent', () => {
       expect(await searchHarness.getRowCount()).toBe(0);
       expect(await searchHarness.hasEmptyState()).toBe(true);
       const emptyText = await searchHarness.getEmptyStateText();
-      expect(emptyText).toContain('NO RESULTS FOR');
+      expect(emptyText).toContain('no results for');
       expect(emptyText).toContain('nonexistent');
     });
   });

@@ -9,13 +9,54 @@ import {
 import {toSignal} from '@angular/core/rxjs-interop';
 import {ActivatedRoute, Router, RouterLink} from '@angular/router';
 import {AuthService} from '@/core/services/auth.service';
+import {
+  isSocialProvider,
+  type SocialProvider,
+} from '@/features/auth/models/external-auth.model';
+import {isNonRetryableReadError, retryWithDelays} from '@/utils/async-control';
 import {ConfirmationStateComponent} from '@ui/components/composites/confirmation-state/confirmation-state.component';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 import {ZardCardComponent} from '@ui/components/primitives/card/card.component';
-import {resolveConfirmOAuthCallback} from './confirm-oauth-callback';
 
 type ConfirmState = 'loading' | 'success' | 'error';
 
+const CALLBACK_ERROR_MESSAGE =
+  'This provider could not be connected right now.';
+const INVALID_LINK_MESSAGE =
+  'This provider link is invalid or expired. Please try again.';
+const SIGNED_OUT_MESSAGE =
+  'Sign in to your account, then check Account Settings to confirm this connection.';
+// Deliberately does not claim the link failed: the backend links the account
+// during the provider callback, so an unconfirmed read here is usually a
+// read-lag false negative (see docs/runbooks/auth-incidents.md).
+const UNCONFIRMED_LINK_MESSAGE =
+  'We could not confirm the connection. Check Account Settings to see if this login method is linked.';
+
+/**
+ * Bounded wait for the linked account to be readable after the provider
+ * redirect. Better Auth links the account before redirecting here, so the
+ * first attempt normally succeeds; the retries absorb read-after-write lag
+ * and the Convex client re-auth window right after page load, during which
+ * the connected-accounts action reports an empty list.
+ */
+const LINK_CONFIRM_RETRY_DELAYS_MS = [0, 500, 1000, 2000, 4000] as const;
+
+/**
+ * Confirms a social account link after the provider redirect.
+ *
+ * Unlike the social sign-in callback, the link callback carries NO one-time
+ * token (OTT): Better Auth's OAuth callback only creates a session — which the
+ * crossDomain plugin turns into an OTT — for sign-in flows. Linking mutates
+ * the account list of the already-authenticated user and redirects back
+ * without a new session. The user's existing session survives the round-trip
+ * in Better Auth client storage, so this page confirms the link by reading the
+ * connected accounts with that session instead of demanding a token that can
+ * never arrive.
+ *
+ * The success state asserts the postcondition "this provider is connected",
+ * not that this specific visit performed the link — a revisit while the
+ * provider is already linked truthfully reports it as connected.
+ */
 @Component({
   selector: 'app-confirm-social-link',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -97,16 +138,34 @@ export class ConfirmSocialLinkComponent {
 
   constructor() {
     effect(() => {
-      const alreadyInitialized = untracked(() => this.initialized());
       const queryParamMap = this.queryParamMap();
-      const callbackError = queryParamMap.get('error') ?? undefined;
-      const ott = queryParamMap.get('ott') ?? undefined;
+      const alreadyInitialized = untracked(() => this.initialized());
       if (alreadyInitialized) {
         return;
       }
 
+      const callbackError = queryParamMap.get('error') ?? undefined;
+      if (callbackError) {
+        this.initialized.set(true);
+        this.fail(CALLBACK_ERROR_MESSAGE);
+        return;
+      }
+
+      const provider = queryParamMap.get('provider') ?? undefined;
+      if (!isSocialProvider(provider)) {
+        this.initialized.set(true);
+        this.fail(INVALID_LINK_MESSAGE);
+        return;
+      }
+
+      // The link confirmation reads state owned by the signed-in session, so
+      // hold the loading state until auth bootstrap settles.
+      if (!this.auth.authInitialized()) {
+        return;
+      }
+
       this.initialized.set(true);
-      void this.initialize(callbackError, ott);
+      void this.initialize(provider);
     });
 
     effect(() => {
@@ -137,40 +196,43 @@ export class ConfirmSocialLinkComponent {
     await this.router.navigate(['/account']);
   }
 
-  private async navigateToAccountIfReady(): Promise<void> {
-    if (
-      !this.auth.authInitialized() ||
-      !this.auth.isAuthenticated() ||
-      !this.auth.user()
-    ) {
+  private async initialize(provider: SocialProvider): Promise<void> {
+    if (!this.auth.isAuthenticated()) {
+      this.fail(SIGNED_OUT_MESSAGE);
       return;
     }
 
-    await this.navigateToAccount();
-  }
-
-  private async initialize(
-    callbackError: string | undefined,
-    ott: string | undefined,
-  ): Promise<void> {
-    const outcome = await resolveConfirmOAuthCallback({
-      auth: this.auth,
-      callbackError,
-      ott,
-      callbackErrorMessage: 'This provider could not be connected right now.',
-      missingOttMessage:
-        'This provider link is invalid or expired. Please try again.',
-      fallbackErrorMessage: 'This provider could not be connected right now.',
-      syncUserToApp: false,
-    });
-
-    if (!outcome.ok) {
-      this.error.set(outcome.errorMessage);
-      this.state.set('error');
+    const linked = await this.confirmProviderLinked(provider);
+    if (!linked) {
+      this.fail(UNCONFIRMED_LINK_MESSAGE);
       return;
     }
 
     this.state.set('success');
-    await this.navigateToAccountIfReady();
+  }
+
+  private fail(message: string): void {
+    this.error.set(message);
+    this.state.set('error');
+  }
+
+  private async confirmProviderLinked(
+    provider: SocialProvider,
+  ): Promise<boolean> {
+    try {
+      await retryWithDelays({
+        delaysMs: LINK_CONFIRM_RETRY_DELAYS_MS,
+        run: async () => {
+          const accounts = await this.auth.getExternalAuths();
+          if (!accounts.some((account) => account.provider === provider)) {
+            throw new Error(`Provider ${provider} is not linked yet`);
+          }
+        },
+        shouldRetry: (error) => !isNonRetryableReadError(error),
+      });
+      return true;
+    } catch {
+      return false;
+    }
   }
 }

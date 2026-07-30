@@ -94,6 +94,22 @@ async function seedDemoCheckoutFixture(convexHelper: ConvexHelper) {
   };
 }
 
+async function seedStripeIncompleteOrganizer(
+  convexHelper: ConvexHelper,
+  label: string,
+): Promise<Id<'organizers'>> {
+  const organizerName = uniqueName(label);
+  const accountSuffix = organizerName.replace(/[^a-zA-Z0-9]/g, '_');
+  return convexHelper.mutation(api.testing.communities.seedOrganizer, {
+    name: organizerName,
+    stripeConnectedAccountId: `acct_incomplete_${accountSuffix}`,
+    stripeOnboardingStatus: 'in_progress',
+    stripeChargesEnabled: false,
+    stripePayoutsEnabled: false,
+    isPlatformOrganizer: false,
+  });
+}
+
 test.describe('Payment Purchase Flow', () => {
   test(
     'seeded Rooftop Listening checkout exposes embedded payment',
@@ -207,6 +223,139 @@ test.describe('Payment Purchase Flow', () => {
       .toBe(true);
 
     await fillAndSubmitPayment(page);
+
+    await waitForPaymentSuccess(page, 'guest');
+    await expect(page.getByTestId('checkout-view-tickets')).toHaveCount(0);
+  });
+
+  test('member can claim a free ticket while Stripe onboarding is incomplete', async ({
+    page,
+    convexHelper,
+  }) => {
+    const nonce = uniqueName('free-member').replace(/\s+/g, '-').toLowerCase();
+    const email = `free-member-${nonce}@example.com`;
+    const password = 'FreeMemberPassword123!';
+    const eventTitle = uniqueName('Free Incomplete Stripe Event');
+
+    await convexHelper.action(api.testing.users_node.seedUserAndGetTokens, {
+      email,
+      password,
+      name: `Free Member ${nonce}`,
+    });
+    const organizerId = await seedStripeIncompleteOrganizer(
+      convexHelper,
+      'Free Member Org',
+    );
+    const eventId = await convexHelper.mutation(api.testing.events.seedEvent, {
+      title: eventTitle,
+      date: new Date(2030, 0, 5).toISOString(),
+      price: 0,
+      totalTickets: 20,
+      status: 'published',
+      visibility: 'public',
+      organizerId,
+      maxTicketsPerUser: 2,
+    });
+
+    await signInUser(page, email, password);
+    await page.goto(`/events/${eventId}`);
+    const eventDetails = await getHarnessWhenVisible(page, EventDetailsHarness);
+    await expect
+      .poll(() => eventDetails.getEventTitle(), {timeout: 20000})
+      .toBe(eventTitle);
+    await eventDetails.clickGetTickets();
+
+    const checkout = await getHarnessWhenVisible(
+      page,
+      CheckoutSidebarHarness,
+      15000,
+      'attached',
+    );
+    await expect
+      .poll(() => checkout.isFreeTicketVisible(), {timeout: 10000})
+      .toBe(true);
+    await expect
+      .poll(() => checkout.isPaymentSetupIncomplete(), {timeout: 10000})
+      .toBe(false);
+    await expect
+      .poll(() => checkout.isFreeTicketEnabled(), {timeout: 10000})
+      .toBe(true);
+
+    await checkout.claimFreeTicket();
+    await expect
+      .poll(async () => (await checkout.getHostText()).toLowerCase(), {
+        timeout: 15000,
+      })
+      .toContain('access granted');
+    await expect
+      .poll(async () => (await checkout.getHostText()).toLowerCase(), {
+        timeout: 15000,
+      })
+      .toContain('ticket claimed');
+
+    const tickets = await goToMyTickets(page);
+    await expect
+      .poll(() => tickets.getTicketCardByEventTitle(eventTitle), {
+        timeout: 30000,
+      })
+      .toBeTruthy();
+  });
+
+  test('guest can claim a free ticket while Stripe onboarding is incomplete', async ({
+    page,
+    convexHelper,
+  }) => {
+    const nonce = uniqueName('free-guest').replace(/\s+/g, '-').toLowerCase();
+    const guestEmail = `free-guest-${nonce}@example.com`;
+    const eventTitle = uniqueName('Free Guest Incomplete Stripe Event');
+    const organizerId = await seedStripeIncompleteOrganizer(
+      convexHelper,
+      'Free Guest Org',
+    );
+    const eventId = await convexHelper.mutation(api.testing.events.seedEvent, {
+      title: eventTitle,
+      date: new Date(2030, 0, 6).toISOString(),
+      price: 0,
+      totalTickets: 20,
+      status: 'published',
+      visibility: 'public',
+      organizerId,
+      maxTicketsPerUser: 2,
+    });
+
+    await page.goto(`/events/${eventId}`);
+    const eventDetails = await getHarnessWhenVisible(page, EventDetailsHarness);
+    await expect
+      .poll(() => eventDetails.getEventTitle(), {timeout: 20000})
+      .toBe(eventTitle);
+    await eventDetails.clickGetTickets();
+
+    const checkout = await getHarnessWhenVisible(
+      page,
+      CheckoutSidebarHarness,
+      15000,
+      'attached',
+    );
+    await checkout.setGuestEmail(guestEmail);
+    await checkout.submitGuestEmail();
+    await expect
+      .poll(() => checkout.isTermsCheckboxVisible(), {timeout: 10000})
+      .toBe(true);
+    await expect
+      .poll(() => checkout.isFreeTicketVisible(), {timeout: 10000})
+      .toBe(true);
+    await expect
+      .poll(() => checkout.isPaymentSetupIncomplete(), {timeout: 10000})
+      .toBe(false);
+    await expect
+      .poll(() => checkout.isFreeTicketEnabled(), {timeout: 10000})
+      .toBe(false);
+
+    await checkout.acceptTerms();
+    await expect
+      .poll(() => checkout.isFreeTicketEnabled(), {timeout: 10000})
+      .toBe(true);
+    await checkout.claimFreeTicket();
 
     await waitForPaymentSuccess(page, 'guest');
     await expect(page.getByTestId('checkout-view-tickets')).toHaveCount(0);

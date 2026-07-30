@@ -33,6 +33,22 @@ export class CheckInActivityFeedHarness extends ComponentHarness {
     return (await timestamps[0].text()).trim();
   }
 
+  async getMostRecentEntryClasses(): Promise<string[]> {
+    const entries = await this.getEntries();
+    if (entries.length === 0) return [];
+    return ((await entries[0].getAttribute('class')) ?? '')
+      .split(/\s+/)
+      .filter(Boolean);
+  }
+
+  async getMostRecentEntryTimestampClasses(): Promise<string[]> {
+    const timestamps = await this.getTimestampEls();
+    if (timestamps.length === 0) return [];
+    return ((await timestamps[0].getAttribute('class')) ?? '')
+      .split(/\s+/)
+      .filter(Boolean);
+  }
+
   async isEmptyStateVisible(): Promise<boolean> {
     return (await this.getEmptyState()) !== null;
   }
