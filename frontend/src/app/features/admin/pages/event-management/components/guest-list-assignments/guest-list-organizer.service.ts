@@ -2,14 +2,31 @@ import {Injectable} from '@angular/core';
 import type {FunctionArgs, FunctionReturnType} from 'convex/server';
 import {injectConvex} from 'convex-angular';
 import {api} from '@convex/_generated/api';
-import type {Id} from '@convex/_generated/dataModel';
 
 export type CreateGuestListAssignmentArgs = FunctionArgs<
   typeof api.guest_list.assignments.create
 >;
-export type BulkCreateStaffRows = FunctionArgs<
+export type SearchCommunityMembersArgs = FunctionArgs<
+  typeof api.communities.scanners.searchGrantCandidates
+>;
+export type BulkCreateStaffArgs = FunctionArgs<
   typeof api.guest_list.assignments.bulkCreateStaff
->['rows'];
+>;
+export type UpdateGuestListGrantArgs = FunctionArgs<
+  typeof api.guest_list.assignments.updateGrant
+>;
+export type RevokeGuestListAssignmentArgs = FunctionArgs<
+  typeof api.guest_list.assignments.revoke
+>;
+export type ResendGuestListInviteArgs = FunctionArgs<
+  typeof api.guest_list.assignments.resendInvite
+>;
+export type ListAssignmentGuestsArgs = FunctionArgs<
+  typeof api.guest_list.assignments.listGuests
+>;
+export type ListEventAssignmentsArgs = FunctionArgs<
+  typeof api.guest_list.assignments.listByEvent
+>;
 export type CommunityMemberCandidate = FunctionReturnType<
   typeof api.communities.scanners.searchGrantCandidates
 >[number];
@@ -19,13 +36,14 @@ export class GuestListOrganizerService {
   private readonly convex = injectConvex();
 
   searchMembers(
-    organizerId: string,
-    searchTerm: string,
-  ): Promise<CommunityMemberCandidate[]> {
-    return this.convex.query(api.communities.scanners.searchGrantCandidates, {
-      organizerId: organizerId as Id<'organizers'>,
-      searchTerm,
-    });
+    args: SearchCommunityMembersArgs,
+  ): Promise<
+    FunctionReturnType<typeof api.communities.scanners.searchGrantCandidates>
+  > {
+    return this.convex.query(
+      api.communities.scanners.searchGrantCandidates,
+      args,
+    );
   }
 
   create(
@@ -35,62 +53,49 @@ export class GuestListOrganizerService {
   }
 
   bulkCreateStaff(
-    eventId: string,
-    batchKey: string,
-    rows: BulkCreateStaffRows,
+    args: BulkCreateStaffArgs,
   ): Promise<
     FunctionReturnType<typeof api.guest_list.assignments.bulkCreateStaff>
   > {
-    return this.convex.mutation(api.guest_list.assignments.bulkCreateStaff, {
-      eventId: eventId as Id<'events'>,
-      batchKey,
-      rows,
-    });
+    return this.convex.mutation(
+      api.guest_list.assignments.bulkCreateStaff,
+      args,
+    );
   }
 
   updateGrant(
-    assignmentId: string,
-    grantedSlots: number,
+    args: UpdateGuestListGrantArgs,
   ): Promise<
     FunctionReturnType<typeof api.guest_list.assignments.updateGrant>
   > {
-    return this.convex.mutation(api.guest_list.assignments.updateGrant, {
-      assignmentId: assignmentId as Id<'guestListAssignments'>,
-      grantedSlots,
-    });
+    return this.convex.mutation(api.guest_list.assignments.updateGrant, args);
   }
 
   revoke(
-    assignmentId: string,
+    args: RevokeGuestListAssignmentArgs,
   ): Promise<FunctionReturnType<typeof api.guest_list.assignments.revoke>> {
-    return this.convex.mutation(api.guest_list.assignments.revoke, {
-      assignmentId: assignmentId as Id<'guestListAssignments'>,
-    });
+    return this.convex.mutation(api.guest_list.assignments.revoke, args);
   }
 
   resendInvite(
-    assignmentId: string,
-    idempotencyKey: string,
+    args: ResendGuestListInviteArgs,
   ): Promise<
     FunctionReturnType<typeof api.guest_list.assignments.resendInvite>
   > {
-    return this.convex.mutation(api.guest_list.assignments.resendInvite, {
-      assignmentId: assignmentId as Id<'guestListAssignments'>,
-      idempotencyKey,
-    });
+    return this.convex.mutation(api.guest_list.assignments.resendInvite, args);
   }
 
-  listGuests(assignmentId: string, cursor: string | null) {
-    return this.convex.query(api.guest_list.assignments.listGuests, {
-      assignmentId: assignmentId as Id<'guestListAssignments'>,
-      paginationOpts: {numItems: 25, cursor},
-    });
+  listGuests(
+    args: ListAssignmentGuestsArgs,
+  ): Promise<FunctionReturnType<typeof api.guest_list.assignments.listGuests>> {
+    return this.convex.query(api.guest_list.assignments.listGuests, args);
   }
 
-  listByEvent(eventId: string, cursor: string | null) {
-    return this.convex.query(api.guest_list.assignments.listByEvent, {
-      eventId: eventId as Id<'events'>,
-      paginationOpts: {numItems: 25, cursor},
-    });
+  listByEvent(
+    args: ListEventAssignmentsArgs,
+  ): Promise<
+    FunctionReturnType<typeof api.guest_list.assignments.listByEvent>
+  > {
+    return this.convex.query(api.guest_list.assignments.listByEvent, args);
   }
 }

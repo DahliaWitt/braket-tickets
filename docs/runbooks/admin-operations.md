@@ -348,6 +348,16 @@ and optional `slotOverride`. This target has a guest-list-specific
 audit record, counters, and scheduled delivery work in one transaction. Split
 larger rosters into separately keyed batches.
 
+Each event supports at most 500 active artist/staff assignments and 5,000 total
+guest admissions across manual guests, guest imports, assignment-holder
+admissions, and self-service additions. Revoked assignment history does not
+count toward the active-assignment cap. Capacity failures use stable
+`ACTIVE_ASSIGNMENT_CAP_EXCEEDED`, `GUEST_ADMISSION_CAP_EXCEEDED`, or
+`IMPORT_CAP_EXCEEDED` error codes. Legacy data that is already over a cap and
+has no counter snapshot reports `GUEST_LIST_EVENT_CAP_EXCEEDED` on new writes,
+but removals and revocations remain available so an operator can reduce it back
+to the supported boundary.
+
 The assignment list keeps only its first page reactive. Loaded later pages are
 deduplicated by assignment ID and discarded when the first-page boundary
 changes. Expanded guest rows are bounded snapshots, not live subscriptions;
@@ -358,6 +368,11 @@ The feature remains fail-closed until both guest-list verification flags are
 complete and `guest_list/maintenance.enable` records `enabledAt`. Operational
 enablement also requires the recipient-key migration below. Use the installed
 migration runner in the deployment being prepared:
+
+`runGuestListBackfills` is intentionally serial with a fixed batch size of one.
+In particular, the event-stats step processes only one event per transaction
+because a dense event may read its full bounded guest and assignment rosters.
+An operator-supplied `batchSize` cannot increase this limit.
 
 ```bash
 pnpm convex run migrations:runGuestListBackfills '{"dryRun":true}'

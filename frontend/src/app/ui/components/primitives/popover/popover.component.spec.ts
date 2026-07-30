@@ -1,26 +1,23 @@
-import {type HarnessLoader} from '@angular/cdk/testing';
-import {OverlayContainer, OverlayModule} from '@angular/cdk/overlay';
-import type {ConnectedPosition} from '@angular/cdk/overlay';
-import {PortalModule} from '@angular/cdk/portal';
-import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
+import { type HarnessLoader } from '@angular/cdk/testing';
+import { OverlayContainer, OverlayModule } from '@angular/cdk/overlay';
+import type { ConnectedPosition } from '@angular/cdk/overlay';
+import { PortalModule } from '@angular/cdk/portal';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import {
   ChangeDetectionStrategy,
   Component,
   provideZonelessChangeDetection,
   signal,
 } from '@angular/core';
-import {type ComponentFixture, TestBed} from '@angular/core/testing';
-import {beforeEach, describe, expect, it, vi} from 'vitest';
+import { type ComponentFixture, TestBed } from '@angular/core/testing';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type ZardPopoverPlacement,
   type ZardPopoverTrigger,
   ZardPopoverComponent,
   ZardPopoverDirective,
 } from './popover.component';
-import {
-  PopoverContentHarness,
-  PopoverTriggerHarness,
-} from './popover.component.harness';
+import { PopoverContentHarness, PopoverTriggerHarness } from './popover.component.harness';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -73,8 +70,8 @@ interface PopoverDirectiveTestApi {
  * element outside the overlay drives the real outsidePointerEvents() stream.
  */
 function dispatchOutsidePointer(target: EventTarget): void {
-  target.dispatchEvent(new Event('pointerdown', {bubbles: true}));
-  target.dispatchEvent(new Event('click', {bubbles: true}));
+  target.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+  target.dispatchEvent(new Event('click', { bubbles: true }));
 }
 
 describe('ZardPopoverDirective', () => {
@@ -472,9 +469,7 @@ describe('ZardPopoverDirective', () => {
       },
     };
 
-    for (const placement of Object.keys(
-      expectations,
-    ) as ZardPopoverPlacement[]) {
+    for (const placement of Object.keys(expectations) as ZardPopoverPlacement[]) {
       host.placement.set(placement);
       fixture.detectChanges();
 

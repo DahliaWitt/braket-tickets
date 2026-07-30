@@ -47,7 +47,7 @@ async function setup(
   fixture.componentRef.setInput('eventId', 'event-1');
   fixture.componentRef.setInput('organizerId', 'organizer-1');
   fixture.componentRef.setInput('assignments', assignments);
-  fixture.detectChanges();
+  await fixture.whenStable();
   const harness = await TestbedHarnessEnvironment.harnessForFixture(
     fixture,
     GuestListAssignmentsHarness,
@@ -103,7 +103,7 @@ describe('GuestListAssignmentsComponent', () => {
         createdAt: 1,
       },
     ]);
-    fixture.detectChanges();
+    await fixture.whenStable();
     const harness = await TestbedHarnessEnvironment.harnessForFixture(
       fixture,
       GuestListAssignmentsHarness,
@@ -144,7 +144,10 @@ describe('GuestListAssignmentsComponent', () => {
     await harness.setRole('artist');
     await harness.clickInvite();
 
-    expect(service.searchMembers).toHaveBeenCalledWith('organizer-1', 'alex');
+    expect(service.searchMembers).toHaveBeenCalledWith({
+      organizerId: 'organizer-1',
+      searchTerm: 'alex',
+    });
     expect(service.create).toHaveBeenCalledWith(
       expect.objectContaining({
         eventId: 'event-1',
@@ -176,6 +179,26 @@ describe('GuestListAssignmentsComponent', () => {
     });
   });
 
+  it('searches members with Enter without submitting the invite form', async () => {
+    const service = makeServiceMock();
+    service.searchMembers.mockResolvedValue([
+      {
+        userId: 'user-1',
+        displayName: 'Alex Artist',
+        email: 'alex@example.test',
+      },
+    ]);
+    const {harness} = await setup(service);
+
+    await harness.searchMembersWithEnter('alex');
+
+    expect(service.searchMembers).toHaveBeenCalledWith({
+      organizerId: 'organizer-1',
+      searchTerm: 'alex',
+    });
+    expect(service.create).not.toHaveBeenCalled();
+  });
+
   it('drops a selected member identity when the email is changed', async () => {
     const service = makeServiceMock();
     service.searchMembers.mockResolvedValue([
@@ -190,6 +213,9 @@ describe('GuestListAssignmentsComponent', () => {
     await harness.searchMembers('alex');
     await harness.selectSearchResult();
     await harness.setEmail('different@example.test');
+
+    expect(await harness.hasSelectedMember()).toBe(false);
+
     await harness.clickInvite();
 
     expect(service.create).toHaveBeenCalledWith(
@@ -245,16 +271,55 @@ describe('GuestListAssignmentsComponent', () => {
     );
   });
 
+  it('fully resets the invite form and validation state after success', async () => {
+    const service = makeServiceMock();
+    const {fixture, harness} = await setup(service);
+
+    await harness.searchMembers('tour');
+    await harness.setDisplayName('Tour Manager');
+    await harness.setEmail('tour@example.test');
+    await harness.setRole('staff');
+    await harness.setGrantOverride('4');
+    await harness.clickInvite();
+    await fixture.whenStable();
+
+    expect(await harness.getAssignmentFormValues()).toEqual({
+      search: '',
+      displayName: '',
+      email: '',
+      role: 'artist',
+      grantOverride: '',
+    });
+    expect(await harness.getIdentityErrors()).toEqual([]);
+  });
+
   it('explains required invite fields after an attempted submission', async () => {
     const service = makeServiceMock();
-    const {harness} = await setup(service);
+    const {fixture, harness} = await setup(service);
 
     await harness.clickInvite();
+    await fixture.whenStable();
 
     expect(await harness.getIdentityErrors()).toEqual([
       'Name is required',
       'Email is required',
     ]);
+    expect(await harness.getIdentityFieldSemantics()).toEqual({
+      search: {
+        id: null,
+        ariaInvalid: 'false',
+        ariaDescribedBy: null,
+      },
+      displayName: {
+        id: 'assignment-display-name',
+        ariaInvalid: 'true',
+        ariaDescribedBy: 'assignment-display-name-error',
+      },
+      displayNameError: {
+        id: 'assignment-display-name-error',
+        text: 'Name is required',
+      },
+    });
     expect(service.create).not.toHaveBeenCalled();
   });
 
@@ -269,8 +334,14 @@ describe('GuestListAssignmentsComponent', () => {
       await harness.setGrantOverride(override);
 
       expect(await harness.getInviteState()).toEqual({
-        disabled: false,
+        disabled: true,
         overrideError: 'Use a whole number between 0 and 100.',
+      });
+      expect(await harness.getGrantOverrideSemantics()).toEqual({
+        id: 'assignment-grant-override',
+        ariaInvalid: 'true',
+        ariaDescribedBy: 'assignment-grant-override-error',
+        errorId: 'assignment-grant-override-error',
       });
       await harness.clickInvite();
       expect(service.create).not.toHaveBeenCalled();
@@ -282,7 +353,6 @@ describe('GuestListAssignmentsComponent', () => {
     const {fixture, harness} = await setup(service);
 
     await harness.clickImportStaff();
-    fixture.detectChanges();
     await fixture.whenStable();
     const surface = await harness.getImportSurface();
     expect(surface).not.toBeNull();
@@ -293,9 +363,12 @@ describe('GuestListAssignmentsComponent', () => {
     await surface!.clickConfirm();
 
     expect(service.bulkCreateStaff).toHaveBeenCalledWith(
-      'event-1',
-      expect.any(String),
-      [{name: 'Stage Hand', email: 'stage@example.test', slotOverride: 3}],
+      expect.objectContaining({
+        eventId: 'event-1',
+        rows: [
+          {name: 'Stage Hand', email: 'stage@example.test', slotOverride: 3},
+        ],
+      }),
     );
   });
 
@@ -315,10 +388,13 @@ describe('GuestListAssignmentsComponent', () => {
       'New additions stay blocked until usage falls below 1.',
     );
     await harness.clickConfirmGrantReduction();
-    expect(service.updateGrant).toHaveBeenCalledWith('assignment-1', 1);
+    expect(service.updateGrant).toHaveBeenCalledWith({
+      assignmentId: 'assignment-1',
+      grantedSlots: 1,
+    });
   });
 
-  it('uses an inline dialog, focuses the safe action, and restores the trigger on Escape', async () => {
+  it('dismisses the grant dialog from a focused confirm action and restores the trigger', async () => {
     const {fixture, harness} = await setup(makeServiceMock(), [
       activeAssignment,
     ]);
@@ -326,7 +402,6 @@ describe('GuestListAssignmentsComponent', () => {
     await harness.clickEditGrant();
     await harness.setEditedGrant('1');
     await harness.clickSaveGrant();
-    fixture.detectChanges();
     await fixture.whenStable();
 
     expect(await harness.getGrantWarningRole()).toBe('dialog');
@@ -334,22 +409,69 @@ describe('GuestListAssignmentsComponent', () => {
       true,
     );
 
-    await harness.dismissGrantWarningWithEscape();
-    fixture.detectChanges();
+    await harness.focusConfirmGrantReduction();
+    expect(await harness.isConfirmGrantFocused()).toBe(true);
+    await harness.dismissGrantWarningFromConfirmWithEscape();
     await fixture.whenStable();
 
     expect(await harness.getGrantWarningRole()).toBeNull();
 
     await harness.clickSaveGrant();
-    fixture.detectChanges();
     await fixture.whenStable();
     await harness.clickCancelGrantReduction();
-    fixture.detectChanges();
     await fixture.whenStable();
 
     expect(await harness.isSaveGrantFocused(), 'trigger focus restored').toBe(
       true,
     );
+  });
+
+  it('dismisses the revoke dialog when Escape starts from the confirm action', async () => {
+    const service = makeServiceMock();
+    const {fixture, harness} = await setup(service, [activeAssignment]);
+
+    await harness.clickRevoke();
+    await fixture.whenStable();
+    expect(await harness.getRevokeWarningRole()).toBe('dialog');
+
+    await harness.focusConfirmRevoke();
+    expect(await harness.isConfirmRevokeFocused()).toBe(true);
+    await harness.dismissRevokeWarningFromConfirmWithEscape();
+    await fixture.whenStable();
+
+    expect(await harness.getRevokeWarningRole()).toBeNull();
+    expect(service.revoke).not.toHaveBeenCalled();
+  });
+
+  it('keeps grant and revoke confirmations mutually exclusive and focuses the newest one', async () => {
+    const secondAssignment = {
+      ...activeAssignment,
+      assignmentId: 'assignment-2',
+      displayName: 'Second Staff',
+    };
+    const {fixture, harness} = await setup(makeServiceMock(), [
+      activeAssignment,
+      secondAssignment,
+    ]);
+
+    await harness.clickEditGrant(0);
+    await harness.setEditedGrant('1');
+    await harness.clickSaveGrant();
+    await harness.clickRevoke(1);
+    await fixture.whenStable();
+
+    expect(await harness.getGrantWarningRole()).toBeNull();
+    expect(await harness.getRevokeWarningRole()).toBe('dialog');
+    expect(await harness.isCancelRevokeFocused()).toBe(true);
+
+    await harness.clickEditGrant(0);
+    await harness.setEditedGrant('1');
+    await harness.clickSaveGrant();
+    await fixture.whenStable();
+
+    expect(await harness.getRevokeWarningRole()).toBeNull();
+    expect(await harness.getGrantWarningRole()).toBe('dialog');
+    expect(await harness.isCancelGrantFocused()).toBe(true);
   });
 
   it('locks grant confirmation while saving and restores focus after a successful reduction', async () => {
@@ -439,7 +561,10 @@ describe('GuestListAssignmentsComponent', () => {
 
     await harness.clickExpandGuests();
 
-    expect(service.listGuests).toHaveBeenCalledWith('assignment-1', null);
+    expect(service.listGuests).toHaveBeenCalledWith({
+      assignmentId: 'assignment-1',
+      paginationOpts: {numItems: 25, cursor: null},
+    });
     expect((await harness.getSourcedGuestTexts())[0]).toContain('Guest One');
   });
 
@@ -590,6 +715,63 @@ describe('GuestListAssignmentsComponent', () => {
     ]);
   });
 
+  it('loads the newly expanded assignment after another guest list finishes loading', async () => {
+    const service = makeServiceMock();
+    let resolveFirst!: (value: {
+      page: Record<string, unknown>[];
+      isDone: boolean;
+      continueCursor: string;
+    }) => void;
+    service.listGuests
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveFirst = resolve;
+        }),
+      )
+      .mockResolvedValueOnce({
+        page: [
+          {
+            guestId: 'guest-second',
+            name: 'Second Guest',
+            email: 'second@example.test',
+            deliveryState: 'sent',
+          },
+        ],
+        isDone: true,
+        continueCursor: '',
+      });
+    const secondAssignment = {
+      ...activeAssignment,
+      assignmentId: 'assignment-2',
+      displayName: 'Second Staff',
+      usedSlots: 1,
+    };
+    const {fixture, harness} = await setup(service, [
+      activeAssignment,
+      secondAssignment,
+    ]);
+
+    const firstExpansion = harness.clickExpandGuests(0);
+    await vi.waitFor(() => expect(service.listGuests).toHaveBeenCalledTimes(1));
+    await harness.clickExpandGuests(1);
+    resolveFirst({
+      page: [],
+      isDone: true,
+      continueCursor: '',
+    });
+    await firstExpansion;
+    await fixture.whenStable();
+
+    await vi.waitFor(() => expect(service.listGuests).toHaveBeenCalledTimes(2));
+    expect(service.listGuests).toHaveBeenLastCalledWith({
+      assignmentId: 'assignment-2',
+      paginationOpts: {numItems: 25, cursor: null},
+    });
+    expect(await harness.getSourcedGuestTexts()).toEqual([
+      expect.stringContaining('Second Guest'),
+    ]);
+  });
+
   it('paginates sourced guests beyond the first page', async () => {
     const service = makeServiceMock();
     service.listGuests
@@ -623,11 +805,10 @@ describe('GuestListAssignmentsComponent', () => {
     expect(await harness.hasSourcedGuestLoadMore()).toBe(true);
     await harness.clickLoadMoreSourcedGuests();
 
-    expect(service.listGuests).toHaveBeenNthCalledWith(
-      2,
-      'assignment-1',
-      'guest-page-2',
-    );
+    expect(service.listGuests).toHaveBeenNthCalledWith(2, {
+      assignmentId: 'assignment-1',
+      paginationOpts: {numItems: 25, cursor: 'guest-page-2'},
+    });
     expect(await harness.getSourcedGuestTexts()).toHaveLength(2);
     expect(await harness.hasSourcedGuestLoadMore()).toBe(false);
   });
@@ -647,7 +828,7 @@ describe('GuestListAssignmentsComponent', () => {
     expect(service.listGuests).toHaveBeenCalledTimes(1);
     rejectLoad(new Error('network down'));
     await firstLoad;
-    fixture.detectChanges();
+    await fixture.whenStable();
 
     expect(await harness.getActionErrorText()).toContain(
       "couldn't load this guest list",
@@ -671,7 +852,7 @@ describe('GuestListAssignmentsComponent', () => {
     expect(service.updateGrant).toHaveBeenCalledTimes(1);
     rejectUpdate(new Error('network down'));
     await firstSave;
-    fixture.detectChanges();
+    await fixture.whenStable();
 
     expect(await harness.getActionErrorText()).toContain(
       "couldn't update this grant",
@@ -694,12 +875,15 @@ describe('GuestListAssignmentsComponent', () => {
     });
     const {fixture, harness} = await setup(service, [activeAssignment]);
     fixture.componentRef.setInput('continueCursor', 'next-page');
-    fixture.detectChanges();
+    await fixture.whenStable();
 
     expect((await harness.getRowTexts())[0]).toContain('accepted');
     await harness.clickLoadMore();
 
-    expect(service.listByEvent).toHaveBeenCalledWith('event-1', 'next-page');
+    expect(service.listByEvent).toHaveBeenCalledWith({
+      eventId: 'event-1',
+      paginationOpts: {numItems: 25, cursor: 'next-page'},
+    });
     expect(
       (await harness.getRowTexts()).some((text) =>
         text.includes('Second Staff'),
@@ -772,10 +956,10 @@ describe('GuestListAssignmentsComponent', () => {
 
     const staleLoad = harness.clickLoadMore();
     await vi.waitFor(() => {
-      expect(service.listByEvent).toHaveBeenCalledWith(
-        'event-1',
-        'old-boundary',
-      );
+      expect(service.listByEvent).toHaveBeenCalledWith({
+        eventId: 'event-1',
+        paginationOpts: {numItems: 25, cursor: 'old-boundary'},
+      });
     });
     fixture.componentRef.setInput('assignments', [
       {
@@ -824,7 +1008,10 @@ describe('GuestListAssignmentsComponent', () => {
 
     await harness.clickLoadMore();
 
-    expect(service.listByEvent).toHaveBeenCalledWith('event-1', 'hidden-page');
+    expect(service.listByEvent).toHaveBeenCalledWith({
+      eventId: 'event-1',
+      paginationOpts: {numItems: 25, cursor: 'hidden-page'},
+    });
     expect(await harness.getRowTexts()).toHaveLength(1);
   });
 });

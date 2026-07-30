@@ -41,7 +41,9 @@ export const MISSING_USER_REPAIR_MAX_QUERY_ERRORS = 6;
  * without a service→guards→service import cycle.
  */
 export type SettledUser =
-  {socialSignupCompletionRequired?: boolean; _id?: string} | null | undefined;
+  | {socialSignupCompletionRequired?: boolean; _id?: string}
+  | null
+  | undefined;
 
 export function requiresSocialSignupCompletion(user: SettledUser): boolean {
   return user?.socialSignupCompletionRequired === true;

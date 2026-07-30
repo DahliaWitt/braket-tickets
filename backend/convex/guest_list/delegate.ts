@@ -18,6 +18,7 @@ import {
   removeDelegateGuest,
   updateDelegateGuest,
   linkVerifiedAssignmentIfNeeded,
+  linkGuestListAssignmentToVerifiedUser,
 } from '../lib/guest_list/core';
 import {normalizeEmailOrNull} from '../lib/validation';
 import {hasEventEnded} from '../lib/timezone';
@@ -26,6 +27,7 @@ import {rateLimiter} from '../lib/rate_limits';
 import {tokenPrefix} from '../lib/token_digests';
 import {isValidBearerTokenShape} from '../lib/token_digests';
 import {ongoingEventStartLowerBound} from '../lib/timezone';
+import {isGuestTicketSendInFlight} from '../lib/guest_ticket_delivery';
 
 const unavailable = (): never =>
   throwAppError('UNAVAILABLE', 'Self-service guest lists are unavailable');
@@ -58,7 +60,9 @@ export const authorizeToken = mutation({
         kind: 'token',
         token: args.token,
       });
-      return {status: resolved ? ('available' as const) : ('unavailable' as const)};
+      return {
+        status: resolved ? ('available' as const) : ('unavailable' as const),
+      };
     } catch {
       return {status: 'unavailable' as const};
     }
@@ -105,17 +109,17 @@ export const listMine = mutation({
             .gte('eventDate', lowerBound),
         )
         .take(100);
-      const now = Date.now();
       for (const assignment of unlinked) {
-        await ctx.db.patch('guestListAssignments', assignment._id, {
-          userId: user._id,
-          redeemedAt: assignment.redeemedAt ?? now,
-        });
+        await linkGuestListAssignmentToVerifiedUser(ctx, assignment, user._id);
       }
     }
     const numItems = Math.min(args.paginationOpts.numItems, 50);
     let cursor = args.paginationOpts.cursor;
-    for (let inspectedPages = 0; inspectedPages < MAX_LIST_MINE_FILTERED_PAGES; inspectedPages += 1) {
+    for (
+      let inspectedPages = 0;
+      inspectedPages < MAX_LIST_MINE_FILTERED_PAGES;
+      inspectedPages += 1
+    ) {
       const page = await ctx.db
         .query('guestListAssignments')
         .withIndex('by_userId_and_status_and_eventDate', (q) =>
@@ -130,17 +134,20 @@ export const listMine = mutation({
       );
       const items = page.page.flatMap((assignment, index) => {
         const event = events[index];
-        if (!event || event.status === 'cancelled' || hasEventEnded(event)) return [];
-        return [{
-          assignmentId: assignment._id,
-          eventId: assignment.eventId,
-          eventTitle: event.title,
-          eventDate: event.date,
-          eventEndDate: event.endDate,
-          role: assignment.role,
-          grantedSlots: assignment.grantedSlots,
-          usedSlots: assignment.usedSlots,
-        }];
+        if (!event || event.status === 'cancelled' || hasEventEnded(event))
+          return [];
+        return [
+          {
+            assignmentId: assignment._id,
+            eventId: assignment.eventId,
+            eventTitle: event.title,
+            eventDate: event.date,
+            eventEndDate: event.endDate,
+            role: assignment.role,
+            grantedSlots: assignment.grantedSlots,
+            usedSlots: assignment.usedSlots,
+          },
+        ];
       });
       if (items.length > 0 || page.isDone) {
         return {
@@ -268,15 +275,28 @@ export const retryTicket = mutation({
     if (!resolved) return unavailable();
     await linkVerifiedAssignmentIfNeeded(ctx, resolved);
     await rateLimiter.limit(ctx, 'guestListDelegateRetry', {
-      key: resolved.actorUserId ?? resolved.assignment.tokenPrefix ?? resolved.assignment._id,
+      key:
+        resolved.actorUserId ??
+        resolved.assignment.tokenPrefix ??
+        resolved.assignment._id,
       throws: true,
     });
     const guest = await ctx.db.get('guests', args.guestId);
-    if (!guest || guest.sourceAssignmentId !== resolved.assignment._id || guest.sourceKind !== 'self_service') return unavailable();
+    if (
+      !guest ||
+      guest.sourceAssignmentId !== resolved.assignment._id ||
+      guest.sourceKind !== 'self_service'
+    )
+      return unavailable();
     if (guest.emailedAt !== undefined) return {status: 'alreadySent' as const};
-    if (typeof guest.emailSendLockedAt === 'number') return {status: 'inFlight' as const};
+    if (isGuestTicketSendInFlight(guest.emailSendLockedAt))
+      return {status: 'inFlight' as const};
     await ctx.db.patch('guests', guest._id, {ticketDeliveryState: 'queued'});
-    await ctx.scheduler.runAfter(0, internal.events.guest_actions.sendAutomaticTicket, {guestId: guest._id});
+    await ctx.scheduler.runAfter(
+      0,
+      internal.events.guest_actions.sendAutomaticTicket,
+      {guestId: guest._id},
+    );
     return {status: 'queued' as const};
   },
 });

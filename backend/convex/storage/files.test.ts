@@ -896,10 +896,10 @@ describe('files', () => {
     ): Promise<void> {
       await t.run(async (ctx) => {
         for (const storageId of storageIds) {
-          await ctx.runMutation(internal.storage.files._markUploadConfirmed, {
-            storageId,
-            uploaderUserId,
-          });
+          await ctx.runMutation(
+            internal.storage.files._markUploadConfirmed,
+            {storageId, uploaderUserId},
+          );
         }
       });
     }

@@ -36,12 +36,8 @@ export function generateCalendarDays(config: CalendarDayConfig): CalendarDay[] {
   // `currentWeekDate > endDate` is a NaN comparison that is always false,
   // hanging the browser tab. Fall back to the current month whenever either
   // boundary is invalid, so no Invalid Date can reach the loop or the grid.
-  let year = Number.isFinite(config.year)
-    ? Math.trunc(config.year)
-    : today.getFullYear();
-  let month = Number.isFinite(config.month)
-    ? Math.trunc(config.month)
-    : today.getMonth();
+  let year = Number.isFinite(config.year) ? Math.trunc(config.year) : today.getFullYear();
+  let month = Number.isFinite(config.month) ? Math.trunc(config.month) : today.getMonth();
 
   let firstDay = new Date(year, month, 1);
   let lastDay = new Date(year, month + 1, 0);

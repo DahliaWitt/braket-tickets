@@ -1,4 +1,8 @@
-import {ComponentHarness, type TestElement} from '@angular/cdk/testing';
+import {
+  ComponentHarness,
+  TestKey,
+  type TestElement,
+} from '@angular/cdk/testing';
 import {ImportSurfaceComponentHarness} from '@/features/admin/import/import-surface.component.harness';
 
 export class GuestListAssignmentsHarness extends ComponentHarness {
@@ -34,8 +38,14 @@ export class GuestListAssignmentsHarness extends ComponentHarness {
   private readonly searchResultsList = this.locatorForOptional(
     '[data-testid="assignment-member-results"]',
   );
+  private readonly selectedMember = this.locatorForOptional(
+    '[data-testid="selected-assignment-member"]',
+  );
   private readonly displayNameInput = this.locatorFor(
     '[data-testid="assignment-display-name"]',
+  );
+  private readonly displayNameError = this.locatorForOptional(
+    '#assignment-display-name-error',
   );
   private readonly emailInput = this.locatorFor(
     '[data-testid="assignment-email"]',
@@ -123,6 +133,12 @@ export class GuestListAssignmentsHarness extends ComponentHarness {
     await button.click();
   }
 
+  async clickCancelRevoke(): Promise<void> {
+    const button = await this.cancelRevokeButton();
+    if (!button) throw new Error('Revoke warning is not open');
+    await button.click();
+  }
+
   async getRevokeConfirmationState(): Promise<{
     confirmDisabled: boolean;
     confirmBusy: boolean;
@@ -145,10 +161,20 @@ export class GuestListAssignmentsHarness extends ComponentHarness {
     await (await this.searchButton()).click();
   }
 
+  async searchMembersWithEnter(term: string): Promise<void> {
+    const input = await this.searchInput();
+    await input.clear();
+    await input.sendKeys(term, TestKey.ENTER);
+  }
+
   async selectSearchResult(index = 0): Promise<void> {
     const result = (await this.searchResults())[index];
     if (!result) throw new Error(`No member result at index ${index}`);
     await result.click();
+  }
+
+  async hasSelectedMember(): Promise<boolean> {
+    return (await this.selectedMember()) !== null;
   }
 
   async getSearchResultSemantics(): Promise<{
@@ -209,12 +235,88 @@ export class GuestListAssignmentsHarness extends ComponentHarness {
     };
   }
 
+  async getAssignmentFormValues(): Promise<{
+    search: string;
+    displayName: string;
+    email: string;
+    role: string;
+    grantOverride: string;
+  }> {
+    const search = await this.searchInput();
+    const displayName = await this.displayNameInput();
+    const email = await this.emailInput();
+    const role = await this.roleSelect();
+    const grantOverride = await this.grantInput();
+    return {
+      search: String(await search.getProperty('value')),
+      displayName: String(await displayName.getProperty('value')),
+      email: String(await email.getProperty('value')),
+      role: String(await role.getProperty('value')),
+      grantOverride: String(await grantOverride.getProperty('value')),
+    };
+  }
+
+  async getGrantOverrideSemantics(): Promise<{
+    id: string | null;
+    ariaInvalid: string | null;
+    ariaDescribedBy: string | null;
+    errorId: string | null;
+  }> {
+    const input = await this.grantInput();
+    const error = await this.grantOverrideError();
+    return {
+      id: await input.getAttribute('id'),
+      ariaInvalid: await input.getAttribute('aria-invalid'),
+      ariaDescribedBy: await input.getAttribute('aria-describedby'),
+      errorId: error ? await error.getAttribute('id') : null,
+    };
+  }
+
   async getIdentityErrors(): Promise<string[]> {
     return Promise.all(
       (await this.identityErrors()).map(async (error) =>
         (await error.text()).trim(),
       ),
     );
+  }
+
+  async getIdentityFieldSemantics(): Promise<{
+    search: {
+      id: string | null;
+      ariaInvalid: string | null;
+      ariaDescribedBy: string | null;
+    };
+    displayName: {
+      id: string | null;
+      ariaInvalid: string | null;
+      ariaDescribedBy: string | null;
+    };
+    displayNameError: {
+      id: string | null;
+      text: string;
+    } | null;
+  }> {
+    const search = await this.searchInput();
+    const displayName = await this.displayNameInput();
+    const displayNameError = await this.displayNameError();
+    return {
+      search: {
+        id: await search.getAttribute('id'),
+        ariaInvalid: await search.getAttribute('aria-invalid'),
+        ariaDescribedBy: await search.getAttribute('aria-describedby'),
+      },
+      displayName: {
+        id: await displayName.getAttribute('id'),
+        ariaInvalid: await displayName.getAttribute('aria-invalid'),
+        ariaDescribedBy: await displayName.getAttribute('aria-describedby'),
+      },
+      displayNameError: displayNameError
+        ? {
+            id: await displayNameError.getAttribute('id'),
+            text: (await displayNameError.text()).trim(),
+          }
+        : null,
+    };
   }
 
   async clickImportStaff(): Promise<void> {
@@ -291,10 +393,48 @@ export class GuestListAssignmentsHarness extends ComponentHarness {
     return button?.isFocused() ?? false;
   }
 
-  async dismissGrantWarningWithEscape(): Promise<void> {
-    const button = await this.cancelGrantButton();
+  async focusConfirmGrantReduction(): Promise<void> {
+    const button = await this.confirmGrantButton();
     if (!button) throw new Error('Grant warning is not open');
-    await button.dispatchEvent('keydown', {key: 'Escape'});
+    await button.focus();
+  }
+
+  async isConfirmGrantFocused(): Promise<boolean> {
+    const button = await this.confirmGrantButton();
+    return button?.isFocused() ?? false;
+  }
+
+  async dismissGrantWarningFromConfirmWithEscape(): Promise<void> {
+    const button = await this.confirmGrantButton();
+    if (!button) throw new Error('Grant warning is not open');
+    await button.sendKeys(TestKey.ESCAPE);
+  }
+
+  async getRevokeWarningRole(): Promise<string | null> {
+    const warning = await this.revokeWarning();
+    return warning?.getAttribute('role') ?? null;
+  }
+
+  async focusConfirmRevoke(): Promise<void> {
+    const button = await this.confirmRevokeButton();
+    if (!button) throw new Error('Revoke warning is not open');
+    await button.focus();
+  }
+
+  async isConfirmRevokeFocused(): Promise<boolean> {
+    const button = await this.confirmRevokeButton();
+    return button?.isFocused() ?? false;
+  }
+
+  async isCancelRevokeFocused(): Promise<boolean> {
+    const button = await this.cancelRevokeButton();
+    return button?.isFocused() ?? false;
+  }
+
+  async dismissRevokeWarningFromConfirmWithEscape(): Promise<void> {
+    const button = await this.confirmRevokeButton();
+    if (!button) throw new Error('Revoke warning is not open');
+    await button.sendKeys(TestKey.ESCAPE);
   }
 
   async isSaveGrantFocused(): Promise<boolean> {

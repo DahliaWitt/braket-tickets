@@ -1,85 +1,62 @@
 import {v} from 'convex/values';
 import {internalMutation, internalQuery} from '../_generated/server';
-import type {MutationCtx} from '../_generated/server';
-import type {Id} from '../_generated/dataModel';
 import {normalizeEmailOrNull} from '../lib/validation';
 import {internal} from '../_generated/api';
+import {
+  loadAuthoritativeGuestListEventCounters,
+  MAX_ASSIGNMENTS_PER_EVENT_STATS,
+  MAX_GUESTS_PER_EVENT_STATS,
+  replaceGuestListEventStats,
+  type GuestListEventCounterFields,
+} from '../lib/guest_list/event_stats';
 
 const AUDIT_RETENTION_MS = 365 * 24 * 60 * 60 * 1000;
-const MAX_GUESTS_PER_RECONCILIATION = 5000;
-const MAX_ASSIGNMENTS_PER_RECONCILIATION = 500;
 // Each event may consume the full bounded reads below, so verification advances
 // one event per transaction rather than multiplying that worst case.
 const MAX_EVENTS_PER_VERIFICATION_BATCH = 1;
 
-type EventCounterFields = {
-  eventId: Id<'events'>;
-  selfServiceGuestCount: number;
-  activeGrantedSlots: number;
-  activeArtistGuestCount: number;
-  activeStaffGuestCount: number;
-  activeAssignmentCount: number;
-  totalGuestAdmissionCount: number;
-};
-
-async function authoritativeEventCounters(
-  ctx: Pick<MutationCtx, 'db'>,
-  eventId: Id<'events'>,
-): Promise<EventCounterFields | null> {
-  const guests = await ctx.db
-    .query('guests')
-    .withIndex('by_event', (q) => q.eq('eventId', eventId))
-    .take(MAX_GUESTS_PER_RECONCILIATION + 1);
-  if (guests.length > MAX_GUESTS_PER_RECONCILIATION) return null;
-  const assignments = await ctx.db
-    .query('guestListAssignments')
-    .withIndex('by_eventId_and_status', (q) => q.eq('eventId', eventId))
-    .take(MAX_ASSIGNMENTS_PER_RECONCILIATION + 1);
-  if (assignments.length > MAX_ASSIGNMENTS_PER_RECONCILIATION) return null;
-  const active = assignments.filter((assignment) => assignment.status === 'active');
-  return {
-    eventId,
-    selfServiceGuestCount: guests.filter((guest) => guest.sourceKind === 'self_service').length,
-    activeGrantedSlots: active.reduce((sum, assignment) => sum + assignment.grantedSlots, 0),
-    activeArtistGuestCount: active.filter((assignment) => assignment.role === 'artist').reduce((sum, assignment) => sum + assignment.usedSlots, 0),
-    activeStaffGuestCount: active.filter((assignment) => assignment.role === 'staff').reduce((sum, assignment) => sum + assignment.usedSlots, 0),
-    activeAssignmentCount: active.length,
-    totalGuestAdmissionCount: guests.length,
-  };
-}
-
 function countersMatch(
-  stored: EventCounterFields,
-  expected: EventCounterFields,
+  stored: GuestListEventCounterFields,
+  expected: GuestListEventCounterFields,
 ): boolean {
-  return stored.selfServiceGuestCount === expected.selfServiceGuestCount &&
+  return (
+    stored.selfServiceGuestCount === expected.selfServiceGuestCount &&
     stored.activeGrantedSlots === expected.activeGrantedSlots &&
     stored.activeArtistGuestCount === expected.activeArtistGuestCount &&
     stored.activeStaffGuestCount === expected.activeStaffGuestCount &&
     stored.activeAssignmentCount === expected.activeAssignmentCount &&
-    stored.totalGuestAdmissionCount === expected.totalGuestAdmissionCount;
+    stored.totalGuestAdmissionCount === expected.totalGuestAdmissionCount
+  );
 }
 
 export const getFeatureState = internalQuery({
   args: {},
-  returns: v.union(v.null(), v.object({
-    emailKeyBackfillComplete: v.boolean(),
-    guestCountBackfillComplete: v.boolean(),
-    verificationInProgress: v.boolean(),
-    verificationStartedAt: v.optional(v.number()),
-    verificationCompletedAt: v.optional(v.number()),
-    enabledAt: v.optional(v.number()),
-  })),
+  returns: v.union(
+    v.null(),
+    v.object({
+      emailKeyBackfillComplete: v.boolean(),
+      guestCountBackfillComplete: v.boolean(),
+      verificationInProgress: v.boolean(),
+      verificationStartedAt: v.optional(v.number()),
+      verificationCompletedAt: v.optional(v.number()),
+      enabledAt: v.optional(v.number()),
+    }),
+  ),
   handler: async (ctx) => {
-    const state = await ctx.db.query('guestListFeatureState').withIndex('by_key', (q) => q.eq('key', 'singleton')).unique();
-    return state ? {
-      emailKeyBackfillComplete: state.emailKeyBackfillComplete,
-      guestCountBackfillComplete: state.guestCountBackfillComplete,
-      verificationInProgress: state.verificationInProgress ?? false,
-      verificationStartedAt: state.verificationStartedAt,
-      verificationCompletedAt: state.verificationCompletedAt,
-      enabledAt: state.enabledAt,
-    } : null;
+    const state = await ctx.db
+      .query('guestListFeatureState')
+      .withIndex('by_key', (q) => q.eq('key', 'singleton'))
+      .unique();
+    return state
+      ? {
+          emailKeyBackfillComplete: state.emailKeyBackfillComplete,
+          guestCountBackfillComplete: state.guestCountBackfillComplete,
+          verificationInProgress: state.verificationInProgress ?? false,
+          verificationStartedAt: state.verificationStartedAt,
+          verificationCompletedAt: state.verificationCompletedAt,
+          enabledAt: state.enabledAt,
+        }
+      : null;
   },
 });
 
@@ -94,7 +71,10 @@ export const recordBackfillVerification = internalMutation({
     inProgress: v.boolean(),
   }),
   handler: async (ctx, args) => {
-    const batchSize = Math.max(1, Math.min(100, Math.floor(args.batchSize ?? 50)));
+    const batchSize = Math.max(
+      1,
+      Math.min(100, Math.floor(args.batchSize ?? 50)),
+    );
     let state = await ctx.db
       .query('guestListFeatureState')
       .withIndex('by_key', (q) => q.eq('key', 'singleton'))
@@ -129,7 +109,11 @@ export const recordBackfillVerification = internalMutation({
     }
     if (!state) throw new Error('Failed to initialize guest-list verification');
     const runId = requestedRunId ?? state.verificationRunId;
-    if (!runId || state.verificationRunId !== runId || !state.verificationInProgress) {
+    if (
+      !runId ||
+      state.verificationRunId !== runId ||
+      !state.verificationInProgress
+    ) {
       return {
         emailKeyBackfillComplete: state.emailKeyBackfillComplete,
         guestCountBackfillComplete: state.guestCountBackfillComplete,
@@ -174,17 +158,18 @@ export const recordBackfillVerification = internalMutation({
       page.page.map(async (event) => {
         const [stats, expected] = await Promise.all([
           ctx.db
-          .query('guestListEventStats')
-          .withIndex('by_eventId', (q) => q.eq('eventId', event._id))
-          .unique(),
-          authoritativeEventCounters(ctx, event._id),
+            .query('guestListEventStats')
+            .withIndex('by_eventId', (q) => q.eq('eventId', event._id))
+            .unique(),
+          loadAuthoritativeGuestListEventCounters(ctx, event._id),
         ]);
-        return stats !== null && expected !== null && countersMatch(stats, expected);
+        return (
+          stats !== null && expected !== null && countersMatch(stats, expected)
+        );
       }),
     );
     const valid =
-      (state.guestCountVerificationValid ?? true) &&
-      comparisons.every(Boolean);
+      (state.guestCountVerificationValid ?? true) && comparisons.every(Boolean);
     if (!page.isDone) {
       await ctx.db.patch('guestListFeatureState', state._id, {
         guestCountVerificationValid: valid,
@@ -220,14 +205,20 @@ export const enable = internalMutation({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
-    const state = await ctx.db.query('guestListFeatureState').withIndex('by_key', (q) => q.eq('key', 'singleton')).unique();
+    const state = await ctx.db
+      .query('guestListFeatureState')
+      .withIndex('by_key', (q) => q.eq('key', 'singleton'))
+      .unique();
     if (
       !state?.emailKeyBackfillComplete ||
       !state.guestCountBackfillComplete ||
       state.verificationInProgress ||
       state.verificationCompletedAt === undefined
-    ) throw new Error('Guest-list backfills are not verified');
-    await ctx.db.patch('guestListFeatureState', state._id, {enabledAt: Date.now()});
+    )
+      throw new Error('Guest-list backfills are not verified');
+    await ctx.db.patch('guestListFeatureState', state._id, {
+      enabledAt: Date.now(),
+    });
     return null;
   },
 });
@@ -236,8 +227,14 @@ export const disable = internalMutation({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
-    const state = await ctx.db.query('guestListFeatureState').withIndex('by_key', (q) => q.eq('key', 'singleton')).unique();
-    if (state) await ctx.db.patch('guestListFeatureState', state._id, {enabledAt: undefined});
+    const state = await ctx.db
+      .query('guestListFeatureState')
+      .withIndex('by_key', (q) => q.eq('key', 'singleton'))
+      .unique();
+    if (state)
+      await ctx.db.patch('guestListFeatureState', state._id, {
+        enabledAt: undefined,
+      });
     return null;
   },
 });
@@ -246,15 +243,16 @@ export const reconcileEventCounters = internalMutation({
   args: {eventId: v.id('events')},
   returns: v.null(),
   handler: async (ctx, args) => {
-    const fields = await authoritativeEventCounters(ctx, args.eventId);
+    const fields = await loadAuthoritativeGuestListEventCounters(
+      ctx,
+      args.eventId,
+    );
     if (!fields) {
       throw new Error(
-        `Guest-list counter reconciliation exceeds the supported per-event limit (${MAX_GUESTS_PER_RECONCILIATION} guests or ${MAX_ASSIGNMENTS_PER_RECONCILIATION} assignments)`,
+        `Guest-list counter reconciliation exceeds the supported per-event limit (${MAX_GUESTS_PER_EVENT_STATS} guests or ${MAX_ASSIGNMENTS_PER_EVENT_STATS} assignments)`,
       );
     }
-    const stats = await ctx.db.query('guestListEventStats').withIndex('by_eventId', (q) => q.eq('eventId', args.eventId)).unique();
-    if (stats) await ctx.db.patch('guestListEventStats', stats._id, fields);
-    else await ctx.db.insert('guestListEventStats', fields);
+    await replaceGuestListEventStats(ctx, fields);
     return null;
   },
 });
@@ -267,6 +265,8 @@ export const syncAssignmentEventDate = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const event = await ctx.db.get('events', args.eventId);
+    if (!event || event.date !== args.eventDate) return null;
     const page = await ctx.db
       .query('guestListAssignments')
       .withIndex('by_eventId_and_status', (q) => q.eq('eventId', args.eventId))
@@ -274,7 +274,7 @@ export const syncAssignmentEventDate = internalMutation({
     await Promise.all(
       page.page.map((assignment) =>
         ctx.db.patch('guestListAssignments', assignment._id, {
-          eventDate: args.eventDate,
+          eventDate: event.date,
         }),
       ),
     );
@@ -284,7 +284,7 @@ export const syncAssignmentEventDate = internalMutation({
         internal.guest_list.maintenance.syncAssignmentEventDate,
         {
           eventId: args.eventId,
-          eventDate: args.eventDate,
+          eventDate: event.date,
           cursor: page.continueCursor,
         },
       );
@@ -298,11 +298,20 @@ export const cleanupAuditEvents = internalMutation({
   returns: v.number(),
   handler: async (ctx, args) => {
     const cutoff = args.cutoffTimestamp ?? Date.now() - AUDIT_RETENTION_MS;
-    const rows = await ctx.db.query('guestListAuditEvents').order('asc').take(500);
+    const rows = await ctx.db
+      .query('guestListAuditEvents')
+      .order('asc')
+      .take(500);
     const expired = rows.filter((row) => row._creationTime < cutoff);
-    await Promise.all(expired.map((row) => ctx.db.delete('guestListAuditEvents', row._id)));
+    await Promise.all(
+      expired.map((row) => ctx.db.delete('guestListAuditEvents', row._id)),
+    );
     if (rows.length === 500 && expired.length === 500) {
-      await ctx.scheduler.runAfter(0, internal.guest_list.maintenance.cleanupAuditEvents, {cutoffTimestamp: cutoff});
+      await ctx.scheduler.runAfter(
+        0,
+        internal.guest_list.maintenance.cleanupAuditEvents,
+        {cutoffTimestamp: cutoff},
+      );
     }
     return expired.length;
   },

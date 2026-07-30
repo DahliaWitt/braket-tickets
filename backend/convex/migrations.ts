@@ -1,10 +1,20 @@
 import {Migrations} from '@convex-dev/migrations';
+import {createFunctionHandle, getFunctionName} from 'convex/server';
+import {ConvexError, v} from 'convex/values';
 import {components, internal} from './_generated/api';
 import type {DataModel} from './_generated/dataModel';
+import {internalMutation} from './_generated/server';
 import {digestBearerToken, tokenPrefix} from './lib/token_digests';
 import {normalizeEmailOrNull} from './lib/validation';
+import {
+  loadAuthoritativeGuestListEventCounters,
+  MAX_ASSIGNMENTS_PER_EVENT_STATS,
+  MAX_GUESTS_PER_EVENT_STATS,
+  replaceGuestListEventStats,
+} from './lib/guest_list/event_stats';
 
 export const migrations = new Migrations<DataModel>(components.migrations);
+const GUEST_LIST_EVENT_STATS_BATCH_SIZE = 1;
 
 export const backfillMagicLinkTokenDigests = migrations.define({
   table: 'magic_links',
@@ -139,46 +149,25 @@ export const backfillGuestEmailKeys = migrations.define({
 
 export const backfillGuestListEventStats = migrations.define({
   table: 'events',
+  // A dense event can read up to 5,000 guests and 500 assignments. Keep each
+  // event in its own transaction so two dense events never share limits.
+  batchSize: GUEST_LIST_EVENT_STATS_BATCH_SIZE,
   migrateOne: async (ctx, event) => {
     const existing = await ctx.db
       .query('guestListEventStats')
       .withIndex('by_eventId', (q) => q.eq('eventId', event._id))
       .unique();
     if (existing) return {};
-    const guests = await ctx.db
-      .query('guests')
-      .withIndex('by_event', (q) => q.eq('eventId', event._id))
-      .take(5001);
-    const assignments = await ctx.db
-      .query('guestListAssignments')
-      .withIndex('by_eventId_and_status', (q) => q.eq('eventId', event._id))
-      .take(501);
-    if (guests.length > 5000 || assignments.length > 500) {
+    const counters = await loadAuthoritativeGuestListEventCounters(
+      ctx,
+      event._id,
+    );
+    if (!counters) {
       throw new Error(
-        'Guest-list event stats backfill exceeds the supported per-event limit (5000 guests or 500 assignments)',
+        `Guest-list event stats backfill exceeds the supported per-event limit (${MAX_GUESTS_PER_EVENT_STATS} guests or ${MAX_ASSIGNMENTS_PER_EVENT_STATS} assignments)`,
       );
     }
-    const active = assignments.filter(
-      (assignment) => assignment.status === 'active',
-    );
-    await ctx.db.insert('guestListEventStats', {
-      eventId: event._id,
-      selfServiceGuestCount: guests.filter(
-        (guest) => guest.sourceKind === 'self_service',
-      ).length,
-      activeGrantedSlots: active.reduce(
-        (sum, assignment) => sum + assignment.grantedSlots,
-        0,
-      ),
-      activeArtistGuestCount: active
-        .filter((assignment) => assignment.role === 'artist')
-        .reduce((sum, assignment) => sum + assignment.usedSlots, 0),
-      activeStaffGuestCount: active
-        .filter((assignment) => assignment.role === 'staff')
-        .reduce((sum, assignment) => sum + assignment.usedSlots, 0),
-      activeAssignmentCount: active.length,
-      totalGuestAdmissionCount: guests.length,
-    });
+    await replaceGuestListEventStats(ctx, counters);
     return {};
   },
 });
@@ -212,11 +201,70 @@ export const backfillEmailDeliveryRecipientKeys = migrations.define({
     emailDeliveryRecipientKeyPatch(delivery),
 });
 
-export const runGuestListBackfills = migrations.runner([
+const guestListBackfills = [
   internal.migrations.backfillGuestEmailKeys,
   internal.migrations.backfillGuestListEventStats,
   internal.migrations.backfillGuestListAssignmentEventDates,
-]);
+] as const;
+
+function isSuccessfulMigrationDryRun(error: unknown): boolean {
+  if (!(error instanceof ConvexError)) return false;
+  const data: unknown = error.data;
+  if (typeof data !== 'object' || data === null || !('kind' in data)) {
+    return false;
+  }
+  if (data.kind !== 'DRY RUN' || !('status' in data)) return false;
+  const status: unknown = data.status;
+  return (
+    typeof status === 'object' &&
+    status !== null &&
+    'state' in status &&
+    (status.state === 'success' || status.state === 'inProgress')
+  );
+}
+
+/**
+ * Runs the guest-list migration series with a non-overridable one-document
+ * batch. The event-stats step can read a dense event's full bounded roster, so
+ * allowing an operator-supplied larger batch would combine several dense
+ * events in one transaction.
+ */
+export const runGuestListBackfills = internalMutation({
+  args: {
+    cursor: v.optional(v.union(v.string(), v.null())),
+    dryRun: v.optional(v.boolean()),
+    reset: v.optional(v.boolean()),
+    oneBatchOnly: v.optional(v.boolean()),
+    // Accepted for backwards-compatible CLI invocations, but deliberately
+    // ignored so callers cannot raise the safe batch size.
+    batchSize: v.optional(v.number()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const [first, ...rest] = guestListBackfills;
+    const next = await Promise.all(
+      rest.map(async (migration) => ({
+        name: getFunctionName(migration),
+        fnHandle: await createFunctionHandle(migration),
+      })),
+    );
+    try {
+      await ctx.runMutation(components.migrations.lib.migrate, {
+        name: getFunctionName(first),
+        fnHandle: await createFunctionHandle(first),
+        cursor: args.reset ? null : args.cursor,
+        batchSize: GUEST_LIST_EVENT_STATS_BATCH_SIZE,
+        next,
+        dryRun: args.dryRun ?? false,
+        reset: args.reset,
+        oneBatchOnly: args.oneBatchOnly,
+      });
+    } catch (error) {
+      if (!args.dryRun || !isSuccessfulMigrationDryRun(error)) throw error;
+    }
+    return null;
+  },
+});
 
 /**
  * Seeds `eventBroadcastDeliveries` from historical `emailDeliveries` rows so

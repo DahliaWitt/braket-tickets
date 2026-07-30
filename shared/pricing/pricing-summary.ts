@@ -13,7 +13,10 @@ export interface BuyerPricingInput {
 }
 
 export type BuyerPricingKind =
-  'regular' | 'sliding_scale' | 'resale' | 'sign_in_required';
+  | 'regular'
+  | 'sliding_scale'
+  | 'resale'
+  | 'sign_in_required';
 
 export interface BuyerPricingSummary {
   kind: BuyerPricingKind;

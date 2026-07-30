@@ -230,9 +230,7 @@ describe('ZardSelectComponent', () => {
     // Enabled options are None(0), Alpha(1), Gamma(2); Beta is disabled and
     // excluded from navigation. End highlights Gamma, the enabled option that
     // sits after the disabled Beta in the DOM.
-    selectComponent.onDropdownKeydown(
-      new KeyboardEvent('keydown', {key: 'End'}),
-    );
+    selectComponent.onDropdownKeydown(new KeyboardEvent('keydown', {key: 'End'}));
     fixture.detectChanges();
     await fixture.whenStable();
 

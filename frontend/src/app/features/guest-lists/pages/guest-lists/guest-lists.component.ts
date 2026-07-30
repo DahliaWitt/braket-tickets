@@ -9,11 +9,18 @@ import {RouterLink} from '@angular/router';
 import {ContentLayoutComponent} from '@/layout/content-layout/content-layout.component';
 import {GuestListDelegateService} from '../../services/guest-list-delegate.service';
 import {logger} from '@/utils/logger';
+import {EventDatePipe} from '@/utils/event-date.pipe';
+import {EventEndTimePipe} from '@/utils/event-end-time.pipe';
 
 @Component({
   selector: 'app-guest-lists',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, ContentLayoutComponent],
+  imports: [
+    EventDatePipe,
+    EventEndTimePipe,
+    RouterLink,
+    ContentLayoutComponent,
+  ],
   template: `
     <app-content-layout>
       <main class="mx-auto w-full max-w-4xl px-4 py-10 sm:px-6 sm:py-16">
@@ -23,7 +30,7 @@ import {logger} from '@/utils/logger';
           Door list / delegated access
         </p>
         <h1
-          class="mt-3 text-4xl font-black tracking-tight uppercase sm:text-6xl"
+          class="mt-3 font-display text-4xl font-extrabold tracking-tight uppercase sm:text-6xl"
         >
           Your guest lists
         </h1>
@@ -46,7 +53,7 @@ import {logger} from '@/utils/logger';
             data-testid="guest-lists-load-failure"
             class="mt-12 border-y border-border py-10"
           >
-            <h2 class="text-xl font-bold uppercase">
+            <h2 class="font-display text-xl font-extrabold uppercase">
               We couldn’t load your guest lists
             </h2>
             <p class="mt-2 text-sm text-muted-foreground">
@@ -67,7 +74,9 @@ import {logger} from '@/utils/logger';
               data-testid="guest-lists-empty"
               class="mt-12 border-y border-border py-10"
             >
-              <h2 class="text-xl font-bold uppercase">No active guest lists</h2>
+              <h2 class="font-display text-xl font-extrabold uppercase">
+                No active guest lists
+              </h2>
               <p class="mt-2 text-sm text-muted-foreground">
                 Active artist and staff assignments will appear here until their
                 event ends.
@@ -88,10 +97,16 @@ import {logger} from '@/utils/logger';
                     <p
                       class="text-xs font-bold tracking-[0.2em] text-muted-foreground uppercase"
                     >
-                      {{ assignment.role }} · {{ assignment.eventDate }}
+                      {{ assignment.role }} ·
+                      {{ assignment.eventDate | eventDate }} ·
+                      {{ assignment.eventDate | eventDate: 'shortTime'
+                      }}{{
+                        assignment.eventEndDate
+                          | eventEndTime: assignment.eventDate
+                      }}
                     </p>
                     <h2
-                      class="mt-2 text-2xl font-black tracking-tight uppercase"
+                      class="mt-2 font-display text-2xl font-extrabold tracking-tight uppercase"
                     >
                       {{ assignment.eventTitle }}
                     </h2>
@@ -115,8 +130,9 @@ import {logger} from '@/utils/logger';
             <button
               data-testid="guest-lists-load-more"
               type="button"
-              class="mt-8 text-sm font-bold tracking-widest uppercase underline underline-offset-4 disabled:opacity-60"
+              class="mt-8 text-sm font-bold tracking-widest uppercase underline underline-offset-4 disabled:cursor-wait disabled:text-muted-foreground disabled:no-underline"
               [disabled]="loadingMore()"
+              [attr.aria-busy]="loadingMore()"
               (click)="loadMore()"
             >
               {{ loadingMore() ? 'Loading more…' : 'Load more guest lists' }}
@@ -126,14 +142,15 @@ import {logger} from '@/utils/logger';
             <div
               data-testid="guest-lists-pagination-failure"
               role="alert"
-              class="mt-6 flex flex-wrap items-center justify-between gap-3 border-y border-destructive/40 py-4 text-sm text-destructive"
+              class="mt-6 flex flex-wrap items-center justify-between gap-3 border-y border-destructive/40 py-4 text-sm text-destructive-text"
             >
               <span>More guest lists couldn’t load — try again?</span>
               <button
                 data-testid="guest-lists-retry-pagination"
                 type="button"
-                class="font-bold tracking-widest uppercase underline underline-offset-4 disabled:opacity-60"
+                class="font-bold tracking-widest uppercase underline underline-offset-4 disabled:cursor-wait disabled:text-muted-foreground disabled:no-underline"
                 [disabled]="loadingMore()"
+                [attr.aria-busy]="loadingMore()"
                 (click)="loadMore()"
               >
                 Try again

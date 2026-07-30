@@ -458,6 +458,7 @@ const schemaTables = {
     .index('by_user', ['userId'])
     .index('by_event_status', ['eventId', 'status'])
     .index('by_user_event', ['userId', 'eventId'])
+    .index('by_userId_and_eventId_and_status', ['userId', 'eventId', 'status'])
     .index('by_order', ['orderId'])
     .index('by_guestSession', ['guestSessionId'])
     .index('by_guestSession_event', ['guestSessionId', 'eventId'])

@@ -1,5 +1,5 @@
-import {ComponentHarness} from '@angular/cdk/testing';
-import {waitForHarnessCondition} from '@/testing/harness-wait';
+import { ComponentHarness } from '@angular/cdk/testing';
+import { waitForHarnessCondition } from '@/testing/harness-wait';
 
 export class ZardTabGroupHarness extends ComponentHarness {
   static hostSelector = 'z-tab-group';
@@ -24,9 +24,8 @@ export class ZardTabGroupHarness extends ComponentHarness {
     if (index < tabs.length) {
       await tabs[index].click();
       await waitForHarnessCondition(
-        async () =>
-          (await tabs[index].getAttribute('aria-selected')) === 'true',
-        {description: `tab ${index} selection`},
+        async () => (await tabs[index].getAttribute('aria-selected')) === 'true',
+        { description: `tab ${index} selection` },
       );
     }
   }

@@ -14,6 +14,7 @@ import {
   assertBatchSizeWithinCap,
   assertEventImportCapNotExceeded,
   findExistingImportBatch,
+  IMPORT_ERROR_CODES,
   insertImportBatch,
   nameEmailDedupKey,
 } from '../../lib/imports/bulk';
@@ -23,6 +24,11 @@ import type {
 } from '../../lib/imports/validators';
 import {MANAGEMENT_DATASET_LIMITS} from '../../lib/management_limits';
 import {takeFromQuery} from '../../lib/query_scan';
+import {
+  assertGuestAdmissionCapacity,
+  getOrCreateGuestListEventStats,
+  updateGuestListEventStats,
+} from '../../lib/guest_list/event_stats';
 
 /**
  * One raw guest row from the parsed CSV. `type` is a free string here because
@@ -180,6 +186,16 @@ export async function addMany(
     entity: 'guests',
   });
 
+  const stats =
+    toInsert.length > 0
+      ? await getOrCreateGuestListEventStats(ctx, args.eventId)
+      : null;
+  if (stats) {
+    assertGuestAdmissionCapacity(stats, toInsert.length, {
+      errorCode: IMPORT_ERROR_CODES.IMPORT_CAP_EXCEEDED,
+      operation: 'importing',
+    });
+  }
   for (const {rowIndex, row} of toInsert) {
     await ctx.db.insert('guests', {
       eventId: args.eventId,
@@ -194,14 +210,11 @@ export async function addMany(
   outcomes.sort((a, b) => a.rowIndex - b.rowIndex);
 
   const insertedCount = toInsert.length;
-  const stats = await ctx.db
-    .query('guestListEventStats')
-    .withIndex('by_eventId', (q) => q.eq('eventId', args.eventId))
-    .unique();
-  if (stats && insertedCount > 0) {
-    await ctx.db.patch('guestListEventStats', stats._id, {
-      totalGuestAdmissionCount: stats.totalGuestAdmissionCount + insertedCount,
-    });
+  if (stats) {
+    await updateGuestListEventStats(ctx, stats, (current) => ({
+      totalGuestAdmissionCount:
+        current.totalGuestAdmissionCount + insertedCount,
+    }));
   }
   const result: ImportBatchResult = {insertedCount, skippedCount, outcomes};
 

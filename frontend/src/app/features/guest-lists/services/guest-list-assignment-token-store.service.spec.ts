@@ -86,17 +86,4 @@ describe('GuestListAssignmentTokenStoreService', () => {
     expect(service.get('assignment-1')).toBeNull();
     expect(service.getMostRecent()).toBeNull();
   });
-
-  it('clears every guest-list credential on shared-device logout', () => {
-    storage.set('unrelated', 'keep-me');
-    service.rememberResolvedAssignment('assignment-1', 'secret-1');
-    service.rememberResolvedAssignment('assignment-2', 'secret-2');
-
-    service.forgetAll();
-
-    expect(storage.get('unrelated')).toBe('keep-me');
-    expect(service.get('assignment-1')).toBeNull();
-    expect(service.get('assignment-2')).toBeNull();
-    expect(service.getMostRecent()).toBeNull();
-  });
 });

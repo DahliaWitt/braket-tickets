@@ -1,11 +1,16 @@
 import {
+  afterNextRender,
   ChangeDetectionStrategy,
   Component,
   computed,
+  ElementRef,
   inject,
+  Injector,
   signal,
+  viewChild,
 } from '@angular/core';
 import type {OnInit} from '@angular/core';
+import {A11yModule} from '@angular/cdk/a11y';
 import {ActivatedRoute, RouterLink} from '@angular/router';
 import {
   FormField,
@@ -26,339 +31,50 @@ import {
 import {GuestListAssignmentTokenStoreService} from '../../services/guest-list-assignment-token-store.service';
 import {logger} from '@/utils/logger';
 import {signalFormFieldErrorMessage} from '@/utils/signal-form';
+import {EventDatePipe} from '@/utils/event-date.pipe';
+import {EventEndTimePipe} from '@/utils/event-end-time.pipe';
 
 type AvailableView = Extract<
   Awaited<ReturnType<GuestListDelegateService['getView']>>,
   {status: 'available'}
 >;
+type AddGuestResult = Awaited<ReturnType<GuestListDelegateService['addGuest']>>;
+type UpdateGuestResult = Awaited<
+  ReturnType<GuestListDelegateService['updateGuest']>
+>;
+type AvailableGuest = AvailableView['guests']['page'][number];
 
 @Component({
   selector: 'app-guest-list-manage',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormField, RouterLink, ZardButtonComponent, ZardInputDirective],
+  imports: [
+    A11yModule,
+    EventDatePipe,
+    EventEndTimePipe,
+    FormField,
+    RouterLink,
+    ZardButtonComponent,
+    ZardInputDirective,
+  ],
   host: {class: 'block min-h-dvh bg-background text-foreground'},
-  template: `
-    <main class="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-14">
-      @if (loading()) {
-        <div
-          data-testid="guest-list-loading"
-          class="border-y border-border py-10 text-xs font-bold tracking-[0.25em] uppercase"
-        >
-          Checking guest-list access…
-        </div>
-      } @else if (loadFailure()) {
-        <section
-          data-testid="guest-list-load-failure"
-          class="mx-auto max-w-xl border-y border-border py-16"
-        >
-          <p
-            class="text-xs font-bold tracking-[0.24em] text-muted-foreground uppercase"
-          >
-            Guest list
-          </p>
-          <h1 class="mt-3 text-4xl font-black tracking-tight uppercase">
-            We couldn’t load this guest list
-          </h1>
-          <p class="mt-4 text-sm leading-6 text-muted-foreground">
-            Something went wrong on our end. Check your connection and try
-            again.
-          </p>
-          <button
-            data-testid="guest-list-retry-loading"
-            z-button
-            zType="outline"
-            type="button"
-            class="mt-8"
-            (click)="retryLoading()"
-          >
-            Try again
-          </button>
-        </section>
-      } @else if (unavailable()) {
-        <section
-          data-testid="guest-list-unavailable"
-          class="mx-auto max-w-xl border-y border-border py-16"
-        >
-          <p
-            class="text-xs font-bold tracking-[0.24em] text-muted-foreground uppercase"
-          >
-            Guest list
-          </p>
-          <h1 class="mt-3 text-4xl font-black tracking-tight uppercase">
-            This guest list is unavailable
-          </h1>
-          <p class="mt-4 text-sm leading-6 text-muted-foreground">
-            The link may no longer be active, or guest-list access may have
-            ended.
-          </p>
-          <a
-            routerLink="/"
-            class="mt-8 inline-block text-sm font-bold tracking-widest uppercase underline underline-offset-4"
-            >Go home</a
-          >
-        </section>
-      } @else if (view(); as current) {
-        <header
-          data-testid="guest-list-event"
-          class="grid gap-8 border-b border-border pb-8 sm:grid-cols-[1fr_auto] sm:items-end"
-        >
-          <div>
-            <p
-              class="text-xs font-bold tracking-[0.24em] text-muted-foreground uppercase"
-            >
-              {{ current.assignment.role }} guest list
-            </p>
-            <h1
-              class="mt-3 text-4xl font-black tracking-tight uppercase sm:text-6xl"
-            >
-              {{ current.event.title }}
-            </h1>
-            <p class="mt-4 text-sm text-muted-foreground">
-              {{ current.event.date }}
-              @if (current.event.location) {
-                · {{ current.event.location }}
-              }
-            </p>
-          </div>
-          <div data-testid="guest-list-usage" class="sm:text-right">
-            <strong class="text-4xl font-black tabular-nums"
-              >{{ current.assignment.usedSlots }} of
-              {{ current.assignment.grantedSlots }}</strong
-            >
-            <p
-              class="mt-1 text-xs font-bold tracking-[0.2em] text-muted-foreground uppercase"
-            >
-              guest slots used
-            </p>
-          </div>
-        </header>
-
-        <div
-          class="grid gap-12 py-10 lg:grid-cols-[minmax(0,1fr)_minmax(19rem,0.68fr)]"
-        >
-          <section>
-            <div
-              class="flex items-end justify-between border-b border-border pb-3"
-            >
-              <h2 class="text-2xl font-black tracking-tight uppercase">
-                At the door
-              </h2>
-              <span
-                class="text-xs tracking-widest text-muted-foreground uppercase"
-                >Tickets emailed automatically</span
-              >
-            </div>
-            @if (current.guests.page.length === 0) {
-              <p class="py-10 text-sm text-muted-foreground">
-                No guests added yet.
-              </p>
-            } @else {
-              <div class="divide-y divide-border">
-                @for (guest of current.guests.page; track guest.guestId) {
-                  <article data-testid="guest-list-guest" class="py-5">
-                    <div
-                      class="flex flex-wrap items-start justify-between gap-4"
-                    >
-                      <div>
-                        <h3 class="font-bold">{{ guest.name }}</h3>
-                        <p class="mt-1 text-sm text-muted-foreground">
-                          {{ guest.email }}
-                        </p>
-                        @if (guest.deliveryState === 'failed') {
-                          <p
-                            class="mt-2 text-xs font-bold tracking-widest text-destructive uppercase"
-                          >
-                            Ticket email failed
-                          </p>
-                        } @else if (guest.deliveryState === 'queued') {
-                          <p
-                            class="mt-2 text-xs tracking-widest text-muted-foreground uppercase"
-                          >
-                            Ticket email queued
-                          </p>
-                        }
-                      </div>
-                      <div class="flex gap-2">
-                        <button
-                          data-testid="guest-list-edit"
-                          z-button
-                          zType="outline"
-                          type="button"
-                          [disabled]="guestActionInFlight(guest.guestId)"
-                          (click)="startEdit(guest)"
-                        >
-                          Edit
-                        </button>
-                        @if (guest.deliveryState === 'failed') {
-                          <button
-                            data-testid="guest-list-retry"
-                            z-button
-                            zType="outline"
-                            type="button"
-                            [disabled]="guestActionInFlight(guest.guestId)"
-                            (click)="retry(guest.guestId)"
-                          >
-                            {{
-                              retryingGuestIds().has(guest.guestId)
-                                ? 'Retrying…'
-                                : 'Retry email'
-                            }}
-                          </button>
-                        }
-                        <button
-                          data-testid="guest-list-remove"
-                          z-button
-                          zType="destructive"
-                          type="button"
-                          [disabled]="guestActionInFlight(guest.guestId)"
-                          (click)="remove(guest.guestId)"
-                        >
-                          {{
-                            removingGuestIds().has(guest.guestId)
-                              ? 'Removing…'
-                              : 'Remove'
-                          }}
-                        </button>
-                      </div>
-                    </div>
-                    <p class="mt-3 text-xs text-muted-foreground">
-                      Removing this guest invalidates their ticket.
-                    </p>
-                  </article>
-                }
-              </div>
-              @if (!current.guests.isDone) {
-                <button
-                  data-testid="guest-list-load-more"
-                  z-button
-                  zType="outline"
-                  type="button"
-                  class="mt-6"
-                  [disabled]="loadingMoreGuests()"
-                  (click)="loadMoreGuests()"
-                >
-                  {{
-                    loadingMoreGuests() ? 'Loading more…' : 'Load more guests'
-                  }}
-                </button>
-              }
-            }
-          </section>
-
-          <aside>
-            <h2 class="text-2xl font-black tracking-tight uppercase">
-              {{ editingGuestId() ? 'Edit guest' : 'Add a guest' }}
-            </h2>
-            @if (quotaFull() && !editingGuestId()) {
-              <p class="mt-3 border-y border-border py-3 text-sm">
-                All granted slots are in use. You can still edit or remove
-                existing guests.
-              </p>
-            }
-            @if (actionError(); as message) {
-              <p
-                data-testid="guest-list-action-error"
-                role="alert"
-                class="mt-4 border-y border-destructive/40 py-3 text-sm text-destructive"
-              >
-                {{ message }}
-              </p>
-            }
-            <form
-              data-testid="guest-list-add-form"
-              class="mt-6 space-y-5"
-              (submit)="saveGuest($event)"
-            >
-              <label class="block text-xs font-bold tracking-widest uppercase">
-                Name
-                <input
-                  data-testid="guest-list-name"
-                  id="guest-list-name"
-                  zInput
-                  [zStatus]="guestNameError() ? 'error' : undefined"
-                  class="mt-2"
-                  autocomplete="name"
-                  [formField]="guestForm.name"
-                />
-                @if (guestNameError(); as message) {
-                  <span
-                    id="guest-list-name-error"
-                    data-testid="guest-list-field-error"
-                    class="mt-2 block font-mono text-xs normal-case tracking-normal text-destructive"
-                    >{{ message }}</span
-                  >
-                }
-              </label>
-              <label class="block text-xs font-bold tracking-widest uppercase">
-                Email
-                <input
-                  data-testid="guest-list-email"
-                  id="guest-list-email"
-                  zInput
-                  [zStatus]="guestEmailError() ? 'error' : undefined"
-                  class="mt-2"
-                  type="email"
-                  autocomplete="email"
-                  [formField]="guestForm.email"
-                />
-                @if (guestEmailError(); as message) {
-                  <span
-                    id="guest-list-email-error"
-                    data-testid="guest-list-field-error"
-                    class="mt-2 block font-mono text-xs normal-case tracking-normal text-destructive"
-                    >{{ message }}</span
-                  >
-                }
-              </label>
-              <button
-                data-testid="guest-list-add"
-                z-button
-                zFull
-                type="submit"
-                [disabled]="(quotaFull() && !editingGuestId()) || saving()"
-              >
-                {{
-                  editingGuestId() ? 'Save changes' : 'Add guest + send ticket'
-                }}
-              </button>
-              @if (editingGuestId()) {
-                <button
-                  z-button
-                  zType="ghost"
-                  zFull
-                  type="button"
-                  (click)="cancelEdit()"
-                >
-                  Cancel edit
-                </button>
-              }
-            </form>
-          </aside>
-        </div>
-
-        @if (accountless()) {
-          <footer class="border-t border-border pt-6">
-            <button
-              data-testid="guest-list-forget"
-              type="button"
-              class="text-xs font-bold tracking-widest uppercase underline underline-offset-4"
-              (click)="forget()"
-            >
-              Forget this guest list on this device
-            </button>
-          </footer>
-        }
-      }
-    </main>
-  `,
+  templateUrl: './guest-list-manage.component.html',
 })
 export class GuestListManageComponent implements OnInit {
   private readonly delegate = inject(GuestListDelegateService);
   private readonly tokens = inject(GuestListAssignmentTokenStoreService);
   private readonly route = inject(ActivatedRoute);
+  private readonly injector = inject(Injector);
+  private readonly guestListHeading = viewChild<
+    unknown,
+    ElementRef<HTMLElement>
+  >('guestListHeading', {read: ElementRef});
+  private readonly cancelRemovalButton = viewChild<
+    unknown,
+    ElementRef<HTMLButtonElement>
+  >('cancelRemovalButton', {read: ElementRef});
   private readonly routeAssignmentId =
     this.route.snapshot.paramMap.get('assignmentId');
-  private readonly fragmentToken = this.routeAssignmentId
+  private fragmentToken = this.routeAssignmentId
     ? null
     : this.tokens.captureCredentialFromFragment();
 
@@ -370,7 +86,9 @@ export class GuestListManageComponent implements OnInit {
   readonly loadingMoreGuests = signal(false);
   readonly removingGuestIds = signal<ReadonlySet<GuestListGuestId>>(new Set());
   readonly retryingGuestIds = signal<ReadonlySet<GuestListGuestId>>(new Set());
+  readonly pendingRemovalGuest = signal<AvailableGuest | null>(null);
   readonly actionError = signal<string | null>(null);
+  readonly actionNotice = signal<string | null>(null);
   readonly editingGuestId = signal<GuestListGuestId | null>(null);
   readonly accountless = signal(false);
   readonly guestModel = signal({name: '', email: ''});
@@ -388,6 +106,9 @@ export class GuestListManageComponent implements OnInit {
     const assignment = this.view()?.assignment;
     return assignment ? assignment.usedSlots >= assignment.grantedSlots : false;
   });
+  readonly rowActionInFlight = computed(
+    () => this.removingGuestIds().size > 0 || this.retryingGuestIds().size > 0,
+  );
 
   protected guestNameError(): string | null {
     if (!this.guestSubmitted() && !this.guestForm.name().touched()) return null;
@@ -398,7 +119,8 @@ export class GuestListManageComponent implements OnInit {
   }
 
   protected guestEmailError(): string | null {
-    if (!this.guestSubmitted() && !this.guestForm.email().touched()) return null;
+    if (!this.guestSubmitted() && !this.guestForm.email().touched())
+      return null;
     return signalFormFieldErrorMessage(this.guestForm.email, [
       'required',
       'email',
@@ -409,6 +131,8 @@ export class GuestListManageComponent implements OnInit {
   private access: DelegateAccess | null = null;
   private activeToken: string | null = null;
   private storedAssignmentId: string | null = null;
+  private removalTrigger: HTMLElement | null = null;
+  private accessGeneration = 0;
   private reloadGeneration = 0;
 
   ngOnInit(): void {
@@ -416,11 +140,14 @@ export class GuestListManageComponent implements OnInit {
   }
 
   private async initializeAccess(): Promise<void> {
+    const generation = ++this.accessGeneration;
+    this.access = null;
     try {
       const assignmentId = this.routeAssignmentId;
       if (assignmentId) {
         const typedAssignmentId = assignmentId as GuestListAssignmentId;
         const claim = await this.delegate.claimSignedIn(typedAssignmentId);
+        if (!this.isCurrentAccess(generation)) return;
         if (claim.status === 'unavailable') {
           this.showUnavailable();
           return;
@@ -439,18 +166,17 @@ export class GuestListManageComponent implements OnInit {
           const authorization = await this.delegate.authorizeToken(
             this.activeToken,
           );
+          if (!this.isCurrentAccess(generation)) return;
           if (authorization.status === 'unavailable') {
-            if (this.storedAssignmentId) {
-              this.tokens.forget(this.storedAssignmentId);
-            }
             this.showUnavailable();
             return;
           }
           this.access = {kind: 'token', token: this.activeToken};
         }
       }
-      await this.reload();
+      await this.reload(true, generation);
     } catch (error) {
+      if (!this.isCurrentAccess(generation)) return;
       logger.error('Failed to load delegated guest list', error);
       this.view.set(null);
       this.unavailable.set(false);
@@ -460,7 +186,14 @@ export class GuestListManageComponent implements OnInit {
   }
 
   private showUnavailable(): void {
+    if (this.storedAssignmentId) {
+      this.tokens.forget(this.storedAssignmentId);
+    }
     this.access = null;
+    this.activeToken = null;
+    this.storedAssignmentId = null;
+    this.pendingRemovalGuest.set(null);
+    this.removalTrigger = null;
     this.view.set(null);
     this.loading.set(false);
     this.loadFailure.set(false);
@@ -471,39 +204,49 @@ export class GuestListManageComponent implements OnInit {
     this.loadFailure.set(false);
     this.unavailable.set(false);
     this.loading.set(true);
+    this.actionNotice.set(null);
     void this.initializeAccess();
   }
 
   async saveGuest(event: SubmitEvent): Promise<void> {
     event.preventDefault();
+    if (this.saving() || this.rowActionInFlight() || this.pendingRemovalGuest())
+      return;
     this.guestSubmitted.set(true);
     const access = this.access;
     if (!access) return;
+    const accessGeneration = this.accessGeneration;
     await submit(this.guestForm, async () => {
       this.saving.set(true);
       this.actionError.set(null);
+      this.actionNotice.set(null);
+      const guestId = this.editingGuestId();
       try {
         const value = this.guestModel();
-        const guestId = this.editingGuestId();
         if (guestId) {
-          await this.delegate.updateGuest(access, {
+          const result = await this.delegate.updateGuest(access, {
             guestId,
             name: value.name.trim(),
             email: value.email.trim(),
           });
+          if (!this.isCurrentAccess(accessGeneration)) return;
+          this.applyGuestMutation(result);
         } else {
-          await this.delegate.addGuest(access, {
+          const result = await this.delegate.addGuest(access, {
             name: value.name.trim(),
             email: value.email.trim(),
             idempotencyKey: crypto.randomUUID(),
           });
+          if (!this.isCurrentAccess(accessGeneration)) return;
+          this.applyGuestMutation(result);
         }
         this.cancelEdit();
-        await this.reload(false);
+        await this.refreshAfterCommittedAction(accessGeneration);
       } catch (error) {
+        if (!this.isCurrentAccess(accessGeneration)) return;
         logger.error('Failed to save delegated guest', error);
         this.actionError.set(
-          this.editingGuestId()
+          guestId
             ? 'Changes were not saved — try again.'
             : 'Guest was not added — try again.',
         );
@@ -513,7 +256,13 @@ export class GuestListManageComponent implements OnInit {
     });
   }
 
-  startEdit(guest: AvailableView['guests']['page'][number]): void {
+  startEdit(guest: AvailableGuest): void {
+    if (
+      this.saving() ||
+      this.pendingRemovalGuest() ||
+      this.guestActionInFlight(guest.guestId)
+    )
+      return;
     this.editingGuestId.set(guest.guestId);
     this.guestModel.set({name: guest.name, email: guest.email});
   }
@@ -525,29 +274,126 @@ export class GuestListManageComponent implements OnInit {
     this.guestSubmitted.set(false);
   }
 
-  async remove(guestId: GuestListGuestId): Promise<void> {
-    if (!this.access || this.guestActionInFlight(guestId)) return;
+  requestRemoval(guest: AvailableGuest, event: MouseEvent): void {
+    if (
+      this.saving() ||
+      this.guestActionInFlight(guest.guestId) ||
+      this.pendingRemovalGuest()
+    )
+      return;
+    const trigger = event.currentTarget;
+    if (trigger instanceof HTMLElement) {
+      this.removalTrigger = trigger;
+    }
+    this.pendingRemovalGuest.set(guest);
+    afterNextRender(() => this.cancelRemovalButton()?.nativeElement.focus(), {
+      injector: this.injector,
+    });
+  }
+
+  cancelRemoval(): void {
+    const guest = this.pendingRemovalGuest();
+    if (guest && this.removingGuestIds().has(guest.guestId)) return;
+    const trigger = this.removalTrigger;
+    this.pendingRemovalGuest.set(null);
+    this.removalTrigger = null;
+    this.focusAfterRender(trigger);
+  }
+
+  async confirmRemoval(): Promise<void> {
+    const guest = this.pendingRemovalGuest();
+    if (!guest || this.removingGuestIds().has(guest.guestId)) return;
+    const trigger = this.removalTrigger;
+    const removed = await this.remove(guest.guestId);
+    if (this.pendingRemovalGuest()?.guestId !== guest.guestId) return;
+    this.pendingRemovalGuest.set(null);
+    this.removalTrigger = null;
+    this.focusAfterRender(
+      removed ? (this.guestListHeading()?.nativeElement ?? null) : trigger,
+    );
+  }
+
+  async remove(guestId: GuestListGuestId): Promise<boolean> {
+    if (!this.access || this.saving() || this.guestActionInFlight(guestId))
+      return false;
+    const access = this.access;
+    const accessGeneration = this.accessGeneration;
     this.addGuestAction(this.removingGuestIds, guestId);
     this.actionError.set(null);
+    this.actionNotice.set(null);
     try {
-      await this.delegate.removeGuest(this.access, guestId);
-      await this.reload(false);
+      const result = await this.delegate.removeGuest(access, guestId);
+      if (!this.isCurrentAccess(accessGeneration)) return false;
+      if (this.editingGuestId() === guestId) {
+        this.cancelEdit();
+      }
+      this.view.update((current) =>
+        current
+          ? {
+              ...current,
+              assignment: {
+                ...current.assignment,
+                usedSlots: result.usedSlots,
+              },
+              guests: {
+                ...current.guests,
+                page: current.guests.page.filter(
+                  (guest) => guest.guestId !== guestId,
+                ),
+              },
+            }
+          : current,
+      );
+      await this.refreshAfterCommittedAction(accessGeneration);
+      return true;
     } catch (error) {
+      if (!this.isCurrentAccess(accessGeneration)) return false;
       logger.error('Failed to remove delegated guest', error);
       this.actionError.set('Guest was not removed — try again.');
+      return false;
     } finally {
       this.removeGuestAction(this.removingGuestIds, guestId);
     }
   }
 
   async retry(guestId: GuestListGuestId): Promise<void> {
-    if (!this.access || this.guestActionInFlight(guestId)) return;
+    if (
+      !this.access ||
+      this.saving() ||
+      this.pendingRemovalGuest() ||
+      this.guestActionInFlight(guestId)
+    )
+      return;
+    const access = this.access;
+    const accessGeneration = this.accessGeneration;
     this.addGuestAction(this.retryingGuestIds, guestId);
     this.actionError.set(null);
+    this.actionNotice.set(null);
     try {
-      await this.delegate.retryTicket(this.access, guestId);
-      await this.reload(false);
+      const result = await this.delegate.retryTicket(access, guestId);
+      if (!this.isCurrentAccess(accessGeneration)) return;
+      this.view.update((current) =>
+        current
+          ? {
+              ...current,
+              guests: {
+                ...current.guests,
+                page: current.guests.page.map((guest) =>
+                  guest.guestId === guestId
+                    ? {
+                        ...guest,
+                        deliveryState:
+                          result.status === 'alreadySent' ? 'sent' : 'queued',
+                      }
+                    : guest,
+                ),
+              },
+            }
+          : current,
+      );
+      await this.refreshAfterCommittedAction(accessGeneration);
     } catch (error) {
+      if (!this.isCurrentAccess(accessGeneration)) return;
       logger.error('Failed to retry delegated guest ticket email', error);
       this.actionError.set('Ticket email could not resend — try again.');
     } finally {
@@ -557,6 +403,7 @@ export class GuestListManageComponent implements OnInit {
 
   guestActionInFlight(guestId: GuestListGuestId): boolean {
     return (
+      this.saving() ||
       this.removingGuestIds().has(guestId) ||
       this.retryingGuestIds().has(guestId)
     );
@@ -584,25 +431,47 @@ export class GuestListManageComponent implements OnInit {
     const current = this.view();
     const access = this.access;
     if (!current || !access || current.guests.isDone) return;
+    const accessGeneration = this.accessGeneration;
+    const reloadGeneration = this.reloadGeneration;
     this.loadingMoreGuests.set(true);
     this.actionError.set(null);
+    this.actionNotice.set(null);
     try {
       const result = await this.delegate.getView(
         access,
         current.guests.continueCursor,
       );
+      if (
+        !this.isCurrentAccess(accessGeneration) ||
+        reloadGeneration !== this.reloadGeneration
+      )
+        return;
       if (result.status === 'unavailable') {
         this.showUnavailable();
         return;
       }
-      this.view.set({
-        ...result,
-        guests: {
-          ...result.guests,
-          page: [...current.guests.page, ...result.guests.page],
-        },
+      this.view.update((latest) => {
+        if (!latest) return latest;
+        const guestsById = new Map(
+          [...latest.guests.page, ...result.guests.page].map((guest) => [
+            guest.guestId,
+            guest,
+          ]),
+        );
+        return {
+          ...result,
+          guests: {
+            ...result.guests,
+            page: [...guestsById.values()],
+          },
+        };
       });
     } catch (error) {
+      if (
+        !this.isCurrentAccess(accessGeneration) ||
+        reloadGeneration !== this.reloadGeneration
+      )
+        return;
       logger.error('Failed to load more delegated guests', error);
       this.actionError.set('More guests could not load — try again.');
     } finally {
@@ -611,15 +480,39 @@ export class GuestListManageComponent implements OnInit {
   }
 
   forget(): void {
-    const assignmentId = this.view()?.assignment.assignmentId;
+    ++this.accessGeneration;
+    ++this.reloadGeneration;
+    const assignmentId =
+      this.view()?.assignment.assignmentId ?? this.storedAssignmentId;
     if (assignmentId) this.tokens.forget(assignmentId);
     this.access = null;
     this.activeToken = null;
+    this.fragmentToken = null;
+    this.storedAssignmentId = null;
     this.view.set(null);
+    this.loading.set(false);
+    this.loadFailure.set(false);
+    this.actionError.set(null);
+    this.actionNotice.set(null);
+    this.pendingRemovalGuest.set(null);
+    this.removalTrigger = null;
     this.unavailable.set(true);
   }
 
-  private async reload(showLoading = true): Promise<void> {
+  private focusAfterRender(target: HTMLElement | null): void {
+    if (!target) return;
+    afterNextRender(
+      () => {
+        if (target.isConnected) target.focus();
+      },
+      {injector: this.injector},
+    );
+  }
+
+  private async reload(
+    showLoading = true,
+    accessGeneration = this.accessGeneration,
+  ): Promise<void> {
     const generation = ++this.reloadGeneration;
     const access = this.access;
     if (!access) {
@@ -631,12 +524,13 @@ export class GuestListManageComponent implements OnInit {
     this.loadFailure.set(false);
     try {
       const result = await this.delegate.getView(access);
-      if (generation !== this.reloadGeneration) return;
+      if (
+        generation !== this.reloadGeneration ||
+        !this.isCurrentAccess(accessGeneration)
+      )
+        return;
       if (result.status === 'unavailable') {
-        if (this.storedAssignmentId)
-          this.tokens.forget(this.storedAssignmentId);
-        this.view.set(null);
-        this.unavailable.set(true);
+        this.showUnavailable();
         return;
       }
       this.view.set(result);
@@ -649,7 +543,59 @@ export class GuestListManageComponent implements OnInit {
         this.storedAssignmentId = result.assignment.assignmentId;
       }
     } finally {
-      if (generation === this.reloadGeneration) this.loading.set(false);
+      if (
+        generation === this.reloadGeneration &&
+        this.isCurrentAccess(accessGeneration)
+      )
+        this.loading.set(false);
+    }
+  }
+
+  private isCurrentAccess(generation: number): boolean {
+    return generation === this.accessGeneration;
+  }
+
+  private applyGuestMutation(result: AddGuestResult | UpdateGuestResult): void {
+    this.view.update((current) => {
+      if (!current) return current;
+      const existing = current.guests.page.some(
+        (guest) => guest.guestId === result.guest.guestId,
+      );
+      return {
+        ...current,
+        assignment: {
+          ...current.assignment,
+          usedSlots: result.usedSlots,
+          grantedSlots: result.grantedSlots,
+        },
+        guests: {
+          ...current.guests,
+          page: existing
+            ? current.guests.page.map((guest) =>
+                guest.guestId === result.guest.guestId ? result.guest : guest,
+              )
+            : [...current.guests.page, result.guest],
+        },
+      };
+    });
+  }
+
+  private async refreshAfterCommittedAction(
+    accessGeneration: number,
+  ): Promise<void> {
+    const refreshGeneration = this.reloadGeneration + 1;
+    try {
+      await this.reload(false, accessGeneration);
+    } catch (error) {
+      if (
+        !this.isCurrentAccess(accessGeneration) ||
+        refreshGeneration !== this.reloadGeneration
+      )
+        return;
+      logger.error('Guest-list change succeeded but refresh failed', error);
+      this.actionNotice.set(
+        'Your change went through, but this list couldn’t refresh. Reload the page to see the latest details.',
+      );
     }
   }
 }

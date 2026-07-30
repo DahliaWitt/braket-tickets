@@ -45,6 +45,8 @@ import {signalFormFieldErrorMessage} from '@/utils/signal-form';
 
 export type {GuestListAssignment, GuestListEventOverview};
 
+type GuestListAssignmentId = GuestListAssignment['assignmentId'];
+
 @Component({
   selector: 'app-guest-list-assignments',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -71,23 +73,23 @@ export class GuestListAssignmentsComponent {
     const loaded = this.loadedContinueCursor();
     return loaded === undefined ? this.continueCursor() : loaded;
   });
-  private readonly grantWarning = viewChild<
-    unknown,
-    ElementRef<HTMLElement>
-  >('grantWarning', {read: ElementRef});
-  private readonly revokeWarning = viewChild<
-    unknown,
-    ElementRef<HTMLElement>
-  >('revokeWarning', {read: ElementRef});
+  private readonly grantWarning = viewChild<unknown, ElementRef<HTMLElement>>(
+    'grantWarning',
+    {read: ElementRef},
+  );
+  private readonly revokeWarning = viewChild<unknown, ElementRef<HTMLElement>>(
+    'revokeWarning',
+    {read: ElementRef},
+  );
   private readonly confirmationFocus = new ConfirmationFocusManager();
   readonly pendingRevoke = signal<GuestListAssignment | null>(null);
   readonly pendingGrantReduction = signal<{
-    assignmentId: string;
+    assignmentId: GuestListAssignmentId;
     grant: number;
   } | null>(null);
-  readonly editingGrantId = signal<string | null>(null);
+  readonly editingGrantId = signal<GuestListAssignmentId | null>(null);
   readonly grantEditValue = signal('');
-  readonly expandedAssignmentId = signal<string | null>(null);
+  readonly expandedAssignmentId = signal<GuestListAssignmentId | null>(null);
   private readonly expandedGuestPages = signal<
     ReadonlyMap<string, SourcedGuestPage>
   >(new Map());
@@ -97,6 +99,10 @@ export class GuestListAssignmentsComponent {
   private readonly expandedGuestAttemptedUsage = signal<
     ReadonlyMap<string, number>
   >(new Map());
+  private queuedGuestLoad: {
+    assignmentId: GuestListAssignmentId;
+    cursor: string | null;
+  } | null = null;
   private readonly failedGuestLoads = signal<ReadonlySet<string>>(new Set());
   readonly memberResults = signal<readonly CommunityMemberCandidate[]>([]);
   readonly selectedMember = signal<CommunityMemberCandidate | null>(null);
@@ -115,11 +121,11 @@ export class GuestListAssignmentsComponent {
   readonly isCreating = signal(false);
   readonly isSearching = signal(false);
   readonly isBulkCreating = signal(false);
-  readonly updatingGrantId = signal<string | null>(null);
-  readonly loadingGuestsId = signal<string | null>(null);
+  readonly updatingGrantId = signal<GuestListAssignmentId | null>(null);
+  readonly loadingGuestsId = signal<GuestListAssignmentId | null>(null);
   readonly isLoadingMoreAssignments = signal(false);
-  readonly revokingId = signal<string | null>(null);
-  readonly resendingId = signal<string | null>(null);
+  readonly revokingId = signal<GuestListAssignmentId | null>(null);
+  readonly resendingId = signal<GuestListAssignmentId | null>(null);
   readonly actionError = signal<string | null>(null);
   readonly isImporting = signal(false);
   readonly importReport = signal<ImportReport | null>(null);
@@ -177,14 +183,6 @@ export class GuestListAssignmentsComponent {
       (this.grantWarning() ?? this.revokeWarning())?.nativeElement.focus();
     });
     effect(() => {
-      const selected = this.selectedMember();
-      const emailAddress = this.assignmentModel().email.trim().toLowerCase();
-      const selectedEmail = selected?.email?.trim().toLowerCase() ?? '';
-      if (selected && selectedEmail !== emailAddress) {
-        this.selectedMember.set(null);
-      }
-    });
-    effect(() => {
       const boundary = `${this.continueCursor() ?? ''}:${this.assignments()
         .map((assignment) => assignment.assignmentId)
         .join(',')}`;
@@ -224,12 +222,16 @@ export class GuestListAssignmentsComponent {
 
   async searchMembers(): Promise<void> {
     const term = this.assignmentModel().search.trim();
-    if (!term || !this.organizerId() || this.isSearching()) return;
+    const organizerId = this.organizerId();
+    if (!term || !organizerId || this.isSearching()) return;
     this.actionError.set(null);
     this.isSearching.set(true);
     try {
       this.memberResults.set(
-        await this.service.searchMembers(this.organizerId(), term),
+        await this.service.searchMembers({
+          organizerId,
+          searchTerm: term,
+        }),
       );
     } catch (error) {
       logger.error('Failed to search guest list assignees', error);
@@ -237,6 +239,13 @@ export class GuestListAssignmentsComponent {
     } finally {
       this.isSearching.set(false);
     }
+  }
+
+  searchMembersFromKeyboard(event: Event): void {
+    if (!(event instanceof KeyboardEvent)) return;
+    event.preventDefault();
+    if (event.isComposing) return;
+    void this.searchMembers();
   }
 
   selectMember(member: CommunityMemberCandidate): void {
@@ -251,6 +260,16 @@ export class GuestListAssignmentsComponent {
 
   clearSelectedMember(): void {
     this.selectedMember.set(null);
+  }
+
+  onAssignmentEmailInput(event: Event): void {
+    const input = event.target;
+    const selected = this.selectedMember();
+    if (!(input instanceof HTMLInputElement) || !selected) return;
+    const selectedEmail = selected.email?.trim().toLowerCase() ?? '';
+    if (input.value.trim().toLowerCase() !== selectedEmail) {
+      this.selectedMember.set(null);
+    }
   }
 
   async createAssignment(event: SubmitEvent): Promise<void> {
@@ -281,6 +300,7 @@ export class GuestListAssignmentsComponent {
         role: 'artist',
         grantOverride: '',
       });
+      this.assignmentForm().reset();
       this.selectedMember.set(null);
       this.assignmentSubmitted.set(false);
     } catch (error) {
@@ -297,19 +317,20 @@ export class GuestListAssignmentsComponent {
   }
 
   async bulkCreateStaff(payload: ImportConfirmPayload): Promise<void> {
-    if (this.isBulkCreating()) return;
+    const eventId = this.eventId();
+    if (!eventId || this.isBulkCreating()) return;
     this.actionError.set(null);
     this.isBulkCreating.set(true);
     try {
-      const result = await this.service.bulkCreateStaff(
-        this.eventId(),
-        payload.batchKey,
-        payload.rows.map((row) => ({
+      const result = await this.service.bulkCreateStaff({
+        eventId,
+        batchKey: payload.batchKey,
+        rows: payload.rows.map((row) => ({
           name: row.name,
           email: row.email ?? '',
           slotOverride: row.slotOverride,
         })),
-      );
+      });
       this.importReport.set(buildImportReport(result));
     } catch (error) {
       logger.error('Failed to import staff assignments', error);
@@ -350,6 +371,7 @@ export class GuestListAssignmentsComponent {
     const grant = Number(this.grantEditValue());
     if (!Number.isInteger(grant) || grant < 0 || grant > 100) return;
     this.confirmationFocus.remember(event);
+    this.pendingRevoke.set(null);
     if (grant < assignment.usedSlots) {
       this.pendingGrantReduction.set({
         assignmentId: assignment.assignmentId,
@@ -384,14 +406,17 @@ export class GuestListAssignmentsComponent {
   }
 
   private async persistGrant(
-    assignmentId: string,
+    assignmentId: GuestListAssignmentId,
     grant: number,
   ): Promise<boolean> {
     if (this.updatingGrantId()) return false;
     this.actionError.set(null);
     this.updatingGrantId.set(assignmentId);
     try {
-      await this.service.updateGrant(assignmentId, grant);
+      await this.service.updateGrant({
+        assignmentId,
+        grantedSlots: grant,
+      });
       this.editingGrantId.set(null);
       toast.success('Guest list grant updated');
       return true;
@@ -412,34 +437,41 @@ export class GuestListAssignmentsComponent {
     }
     this.expandedAssignmentId.set(assignment.assignmentId);
     if (this.expandedGuestPages().has(assignment.assignmentId)) return;
+    if (this.loadingGuestsId()) {
+      this.queuedGuestLoad = {
+        assignmentId: assignment.assignmentId,
+        cursor: null,
+      };
+      return;
+    }
     await this.fetchGuests(assignment.assignmentId, null);
   }
 
-  guestsFor(assignmentId: string): readonly SourcedGuest[] {
+  guestsFor(assignmentId: GuestListAssignmentId): readonly SourcedGuest[] {
     return this.expandedGuestPages().get(assignmentId)?.guests ?? [];
   }
 
-  guestContinueCursor(assignmentId: string): string | null {
+  guestContinueCursor(assignmentId: GuestListAssignmentId): string | null {
     return this.expandedGuestPages().get(assignmentId)?.continueCursor ?? null;
   }
 
-  guestLoadFailed(assignmentId: string): boolean {
+  guestLoadFailed(assignmentId: GuestListAssignmentId): boolean {
     return this.failedGuestLoads().has(assignmentId);
   }
 
-  async retryGuests(assignmentId: string): Promise<void> {
+  async retryGuests(assignmentId: GuestListAssignmentId): Promise<void> {
     if (this.loadingGuestsId()) return;
     await this.fetchGuests(assignmentId, null);
   }
 
-  async loadMoreGuests(assignmentId: string): Promise<void> {
+  async loadMoreGuests(assignmentId: GuestListAssignmentId): Promise<void> {
     const cursor = this.guestContinueCursor(assignmentId);
     if (!cursor || this.loadingGuestsId()) return;
     await this.fetchGuests(assignmentId, cursor);
   }
 
   private async fetchGuests(
-    assignmentId: string,
+    assignmentId: GuestListAssignmentId,
     cursor: string | null,
   ): Promise<void> {
     if (this.loadingGuestsId()) return;
@@ -460,7 +492,10 @@ export class GuestListAssignmentsComponent {
     this.actionError.set(null);
     this.loadingGuestsId.set(assignmentId);
     try {
-      const result = await this.service.listGuests(assignmentId, cursor);
+      const result = await this.service.listGuests({
+        assignmentId,
+        paginationOpts: {numItems: 25, cursor},
+      });
       const currentUsage = this.visibleAssignments().find(
         (assignment) => assignment.assignmentId === assignmentId,
       )?.usedSlots;
@@ -488,19 +523,31 @@ export class GuestListAssignmentsComponent {
       this.actionError.set("couldn't load this guest list — try again?");
     } finally {
       this.loadingGuestsId.set(null);
-      if (shouldRefetch) void this.fetchGuests(assignmentId, null);
+      const queued = this.queuedGuestLoad;
+      this.queuedGuestLoad = null;
+      if (shouldRefetch) {
+        void this.fetchGuests(assignmentId, null);
+      } else if (
+        queued &&
+        this.expandedAssignmentId() === queued.assignmentId
+      ) {
+        void this.fetchGuests(queued.assignmentId, queued.cursor);
+      }
     }
   }
 
   async loadMoreAssignments(): Promise<void> {
     const cursor = this.effectiveContinueCursor();
-    if (!cursor || !this.eventId() || this.isLoadingMoreAssignments()) return;
-    const requestGeneration = this.assignmentPageGeneration;
     const eventId = this.eventId();
+    if (!cursor || !eventId || this.isLoadingMoreAssignments()) return;
+    const requestGeneration = this.assignmentPageGeneration;
     this.actionError.set(null);
     this.isLoadingMoreAssignments.set(true);
     try {
-      const result = await this.service.listByEvent(eventId, cursor);
+      const result = await this.service.listByEvent({
+        eventId,
+        paginationOpts: {numItems: 25, cursor},
+      });
       if (requestGeneration !== this.assignmentPageGeneration) return;
       this.additionalAssignments.update((current) => [
         ...current,
@@ -522,6 +569,7 @@ export class GuestListAssignmentsComponent {
 
   beginRevoke(assignment: GuestListAssignment, event: Event): void {
     this.confirmationFocus.remember(event);
+    this.pendingGrantReduction.set(null);
     this.pendingRevoke.set(assignment);
   }
 
@@ -542,7 +590,7 @@ export class GuestListAssignmentsComponent {
     this.actionError.set(null);
     this.revokingId.set(assignment.assignmentId);
     try {
-      await this.service.revoke(assignment.assignmentId);
+      await this.service.revoke({assignmentId: assignment.assignmentId});
       this.pendingRevoke.set(null);
       this.confirmationFocus.restore(true);
       toast.success('Guest list access revoked');
@@ -559,10 +607,10 @@ export class GuestListAssignmentsComponent {
     this.actionError.set(null);
     this.resendingId.set(assignment.assignmentId);
     try {
-      await this.service.resendInvite(
-        assignment.assignmentId,
-        crypto.randomUUID(),
-      );
+      await this.service.resendInvite({
+        assignmentId: assignment.assignmentId,
+        idempotencyKey: crypto.randomUUID(),
+      });
       toast.success('Invite queued');
     } catch (error) {
       logger.error('Failed to resend guest list invite', error);

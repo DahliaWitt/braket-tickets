@@ -474,7 +474,16 @@
         aria-labelledby="tab-guests"
         tabindex="0"
       >
-        @if (guestListFeatureEnabled()) {
+        @if (guestListWorkspaceError()) {
+          <div
+            data-testid="guest-list-workspace-error"
+            role="alert"
+            class="mb-8 border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive-text"
+          >
+            Self-service guest lists couldn't load. Manual guest management is
+            still available below; refresh the page to retry.
+          </div>
+        } @else if (guestListFeatureEnabled()) {
           <app-guest-list-assignments
             class="mb-8 block"
             [eventId]="data.event._id"

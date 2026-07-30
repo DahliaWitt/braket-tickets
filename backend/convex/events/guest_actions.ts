@@ -127,12 +127,18 @@ export const sendAutomaticTicket = internalAction({
     });
     if (!guest?.email || !guest.sourceAssignmentId || !guest.sourceKind)
       return {status: 'skipped' as const};
-    const assignment = await ctx.runQuery(
-      internal.guest_list.invite_state.getAssignmentForTicket,
-      {assignmentId: guest.sourceAssignmentId},
+    const deliverySnapshot = {
+      guestId: guest._id,
+      assignmentId: guest.sourceAssignmentId,
+      eventId: guest.eventId,
+      recipient: guest.email,
+      sourceKind: guest.sourceKind,
+    };
+    const canDeliver = await ctx.runQuery(
+      internal.guest_list.invite_state.canDeliverAutomaticTicket,
+      deliverySnapshot,
     );
-    if (!assignment || assignment.eventId !== guest.eventId)
-      return {status: 'skipped' as const};
+    if (!canDeliver) return {status: 'skipped' as const};
     const claim = await ctx.runMutation(
       internal.events.guests.beginGuestTicketSend,
       {id: guest._id, requireUnsent: true},
@@ -140,11 +146,23 @@ export const sendAutomaticTicket = internalAction({
     if (!claim.claimed || claim.lockToken === null)
       return {status: 'skipped' as const};
     try {
-      return await deliverGuestTicket(
+      const result = await deliverGuestTicket(
         ctx,
         {...guest, email: guest.email},
         claim.lockToken,
+        async () =>
+          await ctx.runQuery(
+            internal.guest_list.invite_state.canDeliverAutomaticTicket,
+            deliverySnapshot,
+          ),
       );
+      if (result.status === 'skipped') {
+        await ctx.runMutation(internal.events.guests.clearGuestTicketSendLock, {
+          id: guest._id,
+          lockToken: claim.lockToken,
+        });
+      }
+      return result;
     } catch (error) {
       await ctx.runMutation(internal.events.guests.markGuestTicketSendFailed, {
         id: guest._id,
@@ -159,7 +177,8 @@ async function deliverGuestTicket(
   ctx: ActionCtx,
   guest: Awaited<ReturnType<typeof requireGuestTicketSendAccess>>,
   lockToken: number,
-): Promise<{status: 'sent'}> {
+  canDeliver?: () => Promise<boolean>,
+): Promise<{status: 'sent' | 'skipped'}> {
   const eventP = ctx.runQuery(internal.events.management.getInternal, {
     id: guest.eventId,
   });
@@ -197,6 +216,10 @@ async function deliverGuestTicket(
       hasCodeOfConduct: !!organizer?.codeOfConduct,
     },
   );
+
+  if (canDeliver && !(await canDeliver())) {
+    return {status: 'skipped'};
+  }
 
   await sendEmailDeliveryNow(
     ctx,

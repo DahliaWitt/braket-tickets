@@ -1,0 +1,405 @@
+<main class="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-14">
+  @if (loading()) {
+    <div
+      data-testid="guest-list-loading"
+      class="border-y border-border py-10 text-xs font-bold tracking-[0.25em] uppercase"
+    >
+      Checking guest-list access…
+    </div>
+  } @else if (loadFailure()) {
+    <section
+      data-testid="guest-list-load-failure"
+      class="mx-auto max-w-xl border-y border-border py-16"
+    >
+      <p
+        class="text-xs font-bold tracking-[0.24em] text-muted-foreground uppercase"
+      >
+        Guest list
+      </p>
+      <h1
+        class="mt-3 font-display text-4xl font-extrabold tracking-tight uppercase"
+      >
+        We couldn’t load this guest list
+      </h1>
+      <p class="mt-4 text-sm leading-6 text-muted-foreground">
+        Something went wrong on our end. Check your connection and try again.
+      </p>
+      <button
+        data-testid="guest-list-retry-loading"
+        z-button
+        zType="outline"
+        type="button"
+        class="mt-8"
+        (click)="retryLoading()"
+      >
+        Try again
+      </button>
+    </section>
+  } @else if (unavailable()) {
+    <section
+      data-testid="guest-list-unavailable"
+      class="mx-auto max-w-xl border-y border-border py-16"
+    >
+      <p
+        class="text-xs font-bold tracking-[0.24em] text-muted-foreground uppercase"
+      >
+        Guest list
+      </p>
+      <h1
+        class="mt-3 font-display text-4xl font-extrabold tracking-tight uppercase"
+      >
+        This guest list is unavailable
+      </h1>
+      <p class="mt-4 text-sm leading-6 text-muted-foreground">
+        The link may no longer be active, or guest-list access may have ended.
+      </p>
+      <a
+        routerLink="/"
+        class="mt-8 inline-block text-sm font-bold tracking-widest uppercase underline underline-offset-4"
+        >Go home</a
+      >
+    </section>
+  } @else if (view(); as current) {
+    <header
+      data-testid="guest-list-event"
+      class="grid gap-8 border-b border-border pb-8 sm:grid-cols-[1fr_auto] sm:items-end"
+    >
+      <div>
+        <p
+          class="text-xs font-bold tracking-[0.24em] text-muted-foreground uppercase"
+        >
+          {{ current.assignment.role }} guest list
+        </p>
+        <h1
+          class="mt-3 font-display text-4xl font-extrabold tracking-tight uppercase sm:text-6xl"
+        >
+          {{ current.event.title }}
+        </h1>
+        <p class="mt-4 text-sm text-muted-foreground">
+          {{ current.event.date | eventDate }} ·
+          {{ current.event.date | eventDate: 'shortTime'
+          }}{{ current.event.endDate | eventEndTime: current.event.date }}
+          @if (current.event.location) {
+            · {{ current.event.location }}
+          }
+        </p>
+      </div>
+      <div data-testid="guest-list-usage" class="sm:text-right">
+        <strong class="font-display text-4xl font-extrabold tabular-nums"
+          >{{ current.assignment.usedSlots }} of
+          {{ current.assignment.grantedSlots }}</strong
+        >
+        <p
+          class="mt-1 text-xs font-bold tracking-[0.2em] text-muted-foreground uppercase"
+        >
+          guest slots used
+        </p>
+      </div>
+    </header>
+
+    <div
+      class="grid gap-12 py-10 lg:grid-cols-[minmax(0,1fr)_minmax(19rem,0.68fr)]"
+    >
+      <section>
+        <div class="flex items-end justify-between border-b border-border pb-3">
+          <h2
+            #guestListHeading
+            data-testid="guest-list-heading"
+            tabindex="-1"
+            class="font-display text-2xl font-extrabold tracking-tight uppercase"
+          >
+            At the door
+          </h2>
+          <span class="text-xs tracking-widest text-muted-foreground uppercase"
+            >Tickets emailed automatically</span
+          >
+        </div>
+        @if (current.guests.page.length === 0) {
+          <p class="py-10 text-sm text-muted-foreground">
+            No guests added yet.
+          </p>
+        } @else {
+          <div class="divide-y divide-border">
+            @for (guest of current.guests.page; track guest.guestId) {
+              <article data-testid="guest-list-guest" class="py-5">
+                <div class="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <h3 class="font-bold">{{ guest.name }}</h3>
+                    <p class="mt-1 text-sm text-muted-foreground">
+                      {{ guest.email }}
+                    </p>
+                    @if (guest.deliveryState === 'failed') {
+                      <p
+                        class="mt-2 text-xs font-bold tracking-widest text-destructive-text uppercase"
+                      >
+                        Ticket email failed
+                      </p>
+                    } @else if (guest.deliveryState === 'queued') {
+                      <p
+                        class="mt-2 text-xs tracking-widest text-muted-foreground uppercase"
+                      >
+                        Ticket email queued
+                      </p>
+                    }
+                  </div>
+                  <div class="flex gap-2">
+                    <button
+                      data-testid="guest-list-edit"
+                      z-button
+                      zType="outline"
+                      type="button"
+                      [disabled]="
+                        pendingRemovalGuest() !== null ||
+                        guestActionInFlight(guest.guestId)
+                      "
+                      (click)="startEdit(guest)"
+                    >
+                      Edit
+                    </button>
+                    @if (guest.deliveryState === 'failed') {
+                      <button
+                        data-testid="guest-list-retry"
+                        z-button
+                        zType="outline"
+                        type="button"
+                        [disabled]="
+                          pendingRemovalGuest() !== null ||
+                          guestActionInFlight(guest.guestId)
+                        "
+                        (click)="retry(guest.guestId)"
+                      >
+                        {{
+                          retryingGuestIds().has(guest.guestId)
+                            ? 'Retrying…'
+                            : 'Retry email'
+                        }}
+                      </button>
+                    }
+                    <button
+                      data-testid="guest-list-remove"
+                      z-button
+                      zType="destructive"
+                      type="button"
+                      [disabled]="
+                        pendingRemovalGuest() !== null ||
+                        guestActionInFlight(guest.guestId)
+                      "
+                      (click)="requestRemoval(guest, $event)"
+                    >
+                      {{
+                        removingGuestIds().has(guest.guestId)
+                          ? 'Removing…'
+                          : 'Remove'
+                      }}
+                    </button>
+                  </div>
+                </div>
+                <p class="mt-3 text-xs text-muted-foreground">
+                  Removing this guest invalidates their ticket.
+                </p>
+              </article>
+            }
+          </div>
+          @if (!current.guests.isDone) {
+            <button
+              data-testid="guest-list-load-more"
+              z-button
+              zType="outline"
+              type="button"
+              class="mt-6"
+              [disabled]="loadingMoreGuests()"
+              (click)="loadMoreGuests()"
+            >
+              {{ loadingMoreGuests() ? 'Loading more…' : 'Load more guests' }}
+            </button>
+          }
+        }
+      </section>
+
+      <aside>
+        <h2
+          data-testid="guest-list-form-heading"
+          class="font-display text-2xl font-extrabold tracking-tight uppercase"
+        >
+          {{ editingGuestId() ? 'Edit guest' : 'Add a guest' }}
+        </h2>
+        @if (quotaFull() && !editingGuestId()) {
+          <p class="mt-3 border-y border-border py-3 text-sm">
+            All granted slots are in use. You can still edit or remove existing
+            guests.
+          </p>
+        }
+        @if (actionError(); as message) {
+          <p
+            data-testid="guest-list-action-error"
+            role="alert"
+            class="mt-4 border-y border-destructive/40 py-3 text-sm text-destructive-text"
+          >
+            {{ message }}
+          </p>
+        }
+        @if (actionNotice(); as message) {
+          <p
+            data-testid="guest-list-action-notice"
+            role="status"
+            class="mt-4 border-y border-success/40 py-3 text-sm text-success"
+          >
+            {{ message }}
+          </p>
+        }
+        <form
+          data-testid="guest-list-add-form"
+          class="mt-6 space-y-5"
+          (submit)="saveGuest($event)"
+        >
+          <label class="block text-xs font-bold tracking-widest uppercase">
+            Name
+            <input
+              data-testid="guest-list-name"
+              id="guest-list-name"
+              zInput
+              [zStatus]="guestNameError() ? 'error' : undefined"
+              class="mt-2"
+              autocomplete="name"
+              [formField]="guestForm.name"
+            />
+            @if (guestNameError(); as message) {
+              <span
+                id="guest-list-name-error"
+                data-testid="guest-list-field-error"
+                class="mt-2 block font-mono text-xs tracking-normal text-destructive-text normal-case"
+                >{{ message }}</span
+              >
+            }
+          </label>
+          <label class="block text-xs font-bold tracking-widest uppercase">
+            Email
+            <input
+              data-testid="guest-list-email"
+              id="guest-list-email"
+              zInput
+              [zStatus]="guestEmailError() ? 'error' : undefined"
+              class="mt-2"
+              type="email"
+              autocomplete="email"
+              [formField]="guestForm.email"
+            />
+            @if (guestEmailError(); as message) {
+              <span
+                id="guest-list-email-error"
+                data-testid="guest-list-field-error"
+                class="mt-2 block font-mono text-xs tracking-normal text-destructive-text normal-case"
+                >{{ message }}</span
+              >
+            }
+          </label>
+          <button
+            data-testid="guest-list-add"
+            z-button
+            zFull
+            type="submit"
+            [disabled]="
+              (quotaFull() && !editingGuestId()) ||
+              saving() ||
+              rowActionInFlight() ||
+              pendingRemovalGuest() !== null
+            "
+          >
+            {{ editingGuestId() ? 'Save changes' : 'Add guest + send ticket' }}
+          </button>
+          @if (editingGuestId()) {
+            <button
+              data-testid="guest-list-cancel-edit"
+              z-button
+              zType="ghost"
+              zFull
+              type="button"
+              [disabled]="saving() || rowActionInFlight()"
+              (click)="cancelEdit()"
+            >
+              Cancel edit
+            </button>
+          }
+        </form>
+      </aside>
+    </div>
+
+    @if (pendingRemovalGuest(); as guest) {
+      <div
+        class="fixed inset-0 z-50 grid place-items-center bg-background/80 p-4 backdrop-blur-md"
+      >
+        <section
+          data-testid="guest-list-remove-confirmation"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="guest-list-remove-title"
+          aria-describedby="guest-list-remove-description"
+          class="w-full max-w-md border border-border bg-background p-6"
+          cdkTrapFocus
+          (keydown.escape)="cancelRemoval()"
+        >
+          <p
+            class="text-xs font-bold tracking-[0.24em] text-destructive-text uppercase"
+          >
+            Remove guest
+          </p>
+          <h2
+            id="guest-list-remove-title"
+            class="mt-3 font-display text-2xl font-extrabold tracking-tight"
+          >
+            Remove {{ guest.name }}?
+          </h2>
+          <p
+            id="guest-list-remove-description"
+            class="mt-3 text-sm leading-6 text-muted-foreground"
+          >
+            Their ticket stops working immediately. This can’t be undone.
+          </p>
+          <div
+            class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"
+          >
+            <button
+              #cancelRemovalButton
+              data-testid="guest-list-cancel-remove"
+              z-button
+              zType="outline"
+              type="button"
+              [disabled]="removingGuestIds().has(guest.guestId)"
+              (click)="cancelRemoval()"
+            >
+              Keep guest
+            </button>
+            <button
+              data-testid="guest-list-confirm-remove"
+              z-button
+              zType="destructive"
+              type="button"
+              [disabled]="removingGuestIds().has(guest.guestId)"
+              [attr.aria-busy]="removingGuestIds().has(guest.guestId)"
+              (click)="confirmRemoval()"
+            >
+              {{
+                removingGuestIds().has(guest.guestId)
+                  ? 'Removing…'
+                  : 'Remove guest'
+              }}
+            </button>
+          </div>
+        </section>
+      </div>
+    }
+
+    @if (accountless()) {
+      <footer class="border-t border-border pt-6">
+        <button
+          data-testid="guest-list-forget"
+          type="button"
+          class="text-xs font-bold tracking-widest uppercase underline underline-offset-4"
+          (click)="forget()"
+        >
+          Forget this guest list on this device
+        </button>
+      </footer>
+    }
+  }
+</main>

@@ -139,15 +139,25 @@
         @if (isLoading()) {
           @for (i of [1, 2, 3]; track i) {
             <tr class="border-b border-border/50">
-              <td class="px-6 py-4">
+              <td data-testid="guest-loading-cell" class="px-6 py-4">
                 <div class="space-y-2">
                   <z-skeleton class="h-4 w-30" />
                   <z-skeleton class="h-3 w-45" />
                 </div>
               </td>
-              <td class="px-6 py-4"><z-skeleton class="h-5 w-15" /></td>
-              <td class="px-6 py-4"><z-skeleton class="h-4 w-25" /></td>
-              <td class="flex justify-end gap-2 px-6 py-4 text-right">
+              <td data-testid="guest-loading-cell" class="px-6 py-4">
+                <z-skeleton class="h-5 w-15" />
+              </td>
+              <td data-testid="guest-loading-cell" class="px-6 py-4">
+                <z-skeleton class="h-4 w-25" />
+              </td>
+              <td data-testid="guest-loading-cell" class="px-6 py-4">
+                <z-skeleton class="h-4 w-32" />
+              </td>
+              <td
+                data-testid="guest-loading-cell"
+                class="flex justify-end gap-2 px-6 py-4 text-right"
+              >
                 <z-skeleton class="h-8 w-8" />
                 <z-skeleton class="h-8 w-8" />
                 <z-skeleton class="h-8 w-8" />

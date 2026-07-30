@@ -2,7 +2,11 @@
    These specs cast vi.fn mocks to the callback/return types the dialog API
    expects; tsconfig.spec.json requires the casts even though the lint config
    considers them redundant. */
-import {Overlay, OverlayModule, type OverlayRef} from '@angular/cdk/overlay';
+import {
+  Overlay,
+  OverlayModule,
+  type OverlayRef,
+} from '@angular/cdk/overlay';
 import {ComponentPortal, PortalModule} from '@angular/cdk/portal';
 import {
   ChangeDetectionStrategy,
@@ -352,10 +356,7 @@ describe('BraDialogRef Escape scoping with real CDK overlays', () => {
   // propagation on Escape — modelling the fixed z-select dropdown, which uses
   // `(keydown.{...}.prevent-with-stop)` so a consumed Escape never bubbles to
   // the CDK keyboard dispatcher on <body>.
-  const openInnerSelectLikeOverlay = (): {
-    ref: OverlayRef;
-    panel: HTMLElement;
-  } => {
+  const openInnerSelectLikeOverlay = (): {ref: OverlayRef; panel: HTMLElement} => {
     const innerRef = overlay.create({
       positionStrategy: overlay.position().global(),
       hasBackdrop: false,

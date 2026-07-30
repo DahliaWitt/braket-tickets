@@ -113,8 +113,7 @@ describe('claimWebhookEvent', () => {
     expect(second.disposition).toBe('skip');
     if (second.disposition !== 'skip') return;
     expect(second.reason).toBe('in_flight');
-    if (first.disposition !== 'proceed')
-      throw new Error('first should proceed');
+    if (first.disposition !== 'proceed') throw new Error('first should proceed');
     expect(second.existingClaimId).toBe(first.claimId);
   });
 
@@ -141,8 +140,7 @@ describe('claimWebhookEvent', () => {
     if (second.disposition !== 'proceed') return;
     expect(second.mode).toBe('reclaimed_stale');
     expect(second.attempts).toBe(2);
-    if (first.disposition !== 'proceed')
-      throw new Error('first should proceed');
+    if (first.disposition !== 'proceed') throw new Error('first should proceed');
     expect(second.claimId).toBe(first.claimId);
 
     const row = await t.run((ctx) => ctx.db.get(second.claimId));
@@ -413,10 +411,8 @@ describe('reapStaleWebhookClaims', () => {
 
     expect(result.reaped).toBe(1);
 
-    if (staleClaim.disposition !== 'proceed')
-      throw new Error('expected proceed');
-    if (freshClaim.disposition !== 'proceed')
-      throw new Error('expected proceed');
+    if (staleClaim.disposition !== 'proceed') throw new Error('expected proceed');
+    if (freshClaim.disposition !== 'proceed') throw new Error('expected proceed');
 
     const stale = await t.run((ctx) => ctx.db.get(staleClaim.claimId));
     expect(stale?.status).toBe('failed');

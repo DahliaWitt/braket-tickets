@@ -673,7 +673,7 @@ describe('EventManagement', () => {
     ).toBe(false);
   });
 
-  it('surfaces a rollout feature-state query failure as a page load error', async () => {
+  it('isolates a self-service feature-state failure to the guest-list workspace', async () => {
     const loggerErrorSpy = vi
       .spyOn(logger, 'error')
       .mockImplementation(() => undefined);
@@ -682,9 +682,12 @@ describe('EventManagement', () => {
     fixture.detectChanges();
     await fixture.whenStable();
 
-    expect(await harness.getManagementLoadErrorText()).toContain(
-      "couldn't load event data",
+    expect(await harness.getManagementLoadErrorText()).toBeNull();
+    await harness.clickTab('guests');
+    expect(await harness.getGuestListWorkspaceErrorText()).toContain(
+      "Self-service guest lists couldn't load",
     );
+    expect(await harness.hasGuestListAssignmentsWorkspace()).toBe(false);
     expect(loggerErrorSpy).toHaveBeenCalledWith(
       'Failed to load event management guestListFeature',
       expect.any(Error),

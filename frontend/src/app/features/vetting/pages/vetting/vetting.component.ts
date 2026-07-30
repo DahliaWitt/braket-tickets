@@ -759,13 +759,17 @@ export class VettingComponent {
   asBoolField(
     field: MaybeFieldTree<VettingFieldValue> | null,
   ): MaybeFieldTree<boolean> | null {
-    return castSignalFormField<boolean>(field);
+    return castSignalFormField<boolean>(
+      field,
+    );
   }
 
   asArrayField(
     field: MaybeFieldTree<VettingFieldValue> | null,
   ): MaybeFieldTree<string[]> | null {
-    return castSignalFormField<string[]>(field);
+    return castSignalFormField<string[]>(
+      field,
+    );
   }
 
   isRadioSelected(

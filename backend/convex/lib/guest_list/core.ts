@@ -15,9 +15,22 @@ import {
 } from '../validation';
 import type {GuestListDelegateAccess} from '../access';
 import type {GuestListAssignmentAccess} from '../access';
-import {MAX_GUEST_LIST_SLOTS} from '../../communities/management/guest_list_settings';
+import {
+  DEFAULT_GUEST_LIST_SLOTS,
+  MAX_GUEST_LIST_SLOTS,
+} from '../../communities/management/guest_list_settings';
 import {internal} from '../../_generated/api';
 import {rateLimiter} from '../rate_limits';
+import {getIdempotencyKeyValidationError} from '../idempotency';
+import {requireGuestListEventActive} from './lifecycle';
+import {
+  assertActiveAssignmentCapacity,
+  assertGuestAdmissionCapacity,
+  getExistingGuestListEventStats,
+  getOrCreateGuestListEventStats,
+  updateGuestListEventStatsAfterReduction,
+  updateGuestListEventStats,
+} from './event_stats';
 
 type ReadCtx = Pick<QueryCtx, 'db' | 'auth'>;
 
@@ -62,6 +75,14 @@ export function validateGuestListSlots(value: number): void {
   }
 }
 
+export function assertValidGuestListIdempotencyKey(
+  value: string,
+  label = 'Idempotency key',
+): void {
+  const error = getIdempotencyKeyValidationError(value, label);
+  if (error) throwInvalidInput(error);
+}
+
 export async function linkVerifiedAssignmentIfNeeded(
   ctx: MutationCtx,
   resolved: GuestListAssignmentAccess,
@@ -72,15 +93,28 @@ export async function linkVerifiedAssignmentIfNeeded(
     resolved.assignment.userId !== undefined
   )
     return;
-  await ctx.db.patch('guestListAssignments', resolved.assignment._id, {
-    userId: resolved.actorUserId,
-    redeemedAt: resolved.assignment.redeemedAt ?? Date.now(),
+  await linkGuestListAssignmentToVerifiedUser(
+    ctx,
+    resolved.assignment,
+    resolved.actorUserId,
+  );
+}
+
+export async function linkGuestListAssignmentToVerifiedUser(
+  ctx: MutationCtx,
+  assignment: Doc<'guestListAssignments'>,
+  userId: Id<'users'>,
+): Promise<void> {
+  if (assignment.userId !== undefined) return;
+  await ctx.db.patch('guestListAssignments', assignment._id, {
+    userId,
+    redeemedAt: assignment.redeemedAt ?? Date.now(),
   });
   await insertAudit(ctx, {
-    eventId: resolved.assignment.eventId,
-    assignmentId: resolved.assignment._id,
+    eventId: assignment.eventId,
+    assignmentId: assignment._id,
     actorKind: 'signed_in_delegate',
-    actorUserId: resolved.actorUserId,
+    actorUserId: userId,
     action: 'assignment.user_link',
   });
 }
@@ -118,38 +152,6 @@ export async function requireGuestListFeatureEnabled(
   }
 }
 
-async function getOrCreateStats(
-  ctx: MutationCtx,
-  eventId: Id<'events'>,
-): Promise<Doc<'guestListEventStats'>> {
-  const existing = await ctx.db
-    .query('guestListEventStats')
-    .withIndex('by_eventId', (q) => q.eq('eventId', eventId))
-    .unique();
-  if (existing) return existing;
-  const existingGuests = await ctx.db
-    .query('guests')
-    .withIndex('by_event', (q) => q.eq('eventId', eventId))
-    .take(5001);
-  if (existingGuests.length > 5000) {
-    throw new Error(
-      'Guest-list event stats initialization exceeds the supported per-event limit of 5000 guests',
-    );
-  }
-  const id = await ctx.db.insert('guestListEventStats', {
-    eventId,
-    selfServiceGuestCount: 0,
-    activeGrantedSlots: 0,
-    activeArtistGuestCount: 0,
-    activeStaffGuestCount: 0,
-    activeAssignmentCount: 0,
-    totalGuestAdmissionCount: existingGuests.length,
-  });
-  const created = await ctx.db.get('guestListEventStats', id);
-  if (!created) throw new Error('Failed to create guest-list event stats');
-  return created;
-}
-
 async function insertAudit(
   ctx: MutationCtx,
   args: Omit<
@@ -167,18 +169,14 @@ async function hasValidTicketForAssignment(
   userId?: Id<'users'>,
 ): Promise<boolean> {
   if (userId) {
-    const userTickets = await ctx.db
-      .query('tickets')
-      .withIndex('by_user_event', (q) =>
-        q.eq('userId', userId).eq('eventId', eventId),
-      )
-      .take(20);
-    if (
-      userTickets.some(
-        (ticket) => ticket.status === 'valid' || ticket.status === 'used',
-      )
-    ) {
-      return true;
+    for (const status of ['valid', 'used'] as const) {
+      const ticket = await ctx.db
+        .query('tickets')
+        .withIndex('by_userId_and_eventId_and_status', (q) =>
+          q.eq('userId', userId).eq('eventId', eventId).eq('status', status),
+        )
+        .first();
+      if (ticket) return true;
     }
   }
   for (const status of ['valid', 'used'] as const) {
@@ -209,8 +207,10 @@ export async function createAssignment(
     skipRateLimit?: boolean;
   },
 ) {
+  assertValidGuestListIdempotencyKey(args.idempotencyKey);
   const {user: actor, event} = await requireEventForManage(ctx, args.eventId);
   await requireGuestListFeatureEnabled(ctx);
+  requireGuestListEventActive(event);
   const replay = await ctx.db
     .query('guestListAssignments')
     .withIndex('by_eventId_and_idempotencyKey', (q) =>
@@ -260,9 +260,24 @@ export async function createAssignment(
   const grantedSlots =
     args.grantedSlots ??
     (args.role === 'artist'
-      ? (organizer.defaultArtistGuestSlots ?? 2)
-      : (organizer.defaultStaffGuestSlots ?? 2));
+      ? (organizer.defaultArtistGuestSlots ?? DEFAULT_GUEST_LIST_SLOTS)
+      : (organizer.defaultStaffGuestSlots ?? DEFAULT_GUEST_LIST_SLOTS));
   validateGuestListSlots(grantedSlots);
+  const stats = await getOrCreateGuestListEventStats(ctx, args.eventId);
+  assertActiveAssignmentCapacity(stats);
+  const [validTicket, existingGuest] = await Promise.all([
+    hasValidTicketForAssignment(ctx, args.eventId, emailKey, args.userId),
+    ctx.db
+      .query('guests')
+      .withIndex('by_event_and_emailKey', (q) =>
+        q.eq('eventId', args.eventId).eq('emailKey', emailKey),
+      )
+      .first(),
+  ]);
+  const needsAdmission = !validTicket && !existingGuest;
+  if (needsAdmission) {
+    assertGuestAdmissionCapacity(stats, 1);
+  }
   const now = Date.now();
   const assignmentId = await ctx.db.insert('guestListAssignments', {
     eventId: args.eventId,
@@ -285,20 +300,7 @@ export async function createAssignment(
   });
 
   let admissionGuestId: Id<'guests'> | undefined;
-  const [validTicket, existingGuest] = await Promise.all([
-    hasValidTicketForAssignment(ctx, args.eventId, emailKey, args.userId),
-    ctx.db
-      .query('guests')
-      .withIndex('by_event_and_emailKey', (q) =>
-        q.eq('eventId', args.eventId).eq('emailKey', emailKey),
-      )
-      .first(),
-  ]);
-  // Initialize the event snapshot before inserting the admission. Otherwise a
-  // first assignment's admission is included in the lazy snapshot and then
-  // incremented again below, double-counting the dashboard total.
-  const stats = await getOrCreateStats(ctx, args.eventId);
-  if (!validTicket && !existingGuest) {
+  if (needsAdmission) {
     admissionGuestId = await ctx.db.insert('guests', {
       eventId: args.eventId,
       name,
@@ -316,12 +318,12 @@ export async function createAssignment(
     });
   }
 
-  await ctx.db.patch('guestListEventStats', stats._id, {
-    activeGrantedSlots: stats.activeGrantedSlots + grantedSlots,
-    activeAssignmentCount: stats.activeAssignmentCount + 1,
+  await updateGuestListEventStats(ctx, stats, (current) => ({
+    activeGrantedSlots: current.activeGrantedSlots + grantedSlots,
+    activeAssignmentCount: current.activeAssignmentCount + 1,
     totalGuestAdmissionCount:
-      stats.totalGuestAdmissionCount + (admissionGuestId ? 1 : 0),
-  });
+      current.totalGuestAdmissionCount + (admissionGuestId ? 1 : 0),
+  }));
   await insertAudit(ctx, {
     eventId: args.eventId,
     assignmentId,
@@ -361,6 +363,7 @@ export async function addDelegateGuest(
     idempotencyKey: string;
   },
 ) {
+  assertValidGuestListIdempotencyKey(args.idempotencyKey);
   await requireGuestListFeatureEnabled(ctx);
   const resolved = await resolveGuestListAssignmentAccess(ctx, args.access);
   if (!resolved) throwAppError('UNAVAILABLE', 'Guest list is unavailable');
@@ -392,6 +395,8 @@ export async function addDelegateGuest(
     args.name,
     args.email,
   );
+  const stats = await getOrCreateGuestListEventStats(ctx, assignment.eventId);
+  assertGuestAdmissionCapacity(stats, 1);
   const guestId = await ctx.db.insert('guests', {
     eventId: assignment.eventId,
     name,
@@ -407,14 +412,13 @@ export async function addDelegateGuest(
   });
   const usedSlots = assignment.usedSlots + 1;
   await ctx.db.patch('guestListAssignments', assignment._id, {usedSlots});
-  const stats = await getOrCreateStats(ctx, assignment.eventId);
-  await ctx.db.patch('guestListEventStats', stats._id, {
-    selfServiceGuestCount: stats.selfServiceGuestCount + 1,
-    totalGuestAdmissionCount: stats.totalGuestAdmissionCount + 1,
+  await updateGuestListEventStats(ctx, stats, (current) => ({
+    selfServiceGuestCount: current.selfServiceGuestCount + 1,
+    totalGuestAdmissionCount: current.totalGuestAdmissionCount + 1,
     ...(assignment.role === 'artist'
-      ? {activeArtistGuestCount: stats.activeArtistGuestCount + 1}
-      : {activeStaffGuestCount: stats.activeStaffGuestCount + 1}),
-  });
+      ? {activeArtistGuestCount: current.activeArtistGuestCount + 1}
+      : {activeStaffGuestCount: current.activeStaffGuestCount + 1}),
+  }));
   await insertAudit(ctx, {
     eventId: assignment.eventId,
     assignmentId: assignment._id,
@@ -455,6 +459,7 @@ export async function revokeAssignment(
       retainedGuestCount: assignment.usedSlots,
     };
   }
+  const stats = await getExistingGuestListEventStats(ctx, assignment.eventId);
   const now = Date.now();
   await ctx.db.patch('guestListAssignments', assignmentId, {
     status: 'revoked',
@@ -465,27 +470,31 @@ export async function revokeAssignment(
     pendingTokenDigest: undefined,
     pendingTokenPrefix: undefined,
   });
-  const stats = await getOrCreateStats(ctx, assignment.eventId);
-  await ctx.db.patch('guestListEventStats', stats._id, {
-    activeGrantedSlots: Math.max(
-      0,
-      stats.activeGrantedSlots - assignment.grantedSlots,
-    ),
-    activeAssignmentCount: Math.max(0, stats.activeAssignmentCount - 1),
-    ...(assignment.role === 'artist'
-      ? {
-          activeArtistGuestCount: Math.max(
-            0,
-            stats.activeArtistGuestCount - assignment.usedSlots,
-          ),
-        }
-      : {
-          activeStaffGuestCount: Math.max(
-            0,
-            stats.activeStaffGuestCount - assignment.usedSlots,
-          ),
-        }),
-  });
+  await updateGuestListEventStatsAfterReduction(
+    ctx,
+    assignment.eventId,
+    stats,
+    (current) => ({
+      activeGrantedSlots: Math.max(
+        0,
+        current.activeGrantedSlots - assignment.grantedSlots,
+      ),
+      activeAssignmentCount: Math.max(0, current.activeAssignmentCount - 1),
+      ...(assignment.role === 'artist'
+        ? {
+            activeArtistGuestCount: Math.max(
+              0,
+              current.activeArtistGuestCount - assignment.usedSlots,
+            ),
+          }
+        : {
+            activeStaffGuestCount: Math.max(
+              0,
+              current.activeStaffGuestCount - assignment.usedSlots,
+            ),
+          }),
+    }),
+  );
   await insertAudit(ctx, {
     eventId: assignment.eventId,
     assignmentId,
@@ -583,43 +592,69 @@ export async function removeSourcedGuestAndUpdateCounters(
   },
 ): Promise<number> {
   const assignmentId = args.guest.sourceAssignmentId;
+  const stats = await getExistingGuestListEventStats(ctx, args.guest.eventId);
   if (!assignmentId || args.guest.sourceKind !== 'self_service') {
     await ctx.db.delete('guests', args.guest._id);
+    await updateGuestListEventStatsAfterReduction(
+      ctx,
+      args.guest.eventId,
+      stats,
+      (current) => ({
+        totalGuestAdmissionCount: Math.max(
+          0,
+          current.totalGuestAdmissionCount - 1,
+        ),
+      }),
+    );
     return 0;
   }
   const assignment = await ctx.db.get('guestListAssignments', assignmentId);
   if (!assignment) {
     await ctx.db.delete('guests', args.guest._id);
+    await updateGuestListEventStatsAfterReduction(
+      ctx,
+      args.guest.eventId,
+      stats,
+      (current) => ({
+        selfServiceGuestCount: Math.max(0, current.selfServiceGuestCount - 1),
+        totalGuestAdmissionCount: Math.max(
+          0,
+          current.totalGuestAdmissionCount - 1,
+        ),
+      }),
+    );
     return 0;
   }
   const usedSlots = Math.max(0, assignment.usedSlots - 1);
   await ctx.db.delete('guests', args.guest._id);
   await ctx.db.patch('guestListAssignments', assignmentId, {usedSlots});
-  const stats = await ctx.db
-    .query('guestListEventStats')
-    .withIndex('by_eventId', (q) => q.eq('eventId', assignment.eventId))
-    .unique();
-  if (stats) {
-    await ctx.db.patch('guestListEventStats', stats._id, {
-      selfServiceGuestCount: Math.max(0, stats.selfServiceGuestCount - 1),
-      totalGuestAdmissionCount: Math.max(0, stats.totalGuestAdmissionCount - 1),
+  await updateGuestListEventStatsAfterReduction(
+    ctx,
+    args.guest.eventId,
+    stats,
+    (current) => ({
+      selfServiceGuestCount: Math.max(0, current.selfServiceGuestCount - 1),
+      totalGuestAdmissionCount: Math.max(
+        0,
+        current.totalGuestAdmissionCount - 1,
+      ),
       ...(assignment.status === 'active'
         ? assignment.role === 'artist'
           ? {
               activeArtistGuestCount: Math.max(
                 0,
-                stats.activeArtistGuestCount - 1,
+                current.activeArtistGuestCount - 1,
               ),
             }
           : {
               activeStaffGuestCount: Math.max(
                 0,
-                stats.activeStaffGuestCount - 1,
+                current.activeStaffGuestCount - 1,
               ),
             }
         : {}),
-    });
-  }
+    }),
+  );
   await insertAudit(ctx, {
     eventId: assignment.eventId,
     assignmentId,

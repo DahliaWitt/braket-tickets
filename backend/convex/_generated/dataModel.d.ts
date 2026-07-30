@@ -1994,6 +1994,12 @@ export type DataModel = {
       by_guestSession_event: ["guestSessionId", "eventId", "_creationTime"];
       by_order: ["orderId", "_creationTime"];
       by_user: ["userId", "_creationTime"];
+      by_userId_and_eventId_and_status: [
+        "userId",
+        "eventId",
+        "status",
+        "_creationTime",
+      ];
       by_user_event: ["userId", "eventId", "_creationTime"];
     };
     searchIndexes: {};

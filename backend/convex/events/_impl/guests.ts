@@ -14,6 +14,16 @@ import {ADMIN_AUDIT_ACTIONS} from '../../lib/admin_audit_actions';
 import {insertAdminAuditLog} from '../../lib/admin_audit_log';
 import {loadManagementDatasetWithinLimit} from '../../lib/management_limits';
 import {removeSourcedGuestAndUpdateCounters} from '../../lib/guest_list/core';
+import {
+  assertGuestAdmissionCapacity,
+  getExistingGuestListEventStats,
+  getOrCreateGuestListEventStats,
+  updateGuestListEventStatsAfterReduction,
+  updateGuestListEventStats,
+} from '../../lib/guest_list/event_stats';
+import {isGuestTicketSendInFlight} from '../../lib/guest_ticket_delivery';
+
+export {GUEST_TICKET_SEND_LOCK_STALE_MS} from '../../lib/guest_ticket_delivery';
 
 export async function add(
   ctx: MutationCtx,
@@ -35,20 +45,16 @@ export async function add(
 
   // Persist the trimmed, validated email so the stored record matches the
   // value used by scheduling and the broadcast audience lookups downstream.
+  const stats = await getOrCreateGuestListEventStats(ctx, args.eventId);
+  assertGuestAdmissionCapacity(stats, 1);
   const guestId = await ctx.db.insert('guests', {
     ...args,
     email,
     emailKey: email?.toLowerCase(),
   });
-  const stats = await ctx.db
-    .query('guestListEventStats')
-    .withIndex('by_eventId', (q) => q.eq('eventId', args.eventId))
-    .unique();
-  if (stats) {
-    await ctx.db.patch('guestListEventStats', stats._id, {
-      totalGuestAdmissionCount: stats.totalGuestAdmissionCount + 1,
-    });
-  }
+  await updateGuestListEventStats(ctx, stats, (current) => ({
+    totalGuestAdmissionCount: current.totalGuestAdmissionCount + 1,
+  }));
 
   await insertAdminAuditLog(
     {db: ctx.db, meta: ctx.meta},
@@ -159,14 +165,15 @@ export async function remove(
 
   const {user} = await requireEventForEdit(ctx, guest.eventId);
 
+  let admissionAssignment: Doc<'guestListAssignments'> | null = null;
   if (guest.sourceAssignmentId && guest.sourceKind === 'assignment_admission') {
-    const assignment = await ctx.db.get(
+    admissionAssignment = await ctx.db.get(
       'guestListAssignments',
       guest.sourceAssignmentId,
     );
     if (
-      assignment?.status === 'active' &&
-      assignment.admissionGuestId === guest._id
+      admissionAssignment?.status === 'active' &&
+      admissionAssignment.admissionGuestId === guest._id
     ) {
       throwConflict('Cannot remove an active assignment admission');
     }
@@ -179,19 +186,24 @@ export async function remove(
       actorUserId: user._id,
     });
   } else {
-    await ctx.db.delete('guests', args.id);
-    const stats = await ctx.db
-      .query('guestListEventStats')
-      .withIndex('by_eventId', (q) => q.eq('eventId', guest.eventId))
-      .unique();
-    if (stats) {
-      await ctx.db.patch('guestListEventStats', stats._id, {
-        totalGuestAdmissionCount: Math.max(
-          0,
-          stats.totalGuestAdmissionCount - 1,
-        ),
+    const stats = await getExistingGuestListEventStats(ctx, guest.eventId);
+    if (admissionAssignment?.admissionGuestId === guest._id) {
+      await ctx.db.patch('guestListAssignments', admissionAssignment._id, {
+        admissionGuestId: undefined,
       });
     }
+    await ctx.db.delete('guests', args.id);
+    await updateGuestListEventStatsAfterReduction(
+      ctx,
+      guest.eventId,
+      stats,
+      (current) => ({
+        totalGuestAdmissionCount: Math.max(
+          0,
+          current.totalGuestAdmissionCount - 1,
+        ),
+      }),
+    );
   }
   return null;
 }
@@ -222,15 +234,6 @@ export async function getInternal(
 ): Promise<Doc<'guests'> | null> {
   return await ctx.db.get('guests', args.id);
 }
-
-/**
- * How long a guest ticket-email send lock is honored before it is treated as
- * abandoned. A normal send (PDF build + email dispatch) completes in seconds; a
- * lock older than this only survives when the send action crashed between
- * claiming and releasing, so reclaiming it lets a retry proceed. Kept well above
- * realistic send latency so a genuinely in-flight send is never stolen.
- */
-export const GUEST_TICKET_SEND_LOCK_STALE_MS = 5 * 60 * 1000;
 
 export type BeginGuestTicketSendResult = {
   claimed: boolean;
@@ -297,10 +300,7 @@ export async function beginGuestTicketSend(
 
   const now = Date.now();
   const lockedAt = guest.emailSendLockedAt;
-  if (
-    typeof lockedAt === 'number' &&
-    now - lockedAt < GUEST_TICKET_SEND_LOCK_STALE_MS
-  ) {
+  if (isGuestTicketSendInFlight(lockedAt, now)) {
     return {claimed: false, reason: 'in_flight', lockToken: null};
   }
 

@@ -18,6 +18,10 @@ import {AUTH_CLIENT, type AuthClient} from './auth-client.token';
 import {AUTH_SETTLE_TIMEOUT_MS} from './auth.service.helpers';
 import {COMPROMISED_PASSWORD_MESSAGE} from '@shared/constants';
 import {BraToastService} from '@ui/components/composites/toast/toast.service';
+import {
+  GUEST_LIST_RECENT_ASSIGNMENT_STORAGE_KEY,
+  guestListTokenStorageKey,
+} from './guest-list-credential-storage';
 
 const authClient = {
   signIn: {
@@ -785,23 +789,19 @@ describe('AuthService', () => {
     });
 
     it('clears persisted accountless guest-list credentials on shared-device logout', () => {
+      const tokenKey = guestListTokenStorageKey('assignment-1');
+      window.localStorage.setItem(tokenKey, 'invite-secret');
       window.localStorage.setItem(
-        'bt-guest-list-token:assignment-1',
-        'invite-secret',
-      );
-      window.localStorage.setItem(
-        'bt-guest-list-recent-assignment',
+        GUEST_LIST_RECENT_ASSIGNMENT_STORAGE_KEY,
         'assignment-1',
       );
       window.localStorage.setItem('unrelated', 'keep-me');
 
       service.logout();
 
+      expect(window.localStorage.getItem(tokenKey)).toBeNull();
       expect(
-        window.localStorage.getItem('bt-guest-list-token:assignment-1'),
-      ).toBeNull();
-      expect(
-        window.localStorage.getItem('bt-guest-list-recent-assignment'),
+        window.localStorage.getItem(GUEST_LIST_RECENT_ASSIGNMENT_STORAGE_KEY),
       ).toBeNull();
       expect(window.localStorage.getItem('unrelated')).toBe('keep-me');
     });

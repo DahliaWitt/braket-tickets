@@ -1,4 +1,4 @@
-import {describe, it, expect} from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   isSameDay,
   isDateDisabled,
@@ -10,11 +10,7 @@ import {
   normalizeCalendarValue,
   toValidDate,
 } from './calendar.utils';
-import type {
-  CalendarDay,
-  CalendarDayConfig,
-  CalendarValue,
-} from './calendar.types';
+import type { CalendarDay, CalendarDayConfig, CalendarValue } from './calendar.types';
 
 describe('calendar.utils', () => {
   describe('isSameDay', () => {
@@ -100,11 +96,7 @@ describe('calendar.utils', () => {
 
     it('should mark today correctly', () => {
       const today = new Date();
-      const config = {
-        ...baseConfig,
-        year: today.getFullYear(),
-        month: today.getMonth(),
-      };
+      const config = { ...baseConfig, year: today.getFullYear(), month: today.getMonth() };
       const days = generateCalendarDays(config);
       const todayDay = days.find((day) => isSameDay(day.date, today));
       expect(todayDay?.isToday).toBe(true);
@@ -114,14 +106,12 @@ describe('calendar.utils', () => {
       const days = generateCalendarDays(baseConfig);
       const currentMonthDays = days.filter((day) => day.isCurrentMonth);
       expect(currentMonthDays.length).toBeGreaterThan(0);
-      expect(currentMonthDays.every((day) => day.date.getMonth() === 5)).toBe(
-        true,
-      );
+      expect(currentMonthDays.every((day) => day.date.getMonth() === 5)).toBe(true);
     });
 
     it('should handle single selection mode', () => {
       const selectedDate = new Date(2024, 5, 15);
-      const config = {...baseConfig, selectedDates: [selectedDate]};
+      const config = { ...baseConfig, selectedDates: [selectedDate] };
       const days = generateCalendarDays(config);
       const selectedDay = days.find((day) => isSameDay(day.date, selectedDate));
       expect(selectedDay?.isSelected).toBe(true);
@@ -129,7 +119,7 @@ describe('calendar.utils', () => {
 
     it('should handle multiple selection mode', () => {
       const selectedDates = [new Date(2024, 5, 15), new Date(2024, 5, 20)];
-      const config = {...baseConfig, mode: 'multiple' as const, selectedDates};
+      const config = { ...baseConfig, mode: 'multiple' as const, selectedDates };
       const days = generateCalendarDays(config);
       const selectedDays = days.filter((day) =>
         selectedDates.some((sel) => isSameDay(day.date, sel)),
@@ -150,8 +140,7 @@ describe('calendar.utils', () => {
       const startDay = days.find((day) => isSameDay(day.date, startDate));
       const endDay = days.find((day) => isSameDay(day.date, endDate));
       const middleDay = days.find(
-        (day) =>
-          day.date > startDate && day.date < endDate && day.isCurrentMonth,
+        (day) => day.date > startDate && day.date < endDate && day.isCurrentMonth,
       );
 
       expect(startDay?.isRangeStart).toBe(true);
@@ -176,18 +165,16 @@ describe('calendar.utils', () => {
     });
 
     it('should mark disabled dates when disabled flag is true', () => {
-      const config = {...baseConfig, disabled: true};
+      const config = { ...baseConfig, disabled: true };
       const days = generateCalendarDays(config);
       expect(days.every((day) => day.isDisabled)).toBe(true);
     });
 
     it('should mark disabled dates based on minDate', () => {
       const minDate = new Date(2024, 5, 15);
-      const config = {...baseConfig, minDate};
+      const config = { ...baseConfig, minDate };
       const days = generateCalendarDays(config);
-      const beforeMinDay = days.find(
-        (day) => day.date < minDate && day.isCurrentMonth,
-      );
+      const beforeMinDay = days.find((day) => day.date < minDate && day.isCurrentMonth);
       if (beforeMinDay) {
         expect(beforeMinDay.isDisabled).toBe(true);
       }
@@ -195,11 +182,9 @@ describe('calendar.utils', () => {
 
     it('should mark disabled dates based on maxDate', () => {
       const maxDate = new Date(2024, 5, 15);
-      const config = {...baseConfig, maxDate};
+      const config = { ...baseConfig, maxDate };
       const days = generateCalendarDays(config);
-      const afterMaxDay = days.find(
-        (day) => day.date > maxDate && day.isCurrentMonth,
-      );
+      const afterMaxDay = days.find((day) => day.date > maxDate && day.isCurrentMonth);
       if (afterMaxDay) {
         expect(afterMaxDay.isDisabled).toBe(true);
       }
@@ -212,92 +197,96 @@ describe('calendar.utils', () => {
     // generateCalendarDays, so these assertions return. The per-test timeout is
     // a best-effort secondary net (it cannot interrupt a purely synchronous
     // loop, but it bounds async-scheduled work) — the cap is the real guard.
-    it('should return a bounded, valid grid when year and month are NaN', () => {
-      const config = {...baseConfig, year: Number.NaN, month: Number.NaN};
-      const days = generateCalendarDays(config);
+    it(
+      'should return a bounded, valid grid when year and month are NaN',
+      () => {
+        const config = { ...baseConfig, year: Number.NaN, month: Number.NaN };
+        const days = generateCalendarDays(config);
 
-      // Terminates with a real grid (a month spans at most 6 weeks = 42 cells).
-      expect(days.length).toBeGreaterThan(0);
-      expect(days.length).toBeLessThanOrEqual(6 * 7);
-      // Every generated cell is a valid Date, never an Invalid Date.
-      expect(days.every((day) => !Number.isNaN(day.date.getTime()))).toBe(true);
-    }, 5000);
+        // Terminates with a real grid (a month spans at most 6 weeks = 42 cells).
+        expect(days.length).toBeGreaterThan(0);
+        expect(days.length).toBeLessThanOrEqual(6 * 7);
+        // Every generated cell is a valid Date, never an Invalid Date.
+        expect(days.every((day) => !Number.isNaN(day.date.getTime()))).toBe(true);
+      },
+      5000,
+    );
 
-    it('should fall back to a valid grid when year/month come from an Invalid Date', () => {
-      const invalid = new Date('not a real date');
-      const config = {
-        ...baseConfig,
-        year: invalid.getFullYear(), // NaN
-        month: invalid.getMonth(), // NaN
-      };
-      const days = generateCalendarDays(config);
+    it(
+      'should fall back to a valid grid when year/month come from an Invalid Date',
+      () => {
+        const invalid = new Date('not a real date');
+        const config = {
+          ...baseConfig,
+          year: invalid.getFullYear(), // NaN
+          month: invalid.getMonth(), // NaN
+        };
+        const days = generateCalendarDays(config);
 
-      expect(days.length).toBeGreaterThan(0);
-      expect(days.length).toBeLessThanOrEqual(6 * 7);
-      expect(days.every((day) => day.date instanceof Date)).toBe(true);
-      expect(days.every((day) => !Number.isNaN(day.date.getTime()))).toBe(true);
-    }, 5000);
+        expect(days.length).toBeGreaterThan(0);
+        expect(days.length).toBeLessThanOrEqual(6 * 7);
+        expect(days.every((day) => day.date instanceof Date)).toBe(true);
+        expect(days.every((day) => !Number.isNaN(day.date.getTime()))).toBe(true);
+      },
+      5000,
+    );
 
-    it('should return a bounded grid for out-of-range (finite) year values', () => {
-      // Number.isFinite(1e21) is true, but new Date(1e21, ...) is Invalid.
-      const config = {...baseConfig, year: 1e21, month: 0};
-      const days = generateCalendarDays(config);
+    it(
+      'should return a bounded grid for out-of-range (finite) year values',
+      () => {
+        // Number.isFinite(1e21) is true, but new Date(1e21, ...) is Invalid.
+        const config = { ...baseConfig, year: 1e21, month: 0 };
+        const days = generateCalendarDays(config);
 
-      expect(days.length).toBeGreaterThan(0);
-      expect(days.length).toBeLessThanOrEqual(6 * 7);
-      expect(days.every((day) => !Number.isNaN(day.date.getTime()))).toBe(true);
-    }, 5000);
+        expect(days.length).toBeGreaterThan(0);
+        expect(days.length).toBeLessThanOrEqual(6 * 7);
+        expect(days.every((day) => !Number.isNaN(day.date.getTime()))).toBe(true);
+      },
+      5000,
+    );
 
     it('should still generate a correct grid for valid year/month', () => {
       // Guards must not alter valid-date behavior.
-      const days = generateCalendarDays({...baseConfig, year: 2024, month: 5});
+      const days = generateCalendarDays({ ...baseConfig, year: 2024, month: 5 });
       const currentMonthDays = days.filter((day) => day.isCurrentMonth);
       expect(currentMonthDays.length).toBe(30); // June 2024 has 30 days
-      expect(currentMonthDays.every((day) => day.date.getMonth() === 5)).toBe(
-        true,
-      );
-      expect(
-        currentMonthDays.every((day) => day.date.getFullYear() === 2024),
-      ).toBe(true);
+      expect(currentMonthDays.every((day) => day.date.getMonth() === 5)).toBe(true);
+      expect(currentMonthDays.every((day) => day.date.getFullYear() === 2024)).toBe(true);
     });
 
-    it('should produce only valid cells when the month boundary overflows the Date range', () => {
-      // year 275760 / month 8: firstDay is valid but lastDay (Sep 30 275760)
-      // exceeds the maximum representable Date, so the grid must fall back
-      // rather than emit Invalid Date cells.
-      const config = {...baseConfig, year: 275760, month: 8};
-      const days = generateCalendarDays(config);
+    it(
+      'should produce only valid cells when the month boundary overflows the Date range',
+      () => {
+        // year 275760 / month 8: firstDay is valid but lastDay (Sep 30 275760)
+        // exceeds the maximum representable Date, so the grid must fall back
+        // rather than emit Invalid Date cells.
+        const config = { ...baseConfig, year: 275760, month: 8 };
+        const days = generateCalendarDays(config);
 
-      expect(days.length).toBeGreaterThan(0);
-      expect(days.length).toBeLessThanOrEqual(6 * 7);
-      expect(days.every((day) => !Number.isNaN(day.date.getTime()))).toBe(true);
-    }, 5000);
+        expect(days.length).toBeGreaterThan(0);
+        expect(days.length).toBeLessThanOrEqual(6 * 7);
+        expect(days.every((day) => !Number.isNaN(day.date.getTime()))).toBe(true);
+      },
+      5000,
+    );
 
     it('should mark the correct current-month cells for an overflow month (12 → January)', () => {
       // month 12 normalizes to January of the next year; isCurrentMonth must
       // track the normalized month, not the raw out-of-range index.
-      const days = generateCalendarDays({...baseConfig, year: 2024, month: 12});
+      const days = generateCalendarDays({ ...baseConfig, year: 2024, month: 12 });
       const currentMonthDays = days.filter((day) => day.isCurrentMonth);
       expect(currentMonthDays.length).toBe(31); // January 2025 has 31 days
-      expect(currentMonthDays.every((day) => day.date.getMonth() === 0)).toBe(
-        true,
-      );
-      expect(
-        currentMonthDays.every((day) => day.date.getFullYear() === 2025),
-      ).toBe(true);
+      expect(currentMonthDays.every((day) => day.date.getMonth() === 0)).toBe(true);
+      expect(currentMonthDays.every((day) => day.date.getFullYear() === 2025)).toBe(true);
     });
 
     it('should mark the correct current-month cells for a negative month (-1 → December)', () => {
       // month -1 normalizes to December of the previous year.
-      const days = generateCalendarDays({...baseConfig, year: 2024, month: -1});
+      const days = generateCalendarDays({ ...baseConfig, year: 2024, month: -1 });
       const currentMonthDays = days.filter((day) => day.isCurrentMonth);
       expect(currentMonthDays.length).toBe(31); // December 2023 has 31 days
-      expect(currentMonthDays.every((day) => day.date.getMonth() === 11)).toBe(
-        true,
-      );
-      expect(
-        currentMonthDays.every((day) => day.date.getFullYear() === 2023),
-      ).toBe(true);
+      expect(currentMonthDays.every((day) => day.date.getMonth() === 11)).toBe(true);
+      expect(currentMonthDays.every((day) => day.date.getFullYear() === 2023)).toBe(true);
     });
   });
 
@@ -455,16 +444,12 @@ describe('calendar.utils', () => {
     });
 
     it('should normalize string date', () => {
-      const result = normalizeCalendarValue(
-        '20240615' as unknown as CalendarValue,
-      );
+      const result = normalizeCalendarValue('20240615' as unknown as CalendarValue);
       expect(result).toBeInstanceOf(Date);
     });
 
     it('should normalize number date', () => {
-      const result = normalizeCalendarValue(
-        20240615 as unknown as CalendarValue,
-      );
+      const result = normalizeCalendarValue(20240615 as unknown as CalendarValue);
       expect(result).toBeInstanceOf(Date);
     });
 
@@ -474,17 +459,11 @@ describe('calendar.utils', () => {
     });
 
     it('should drop Invalid Date entries from an array', () => {
-      const dates = [
-        new Date(2024, 5, 15),
-        new Date('garbage'),
-        new Date(2024, 5, 20),
-      ];
+      const dates = [new Date(2024, 5, 15), new Date('garbage'), new Date(2024, 5, 20)];
       const result = normalizeCalendarValue(dates);
       expect(Array.isArray(result)).toBe(true);
       expect((result as Date[]).length).toBe(2);
-      expect((result as Date[]).every((d) => !Number.isNaN(d.getTime()))).toBe(
-        true,
-      );
+      expect((result as Date[]).every((d) => !Number.isNaN(d.getTime()))).toBe(true);
     });
 
     it('should return an empty array when every entry is invalid', () => {

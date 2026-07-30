@@ -364,9 +364,6 @@ export class EventManagement {
       this.purchasesResource.error() != null ||
       this.resaleResource.error() != null ||
       this.guestsQuery.error() != null ||
-      this.guestListFeatureQuery.error() != null ||
-      this.guestListOverviewQuery.error() != null ||
-      this.guestListAssignmentsQuery.error() != null ||
       this.importedTicketsResource.error() != null,
   );
 
@@ -396,6 +393,12 @@ export class EventManagement {
     () => this.guestListFeatureQuery.data()?.enabled === true,
   );
   readonly isGuestListFeatureLoading = this.guestListFeatureQuery.isLoading;
+  readonly guestListWorkspaceError = computed(
+    () =>
+      this.guestListFeatureQuery.error() != null ||
+      this.guestListOverviewQuery.error() != null ||
+      this.guestListAssignmentsQuery.error() != null,
+  );
   readonly guestListOverview = computed(
     () =>
       this.guestListOverviewQuery.data() ?? {
@@ -446,9 +449,6 @@ export class EventManagement {
       this.purchasesResource.error(),
       this.resaleResource.error(),
       this.guestsQuery.error(),
-      this.guestListFeatureQuery.error(),
-      this.guestListOverviewQuery.error(),
-      this.guestListAssignmentsQuery.error(),
       this.importedTicketsResource.error(),
     ];
 

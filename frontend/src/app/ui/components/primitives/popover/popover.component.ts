@@ -4,8 +4,8 @@ import {
   OverlayPositionBuilder,
   type OverlayRef,
 } from '@angular/cdk/overlay';
-import {TemplatePortal} from '@angular/cdk/portal';
-import {isPlatformBrowser} from '@angular/common';
+import { TemplatePortal } from '@angular/cdk/portal';
+import { isPlatformBrowser } from '@angular/common';
 import {
   afterNextRender,
   ChangeDetectionStrategy,
@@ -23,13 +23,13 @@ import {
   type TemplateRef,
   ViewContainerRef,
 } from '@angular/core';
-import {takeUntilDestroyed, toObservable} from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 
-import {filter, type Subscription} from 'rxjs';
+import { filter, type Subscription } from 'rxjs';
 
-import {popoverVariants} from './popover.variants';
+import { popoverVariants } from './popover.variants';
 
-import {mergeClasses} from '@ui/utils/merge-classes';
+import { mergeClasses } from '@ui/utils/merge-classes';
 
 export type ZardPopoverTrigger = 'click' | 'hover' | null;
 export type ZardPopoverPlacement = 'top' | 'bottom' | 'left' | 'right';
@@ -154,10 +154,7 @@ export class ZardPopoverDirective {
       this.createOverlay();
     }
 
-    const templatePortal = new TemplatePortal(
-      this.zContent(),
-      this.viewContainerRef,
-    );
+    const templatePortal = new TemplatePortal(this.zContent(), this.viewContainerRef);
     this.overlayRef?.attach(templatePortal);
     this.isVisible.set(true);
     this.zVisibleChange.emit(true);
@@ -260,16 +257,12 @@ export class ZardPopoverDirective {
 
     // Add Escape key handler for all triggers
     this.listeners.push(
-      this.renderer.listen(
-        this.nativeElement,
-        'keydown',
-        (event: KeyboardEvent) => {
-          if (event.key === 'Escape' && this.isVisible()) {
-            event.preventDefault();
-            this.hide();
-          }
-        },
-      ),
+      this.renderer.listen(this.nativeElement, 'keydown', (event: KeyboardEvent) => {
+        if (event.key === 'Escape' && this.isVisible()) {
+          event.preventDefault();
+          this.hide();
+        }
+      }),
     );
 
     if (trigger === 'click') {
@@ -281,16 +274,12 @@ export class ZardPopoverDirective {
       );
       // Add Enter/Space for keyboard activation
       this.listeners.push(
-        this.renderer.listen(
-          this.nativeElement,
-          'keydown',
-          (event: KeyboardEvent) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault();
-              this.toggle();
-            }
-          },
-        ),
+        this.renderer.listen(this.nativeElement, 'keydown', (event: KeyboardEvent) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            this.toggle();
+          }
+        }),
       );
     } else if (trigger === 'hover') {
       // Use maxTouchPoints as the canonical touch check — it's defined in the W3C Pointer Events
@@ -301,22 +290,15 @@ export class ZardPopoverDirective {
       if (isTouch) {
         // Touch devices: tap to toggle, tap outside to close
         this.listeners.push(
-          this.renderer.listen(
-            this.nativeElement,
-            'touchstart',
-            (event: TouchEvent) => {
-              event.stopPropagation();
-              this.toggle();
-            },
-          ),
+          this.renderer.listen(this.nativeElement, 'touchstart', (event: TouchEvent) => {
+            event.stopPropagation();
+            this.toggle();
+          }),
         );
 
         const outsideTouchHandler = (event: TouchEvent) => {
           const target = event.target;
-          if (
-            this.isVisible() &&
-            (!(target instanceof Node) || !this.nativeElement.contains(target))
-          ) {
+          if (this.isVisible() && (!(target instanceof Node) || !this.nativeElement.contains(target))) {
             this.hide();
           }
         };
@@ -327,10 +309,7 @@ export class ZardPopoverDirective {
         this.listeners.push(
           this.renderer.listen(this.nativeElement, 'mouseenter', () => {
             this.clearGraceTimer();
-            this.hoverDelayTimer = setTimeout(
-              () => this.show(),
-              this.zHoverDelay(),
-            );
+            this.hoverDelayTimer = setTimeout(() => this.show(), this.zHoverDelay());
           }),
         );
 
@@ -536,7 +515,5 @@ export class ZardPopoverDirective {
 export class ZardPopoverComponent {
   readonly class = input<string>('');
 
-  protected readonly classes = computed(() =>
-    mergeClasses(popoverVariants(), this.class()),
-  );
+  protected readonly classes = computed(() => mergeClasses(popoverVariants(), this.class()));
 }

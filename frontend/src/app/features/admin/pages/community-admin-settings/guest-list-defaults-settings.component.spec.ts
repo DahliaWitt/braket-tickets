@@ -18,7 +18,7 @@ describe('GuestListDefaultsSettingsComponent', () => {
     const fixture = TestBed.createComponent(GuestListDefaultsSettingsComponent);
     fixture.componentRef.setInput('artistSlots', 2);
     fixture.componentRef.setInput('staffSlots', 2);
-    fixture.detectChanges();
+    await fixture.whenStable();
     const harness = await TestbedHarnessEnvironment.harnessForFixture(
       fixture,
       GuestListDefaultsSettingsHarness,
@@ -38,7 +38,7 @@ describe('GuestListDefaultsSettingsComponent', () => {
     const fixture = TestBed.createComponent(GuestListDefaultsSettingsComponent);
     fixture.componentRef.setInput('artistSlots', 2);
     fixture.componentRef.setInput('staffSlots', 2);
-    fixture.detectChanges();
+    await fixture.whenStable();
     const harness = await TestbedHarnessEnvironment.harnessForFixture(
       fixture,
       GuestListDefaultsSettingsHarness,
@@ -51,5 +51,28 @@ describe('GuestListDefaultsSettingsComponent', () => {
     await harness.clickSave();
 
     expect(saved).toHaveBeenCalledWith({artistSlots: 4, staffSlots: 1});
+  });
+
+  it('preserves unsaved edits until a default input actually changes', async () => {
+    const fixture = TestBed.createComponent(GuestListDefaultsSettingsComponent);
+    fixture.componentRef.setInput('artistSlots', 2);
+    fixture.componentRef.setInput('staffSlots', 2);
+    await fixture.whenStable();
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      GuestListDefaultsSettingsHarness,
+    );
+
+    await harness.setArtistSlots('7');
+    await fixture.whenStable();
+
+    expect(await harness.getArtistSlots()).toBe('7');
+    expect(await harness.getStaffSlots()).toBe('2');
+
+    fixture.componentRef.setInput('staffSlots', 4);
+    await fixture.whenStable();
+
+    expect(await harness.getArtistSlots()).toBe('2');
+    expect(await harness.getStaffSlots()).toBe('4');
   });
 });

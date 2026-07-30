@@ -4,8 +4,17 @@ import {api, internal} from '../_generated/api';
 import type {Id} from '../_generated/dataModel';
 import {convexTest, finishAllScheduledFunctions} from '../setup.testing';
 import {rateLimiter} from '../lib/rate_limits';
+import {GUEST_TICKET_SEND_LOCK_STALE_MS} from '../lib/guest_ticket_delivery';
 
 afterEach(() => vi.useRealTimers());
+
+const INVALID_IDEMPOTENCY_KEYS = [
+  '',
+  '   ',
+  'a'.repeat(65),
+  'contains spaces',
+  'contains:punctuation',
+] as const;
 
 const enableFeature = makeFunctionReference<
   'mutation',
@@ -17,6 +26,21 @@ const cancelGuestListScheduledWork = makeFunctionReference<
   Record<string, never>,
   null
 >('testing/guest_list:cancelScheduledWork');
+const seedHistoricalAssignment = makeFunctionReference<
+  'mutation',
+  {
+    eventId: Id<'events'>;
+    createdBy: Id<'users'>;
+    displayName: string;
+    email: string;
+  },
+  Id<'guestListAssignments'>
+>('testing/guest_list:seedHistoricalAssignment');
+const clearTicketRosterEmailProjection = makeFunctionReference<
+  'mutation',
+  {ticketId: Id<'tickets'>},
+  null
+>('testing/tickets:clearRosterEmailProjection');
 const authorizeToken = makeFunctionReference<
   'mutation',
   {token: string},
@@ -65,6 +89,26 @@ const markGuestTicketSendFailed = makeFunctionReference<
   {id: Id<'guests'>; lockToken: number},
   null
 >('events/guests:markGuestTicketSendFailed');
+const canDeliverAutomaticTicket = makeFunctionReference<
+  'query',
+  {
+    guestId: Id<'guests'>;
+    assignmentId: Id<'guestListAssignments'>;
+    eventId: Id<'events'>;
+    recipient: string;
+    sourceKind: 'assignment_admission' | 'self_service';
+  },
+  boolean
+>('guest_list/invite_state:canDeliverAutomaticTicket');
+const abortInviteAttempt = makeFunctionReference<
+  'mutation',
+  {
+    assignmentId: Id<'guestListAssignments'>;
+    attemptId: string;
+    failureCode: string;
+  },
+  boolean
+>('guest_list/invite_state:abortAttempt');
 
 async function setup() {
   const t = convexTest();
@@ -231,6 +275,72 @@ describe('self-service guest-list assignments', () => {
     expect(rate?.value).toBe(19);
   });
 
+  it('rejects malformed assignment idempotency keys before lookup, rate limit, or persistence', async () => {
+    const {t, manager, managerId, eventId} = await setup();
+
+    for (const idempotencyKey of INVALID_IDEMPOTENCY_KEYS) {
+      await expect(
+        manager.mutation(api.guest_list.assignments.create, {
+          eventId,
+          role: 'staff',
+          displayName: 'Invalid Key Staff',
+          email: 'invalid-assignment-key@example.com',
+          idempotencyKey,
+        }),
+      ).rejects.toThrow(/idempotency key/i);
+    }
+
+    const state = await t.run(async (ctx) => ({
+      assignment: await ctx.db
+        .query('guestListAssignments')
+        .withIndex('by_eventId_and_status', (q) => q.eq('eventId', eventId))
+        .first(),
+      rate: await rateLimiter.getValue(ctx, 'guestListAssignmentCreate', {
+        key: managerId,
+      }),
+    }));
+    expect(state.assignment).toBeNull();
+    expect(state.rate.value).toBe(20);
+  });
+
+  it('does not create an admission when a valid ticket follows more than twenty inactive tickets', async () => {
+    vi.useFakeTimers();
+    const {t, manager, eventId, delegateId} = await setup();
+    for (let index = 0; index < 21; index += 1) {
+      await t.mutation(api.testing.tickets.seedTicket, {
+        userId: delegateId,
+        eventId,
+        status: 'refunded',
+        tier: 'regular',
+        trustSource: 'direct',
+      });
+    }
+    const validTicketId = await t.mutation(api.testing.tickets.seedTicket, {
+      userId: delegateId,
+      eventId,
+      status: 'valid',
+      tier: 'regular',
+      trustSource: 'direct',
+    });
+    await t.mutation(clearTicketRosterEmailProjection, {
+      ticketId: validTicketId,
+    });
+
+    const assignment = await manager.mutation(
+      api.guest_list.assignments.create,
+      {
+        eventId,
+        role: 'artist',
+        displayName: 'Already Ticketed Artist',
+        email: 'touring-artist@example.com',
+        userId: delegateId,
+        idempotencyKey: 'valid-ticket-after-inactive-history',
+      },
+    );
+
+    expect(assignment.admissionGuestId).toBeUndefined();
+  });
+
   it('returns the declared event overview shape after assignment stats exist', async () => {
     const {manager, eventId} = await setup();
     await manager.mutation(api.guest_list.assignments.create, {
@@ -251,6 +361,44 @@ describe('self-service guest-list assignments', () => {
       activeAssignmentCount: 1,
       totalGuestAdmissionCount: 1,
     });
+  });
+
+  it('counts a manual guest before the event has any assignments', async () => {
+    const {manager, eventId} = await setup();
+    await manager.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Manual Guest',
+      email: 'manual-guest@example.com',
+      type: 'guest',
+    });
+
+    await expect(
+      manager.query(api.guest_list.assignments.getEventOverview, {eventId}),
+    ).resolves.toMatchObject({totalGuestAdmissionCount: 1});
+  });
+
+  it('counts imported guests before the event has any assignments', async () => {
+    const {manager, eventId} = await setup();
+    await manager.mutation(api.events.guests.addMany, {
+      eventId,
+      batchKey: 'guest-list-overview-import',
+      rows: [
+        {
+          name: 'Imported Guest One',
+          email: 'imported-one@example.com',
+          type: 'guest',
+        },
+        {
+          name: 'Imported Guest Two',
+          email: 'imported-two@example.com',
+          type: 'staff',
+        },
+      ],
+    });
+
+    await expect(
+      manager.query(api.guest_list.assignments.getEventOverview, {eventId}),
+    ).resolves.toMatchObject({totalGuestAdmissionCount: 2});
   });
 
   it('lets a signed-in delegate add required-email guests up to quota', async () => {
@@ -369,6 +517,52 @@ describe('self-service guest-list assignments', () => {
     expect(rateAfterReplay?.value).toBe(rateAfterInsert?.value);
   });
 
+  it('rejects malformed delegate idempotency keys before lookup, rate limit, or persistence', async () => {
+    const {t, manager, delegate, eventId, delegateId} = await setup();
+    const assignment = await manager.mutation(
+      api.guest_list.assignments.create,
+      {
+        eventId,
+        role: 'artist',
+        displayName: 'Touring Artist',
+        email: 'touring-artist@example.com',
+        userId: delegateId,
+        idempotencyKey: 'delegate-invalid-key-assignment',
+      },
+    );
+    const access = {
+      kind: 'signedIn' as const,
+      assignmentId: assignment.assignmentId,
+    };
+
+    for (const idempotencyKey of INVALID_IDEMPOTENCY_KEYS) {
+      await expect(
+        delegate.mutation(api.guest_list.delegate.addGuest, {
+          access,
+          name: 'Invalid Key Guest',
+          email: 'invalid-delegate-key@example.com',
+          idempotencyKey,
+        }),
+      ).rejects.toThrow(/idempotency key/i);
+    }
+
+    const state = await t.run(async (ctx) => ({
+      guest: await ctx.db
+        .query('guests')
+        .withIndex('by_sourceAssignmentId_and_sourceKind', (q) =>
+          q
+            .eq('sourceAssignmentId', assignment.assignmentId)
+            .eq('sourceKind', 'self_service'),
+        )
+        .first(),
+      rate: await rateLimiter.getValue(ctx, 'guestListDelegateAdd', {
+        key: delegateId,
+      }),
+    }));
+    expect(state.guest).toBeNull();
+    expect(state.rate.value).toBe(20);
+  });
+
   it('keeps guests when a grant drops below usage and decrements usage on removal', async () => {
     const {manager, delegate, eventId, delegateId} = await setup();
     const assignment = await manager.mutation(
@@ -479,6 +673,89 @@ describe('self-service guest-list assignments', () => {
     ).rejects.toThrow(/BATCH_TOO_LARGE/);
   });
 
+  it('rejects malformed staff batch keys before lookup, rate limit, or persistence', async () => {
+    const {t, manager, managerId, eventId} = await setup();
+
+    for (const batchKey of INVALID_IDEMPOTENCY_KEYS) {
+      await expect(
+        manager.mutation(api.guest_list.assignments.bulkCreateStaff, {
+          eventId,
+          batchKey,
+          rows: [
+            {
+              name: 'Invalid Batch Staff',
+              email: 'invalid-batch-key@example.com',
+            },
+          ],
+        }),
+      ).rejects.toThrow(/batch key/i);
+    }
+
+    const state = await t.run(async (ctx) => ({
+      assignment: await ctx.db
+        .query('guestListAssignments')
+        .withIndex('by_eventId_and_status', (q) => q.eq('eventId', eventId))
+        .first(),
+      batch: await ctx.db
+        .query('importBatches')
+        .withIndex('by_event_batch_key_target', (q) => q.eq('eventId', eventId))
+        .first(),
+      rate: await rateLimiter.getValue(ctx, 'guestListAssignmentBulkCreate', {
+        key: managerId,
+      }),
+    }));
+    expect(state.assignment).toBeNull();
+    expect(state.batch).toBeNull();
+    expect(state.rate.value).toBe(5);
+  });
+
+  it('derives valid collision-resistant row keys and replays a max-length staff batch', async () => {
+    const {t, manager, managerId, eventId} = await setup();
+    const batchKey = 'b'.repeat(64);
+    const args = {
+      eventId,
+      batchKey,
+      rows: [
+        {name: 'First Staff', email: 'first-batch-staff@example.com'},
+        {name: 'Second Staff', email: 'second-batch-staff@example.com'},
+      ],
+    };
+
+    const inserted = await manager.mutation(
+      api.guest_list.assignments.bulkCreateStaff,
+      args,
+    );
+    const rateAfterInsert = await t.run((ctx) =>
+      rateLimiter.getValue(ctx, 'guestListAssignmentBulkCreate', {
+        key: managerId,
+      }),
+    );
+    const replayed = await manager.mutation(
+      api.guest_list.assignments.bulkCreateStaff,
+      args,
+    );
+    const state = await t.run(async (ctx) => ({
+      assignments: await ctx.db
+        .query('guestListAssignments')
+        .withIndex('by_eventId_and_status', (q) => q.eq('eventId', eventId))
+        .collect(),
+      rate: await rateLimiter.getValue(ctx, 'guestListAssignmentBulkCreate', {
+        key: managerId,
+      }),
+    }));
+
+    expect(replayed).toEqual(inserted);
+    expect(state.rate.value).toBe(rateAfterInsert.value);
+    expect(state.assignments).toHaveLength(2);
+    expect(
+      new Set(state.assignments.map((assignment) => assignment.idempotencyKey))
+        .size,
+    ).toBe(2);
+    for (const assignment of state.assignments) {
+      expect(assignment.idempotencyKey).toMatch(/^[A-Za-z0-9_-]{64}$/);
+    }
+  });
+
   it('rolls back the whole staff batch when assignment creation fails after validation', async () => {
     const {t, manager, eventId} = await setup();
     await t.run(async (ctx) => {
@@ -508,8 +785,8 @@ describe('self-service guest-list assignments', () => {
     expect(assignments).toEqual([]);
   });
 
-  it('rejects invite resend after an assignment is revoked', async () => {
-    const {manager, eventId} = await setup();
+  it('rejects invite resend and ignores a late invite failure after revocation', async () => {
+    const {t, manager, eventId} = await setup();
     const assignment = await manager.mutation(
       api.guest_list.assignments.create,
       {
@@ -523,6 +800,21 @@ describe('self-service guest-list assignments', () => {
     await manager.mutation(api.guest_list.assignments.revoke, {
       assignmentId: assignment.assignmentId,
     });
+    const revoked = await t.run((ctx) =>
+      ctx.db.get('guestListAssignments', assignment.assignmentId),
+    );
+    await expect(
+      t.mutation(internal.guest_list.invite_state.failAttempt, {
+        assignmentId: assignment.assignmentId,
+        attemptId: 'revoked-resend',
+        failureCode: 'late_provider_failure',
+      }),
+    ).resolves.toBe(false);
+    await expect(
+      t.run((ctx) =>
+        ctx.db.get('guestListAssignments', assignment.assignmentId),
+      ),
+    ).resolves.toEqual(revoked);
     await expect(
       manager.mutation(api.guest_list.assignments.resendInvite, {
         assignmentId: assignment.assignmentId,
@@ -531,8 +823,188 @@ describe('self-service guest-list assignments', () => {
     ).rejects.toThrow(/revoked/i);
   });
 
+  it('rejects grant changes after an assignment is revoked', async () => {
+    const {manager, eventId} = await setup();
+    const assignment = await manager.mutation(
+      api.guest_list.assignments.create,
+      {
+        eventId,
+        role: 'artist',
+        displayName: 'Revoked Grant Artist',
+        email: 'revoked-grant@example.com',
+        idempotencyKey: 'revoked-grant',
+      },
+    );
+    await manager.mutation(api.guest_list.assignments.revoke, {
+      assignmentId: assignment.assignmentId,
+    });
+
+    await expect(
+      manager.mutation(api.guest_list.assignments.updateGrant, {
+        assignmentId: assignment.assignmentId,
+        grantedSlots: 5,
+      }),
+    ).rejects.toThrow(/revoked/i);
+  });
+
+  it('rejects invite resend after the event is cancelled', async () => {
+    const {manager, eventId} = await setup();
+    const assignment = await manager.mutation(
+      api.guest_list.assignments.create,
+      {
+        eventId,
+        role: 'staff',
+        displayName: 'Cancelled Event Staff',
+        email: 'cancelled-event-staff@example.com',
+        idempotencyKey: 'cancelled-event-resend',
+      },
+    );
+    await manager.mutation(api.events.management.update, {
+      id: eventId,
+      status: 'cancelled',
+    });
+
+    await expect(
+      manager.mutation(api.guest_list.assignments.resendInvite, {
+        assignmentId: assignment.assignmentId,
+        idempotencyKey: 'cancelled-event-must-not-send',
+      }),
+    ).rejects.toThrow(/cancelled/i);
+  });
+
+  it('rejects invite resend after the event has ended', async () => {
+    const {t, manager, managerId, organizerId} = await setup();
+    const eventId = await t.mutation(api.testing.events.seedEvent, {
+      title: 'Ended resend event',
+      date: '2020-01-01T20:00:00.000Z',
+      endDate: '2020-01-02T06:00:00.000Z',
+      price: 2000,
+      organizerId,
+      visibility: 'public',
+    });
+    const assignmentId = await t.mutation(seedHistoricalAssignment, {
+      eventId,
+      createdBy: managerId,
+      displayName: 'Ended Event Staff',
+      email: 'ended-event-staff@example.com',
+    });
+
+    await expect(
+      manager.mutation(api.guest_list.assignments.resendInvite, {
+        assignmentId,
+        idempotencyKey: 'ended-event-must-not-send',
+      }),
+    ).rejects.toThrow(/ended/i);
+  });
+
+  it('does not consume invite resend capacity for an idempotent replay', async () => {
+    vi.useFakeTimers();
+    const {t, manager, managerId, eventId} = await setup();
+    const assignment = await manager.mutation(
+      api.guest_list.assignments.create,
+      {
+        eventId,
+        role: 'staff',
+        displayName: 'Replay Resend Staff',
+        email: 'replay-resend@example.com',
+        idempotencyKey: 'replay-resend-assignment',
+      },
+    );
+    await manager.mutation(api.guest_list.assignments.resendInvite, {
+      assignmentId: assignment.assignmentId,
+      idempotencyKey: 'replay-resend-attempt',
+    });
+    const rateAfterFirst = await t.run((ctx) =>
+      rateLimiter.getValue(ctx, 'guestListInviteResend', {key: managerId}),
+    );
+
+    await manager.mutation(api.guest_list.assignments.resendInvite, {
+      assignmentId: assignment.assignmentId,
+      idempotencyKey: 'replay-resend-attempt',
+    });
+    const rateAfterReplay = await t.run((ctx) =>
+      rateLimiter.getValue(ctx, 'guestListInviteResend', {key: managerId}),
+    );
+
+    expect(rateAfterReplay?.value).toBe(rateAfterFirst?.value);
+  });
+
+  it('rejects malformed resend idempotency keys before lookup, rate limit, or persistence', async () => {
+    const {t, manager, managerId, eventId} = await setup();
+    const assignment = await manager.mutation(
+      api.guest_list.assignments.create,
+      {
+        eventId,
+        role: 'staff',
+        displayName: 'Invalid Resend Staff',
+        email: 'invalid-resend-key@example.com',
+        idempotencyKey: 'invalid-resend-assignment',
+      },
+    );
+    const before = await t.run((ctx) =>
+      ctx.db.get('guestListAssignments', assignment.assignmentId),
+    );
+
+    for (const idempotencyKey of INVALID_IDEMPOTENCY_KEYS) {
+      await expect(
+        manager.mutation(api.guest_list.assignments.resendInvite, {
+          assignmentId: assignment.assignmentId,
+          idempotencyKey,
+        }),
+      ).rejects.toThrow(/idempotency key/i);
+    }
+
+    const state = await t.run(async (ctx) => ({
+      assignment: await ctx.db.get(
+        'guestListAssignments',
+        assignment.assignmentId,
+      ),
+      rate: await rateLimiter.getValue(ctx, 'guestListInviteResend', {
+        key: managerId,
+      }),
+    }));
+    expect(state.assignment).toEqual(before);
+    expect(state.rate.value).toBe(5);
+  });
+
+  it.each([
+    {
+      title: 'cancelled',
+      date: '2035-08-10T20:00:00.000Z',
+      endDate: '2035-08-11T06:00:00.000Z',
+      status: 'cancelled' as const,
+    },
+    {
+      title: 'ended',
+      date: '2020-01-01T20:00:00.000Z',
+      endDate: '2020-01-02T06:00:00.000Z',
+      status: 'published' as const,
+    },
+  ])('rejects assignment creation for a $title event', async (event) => {
+    const {t, manager, organizerId} = await setup();
+    const eventId = await t.mutation(api.testing.events.seedEvent, {
+      title: `${event.title} assignment event`,
+      date: event.date,
+      endDate: event.endDate,
+      price: 2000,
+      organizerId,
+      visibility: 'public',
+      status: event.status,
+    });
+
+    await expect(
+      manager.mutation(api.guest_list.assignments.create, {
+        eventId,
+        role: 'staff',
+        displayName: `${event.title} staff`,
+        email: `${event.title}-staff@example.com`,
+        idempotencyKey: `${event.title}-assignment`,
+      }),
+    ).rejects.toThrow(/event has ended|cancelled/i);
+  });
+
   it('links verified-email assignments then paginates a single current indexed stream', async () => {
-    const {t, manager, delegate, delegateId, eventId, organizerId} =
+    const {t, manager, managerId, delegate, delegateId, eventId, organizerId} =
       await setup();
     const endedEventId = await manager.mutation(api.testing.events.seedEvent, {
       title: 'Ended delegated event',
@@ -542,12 +1014,11 @@ describe('self-service guest-list assignments', () => {
       organizerId,
       visibility: 'public',
     });
-    await manager.mutation(api.guest_list.assignments.create, {
+    await t.mutation(seedHistoricalAssignment, {
       eventId: endedEventId,
-      role: 'staff',
+      createdBy: managerId,
       displayName: 'Touring Artist',
       email: 'touring-artist@example.com',
-      idempotencyKey: 'ended-email-assignment',
     });
     const current = await manager.mutation(api.guest_list.assignments.create, {
       eventId,
@@ -572,6 +1043,17 @@ describe('self-service guest-list assignments', () => {
         ctx.db.get('guestListAssignments', current.assignmentId),
       ),
     ).toMatchObject({userId: delegateId});
+    const audits = await t.run((ctx) =>
+      ctx.db
+        .query('guestListAuditEvents')
+        .withIndex('by_assignmentId_and_createdAt', (q) =>
+          q.eq('assignmentId', current.assignmentId),
+        )
+        .collect(),
+    );
+    expect(
+      audits.filter((audit) => audit.action === 'assignment.user_link'),
+    ).toHaveLength(1);
   });
 
   it('continues past a full hidden page before returning a current assignment', async () => {
@@ -698,6 +1180,55 @@ describe('self-service guest-list assignments', () => {
     }
   });
 
+  it('requeues a ticket after its send lock becomes stale', async () => {
+    vi.useFakeTimers();
+    const {t, manager, delegate, eventId, delegateId} = await setup();
+    const assignment = await manager.mutation(
+      api.guest_list.assignments.create,
+      {
+        eventId,
+        role: 'artist',
+        displayName: 'Stale Lock Artist',
+        email: 'touring-artist@example.com',
+        userId: delegateId,
+        idempotencyKey: 'stale-lock-assignment',
+      },
+    );
+    const access = {
+      kind: 'signedIn' as const,
+      assignmentId: assignment.assignmentId,
+    };
+    const added = await delegate.mutation(api.guest_list.delegate.addGuest, {
+      access,
+      name: 'Stale Lock Guest',
+      email: 'stale-lock-guest@example.com',
+      idempotencyKey: 'stale-lock-guest',
+    });
+    await t.mutation(cancelGuestListScheduledWork, {});
+    await expect(
+      t.mutation(internal.events.guests.beginGuestTicketSend, {
+        id: added.guest.guestId,
+        requireUnsent: true,
+      }),
+    ).resolves.toMatchObject({claimed: true});
+
+    vi.advanceTimersByTime(GUEST_TICKET_SEND_LOCK_STALE_MS + 1);
+
+    await expect(
+      delegate.mutation(api.guest_list.delegate.retryTicket, {
+        access,
+        guestId: added.guest.guestId,
+      }),
+    ).resolves.toEqual({status: 'queued'});
+    await t.mutation(cancelGuestListScheduledWork, {});
+    await expect(
+      t.mutation(internal.events.guests.beginGuestTicketSend, {
+        id: added.guest.guestId,
+        requireUnsent: true,
+      }),
+    ).resolves.toMatchObject({claimed: true, reason: 'claimed'});
+  });
+
   it('queues a corrected recipient even after the old address received a ticket', async () => {
     vi.useFakeTimers();
     const {t, manager, delegate, eventId, delegateId} = await setup();
@@ -770,6 +1301,96 @@ describe('self-service guest-list assignments', () => {
         requireUnsent: true,
       }),
     ).resolves.toMatchObject({claimed: true, reason: 'claimed'});
+  });
+
+  it('rechecks the snapshotted automatic-ticket source before provider delivery', async () => {
+    vi.useFakeTimers();
+    const {t, manager, delegate, eventId, delegateId} = await setup();
+    const assignment = await manager.mutation(
+      api.guest_list.assignments.create,
+      {
+        eventId,
+        role: 'artist',
+        displayName: 'Delivery Check Artist',
+        email: 'touring-artist@example.com',
+        userId: delegateId,
+        idempotencyKey: 'delivery-check-assignment',
+      },
+    );
+    await t.mutation(cancelGuestListScheduledWork, {});
+    await expect(
+      t.query(canDeliverAutomaticTicket, {
+        guestId: assignment.admissionGuestId!,
+        assignmentId: assignment.assignmentId,
+        eventId,
+        recipient: 'TOURING-ARTIST@EXAMPLE.COM',
+        sourceKind: 'assignment_admission',
+      }),
+    ).resolves.toBe(true);
+
+    const access = {
+      kind: 'signedIn' as const,
+      assignmentId: assignment.assignmentId,
+    };
+    const edited = await delegate.mutation(api.guest_list.delegate.addGuest, {
+      access,
+      name: 'Edited During Build',
+      email: 'before-build@example.com',
+      idempotencyKey: 'edited-during-build',
+    });
+    await t.mutation(cancelGuestListScheduledWork, {});
+    const editedSnapshot = {
+      guestId: edited.guest.guestId,
+      assignmentId: assignment.assignmentId,
+      eventId,
+      recipient: 'before-build@example.com',
+      sourceKind: 'self_service' as const,
+    };
+    await expect(
+      t.query(canDeliverAutomaticTicket, editedSnapshot),
+    ).resolves.toBe(true);
+
+    await delegate.mutation(api.guest_list.delegate.updateGuest, {
+      access,
+      guestId: edited.guest.guestId,
+      name: 'Edited During Build',
+      email: 'after-build@example.com',
+    });
+    await t.mutation(cancelGuestListScheduledWork, {});
+    await expect(
+      t.query(canDeliverAutomaticTicket, editedSnapshot),
+    ).resolves.toBe(false);
+    await expect(
+      t.query(canDeliverAutomaticTicket, {
+        ...editedSnapshot,
+        recipient: 'AFTER-BUILD@EXAMPLE.COM',
+      }),
+    ).resolves.toBe(true);
+
+    const removed = await delegate.mutation(api.guest_list.delegate.addGuest, {
+      access,
+      name: 'Removed During Build',
+      email: 'removed-during-build@example.com',
+      idempotencyKey: 'removed-during-build',
+    });
+    await t.mutation(cancelGuestListScheduledWork, {});
+    const removedSnapshot = {
+      guestId: removed.guest.guestId,
+      assignmentId: assignment.assignmentId,
+      eventId,
+      recipient: 'removed-during-build@example.com',
+      sourceKind: 'self_service' as const,
+    };
+    await expect(
+      t.query(canDeliverAutomaticTicket, removedSnapshot),
+    ).resolves.toBe(true);
+    await delegate.mutation(api.guest_list.delegate.removeGuest, {
+      access,
+      guestId: removed.guest.guestId,
+    });
+    await expect(
+      t.query(canDeliverAutomaticTicket, removedSnapshot),
+    ).resolves.toBe(false);
   });
 
   it('deduplicates a provider-accepted ticket after a case-only email edit', async () => {
@@ -901,6 +1522,20 @@ describe('self-service guest-list assignments', () => {
     await expect(
       t.run((ctx) => ctx.db.get('guests', assignment.admissionGuestId!)),
     ).resolves.not.toBeNull();
+
+    await manager.mutation(api.guest_list.assignments.revoke, {
+      assignmentId: assignment.assignmentId,
+    });
+    await manager.mutation(api.events.guests.remove, {
+      id: assignment.admissionGuestId!,
+    });
+    await expect(
+      t.run((ctx) => ctx.db.get('guests', assignment.admissionGuestId!)),
+    ).resolves.toBeNull();
+    const revokedAssignment = await t.run((ctx) =>
+      ctx.db.get('guestListAssignments', assignment.assignmentId),
+    );
+    expect(revokedAssignment?.admissionGuestId).toBeUndefined();
   });
 
   it('verifies guest-list backfills through resumable cursor batches before enablement', async () => {
@@ -1120,6 +1755,45 @@ describe('self-service guest-list assignments', () => {
     ).rejects.toThrow(/exceeds the supported per-event limit/i);
   }, 20_000);
 
+  it('ignores a stale event-date synchronization chain after a newer update', async () => {
+    vi.useFakeTimers();
+    const {t, manager, eventId} = await setup();
+    const assignment = await manager.mutation(
+      api.guest_list.assignments.create,
+      {
+        eventId,
+        role: 'artist',
+        displayName: 'Rescheduled Artist',
+        email: 'rescheduled-artist@example.com',
+        idempotencyKey: 'rescheduled-artist',
+      },
+    );
+    await t.mutation(cancelGuestListScheduledWork, {});
+    const staleDate = '2035-07-10T20:00:00.000Z';
+    const currentDate = '2035-07-12T20:00:00.000Z';
+    await manager.mutation(api.events.management.update, {
+      id: eventId,
+      date: currentDate,
+      endDate: '2035-07-13T06:00:00.000Z',
+    });
+    await t.mutation(cancelGuestListScheduledWork, {});
+
+    await t.mutation(internal.guest_list.maintenance.syncAssignmentEventDate, {
+      eventId,
+      eventDate: currentDate,
+    });
+    await t.mutation(internal.guest_list.maintenance.syncAssignmentEventDate, {
+      eventId,
+      eventDate: staleDate,
+    });
+
+    await expect(
+      t.run((ctx) =>
+        ctx.db.get('guestListAssignments', assignment.assignmentId),
+      ),
+    ).resolves.toMatchObject({eventDate: currentDate});
+  });
+
   it('promotes only the owning invite attempt and preserves active token on resend failure', async () => {
     const {t, manager, eventId} = await setup();
     const assignment = await manager.mutation(
@@ -1162,6 +1836,21 @@ describe('self-service guest-list assignments', () => {
     );
     expect(inviteJobs.length).toBeGreaterThan(0);
     expect(JSON.stringify(inviteJobs)).not.toContain('"token"');
+    await expect(
+      t.mutation(internal.guest_list.invite_state.prepareAttempt, {
+        assignmentId: assignment.assignmentId,
+        attemptId: 'resend-attempt',
+        tokenDigest: 'resend-digest',
+        tokenPrefix: 'resend',
+      }),
+    ).resolves.toBe(true);
+    expect(
+      await t.mutation(internal.guest_list.invite_state.failAttempt, {
+        assignmentId: assignment.assignmentId,
+        attemptId: 'initial-attempt',
+        failureCode: 'late_initial_failure',
+      }),
+    ).toBe(false);
     await t.mutation(internal.guest_list.invite_state.failAttempt, {
       assignmentId: assignment.assignmentId,
       attemptId: 'resend-attempt',
@@ -1172,5 +1861,109 @@ describe('self-service guest-list assignments', () => {
     );
     expect(row?.inviteState).toBe('failed');
     expect(row?.tokenDigest).toBeDefined();
+  });
+
+  it('aborts a prepared resend when the event is cancelled before delivery', async () => {
+    vi.useFakeTimers();
+    const {t, manager, eventId} = await setup();
+    const assignment = await manager.mutation(
+      api.guest_list.assignments.create,
+      {
+        eventId,
+        role: 'artist',
+        displayName: 'Cancelled Invite Artist',
+        email: 'cancelled-invite@example.com',
+        idempotencyKey: 'cancelled-invite-attempt',
+      },
+    );
+    await t.mutation(cancelGuestListScheduledWork, {});
+    await expect(
+      t.mutation(internal.guest_list.invite_state.prepareAttempt, {
+        assignmentId: assignment.assignmentId,
+        attemptId: 'cancelled-invite-attempt',
+        tokenDigest: 'accepted-invite-digest',
+        tokenPrefix: 'accepted',
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      t.mutation(internal.guest_list.invite_state.promoteAttempt, {
+        assignmentId: assignment.assignmentId,
+        attemptId: 'cancelled-invite-attempt',
+      }),
+    ).resolves.toBe(true);
+    await manager.mutation(api.guest_list.assignments.resendInvite, {
+      assignmentId: assignment.assignmentId,
+      idempotencyKey: 'cancelled-invite-resend',
+    });
+    await t.mutation(cancelGuestListScheduledWork, {});
+    await expect(
+      t.mutation(internal.guest_list.invite_state.prepareAttempt, {
+        assignmentId: assignment.assignmentId,
+        attemptId: 'cancelled-invite-resend',
+        tokenDigest: 'cancelled-resend-digest',
+        tokenPrefix: 'cancelled',
+      }),
+    ).resolves.toBe(true);
+    await manager.mutation(api.events.management.update, {
+      id: eventId,
+      status: 'cancelled',
+    });
+
+    await expect(
+      t.query(internal.guest_list.invite_state.loadAttempt, {
+        assignmentId: assignment.assignmentId,
+        attemptId: 'cancelled-invite-resend',
+      }),
+    ).resolves.toBeNull();
+    await expect(
+      t.mutation(internal.guest_list.invite_state.promoteAttempt, {
+        assignmentId: assignment.assignmentId,
+        attemptId: 'cancelled-invite-resend',
+      }),
+    ).resolves.toBe(false);
+    await expect(
+      t.mutation(abortInviteAttempt, {
+        assignmentId: assignment.assignmentId,
+        attemptId: 'cancelled-invite-resend',
+        failureCode: 'event_inactive',
+      }),
+    ).resolves.toBe(true);
+    const aborted = await t.run((ctx) =>
+      ctx.db.get('guestListAssignments', assignment.assignmentId),
+    );
+    expect(aborted).toMatchObject({
+      tokenDigest: 'accepted-invite-digest',
+      tokenPrefix: 'accepted',
+      inviteState: 'failed',
+      inviteFailureCode: 'event_inactive',
+    });
+    expect(aborted?.pendingTokenDigest).toBeUndefined();
+    expect(aborted?.pendingTokenPrefix).toBeUndefined();
+  });
+
+  it('aborts automatic ticket delivery when the event is cancelled', async () => {
+    vi.useFakeTimers();
+    const {t, manager, eventId} = await setup();
+    const assignment = await manager.mutation(
+      api.guest_list.assignments.create,
+      {
+        eventId,
+        role: 'staff',
+        displayName: 'Cancelled Ticket Staff',
+        email: 'cancelled-ticket@example.com',
+        idempotencyKey: 'cancelled-ticket-assignment',
+      },
+    );
+    await t.mutation(cancelGuestListScheduledWork, {});
+    await manager.mutation(api.events.management.update, {
+      id: eventId,
+      status: 'cancelled',
+    });
+
+    await expect(
+      t.query(internal.guest_list.invite_state.getAssignmentForTicket, {
+        assignmentId: assignment.assignmentId,
+      }),
+    ).resolves.toBeNull();
   });
 });

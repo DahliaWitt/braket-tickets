@@ -47,6 +47,9 @@ export class EventManagementGuestsTabHarness extends ComponentHarness {
   private readonly getEditButtons = this.locatorForAll(
     '[data-testid="edit-guest"]',
   );
+  private readonly getDesktopLoadingCells = this.locatorForAll(
+    '[data-testid="guest-loading-cell"]',
+  );
 
   async clickAddGuestButton(): Promise<void> {
     const button = await this.getAddGuestButton();
@@ -148,5 +151,9 @@ export class EventManagementGuestsTabHarness extends ComponentHarness {
       throw new Error(`No edit-guest button found at index ${index}`);
     }
     await button.click();
+  }
+
+  async getDesktopLoadingCellCount(): Promise<number> {
+    return (await this.getDesktopLoadingCells()).length;
   }
 }

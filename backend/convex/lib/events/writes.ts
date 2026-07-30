@@ -29,7 +29,9 @@ export interface SliderConfigInput {
 }
 
 export type AnnouncementInput =
-  {mode: 'skip'} | {mode: 'now'} | {mode: 'scheduled'; scheduledFor: number};
+  | {mode: 'skip'}
+  | {mode: 'now'}
+  | {mode: 'scheduled'; scheduledFor: number};
 
 type EventCreateFields = Omit<Doc<'events'>, '_id' | '_creationTime'>;
 
@@ -63,10 +65,11 @@ export interface CreateEventInput extends EventWriteValidationInput {
   announcement?: AnnouncementInput;
 }
 
-export interface UpdateEventInput extends Omit<
-  EventWriteValidationInput,
-  'description' | 'location' | 'maxTicketsPerUser'
-> {
+export interface UpdateEventInput
+  extends Omit<
+    EventWriteValidationInput,
+    'description' | 'location' | 'maxTicketsPerUser'
+  > {
   title?: string;
   // `null` is an explicit clear sentinel on these optional fields (update
   // only). It survives the wire where an omitted key cannot express "remove".

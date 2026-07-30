@@ -119,6 +119,13 @@ describe('EventManagementGuestsTabComponent', () => {
     );
   });
 
+  it('renders five desktop loading cells for every guest table row', async () => {
+    fixture.componentRef.setInput('isLoading', true);
+    await fixture.whenStable();
+
+    expect(await harness.getDesktopLoadingCellCount()).toBe(15);
+  });
+
   it('shows a success toast and refreshes after adding a guest from the dialog', async () => {
     dialogServiceMock.create.mockReturnValue({
       afterClosed$: of(addGuestResult),

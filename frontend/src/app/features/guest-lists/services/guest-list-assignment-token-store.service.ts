@@ -1,8 +1,9 @@
 import {inject, Injectable} from '@angular/core';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
-
-const TOKEN_PREFIX = 'bt-guest-list-token:';
-const RECENT_ASSIGNMENT_KEY = 'bt-guest-list-recent-assignment';
+import {
+  GUEST_LIST_RECENT_ASSIGNMENT_STORAGE_KEY,
+  guestListTokenStorageKey,
+} from '@/core/services/guest-list-credential-storage';
 
 @Injectable({providedIn: 'root'})
 export class GuestListAssignmentTokenStoreService {
@@ -26,12 +27,14 @@ export class GuestListAssignmentTokenStoreService {
   }
 
   get(assignmentId: string): string | null {
-    return this.browser.getLocalStorageItem(this.storageKey(assignmentId));
+    return this.browser.getLocalStorageItem(
+      guestListTokenStorageKey(assignmentId),
+    );
   }
 
   getMostRecent(): {assignmentId: string; token: string} | null {
     const assignmentId = this.browser.getLocalStorageItem(
-      RECENT_ASSIGNMENT_KEY,
+      GUEST_LIST_RECENT_ASSIGNMENT_STORAGE_KEY,
     );
     if (!assignmentId) return null;
     const token = this.get(assignmentId);
@@ -39,25 +42,26 @@ export class GuestListAssignmentTokenStoreService {
   }
 
   rememberResolvedAssignment(assignmentId: string, token: string): void {
-    this.browser.setLocalStorageItem(this.storageKey(assignmentId), token);
-    this.browser.setLocalStorageItem(RECENT_ASSIGNMENT_KEY, assignmentId);
+    this.browser.setLocalStorageItem(
+      guestListTokenStorageKey(assignmentId),
+      token,
+    );
+    this.browser.setLocalStorageItem(
+      GUEST_LIST_RECENT_ASSIGNMENT_STORAGE_KEY,
+      assignmentId,
+    );
   }
 
   forget(assignmentId: string): void {
-    this.browser.removeLocalStorageItem(this.storageKey(assignmentId));
+    this.browser.removeLocalStorageItem(guestListTokenStorageKey(assignmentId));
     if (
-      this.browser.getLocalStorageItem(RECENT_ASSIGNMENT_KEY) === assignmentId
+      this.browser.getLocalStorageItem(
+        GUEST_LIST_RECENT_ASSIGNMENT_STORAGE_KEY,
+      ) === assignmentId
     ) {
-      this.browser.removeLocalStorageItem(RECENT_ASSIGNMENT_KEY);
+      this.browser.removeLocalStorageItem(
+        GUEST_LIST_RECENT_ASSIGNMENT_STORAGE_KEY,
+      );
     }
-  }
-
-  forgetAll(): void {
-    this.browser.removeLocalStorageItemsWithPrefix(TOKEN_PREFIX);
-    this.browser.removeLocalStorageItem(RECENT_ASSIGNMENT_KEY);
-  }
-
-  private storageKey(assignmentId: string): string {
-    return `${TOKEN_PREFIX}${assignmentId}`;
   }
 }

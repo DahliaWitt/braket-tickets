@@ -65,6 +65,53 @@ describe('guests.addMany', () => {
     expect(guests.find((g) => g.name === 'Carol')?.type).toBe('guest');
   });
 
+  it('allows the final imported guest and rejects overflow with the stable import error', async () => {
+    const t = convexTest();
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+    const asAdmin = t.withIdentity({subject: adminId});
+    await t.run((ctx) =>
+      ctx.db.insert('guestListEventStats', {
+        eventId,
+        selfServiceGuestCount: 0,
+        activeGrantedSlots: 0,
+        activeArtistGuestCount: 0,
+        activeStaffGuestCount: 0,
+        activeAssignmentCount: 0,
+        totalGuestAdmissionCount: 4_999,
+      }),
+    );
+
+    await expect(
+      asAdmin.mutation(api.events.guests.addMany, {
+        eventId,
+        batchKey: 'capacity-boundary',
+        rows: [{name: 'Boundary import'}],
+      }),
+    ).resolves.toMatchObject({insertedCount: 1});
+    await expect(
+      asAdmin.mutation(api.events.guests.addMany, {
+        eventId,
+        batchKey: 'capacity-overflow',
+        rows: [{name: 'Overflow import'}],
+      }),
+    ).rejects.toThrow('IMPORT_CAP_EXCEEDED');
+
+    await expect(
+      t.run((ctx) =>
+        ctx.db
+          .query('importBatches')
+          .withIndex('by_event_batch_key_target', (q) =>
+            q
+              .eq('eventId', eventId)
+              .eq('batchKey', 'capacity-overflow')
+              .eq('target', 'guests'),
+          )
+          .unique(),
+      ),
+    ).resolves.toBeNull();
+  });
+
   it('flags an invalid type row and defaults missing type to guest', async () => {
     const t = convexTest();
     const adminId = await setupAdmin(t);

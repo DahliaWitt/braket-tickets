@@ -71,7 +71,8 @@ export class CheckoutStore {
   });
   readonly checkoutLocked = computed(
     () =>
-      this.activeCheckoutSessionId() !== null || this.sessionCreationInFlight(),
+      this.activeCheckoutSessionId() !== null ||
+      this.sessionCreationInFlight(),
   );
   readonly buyerEmail = computed(() => this.auth.email() ?? this.guestEmail());
   readonly maxTickets = computed(() => {
@@ -306,9 +307,7 @@ export class CheckoutStore {
     }
 
     if (amountCents < min) {
-      this.slidingScaleError.set(
-        `Minimum amount is $${(min / 100).toFixed(2)}`,
-      );
+      this.slidingScaleError.set(`Minimum amount is $${(min / 100).toFixed(2)}`);
       this.customAmount.set(amountCents);
       return;
     }

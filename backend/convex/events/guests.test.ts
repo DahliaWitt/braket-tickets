@@ -90,6 +90,48 @@ describe('guests.add', () => {
     expect(guest?.eventId).toBe(eventId);
   });
 
+  it('allows the final guest admission and rejects overflow with a stable app error', async () => {
+    const t = convexTest();
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+    const asAdmin = t.withIdentity({subject: adminId});
+    await t.run((ctx) =>
+      ctx.db.insert('guestListEventStats', {
+        eventId,
+        selfServiceGuestCount: 0,
+        activeGrantedSlots: 0,
+        activeArtistGuestCount: 0,
+        activeStaffGuestCount: 0,
+        activeAssignmentCount: 0,
+        totalGuestAdmissionCount: 4_999,
+      }),
+    );
+
+    await expect(
+      asAdmin.mutation(api.events.guests.add, {
+        eventId,
+        name: 'Boundary guest',
+        type: 'guest',
+      }),
+    ).resolves.toBeDefined();
+    await expect(
+      asAdmin.mutation(api.events.guests.add, {
+        eventId,
+        name: 'Overflow guest',
+        type: 'guest',
+      }),
+    ).rejects.toThrow('GUEST_ADMISSION_CAP_EXCEEDED');
+
+    await expect(
+      t.run((ctx) =>
+        ctx.db
+          .query('guestListEventStats')
+          .withIndex('by_eventId', (q) => q.eq('eventId', eventId))
+          .unique(),
+      ),
+    ).resolves.toMatchObject({totalGuestAdmissionCount: 5_000});
+  });
+
   it('creates a guest with all optional fields', async () => {
     const t = convexTest();
 

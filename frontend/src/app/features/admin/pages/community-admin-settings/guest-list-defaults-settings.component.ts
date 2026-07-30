@@ -1,10 +1,9 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  effect,
   input,
+  linkedSignal,
   output,
-  signal,
 } from '@angular/core';
 import {FormField, form, submit, validate} from '@angular/forms/signals';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
@@ -133,10 +132,10 @@ export class GuestListDefaultsSettingsComponent {
   readonly save = output<GuestListDefaultValues>();
   readonly helpText = HELP_TEXT;
 
-  private readonly model = signal<GuestListDefaultFormValue>({
-    artistSlots: '2',
-    staffSlots: '2',
-  });
+  private readonly model = linkedSignal<GuestListDefaultFormValue>(() => ({
+    artistSlots: String(this.artistSlots()),
+    staffSlots: String(this.staffSlots()),
+  }));
   readonly defaultsForm = form(this.model, (fields) => {
     for (const field of [fields.artistSlots, fields.staffSlots]) {
       validate(field, ({value}) => {
@@ -149,15 +148,6 @@ export class GuestListDefaultsSettingsComponent {
       });
     }
   });
-
-  constructor() {
-    effect(() => {
-      this.model.set({
-        artistSlots: String(this.artistSlots()),
-        staffSlots: String(this.staffSlots()),
-      });
-    });
-  }
 
   onSubmit(event: SubmitEvent): void {
     event.preventDefault();

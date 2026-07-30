@@ -1,14 +1,22 @@
-import {effect, Injectable, signal} from '@angular/core';
+import {computed, effect, inject, Injectable, signal} from '@angular/core';
 import {injectConvex, injectQuery} from 'convex-angular';
-import type {FunctionArgs} from 'convex/server';
+import type {FunctionArgs, FunctionReturnType} from 'convex/server';
 import {api} from '@convex/_generated/api';
+import {AuthService} from '@/core/services/auth.service';
 import {logger} from '@/utils/logger';
 
 type ListMineArgs = FunctionArgs<typeof api.guest_list.delegate.listMine>;
+type ListMineResult = FunctionReturnType<
+  typeof api.guest_list.delegate.listMine
+>;
 
 @Injectable({providedIn: 'root'})
 export class GuestListDashboardService {
   private readonly convex = injectConvex();
+  private readonly auth = inject(AuthService);
+  private readonly authenticatedUserId = computed(
+    () => this.auth.user()?._id ?? null,
+  );
   private readonly featureStateQuery = injectQuery(
     api.guest_list.feature_state.get,
     () => ({}),
@@ -21,25 +29,50 @@ export class GuestListDashboardService {
   constructor() {
     effect(() => {
       const enabled = this.featureStateQuery.data()?.enabled === true;
+      const authSettled = this.auth.authSettled();
+      const userId = this.authenticatedUserId();
       const generation = ++this.loadGeneration;
-      if (!enabled) {
+      if (!enabled || !authSettled || !userId) {
         this.activeAssignments.set(false);
         return;
       }
+      this.activeAssignments.set(false);
       void this.loadActiveAssignments(generation);
     });
   }
 
   private async loadActiveAssignments(generation: number): Promise<void> {
     try {
-      const result = await this.convex.mutation(
-        api.guest_list.delegate.listMine,
-        {
-          paginationOpts: {numItems: 1, cursor: null},
-        } satisfies ListMineArgs,
-      );
-      if (generation === this.loadGeneration) {
-        this.activeAssignments.set(result.page.length > 0);
+      let cursor: ListMineArgs['paginationOpts']['cursor'] = null;
+      const seenCursors = new Set<string>();
+
+      while (generation === this.loadGeneration) {
+        const result: ListMineResult = await this.convex.mutation(
+          api.guest_list.delegate.listMine,
+          {
+            paginationOpts: {numItems: 1, cursor},
+          } satisfies ListMineArgs,
+        );
+        if (generation !== this.loadGeneration) return;
+        if (result.page.length > 0) {
+          this.activeAssignments.set(true);
+          return;
+        }
+        if (result.isDone) {
+          this.activeAssignments.set(false);
+          return;
+        }
+
+        const nextCursor: string = result.continueCursor;
+        if (!nextCursor || seenCursors.has(nextCursor)) {
+          logger.error(
+            'Guest-list assignment discovery returned a repeated cursor',
+          );
+          this.activeAssignments.set(false);
+          return;
+        }
+        seenCursors.add(nextCursor);
+        cursor = nextCursor;
       }
     } catch (error) {
       logger.error('Failed to discover active guest-list assignments', error);

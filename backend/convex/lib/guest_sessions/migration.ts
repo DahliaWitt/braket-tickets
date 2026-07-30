@@ -1,10 +1,7 @@
 import type {Id} from '../../_generated/dataModel';
 import {internal} from '../../_generated/api';
 import type {ActionCtx, MutationCtx, QueryCtx} from '../../_generated/server';
-import {
-  collectAllQueryUnsafe,
-  collectMatchingInQuery,
-} from '../../lib/query_scan';
+import {collectAllQueryUnsafe, collectMatchingInQuery} from '../../lib/query_scan';
 import {
   loadAllTicketOrdersByGuestSession,
   loadAllTicketsByGuestSession,
@@ -48,10 +45,7 @@ export async function migrateOneGuestSessionToUser(
   );
 
   // ticket_orders mirror the same guest → user ownership transfer.
-  const guestOrders = await loadAllTicketOrdersByGuestSession(
-    ctx.db,
-    session._id,
-  );
+  const guestOrders = await loadAllTicketOrdersByGuestSession(ctx.db, session._id);
   await Promise.all(
     guestOrders.map((order) =>
       ctx.db.patch('ticket_orders', order._id, {
@@ -67,9 +61,7 @@ export async function migrateOneGuestSessionToUser(
   );
   await Promise.all(
     unmigratedRedemptions.map((redemption) =>
-      ctx.db.patch('magic_link_redemption_log', redemption._id, {
-        userId: args.userId,
-      }),
+      ctx.db.patch('magic_link_redemption_log', redemption._id, {userId: args.userId}),
     ),
   );
 
@@ -92,21 +84,16 @@ export async function migrateOneGuestSessionToUser(
     ),
   );
 
-  await ctx.db.patch('guest_sessions', args.sessionId, {
-    convertedToUserId: args.userId,
-  });
+  await ctx.db.patch('guest_sessions', args.sessionId, {convertedToUserId: args.userId});
 }
 
 export async function migrateGuestSessionsForUser(
   ctx: ActionCtx,
   args: {email: string; userId: Id<'users'>},
 ): Promise<void> {
-  const sessions = await ctx.runQuery(
-    internal.guest_sessions.core.getUnmigratedByEmail,
-    {
-      email: args.email,
-    },
-  );
+  const sessions = await ctx.runQuery(internal.guest_sessions.core.getUnmigratedByEmail, {
+    email: args.email,
+  });
 
   for (const session of sessions) {
     await ctx.runMutation(internal.guest_sessions.core.migrateOneSession, {

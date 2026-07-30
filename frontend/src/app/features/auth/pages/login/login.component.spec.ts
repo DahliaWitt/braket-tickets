@@ -984,13 +984,10 @@ describe('LoginComponent query-param routing', () => {
       returnUrl: '/tickets',
     });
 
-    expect(routerMock.navigate).toHaveBeenCalledWith(
-      ['/confirm/verification'],
-      {
-        queryParams: {error: 'TOKEN_EXPIRED', returnUrl: '/tickets'},
-        replaceUrl: true,
-      },
-    );
+    expect(routerMock.navigate).toHaveBeenCalledWith(['/confirm/verification'], {
+      queryParams: {error: 'TOKEN_EXPIRED', returnUrl: '/tickets'},
+      replaceUrl: true,
+    });
     expect(routerMock.navigate).not.toHaveBeenCalledWith(
       ['/confirm/social-signin'],
       expect.anything(),
@@ -1013,10 +1010,7 @@ describe('LoginComponent query-param routing', () => {
   it('routes an OAuth error accompanied by a one-time token to the social sign-in page', async () => {
     // A failed cross-domain OAuth exchange carries `ott` alongside `error`; it is
     // still an OAuth callback and must not be reclassified as a verification error.
-    await createWithQueryParams({
-      error: 'access_denied',
-      ott: 'one-time-token',
-    });
+    await createWithQueryParams({error: 'access_denied', ott: 'one-time-token'});
 
     expect(routerMock.navigate).toHaveBeenCalledWith(
       ['/confirm/social-signin'],

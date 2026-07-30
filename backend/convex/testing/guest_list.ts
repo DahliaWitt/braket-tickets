@@ -1,5 +1,6 @@
 import {v} from 'convex/values';
 import {testingMutation} from './wrappers';
+import {hasEventEnded} from '../lib/timezone';
 
 /** Bootstrap-only feature-state switch for convex-test and E2E seeds. */
 export const enableFeature = testingMutation({
@@ -45,5 +46,46 @@ export const cancelScheduledWork = testingMutation({
       .take(1000);
     await Promise.all(scheduled.map((job) => ctx.scheduler.cancel(job._id)));
     return null;
+  },
+});
+
+/**
+ * Seeds the otherwise-impossible state needed to verify current-assignment
+ * discovery skips historical rows after production creation starts rejecting
+ * ended events.
+ */
+export const seedHistoricalAssignment = testingMutation({
+  args: {
+    eventId: v.id('events'),
+    createdBy: v.id('users'),
+    displayName: v.string(),
+    email: v.string(),
+  },
+  returns: v.id('guestListAssignments'),
+  handler: async (ctx, args) => {
+    const event = await ctx.db.get('events', args.eventId);
+    if (!event || !hasEventEnded(event)) {
+      throw new Error('Historical assignment fixtures require an ended event');
+    }
+    const email = args.email.trim();
+    const now = Date.now();
+    // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Intentionally seeds an active assignment for an ended event, which production rejects.
+    return await ctx.db.insert('guestListAssignments', {
+      eventId: event._id,
+      organizerId: event.organizerId,
+      role: 'staff',
+      displayName: args.displayName.trim(),
+      email,
+      emailKey: email.toLowerCase(),
+      eventDate: event.date,
+      grantedSlots: 2,
+      usedSlots: 0,
+      status: 'active',
+      inviteState: 'accepted',
+      createdBy: args.createdBy,
+      createdAt: now,
+      invitedAt: now,
+      idempotencyKey: `historical-test:${event._id}`,
+    });
   },
 });

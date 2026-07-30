@@ -62,7 +62,10 @@ export type WebhookClaimDisposition =
     }
   | {
       disposition: 'skip';
-      reason: 'already_completed' | 'already_failed' | 'in_flight';
+      reason:
+        | 'already_completed'
+        | 'already_failed'
+        | 'in_flight';
       existingClaimId: Id<'stripe_webhook_events'>;
     };
 
@@ -91,7 +94,9 @@ async function findWebhookClaim(
 ): Promise<Doc<'stripe_webhook_events'> | null> {
   return await db
     .query('stripe_webhook_events')
-    .withIndex('by_stripeEventId', (q) => q.eq('stripeEventId', stripeEventId))
+    .withIndex('by_stripeEventId', (q) =>
+      q.eq('stripeEventId', stripeEventId),
+    )
     .unique();
 }
 

@@ -1,7 +1,6 @@
 # Convex Backend
 
 This folder has two jobs:
-
 - root files in `convex/` hold infra and configuration (`schema.ts`, `http.ts`, `crons.ts`, etc.)
 - feature directories define registered Convex functions with thin orchestration
 - internal subdirectories hold shared logic, validators, and private feature implementations
@@ -9,7 +8,6 @@ This folder has two jobs:
 ## Verify Before Coding
 
 Your training data for Convex is outdated. Before writing code:
-
 - Read `convex/_generated/ai/guidelines.md` first
 - Read `convex/schema.ts` for local schema and indexes
 - Use Convex MCP tools (`tables`, `functionSpec`) to verify live deployment state
@@ -18,7 +16,6 @@ Your training data for Convex is outdated. Before writing code:
 ## Structure Contract
 
 Follow these rules so we do not recreate god files:
-
 - Keep registered Convex exports in feature modules (e.g. `convex/events/*.ts`, `convex/stripe/*.ts`, `convex/payments/*.ts`)
 - Do not add new domain API files at the Convex root. Create or extend a feature folder instead.
 - Keep top-level API files thin: registration, auth, argument validation, return validation, and orchestration only
@@ -64,7 +61,6 @@ Tests live in `convex/**/*.test.ts` (edge-runtime environment).
 Use `convexTest()`, `t.run()`, `t.mutation()`, and `t.query()` rather than Playwright.
 Backend logic tests do not belong in `frontend/e2e/`.
 Run targeted backend checks while iterating:
-
 - `pnpm typecheck:convex`
 - `pnpm lint:convex`
 - `pnpm test:convex`
@@ -81,7 +77,6 @@ change when schema/validator changes affect required fields or enum vocabularies
 ## Debugging
 
 Use Convex MCP tools:
-
 - `data` to inspect live data
 - `runOneoffQuery` to test queries safely
 - `logs` to debug execution issues

@@ -62,7 +62,9 @@ type HandlerResult = {
 };
 
 type OrderConnectedAccountValidation =
-  'ok' | 'order_not_found' | 'account_mismatch';
+  | 'ok'
+  | 'order_not_found'
+  | 'account_mismatch';
 
 type WebhookActionCtx = Pick<
   ActionCtx,

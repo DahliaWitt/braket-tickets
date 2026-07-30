@@ -30,7 +30,9 @@ describe('formatUsdCents', () => {
 
 describe('getBuyerPricingSummary', () => {
   it('preserves trailing zeros across regular unit and total copy', () => {
-    expect(getBuyerPricingSummary({price: 1050, quantity: 3})).toMatchObject({
+    expect(
+      getBuyerPricingSummary({price: 1050, quantity: 3}),
+    ).toMatchObject({
       kind: 'regular',
       primaryText: '$10.50',
       ariaLabel: '$10.50 regular ticket price',

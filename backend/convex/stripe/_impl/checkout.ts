@@ -337,11 +337,7 @@ export async function createPlatformCheckoutSession(
   };
 
   const session = await stripe.checkout.sessions.create(sessionParams, {
-    idempotencyKey: buildCheckoutIdempotencyKey(
-      args.orderId,
-      sessionParams,
-      {},
-    ),
+    idempotencyKey: buildCheckoutIdempotencyKey(args.orderId, sessionParams, {}),
   });
 
   return toStripeSessionResult(session);

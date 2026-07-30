@@ -1,15 +1,13 @@
-import {ComponentHarness} from '@angular/cdk/testing';
+import { ComponentHarness } from '@angular/cdk/testing';
 
-import {BraCalendarGridComponentHarness} from './calendar-grid.harness';
-import {BraCalendarNavigationComponentHarness} from './calendar-navigation.component.harness';
+import { BraCalendarGridComponentHarness } from './calendar-grid.harness';
+import { BraCalendarNavigationComponentHarness } from './calendar-navigation.component.harness';
 
 export class BraCalendarComponentHarness extends ComponentHarness {
   static hostSelector = 'bra-calendar, [bra-calendar]';
 
   private getGrid = this.locatorFor(BraCalendarGridComponentHarness);
-  private getNavigation = this.locatorFor(
-    BraCalendarNavigationComponentHarness,
-  );
+  private getNavigation = this.locatorFor(BraCalendarNavigationComponentHarness);
 
   async getNavigationHarness(): Promise<BraCalendarNavigationComponentHarness> {
     return this.getNavigation();

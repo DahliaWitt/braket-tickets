@@ -72,6 +72,36 @@ describe('GuestListsComponent', () => {
     ]);
   });
 
+  it('renders full event timestamps through the event date and end-time pipes', async () => {
+    delegate.listMine.mockResolvedValue({
+      page: [
+        {
+          assignmentId: 'assignment-1',
+          eventId: 'event-1',
+          eventTitle: 'Warehouse Signal',
+          eventDate: '2026-08-02T04:00:00.000Z',
+          eventEndDate: '2026-08-02T10:00:00.000Z',
+          role: 'artist',
+          grantedSlots: 4,
+          usedSlots: 2,
+        },
+      ],
+      isDone: true,
+      continueCursor: '',
+    });
+    fixture = TestBed.createComponent(GuestListsComponent);
+    await fixture.whenStable();
+    harness = await TestbedHarnessEnvironment.harnessForFixture(
+      fixture,
+      GuestListsComponentHarness,
+    );
+
+    const [{text}] = await harness.getAssignmentLinks();
+    expect(text).toContain('Aug 1, 2026');
+    expect(text).toContain('9:00 PM – 3:00 AM');
+    expect(text).not.toContain('2026-08-02T04:00:00.000Z');
+  });
+
   it('shows a useful empty state when no assignments remain eligible', async () => {
     delegate.listMine.mockResolvedValue({
       page: [],

@@ -1,9 +1,4 @@
-import {
-  clamp,
-  roundToStep,
-  roundToStepClamped,
-  convertValueToPercentage,
-} from './number';
+import { clamp, roundToStep, roundToStepClamped, convertValueToPercentage } from './number';
 
 describe('number utils', () => {
   describe('clamp', () => {

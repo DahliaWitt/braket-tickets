@@ -1,3 +1,4 @@
+import migrationsTest from '@convex-dev/migrations/test';
 import {describe, expect, it} from 'vitest';
 import {convexTest} from './setup.testing';
 import {api, internal} from './_generated/api';
@@ -188,5 +189,93 @@ describe('token digest migrations', () => {
       user: await ctx.db.get(userId),
     }));
     expect(rerun).toEqual(migrated);
+  });
+});
+
+describe('guest-list migrations', () => {
+  it('uses the definition batch size to process one event-stats row per transaction', async () => {
+    const t = convexTest();
+    const organizerId = await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {
+        name: 'Guest-list migration batching',
+        status: 'published',
+      },
+    );
+    for (const [index, date] of [
+      ['one', '2035-07-10T20:00:00.000Z'],
+      ['two', '2035-07-11T20:00:00.000Z'],
+    ] as const) {
+      await t.mutation(api.testing.events.seedEvent, {
+        title: `Migration event ${index}`,
+        date,
+        price: 2000,
+        organizerId,
+        visibility: 'public',
+        ticketSalesStatus: 'active',
+      });
+    }
+
+    await t.mutation(internal.migrations.backfillGuestListEventStats, {
+      cursor: null,
+      dryRun: false,
+      oneBatchOnly: true,
+    });
+
+    const stats = await t.run((ctx) =>
+      ctx.db.query('guestListEventStats').collect(),
+    );
+    expect(stats).toHaveLength(1);
+  });
+
+  it('does not let the guest-list runner raise its fixed batch size', async () => {
+    const t = convexTest();
+    migrationsTest.register(t);
+    const organizerId = await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {
+        name: 'Guest-list safe runner',
+        status: 'published',
+      },
+    );
+    const eventId = await t.mutation(api.testing.events.seedEvent, {
+      title: 'Guest-list safe runner event',
+      date: '2035-07-10T20:00:00.000Z',
+      price: 2000,
+      organizerId,
+      visibility: 'public',
+      ticketSalesStatus: 'active',
+    });
+    await t.run(async (ctx) => {
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- intentionally legacy rows for migration batching regression
+      await ctx.db.insert('guests', {
+        eventId,
+        name: 'Legacy Guest One',
+        email: 'legacy-one@example.com',
+        type: 'guest',
+      });
+      // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- intentionally legacy rows for migration batching regression
+      await ctx.db.insert('guests', {
+        eventId,
+        name: 'Legacy Guest Two',
+        email: 'legacy-two@example.com',
+        type: 'guest',
+      });
+    });
+
+    await t.mutation(internal.migrations.runGuestListBackfills, {
+      batchSize: 100,
+      oneBatchOnly: true,
+    });
+
+    const guests = await t.run((ctx) =>
+      ctx.db
+        .query('guests')
+        .withIndex('by_event', (q) => q.eq('eventId', eventId))
+        .collect(),
+    );
+    expect(guests.filter((guest) => guest.emailKey !== undefined)).toHaveLength(
+      1,
+    );
   });
 });

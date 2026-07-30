@@ -1,7 +1,7 @@
 <section class="space-y-6" aria-labelledby="artists-staff-heading">
   <div
     data-testid="guest-list-overview"
-    class="grid overflow-hidden rounded-xl border border-border bg-card sm:grid-cols-3"
+    class="grid overflow-hidden rounded border border-border bg-card sm:grid-cols-3"
   >
     <div class="border-b border-border p-4 sm:border-r sm:border-b-0">
       <p class="mono-label text-2xs text-muted-foreground">
@@ -57,20 +57,11 @@
         >
         <input
           zInput
-          id="assignment-display-name"
-          [zStatus]="assignmentNameError() ? 'error' : undefined"
           [formField]="assignmentForm.search"
           data-testid="assignment-member-search"
           placeholder="Search name or email"
+          (keydown.enter)="searchMembersFromKeyboard($event)"
         />
-        @if (assignmentNameError(); as message) {
-          <span
-            id="assignment-display-name-error"
-            data-testid="assignment-identity-error"
-            class="block font-mono text-xs text-destructive-text"
-            >{{ message }}</span
-          >
-        }
       </label>
       <button
         type="button"
@@ -88,7 +79,7 @@
       <ul
         data-testid="assignment-member-results"
         aria-label="Community members"
-        class="divide-y divide-border rounded-lg border border-border"
+        class="divide-y divide-border rounded border border-border"
       >
         @for (member of memberResults(); track member.userId) {
           <li>
@@ -110,7 +101,7 @@
     @if (selectedMember(); as member) {
       <div
         data-testid="selected-assignment-member"
-        class="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2"
+        class="flex items-center justify-between gap-3 rounded border border-border bg-muted/40 px-3 py-2"
       >
         <p class="text-sm text-foreground">
           Linked to <strong>{{ member.displayName }}</strong>
@@ -135,9 +126,19 @@
         <span class="mono-label text-2xs text-muted-foreground">Name</span>
         <input
           zInput
+          id="assignment-display-name"
+          [zStatus]="assignmentNameError() ? 'error' : undefined"
           [formField]="assignmentForm.displayName"
           data-testid="assignment-display-name"
         />
+        @if (assignmentNameError(); as message) {
+          <span
+            id="assignment-display-name-error"
+            data-testid="assignment-identity-error"
+            class="block font-mono text-xs text-destructive-text"
+            >{{ message }}</span
+          >
+        }
       </label>
       <label class="space-y-1">
         <span class="mono-label text-2xs text-muted-foreground">Email</span>
@@ -148,6 +149,7 @@
           [zStatus]="assignmentEmailError() ? 'error' : undefined"
           [formField]="assignmentForm.email"
           data-testid="assignment-email"
+          (input)="onAssignmentEmailInput($event)"
         />
         @if (assignmentEmailError(); as message) {
           <span
@@ -176,7 +178,14 @@
         >
         <input
           zInput
+          id="assignment-grant-override"
           inputmode="numeric"
+          [zStatus]="
+            assignmentForm.grantOverride().invalid() &&
+            assignmentModel().grantOverride.trim()
+              ? 'error'
+              : undefined
+          "
           [formField]="assignmentForm.grantOverride"
           data-testid="assignment-grant-override"
           placeholder="Use role default"
@@ -188,6 +197,7 @@
       assignmentModel().grantOverride.trim()
     ) {
       <p
+        id="assignment-grant-override-error"
         role="alert"
         data-testid="assignment-grant-override-error"
         class="font-mono text-xs text-destructive-text"
@@ -210,7 +220,11 @@
         type="submit"
         z-button
         data-testid="create-assignment"
-        [zDisabled]="isCreating()"
+        [zDisabled]="
+          isCreating() ||
+          assignmentForm.grantOverride().invalid() ||
+          (assignmentSubmitted() && assignmentForm().invalid())
+        "
         [zLoading]="isCreating()"
         (click)="markAssignmentSubmitted()"
       >
@@ -238,7 +252,7 @@
   }
 
   <div
-    class="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card"
+    class="divide-y divide-border overflow-hidden rounded border border-border bg-card"
   >
     @for (assignment of visibleAssignments(); track assignment.assignmentId) {
       <article
@@ -375,7 +389,8 @@
             aria-modal="false"
             aria-labelledby="grant-reduction-title"
             aria-describedby="grant-reduction-description"
-            class="space-y-3 border-t border-warning/30 bg-warning/10 p-4 text-sm text-warning"
+            (keydown)="handleGrantWarningKeydown($event)"
+            class="space-y-3 border-t border-warning/30 bg-warning/10 p-4 text-sm text-warning-text"
           >
             <p id="grant-reduction-title" class="font-bold uppercase">
               Confirm grant reduction
@@ -395,7 +410,6 @@
                 zSize="sm"
                 data-testid="cancel-grant-reduction"
                 [zDisabled]="updatingGrantId() === assignment.assignmentId"
-                (keydown)="handleGrantWarningKeydown($event)"
                 (click)="cancelGrantReduction()"
               >
                 Cancel</button
@@ -478,6 +492,7 @@
             aria-modal="false"
             aria-labelledby="revoke-assignment-title"
             aria-describedby="revoke-assignment-description"
+            (keydown)="handleRevokeWarningKeydown($event)"
             class="space-y-3 border-t border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive-text"
           >
             <p id="revoke-assignment-title" class="font-bold uppercase">
@@ -500,7 +515,6 @@
                 zSize="sm"
                 data-testid="cancel-revoke-assignment"
                 [zDisabled]="revokingId() === assignment.assignmentId"
-                (keydown)="handleRevokeWarningKeydown($event)"
                 (click)="cancelRevoke()"
               >
                 Cancel</button

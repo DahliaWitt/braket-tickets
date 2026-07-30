@@ -3263,6 +3263,17 @@ export declare const api: {
     guest_list: {
       cancelScheduledWork: FunctionReference<"mutation", "public", {}, null>;
       enableFeature: FunctionReference<"mutation", "public", {}, null>;
+      seedHistoricalAssignment: FunctionReference<
+        "mutation",
+        "public",
+        {
+          createdBy: Id<"users">;
+          displayName: string;
+          email: string;
+          eventId: Id<"events">;
+        },
+        Id<"guestListAssignments">
+      >;
     };
     guest_sessions: {
       getGuestSessionByEmail: FunctionReference<
@@ -3440,6 +3451,12 @@ export declare const api: {
       >;
     };
     tickets: {
+      clearRosterEmailProjection: FunctionReference<
+        "mutation",
+        "public",
+        { ticketId: Id<"tickets"> },
+        null
+      >;
       seedTicket: FunctionReference<
         "mutation",
         "public",
@@ -5058,6 +5075,28 @@ export declare const internal: {
       >;
     };
     invite_state: {
+      abortAttempt: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          assignmentId: Id<"guestListAssignments">;
+          attemptId: string;
+          failureCode: string;
+        },
+        boolean
+      >;
+      canDeliverAutomaticTicket: FunctionReference<
+        "query",
+        "internal",
+        {
+          assignmentId: Id<"guestListAssignments">;
+          eventId: Id<"events">;
+          guestId: Id<"guests">;
+          recipient: string;
+          sourceKind: "assignment_admission" | "self_service";
+        },
+        boolean
+      >;
       failAttempt: FunctionReference<
         "mutation",
         "internal",
@@ -5667,12 +5706,10 @@ export declare const internal: {
         batchSize?: number;
         cursor?: string | null;
         dryRun?: boolean;
-        fn?: string;
-        next?: Array<string>;
         oneBatchOnly?: boolean;
         reset?: boolean;
       },
-      any
+      null
     >;
     runTokenDigestBackfills: FunctionReference<
       "mutation",

@@ -1,16 +1,16 @@
-import {type HarnessLoader} from '@angular/cdk/testing';
-import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
+import { type HarnessLoader } from '@angular/cdk/testing';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import {
   ChangeDetectionStrategy,
   Component,
   provideZonelessChangeDetection,
   signal,
 } from '@angular/core';
-import {type ComponentFixture, TestBed} from '@angular/core/testing';
-import {By} from '@angular/platform-browser';
-import {vi} from 'vitest';
-import {ZardSliderComponent} from './slider.component';
-import {ZardSliderHarness} from './slider.component.harness';
+import { type ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
+import { vi } from 'vitest';
+import { ZardSliderComponent } from './slider.component';
+import { ZardSliderHarness } from './slider.component.harness';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -59,9 +59,8 @@ describe('ZardSliderComponent', () => {
     width: number;
     height: number;
   }): void => {
-    const sliderElement = fixture.debugElement.query(
-      By.directive(ZardSliderComponent),
-    ).nativeElement as HTMLElement;
+    const sliderElement = fixture.debugElement.query(By.directive(ZardSliderComponent))
+      .nativeElement as HTMLElement;
     const domRect: DOMRect = {
       x: rect.left,
       y: rect.top,
@@ -79,20 +78,14 @@ describe('ZardSliderComponent', () => {
   const dispatchPointerEvent = (
     eventName: 'pointerdown' | 'pointermove' | 'pointerup',
     target: EventTarget,
-    coordinates: {clientX?: number; clientY?: number} = {},
+    coordinates: { clientX?: number; clientY?: number } = {},
   ): void => {
-    const event = new Event(eventName, {bubbles: true}) as PointerEvent;
+    const event = new Event(eventName, { bubbles: true }) as PointerEvent;
     if (coordinates.clientX != null) {
-      Object.defineProperty(event, 'clientX', {
-        configurable: true,
-        value: coordinates.clientX,
-      });
+      Object.defineProperty(event, 'clientX', { configurable: true, value: coordinates.clientX });
     }
     if (coordinates.clientY != null) {
-      Object.defineProperty(event, 'clientY', {
-        configurable: true,
-        value: coordinates.clientY,
-      });
+      Object.defineProperty(event, 'clientY', { configurable: true, value: coordinates.clientY });
     }
     target.dispatchEvent(event);
   };
@@ -155,10 +148,10 @@ describe('ZardSliderComponent', () => {
     const onChange = vi.fn();
     slider.registerOnChange(onChange);
 
-    slider.handleKeydown(new KeyboardEvent('keydown', {key: 'ArrowRight'}));
-    slider.handleKeydown(new KeyboardEvent('keydown', {key: 'Home'}));
-    slider.handleKeydown(new KeyboardEvent('keydown', {key: 'End'}));
-    slider.handleKeydown(new KeyboardEvent('keydown', {key: 'Escape'}));
+    slider.handleKeydown(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+    slider.handleKeydown(new KeyboardEvent('keydown', { key: 'Home' }));
+    slider.handleKeydown(new KeyboardEvent('keydown', { key: 'End' }));
+    slider.handleKeydown(new KeyboardEvent('keydown', { key: 'Escape' }));
     fixture.detectChanges();
 
     expect(host.slideChanges()).toEqual([60, 0, 100]);
@@ -173,9 +166,7 @@ describe('ZardSliderComponent', () => {
     host.disabled.set(true);
     fixture.detectChanges();
 
-    getSliderComponent().handleKeydown(
-      new KeyboardEvent('keydown', {key: 'ArrowRight'}),
-    );
+    getSliderComponent().handleKeydown(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
     fixture.detectChanges();
 
     const sliderHarness = await loader.getHarness(ZardSliderHarness);
@@ -194,7 +185,7 @@ describe('ZardSliderComponent', () => {
 
   it('should update value from pointer interaction on track and touch callback', async () => {
     host.step.set(10);
-    mockSliderRect({left: 0, top: 0, width: 200, height: 40});
+    mockSliderRect({ left: 0, top: 0, width: 200, height: 40 });
     fixture.detectChanges();
 
     const slider = getSliderComponent();
@@ -214,7 +205,7 @@ describe('ZardSliderComponent', () => {
 
   it('should continue updating during pointer drag until pointerup', async () => {
     host.step.set(10);
-    mockSliderRect({left: 0, top: 0, width: 200, height: 40});
+    mockSliderRect({ left: 0, top: 0, width: 200, height: 40 });
     fixture.detectChanges();
 
     const slider = getSliderComponent();
@@ -222,7 +213,7 @@ describe('ZardSliderComponent', () => {
       clientX: 40,
       clientY: 20,
     });
-    dispatchPointerEvent('pointermove', document, {clientX: 160, clientY: 20});
+    dispatchPointerEvent('pointermove', document, { clientX: 160, clientY: 20 });
     dispatchPointerEvent('pointerup', document);
     fixture.detectChanges();
 
@@ -237,7 +228,7 @@ describe('ZardSliderComponent', () => {
       host.min.set(0);
       host.max.set(10);
       host.step.set(4);
-      mockSliderRect({left: 0, top: 0, width: 200, height: 40});
+      mockSliderRect({ left: 0, top: 0, width: 200, height: 40 });
       fixture.detectChanges();
 
       const slider = getSliderComponent();
@@ -246,10 +237,7 @@ describe('ZardSliderComponent', () => {
         clientY: 20,
       });
       // Drag past the right edge of the track (raw = zMax).
-      dispatchPointerEvent('pointermove', document, {
-        clientX: 260,
-        clientY: 20,
-      });
+      dispatchPointerEvent('pointermove', document, { clientX: 260, clientY: 20 });
       dispatchPointerEvent('pointerup', document);
       fixture.detectChanges();
 
@@ -274,7 +262,7 @@ describe('ZardSliderComponent', () => {
       host.min.set(0);
       host.max.set(10);
       host.step.set(4);
-      mockSliderRect({left: 0, top: 0, width: 200, height: 40});
+      mockSliderRect({ left: 0, top: 0, width: 200, height: 40 });
       fixture.detectChanges();
 
       const slider = getSliderComponent();
@@ -316,20 +304,20 @@ describe('ZardSliderComponent', () => {
       // Thumb starts at zMax (10). ArrowLeft must snap to the nearest grid value
       // below the ceiling (8), matching native <input type=range> step-down —
       // never below zMin, never off-grid at 6.
-      slider.handleKeydown(new KeyboardEvent('keydown', {key: 'ArrowLeft'}));
+      slider.handleKeydown(new KeyboardEvent('keydown', { key: 'ArrowLeft' }));
       fixture.detectChanges();
       expect(await harness.getValue()).toBe(8);
 
       // ArrowRight climbs back and clamps to zMax, which stays reachable.
-      slider.handleKeydown(new KeyboardEvent('keydown', {key: 'ArrowRight'}));
+      slider.handleKeydown(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
       fixture.detectChanges();
       expect(await harness.getValue()).toBe(10);
 
       // Home/End reach the exact bounds.
-      slider.handleKeydown(new KeyboardEvent('keydown', {key: 'Home'}));
+      slider.handleKeydown(new KeyboardEvent('keydown', { key: 'Home' }));
       fixture.detectChanges();
       expect(await harness.getValue()).toBe(0);
-      slider.handleKeydown(new KeyboardEvent('keydown', {key: 'End'}));
+      slider.handleKeydown(new KeyboardEvent('keydown', { key: 'End' }));
       fixture.detectChanges();
       expect(await harness.getValue()).toBe(10);
 
@@ -344,7 +332,7 @@ describe('ZardSliderComponent', () => {
       host.min.set(0);
       host.max.set(10);
       host.step.set(4);
-      mockSliderRect({left: 0, top: 0, width: 40, height: 200});
+      mockSliderRect({ left: 0, top: 0, width: 40, height: 200 });
       fixture.detectChanges();
 
       const slider = getSliderComponent();
@@ -357,9 +345,7 @@ describe('ZardSliderComponent', () => {
 
       const harness = await loader.getHarness(ZardSliderHarness);
       expect(await harness.getValue()).toBe(10);
-      expect(await harness.getValue()).toBeLessThanOrEqual(
-        await harness.getMax(),
-      );
+      expect(await harness.getValue()).toBeLessThanOrEqual(await harness.getMax());
       expect(slider.percentValue()).toBeLessThanOrEqual(100);
       expect(host.slideChanges()).toEqual([10]);
     });
@@ -370,7 +356,7 @@ describe('ZardSliderComponent', () => {
       host.min.set(10);
       host.max.set(25.5);
       host.step.set(1);
-      mockSliderRect({left: 0, top: 0, width: 200, height: 40});
+      mockSliderRect({ left: 0, top: 0, width: 200, height: 40 });
       fixture.detectChanges();
 
       const slider = getSliderComponent();
@@ -383,9 +369,7 @@ describe('ZardSliderComponent', () => {
       });
       fixture.detectChanges();
       expect(await harness.getValue()).toBe(25.5);
-      expect(await harness.getValue()).toBeLessThanOrEqual(
-        await harness.getMax(),
-      );
+      expect(await harness.getValue()).toBeLessThanOrEqual(await harness.getMax());
       expect(slider.percentValue()).toBeLessThanOrEqual(100);
 
       // Far left → clamp to zMin (10).
@@ -395,12 +379,10 @@ describe('ZardSliderComponent', () => {
       });
       fixture.detectChanges();
       expect(await harness.getValue()).toBe(10);
-      expect(await harness.getValue()).toBeGreaterThanOrEqual(
-        await harness.getMin(),
-      );
+      expect(await harness.getValue()).toBeGreaterThanOrEqual(await harness.getMin());
 
       // End reaches the exact (off-grid) zMax — the checkout price ceiling.
-      slider.handleKeydown(new KeyboardEvent('keydown', {key: 'End'}));
+      slider.handleKeydown(new KeyboardEvent('keydown', { key: 'End' }));
       fixture.detectChanges();
       expect(await harness.getValue()).toBe(25.5);
 
@@ -414,7 +396,7 @@ describe('ZardSliderComponent', () => {
   it('should calculate vertical percentage from Y coordinate', async () => {
     host.orientation.set('vertical');
     host.step.set(5);
-    mockSliderRect({left: 0, top: 0, width: 40, height: 200});
+    mockSliderRect({ left: 0, top: 0, width: 40, height: 200 });
     fixture.detectChanges();
 
     const slider = getSliderComponent();

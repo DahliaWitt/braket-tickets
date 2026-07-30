@@ -5,7 +5,6 @@ order: 3
 description: Authz + handler authorization model after the ReBAC migration
 access: public
 ---
-
 # Convex Security Strategy (Authz + Handler Authorization)
 
 This document is for developers working on the Braket Tickets Convex backend. It covers the current authorization and visibility model after the ReBAC migration to `@djpanda/convex-authz`.
@@ -67,20 +66,20 @@ Do not use those tables to decide whether a user is a member of a community. Mem
 
 ### 3.1 Roles
 
-| Role                | Scope     | Effective permissions                                                              |
-| ------------------- | --------- | ---------------------------------------------------------------------------------- |
-| `root_admin`        | global    | `platform:admin`, `community:admin`, `community:scan`, `event:admin`, `event:scan` |
-| `community_admin`   | organizer | `community:admin`, `community:scan`, `event:admin`, `event:scan`                   |
-| `community_scanner` | organizer | `event:scan`                                                                       |
+| Role | Scope | Effective permissions |
+| --- | --- | --- |
+| `root_admin` | global | `platform:admin`, `community:admin`, `community:scan`, `event:admin`, `event:scan` |
+| `community_admin` | organizer | `community:admin`, `community:scan`, `event:admin`, `event:scan` |
+| `community_scanner` | organizer | `event:scan` |
 
 Role configuration lives in `backend/convex/lib/authz.ts`.
 
 ### 3.2 Relations
 
-| Relation                             | Meaning                                                            |
-| ------------------------------------ | ------------------------------------------------------------------ |
-| `(user, member, organizer)`          | user is a member of that organizer's community                     |
-| `(organizer, trusts, organizer)`     | trusting organizer accepts membership from the trusted organizer   |
+| Relation | Meaning |
+| --- | --- |
+| `(user, member, organizer)` | user is a member of that organizer's community |
+| `(organizer, trusts, organizer)` | trusting organizer accepts membership from the trusted organizer |
 | `(organizer, trusted_by, organizer)` | internal reverse edge used only for traversal-backed access checks |
 
 Trust links are binary. There is no expiry state, pause state, or alternate trust-link table. The reverse `trusted_by` edge is implementation detail, not an admin-facing relation.
@@ -146,11 +145,11 @@ There is no `queryWithRLS()` or `mutationWithRLS()` layer anymore.
 
 Event read access is centralized in `canViewEvent(...)` and list-style event queries must route through `filterViewableEvents(...)`.
 
-| Event visibility  | Discoverable/viewable            | Purchasable                      |
-| ----------------- | -------------------------------- | -------------------------------- |
-| `private`         | authenticated, vetted users only | authenticated, vetted users only |
-| `public_viewable` | anonymous users can view         | vetted users only                |
-| `public`          | anonymous users can view         | no vetting required              |
+| Event visibility | Discoverable/viewable | Purchasable |
+| --- | --- | --- |
+| `private` | authenticated, vetted users only | authenticated, vetted users only |
+| `public_viewable` | anonymous users can view | vetted users only |
+| `public` | anonymous users can view | no vetting required |
 
 Draft, cancelled, and draft-community events are readable only by organizers who can modify the event (scoped `event:manage`/`event:edit`) — community admins and root admins. Members and door-staff scanners hold neither permission, so they cannot read a community's unpublished or cancelled events (there is no standalone `event:view` permission). Public-facing reads must not reimplement the matrix directly.
 
@@ -218,12 +217,12 @@ Ticket purchase and related gates use `canPurchaseEvent(...)` in `backend/convex
 
 Possible outcomes:
 
-| Source        | Meaning                                  |
-| ------------- | ---------------------------------------- |
+| Source | Meaning |
+| --- | --- |
 | `open_access` | event is open-access (public visibility) |
-| `direct`      | user is a direct organizer member        |
-| `shared`      | user is a member of a trusted organizer  |
-| `none`        | no qualifying access path                |
+| `direct` | user is a direct organizer member |
+| `shared` | user is a member of a trusted organizer |
+| `none` | no qualifying access path |
 
 Important implementation notes:
 

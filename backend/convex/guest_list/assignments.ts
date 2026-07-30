@@ -16,6 +16,7 @@ import {findExistingImportBatch, insertImportBatch} from '../lib/imports/bulk';
 import {internal} from '../_generated/api';
 import {rateLimiter} from '../lib/rate_limits';
 import {
+  assertValidGuestListIdempotencyKey,
   assignmentView,
   createAssignment,
   requireGuestListFeatureEnabled,
@@ -24,6 +25,12 @@ import {
   validateAssignmentInput,
   validateGuestListSlots,
 } from '../lib/guest_list/core';
+import {requireGuestListEventActive} from '../lib/guest_list/lifecycle';
+import {
+  getOrCreateGuestListEventStats,
+  updateGuestListEventStats,
+} from '../lib/guest_list/event_stats';
+import {deriveIdempotencyKey} from '../lib/idempotency';
 
 const unavailable = (): never =>
   throwAppError('UNAVAILABLE', 'Self-service guest lists are unavailable');
@@ -158,6 +165,7 @@ export const bulkCreateStaff = mutation({
   },
   returns: importBatchResultValidator,
   handler: async (ctx, args) => {
+    assertValidGuestListIdempotencyKey(args.batchKey, 'Batch key');
     const {user} = await requireEventForManage(ctx, args.eventId);
     await requireGuestListFeatureEnabled(ctx);
     const existing = await findExistingImportBatch(
@@ -221,13 +229,17 @@ export const bulkCreateStaff = mutation({
         });
         continue;
       }
+      const assignmentIdempotencyKey = await deriveIdempotencyKey(
+        'guest-list-staff-assignment',
+        [args.eventId, args.batchKey, String(rowIndex)],
+      );
       await createAssignment(ctx, {
         eventId: args.eventId,
         role: 'staff',
         displayName: row.name,
         email: row.email,
         grantedSlots: row.slotOverride,
-        idempotencyKey: `${args.batchKey}:${rowIndex}`,
+        idempotencyKey: assignmentIdempotencyKey,
         skipRateLimit: true,
       });
       insertedCount += 1;
@@ -259,22 +271,26 @@ export const updateGrant = mutation({
     if (!assignment) return unavailable();
     const {user} = await requireEventForManage(ctx, assignment.eventId);
     await requireGuestListFeatureEnabled(ctx);
+    if (assignment.status === 'revoked') {
+      throwAppError(
+        'INVALID_STATE',
+        'A revoked assignment cannot have its grant changed',
+      );
+    }
     validateGuestListSlots(args.grantedSlots);
     const previousGrantedSlots = assignment.grantedSlots;
     if (previousGrantedSlots !== args.grantedSlots) {
+      const stats = await getOrCreateGuestListEventStats(
+        ctx,
+        assignment.eventId,
+      );
       await ctx.db.patch('guestListAssignments', assignment._id, {
         grantedSlots: args.grantedSlots,
       });
-      const stats = await ctx.db
-        .query('guestListEventStats')
-        .withIndex('by_eventId', (q) => q.eq('eventId', assignment.eventId))
-        .unique();
-      if (stats && assignment.status === 'active') {
-        await ctx.db.patch('guestListEventStats', stats._id, {
-          activeGrantedSlots:
-            stats.activeGrantedSlots + args.grantedSlots - previousGrantedSlots,
-        });
-      }
+      await updateGuestListEventStats(ctx, stats, (current) => ({
+        activeGrantedSlots:
+          current.activeGrantedSlots + args.grantedSlots - previousGrantedSlots,
+      }));
       await ctx.db.insert('guestListAuditEvents', {
         eventId: assignment.eventId,
         assignmentId: assignment._id,
@@ -316,26 +332,28 @@ export const resendInvite = mutation({
     inviteState: guestListInviteStateValidator,
   }),
   handler: async (ctx, args) => {
+    assertValidGuestListIdempotencyKey(args.idempotencyKey);
     const assignment = await ctx.db.get(
       'guestListAssignments',
       args.assignmentId,
     );
     if (!assignment) return unavailable();
-    const {user} = await requireEventForManage(ctx, assignment.eventId);
-    await rateLimiter.limit(ctx, 'guestListInviteResend', {
-      key: user._id,
-      throws: true,
-    });
+    const {user, event} = await requireEventForManage(ctx, assignment.eventId);
     await requireGuestListFeatureEnabled(ctx);
     if (assignment.status === 'revoked') {
       throwAppError('INVALID_STATE', 'A revoked assignment cannot be resent');
     }
+    requireGuestListEventActive(event);
     if (assignment.lastResendIdempotencyKey === args.idempotencyKey) {
       return {
         assignmentId: assignment._id,
         inviteState: assignment.inviteState,
       };
     }
+    await rateLimiter.limit(ctx, 'guestListInviteResend', {
+      key: user._id,
+      throws: true,
+    });
     await ctx.db.patch('guestListAssignments', assignment._id, {
       inviteState: 'pending',
       inviteAttemptId: args.idempotencyKey,

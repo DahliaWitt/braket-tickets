@@ -10,6 +10,13 @@ export class GuestListManageComponentHarness extends ComponentHarness {
     );
   }
 
+  async getEventDetailsText(): Promise<string | null> {
+    const element = await this.locatorForOptional(
+      '[data-testid="guest-list-event"]',
+    )();
+    return element ? (await element.text()).trim() : null;
+  }
+
   async getUnavailableText(): Promise<string | null> {
     const element = await this.locatorForOptional(
       '[data-testid="guest-list-unavailable"]',
@@ -42,6 +49,14 @@ export class GuestListManageComponentHarness extends ComponentHarness {
     return (await button.getAttribute('disabled')) !== null;
   }
 
+  async getAddState(): Promise<{disabled: boolean; text: string}> {
+    const button = await this.locatorFor('[data-testid="guest-list-add"]')();
+    return {
+      disabled: (await button.getAttribute('disabled')) !== null,
+      text: (await button.text()).trim(),
+    };
+  }
+
   async fillGuest(name: string, email: string): Promise<void> {
     await (
       await this.locatorFor('[data-testid="guest-list-name"]')()
@@ -67,6 +82,13 @@ export class GuestListManageComponentHarness extends ComponentHarness {
     return element ? (await element.text()).trim() : null;
   }
 
+  async getActionNoticeText(): Promise<string | null> {
+    const element = await this.locatorForOptional(
+      '[data-testid="guest-list-action-notice"]',
+    )();
+    return element ? (await element.text()).trim() : null;
+  }
+
   async submitGuest(): Promise<void> {
     await (
       await this.locatorFor('[data-testid="guest-list-add-form"]')()
@@ -77,7 +99,9 @@ export class GuestListManageComponentHarness extends ComponentHarness {
     const errors = await this.locatorForAll(
       '[data-testid="guest-list-field-error"]',
     )();
-    return Promise.all(errors.map(async (error) => (await error.text()).trim()));
+    return Promise.all(
+      errors.map(async (error) => (await error.text()).trim()),
+    );
   }
 
   async getGuestRows(): Promise<string[]> {
@@ -101,10 +125,86 @@ export class GuestListManageComponentHarness extends ComponentHarness {
     await (await this.locatorFor('[data-testid="guest-list-edit"]')()).click();
   }
 
-  async clickRemove(): Promise<void> {
+  async getEditState(): Promise<{disabled: boolean; text: string}> {
+    const button = await this.locatorFor('[data-testid="guest-list-edit"]')();
+    return {
+      disabled: (await button.getAttribute('disabled')) !== null,
+      text: (await button.text()).trim(),
+    };
+  }
+
+  async isEditing(): Promise<boolean> {
+    return (
+      (await this.locatorForOptional(
+        '[data-testid="guest-list-cancel-edit"]',
+      )()) !== null
+    );
+  }
+
+  async openRemovalConfirmation(): Promise<void> {
     await (
       await this.locatorFor('[data-testid="guest-list-remove"]')()
     ).click();
+  }
+
+  async clickRemove(): Promise<void> {
+    await this.openRemovalConfirmation();
+    await this.confirmRemoval();
+  }
+
+  async getRemovalConfirmationText(): Promise<string | null> {
+    const confirmation = await this.locatorForOptional(
+      '[data-testid="guest-list-remove-confirmation"]',
+    )();
+    return confirmation ? (await confirmation.text()).trim() : null;
+  }
+
+  async confirmRemoval(): Promise<void> {
+    await (
+      await this.locatorFor('[data-testid="guest-list-confirm-remove"]')()
+    ).click();
+  }
+
+  async cancelRemoval(): Promise<void> {
+    await (
+      await this.locatorFor('[data-testid="guest-list-cancel-remove"]')()
+    ).click();
+  }
+
+  async isCancelRemovalFocused(): Promise<boolean> {
+    return (
+      await this.locatorFor('[data-testid="guest-list-cancel-remove"]')()
+    ).isFocused();
+  }
+
+  async getRemovalConfirmationState(): Promise<{
+    confirmDisabled: boolean;
+    confirmBusy: boolean;
+    cancelDisabled: boolean;
+  }> {
+    const confirm = await this.locatorFor(
+      '[data-testid="guest-list-confirm-remove"]',
+    )();
+    const cancel = await this.locatorFor(
+      '[data-testid="guest-list-cancel-remove"]',
+    )();
+    return {
+      confirmDisabled: (await confirm.getAttribute('disabled')) !== null,
+      confirmBusy: (await confirm.getAttribute('aria-busy')) === 'true',
+      cancelDisabled: (await cancel.getAttribute('disabled')) !== null,
+    };
+  }
+
+  async isRemoveFocused(): Promise<boolean> {
+    return (
+      await this.locatorFor('[data-testid="guest-list-remove"]')()
+    ).isFocused();
+  }
+
+  async isGuestListHeadingFocused(): Promise<boolean> {
+    return (
+      await this.locatorFor('[data-testid="guest-list-heading"]')()
+    ).isFocused();
   }
 
   async getRemoveState(): Promise<{disabled: boolean; text: string}> {

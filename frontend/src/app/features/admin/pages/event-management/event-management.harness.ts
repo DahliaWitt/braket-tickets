@@ -38,6 +38,9 @@ export class EventManagementHarness extends ComponentHarness {
   private readonly getGuestListUnavailableEl = this.locatorForOptional(
     '[data-testid="guest-list-feature-unavailable"]',
   );
+  private readonly getGuestListWorkspaceErrorEl = this.locatorForOptional(
+    '[data-testid="guest-list-workspace-error"]',
+  );
   private readonly getGuestListAssignmentsHarness = this.locatorForOptional(
     GuestListAssignmentsHarness,
   );
@@ -65,6 +68,11 @@ export class EventManagementHarness extends ComponentHarness {
 
   async getGuestListUnavailableText(): Promise<string | null> {
     const el = await this.getGuestListUnavailableEl();
+    return el ? (await el.text()).trim() : null;
+  }
+
+  async getGuestListWorkspaceErrorText(): Promise<string | null> {
+    const el = await this.getGuestListWorkspaceErrorEl();
     return el ? (await el.text()).trim() : null;
   }
 

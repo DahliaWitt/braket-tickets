@@ -191,8 +191,7 @@ function humanizeMarketingError(
                 class="font-mono text-xs text-muted-foreground"
                 data-testid="marketing-announcement-sent-at"
               >
-                Sent
-                {{
+                Sent {{
                   status.sentAt ?? status.scheduledFor | date: ADMIN_DATETIME
                 }}
                 @if (status.recipientCount !== undefined) {
