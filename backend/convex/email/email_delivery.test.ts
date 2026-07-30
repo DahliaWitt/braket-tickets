@@ -1,6 +1,7 @@
 import {convexTest} from '../setup.testing';
 import {describe, it, expect} from 'vitest';
 import {internal} from '../_generated/api';
+import {emailDeliveryRecipientKeyPatch} from '../migrations';
 
 describe('email_delivery', () => {
   describe('hasDelivery', () => {
@@ -41,6 +42,80 @@ describe('email_delivery', () => {
           sourceId: 'guest-2',
         }),
       ).toBe(false);
+    });
+
+    it('scopes ticket delivery deduplication to the recipient when requested', async () => {
+      const t = convexTest();
+
+      await t.mutation(internal.email.email_delivery.recordDelivery, {
+        emailId: 'email-recipient-aware',
+        source: 'ticket',
+        sourceId: 'guest-address-changed',
+        recipient: 'old-address@example.com',
+        critical: true,
+        manual: false,
+        fallback: false,
+        provider: 'resend',
+      });
+
+      await expect(
+        t.query(internal.email.email_delivery.hasDelivery, {
+          source: 'ticket',
+          sourceId: 'guest-address-changed',
+          recipient: 'OLD-ADDRESS@example.com',
+        }),
+      ).resolves.toBe(true);
+      await expect(
+        t.query(internal.email.email_delivery.hasDelivery, {
+          source: 'ticket',
+          sourceId: 'guest-address-changed',
+          recipient: 'new-address@example.com',
+        }),
+      ).resolves.toBe(false);
+
+      const delivery = await t.run((ctx) =>
+        ctx.db
+          .query('emailDeliveries')
+          .withIndex('by_emailId', (q) =>
+            q.eq('emailId', 'email-recipient-aware'),
+          )
+          .unique(),
+      );
+      expect(delivery).toMatchObject({
+        recipient: 'old-address@example.com',
+        recipientKey: 'old-address@example.com',
+      });
+    });
+
+    it('normalizes legacy recipient rows during rollout', async () => {
+      const t = convexTest();
+      await t.run(async (ctx) => {
+        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- legacy pre-recipientKey delivery row required for migration coverage
+        await ctx.db.insert('emailDeliveries', {
+          emailId: 'legacy-case-delivery',
+          source: 'ticket',
+          sourceId: 'legacy-case-guest',
+          recipient: 'Legacy.Guest@Example.com',
+          critical: true,
+          manual: false,
+          fallback: false,
+          provider: 'resend',
+          sentAt: Date.now(),
+        });
+      });
+
+      await expect(
+        t.query(internal.email.email_delivery.hasDelivery, {
+          source: 'ticket',
+          sourceId: 'legacy-case-guest',
+          recipient: 'legacy.guest@example.com',
+        }),
+      ).resolves.toBe(true);
+      expect(
+        emailDeliveryRecipientKeyPatch({
+          recipient: 'Legacy.Guest@Example.com',
+        }),
+      ).toEqual({recipientKey: 'legacy.guest@example.com'});
     });
   });
 

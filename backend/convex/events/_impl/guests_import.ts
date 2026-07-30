@@ -185,6 +185,7 @@ export async function addMany(
       eventId: args.eventId,
       name: row.name,
       ...(row.email !== undefined ? {email: row.email} : {}),
+      ...(row.email !== undefined ? {emailKey: row.email.toLowerCase()} : {}),
       type: row.type,
       ...(row.notes !== undefined ? {notes: row.notes} : {}),
     });
@@ -193,6 +194,15 @@ export async function addMany(
   outcomes.sort((a, b) => a.rowIndex - b.rowIndex);
 
   const insertedCount = toInsert.length;
+  const stats = await ctx.db
+    .query('guestListEventStats')
+    .withIndex('by_eventId', (q) => q.eq('eventId', args.eventId))
+    .unique();
+  if (stats && insertedCount > 0) {
+    await ctx.db.patch('guestListEventStats', stats._id, {
+      totalGuestAdmissionCount: stats.totalGuestAdmissionCount + insertedCount,
+    });
+  }
   const result: ImportBatchResult = {insertedCount, skippedCount, outcomes};
 
   await insertImportBatch(ctx, {

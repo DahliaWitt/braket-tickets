@@ -89,6 +89,16 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
   // Community settings update: 10 per admin per minute.
   updateOrganizer: {kind: 'fixed window', rate: 10, period: MINUTE},
 
+  // Self-service guest lists: organizer creation/email and delegate CRUD.
+  guestListAssignmentCreate: {kind: 'fixed window', rate: 20, period: MINUTE},
+  guestListAssignmentBulkCreate: {kind: 'fixed window', rate: 5, period: MINUTE},
+  guestListInviteResend: {kind: 'fixed window', rate: 5, period: HOUR},
+  guestListTokenResolve: {kind: 'fixed window', rate: 30, period: MINUTE},
+  guestListDelegateAdd: {kind: 'fixed window', rate: 20, period: MINUTE},
+  guestListDelegateEdit: {kind: 'fixed window', rate: 30, period: MINUTE},
+  guestListDelegateRemove: {kind: 'fixed window', rate: 30, period: MINUTE},
+  guestListDelegateRetry: {kind: 'fixed window', rate: 5, period: HOUR},
+
   // Public events landing page: 60 requests per IP per minute.
   // Higher than communities — the landing page hits this on every anonymous page load.
   listPublicEvents: {

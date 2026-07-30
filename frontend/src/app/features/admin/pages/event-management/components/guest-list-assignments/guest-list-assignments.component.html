@@ -1,0 +1,545 @@
+<section class="space-y-6" aria-labelledby="artists-staff-heading">
+  <div
+    data-testid="guest-list-overview"
+    class="grid overflow-hidden rounded-xl border border-border bg-card sm:grid-cols-3"
+  >
+    <div class="border-b border-border p-4 sm:border-r sm:border-b-0">
+      <p class="mono-label text-2xs text-muted-foreground">
+        <span class="mr-1 font-display text-2xl text-foreground">{{
+          overview().selfServiceGuestCount
+        }}</span>
+        self-service guests
+      </p>
+    </div>
+    <div class="border-b border-border p-4 sm:border-r sm:border-b-0">
+      <p class="font-display text-2xl text-foreground">
+        {{ overview().activeGrantedSlots }}
+      </p>
+      <p class="mono-label text-2xs text-muted-foreground">
+        active granted slots
+      </p>
+      <p class="mt-1 font-mono text-2xs text-muted-foreground">
+        {{ overview().activeArtistGuestCount }} artist ·
+        {{ overview().activeStaffGuestCount }} staff used
+      </p>
+    </div>
+    <div class="p-4">
+      <p class="mono-label text-2xs text-muted-foreground">
+        <span class="mr-1 font-display text-2xl text-foreground">{{
+          overview().totalGuestAdmissionCount
+        }}</span>
+        total admissions
+      </p>
+    </div>
+  </div>
+
+  <div>
+    <h2
+      id="artists-staff-heading"
+      class="font-display text-xl tracking-wide text-foreground uppercase"
+    >
+      Artists & Staff
+    </h2>
+    <p class="mt-1 text-sm text-muted-foreground">
+      Invite people to manage their own names. Their admission never uses a
+      slot.
+    </p>
+  </div>
+
+  <form
+    class="space-y-4 border-y border-border py-5"
+    (submit)="createAssignment($event)"
+  >
+    <div class="grid gap-3 md:grid-cols-[1fr_auto]">
+      <label class="space-y-1">
+        <span class="mono-label text-2xs text-muted-foreground"
+          >Find a community member</span
+        >
+        <input
+          zInput
+          id="assignment-display-name"
+          [zStatus]="assignmentNameError() ? 'error' : undefined"
+          [formField]="assignmentForm.search"
+          data-testid="assignment-member-search"
+          placeholder="Search name or email"
+        />
+        @if (assignmentNameError(); as message) {
+          <span
+            id="assignment-display-name-error"
+            data-testid="assignment-identity-error"
+            class="block font-mono text-xs text-destructive-text"
+            >{{ message }}</span
+          >
+        }
+      </label>
+      <button
+        type="button"
+        z-button
+        zType="outline"
+        data-testid="assignment-member-search-button"
+        [zDisabled]="isSearching()"
+        [zLoading]="isSearching()"
+        (click)="searchMembers()"
+      >
+        Search
+      </button>
+    </div>
+    @if (memberResults().length > 0) {
+      <ul
+        data-testid="assignment-member-results"
+        aria-label="Community members"
+        class="divide-y divide-border rounded-lg border border-border"
+      >
+        @for (member of memberResults(); track member.userId) {
+          <li>
+            <button
+              type="button"
+              data-testid="assignment-member-result"
+              class="flex w-full items-center justify-between gap-4 p-3 text-left hover:bg-muted"
+              (click)="selectMember(member)"
+            >
+              <span class="font-sans text-sm">{{ member.displayName }}</span>
+              <span class="font-mono text-xs text-muted-foreground">{{
+                member.email || 'No email'
+              }}</span>
+            </button>
+          </li>
+        }
+      </ul>
+    }
+    @if (selectedMember(); as member) {
+      <div
+        data-testid="selected-assignment-member"
+        class="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2"
+      >
+        <p class="text-sm text-foreground">
+          Linked to <strong>{{ member.displayName }}</strong>
+          <span class="font-mono text-xs text-muted-foreground">
+            · {{ member.email }}
+          </span>
+        </p>
+        <button
+          type="button"
+          z-button
+          zType="ghost"
+          zSize="sm"
+          (click)="clearSelectedMember()"
+        >
+          Use email only
+        </button>
+      </div>
+    }
+
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <label class="space-y-1">
+        <span class="mono-label text-2xs text-muted-foreground">Name</span>
+        <input
+          zInput
+          [formField]="assignmentForm.displayName"
+          data-testid="assignment-display-name"
+        />
+      </label>
+      <label class="space-y-1">
+        <span class="mono-label text-2xs text-muted-foreground">Email</span>
+        <input
+          type="email"
+          zInput
+          id="assignment-email"
+          [zStatus]="assignmentEmailError() ? 'error' : undefined"
+          [formField]="assignmentForm.email"
+          data-testid="assignment-email"
+        />
+        @if (assignmentEmailError(); as message) {
+          <span
+            id="assignment-email-error"
+            data-testid="assignment-identity-error"
+            class="block font-mono text-xs text-destructive-text"
+            >{{ message }}</span
+          >
+        }
+      </label>
+      <label class="space-y-1">
+        <span class="mono-label text-2xs text-muted-foreground">Role</span>
+        <select
+          zInput
+          [value]="assignmentModel().role"
+          (change)="onRoleChange($event)"
+          data-testid="assignment-role"
+        >
+          <option value="artist">Artist</option>
+          <option value="staff">Staff</option>
+        </select>
+      </label>
+      <label class="space-y-1">
+        <span class="mono-label text-2xs text-muted-foreground"
+          >Slot override</span
+        >
+        <input
+          zInput
+          inputmode="numeric"
+          [formField]="assignmentForm.grantOverride"
+          data-testid="assignment-grant-override"
+          placeholder="Use role default"
+        />
+      </label>
+    </div>
+    @if (
+      assignmentForm.grantOverride().invalid() &&
+      assignmentModel().grantOverride.trim()
+    ) {
+      <p
+        role="alert"
+        data-testid="assignment-grant-override-error"
+        class="font-mono text-xs text-destructive-text"
+      >
+        Use a whole number between 0 and 100.
+      </p>
+    }
+    <div class="flex flex-wrap justify-end gap-2">
+      <button
+        type="button"
+        z-button
+        zType="outline"
+        data-testid="import-staff-assignments"
+        [zDisabled]="isBulkCreating()"
+        (click)="isImporting.set(!isImporting())"
+      >
+        Import staff
+      </button>
+      <button
+        type="submit"
+        z-button
+        data-testid="create-assignment"
+        [zDisabled]="isCreating()"
+        [zLoading]="isCreating()"
+        (click)="markAssignmentSubmitted()"
+      >
+        Send invite
+      </button>
+    </div>
+  </form>
+
+  @if (isImporting()) {
+    <app-import-surface
+      [config]="staffImportConfig"
+      [report]="importReport()"
+      (confirmed)="bulkCreateStaff($event)"
+    />
+  }
+
+  @if (actionError(); as error) {
+    <p
+      data-testid="guest-list-assignment-action-error"
+      role="alert"
+      class="border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive-text"
+    >
+      {{ error }}
+    </p>
+  }
+
+  <div
+    class="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card"
+  >
+    @for (assignment of visibleAssignments(); track assignment.assignmentId) {
+      <article
+        #assignmentRow
+        data-testid="guest-list-assignment-row"
+        tabindex="-1"
+        class="space-y-3 p-4"
+      >
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <p class="font-display text-foreground">
+                {{ assignment.displayName }}
+              </p>
+              <bra-status-badge status="muted">{{
+                assignment.role
+              }}</bra-status-badge>
+              <bra-status-badge
+                [status]="
+                  assignment.inviteState === 'failed' ? 'destructive' : 'muted'
+                "
+                >{{ assignment.inviteState }}</bra-status-badge
+              >
+              @if (assignment.status === 'revoked') {
+                <bra-status-badge status="destructive"
+                  >revoked</bra-status-badge
+                >
+              }
+            </div>
+            <p class="truncate font-mono text-xs text-muted-foreground">
+              {{ assignment.email }}
+            </p>
+          </div>
+          <p class="font-mono text-sm text-foreground">
+            <strong
+              >{{ assignment.usedSlots }} /
+              {{ assignment.grantedSlots }}</strong
+            >
+            used
+          </p>
+        </div>
+
+        @if (assignment.status === 'active') {
+          <div class="flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              z-button
+              zType="ghost"
+              zSize="sm"
+              data-testid="expand-assignment-guests"
+              [zDisabled]="loadingGuestsId() === assignment.assignmentId"
+              [zLoading]="loadingGuestsId() === assignment.assignmentId"
+              (click)="toggleGuests(assignment)"
+            >
+              {{
+                expandedAssignmentId() === assignment.assignmentId
+                  ? 'Hide guests'
+                  : 'View guests'
+              }}
+            </button>
+            <button
+              type="button"
+              z-button
+              zType="ghost"
+              zSize="sm"
+              data-testid="edit-assignment-grant"
+              (click)="beginGrantEdit(assignment)"
+            >
+              Edit grant
+            </button>
+            <button
+              type="button"
+              z-button
+              zType="ghost"
+              zSize="sm"
+              data-testid="resend-assignment-invite"
+              [zDisabled]="resendingId() === assignment.assignmentId"
+              [zLoading]="resendingId() === assignment.assignmentId"
+              (click)="resendInvite(assignment)"
+            >
+              Resend invite
+            </button>
+            <button
+              type="button"
+              z-button
+              zType="ghost"
+              zSize="sm"
+              data-testid="revoke-assignment"
+              class="text-destructive-text"
+              [zDisabled]="revokingId() === assignment.assignmentId"
+              [zLoading]="revokingId() === assignment.assignmentId"
+              (click)="beginRevoke(assignment, $event)"
+            >
+              Revoke
+            </button>
+          </div>
+        }
+
+        @if (editingGrantId() === assignment.assignmentId) {
+          <div
+            class="flex flex-wrap items-end justify-end gap-2 border-t border-border pt-3"
+          >
+            <label class="space-y-1"
+              ><span class="mono-label text-2xs text-muted-foreground"
+                >Granted slots</span
+              ><input
+                zInput
+                inputmode="numeric"
+                data-testid="edit-assignment-grant-input"
+                [value]="grantEditValue()"
+                (input)="onGrantValueInput($event)"
+                class="w-28"
+            /></label>
+            <button
+              type="button"
+              z-button
+              zSize="sm"
+              data-testid="save-assignment-grant"
+              [zDisabled]="updatingGrantId() === assignment.assignmentId"
+              [zLoading]="updatingGrantId() === assignment.assignmentId"
+              (click)="saveGrant(assignment, $event)"
+            >
+              Save grant
+            </button>
+          </div>
+        }
+
+        @if (
+          pendingGrantReduction()?.assignmentId === assignment.assignmentId
+        ) {
+          <div
+            data-testid="grant-reduction-warning"
+            role="dialog"
+            aria-modal="false"
+            aria-labelledby="grant-reduction-title"
+            aria-describedby="grant-reduction-description"
+            class="space-y-3 border-t border-warning/30 bg-warning/10 p-4 text-sm text-warning"
+          >
+            <p id="grant-reduction-title" class="font-bold uppercase">
+              Confirm grant reduction
+            </p>
+            <p id="grant-reduction-description">
+              {{ assignment.usedSlots }} slots are already used. Existing guests
+              and tickets will remain, and source attribution will be preserved.
+              New additions stay blocked until usage falls below
+              {{ pendingGrantReduction()!.grant }}.
+            </p>
+            <div class="flex justify-end gap-2">
+              <button
+                #grantWarning
+                type="button"
+                z-button
+                zType="ghost"
+                zSize="sm"
+                data-testid="cancel-grant-reduction"
+                [zDisabled]="updatingGrantId() === assignment.assignmentId"
+                (keydown)="handleGrantWarningKeydown($event)"
+                (click)="cancelGrantReduction()"
+              >
+                Cancel</button
+              ><button
+                type="button"
+                z-button
+                zSize="sm"
+                data-testid="confirm-grant-reduction"
+                [zDisabled]="updatingGrantId() === assignment.assignmentId"
+                [zLoading]="updatingGrantId() === assignment.assignmentId"
+                (click)="confirmGrantReduction()"
+              >
+                Keep guests & reduce
+              </button>
+            </div>
+          </div>
+        }
+
+        @if (expandedAssignmentId() === assignment.assignmentId) {
+          <div class="space-y-2 border-t border-border pt-3">
+            @if (guestLoadFailed(assignment.assignmentId)) {
+              <div
+                role="alert"
+                class="flex flex-wrap items-center justify-between gap-3 border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive-text"
+              >
+                <span>Guest names couldn't refresh.</span>
+                <button
+                  type="button"
+                  z-button
+                  zType="outline"
+                  zSize="sm"
+                  data-testid="retry-sourced-guests"
+                  [zDisabled]="loadingGuestsId() === assignment.assignmentId"
+                  [zLoading]="loadingGuestsId() === assignment.assignmentId"
+                  (click)="retryGuests(assignment.assignmentId)"
+                >
+                  Try again
+                </button>
+              </div>
+            }
+            @for (
+              guest of guestsFor(assignment.assignmentId);
+              track guest.guestId
+            ) {
+              <div
+                data-testid="sourced-guest-row"
+                class="flex items-center justify-between gap-3 font-mono text-xs"
+              >
+                <span>{{ guest.name }} · {{ guest.email }}</span
+                ><span class="text-muted-foreground">{{
+                  guest.deliveryState
+                }}</span>
+              </div>
+            } @empty {
+              <p class="font-mono text-xs text-muted-foreground">
+                No guest names used yet.
+              </p>
+            }
+            @if (guestContinueCursor(assignment.assignmentId)) {
+              <button
+                type="button"
+                z-button
+                zType="outline"
+                zSize="sm"
+                data-testid="load-more-sourced-guests"
+                [zDisabled]="loadingGuestsId() === assignment.assignmentId"
+                [zLoading]="loadingGuestsId() === assignment.assignmentId"
+                (click)="loadMoreGuests(assignment.assignmentId)"
+              >
+                Load more guests
+              </button>
+            }
+          </div>
+        }
+
+        @if (pendingRevoke()?.assignmentId === assignment.assignmentId) {
+          <div
+            data-testid="revoke-assignment-warning"
+            role="dialog"
+            aria-modal="false"
+            aria-labelledby="revoke-assignment-title"
+            aria-describedby="revoke-assignment-description"
+            class="space-y-3 border-t border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive-text"
+          >
+            <p id="revoke-assignment-title" class="font-bold uppercase">
+              Confirm access revocation
+            </p>
+            <p id="revoke-assignment-description">
+              Access will end immediately.
+              @if (assignment.usedSlots > 0) {
+                {{ assignment.usedSlots }} guest list slots have been used.
+              }
+              Existing guests and tickets will remain, and source attribution
+              will be preserved.
+            </p>
+            <div class="flex justify-end gap-2">
+              <button
+                #revokeWarning
+                type="button"
+                z-button
+                zType="ghost"
+                zSize="sm"
+                data-testid="cancel-revoke-assignment"
+                [zDisabled]="revokingId() === assignment.assignmentId"
+                (keydown)="handleRevokeWarningKeydown($event)"
+                (click)="cancelRevoke()"
+              >
+                Cancel</button
+              ><button
+                type="button"
+                z-button
+                zType="destructive"
+                zSize="sm"
+                data-testid="confirm-revoke-assignment"
+                [zDisabled]="revokingId() === assignment.assignmentId"
+                [zLoading]="revokingId() === assignment.assignmentId"
+                (click)="confirmRevoke(assignment)"
+              >
+                Revoke access
+              </button>
+            </div>
+          </div>
+        }
+      </article>
+    } @empty {
+      <div class="p-8 text-center font-mono text-sm text-muted-foreground">
+        No artists or staff invited yet — give someone a few names to take off
+        your plate.
+      </div>
+    }
+  </div>
+  @if (effectiveContinueCursor()) {
+    <div class="flex justify-center">
+      <button
+        type="button"
+        z-button
+        zType="outline"
+        data-testid="load-more-assignments"
+        [zDisabled]="isLoadingMoreAssignments()"
+        [zLoading]="isLoadingMoreAssignments()"
+        (click)="loadMoreAssignments()"
+      >
+        Load more
+      </button>
+    </div>
+  }
+</section>

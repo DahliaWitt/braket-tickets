@@ -67,6 +67,16 @@
         </button>
       </div>
     } @else if (isNewUser()) {
+      @if (hasActiveGuestLists()) {
+        <a
+          routerLink="/guest-lists"
+          data-testid="dashboard-manage-guest-list"
+          class="fade-in mb-5 flex items-center justify-between border-y border-primary/50 px-4 py-4 font-mono text-xs font-bold tracking-widest uppercase transition-colors hover:bg-primary hover:text-primary-foreground"
+        >
+          Manage guest list
+          <span aria-hidden="true">&rarr;</span>
+        </a>
+      }
       <!-- New user: no community relationships -->
       <h1
         class="fade-in py-6 font-display text-3xl leading-[0.9] font-bold tracking-tight text-foreground sm:text-4xl md:py-8 lg:text-5xl"
@@ -241,6 +251,17 @@
       }
     } @else {
       <!-- Vetted user: has community relationships -->
+
+      @if (hasActiveGuestLists()) {
+        <a
+          routerLink="/guest-lists"
+          data-testid="dashboard-manage-guest-list"
+          class="fade-in mb-5 flex items-center justify-between border-y border-primary/50 px-4 py-4 font-mono text-xs font-bold tracking-widest uppercase transition-colors hover:bg-primary hover:text-primary-foreground"
+        >
+          Manage guest list
+          <span aria-hidden="true">&rarr;</span>
+        </a>
+      }
 
       @if (rejectedResubmitEntries().length > 0) {
         @let resubmit = rejectedResubmitEntries()[0];

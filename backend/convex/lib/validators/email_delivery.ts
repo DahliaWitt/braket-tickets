@@ -16,6 +16,7 @@ export const EMAIL_DELIVERY_SOURCES = [
   'payout',
   'resale_available',
   'auth',
+  'guest_list_invite',
 ] as const;
 export type EmailDeliverySource = (typeof EMAIL_DELIVERY_SOURCES)[number];
 
@@ -31,6 +32,7 @@ export const emailDeliverySourceValidator = v.union(
   v.literal(EMAIL_DELIVERY_SOURCES[8]),
   v.literal(EMAIL_DELIVERY_SOURCES[9]),
   v.literal(EMAIL_DELIVERY_SOURCES[10]),
+  v.literal(EMAIL_DELIVERY_SOURCES[11]),
 );
 
 const _emailDeliverySourceValidatorMatchesType: AssertEqual<

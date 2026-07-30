@@ -2,7 +2,11 @@ import type {Doc, Id} from '../../_generated/dataModel';
 import type {MutationCtx, QueryCtx} from '../../_generated/server';
 import {scheduleBroadcastCatchup} from '../../lib/broadcast_catchup';
 import {internal} from '../../_generated/api';
-import {throwNotFound} from '../../lib/errors';
+import {
+  throwConflict,
+  throwInvalidInput,
+  throwNotFound,
+} from '../../lib/errors';
 import {validateGuestFields} from '../../lib/events/guest_fields';
 import {
   validateEmail,
@@ -11,11 +15,13 @@ import {
   MAX_GUEST_NAME_LENGTH,
   MAX_GUEST_EMAIL_LENGTH,
   MAX_GUEST_NOTES_LENGTH,
+  normalizeEmailOrNull,
 } from '../../lib/validation';
 import {requireEventForEdit, requireEventForRoster} from '../../lib/access';
 import {ADMIN_AUDIT_ACTIONS} from '../../lib/admin_audit_actions';
 import {insertAdminAuditLog} from '../../lib/admin_audit_log';
 import {loadManagementDatasetWithinLimit} from '../../lib/management_limits';
+import {removeSourcedGuestAndUpdateCounters} from '../../lib/guest_list/core';
 
 export async function add(
   ctx: MutationCtx,
@@ -44,7 +50,17 @@ export async function add(
   const guestId = await ctx.db.insert('guests', {
     ...args,
     email: trimmedEmail || undefined,
+    emailKey: trimmedEmail?.toLowerCase() || undefined,
   });
+  const stats = await ctx.db
+    .query('guestListEventStats')
+    .withIndex('by_eventId', (q) => q.eq('eventId', args.eventId))
+    .unique();
+  if (stats) {
+    await ctx.db.patch('guestListEventStats', stats._id, {
+      totalGuestAdmissionCount: stats.totalGuestAdmissionCount + 1,
+    });
+  }
 
   await insertAdminAuditLog(
     {db: ctx.db, meta: ctx.meta},
@@ -88,16 +104,46 @@ export async function update(
   validateStringLength(args.email, 'Email', MAX_GUEST_EMAIL_LENGTH);
   validateStringLength(args.notes, 'Notes', MAX_GUEST_NOTES_LENGTH);
 
+  const trimmedEmail = args.email?.trim() || undefined;
+  const isSelfServiceGuest =
+    guest.sourceAssignmentId !== undefined &&
+    guest.sourceKind === 'self_service';
+  if (isSelfServiceGuest) {
+    if (!trimmedEmail) throwInvalidInput('Email is required');
+    validateEmail(trimmedEmail, 'Email');
+  }
+  const emailKey = trimmedEmail?.toLowerCase();
+  const emailChanged = guest.emailKey !== emailKey;
   await ctx.db.replace('guests', args.id, {
     eventId: guest.eventId,
     name: args.name,
-    email: args.email,
+    email: trimmedEmail,
+    emailKey,
     type: args.type,
     notes: args.notes,
-    emailedAt: guest.emailedAt,
+    emailedAt: isSelfServiceGuest && emailChanged ? undefined : guest.emailedAt,
     checkedInAt: guest.checkedInAt,
     checkedInBy: guest.checkedInBy,
+    emailSendLockedAt:
+      isSelfServiceGuest && emailChanged ? null : guest.emailSendLockedAt,
+    ticketDeliveryState:
+      isSelfServiceGuest && emailChanged ? 'queued' : guest.ticketDeliveryState,
+    sourceAssignmentId: guest.sourceAssignmentId,
+    sourceKind: guest.sourceKind,
+    sourceRole: guest.sourceRole,
+    sourceDisplayName: guest.sourceDisplayName,
+    sourceIdempotencyKey: guest.sourceIdempotencyKey,
   });
+
+  if (isSelfServiceGuest && emailChanged) {
+    await ctx.scheduler.runAfter(
+      0,
+      internal.events.guest_actions.sendAutomaticTicket,
+      {
+        guestId: guest._id,
+      },
+    );
+  }
 
   await insertAdminAuditLog(
     {db: ctx.db, meta: ctx.meta},
@@ -123,9 +169,42 @@ export async function remove(
   const guest = await ctx.db.get('guests', args.id);
   if (!guest) throwNotFound('Guest');
 
-  await requireEventForEdit(ctx, guest.eventId);
+  const {user} = await requireEventForEdit(ctx, guest.eventId);
 
-  await ctx.db.delete('guests', args.id);
+  if (guest.sourceAssignmentId && guest.sourceKind === 'assignment_admission') {
+    const assignment = await ctx.db.get(
+      'guestListAssignments',
+      guest.sourceAssignmentId,
+    );
+    if (
+      assignment?.status === 'active' &&
+      assignment.admissionGuestId === guest._id
+    ) {
+      throwConflict('Cannot remove an active assignment admission');
+    }
+  }
+
+  if (guest.sourceAssignmentId && guest.sourceKind === 'self_service') {
+    await removeSourcedGuestAndUpdateCounters(ctx, {
+      guest,
+      actorKind: 'organizer',
+      actorUserId: user._id,
+    });
+  } else {
+    await ctx.db.delete('guests', args.id);
+    const stats = await ctx.db
+      .query('guestListEventStats')
+      .withIndex('by_eventId', (q) => q.eq('eventId', guest.eventId))
+      .unique();
+    if (stats) {
+      await ctx.db.patch('guestListEventStats', stats._id, {
+        totalGuestAdmissionCount: Math.max(
+          0,
+          stats.totalGuestAdmissionCount - 1,
+        ),
+      });
+    }
+  }
   return null;
 }
 
@@ -214,9 +293,16 @@ export async function beginGuestTicketSend(
     }
     const alreadyDelivered = await ctx.runQuery(
       internal.email.email_delivery.hasDelivery,
-      {source: 'ticket', sourceId: args.id},
+      {
+        source: 'ticket',
+        sourceId: args.id,
+        ...(guest.email ? {recipient: guest.email} : {}),
+      },
     );
     if (alreadyDelivered) {
+      if (guest.sourceAssignmentId && guest.ticketDeliveryState !== 'sent') {
+        await ctx.db.patch('guests', args.id, {ticketDeliveryState: 'sent'});
+      }
       return {claimed: false, reason: 'already_sent', lockToken: null};
     }
   }
@@ -230,26 +316,46 @@ export async function beginGuestTicketSend(
     return {claimed: false, reason: 'in_flight', lockToken: null};
   }
 
-  await ctx.db.patch('guests', args.id, {emailSendLockedAt: now});
+  await ctx.db.patch('guests', args.id, {
+    emailSendLockedAt: now,
+    ...(guest.sourceAssignmentId
+      ? {ticketDeliveryState: 'queued' as const}
+      : {}),
+  });
   return {claimed: true, reason: 'claimed', lockToken: now};
 }
 
 /**
- * Records a successful send. Always sets `emailedAt` (the delivery happened),
- * but only releases the lock when this attempt still owns it, so a send that
- * resumed after being stale-reclaimed cannot clear the newer holder's lock.
+ * Records a successful send when it still targets the guest's current email.
+ * A late success for a corrected address must not mark the new recipient as
+ * sent. The lock is only released when this attempt still owns it, so a send
+ * that resumed after being stale-reclaimed cannot clear the newer holder's
+ * lock.
  */
 export async function markAsEmailed(
   ctx: MutationCtx,
   args: {
     id: Id<'guests'>;
     lockToken: number;
+    recipient?: string;
   },
 ): Promise<null> {
   const guest = await ctx.db.get('guests', args.id);
   if (!guest) return null;
+  const currentEmailKey =
+    guest.emailKey ?? normalizeEmailOrNull(guest.email ?? '');
+  const recipientStillMatches =
+    args.recipient === undefined ||
+    normalizeEmailOrNull(args.recipient) === currentEmailKey;
   await ctx.db.patch('guests', args.id, {
-    emailedAt: Date.now(),
+    ...(recipientStillMatches
+      ? {
+          emailedAt: Date.now(),
+          ...(guest.sourceAssignmentId
+            ? {ticketDeliveryState: 'sent' as const}
+            : {}),
+        }
+      : {}),
     ...(guest.emailSendLockedAt === args.lockToken
       ? {emailSendLockedAt: null}
       : {}),
@@ -275,6 +381,23 @@ export async function clearGuestTicketSendLock(
   const guest = await ctx.db.get('guests', args.id);
   if (guest && guest.emailSendLockedAt === args.lockToken) {
     await ctx.db.patch('guests', args.id, {emailSendLockedAt: null});
+  }
+  return null;
+}
+
+/** Marks an assignment-triggered automatic ticket attempt as retryable. */
+export async function markGuestTicketSendFailed(
+  ctx: MutationCtx,
+  args: {id: Id<'guests'>; lockToken: number},
+): Promise<null> {
+  const guest = await ctx.db.get('guests', args.id);
+  if (guest && guest.emailSendLockedAt === args.lockToken) {
+    await ctx.db.patch('guests', args.id, {
+      emailSendLockedAt: null,
+      ...(guest.sourceAssignmentId
+        ? {ticketDeliveryState: 'failed' as const}
+        : {}),
+    });
   }
   return null;
 }

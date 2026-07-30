@@ -27,6 +27,7 @@ export async function insertSeedGuest(
     eventId: args.eventId,
     name: args.name,
     email: args.email,
+    emailKey: args.email?.trim().toLowerCase(),
     type: args.type,
     notes: args.notes,
     checkedInAt: args.checkedInAt,

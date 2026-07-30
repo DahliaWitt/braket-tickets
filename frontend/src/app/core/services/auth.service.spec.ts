@@ -779,6 +779,28 @@ describe('AuthService', () => {
         replaceUrl: true,
       });
     });
+
+    it('clears persisted accountless guest-list credentials on shared-device logout', () => {
+      window.localStorage.setItem(
+        'bt-guest-list-token:assignment-1',
+        'invite-secret',
+      );
+      window.localStorage.setItem(
+        'bt-guest-list-recent-assignment',
+        'assignment-1',
+      );
+      window.localStorage.setItem('unrelated', 'keep-me');
+
+      service.logout();
+
+      expect(
+        window.localStorage.getItem('bt-guest-list-token:assignment-1'),
+      ).toBeNull();
+      expect(
+        window.localStorage.getItem('bt-guest-list-recent-assignment'),
+      ).toBeNull();
+      expect(window.localStorage.getItem('unrelated')).toBe('keep-me');
+    });
   });
 
   describe('session initialization', () => {

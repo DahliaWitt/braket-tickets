@@ -201,6 +201,27 @@ export class EventManagementGuestsTabComponent {
     return `${name}${email}, ${guest.type}, id ${this.idSuffix(guest._id)}`;
   }
 
+  guestSourceLabel(guest: Guest): string {
+    if (
+      !('sourceKind' in guest) ||
+      !('sourceRole' in guest) ||
+      !('sourceDisplayName' in guest) ||
+      typeof guest.sourceDisplayName !== 'string' ||
+      (guest.sourceRole !== 'artist' && guest.sourceRole !== 'staff')
+    ) {
+      return 'Added manually';
+    }
+
+    const role = guest.sourceRole === 'artist' ? 'Artist' : 'Staff';
+    if (guest.sourceKind === 'self_service') {
+      return `Added by ${role} ${guest.sourceDisplayName}`;
+    }
+    if (guest.sourceKind === 'assignment_admission') {
+      return `${role} assignment · ${guest.sourceDisplayName}`;
+    }
+    return 'Added manually';
+  }
+
   openAddGuestDialog(): void {
     const dialogRef = this.dialogService.create({
       zTitle: 'Add Guest',

@@ -130,6 +130,94 @@ export const clearLegacyUserEmailChangeTokens = migrations.define({
   },
 });
 
+export const backfillGuestEmailKeys = migrations.define({
+  table: 'guests',
+  migrateOne: (_ctx, guest) => ({
+    emailKey: normalizeEmailOrNull(guest.email) ?? undefined,
+  }),
+});
+
+export const backfillGuestListEventStats = migrations.define({
+  table: 'events',
+  migrateOne: async (ctx, event) => {
+    const existing = await ctx.db
+      .query('guestListEventStats')
+      .withIndex('by_eventId', (q) => q.eq('eventId', event._id))
+      .unique();
+    if (existing) return {};
+    const guests = await ctx.db
+      .query('guests')
+      .withIndex('by_event', (q) => q.eq('eventId', event._id))
+      .take(5001);
+    const assignments = await ctx.db
+      .query('guestListAssignments')
+      .withIndex('by_eventId_and_status', (q) => q.eq('eventId', event._id))
+      .take(501);
+    if (guests.length > 5000 || assignments.length > 500) {
+      throw new Error(
+        'Guest-list event stats backfill exceeds the supported per-event limit (5000 guests or 500 assignments)',
+      );
+    }
+    const active = assignments.filter(
+      (assignment) => assignment.status === 'active',
+    );
+    await ctx.db.insert('guestListEventStats', {
+      eventId: event._id,
+      selfServiceGuestCount: guests.filter(
+        (guest) => guest.sourceKind === 'self_service',
+      ).length,
+      activeGrantedSlots: active.reduce(
+        (sum, assignment) => sum + assignment.grantedSlots,
+        0,
+      ),
+      activeArtistGuestCount: active
+        .filter((assignment) => assignment.role === 'artist')
+        .reduce((sum, assignment) => sum + assignment.usedSlots, 0),
+      activeStaffGuestCount: active
+        .filter((assignment) => assignment.role === 'staff')
+        .reduce((sum, assignment) => sum + assignment.usedSlots, 0),
+      activeAssignmentCount: active.length,
+      totalGuestAdmissionCount: guests.length,
+    });
+    return {};
+  },
+});
+
+export const backfillGuestListAssignmentEventDates = migrations.define({
+  table: 'guestListAssignments',
+  migrateOne: async (ctx, assignment) => {
+    if (assignment.eventDate !== undefined) return {};
+    const event = await ctx.db.get('events', assignment.eventId);
+    return event ? {eventDate: event.date} : {};
+  },
+});
+
+export function emailDeliveryRecipientKeyPatch(delivery: {
+  recipient: string;
+  recipientKey?: string;
+}): {recipientKey?: string} {
+  if (delivery.recipientKey !== undefined) return {};
+  const recipientKey = normalizeEmailOrNull(delivery.recipient);
+  return recipientKey ? {recipientKey} : {};
+}
+
+/**
+ * Adds normalized lookup keys while preserving the provider-facing recipient
+ * exactly as sent. The field remains optional until this migration has run on
+ * every deployment so the schema is safe to deploy over historical rows.
+ */
+export const backfillEmailDeliveryRecipientKeys = migrations.define({
+  table: 'emailDeliveries',
+  migrateOne: async (_ctx, delivery) =>
+    emailDeliveryRecipientKeyPatch(delivery),
+});
+
+export const runGuestListBackfills = migrations.runner([
+  internal.migrations.backfillGuestEmailKeys,
+  internal.migrations.backfillGuestListEventStats,
+  internal.migrations.backfillGuestListAssignmentEventDates,
+]);
+
 /**
  * Seeds `eventBroadcastDeliveries` from historical `emailDeliveries` rows so
  * pre-feature broadcasts are not re-sent to existing holders by the catch-up

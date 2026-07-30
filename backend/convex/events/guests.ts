@@ -15,6 +15,7 @@ import {
   getInternal as getInternalImpl,
   listByEvent as listByEventImpl,
   markAsEmailed as markAsEmailedImpl,
+  markGuestTicketSendFailed as markGuestTicketSendFailedImpl,
   remove as removeImpl,
   update as updateImpl,
 } from './_impl/guests';
@@ -97,7 +98,11 @@ export const beginGuestTicketSend = internalMutation({
 });
 
 export const markAsEmailed = internalMutation({
-  args: {id: v.id('guests'), lockToken: v.number()},
+  args: {
+    id: v.id('guests'),
+    lockToken: v.number(),
+    recipient: v.optional(v.string()),
+  },
   returns: v.null(),
   handler: markAsEmailedImpl,
 });
@@ -106,4 +111,10 @@ export const clearGuestTicketSendLock = internalMutation({
   args: {id: v.id('guests'), lockToken: v.number()},
   returns: v.null(),
   handler: clearGuestTicketSendLockImpl,
+});
+
+export const markGuestTicketSendFailed = internalMutation({
+  args: {id: v.id('guests'), lockToken: v.number()},
+  returns: v.null(),
+  handler: markGuestTicketSendFailedImpl,
 });

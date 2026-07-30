@@ -11,6 +11,7 @@ import {
 } from '../../lib/validators/ticketing';
 import {guestTypeValidator} from '../../lib/validators/guests';
 import {resaleListingFields} from '../../lib/resale/validators';
+import {guestListRoleValidator} from '../guest_list/validators';
 export {publicEventCardValidator} from '@shared/contracts/public-event';
 
 export const eventDocFields = {
@@ -98,12 +99,23 @@ export const guestFields = {
   eventId: v.id('events'),
   name: v.string(),
   email: v.optional(v.string()),
+  emailKey: v.optional(v.string()),
   type: guestTypeValidator,
   notes: v.optional(v.string()),
   emailedAt: v.optional(v.number()),
   emailSendLockedAt: v.optional(v.union(v.number(), v.null())),
+  ticketDeliveryState: v.optional(
+    v.union(v.literal('queued'), v.literal('sent'), v.literal('failed')),
+  ),
   checkedInAt: v.optional(v.number()),
   checkedInBy: v.optional(v.id('users')),
+  sourceAssignmentId: v.optional(v.id('guestListAssignments')),
+  sourceKind: v.optional(
+    v.union(v.literal('assignment_admission'), v.literal('self_service')),
+  ),
+  sourceRole: v.optional(guestListRoleValidator),
+  sourceDisplayName: v.optional(v.string()),
+  sourceIdempotencyKey: v.optional(v.string()),
 };
 
 export const guestValidator = v.object(guestFields);

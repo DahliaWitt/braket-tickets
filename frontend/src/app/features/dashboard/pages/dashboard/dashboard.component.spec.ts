@@ -21,6 +21,7 @@ import {type Community} from '@/core/services/communities.service';
 import {vi, beforeAll, describe, it, expect, beforeEach} from 'vitest';
 import type {Id} from '@convex/_generated/dataModel';
 import type {CommunityPublicationStatus} from '@shared/domain/community-publication-status';
+import {GuestListDashboardService} from '@/features/guest-lists/services/guest-list-dashboard.service';
 
 // ---------------------------------------------------------------------------
 // Mock data
@@ -135,6 +136,7 @@ const approvalsLoadingSignal = signal(false);
 const myApplicationsSignal = signal<typeof myApplicationsData>([]);
 const myApplicationsLoadingSignal = signal(false);
 const publicCommunitiesSignal = signal<PublicCommunity[]>([]);
+const hasActiveGuestListsSignal = signal(false);
 
 const dashboardDataMock = {
   dashboardResource: {
@@ -155,6 +157,10 @@ const dashboardPageDataMock = {
   myApplications: myApplicationsSignal,
   myApplicationsLoading: myApplicationsLoadingSignal,
   publicCommunities: publicCommunitiesSignal,
+};
+
+const guestListDashboardMock = {
+  hasActiveAssignments: hasActiveGuestListsSignal,
 };
 
 const userSignal = signal({_id: '123', name: 'testuser'});
@@ -208,6 +214,7 @@ describe('DashboardComponent', () => {
     applicationStatus?: string | null;
     eventAvailability?: Record<string, EventAvailability>;
     hasLoadError?: boolean;
+    hasActiveGuestLists?: boolean;
   }) {
     // Configure data before TestBed creation (effects fire during component init)
     approvalsData = options?.approvals ?? [];
@@ -227,6 +234,7 @@ describe('DashboardComponent', () => {
     myApplicationsLoadingSignal.set(false);
     publicCommunitiesSignal.set(publicCommunitiesData);
     userRoleSignal.set('user');
+    hasActiveGuestListsSignal.set(options?.hasActiveGuestLists ?? false);
   }
 
   async function createComponent(): Promise<void> {
@@ -237,6 +245,7 @@ describe('DashboardComponent', () => {
         provideRouter([{path: '**', children: []}]),
         {provide: AuthService, useValue: authServiceMock},
         {provide: DashboardDataService, useValue: dashboardDataMock},
+        {provide: GuestListDashboardService, useValue: guestListDashboardMock},
         // NgOptimizedImage requires a loader when templates use ngSrcset.
         // Use the real loader (passthrough on non-Cloudflare origins) so the
         // spec stays locked to production behavior.
@@ -297,6 +306,20 @@ describe('DashboardComponent', () => {
     await createComponent();
     expect(fixture.componentInstance.rawEvents().length).toBe(1);
     expect(fixture.componentInstance.rawEvents()[0].title).toBe('Test Event');
+  });
+
+  it('shows Manage guest list only when an active non-ended assignment exists', async () => {
+    setup({hasActiveGuestLists: true});
+    await createComponent();
+
+    expect(await harness.getManageGuestListHref()).toBe('/guest-lists');
+  });
+
+  it('hides Manage guest list when no eligible assignment exists', async () => {
+    setup({hasActiveGuestLists: false});
+    await createComponent();
+
+    expect(await harness.getManageGuestListHref()).toBeNull();
   });
 
   // -----------------------------------------------------------------------

@@ -994,6 +994,8 @@ export class AuthService implements ConvexAuthProvider {
    */
   logout(): void {
     logger.info('[logout] Starting logout...');
+    this.browser.removeLocalStorageItemsWithPrefix('bt-guest-list-token:');
+    this.browser.removeLocalStorageItem('bt-guest-list-recent-assignment');
     // Clear local state first so zoneless UI reacts immediately.
     this.clearLocalAuthState();
 

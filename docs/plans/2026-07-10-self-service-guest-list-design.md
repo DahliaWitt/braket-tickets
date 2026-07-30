@@ -30,6 +30,8 @@ The feature introduces a dedicated per-event guest-list assignment rather than m
 
 The existing `guests` table remains the event admission source for organizer-created guests, delegate admissions, and guests created through self-service. New optional source fields link self-service rows to their assignment. This keeps scanning, roster, PDF generation, broadcasts, and ticket-email delivery on the current admission path.
 
+Successful email-delivery rows retain the provider-facing `recipient` and add an optional normalized `recipientKey`, indexed with source and source ID. New writes populate the key immediately. During rollout, recipient-scoped deduplication first uses the normalized index, then the exact-recipient index, and finally checks at most 100 unkeyed legacy rows for the same source. It fails closed if that bounded fallback would be exceeded rather than risking a duplicate send. The field stays optional until `backfillEmailDeliveryRecipientKeys` has migrated historical rows.
+
 The boundaries are:
 
 1. **Community defaults** determine the initial grant copied into a new assignment.
@@ -170,6 +172,8 @@ Write PII-minimized admin audit events for assignment creation, grant changes, r
 
 Add a Guest List Defaults section with non-negative numeric inputs for Artist slots and Staff slots. Both show 2 when no explicit value has been saved.
 
+The settings container renders a distinct loading state until the server query returns confirmed values, renders a recoverable error state when that query fails, and does not mount or enable the save form in either state. The effective 2/2 fallback is applied by the backend response; the client never substitutes 2/2 while data is unresolved, so a slow or failed read cannot overwrite saved defaults.
+
 An accessible help tip, available on hover and keyboard focus, states: “Defaults are copied when a person is assigned. Changing a default affects future assignments only. Existing event assignments keep their current grant.”
 
 ### Event guest-list management
@@ -194,7 +198,11 @@ The assignment view supports:
 - expanding or navigating to the guests sourced from one assignment;
 - bulk staff assignment using the shared import surface.
 
-Assignment rows are paginated rather than returned as an unbounded event collection. Expanding a row loads that assignment's guests through an indexed, bounded query. The existing `guests.listByEvent` remains its current capped full-array roster in this release; it is not described or reimplemented as pagination. The accurate total comes from `guestListEventStats.totalGuestAdmissionCount`, so the cap cannot under-report the overview.
+The optional slot override uses the same whole-number range as the backend: 0 through 100 inclusive. Invalid, fractional, negative, non-numeric, or out-of-range values keep the invite action disabled and show an inline validation message instead of relying on a mutation error.
+
+Member search results use the native semantics of a labeled list containing buttons; they do not claim combobox/listbox semantics without the corresponding keyboard interaction. Selecting a result exposes an explicit linked-member state. If the organizer edits the selected email so it no longer matches that member, the client clears the hidden `userId`; the organizer can also choose “Use email only” explicitly. This prevents a stale account identity from being submitted with an unrelated address.
+
+Assignment rows are paginated rather than returned as an unbounded event collection. The first page remains reactive; later pages are bounded point-in-time reads. The client deduplicates rows by assignment ID and discards later-page snapshots whenever the reactive first-page IDs or cursor change, preventing inserts at the page boundary from dropping or duplicating assignments. Expanding a row loads that assignment's guests through an indexed, bounded point-in-time query. While expanded, a change to that assignment's reactive `usedSlots` invalidates the cached guest page and triggers a bounded first-page refetch; older pages remain available only after an explicit Load more. The existing `guests.listByEvent` remains its current capped full-array roster in this release; it is not described or reimplemented as pagination. The accurate total comes from `guestListEventStats.totalGuestAdmissionCount`, so the cap cannot under-report the overview.
 
 Bulk staff rows accept `name`, `email`, and optional `slot override`. Role is always Staff. Extend the shared import field union and config with target `assignmentStaff`, canonical field `slotOverride`, documented header synonyms, integer/range validation, and row-level preview errors. Extend `importBatches.target` with `assignmentStaff`; its batch key is scoped by event plus target, and the durable result keeps the existing inserted/skipped/invalid row outcome shape. Duplicate active assignments are reported as skipped rather than producing multiple credentials. The batch transaction creates assignment/admission records and queues bounded email work; it does not send inline.
 
@@ -209,6 +217,8 @@ Add a Source column or equivalent field to desktop and mobile guest presentation
 - legacy/admin-created guest: the existing manual/default presentation.
 
 Attribution is rendered from the immutable source snapshot stored on each guest row and remains visible after revocation without N+1 reads. The retained assignment remains the authorization/audit lineage, not the Guest-tab display join.
+
+Existing organizer controls are source-aware. Editing a self-service row preserves its immutable source fields and requires a valid email; changing the normalized recipient clears the prior sent marker and queues a recipient-scoped ticket attempt. Removing a self-service row uses the shared sourced-guest removal helper so assignment and event counters stay consistent. An `assignment_admission` row linked to an active assignment cannot be removed through the generic Guest tab; revocation must end the assignment first. This preserves the invariant that every active assignment retains the admission it created.
 
 ## Delegate Experience
 
@@ -228,7 +238,7 @@ The page loads one narrow delegate view model containing display-safe event fiel
 
 Add is disabled when usage is at or above the grant, while edit and remove remain available. The server remains authoritative so concurrent tabs or requests cannot exceed the grant.
 
-Changing a self-service guest's email resets delivery state and schedules the ticket to the new normalized address. A failed send does not roll back or discard the admission; the page shows a retry state. Removing the guest follows the existing guest removal behavior and invalidates its QR admission because the record no longer exists.
+Changing a self-service guest's email resets delivery state and schedules the ticket to the new normalized address. Ticket-delivery deduplication is scoped by guest ID and normalized recipient, so a successful send to an old address cannot suppress delivery to the corrected address. Completion also verifies that the attempted recipient still matches the guest's current email; a late old-address success never marks the new address as sent. A failed send does not roll back or discard the admission; the page shows a retry state. Removing the guest follows the existing guest removal behavior and invalidates its QR admission because the record no longer exists.
 
 ## Backend and Frontend Contracts
 
@@ -283,22 +293,22 @@ Adding a self-service guest is a delegate-authorized mutation that:
 4. creates the sourced guest row and increments assignment/event counters in the same transaction;
 5. schedules the existing guest ticket action automatically.
 
-Convex mutation serialization and the authoritative assignment counter update in one mutation prevent concurrent submissions from exceeding the grant without collecting child rows. Organizer and delegate removal route through one shared guest-removal helper so sourced counters cannot drift. Email delivery is asynchronous. Delivery failure preserves the admission and is retriable through the existing delivery/guest send-lock behavior.
+Convex mutation serialization and the authoritative assignment counter update in one mutation prevent concurrent submissions from exceeding the grant without collecting child rows. Organizer and delegate removal of self-service rows route through one shared guest-removal helper so sourced counters cannot drift. Generic organizer removal rejects the admission created for an active assignment. Organizer and delegate self-service edits share the same source-preserving, required-email, recipient-reset behavior. Email delivery is asynchronous and recipient-scoped. Delivery failure preserves the admission and is retriable through the existing delivery/guest send-lock behavior.
 
 The per-event stats document is an intentional human-paced write point: it receives assignment/quota/guest-list changes, not scans, check-ins, ticket purchases, or email-delivery status updates. This keeps overview reads constant-time without adding a new aggregate dependency. If deployment insights later show OCC contention on this document, the repairable stats design permits sharding or asynchronous aggregation without changing quota correctness, which remains anchored on each assignment's `usedSlots`.
 
 Bulk assignment mutations enforce the repository import batch cap and keep each transaction within document/read/write budgets. Email work is queued through existing internal delivery/workpool patterns instead of sending inline or invoking one action per row serially. Reconciliation and email-key backfill use the installed migrations component with cursor-based batches, dry-run coverage, resumability, and explicit verification.
 
-Reactive subscriptions are page-level and narrow: one assignment page, one stats row, and the existing capped guest roster. Expanded assignment guests subscribe only for the currently expanded row and use skip otherwise. No list item creates its own event, user, assignment, or source subscription. Dashboard/event-end reads follow the repository's shared time-gating pattern; server-authoritative time is retained even where it limits query caching because a client-supplied timestamp cannot be trusted for access control.
+Reactive subscriptions are page-level and narrow: the first assignment page, one stats row, and the existing capped guest roster. Later assignment pages and expanded assignment guests use bounded point-in-time reads, not live subscriptions. The client invalidates later assignment pages when the reactive boundary changes and refetches an expanded guest first page when that assignment's reactive usage changes. No list item creates its own event, user, assignment, or source subscription. Dashboard/event-end reads follow the repository's shared time-gating pattern; server-authoritative time is retained even where it limits query caching because a client-supplied timestamp cannot be trusted for access control.
 
 ## Migration and Release Sequence
 
 This is a staged widen/backfill/enable rollout using the installed `@convex-dev/migrations` component:
 
 1. **Widen and dual-write:** add optional organizer/guest fields, new tables, validators, indexes, and disabled `guestListFeatureState`. Update every guest creator/editor/importer/remover plus testing seeds in the same change to maintain `emailKey`, preserve immutable source fields across `db.replace`, and maintain total-admission stats when a stats row exists. Public assignment/delegate functions remain fail-closed while disabled.
-2. **Backfill:** run dry-run-tested, cursor-resumable migrations for existing guest `emailKey` values and per-event `totalGuestAdmissionCount`/stats rows. No assignment admission lookup relies on the new guest email index before this completes.
+2. **Backfill:** run dry-run-tested, cursor-resumable migrations for existing guest `emailKey` values, per-event `totalGuestAdmissionCount`/stats rows, and historical `emailDeliveries.recipientKey` values. Run `backfillEmailDeliveryRecipientKeys` after its optional field and index deploy but before enabling self-service guest lists. No assignment admission lookup relies on the new guest email index before this completes; recipient-scoped delivery remains protected during the email-delivery migration by the bounded legacy fallback.
 3. **Verify:** use migration status plus bounded verification functions to confirm every guest with an email has the expected normalized key and every event's guest count matches its stats row. Mark the two completion flags only through an internal verifier that rechecks the migration state.
-4. **Enable:** set `enabledAt` only after both flags are true. The organizer/delegate UI checks the feature-state query and does not expose creation or token flows earlier. Existing deployments can safely run widened code while backfill is underway.
+4. **Enable:** set `enabledAt` only after both guest-list verification flags are true and the recipient-key migration has completed. The organizer/delegate UI checks the feature-state query and does not expose creation or token flows earlier. Existing deployments can safely run widened code while backfill is underway.
 5. **Reconcile:** run the bounded counter reconciliation after enablement and retain it as an internal repair tool. Source fields remain optional because legacy/manual guests legitimately have no assignment source; no unsafe narrowing deploy is required.
 
 Runbook instructions name the exact migration functions, dry-run/status/verification commands, enable function, and rollback behavior after implementation confirms their generated names. The agent does not execute these against production.
@@ -308,8 +318,9 @@ Runbook instructions name the exact migration functions, dry-run/status/verifica
 - An assignment cannot be created with a negative, fractional, or unreasonably large grant; the implementation uses a documented upper bound shared by backend and UI validation.
 - Duplicate normalized emails in a bulk upload are skipped with row-level outcomes.
 - A delegate cannot view or modify another assignment's guests, even for the same event.
-- An organizer may edit or remove sourced guests through existing organizer controls.
-- Organizer removal of a sourced guest immediately reduces the assignment's used count.
+- An organizer may edit self-service sourced guests through source-aware organizer controls; a valid email remains required and a changed address queues recipient-scoped delivery.
+- Organizer removal of a self-service sourced guest immediately reduces the assignment's used count.
+- The admission created for an active assignment cannot be removed through generic organizer controls. After revocation, ordinary removal policy applies without erasing attribution from retained rows.
 - Revocation and below-usage reductions never delete or detach existing guest sources.
 - Event cancellation follows the event's established admission policy; self-service management is unavailable when the shared access helper considers the event closed. The implementation must not invent a second lifecycle rule.
 - If the delegate already has a valid ticket, assignment creation does not send or create a duplicate admission ticket. The management invitation is still sent.
@@ -336,6 +347,9 @@ Backend tests cover:
 - bulk staff validation, idempotency, duplicate handling, and optional overrides;
 - per-assignment and per-event counter maintenance plus reconciliation;
 - email scheduling, failures, retry behavior, and changed-email delivery state;
+- recipient-scoped delivery deduplication, including a previously delivered guest whose email changes and a late completion for the old recipient;
+- optional recipient-key writes, indexed lookup, bounded legacy fallback, migration patching, and fail-closed behavior above the legacy scan cap;
+- source-aware organizer edits/removals and rejection of active assignment-admission deletion;
 - authorization rejection for non-managing organizers and unrelated delegates;
 - internal automatic-send source validation versus public admin resend authorization;
 - staged feature-state/backfill guards, replace-path source preservation, and total-admission counter maintenance;
@@ -348,8 +362,11 @@ Backend tests cover:
 Frontend tests use Angular CDK harnesses and cover:
 
 - community settings defaults and accessible help-tip content;
+- defaults loading/error gating that prevents unresolved 2/2 values from being saved;
 - member search/email assignment and override behavior;
+- optional override range validation, selected-member unlinking after email edits, and semantic native search-result controls;
 - assignment usage, totals, source labels, resend, edit, and revoke warnings;
+- assignment-page deduplication/invalidation and expanded-guest refetch after usage changes;
 - shared bulk-import integration for staff;
 - dashboard action visibility for active future assignments only;
 - signed-in and token-based delegate loading states;
@@ -382,7 +399,6 @@ Pass 1 applied the Convex best-practices checklist to the approved design.
 - Added explicit argument/return validators, shared input caps, internal function boundaries, and idempotency keys for credential/email-producing operations.
 - Required one shared sourced-guest removal helper so organizer and delegate deletion paths update counters consistently.
 - Added bounded, resumable counter reconciliation and corresponding tests.
-- No finding was left unapplied in this pass.
 
 ## Security Audit
 
@@ -395,7 +411,6 @@ Pass 2 re-read the Pass 1 design and applied the Convex security-audit checklist
 - Added operation-specific rate limits for public delegate and organizer email/creation paths with neutral token-resolution errors.
 - Restricted delegate return shapes to the authorized assignment and required internal email actions to reload authoritative records.
 - Added PII-minimized audit logging for sensitive assignment and delegate mutations.
-- No security/performance conflict was introduced, and no finding was left unapplied in this pass.
 
 ## Performance Audit
 
@@ -406,8 +421,7 @@ Pass 3 re-read the security-hardened design and applied the Convex performance-a
 - Collapsed the delegate page into one narrow view model and limited reactive subscriptions to page-level resources, with expanded-row guest queries skipped unless selected.
 - Kept assignment `usedSlots` as the quota correctness point and documented the event stats row as a low-frequency overview optimization, including the measured-signal threshold for future sharding.
 - Bounded bulk mutations and routed email fan-out through existing delivery/workpool patterns; required migrations-component batching and verification for backfill/reconciliation.
-- Preserved server-authoritative event time despite cache cost because client time cannot safely enforce access. This is a deliberate security-over-cache tradeoff, not an unresolved conflict.
-- No finding was left unapplied in this pass.
+- Preserved server-authoritative event time despite cache cost because client time cannot safely enforce access. This records the deliberate security-over-cache tradeoff.
 
 ## Code Review
 
@@ -423,4 +437,22 @@ Pass 4 used an independent code-reviewer agent to re-read the fully audited spec
 - Named `hasEventEnded` and documented its exact explicit-end, day-boundary fallback, malformed-date, cancellation, and equality semantics.
 - Defined admission validity/status and the ticket/guest indexes needed for user/email deduplication.
 - Replaced the nonexistent generic token abstraction with a dedicated assignment token store and specified fragment scrub ordering, browser/SSR behavior, persistence, and cleanup.
-- All ten findings were applied to the spec body; none were deferred or left unresolved.
+- The ten review findings produced the contract, rollout, routing, import, event-time, admission, and token-store changes listed above.
+
+## Corrective Audit Addendum
+
+### Best Practices corrective pass
+
+Recorded recipient-scoped idempotency for changed-email delivery, one source-aware organizer edit/removal path, the active-assignment admission invariant, and server-aligned defaults and override validation.
+
+### Security corrective pass
+
+Recorded selected-member unlinking when email identity diverges, source ownership checks for organizer edits, generic-deletion protection for active delegate admissions, and current-recipient matching for late delivery completions.
+
+### Performance corrective pass
+
+Recorded the reactive first assignment page, point-in-time later pages, pagination-boundary invalidation, assignment-ID deduplication, and bounded expanded-guest refetch on usage change. Added the optional normalized delivery key and its capped legacy fallback to make the rollout read path explicit.
+
+### Code Review corrective pass
+
+Recorded loading/error states, override validation, identity unlinking, recipient-aware ticket delivery, source-aware organizer mutations, admission deletion protection, pagination invalidation, bounded guest refresh, native search-result semantics, and the recipient-key migration-before-enable sequence in the body and testing strategy.

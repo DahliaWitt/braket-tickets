@@ -323,3 +323,81 @@ Batch-level, in the `check-in`/import audit categories (values in
 
 Audit entries and error messages carry counts, batch keys, and row indexes
 only — never raw names or emails.
+
+## Self-service guest-list rollout and operations
+
+Community artist/staff defaults are copied onto each new per-event assignment;
+changing a default never changes existing grants. Community Settings keeps the
+defaults form unavailable until confirmed values load, so unresolved or failed
+reads cannot overwrite saved values with the effective 2/2 fallback. Per-event
+slot overrides accept whole numbers from 0 through 100. Selecting a community
+member links that account only while the entered email still matches; editing
+the address unlinks the hidden account identity, and “Use email only” does so
+explicitly. Search results remain a native list of buttons rather than an
+incomplete listbox widget. Reducing a grant below usage or revoking an
+assignment preserves every existing guest and its snapshotted
+source attribution. Revocation immediately ends both signed-in and emailed-link
+access. Organizer edits to a self-service guest keep the source attribution and
+require a valid email; changing that email queues a fresh ticket for the
+corrected recipient. Organizer removal of a self-service guest uses the same
+counter-maintaining path as delegate removal. The assignment holder's admission
+cannot be deleted from the generic guest roster while the assignment is active.
+Bulk staff import uses durable target `assignmentStaff` and accepts name, email,
+and optional `slotOverride`. This target has a guest-list-specific
+50-row cap because every accepted row may create an assignment, admission,
+audit record, counters, and scheduled delivery work in one transaction. Split
+larger rosters into separately keyed batches.
+
+The assignment list keeps only its first page reactive. Loaded later pages are
+deduplicated by assignment ID and discarded when the first-page boundary
+changes. Expanded guest rows are bounded snapshots, not live subscriptions;
+when an expanded assignment's live usage changes, its first guest page is
+refetched, and additional pages require Load more again.
+
+The feature remains fail-closed until both guest-list verification flags are
+complete and `guest_list/maintenance.enable` records `enabledAt`. Operational
+enablement also requires the recipient-key migration below. Use the installed
+migration runner in the deployment being prepared:
+
+```bash
+pnpm convex run migrations:runGuestListBackfills '{"dryRun":true}'
+pnpm convex run migrations:runGuestListBackfills
+pnpm convex run migrations:backfillEmailDeliveryRecipientKeys '{"dryRun":true}'
+pnpm convex run migrations:backfillEmailDeliveryRecipientKeys
+pnpm convex run guest_list/maintenance:recordBackfillVerification
+```
+
+Poll the feature state while the verifier advances through its scheduled
+batches:
+
+```bash
+pnpm convex run guest_list/maintenance:getFeatureState
+```
+
+Wait until `verificationInProgress` is `false`, both completion flags are
+`true`, and `verificationCompletedAt` is present. Then enable the feature:
+
+```bash
+pnpm convex run guest_list/maintenance:enable
+```
+
+The recipient-key migration must finish before `enable`. New email-delivery rows
+already write the optional normalized key. Until the backfill completes,
+recipient-scoped deduplication checks the normalized and exact indexes, then a
+maximum of 100 unkeyed legacy deliveries for the same source; it fails closed
+rather than scanning beyond that cap or risking a duplicate ticket.
+
+Inspect `guest_list/maintenance.getFeatureState` before exposing the organizer
+UI. Verification is cursor-batched and self-schedules until every guest and
+event has been checked; `enable` rejects while `verificationInProgress` is true
+or either completed scan found a mismatch. Re-run
+`recordBackfillVerification` after correcting a mismatch to start a fresh
+authoritative scan. If counters drift, run
+`guest_list/maintenance.reconcileEventCounters` with the affected `eventId`.
+Rollback is fail-closed: run `pnpm convex run guest_list/maintenance:disable`;
+do not delete assignments or sourced guests, because those rows preserve ticket
+validity and attribution.
+
+Guest-list audit events follow the same 365-day retention window as admin audit
+logs. `guest_list/maintenance.cleanupAuditEvents` deletes them in resumable
+500-row batches and self-schedules while a full expired batch remains.

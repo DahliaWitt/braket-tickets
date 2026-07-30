@@ -214,4 +214,11 @@ export class DashboardComponentHarness extends ComponentHarness {
     const el = await this.locatorForOptional('z-skeleton')();
     return el !== null;
   }
+
+  async getManageGuestListHref(): Promise<string | null> {
+    const link = await this.locatorForOptional(
+      '[data-testid="dashboard-manage-guest-list"]',
+    )();
+    return link ? link.getAttribute('href') : null;
+  }
 }

@@ -123,6 +123,12 @@
           </th>
           <th
             scope="col"
+            class="px-6 py-4 font-mono text-xs tracking-widest text-muted-foreground uppercase"
+          >
+            Source
+          </th>
+          <th
+            scope="col"
             class="px-6 py-4 text-right font-mono text-xs tracking-widest text-muted-foreground uppercase"
           >
             Actions
@@ -173,6 +179,9 @@
                 class="max-w-xs truncate px-6 py-4 text-sm text-muted-foreground"
               >
                 {{ guest.notes || '—' }}
+              </td>
+              <td class="px-6 py-4 font-mono text-xs text-muted-foreground">
+                {{ guestSourceLabel(guest) }}
               </td>
               <td class="space-x-2 px-6 py-4 text-right">
                 <button
@@ -251,7 +260,7 @@
           } @empty {
             <tr>
               <td
-                colspan="4"
+                colspan="5"
                 class="px-6 py-12 text-center font-mono text-sm text-muted-foreground"
               >
                 No guests added yet.
@@ -299,6 +308,10 @@
               <div>
                 <div class="mb-1 text-muted-foreground uppercase">Notes</div>
                 <div>{{ guest.notes || '—' }}</div>
+              </div>
+              <div class="col-span-2">
+                <div class="mb-1 text-muted-foreground uppercase">Source</div>
+                <div>{{ guestSourceLabel(guest) }}</div>
               </div>
             </div>
 

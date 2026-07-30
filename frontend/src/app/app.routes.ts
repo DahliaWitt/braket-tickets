@@ -129,6 +129,13 @@ export const routes: Routes = [
     loadChildren: () =>
       import('./features/admin/scanner.routes').then((m) => m.SCANNER_ROUTES),
   },
+  {
+    path: 'guest-list/manage',
+    loadComponent: () =>
+      import('./features/guest-lists/pages/guest-list-manage/guest-list-manage.component').then(
+        (m) => m.GuestListManageComponent,
+      ),
+  },
   // Redirect short community-events URLs to the canonical events page with query param.
   {
     path: 'c/:slug',
@@ -238,6 +245,22 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/tickets/pages/tickets/tickets.component').then(
             (m) => m.TicketsComponent,
+          ),
+        canActivate: [authGuard],
+      },
+      {
+        path: 'guest-lists',
+        loadComponent: () =>
+          import('./features/guest-lists/pages/guest-lists/guest-lists.component').then(
+            (m) => m.GuestListsComponent,
+          ),
+        canActivate: [authGuard],
+      },
+      {
+        path: 'guest-lists/:assignmentId',
+        loadComponent: () =>
+          import('./features/guest-lists/pages/guest-list-manage/guest-list-manage.component').then(
+            (m) => m.GuestListManageComponent,
           ),
         canActivate: [authGuard],
       },

@@ -465,6 +465,13 @@ export async function update(
   }
   if (hasPatch) {
     await ctx.db.patch('events', id, patch);
+    if (patch.date !== undefined) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.guest_list.maintenance.syncAssignmentEventDate,
+        {eventId: id, eventDate: patch.date},
+      );
+    }
   }
 
   const replacedPosterId = event.poster ? asStorageId(event.poster) : null;

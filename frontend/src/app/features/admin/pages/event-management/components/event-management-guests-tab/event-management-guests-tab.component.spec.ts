@@ -240,6 +240,39 @@ describe('EventManagementGuestsTabComponent', () => {
     );
   });
 
+  it('shows immutable self-service source attribution', async () => {
+    fixture.componentRef.setInput('guests', [
+      {
+        ...mockGuest,
+        sourceKind: 'self_service',
+        sourceRole: 'artist',
+        sourceDisplayName: 'DJ Moth',
+      },
+    ]);
+    fixture.detectChanges();
+
+    expect(await harness.hasGuestRowWithText('Added by Artist DJ Moth')).toBe(
+      true,
+    );
+  });
+
+  it('labels an assignment admission without counting it as a sourced guest', async () => {
+    fixture.componentRef.setInput('guests', [
+      {
+        ...mockGuest,
+        type: 'staff',
+        sourceKind: 'assignment_admission',
+        sourceRole: 'staff',
+        sourceDisplayName: 'Riley Crew',
+      },
+    ]);
+    fixture.detectChanges();
+
+    expect(
+      await harness.hasGuestRowWithText('Staff assignment · Riley Crew'),
+    ).toBe(true);
+  });
+
   it('opens the bulk-import surface and reaches addMany with the guest row shape', async () => {
     const dataChangedSpy = vi.fn();
     fixture.componentInstance.dataChanged.subscribe(dataChangedSpy);

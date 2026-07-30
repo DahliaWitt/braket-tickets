@@ -352,6 +352,7 @@ export type DataModel = {
       manual: boolean;
       provider: "resend" | "smtp";
       recipient: string;
+      recipientKey?: string;
       resendId?: string;
       sentAt: number;
       source:
@@ -365,7 +366,8 @@ export type DataModel = {
         | "ticket"
         | "payout"
         | "resale_available"
-        | "auth";
+        | "auth"
+        | "guest_list_invite";
       sourceId: string;
       _id: Id<"emailDeliveries">;
       _creationTime: number;
@@ -379,6 +381,7 @@ export type DataModel = {
       | "manual"
       | "provider"
       | "recipient"
+      | "recipientKey"
       | "resendId"
       | "sentAt"
       | "source"
@@ -391,6 +394,18 @@ export type DataModel = {
       by_resendId: ["resendId", "_creationTime"];
       by_sentAt: ["sentAt", "_creationTime"];
       by_source: ["source", "sourceId", "_creationTime"];
+      by_source_and_recipient: [
+        "source",
+        "sourceId",
+        "recipient",
+        "_creationTime",
+      ];
+      by_source_and_recipientKey: [
+        "source",
+        "sourceId",
+        "recipientKey",
+        "_creationTime",
+      ];
     };
     searchIndexes: {};
     vectorIndexes: {};
@@ -411,7 +426,8 @@ export type DataModel = {
         | "ticket"
         | "payout"
         | "resale_available"
-        | "auth";
+        | "auth"
+        | "guest_list_invite";
       sourceId: string;
       _id: Id<"emailDeliveryFailures">;
       _creationTime: number;
@@ -699,16 +715,245 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  guestListAssignments: {
+    document: {
+      admissionGuestId?: Id<"guests">;
+      createdAt: number;
+      createdBy: Id<"users">;
+      displayName: string;
+      email: string;
+      emailKey: string;
+      eventDate?: string;
+      eventId: Id<"events">;
+      grantedSlots: number;
+      idempotencyKey: string;
+      inviteAttemptId?: string;
+      inviteFailureCode?: string;
+      inviteState: "pending" | "accepted" | "failed";
+      invitedAt: number;
+      lastInviteAcceptedAt?: number;
+      lastInviteSentAt?: number;
+      lastResendIdempotencyKey?: string;
+      organizerId: Id<"organizers">;
+      pendingTokenDigest?: string;
+      pendingTokenPrefix?: string;
+      redeemedAt?: number;
+      revokedAt?: number;
+      revokedBy?: Id<"users">;
+      role: "artist" | "staff";
+      status: "active" | "revoked";
+      tokenDigest?: string;
+      tokenPrefix?: string;
+      usedSlots: number;
+      userId?: Id<"users">;
+      _id: Id<"guestListAssignments">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "admissionGuestId"
+      | "createdAt"
+      | "createdBy"
+      | "displayName"
+      | "email"
+      | "emailKey"
+      | "eventDate"
+      | "eventId"
+      | "grantedSlots"
+      | "idempotencyKey"
+      | "inviteAttemptId"
+      | "invitedAt"
+      | "inviteFailureCode"
+      | "inviteState"
+      | "lastInviteAcceptedAt"
+      | "lastInviteSentAt"
+      | "lastResendIdempotencyKey"
+      | "organizerId"
+      | "pendingTokenDigest"
+      | "pendingTokenPrefix"
+      | "redeemedAt"
+      | "revokedAt"
+      | "revokedBy"
+      | "role"
+      | "status"
+      | "tokenDigest"
+      | "tokenPrefix"
+      | "usedSlots"
+      | "userId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_emailKey_and_status: ["emailKey", "status", "_creationTime"];
+      by_emailKey_and_status_and_userId_and_eventDate: [
+        "emailKey",
+        "status",
+        "userId",
+        "eventDate",
+        "_creationTime",
+      ];
+      by_eventId_and_emailKey_and_status: [
+        "eventId",
+        "emailKey",
+        "status",
+        "_creationTime",
+      ];
+      by_eventId_and_idempotencyKey: [
+        "eventId",
+        "idempotencyKey",
+        "_creationTime",
+      ];
+      by_eventId_and_status: ["eventId", "status", "_creationTime"];
+      by_organizerId_and_status: ["organizerId", "status", "_creationTime"];
+      by_pendingTokenPrefix: ["pendingTokenPrefix", "_creationTime"];
+      by_tokenPrefix: ["tokenPrefix", "_creationTime"];
+      by_userId_and_status: ["userId", "status", "_creationTime"];
+      by_userId_and_status_and_eventDate: [
+        "userId",
+        "status",
+        "eventDate",
+        "_creationTime",
+      ];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  guestListAuditEvents: {
+    document: {
+      action:
+        | "assignment.create"
+        | "assignment.grant_change"
+        | "assignment.invite"
+        | "assignment.resend"
+        | "assignment.revoke"
+        | "assignment.user_link"
+        | "guest.add"
+        | "guest.edit"
+        | "guest.remove";
+      actorKind:
+        "organizer" | "signed_in_delegate" | "token_delegate" | "system";
+      actorUserId?: Id<"users">;
+      afterValue?: number;
+      assignmentId: Id<"guestListAssignments">;
+      beforeValue?: number;
+      createdAt: number;
+      eventId: Id<"events">;
+      _id: Id<"guestListAuditEvents">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "action"
+      | "actorKind"
+      | "actorUserId"
+      | "afterValue"
+      | "assignmentId"
+      | "beforeValue"
+      | "createdAt"
+      | "eventId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_assignmentId_and_createdAt: [
+        "assignmentId",
+        "createdAt",
+        "_creationTime",
+      ];
+      by_eventId_and_createdAt: ["eventId", "createdAt", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  guestListEventStats: {
+    document: {
+      activeArtistGuestCount: number;
+      activeAssignmentCount: number;
+      activeGrantedSlots: number;
+      activeStaffGuestCount: number;
+      eventId: Id<"events">;
+      selfServiceGuestCount: number;
+      totalGuestAdmissionCount: number;
+      _id: Id<"guestListEventStats">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "activeArtistGuestCount"
+      | "activeAssignmentCount"
+      | "activeGrantedSlots"
+      | "activeStaffGuestCount"
+      | "eventId"
+      | "selfServiceGuestCount"
+      | "totalGuestAdmissionCount";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_eventId: ["eventId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  guestListFeatureState: {
+    document: {
+      emailKeyBackfillComplete: boolean;
+      emailKeyVerificationCursor?: string;
+      emailKeyVerificationFinished?: boolean;
+      emailKeyVerificationValid?: boolean;
+      enabledAt?: number;
+      guestCountBackfillComplete: boolean;
+      guestCountVerificationCursor?: string;
+      guestCountVerificationValid?: boolean;
+      key: "singleton";
+      verificationCompletedAt?: number;
+      verificationInProgress?: boolean;
+      verificationRunId?: string;
+      verificationStartedAt?: number;
+      _id: Id<"guestListFeatureState">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "emailKeyBackfillComplete"
+      | "emailKeyVerificationCursor"
+      | "emailKeyVerificationFinished"
+      | "emailKeyVerificationValid"
+      | "enabledAt"
+      | "guestCountBackfillComplete"
+      | "guestCountVerificationCursor"
+      | "guestCountVerificationValid"
+      | "key"
+      | "verificationCompletedAt"
+      | "verificationInProgress"
+      | "verificationRunId"
+      | "verificationStartedAt";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_key: ["key", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   guests: {
     document: {
       checkedInAt?: number;
       checkedInBy?: Id<"users">;
       email?: string;
+      emailKey?: string;
       emailSendLockedAt?: number | null;
       emailedAt?: number;
       eventId: Id<"events">;
       name: string;
       notes?: string;
+      sourceAssignmentId?: Id<"guestListAssignments">;
+      sourceDisplayName?: string;
+      sourceIdempotencyKey?: string;
+      sourceKind?: "assignment_admission" | "self_service";
+      sourceRole?: "artist" | "staff";
+      ticketDeliveryState?: "queued" | "sent" | "failed";
       type: "guest" | "artist guest" | "staff";
       _id: Id<"guests">;
       _creationTime: number;
@@ -720,15 +965,34 @@ export type DataModel = {
       | "checkedInBy"
       | "email"
       | "emailedAt"
+      | "emailKey"
       | "emailSendLockedAt"
       | "eventId"
       | "name"
       | "notes"
+      | "sourceAssignmentId"
+      | "sourceDisplayName"
+      | "sourceIdempotencyKey"
+      | "sourceKind"
+      | "sourceRole"
+      | "ticketDeliveryState"
       | "type";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_event: ["eventId", "_creationTime"];
+      by_event_and_emailKey: ["eventId", "emailKey", "_creationTime"];
+      by_sourceAssignmentId: ["sourceAssignmentId", "_creationTime"];
+      by_sourceAssignmentId_and_sourceIdempotencyKey: [
+        "sourceAssignmentId",
+        "sourceIdempotencyKey",
+        "_creationTime",
+      ];
+      by_sourceAssignmentId_and_sourceKind: [
+        "sourceAssignmentId",
+        "sourceKind",
+        "_creationTime",
+      ];
     };
     searchIndexes: {};
     vectorIndexes: {};
@@ -746,7 +1010,7 @@ export type DataModel = {
         }>;
         skippedCount: number;
       };
-      target: "guests" | "importedTickets";
+      target: "guests" | "importedTickets" | "assignmentStaff";
       _id: Id<"importBatches">;
       _creationTime: number;
     };
@@ -1225,6 +1489,8 @@ export type DataModel = {
     document: {
       codeOfConduct?: string;
       contactInfo?: string;
+      defaultArtistGuestSlots?: number;
+      defaultStaffGuestSlots?: number;
       description?: string;
       email?: string;
       isPlatformOrganizer?: boolean;
@@ -1259,6 +1525,8 @@ export type DataModel = {
       | "_id"
       | "codeOfConduct"
       | "contactInfo"
+      | "defaultArtistGuestSlots"
+      | "defaultStaffGuestSlots"
       | "description"
       | "email"
       | "isPlatformOrganizer"
@@ -1690,6 +1958,12 @@ export type DataModel = {
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
+      by_event_and_rosterEmailLower_and_status: [
+        "eventId",
+        "rosterEmailLower",
+        "status",
+        "_creationTime",
+      ];
       by_event_and_roster_active_and_sort: [
         "eventId",
         "rosterIsActive",
