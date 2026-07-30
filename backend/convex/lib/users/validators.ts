@@ -33,10 +33,16 @@ export const currentUserValidator = v.object({
   id: v.id('users'),
 });
 
+// Raw `users` document shape. Must cover every field in the schema's users
+// table: `getInternal` returns `ctx.db.get` results unstripped, and Convex
+// return validation rejects unknown fields, so a missing field here breaks
+// every caller (checkout resolves identity through it) for any user whose doc
+// has that field set. validators.test.ts asserts parity with the schema.
 export const internalUserValidator = v.object({
   ...userProfileFields,
   emailChangeToken: v.optional(v.string()),
   emailChangeTokenExpiry: v.optional(v.number()),
+  defaultCommunityAdminOrganizerId: v.optional(v.id('organizers')),
 });
 
 export const connectedAccountValidator = v.object({
