@@ -7,6 +7,7 @@ export type PublicEndpointRateLimitName =
   | 'listPublicEvents'
   | 'listPublicCommunity'
   | 'getPublicCommunityBySlug'
+  | 'getPublicEventPreview'
   | 'unsubscribeEndpoint';
 
 export async function isPublicEndpointRateLimited(

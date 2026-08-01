@@ -1,18 +1,9 @@
-import {handleAssetRequest} from './asset-miss';
-
-interface PagesAssetEnvironment {
-  ASSETS: {
-    fetch(request: Request): Promise<Response>;
-  };
-}
-
-interface PagesRequestContext {
-  request: Request;
-  env: PagesAssetEnvironment;
-}
+import {handleAssetRequest, type PagesRequestContext} from './asset-miss';
+import {applyEventPreview} from './og-preview';
 
 export async function onRequest(
   context: PagesRequestContext,
 ): Promise<Response> {
-  return handleAssetRequest(context);
+  const assetResponse = await handleAssetRequest(context);
+  return applyEventPreview(context.request, context.env, assetResponse);
 }

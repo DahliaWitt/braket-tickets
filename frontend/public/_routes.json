@@ -1,5 +1,5 @@
 {
   "version": 1,
-  "include": ["/monitor", "/monitor/*", "/*.js", "/*.css"],
+  "include": ["/monitor", "/monitor/*", "/*.js", "/*.css", "/events/*"],
   "exclude": []
 }

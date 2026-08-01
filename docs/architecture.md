@@ -31,7 +31,7 @@ Use when:
 
 Public, slow-changing data uses Angular `HttpClient` against Convex HTTP actions (`convexSiteUrl`, port 3211 locally). Responses carry cache headers and are rate-limited by IP.
 
-Examples: `/api/communities` (public directory), `/api/events/upcoming` (public event list).
+Examples: `/api/communities` (public directory), `/api/events/upcoming` (public event list), `/api/events/{id}` (single-event preview, used for OG link-unfurl metadata).
 
 Use when:
 

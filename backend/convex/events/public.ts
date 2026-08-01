@@ -1,5 +1,8 @@
 import {v} from 'convex/values';
-import {publicEventCardValidator} from '@shared/contracts/public-event';
+import {
+  publicEventCardValidator,
+  publicEventPreviewValidator,
+} from '@shared/contracts/public-event';
 
 import {internalQuery, query} from '../_generated/server';
 import {
@@ -14,6 +17,7 @@ import {
   getBatchEventAvailability,
   getEventAvailability,
   getEventById,
+  getPublicEventPreview,
   listEventsByOrganizer,
   listPublicUpcomingEvents,
   listUpcomingPublishedEvents,
@@ -36,6 +40,12 @@ export const listPublicUpcomingInternal = internalQuery({
   args: {},
   returns: v.array(publicEventCardValidator),
   handler: async (ctx) => await listPublicUpcomingEvents(ctx),
+});
+
+export const getPublicEventPreviewInternal = internalQuery({
+  args: {id: v.string()}, // raw URL segment, not v.id — may be garbage
+  returns: v.union(v.null(), publicEventPreviewValidator),
+  handler: async (ctx, args) => await getPublicEventPreview(ctx, args),
 });
 
 export const listByOrganizer = query({

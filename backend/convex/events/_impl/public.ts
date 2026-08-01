@@ -1,5 +1,6 @@
 import type {Id} from '../../_generated/dataModel';
 import type {QueryCtx} from '../../_generated/server';
+import type {PublicEventPreview} from '@shared/contracts/public-event';
 import {
   canViewCommunity,
   canViewEvent,
@@ -7,7 +8,11 @@ import {
   isPlatformAdmin,
 } from '../../lib/access';
 import {countMatchingInQuery} from '../../lib/query_scan';
-import {hasEventEnded, ongoingEventStartLowerBound} from '../../lib/timezone';
+import {
+  formatEventDateTime,
+  hasEventEnded,
+  ongoingEventStartLowerBound,
+} from '../../lib/timezone';
 import {getAuthUserId} from '../../lib/auth_identity';
 import {
   getPosterUrl,
@@ -169,4 +174,72 @@ export async function getBatchEventAvailability(
   args: {eventIds: Id<'events'>[]; now: number},
 ) {
   return await loadBatchEventAvailability(ctx, args);
+}
+
+// No schema cap exists on `description`; truncate server-side so the edge
+// never ships (and discards) up to 1MB of text for an OG meta tag.
+const PUBLIC_EVENT_PREVIEW_DESCRIPTION_MAX_LENGTH = 300;
+
+/**
+ * Public, unauthenticated single-event preview for OG/social-card
+ * unfurling. Backs the `/api/events/:id` HTTP route.
+ *
+ * `args.id` is a raw URL path segment, not a validated `Id<'events'>` — it
+ * may be garbage from a bot or a stale link, so normalization and every
+ * downstream lookup must fail closed to `null` (no existence oracle: a
+ * missing event and a denied event both return `null`).
+ *
+ * Past/ended events remain previewable by design — a shared link should
+ * keep unfurling correctly after the event has ended.
+ */
+export async function getPublicEventPreview(
+  ctx: QueryCtx,
+  args: {id: string},
+): Promise<PublicEventPreview | null> {
+  const eventId = ctx.db.normalizeId('events', args.id);
+  if (!eventId) return null;
+
+  const event = await ctx.db.get('events', eventId);
+  if (!event) return null;
+
+  // Preload the organizer once and pass it into canViewEvent's options so
+  // the access check does not repeat this read internally.
+  const organizer = await ctx.db.get('organizers', event.organizerId);
+
+  if (!(await canViewEvent(ctx, null, event, {organizer}))) {
+    return null;
+  }
+
+  // The anonymous grant path in canViewEvent requires a published event in a
+  // published community — which in turn requires a non-null organizer — so
+  // organizer is guaranteed live here. The explicit null check keeps this
+  // invariant enforced by the type system rather than an unchecked assertion.
+  if (!organizer) return null;
+
+  const rawPosterUrl = await getPosterUrl(ctx, event.poster);
+  // http:// og:image values are rejected by unfurlers and arbitrary schemes
+  // must never reach the OG card — only pass through https:// URLs. Convex
+  // storage URLs are always https, so this only affects legacy http poster
+  // values (e.g. seed data or external sources).
+  const posterUrl =
+    rawPosterUrl !== null && rawPosterUrl.startsWith('https://')
+      ? rawPosterUrl
+      : null;
+
+  return {
+    _id: event._id,
+    title: event.title,
+    description: event.description?.slice(
+      0,
+      PUBLIC_EVENT_PREVIEW_DESCRIPTION_MAX_LENGTH,
+    ),
+    date: event.date,
+    dateLabel: formatEventDateTime({
+      date: event.date,
+      endDate: event.endDate,
+    }),
+    location: event.location,
+    posterUrl,
+    organizerName: organizer.name,
+  };
 }
