@@ -1,31 +1,99 @@
 import {v} from 'convex/values';
 import {internalMutation, internalQuery} from '../_generated/server';
-import {emailDeliverySourceValidator} from '../lib/validators/email_delivery';
+import {
+  EMAIL_DELIVERY_LEGACY_RECIPIENT_SCAN_EXCEEDED,
+  emailDeliverySourceValidator,
+  UNNORMALIZABLE_RECIPIENT_KEY,
+} from '../lib/validators/email_delivery';
 import {components} from '../_generated/api';
+import {normalizeEmailOrNull} from '../lib/validation';
+import {throwAppError} from '../lib/errors';
+
+const LEGACY_RECIPIENT_SCAN_LIMIT = 100;
 
 /**
- * Returns true if any successful delivery has been recorded for the given
- * source/sourceId pair. This is the durable, non-expiring record of "an email
- * for this entity went out" — written inside the send action before any
- * caller-side bookkeeping — so it survives a downstream failure (a marker write
- * or action crash after the provider accepted the email) that would otherwise
- * let a retry re-send. Failed sends record via `recordFailure`, not here, so a
- * genuine failure leaves no delivery row and remains retryable.
+ * Returns true if a successful delivery has been recorded for the given
+ * source/sourceId pair and, when supplied, recipient. Recipient scoping lets a
+ * corrected guest address receive its own ticket without discarding the durable
+ * record that the old address was already served. This record is written inside
+ * the send action before caller-side bookkeeping, so it survives a downstream
+ * failure that would otherwise let a retry re-send. Failed sends record via
+ * `recordFailure`, not here, so a genuine failure remains retryable.
  */
 export const hasDelivery = internalQuery({
   args: {
     source: emailDeliverySourceValidator,
     sourceId: v.string(),
+    recipient: v.optional(v.string()),
   },
   returns: v.boolean(),
   handler: async (ctx, args) => {
-    const existing = await ctx.db
+    const recipient = args.recipient;
+    if (!recipient) {
+      return (
+        (await ctx.db
+          .query('emailDeliveries')
+          .withIndex('by_source', (q) =>
+            q.eq('source', args.source).eq('sourceId', args.sourceId),
+          )
+          .first()) !== null
+      );
+    }
+
+    const recipientKey = normalizeEmailOrNull(recipient);
+    if (recipientKey) {
+      const normalizedDelivery = await ctx.db
+        .query('emailDeliveries')
+        .withIndex('by_source_and_recipientKey', (q) =>
+          q
+            .eq('source', args.source)
+            .eq('sourceId', args.sourceId)
+            .eq('recipientKey', recipientKey),
+        )
+        .first();
+      if (normalizedDelivery) return true;
+    }
+
+    const exactDelivery = await ctx.db
+      .query('emailDeliveries')
+      .withIndex('by_source_and_recipient', (q) =>
+        q
+          .eq('source', args.source)
+          .eq('sourceId', args.sourceId)
+          .eq('recipient', recipient),
+      )
+      .first();
+    if (exactDelivery || !recipientKey) return exactDelivery !== null;
+
+    // During rollout, rows created before recipientKey was introduced remain
+    // safe against case-only duplicates until the migration finishes. This
+    // branch is bounded and disappears from the hot path once rows are keyed.
+    const legacyDeliveries = await ctx.db
       .query('emailDeliveries')
       .withIndex('by_source', (q) =>
         q.eq('source', args.source).eq('sourceId', args.sourceId),
       )
-      .first();
-    return existing !== null;
+      .filter((q) => q.eq(q.field('recipientKey'), undefined))
+      .take(LEGACY_RECIPIENT_SCAN_LIMIT + 1);
+    if (legacyDeliveries.length > LEGACY_RECIPIENT_SCAN_LIMIT) {
+      // Fail closed rather than risk a duplicate ticket, but do it with a
+      // structured code: this surfaces inside the organizer's per-guest
+      // "send all tickets" batch, where a redacted "Server Error" would give
+      // the operator nothing to act on.
+      throwAppError(
+        EMAIL_DELIVERY_LEGACY_RECIPIENT_SCAN_EXCEEDED,
+        'Email delivery recipient-key backfill is incomplete for a high-history source. ' +
+          'Run migrations:backfillEmailDeliveryRecipientKeys before retrying.',
+        {
+          source: args.source,
+          sourceId: args.sourceId,
+          legacyScanLimit: LEGACY_RECIPIENT_SCAN_LIMIT,
+        },
+      );
+    }
+    return legacyDeliveries.some(
+      (delivery) => normalizeEmailOrNull(delivery.recipient) === recipientKey,
+    );
   },
 });
 
@@ -43,12 +111,18 @@ export const recordDelivery = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    // Always write a key. An unnormalizable recipient gets the sentinel rather
+    // than no key at all, so it never joins the bounded legacy-row scan that
+    // `hasDelivery` falls back to during (and after) the rollout.
+    const recipientKey =
+      normalizeEmailOrNull(args.recipient) ?? UNNORMALIZABLE_RECIPIENT_KEY;
     await ctx.db.insert('emailDeliveries', {
       emailId: args.emailId,
       ...(args.resendId ? {resendId: args.resendId} : {}),
       source: args.source,
       sourceId: args.sourceId,
       recipient: args.recipient,
+      recipientKey,
       critical: args.critical,
       manual: args.manual,
       fallback: args.fallback,

@@ -55,6 +55,13 @@ import {
 import {throwNotFound, throwUnauthorized} from './errors';
 import {requireUser} from './auth_identity';
 import {
+  digestBearerToken,
+  isValidBearerTokenShape,
+  tokenPrefix,
+} from './token_digests';
+import {normalizeEmailOrNull} from './validation';
+import {hasEventEnded} from './timezone';
+import {
   type AccessCtx,
   canWithFallback,
   isPlatformAdminCached,
@@ -80,6 +87,69 @@ export {
 export type EventAnalyticsAccess =
   | {authorized: true; isDoorStaff: boolean}
   | {authorized: false; isDoorStaff: false};
+
+export type GuestListDelegateAccess =
+  | {kind: 'signedIn'; assignmentId: Id<'guestListAssignments'>}
+  | {kind: 'token'; token: string};
+
+export type GuestListAssignmentAccess = {
+  assignment: Doc<'guestListAssignments'>;
+  event: Doc<'events'>;
+  actorKind: 'signed_in_delegate' | 'token_delegate';
+  actorUserId?: Id<'users'>;
+};
+
+/**
+ * Resolves either delegate credential through the central authorization
+ * surface. Returns null with no reason detail for every unavailable state.
+ */
+export async function resolveGuestListAssignmentAccess(
+  ctx: AccessCtx,
+  access: GuestListDelegateAccess,
+): Promise<GuestListAssignmentAccess | null> {
+  let assignment: Doc<'guestListAssignments'> | null;
+  let actorKind: GuestListAssignmentAccess['actorKind'];
+  let actorUserId: Id<'users'> | undefined;
+
+  if (access.kind === 'signedIn') {
+    const user = await requireUser(ctx);
+    assignment = await ctx.db.get('guestListAssignments', access.assignmentId);
+    if (!assignment) return null;
+    const verifiedEmailKey = user.authEmailVerified
+      ? normalizeEmailOrNull(user.email)
+      : null;
+    if (
+      assignment.userId !== user._id &&
+      (assignment.userId !== undefined ||
+        verifiedEmailKey !== assignment.emailKey)
+    ) {
+      return null;
+    }
+    actorKind = 'signed_in_delegate';
+    actorUserId = user._id;
+  } else {
+    if (!isValidBearerTokenShape(access.token)) return null;
+    const prefix = tokenPrefix(access.token);
+    const candidates = await ctx.db
+      .query('guestListAssignments')
+      .withIndex('by_tokenPrefix', (q) => q.eq('tokenPrefix', prefix))
+      .take(2);
+    const digest = await digestBearerToken(
+      'guest_list_assignment',
+      access.token,
+    );
+    assignment = candidates.find((row) => row.tokenDigest === digest) ?? null;
+    if (!assignment) return null;
+    actorKind = 'token_delegate';
+  }
+
+  if (assignment.status !== 'active') return null;
+  const event = await ctx.db.get('events', assignment.eventId);
+  if (!event || event.status === 'cancelled' || hasEventEnded(event))
+    return null;
+
+  return {assignment, event, actorKind, actorUserId};
+}
 
 type EventVisibilityOrganizer = Pick<
   Doc<'organizers'>,

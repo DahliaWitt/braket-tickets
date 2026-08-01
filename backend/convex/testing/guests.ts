@@ -2,6 +2,11 @@ import {v} from 'convex/values';
 import type {Id} from '../_generated/dataModel';
 import type {MutationCtx} from '../_generated/server';
 import {validateGuestFields} from '../lib/events/guest_fields';
+import {
+  getOrCreateGuestListEventStats,
+  MAX_GUESTS_PER_EVENT_STATS,
+  updateGuestListEventStats,
+} from '../lib/guest_list/event_stats';
 import {digestBearerToken, tokenPrefix} from '../lib/token_digests';
 import {guestTypeValidator, type GuestType} from '../lib/validators/guests';
 import {testingMutation} from './wrappers';
@@ -22,16 +27,27 @@ export async function insertSeedGuest(
 ): Promise<Id<'guests'>> {
   validateGuestFields(args);
 
+  const stats = await getOrCreateGuestListEventStats(ctx, args.eventId);
+  if (stats.totalGuestAdmissionCount >= MAX_GUESTS_PER_EVENT_STATS) {
+    throw new Error(
+      `Guest seed exceeds the supported per-event limit (${MAX_GUESTS_PER_EVENT_STATS} guests)`,
+    );
+  }
+
   // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Test seed helper with direct guest state control.
   const guestId = await ctx.db.insert('guests', {
     eventId: args.eventId,
     name: args.name,
     email: args.email,
+    emailKey: args.email?.trim().toLowerCase(),
     type: args.type,
     notes: args.notes,
     checkedInAt: args.checkedInAt,
     checkedInBy: args.checkedInBy,
   });
+  await updateGuestListEventStats(ctx, stats, (current) => ({
+    totalGuestAdmissionCount: current.totalGuestAdmissionCount + 1,
+  }));
   return guestId;
 }
 

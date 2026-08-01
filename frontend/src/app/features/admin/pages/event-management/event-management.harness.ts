@@ -3,6 +3,7 @@ import {EventAnalyticsTabHarness} from '@/features/admin/components/event-analyt
 import {TicketReminderTabHarness} from '@/features/admin/components/ticket-reminder-tab/ticket-reminder-tab.component.harness';
 import {waitForHarnessCondition} from '@/testing/harness-wait';
 import {EventManagementBuyersTabHarness} from './components/event-management-buyers-tab/event-management-buyers-tab.component.harness';
+import {GuestListAssignmentsHarness} from './components/guest-list-assignments/guest-list-assignments.component.harness';
 import type {TicketTier} from '@shared/domain/ticket-tier';
 
 export class EventManagementHarness extends ComponentHarness {
@@ -34,6 +35,15 @@ export class EventManagementHarness extends ComponentHarness {
   private readonly getManagementLoadErrorEl = this.locatorForOptional(
     '[data-testid="management-load-error"]',
   );
+  private readonly getGuestListUnavailableEl = this.locatorForOptional(
+    '[data-testid="guest-list-feature-unavailable"]',
+  );
+  private readonly getGuestListWorkspaceErrorEl = this.locatorForOptional(
+    '[data-testid="guest-list-workspace-error"]',
+  );
+  private readonly getGuestListAssignmentsHarness = this.locatorForOptional(
+    GuestListAssignmentsHarness,
+  );
   private readonly getResaleLostProcessingFeesValue = this.locatorForOptional(
     '[data-testid="resale-lost-processing-fees-value"]',
   );
@@ -54,6 +64,28 @@ export class EventManagementHarness extends ComponentHarness {
   async getManagementLoadErrorText(): Promise<string | null> {
     const el = await this.getManagementLoadErrorEl();
     return el ? (await el.text()).trim() : null;
+  }
+
+  async getGuestListUnavailableText(): Promise<string | null> {
+    const el = await this.getGuestListUnavailableEl();
+    return el ? (await el.text()).trim() : null;
+  }
+
+  async getGuestListWorkspaceErrorText(): Promise<string | null> {
+    const el = await this.getGuestListWorkspaceErrorEl();
+    return el ? (await el.text()).trim() : null;
+  }
+
+  /**
+   * The assignment workspace's own harness. Null until the guests tab is open
+   * and the rollout gate is enabled.
+   */
+  async getGuestListWorkspaceHarness(): Promise<GuestListAssignmentsHarness | null> {
+    return this.getGuestListAssignmentsHarness();
+  }
+
+  async hasGuestListAssignmentsWorkspace(): Promise<boolean> {
+    return (await this.getGuestListAssignmentsHarness()) !== null;
   }
 
   /**

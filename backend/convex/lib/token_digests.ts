@@ -2,6 +2,7 @@ export type BearerTokenPurpose =
   | 'admin_invite'
   | 'magic_link'
   | 'guest_session'
+  | 'guest_list_assignment'
   | 'marketing_unsubscribe_user'
   | 'marketing_unsubscribe_address'
   | 'marketing_tracking_open'
@@ -10,6 +11,8 @@ export type BearerTokenPurpose =
 const DIGEST_VERSION = 'v1';
 const TOKEN_BYTE_LENGTH = 32;
 const TOKEN_PREFIX_LENGTH = 8;
+const BASE64URL_TOKEN_LENGTH = 43;
+const BASE64URL_TOKEN_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 function getDigestSecret(): string {
   const secret = process.env['TOKEN_DIGEST_SECRET'];
@@ -44,6 +47,14 @@ export function generateBearerToken(): string {
 
 export function tokenPrefix(token: string): string {
   return token.slice(0, TOKEN_PREFIX_LENGTH);
+}
+
+/** Validates the exact shape minted by {@link generateBearerToken}. */
+export function isValidBearerTokenShape(token: string): boolean {
+  return (
+    token.length === BASE64URL_TOKEN_LENGTH &&
+    BASE64URL_TOKEN_PATTERN.test(token)
+  );
 }
 
 export async function digestBearerToken(

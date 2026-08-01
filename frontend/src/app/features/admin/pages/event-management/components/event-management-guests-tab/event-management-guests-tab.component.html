@@ -123,6 +123,12 @@
           </th>
           <th
             scope="col"
+            class="px-6 py-4 font-mono text-xs tracking-widest text-muted-foreground uppercase"
+          >
+            Source
+          </th>
+          <th
+            scope="col"
             class="px-6 py-4 text-right font-mono text-xs tracking-widest text-muted-foreground uppercase"
           >
             Actions
@@ -133,15 +139,25 @@
         @if (isLoading()) {
           @for (i of [1, 2, 3]; track i) {
             <tr class="border-b border-border/50">
-              <td class="px-6 py-4">
+              <td data-testid="guest-loading-cell" class="px-6 py-4">
                 <div class="space-y-2">
                   <z-skeleton class="h-4 w-30" />
                   <z-skeleton class="h-3 w-45" />
                 </div>
               </td>
-              <td class="px-6 py-4"><z-skeleton class="h-5 w-15" /></td>
-              <td class="px-6 py-4"><z-skeleton class="h-4 w-25" /></td>
-              <td class="flex justify-end gap-2 px-6 py-4 text-right">
+              <td data-testid="guest-loading-cell" class="px-6 py-4">
+                <z-skeleton class="h-5 w-15" />
+              </td>
+              <td data-testid="guest-loading-cell" class="px-6 py-4">
+                <z-skeleton class="h-4 w-25" />
+              </td>
+              <td data-testid="guest-loading-cell" class="px-6 py-4">
+                <z-skeleton class="h-4 w-32" />
+              </td>
+              <td
+                data-testid="guest-loading-cell"
+                class="flex justify-end gap-2 px-6 py-4 text-right"
+              >
                 <z-skeleton class="h-8 w-8" />
                 <z-skeleton class="h-8 w-8" />
                 <z-skeleton class="h-8 w-8" />
@@ -176,6 +192,12 @@
                 class="max-w-xs truncate px-6 py-4 text-sm text-muted-foreground"
               >
                 {{ guest.notes || '—' }}
+              </td>
+              <td
+                data-testid="guest-source"
+                class="px-6 py-4 font-mono text-xs text-muted-foreground"
+              >
+                {{ guestSourceLabel(guest) }}
               </td>
               <td class="space-x-2 px-6 py-4 text-right">
                 <button
@@ -244,8 +266,10 @@
                   (click)="removeGuest(guest)"
                   data-testid="remove-guest"
                   class="text-destructive-text hover:bg-destructive/10"
-                  [attr.aria-label]="'Remove ' + guestActionLabel(guest)"
-                  [zTooltip]="'Remove ' + guestActionLabel(guest)"
+                  [zDisabled]="isAssignmentAdmission(guest)"
+                  [attr.aria-label]="removeGuestActionLabel(guest)"
+                  [attr.title]="removeGuestTooltip(guest)"
+                  [zTooltip]="removeGuestTooltip(guest)"
                 >
                   <z-icon zType="trash" />
                 </button>
@@ -253,7 +277,7 @@
             </tr>
           } @empty {
             <tr>
-              <td colspan="4">
+              <td colspan="5">
                 <app-empty-state title="no guests yet" />
               </td>
             </tr>
@@ -299,6 +323,12 @@
               <div>
                 <div class="mb-1 text-muted-foreground uppercase">Notes</div>
                 <div>{{ guest.notes || '—' }}</div>
+              </div>
+              <div class="col-span-2">
+                <div class="mb-1 text-muted-foreground uppercase">Source</div>
+                <div data-testid="guest-source">
+                  {{ guestSourceLabel(guest) }}
+                </div>
               </div>
             </div>
 
@@ -363,8 +393,10 @@
                 (click)="removeGuest(guest)"
                 data-testid="remove-guest"
                 class="border-destructive/30 text-destructive-text hover:bg-destructive/10"
-                [attr.aria-label]="'Remove ' + guestActionLabel(guest)"
-                [zTooltip]="'Remove ' + guestActionLabel(guest)"
+                [zDisabled]="isAssignmentAdmission(guest)"
+                [attr.aria-label]="removeGuestActionLabel(guest)"
+                [attr.title]="removeGuestTooltip(guest)"
+                [zTooltip]="removeGuestTooltip(guest)"
               >
                 <z-icon zType="trash" />
               </button>

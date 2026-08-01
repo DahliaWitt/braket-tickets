@@ -3,6 +3,7 @@ import {
   applicationApprovedTemplate,
   eventAnnouncementTemplate,
   eventBroadcastTemplate,
+  guestListInviteTemplate,
   payoutSentTemplate,
   purchasedTicketTemplate,
   resaleAvailableTemplate,
@@ -10,6 +11,21 @@ import {
   vettingDigestTemplate,
   vettingSubmissionTemplate,
 } from './templates';
+
+describe('guestListInviteTemplate', () => {
+  it('escapes untrusted names and strips subject newlines', () => {
+    const result = guestListInviteTemplate({
+      displayName: '<img src=x onerror=alert(1)>',
+      eventTitle: 'Danger & Delight\r\nBcc: attacker@example.com',
+      manageUrl: 'https://braket.gay/guest-list/manage#token=secret',
+    });
+
+    expect(result.html).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(result.html).toContain('Danger &amp; Delight');
+    expect(result.html).not.toContain('<img src=x');
+    expect(result.subject).not.toMatch(/[\r\n]/);
+  });
+});
 
 const baseArgs = {
   delivery: {

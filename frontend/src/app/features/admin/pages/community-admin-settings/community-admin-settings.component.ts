@@ -57,6 +57,7 @@ import {
   buildDigestHourOptions,
   type CommunityProfileFormValue,
   DebounceTimer,
+  getOrganizerStatus,
   isProfileDirty,
   moveVettingQuestion,
   needsVettingOptions,
@@ -77,16 +78,7 @@ import {
   saveCommunityAdminNotificationPreference,
   saveCommunityProfile,
 } from './community-admin-settings.actions';
-
-function getOrganizerStatus(
-  status: CommunityPublicationStatus | undefined,
-  vettingQuestions: {id: string}[] | undefined,
-): CommunityPublicationStatus {
-  if (status) return status;
-  return vettingQuestions && vettingQuestions.length > 0
-    ? 'published'
-    : 'draft';
-}
+import {GuestListDefaultsSettingsContainer} from './guest-list-defaults-settings.container';
 
 type StripeOnboardingStatus = NonNullable<
   Doc<'organizers'>['stripeOnboardingStatus']
@@ -95,7 +87,6 @@ type StripeOnboardingStatus = NonNullable<
 type ScannerGrantCandidate = FunctionReturnType<
   typeof api.communities.scanners.searchGrantCandidates
 >[number];
-
 const SCANNER_SEARCH_DEBOUNCE_MS = 300;
 
 @Component({
@@ -111,6 +102,7 @@ const SCANNER_SEARCH_DEBOUNCE_MS = 300;
     ZardTooltipDirective,
     ZardSkeletonComponent,
     StripeConnectEmbedComponent,
+    GuestListDefaultsSettingsContainer,
   ],
   templateUrl: './community-admin-settings.component.html',
   host: {

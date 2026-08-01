@@ -3,6 +3,7 @@ import {convexTest as baseConvexTest} from 'convex-test';
 import type {TestConvex} from 'convex-test';
 import schema from './schema';
 import {register as registerRateLimiter} from '@convex-dev/rate-limiter/test';
+import migrationsTest from '@convex-dev/migrations/test';
 import resendTest from '@convex-dev/resend/test';
 import workpoolTest from '@convex-dev/workpool/test';
 import authzTest from '@djpanda/convex-authz/test';
@@ -40,6 +41,7 @@ export const convexTest = (): ConvexTestInstance => {
     import.meta.glob('./**/*.ts'),
   ) as ConvexTestInstance;
   registerRateLimiter(t);
+  migrationsTest.register(t);
   resendTest.register(t);
   workpoolTest.register(t, 'payoutPool');
   workpoolTest.register(t, 'stripePool');
