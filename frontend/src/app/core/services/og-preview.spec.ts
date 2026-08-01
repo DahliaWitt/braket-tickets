@@ -263,6 +263,24 @@ describe('rewriteShellHtml', () => {
     expect(content?.length).toBeLessThanOrEqual(200);
     expect(content).toContain('…');
   });
+
+  it('never splits a surrogate pair (emoji) at the truncation boundary', () => {
+    // Every character is an astral code point (2 UTF-16 code units), so any
+    // code-unit-based slice would land mid-pair somewhere in this range.
+    const emojiDescription = '🎉'.repeat(300);
+    const html = rewriteShellHtml(
+      buildShellHtml(),
+      buildPreview({description: emojiDescription}),
+      pageUrl,
+    );
+
+    const content = getMetaContent(html, OG_DESCRIPTION_TAG);
+    expect(content).not.toBeNull();
+    expect(content).toContain('…');
+    // A lone high surrogate (not followed by a low surrogate) would render
+    // as U+FFFD in the unfurled card.
+    expect(content).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
+  });
 });
 
 describe('applyEventPreview', () => {

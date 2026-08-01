@@ -32,7 +32,7 @@ const TWITTER_CARD_META_PATTERN = /<meta\b[^>]*\bname="twitter:card"[^>]*>/;
  */
 type CfFetchInit = RequestInit & {
   cf?: {
-    cacheTtl?: number;
+    cacheTtlByStatus?: Record<string, number>;
     cacheEverything?: boolean;
   };
 };
@@ -69,10 +69,17 @@ export function escapeHtml(value: string): string {
 }
 
 function truncate(text: string, maxLength: number): string {
-  if (text.length <= maxLength) {
+  // Measure and slice by Unicode code points, not UTF-16 code units, so an
+  // emoji (surrogate pair) at the cut boundary is never split into a lone
+  // surrogate that renders as U+FFFD.
+  const codePoints = Array.from(text);
+  if (codePoints.length <= maxLength) {
     return text;
   }
-  return `${text.slice(0, maxLength - 1).trimEnd()}…`;
+  return `${codePoints
+    .slice(0, maxLength - 1)
+    .join('')
+    .trimEnd()}…`;
 }
 
 /**
@@ -192,7 +199,14 @@ async function fetchEventPreview(
   const fetchInit: CfFetchInit = {
     signal: AbortSignal.timeout(PREVIEW_FETCH_TIMEOUT_MS),
     cf: {
-      cacheTtl: PREVIEW_CACHE_TTL_SECONDS,
+      // Cache successes only. A flat cacheTtl would colo-cache 404s for the
+      // full TTL despite the origin's no-store — a draft event shared just
+      // before publishing would keep unfurling generic for 5 minutes. A TTL
+      // of 0 means "do not cache" for that status range.
+      cacheTtlByStatus: {
+        '200-299': PREVIEW_CACHE_TTL_SECONDS,
+        '400-599': 0,
+      },
       cacheEverything: true,
     },
   };

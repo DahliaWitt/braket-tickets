@@ -145,7 +145,7 @@ This fetch has a 1.5s timeout (`AbortSignal.timeout`) and fails open on any erro
 **Cache semantics — two layers:**
 
 - The Convex endpoint sends `Cache-Control: public, max-age=300, stale-while-revalidate=600` (5 min fresh, 10 min stale-while-revalidate).
-- The Function's outbound fetch also sets `cf: { cacheTtl: 300, cacheEverything: true }`, so a Cloudflare colo caches the Convex response for up to 300s independently of the browser-facing cache headers on the rewritten shell.
+- The Function's outbound fetch also sets `cf: { cacheTtlByStatus: { "200-299": 300, "400-599": 0 }, cacheEverything: true }`, so a Cloudflare colo caches successful Convex responses for up to 300s independently of the browser-facing cache headers on the rewritten shell. Error statuses (including 404s for not-yet-published events) are never colo-cached — a draft that publishes starts unfurling correctly on the next fetch.
 
 An event's title, date, or poster can take up to ~5 minutes to propagate into new unfurls after an edit, per the layers above.
 
