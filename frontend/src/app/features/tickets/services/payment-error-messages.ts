@@ -40,7 +40,13 @@ const PAYMENT_ERROR_MESSAGES = {
   TERMS_NOT_ACCEPTED: 'Please accept the terms of service to continue',
 } satisfies Record<PaymentErrorCode, string>;
 
-export function extractPaymentErrorMessage(err: unknown): string {
+const GENERIC_PAYMENT_FALLBACK =
+  'Payment processing failed. Please try again or contact support if the problem persists.';
+
+export function extractPaymentErrorMessage(
+  err: unknown,
+  fallback: string = GENERIC_PAYMENT_FALLBACK,
+): string {
   let message = '';
 
   if (err instanceof ConvexError) {
@@ -96,7 +102,7 @@ export function extractPaymentErrorMessage(err: unknown): string {
     message === 'Error' ||
     message === 'Server Error'
   ) {
-    return 'Payment processing failed. Please try again or contact support if the problem persists.';
+    return fallback;
   }
 
   return message;

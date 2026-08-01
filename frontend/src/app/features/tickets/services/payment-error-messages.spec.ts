@@ -126,4 +126,14 @@ describe('extractPaymentErrorMessage', () => {
   it('returns the generic fallback for an empty non-Convex value', () => {
     expect(extractPaymentErrorMessage(new Error(''))).toBe(GENERIC_FALLBACK);
   });
+
+  it('uses a caller-provided fallback for unmappable errors', () => {
+    const fallback = 'Could not start guest checkout. Please try again.';
+
+    expect(extractPaymentErrorMessage(new Error(''), fallback)).toBe(fallback);
+    // A mappable error still wins over the fallback.
+    expect(
+      extractPaymentErrorMessage(new ConvexError({code: 'SOLD_OUT'}), fallback),
+    ).toBe('This event is sold out');
+  });
 });

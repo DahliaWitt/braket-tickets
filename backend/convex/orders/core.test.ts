@@ -691,6 +691,60 @@ describe('orders', () => {
     expect(inventory?.soldCount).toBe(3);
   });
 
+  it('keeps a ticketed stale session on re-entry so the per-email cap survives expiry', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2030-01-01T00:00:00.000Z'));
+      const t = convexTest();
+      const {eventId} = await createEventWithInventory(t, {
+        price: 0,
+        maxTicketsPerUser: 1,
+      });
+      const email = 'stale-ticketed-guest@example.com';
+      const stale = await createGuestSession(t, email);
+
+      await t.mutation(api.orders.core.claimFreeTicketAsGuest, {
+        sessionToken: stale.sessionToken,
+        eventId,
+        quantity: 1,
+        tier: 'regular',
+        termsAccepted: true,
+        idempotencyKey: 'idem-stale-ticketed-claim',
+      });
+
+      // Age the session past the 2h inactivity window (before hard expiry),
+      // then re-enter the email. The hygiene branch in core.initiate must NOT
+      // delete the stale session: its ticket anchors the per-email cap.
+      vi.setSystemTime(new Date('2030-01-01T03:00:00.000Z'));
+      await t.mutation(internal.guest_sessions.core.initiate, {
+        email,
+        sessionToken: 'fresh-after-expiry-token',
+      });
+
+      const sessions = await t.run(async (ctx) =>
+        ctx.db
+          .query('guest_sessions')
+          .withIndex('by_email', (q) => q.eq('email', email))
+          .collect(),
+      );
+      expect(sessions).toHaveLength(2);
+
+      // The cap of 1 still counts the stale session's ticket.
+      await expect(
+        t.mutation(api.orders.core.claimFreeTicketAsGuest, {
+          sessionToken: 'fresh-after-expiry-token',
+          eventId,
+          quantity: 1,
+          tier: 'regular',
+          termsAccepted: true,
+          idempotencyKey: 'idem-stale-ticketed-second',
+        }),
+      ).rejects.toThrow('Maximum 1 tickets per user');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('rejects an idempotency key reused for a different claim instead of silently replaying', async () => {
     const t = convexTest();
     const userId = await createUser(

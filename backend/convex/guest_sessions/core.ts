@@ -192,7 +192,19 @@ export const initiate = internalMutation({
       !existing.convertedToUserId &&
       !isGuestSessionActive(existing, now)
     ) {
-      await deleteGuestSession(ctx, existing._id);
+      // Keep sessions that issued tickets: the per-email ticket cap resolves
+      // tickets through their session rows, so deleting a ticketed session
+      // would orphan its tickets from the count and let the same email exceed
+      // the cap after an expiry cycle.
+      const hasTickets = await ctx.db
+        .query('tickets')
+        .withIndex('by_guestSession', (q) =>
+          q.eq('guestSessionId', existing._id),
+        )
+        .first();
+      if (!hasTickets) {
+        await deleteGuestSession(ctx, existing._id);
+      }
     }
 
     await createGuestSession(ctx, {

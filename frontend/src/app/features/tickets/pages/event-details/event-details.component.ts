@@ -491,7 +491,12 @@ export class EventDetailsComponent {
       // Never render error.message: prod Convex redacts it to "Server Error"
       // for every error type and carries the payload only on error.data.
       this.paymentStatus.set('error');
-      this.paymentErrorMessage.set(extractPaymentErrorMessage(error));
+      this.paymentErrorMessage.set(
+        extractPaymentErrorMessage(
+          error,
+          'Could not start guest checkout. Please try again.',
+        ),
+      );
     }
   }
 
