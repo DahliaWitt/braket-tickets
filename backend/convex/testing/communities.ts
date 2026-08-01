@@ -274,3 +274,26 @@ export const seedCommunityScanner = testingMutation({
     return null;
   },
 });
+
+/**
+ * Directly patches an organizer's publication status, bypassing the
+ * production `communities.profile.update` cascade that auto-unpublishes an
+ * organizer's events whenever the community itself transitions to draft
+ * (see `cascadeUnpublishEvents`). Used to model a state production code
+ * prevents from being *created* going forward, but that access-control
+ * code (`lib/access.ts` canViewEvent) must still defend against for
+ * already-published events under a since-unpublished community.
+ * PROTECTED: Only callable when IS_TEST env var is set.
+ */
+export const seedOrganizerStatusDirect = testingMutation({
+  args: {
+    organizerId: v.id('organizers'),
+    status: communityPublicationStatusValidator,
+  },
+  returns: v.null(),
+  handler: async ({db}, {organizerId, status}) => {
+    // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Intentionally invalid state: flips organizer status without the production cascade that unpublishes its events, for edge-case access-control tests.
+    await db.patch('organizers', organizerId, {status});
+    return null;
+  },
+});

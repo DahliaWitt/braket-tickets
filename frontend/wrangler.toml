@@ -1,2 +1,8 @@
 name = "braket-tickets-frontend"
 pages_build_output_dir = "dist/frontend/browser"
+
+[vars]
+CONVEX_SITE_URL = "https://modest-impala-722.convex.site"
+
+[env.preview.vars]
+CONVEX_SITE_URL = "https://bright-swordfish-194.convex.site"

@@ -8,6 +8,7 @@ import {
   handlePublicCommunitiesOptions,
 } from './http/_impl/communities';
 import {
+  handleGetPublicEventPreview,
   handleListPublicEvents,
   handlePublicEventsOptions,
 } from './http/_impl/events';
@@ -56,6 +57,21 @@ http.route({
 
 http.route({
   path: '/api/events/upcoming',
+  method: 'OPTIONS',
+  handler: httpAction(handlePublicEventsOptions),
+});
+
+// Exact path '/api/events/upcoming' above keeps precedence over this prefix
+// route — Convex checks exactRoutes before prefixRoutes — same pattern as
+// '/api/communities' + '/api/communities/'.
+http.route({
+  pathPrefix: '/api/events/',
+  method: 'GET',
+  handler: httpAction(handleGetPublicEventPreview),
+});
+
+http.route({
+  pathPrefix: '/api/events/',
   method: 'OPTIONS',
   handler: httpAction(handlePublicEventsOptions),
 });

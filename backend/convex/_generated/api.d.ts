@@ -2669,6 +2669,12 @@ export declare const api: {
         { name: string },
         Id<"organizers">
       >;
+      seedOrganizerStatusDirect: FunctionReference<
+        "mutation",
+        "public",
+        { organizerId: Id<"organizers">; status?: "draft" | "published" },
+        null
+      >;
     };
     demo: {
       seedDemoData: FunctionReference<
@@ -4576,6 +4582,21 @@ export declare const internal: {
       >;
     };
     public: {
+      getPublicEventPreviewInternal: FunctionReference<
+        "query",
+        "internal",
+        { id: string },
+        null | {
+          _id: Id<"events">;
+          date: string;
+          dateLabel: string;
+          description?: string;
+          location?: string;
+          organizerName: string;
+          posterUrl: string | null;
+          title: string;
+        }
+      >;
       listPublicUpcomingInternal: FunctionReference<
         "query",
         "internal",
@@ -4831,6 +4852,7 @@ export declare const internal: {
             | "listPublicEvents"
             | "listPublicCommunity"
             | "getPublicCommunityBySlug"
+            | "getPublicEventPreview"
             | "unsubscribeEndpoint";
         },
         null
