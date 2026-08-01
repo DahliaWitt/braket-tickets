@@ -6018,6 +6018,7 @@ export declare const internal: {
           _id: Id<"users">;
           authEmailVerified?: boolean;
           betterAuthUserId?: string;
+          defaultCommunityAdminOrganizerId?: Id<"organizers">;
           email?: string;
           emailChangeToken?: string;
           emailChangeTokenExpiry?: number;
