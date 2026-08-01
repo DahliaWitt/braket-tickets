@@ -3,34 +3,44 @@
     data-testid="guest-list-overview"
     class="grid overflow-hidden rounded border border-border bg-card sm:grid-cols-3"
   >
-    <div class="border-b border-border p-4 sm:border-r sm:border-b-0">
-      <p class="mono-label text-2xs text-muted-foreground">
-        <span class="mr-1 font-display text-2xl text-foreground">{{
-          overview().selfServiceGuestCount
-        }}</span>
-        self-service guests
+    @if (overview(); as totals) {
+      <div class="border-b border-border p-4 sm:border-r sm:border-b-0">
+        <p class="mono-label text-2xs text-muted-foreground">
+          <span class="mr-1 font-display text-2xl text-foreground">{{
+            totals.selfServiceGuestCount
+          }}</span>
+          self-service guests
+        </p>
+      </div>
+      <div class="border-b border-border p-4 sm:border-r sm:border-b-0">
+        <p class="font-display text-2xl text-foreground">
+          {{ totals.activeGrantedSlots }}
+        </p>
+        <p class="mono-label text-2xs text-muted-foreground">
+          active granted slots
+        </p>
+        <p class="mt-1 font-mono text-2xs text-muted-foreground">
+          {{ totals.activeArtistGuestCount }} artist ·
+          {{ totals.activeStaffGuestCount }} staff used
+        </p>
+      </div>
+      <div class="p-4">
+        <p class="mono-label text-2xs text-muted-foreground">
+          <span class="mr-1 font-display text-2xl text-foreground">{{
+            totals.totalGuestAdmissionCount
+          }}</span>
+          total admissions
+        </p>
+      </div>
+    } @else {
+      <p
+        data-testid="guest-list-overview-loading"
+        role="status"
+        class="p-4 font-mono text-xs text-muted-foreground sm:col-span-3"
+      >
+        loading guest list totals…
       </p>
-    </div>
-    <div class="border-b border-border p-4 sm:border-r sm:border-b-0">
-      <p class="font-display text-2xl text-foreground">
-        {{ overview().activeGrantedSlots }}
-      </p>
-      <p class="mono-label text-2xs text-muted-foreground">
-        active granted slots
-      </p>
-      <p class="mt-1 font-mono text-2xs text-muted-foreground">
-        {{ overview().activeArtistGuestCount }} artist ·
-        {{ overview().activeStaffGuestCount }} staff used
-      </p>
-    </div>
-    <div class="p-4">
-      <p class="mono-label text-2xs text-muted-foreground">
-        <span class="mr-1 font-display text-2xl text-foreground">{{
-          overview().totalGuestAdmissionCount
-        }}</span>
-        total admissions
-      </p>
-    </div>
+    }
   </div>
 
   <div>
@@ -38,10 +48,10 @@
       id="artists-staff-heading"
       class="font-display text-xl tracking-wide text-foreground uppercase"
     >
-      Artists & Staff
+      artists & staff
     </h2>
     <p class="mt-1 text-sm text-muted-foreground">
-      Invite people to manage their own names. Their admission never uses a
+      invite people to manage their own names. their admission never uses a
       slot.
     </p>
   </div>
@@ -53,13 +63,13 @@
     <div class="grid gap-3 md:grid-cols-[1fr_auto]">
       <label class="space-y-1">
         <span class="mono-label text-2xs text-muted-foreground"
-          >Find a community member</span
+          >find a community member</span
         >
         <input
           zInput
           [formField]="assignmentForm.search"
           data-testid="assignment-member-search"
-          placeholder="Search name or email"
+          placeholder="search name or email"
           (keydown.enter)="searchMembersFromKeyboard($event)"
         />
       </label>
@@ -72,13 +82,13 @@
         [zLoading]="isSearching()"
         (click)="searchMembers()"
       >
-        Search
+        search
       </button>
     </div>
     @if (memberResults().length > 0) {
       <ul
         data-testid="assignment-member-results"
-        aria-label="Community members"
+        aria-label="community members"
         class="divide-y divide-border rounded border border-border"
       >
         @for (member of memberResults(); track member.userId) {
@@ -91,7 +101,7 @@
             >
               <span class="font-sans text-sm">{{ member.displayName }}</span>
               <span class="font-mono text-xs text-muted-foreground">{{
-                member.email || 'No email'
+                member.email || 'no email'
               }}</span>
             </button>
           </li>
@@ -104,7 +114,7 @@
         class="flex items-center justify-between gap-3 rounded border border-border bg-muted/40 px-3 py-2"
       >
         <p class="text-sm text-foreground">
-          Linked to <strong>{{ member.displayName }}</strong>
+          linked to <strong>{{ member.displayName }}</strong>
           <span class="font-mono text-xs text-muted-foreground">
             · {{ member.email }}
           </span>
@@ -116,14 +126,14 @@
           zSize="sm"
           (click)="clearSelectedMember()"
         >
-          Use email only
+          use email only
         </button>
       </div>
     }
 
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <label class="space-y-1">
-        <span class="mono-label text-2xs text-muted-foreground">Name</span>
+        <span class="mono-label text-2xs text-muted-foreground">name</span>
         <input
           zInput
           id="assignment-display-name"
@@ -141,7 +151,7 @@
         }
       </label>
       <label class="space-y-1">
-        <span class="mono-label text-2xs text-muted-foreground">Email</span>
+        <span class="mono-label text-2xs text-muted-foreground">email</span>
         <input
           type="email"
           zInput
@@ -161,20 +171,20 @@
         }
       </label>
       <label class="space-y-1">
-        <span class="mono-label text-2xs text-muted-foreground">Role</span>
+        <span class="mono-label text-2xs text-muted-foreground">role</span>
         <select
           zInput
           [value]="assignmentModel().role"
           (change)="onRoleChange($event)"
           data-testid="assignment-role"
         >
-          <option value="artist">Artist</option>
-          <option value="staff">Staff</option>
+          <option value="artist">artist</option>
+          <option value="staff">staff</option>
         </select>
       </label>
       <label class="space-y-1">
         <span class="mono-label text-2xs text-muted-foreground"
-          >Slot override</span
+          >slot override</span
         >
         <input
           zInput
@@ -188,7 +198,7 @@
           "
           [formField]="assignmentForm.grantOverride"
           data-testid="assignment-grant-override"
-          placeholder="Use role default"
+          placeholder="use role default"
         />
       </label>
     </div>
@@ -214,7 +224,7 @@
         [zDisabled]="isBulkCreating()"
         (click)="isImporting.set(!isImporting())"
       >
-        Import staff
+        import staff
       </button>
       <button
         type="submit"
@@ -228,7 +238,7 @@
         [zLoading]="isCreating()"
         (click)="markAssignmentSubmitted()"
       >
-        Send invite
+        send invite
       </button>
     </div>
   </form>
@@ -309,8 +319,8 @@
             >
               {{
                 expandedAssignmentId() === assignment.assignmentId
-                  ? 'Hide guests'
-                  : 'View guests'
+                  ? 'hide guests'
+                  : 'view guests'
               }}
             </button>
             <button
@@ -321,7 +331,7 @@
               data-testid="edit-assignment-grant"
               (click)="beginGrantEdit(assignment)"
             >
-              Edit grant
+              edit grant
             </button>
             <button
               type="button"
@@ -333,7 +343,7 @@
               [zLoading]="resendingId() === assignment.assignmentId"
               (click)="resendInvite(assignment)"
             >
-              Resend invite
+              resend invite
             </button>
             <button
               type="button"
@@ -346,7 +356,7 @@
               [zLoading]="revokingId() === assignment.assignmentId"
               (click)="beginRevoke(assignment, $event)"
             >
-              Revoke
+              revoke
             </button>
           </div>
         }
@@ -357,11 +367,13 @@
           >
             <label class="space-y-1"
               ><span class="mono-label text-2xs text-muted-foreground"
-                >Granted slots</span
+                >granted slots</span
               ><input
                 zInput
+                id="edit-assignment-grant"
                 inputmode="numeric"
                 data-testid="edit-assignment-grant-input"
+                [zStatus]="grantEditError() ? 'error' : undefined"
                 [value]="grantEditValue()"
                 (input)="onGrantValueInput($event)"
                 class="w-28"
@@ -371,13 +383,26 @@
               z-button
               zSize="sm"
               data-testid="save-assignment-grant"
-              [zDisabled]="updatingGrantId() === assignment.assignmentId"
+              [zDisabled]="
+                updatingGrantId() === assignment.assignmentId ||
+                grantEditError() !== null
+              "
               [zLoading]="updatingGrantId() === assignment.assignmentId"
               (click)="saveGrant(assignment, $event)"
             >
-              Save grant
+              save grant
             </button>
           </div>
+          @if (grantEditError(); as message) {
+            <p
+              id="edit-assignment-grant-error"
+              role="alert"
+              data-testid="edit-assignment-grant-error"
+              class="text-right font-mono text-xs text-destructive-text"
+            >
+              {{ message }}.
+            </p>
+          }
         }
 
         @if (
@@ -390,15 +415,15 @@
             aria-labelledby="grant-reduction-title"
             aria-describedby="grant-reduction-description"
             (keydown)="handleGrantWarningKeydown($event)"
-            class="space-y-3 border-t border-warning/30 bg-warning/10 p-4 text-sm text-warning-text"
+            class="text-warning-text space-y-3 border-t border-warning/30 bg-warning/10 p-4 text-sm"
           >
             <p id="grant-reduction-title" class="font-bold uppercase">
-              Confirm grant reduction
+              confirm grant reduction
             </p>
             <p id="grant-reduction-description">
-              {{ assignment.usedSlots }} slots are already used. Existing guests
+              {{ assignment.usedSlots }} slots are already used. existing guests
               and tickets will remain, and source attribution will be preserved.
-              New additions stay blocked until usage falls below
+              new additions stay blocked until usage falls below
               {{ pendingGrantReduction()!.grant }}.
             </p>
             <div class="flex justify-end gap-2">
@@ -412,7 +437,7 @@
                 [zDisabled]="updatingGrantId() === assignment.assignmentId"
                 (click)="cancelGrantReduction()"
               >
-                Cancel</button
+                cancel</button
               ><button
                 type="button"
                 z-button
@@ -422,7 +447,7 @@
                 [zLoading]="updatingGrantId() === assignment.assignmentId"
                 (click)="confirmGrantReduction()"
               >
-                Keep guests & reduce
+                keep guests & reduce
               </button>
             </div>
           </div>
@@ -435,7 +460,7 @@
                 role="alert"
                 class="flex flex-wrap items-center justify-between gap-3 border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive-text"
               >
-                <span>Guest names couldn't refresh.</span>
+                <span>guest names couldn't refresh.</span>
                 <button
                   type="button"
                   z-button
@@ -446,7 +471,7 @@
                   [zLoading]="loadingGuestsId() === assignment.assignmentId"
                   (click)="retryGuests(assignment.assignmentId)"
                 >
-                  Try again
+                  try again
                 </button>
               </div>
             }
@@ -465,7 +490,7 @@
               </div>
             } @empty {
               <p class="font-mono text-xs text-muted-foreground">
-                No guest names used yet.
+                no guest names used yet.
               </p>
             }
             @if (guestContinueCursor(assignment.assignmentId)) {
@@ -479,7 +504,7 @@
                 [zLoading]="loadingGuestsId() === assignment.assignmentId"
                 (click)="loadMoreGuests(assignment.assignmentId)"
               >
-                Load more guests
+                load more guests
               </button>
             }
           </div>
@@ -496,14 +521,14 @@
             class="space-y-3 border-t border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive-text"
           >
             <p id="revoke-assignment-title" class="font-bold uppercase">
-              Confirm access revocation
+              confirm access revocation
             </p>
             <p id="revoke-assignment-description">
-              Access will end immediately.
+              access will end immediately.
               @if (assignment.usedSlots > 0) {
                 {{ assignment.usedSlots }} guest list slots have been used.
               }
-              Existing guests and tickets will remain, and source attribution
+              existing guests and tickets will remain, and source attribution
               will be preserved.
             </p>
             <div class="flex justify-end gap-2">
@@ -528,7 +553,7 @@
                 [zLoading]="revokingId() === assignment.assignmentId"
                 (click)="confirmRevoke(assignment)"
               >
-                Revoke access
+                revoke access
               </button>
             </div>
           </div>
@@ -536,7 +561,7 @@
       </article>
     } @empty {
       <div class="p-8 text-center font-mono text-sm text-muted-foreground">
-        No artists or staff invited yet — give someone a few names to take off
+        no artists or staff invited yet — give someone a few names to take off
         your plate.
       </div>
     }
@@ -552,7 +577,7 @@
         [zLoading]="isLoadingMoreAssignments()"
         (click)="loadMoreAssignments()"
       >
-        Load more
+        load more
       </button>
     </div>
   }

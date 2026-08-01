@@ -29,6 +29,8 @@ import {
   type GuestListGuestId,
 } from '../../services/guest-list-delegate.service';
 import {GuestListAssignmentTokenStoreService} from '../../services/guest-list-assignment-token-store.service';
+import {BrowserPlatformService} from '@/core/services/browser-platform.service';
+import {GUEST_LIST_TOKEN_STORAGE_PREFIX} from '@/core/services/guest-list-credential-storage';
 import {logger} from '@/utils/logger';
 import {signalFormFieldErrorMessage} from '@/utils/signal-form';
 import {EventDatePipe} from '@/utils/event-date.pipe';
@@ -62,6 +64,7 @@ type AvailableGuest = AvailableView['guests']['page'][number];
 export class GuestListManageComponent implements OnInit {
   private readonly delegate = inject(GuestListDelegateService);
   private readonly tokens = inject(GuestListAssignmentTokenStoreService);
+  private readonly browser = inject(BrowserPlatformService);
   private readonly route = inject(ActivatedRoute);
   private readonly injector = inject(Injector);
   private readonly guestListHeading = viewChild<
@@ -129,6 +132,16 @@ export class GuestListManageComponent implements OnInit {
   }
 
   private access: DelegateAccess | null = null;
+  /**
+   * Idempotency key for the guest currently being added, bound to the exact
+   * payload it was minted for. Retrying the same guest after a
+   * commit-then-disconnect (the mutation lands but the response is lost) must
+   * replay as the same operation, or the server mints a second guest row,
+   * consumes a second slot, and sends a second ticket email. Editing the name
+   * or email first makes it a different operation, so the key rotates.
+   * Cleared on a confirmed success and on any explicit form reset.
+   */
+  private pendingAddGuest: {signature: string; key: string} | null = null;
   private activeToken: string | null = null;
   private storedAssignmentId: string | null = null;
   private removalTrigger: HTMLElement | null = null;
@@ -186,9 +199,7 @@ export class GuestListManageComponent implements OnInit {
   }
 
   private showUnavailable(): void {
-    if (this.storedAssignmentId) {
-      this.tokens.forget(this.storedAssignmentId);
-    }
+    this.forgetActiveCredential();
     this.access = null;
     this.activeToken = null;
     this.storedAssignmentId = null;
@@ -198,6 +209,27 @@ export class GuestListManageComponent implements OnInit {
     this.loading.set(false);
     this.loadFailure.set(false);
     this.unavailable.set(true);
+  }
+
+  /**
+   * Clears the stored credential behind the current session. A revoked/ended
+   * link must never leave `bt-guest-list-token:<id>` (or the recent pointer)
+   * behind, so when the token arrived from the URL fragment — meaning no
+   * resolved assignment ID is known yet — the entry is located by matching the
+   * stored token value.
+   */
+  private forgetActiveCredential(): void {
+    if (this.storedAssignmentId) {
+      this.tokens.forget(this.storedAssignmentId);
+      return;
+    }
+    const token = this.activeToken;
+    if (!token) return;
+    for (const key of this.browser.getLocalStorageKeys()) {
+      if (!key.startsWith(GUEST_LIST_TOKEN_STORAGE_PREFIX)) continue;
+      if (this.browser.getLocalStorageItem(key) !== token) continue;
+      this.tokens.forget(key.slice(GUEST_LIST_TOKEN_STORAGE_PREFIX.length));
+    }
   }
 
   retryLoading(): void {
@@ -232,12 +264,15 @@ export class GuestListManageComponent implements OnInit {
           if (!this.isCurrentAccess(accessGeneration)) return;
           this.applyGuestMutation(result);
         } else {
+          const name = value.name.trim();
+          const email = value.email.trim();
           const result = await this.delegate.addGuest(access, {
-            name: value.name.trim(),
-            email: value.email.trim(),
-            idempotencyKey: crypto.randomUUID(),
+            name,
+            email,
+            idempotencyKey: this.addGuestKeyFor(JSON.stringify([name, email])),
           });
           if (!this.isCurrentAccess(accessGeneration)) return;
+          this.pendingAddGuest = null;
           this.applyGuestMutation(result);
         }
         this.cancelEdit();
@@ -247,13 +282,25 @@ export class GuestListManageComponent implements OnInit {
         logger.error('Failed to save delegated guest', error);
         this.actionError.set(
           guestId
-            ? 'Changes were not saved — try again.'
-            : 'Guest was not added — try again.',
+            ? 'changes were not saved — try again.'
+            : 'guest was not added — try again.',
         );
       } finally {
         this.saving.set(false);
       }
     });
+  }
+
+  /**
+   * The idempotency key for this exact add payload — reused while the payload
+   * is unchanged (retry of the same operation), rotated when it changes (a new
+   * operation).
+   */
+  private addGuestKeyFor(signature: string): string {
+    if (this.pendingAddGuest?.signature !== signature) {
+      this.pendingAddGuest = {signature, key: crypto.randomUUID()};
+    }
+    return this.pendingAddGuest.key;
   }
 
   startEdit(guest: AvailableGuest): void {
@@ -269,6 +316,7 @@ export class GuestListManageComponent implements OnInit {
 
   cancelEdit(): void {
     this.editingGuestId.set(null);
+    this.pendingAddGuest = null;
     this.guestModel.set({name: '', email: ''});
     this.guestForm().reset();
     this.guestSubmitted.set(false);
@@ -349,7 +397,7 @@ export class GuestListManageComponent implements OnInit {
     } catch (error) {
       if (!this.isCurrentAccess(accessGeneration)) return false;
       logger.error('Failed to remove delegated guest', error);
-      this.actionError.set('Guest was not removed — try again.');
+      this.actionError.set('guest was not removed — try again.');
       return false;
     } finally {
       this.removeGuestAction(this.removingGuestIds, guestId);
@@ -395,7 +443,7 @@ export class GuestListManageComponent implements OnInit {
     } catch (error) {
       if (!this.isCurrentAccess(accessGeneration)) return;
       logger.error('Failed to retry delegated guest ticket email', error);
-      this.actionError.set('Ticket email could not resend — try again.');
+      this.actionError.set('ticket email could not resend — try again.');
     } finally {
       this.removeGuestAction(this.retryingGuestIds, guestId);
     }
@@ -473,7 +521,7 @@ export class GuestListManageComponent implements OnInit {
       )
         return;
       logger.error('Failed to load more delegated guests', error);
-      this.actionError.set('More guests could not load — try again.');
+      this.actionError.set('more guests could not load — try again.');
     } finally {
       this.loadingMoreGuests.set(false);
     }
@@ -489,6 +537,7 @@ export class GuestListManageComponent implements OnInit {
     this.activeToken = null;
     this.fragmentToken = null;
     this.storedAssignmentId = null;
+    this.pendingAddGuest = null;
     this.view.set(null);
     this.loading.set(false);
     this.loadFailure.set(false);
@@ -594,7 +643,7 @@ export class GuestListManageComponent implements OnInit {
         return;
       logger.error('Guest-list change succeeded but refresh failed', error);
       this.actionNotice.set(
-        'Your change went through, but this list couldn’t refresh. Reload the page to see the latest details.',
+        'your change went through, but this list couldn’t refresh. reload the page to see the latest details.',
       );
     }
   }

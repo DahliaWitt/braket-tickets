@@ -1,8 +1,13 @@
 import {v} from 'convex/values';
 import {internalMutation, internalQuery} from '../_generated/server';
-import {emailDeliverySourceValidator} from '../lib/validators/email_delivery';
+import {
+  EMAIL_DELIVERY_LEGACY_RECIPIENT_SCAN_EXCEEDED,
+  emailDeliverySourceValidator,
+  UNNORMALIZABLE_RECIPIENT_KEY,
+} from '../lib/validators/email_delivery';
 import {components} from '../_generated/api';
 import {normalizeEmailOrNull} from '../lib/validation';
+import {throwAppError} from '../lib/errors';
 
 const LEGACY_RECIPIENT_SCAN_LIMIT = 100;
 
@@ -71,8 +76,19 @@ export const hasDelivery = internalQuery({
       .filter((q) => q.eq(q.field('recipientKey'), undefined))
       .take(LEGACY_RECIPIENT_SCAN_LIMIT + 1);
     if (legacyDeliveries.length > LEGACY_RECIPIENT_SCAN_LIMIT) {
-      throw new Error(
-        'Email delivery recipient-key backfill is incomplete for a high-history source',
+      // Fail closed rather than risk a duplicate ticket, but do it with a
+      // structured code: this surfaces inside the organizer's per-guest
+      // "send all tickets" batch, where a redacted "Server Error" would give
+      // the operator nothing to act on.
+      throwAppError(
+        EMAIL_DELIVERY_LEGACY_RECIPIENT_SCAN_EXCEEDED,
+        'Email delivery recipient-key backfill is incomplete for a high-history source. ' +
+          'Run migrations:backfillEmailDeliveryRecipientKeys before retrying.',
+        {
+          source: args.source,
+          sourceId: args.sourceId,
+          legacyScanLimit: LEGACY_RECIPIENT_SCAN_LIMIT,
+        },
       );
     }
     return legacyDeliveries.some(
@@ -95,14 +111,18 @@ export const recordDelivery = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const recipientKey = normalizeEmailOrNull(args.recipient);
+    // Always write a key. An unnormalizable recipient gets the sentinel rather
+    // than no key at all, so it never joins the bounded legacy-row scan that
+    // `hasDelivery` falls back to during (and after) the rollout.
+    const recipientKey =
+      normalizeEmailOrNull(args.recipient) ?? UNNORMALIZABLE_RECIPIENT_KEY;
     await ctx.db.insert('emailDeliveries', {
       emailId: args.emailId,
       ...(args.resendId ? {resendId: args.resendId} : {}),
       source: args.source,
       sourceId: args.sourceId,
       recipient: args.recipient,
-      ...(recipientKey ? {recipientKey} : {}),
+      recipientKey,
       critical: args.critical,
       manual: args.manual,
       fallback: args.fallback,

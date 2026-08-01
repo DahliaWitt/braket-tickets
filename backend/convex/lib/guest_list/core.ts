@@ -22,6 +22,7 @@ import {
 import {internal} from '../../_generated/api';
 import {rateLimiter} from '../rate_limits';
 import {getIdempotencyKeyValidationError} from '../idempotency';
+import {lookupUserByNormalizedEmail} from '../auth_helpers';
 import {requireGuestListEventActive} from './lifecycle';
 import {
   assertActiveAssignmentCapacity,
@@ -152,7 +153,13 @@ export async function requireGuestListFeatureEnabled(
   }
 }
 
-async function insertAudit(
+/**
+ * Single audit-write shape for every guest-list action. All callers — including
+ * the registered mutations in `guest_list/assignments.ts` — must route through
+ * this helper so the stamped `createdAt` and the closed action union stay
+ * consistent across the feature.
+ */
+export async function insertAudit(
   ctx: MutationCtx,
   args: Omit<
     Doc<'guestListAuditEvents'>,
@@ -162,23 +169,49 @@ async function insertAudit(
   await ctx.db.insert('guestListAuditEvents', {...args, createdAt: Date.now()});
 }
 
+/**
+ * Bounded number of recent resend idempotency keys retained per assignment.
+ *
+ * Remembering only the most recent key lets an out-of-order replay of an
+ * earlier key mint a third credential and a third email, so a short history is
+ * required.
+ */
+export const MAX_TRACKED_RESEND_IDEMPOTENCY_KEYS = 5;
+
+export function appendRecentResendIdempotencyKey(
+  stored: readonly string[] | undefined,
+  key: string,
+): string[] {
+  return [key, ...(stored ?? []).filter((existing) => existing !== key)].slice(
+    0,
+    MAX_TRACKED_RESEND_IDEMPOTENCY_KEYS,
+  );
+}
+
+async function hasTicketForUser(
+  ctx: MutationCtx,
+  eventId: Id<'events'>,
+  userId: Id<'users'>,
+): Promise<boolean> {
+  for (const status of ['valid', 'used'] as const) {
+    const ticket = await ctx.db
+      .query('tickets')
+      .withIndex('by_userId_and_eventId_and_status', (q) =>
+        q.eq('userId', userId).eq('eventId', eventId).eq('status', status),
+      )
+      .first();
+    if (ticket) return true;
+  }
+  return false;
+}
+
 async function hasValidTicketForAssignment(
   ctx: MutationCtx,
   eventId: Id<'events'>,
   emailKey: string,
   userId?: Id<'users'>,
 ): Promise<boolean> {
-  if (userId) {
-    for (const status of ['valid', 'used'] as const) {
-      const ticket = await ctx.db
-        .query('tickets')
-        .withIndex('by_userId_and_eventId_and_status', (q) =>
-          q.eq('userId', userId).eq('eventId', eventId).eq('status', status),
-        )
-        .first();
-      if (ticket) return true;
-    }
-  }
+  if (userId && (await hasTicketForUser(ctx, eventId, userId))) return true;
   for (const status of ['valid', 'used'] as const) {
     const ticket = await ctx.db
       .query('tickets')
@@ -191,30 +224,85 @@ async function hasValidTicketForAssignment(
       .first();
     if (ticket) return true;
   }
-  return false;
+  // `rosterEmailLower` is only written by `lib/ticket_roster_projection.ts` on
+  // ticket create/update and no migration backfills it, so tickets issued
+  // before the projection shipped are invisible to the roster-email rule above.
+  // When the invite carries no selected `userId` that legacy ticket would be
+  // missed entirely and the delegate would receive a duplicate admission plus a
+  // second ticket email. Resolving the verified account for the normalized
+  // email keeps the fallback to two point lookups on existing indexes (users
+  // `email`, then `by_userId_and_eventId_and_status`) with no scan.
+  const {user} = await lookupUserByNormalizedEmail(ctx, emailKey);
+  if (!user || user._id === userId || !user.authEmailVerified) return false;
+  return await hasTicketForUser(ctx, eventId, user._id);
 }
+
+/**
+ * Organizer-authorized context shared by every assignment write in one
+ * transaction. Resolving it once keeps bulk staff creation to a single
+ * authorization component round-trip, feature-state read, lifecycle check, and
+ * organizer read instead of repeating all four per row.
+ */
+export type GuestListAssignmentContext = {
+  actor: Doc<'users'>;
+  event: Doc<'events'>;
+  organizer: Doc<'organizers'>;
+};
+
+export async function resolveGuestListAssignmentContext(
+  ctx: MutationCtx,
+  eventId: Id<'events'>,
+): Promise<GuestListAssignmentContext> {
+  const {user: actor, event} = await requireEventForManage(ctx, eventId);
+  await requireGuestListFeatureEnabled(ctx);
+  requireGuestListEventActive(event);
+  const organizer = await ctx.db.get('organizers', event.organizerId);
+  if (!organizer) {
+    return throwAppError(
+      'UNAVAILABLE',
+      'Self-service guest lists are unavailable',
+    );
+  }
+  return {actor, event, organizer};
+}
+
+export type CreateAssignmentArgs = {
+  role: 'artist' | 'staff';
+  displayName: string;
+  email: string;
+  userId?: Id<'users'>;
+  grantedSlots?: number;
+  idempotencyKey: string;
+  skipRateLimit?: boolean;
+};
 
 export async function createAssignment(
   ctx: MutationCtx,
-  args: {
-    eventId: Id<'events'>;
-    role: 'artist' | 'staff';
-    displayName: string;
-    email: string;
-    userId?: Id<'users'>;
-    grantedSlots?: number;
-    idempotencyKey: string;
-    skipRateLimit?: boolean;
-  },
+  args: CreateAssignmentArgs & {eventId: Id<'events'>},
 ) {
   assertValidGuestListIdempotencyKey(args.idempotencyKey);
-  const {user: actor, event} = await requireEventForManage(ctx, args.eventId);
-  await requireGuestListFeatureEnabled(ctx);
-  requireGuestListEventActive(event);
+  const context = await resolveGuestListAssignmentContext(ctx, args.eventId);
+  return await createAssignmentWithContext(ctx, context, args);
+}
+
+/**
+ * Creates one assignment against an already-authorized
+ * {@link GuestListAssignmentContext}. Authorization is not weakened: the
+ * caller must have resolved the context through
+ * {@link resolveGuestListAssignmentContext}, which performs the manage check,
+ * the feature-state gate, and the event lifecycle gate.
+ */
+export async function createAssignmentWithContext(
+  ctx: MutationCtx,
+  context: GuestListAssignmentContext,
+  args: CreateAssignmentArgs,
+) {
+  const {actor, event, organizer} = context;
+  const eventId = event._id;
   const replay = await ctx.db
     .query('guestListAssignments')
     .withIndex('by_eventId_and_idempotencyKey', (q) =>
-      q.eq('eventId', args.eventId).eq('idempotencyKey', args.idempotencyKey),
+      q.eq('eventId', eventId).eq('idempotencyKey', args.idempotencyKey),
     )
     .unique();
   if (replay) return assignmentView(replay);
@@ -230,9 +318,6 @@ export async function createAssignment(
     args.email,
     args.grantedSlots,
   );
-  const organizer = await ctx.db.get('organizers', event.organizerId);
-  if (!organizer)
-    throwAppError('UNAVAILABLE', 'Self-service guest lists are unavailable');
 
   if (args.userId) {
     const selectedUser = await ctx.db.get('users', args.userId);
@@ -248,10 +333,7 @@ export async function createAssignment(
   const duplicate = await ctx.db
     .query('guestListAssignments')
     .withIndex('by_eventId_and_emailKey_and_status', (q) =>
-      q
-        .eq('eventId', args.eventId)
-        .eq('emailKey', emailKey)
-        .eq('status', 'active'),
+      q.eq('eventId', eventId).eq('emailKey', emailKey).eq('status', 'active'),
     )
     .unique();
   if (duplicate)
@@ -263,14 +345,14 @@ export async function createAssignment(
       ? (organizer.defaultArtistGuestSlots ?? DEFAULT_GUEST_LIST_SLOTS)
       : (organizer.defaultStaffGuestSlots ?? DEFAULT_GUEST_LIST_SLOTS));
   validateGuestListSlots(grantedSlots);
-  const stats = await getOrCreateGuestListEventStats(ctx, args.eventId);
+  const stats = await getOrCreateGuestListEventStats(ctx, eventId);
   assertActiveAssignmentCapacity(stats);
   const [validTicket, existingGuest] = await Promise.all([
-    hasValidTicketForAssignment(ctx, args.eventId, emailKey, args.userId),
+    hasValidTicketForAssignment(ctx, eventId, emailKey, args.userId),
     ctx.db
       .query('guests')
       .withIndex('by_event_and_emailKey', (q) =>
-        q.eq('eventId', args.eventId).eq('emailKey', emailKey),
+        q.eq('eventId', eventId).eq('emailKey', emailKey),
       )
       .first(),
   ]);
@@ -278,9 +360,31 @@ export async function createAssignment(
   if (needsAdmission) {
     assertGuestAdmissionCapacity(stats, 1);
   }
+  // Re-inviting a revoked identity reuses the admission row the revoked
+  // assignment created. Without re-attribution the new active assignment would
+  // carry no `admissionGuestId` while the guest row still pointed at the
+  // revoked assignment, so `events/_impl/guests.ts` `remove` would happily
+  // delete the admission the active assignment now depends on.
+  const reusableAdmission =
+    !validTicket &&
+    existingGuest?.sourceKind === 'assignment_admission' &&
+    existingGuest.sourceAssignmentId !== undefined
+      ? existingGuest
+      : null;
+  const priorAdmissionAssignment = reusableAdmission?.sourceAssignmentId
+    ? await ctx.db.get(
+        'guestListAssignments',
+        reusableAdmission.sourceAssignmentId,
+      )
+    : null;
+  const reattributedAdmission =
+    reusableAdmission &&
+    (!priorAdmissionAssignment || priorAdmissionAssignment.status === 'revoked')
+      ? reusableAdmission
+      : null;
   const now = Date.now();
   const assignmentId = await ctx.db.insert('guestListAssignments', {
-    eventId: args.eventId,
+    eventId,
     organizerId: event.organizerId,
     role: args.role,
     displayName: name,
@@ -300,9 +404,11 @@ export async function createAssignment(
   });
 
   let admissionGuestId: Id<'guests'> | undefined;
+  let insertedAdmission = false;
   if (needsAdmission) {
+    insertedAdmission = true;
     admissionGuestId = await ctx.db.insert('guests', {
-      eventId: args.eventId,
+      eventId,
       name,
       email: storedEmail,
       emailKey,
@@ -316,16 +422,38 @@ export async function createAssignment(
     await ctx.db.patch('guestListAssignments', assignmentId, {
       admissionGuestId,
     });
+  } else if (reattributedAdmission) {
+    // Pure re-attribution of an existing row: no insert, so admission counters
+    // stay untouched. The delegate's name/email on the guest row are left as
+    // they are so an organizer correction and its recipient-scoped delivery
+    // state survive the re-invite.
+    admissionGuestId = reattributedAdmission._id;
+    await ctx.db.patch('guests', reattributedAdmission._id, {
+      sourceAssignmentId: assignmentId,
+      sourceRole: args.role,
+      sourceDisplayName: name,
+    });
+    await ctx.db.patch('guestListAssignments', assignmentId, {
+      admissionGuestId,
+    });
+    if (
+      priorAdmissionAssignment &&
+      priorAdmissionAssignment.admissionGuestId === reattributedAdmission._id
+    ) {
+      await ctx.db.patch('guestListAssignments', priorAdmissionAssignment._id, {
+        admissionGuestId: undefined,
+      });
+    }
   }
 
   await updateGuestListEventStats(ctx, stats, (current) => ({
     activeGrantedSlots: current.activeGrantedSlots + grantedSlots,
     activeAssignmentCount: current.activeAssignmentCount + 1,
     totalGuestAdmissionCount:
-      current.totalGuestAdmissionCount + (admissionGuestId ? 1 : 0),
+      current.totalGuestAdmissionCount + (insertedAdmission ? 1 : 0),
   }));
   await insertAudit(ctx, {
-    eventId: args.eventId,
+    eventId,
     assignmentId,
     actorKind: 'organizer',
     actorUserId: actor._id,
@@ -340,7 +468,10 @@ export async function createAssignment(
       attemptId: args.idempotencyKey,
     },
   );
-  if (admissionGuestId) {
+  // Only a freshly inserted admission is scheduled. A re-attributed row already
+  // ran (or is still running) its own delivery, so re-scheduling would risk a
+  // duplicate ticket email for the same guest.
+  if (insertedAdmission && admissionGuestId) {
     await ctx.scheduler.runAfter(
       0,
       internal.events.guest_actions.sendAutomaticTicket,
@@ -444,6 +575,26 @@ export async function addDelegateGuest(
   };
 }
 
+/**
+ * Revokes an assignment and permanently invalidates its credentials.
+ *
+ * Deliberately NOT gated on {@link requireGuestListFeatureEnabled}. Disabling
+ * the feature flag is the containment lever ops reaches for when a management
+ * link leaks, and every read/write path a delegate could use is already dead
+ * behind that gate. If revocation were gated too, flipping the kill switch
+ * would leave the organizer unable to permanently invalidate the leaked
+ * credential — the one operation that must survive the flag. Organizer
+ * authorization is still required.
+ *
+ * `retainedGuestCount` reports the assignment's live `usedSlots`, i.e. the
+ * number of self-service guests currently retained under this assignment — not
+ * a snapshot frozen at revocation time. Removing a retained guest decrements
+ * `usedSlots` through the shared removal helper, so a later replayed revoke
+ * reports the smaller, still-correct current count. Accuracy is preferred over
+ * stability here because the value is used to tell the organizer how many
+ * guests remain, and freezing it would require a new persisted field that would
+ * immediately drift from the guest rows it describes.
+ */
 export async function revokeAssignment(
   ctx: MutationCtx,
   assignmentId: Id<'guestListAssignments'>,
@@ -451,7 +602,6 @@ export async function revokeAssignment(
   const assignment = await ctx.db.get('guestListAssignments', assignmentId);
   if (!assignment) throwAppError('UNAVAILABLE', 'Guest list is unavailable');
   const {user} = await requireEventForManage(ctx, assignment.eventId);
-  await requireGuestListFeatureEnabled(ctx);
   if (assignment.status === 'revoked') {
     return {
       assignmentId,

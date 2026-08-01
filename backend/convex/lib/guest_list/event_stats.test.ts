@@ -6,6 +6,7 @@ import {
   assertActiveAssignmentCapacity,
   assertGuestAdmissionCapacity,
   GUEST_ADMISSION_CAP_EXCEEDED,
+  getOrCreateGuestListEventStatsFromRoster,
   loadAuthoritativeGuestListEventCounters,
   MAX_ASSIGNMENTS_PER_EVENT_STATS,
   MAX_GUESTS_PER_EVENT_STATS,
@@ -129,5 +130,91 @@ describe('guest-list event capacity', () => {
     await expect(
       t.run((ctx) => loadAuthoritativeGuestListEventCounters(ctx, eventId)),
     ).resolves.toBeNull();
+  });
+});
+
+describe('roster-seeded stats initialization', () => {
+  async function seedEvent(t: ReturnType<typeof convexTest>) {
+    const organizerId = await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {name: 'Roster seed'},
+    );
+    const eventId = await t.mutation(api.testing.events.seedEvent, {
+      title: 'Roster seed event',
+      date: '2035-07-10T20:00:00.000Z',
+      price: 1000,
+      organizerId,
+      visibility: 'public',
+    });
+    return eventId;
+  }
+
+  it('derives counters from the supplied roster without re-reading guests', async () => {
+    const t = convexTest();
+    const eventId = await seedEvent(t);
+    // A stale roster snapshot would produce visibly different counters than a
+    // re-read, so counters matching the SUPPLIED roster (not the database)
+    // proves the guests table was not read again.
+    await t.run(async (ctx) => {
+      await ctx.db.insert('guests', {
+        eventId,
+        name: 'DB-only guest',
+        type: 'guest',
+      });
+    });
+    const created = await t.run((ctx) =>
+      getOrCreateGuestListEventStatsFromRoster(ctx, eventId, {
+        guests: [{sourceKind: 'self_service'}, {sourceKind: undefined}],
+        complete: true,
+      }),
+    );
+    expect(created).toMatchObject({
+      eventId,
+      selfServiceGuestCount: 1,
+      totalGuestAdmissionCount: 2,
+      activeAssignmentCount: 0,
+    });
+  });
+
+  it('returns an existing row untouched regardless of the supplied roster', async () => {
+    const t = convexTest();
+    const eventId = await seedEvent(t);
+    await t.run((ctx) =>
+      ctx.db.insert('guestListEventStats', {
+        eventId,
+        selfServiceGuestCount: 3,
+        activeGrantedSlots: 4,
+        activeArtistGuestCount: 1,
+        activeStaffGuestCount: 2,
+        activeAssignmentCount: 2,
+        totalGuestAdmissionCount: 9,
+      }),
+    );
+    const existing = await t.run((ctx) =>
+      getOrCreateGuestListEventStatsFromRoster(ctx, eventId, {
+        guests: [],
+        complete: true,
+      }),
+    );
+    expect(existing).toMatchObject({totalGuestAdmissionCount: 9});
+  });
+
+  it('falls back to the authoritative read when the roster is incomplete', async () => {
+    const t = convexTest();
+    const eventId = await seedEvent(t);
+    await t.run(async (ctx) => {
+      await ctx.db.insert('guests', {
+        eventId,
+        name: 'Authoritative guest',
+        type: 'guest',
+      });
+    });
+    const created = await t.run((ctx) =>
+      getOrCreateGuestListEventStatsFromRoster(ctx, eventId, {
+        guests: [],
+        complete: false,
+      }),
+    );
+    expect(created).toMatchObject({totalGuestAdmissionCount: 1});
   });
 });

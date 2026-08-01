@@ -45,7 +45,7 @@ describe('GuestListDashboardService', () => {
     await vi.waitFor(() => expect(service.hasActiveAssignments()).toBe(true));
     expect(convex.mutation).toHaveBeenCalledOnce();
     expect(convex.mutation.mock.calls[0]?.[1]).toEqual({
-      paginationOpts: {numItems: 1, cursor: null},
+      paginationOpts: {numItems: 50, cursor: null},
     });
   });
 
@@ -67,11 +67,11 @@ describe('GuestListDashboardService', () => {
     await vi.waitFor(() => expect(service.hasActiveAssignments()).toBe(true));
     expect(convex.mutation).toHaveBeenCalledTimes(2);
     expect(convex.mutation).toHaveBeenNthCalledWith(1, expect.anything(), {
-      paginationOpts: {numItems: 1, cursor: null},
+      paginationOpts: {numItems: 50, cursor: null},
     });
     expect(convex.mutation).toHaveBeenNthCalledWith(2, expect.anything(), {
       paginationOpts: {
-        numItems: 1,
+        numItems: 50,
         cursor: 'after-five-cancelled',
       },
     });
@@ -135,7 +135,7 @@ describe('GuestListDashboardService', () => {
 
     expect(service.hasActiveAssignments()).toBe(false);
     expect(convex.mutation).toHaveBeenNthCalledWith(2, expect.anything(), {
-      paginationOpts: {numItems: 1, cursor: null},
+      paginationOpts: {numItems: 50, cursor: null},
     });
   });
 });

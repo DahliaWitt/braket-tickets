@@ -25,7 +25,10 @@ export const guestListDeliveryStateValidator = v.union(
 );
 
 export const guestListDelegateAccessValidator = v.union(
-  v.object({kind: v.literal('signedIn'), assignmentId: v.id('guestListAssignments')}),
+  v.object({
+    kind: v.literal('signedIn'),
+    assignmentId: v.id('guestListAssignments'),
+  }),
   v.object({kind: v.literal('token'), token: v.string()}),
 );
 
@@ -107,10 +110,12 @@ export const guestListAuditActorKindValidator = v.union(
   v.literal('system'),
 );
 
+// The initial invitation is recorded as `assignment.create`; a re-invitation is
+// recorded as `assignment.resend`. There is no third "invite" action, so the
+// union carries no `assignment.invite` member — nothing ever wrote one.
 export const guestListAuditActionValidator = v.union(
   v.literal('assignment.create'),
   v.literal('assignment.grant_change'),
-  v.literal('assignment.invite'),
   v.literal('assignment.resend'),
   v.literal('assignment.revoke'),
   v.literal('assignment.user_link'),

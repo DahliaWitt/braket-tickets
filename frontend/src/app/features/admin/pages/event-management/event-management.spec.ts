@@ -673,6 +673,17 @@ describe('EventManagement', () => {
     ).toBe(false);
   });
 
+  it('shows loading overview tiles instead of zeros before the totals resolve', async () => {
+    await harness.clickTab('guests');
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const workspace = await harness.getGuestListWorkspaceHarness();
+    expect(workspace).not.toBeNull();
+    expect(await workspace!.isOverviewLoading()).toBe(true);
+    expect(await workspace!.getOverviewText()).not.toContain('0');
+  });
+
   it('isolates a self-service feature-state failure to the guest-list workspace', async () => {
     const loggerErrorSpy = vi
       .spyOn(logger, 'error')

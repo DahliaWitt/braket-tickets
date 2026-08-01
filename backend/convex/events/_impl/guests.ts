@@ -45,6 +45,11 @@ export async function add(
 
   // Persist the trimmed, validated email so the stored record matches the
   // value used by scheduling and the broadcast audience lookups downstream.
+  //
+  // The counter row is materialized on demand: `guest_list.getEventOverview`
+  // reports zeros when it is absent, so an event whose only guests were added
+  // manually must still get one. The first manual add for an event therefore
+  // pays a one-time authoritative count (<=5,001 guests + <=501 assignments).
   const stats = await getOrCreateGuestListEventStats(ctx, args.eventId);
   assertGuestAdmissionCapacity(stats, 1);
   const guestId = await ctx.db.insert('guests', {
@@ -99,15 +104,24 @@ export async function update(
   // lenient `@`-presence email rule the guest paths deliberately apply.
   const email = validateGuestFieldsAndNormalizeEmail(args);
 
-  const isSelfServiceGuest =
-    guest.sourceAssignmentId !== undefined &&
-    guest.sourceKind === 'self_service';
-  if (isSelfServiceGuest) {
+  // Both guest-list-sourced kinds carry an automatic ticket delivery:
+  // `self_service` rows are a delegate's invited guest, `assignment_admission`
+  // rows are the artist's/staff member's OWN admission. Either way a corrected
+  // address means the ticket that was already dispatched went somewhere wrong,
+  // so the delivery state must reset and a fresh attempt must be queued.
+  // Scoping this to `self_service` stranded admission rows: `emailedAt`
+  // survived, `ticketDeliveryState` stayed `sent`, no send was queued, and
+  // `guest_list/delegate.retryTicket` refuses non-`self_service` rows — leaving
+  // no retry path at all.
+  const isSourcedGuest =
+    guest.sourceAssignmentId !== undefined && guest.sourceKind !== undefined;
+  if (isSourcedGuest) {
     if (!email) throwInvalidInput('Email is required');
     validateEmail(email, 'Email');
   }
   const emailKey = email?.toLowerCase();
   const emailChanged = guest.emailKey !== emailKey;
+  const resetTicketDelivery = isSourcedGuest && emailChanged;
   await ctx.db.replace('guests', args.id, {
     eventId: guest.eventId,
     name: args.name,
@@ -115,13 +129,13 @@ export async function update(
     emailKey,
     type: args.type,
     notes: args.notes,
-    emailedAt: isSelfServiceGuest && emailChanged ? undefined : guest.emailedAt,
+    emailedAt: resetTicketDelivery ? undefined : guest.emailedAt,
     checkedInAt: guest.checkedInAt,
     checkedInBy: guest.checkedInBy,
-    emailSendLockedAt:
-      isSelfServiceGuest && emailChanged ? null : guest.emailSendLockedAt,
-    ticketDeliveryState:
-      isSelfServiceGuest && emailChanged ? 'queued' : guest.ticketDeliveryState,
+    emailSendLockedAt: resetTicketDelivery ? null : guest.emailSendLockedAt,
+    ticketDeliveryState: resetTicketDelivery
+      ? 'queued'
+      : guest.ticketDeliveryState,
     sourceAssignmentId: guest.sourceAssignmentId,
     sourceKind: guest.sourceKind,
     sourceRole: guest.sourceRole,
@@ -129,7 +143,7 @@ export async function update(
     sourceIdempotencyKey: guest.sourceIdempotencyKey,
   });
 
-  if (isSelfServiceGuest && emailChanged) {
+  if (resetTicketDelivery) {
     await ctx.scheduler.runAfter(
       0,
       internal.events.guest_actions.sendAutomaticTicket,
@@ -311,6 +325,38 @@ export async function beginGuestTicketSend(
       : {}),
   });
   return {claimed: true, reason: 'claimed', lockToken: now};
+}
+
+/**
+ * Pre-dispatch revalidation for the organizer-initiated ("Resend") send path.
+ *
+ * `beginGuestTicketSend` claims the lock, then the action spends seconds
+ * building the PDF. During that window a guest-list email correction
+ * (`guests.update` / `delegate.updateGuest`) deliberately releases the lock so
+ * the corrected address gets a fresh automatic attempt. Without this recheck
+ * the already-claimed resend would still dispatch to the address the delegate
+ * just removed — two emails, one to a stale recipient. `markAsEmailed`'s
+ * recipient guard keeps the row consistent afterwards, but cannot un-send.
+ *
+ * Returns true only while this attempt still owns the lock AND the recipient it
+ * snapshotted is still the guest's current address. The automatic path has its
+ * own equivalent gate (`canDeliverAutomaticTicket`), which additionally
+ * validates the assignment linkage.
+ */
+export async function isGuestTicketSendCurrent(
+  ctx: QueryCtx,
+  args: {
+    id: Id<'guests'>;
+    lockToken: number;
+    recipient: string;
+  },
+): Promise<boolean> {
+  const guest = await ctx.db.get('guests', args.id);
+  if (!guest) return false;
+  if (guest.emailSendLockedAt !== args.lockToken) return false;
+  const currentEmailKey =
+    guest.emailKey ?? normalizeEmailOrNull(guest.email ?? '');
+  return normalizeEmailOrNull(args.recipient) === currentEmailKey;
 }
 
 /**

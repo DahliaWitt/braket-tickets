@@ -1,6 +1,8 @@
+import {v, type Infer} from 'convex/values';
 import type {Doc, Id} from '../../_generated/dataModel';
-import type {MutationCtx} from '../../_generated/server';
+import type {MutationCtx, QueryCtx} from '../../_generated/server';
 import {throwAppError} from '../errors';
+import type {AssertEqual} from '../type_utils';
 
 type GuestListEventStatsCtx = Pick<MutationCtx, 'db'>;
 
@@ -66,28 +68,61 @@ export function assertActiveAssignmentCapacity(
   );
 }
 
-export async function loadAuthoritativeGuestListEventCounters(
-  ctx: Pick<MutationCtx, 'db'>,
+/**
+ * Bounded description of an event whose roster is too large to snapshot.
+ *
+ * Counts are read with a `take(limit + 1)` bound, so a saturated value is
+ * reported as "at least" rather than an exact total: an operator reading the
+ * report knows the event is over the cap and by how much it is known to
+ * exceed it, without the report itself performing an unbounded scan.
+ */
+export type GuestListEventOverage = {
+  eventId: Id<'events'>;
+  guestCount: number;
+  guestCountAtLeast: boolean;
+  activeAssignmentCount: number;
+  activeAssignmentCountAtLeast: boolean;
+  maxGuestsPerEvent: number;
+  maxActiveAssignmentsPerEvent: number;
+};
+
+export const guestListEventOverageValidator = v.object({
+  eventId: v.id('events'),
+  guestCount: v.number(),
+  guestCountAtLeast: v.boolean(),
+  activeAssignmentCount: v.number(),
+  activeAssignmentCountAtLeast: v.boolean(),
+  maxGuestsPerEvent: v.number(),
+  maxActiveAssignmentsPerEvent: v.number(),
+});
+
+const _guestListEventOverageValidatorMatchesType: AssertEqual<
+  Infer<typeof guestListEventOverageValidator>,
+  GuestListEventOverage
+> = true;
+
+/**
+ * Result of one bounded roster read: either the authoritative counters, or the
+ * reason the event cannot be counted. Callers that need both answers must use
+ * this rather than calling the counter loader twice — a single oversized event
+ * already reads up to `MAX_GUESTS_PER_EVENT_STATS + MAX_ASSIGNMENTS_PER_EVENT_STATS + 2`
+ * documents, and a second pass would risk the per-transaction read limit.
+ */
+export type GuestListEventCounterOutcome =
+  | {kind: 'counted'; counters: GuestListEventCounterFields}
+  | {kind: 'oversized'; overage: GuestListEventOverage};
+
+type CountableGuest = Pick<Doc<'guests'>, 'sourceKind'>;
+type CountableAssignment = Pick<
+  Doc<'guestListAssignments'>,
+  'role' | 'grantedSlots' | 'usedSlots'
+>;
+
+function deriveGuestListEventCounters(
   eventId: Id<'events'>,
-): Promise<GuestListEventCounterFields | null> {
-  const [guests, assignments] = await Promise.all([
-    ctx.db
-      .query('guests')
-      .withIndex('by_event', (q) => q.eq('eventId', eventId))
-      .take(MAX_GUESTS_PER_EVENT_STATS + 1),
-    ctx.db
-      .query('guestListAssignments')
-      .withIndex('by_eventId_and_status', (q) =>
-        q.eq('eventId', eventId).eq('status', 'active'),
-      )
-      .take(MAX_ASSIGNMENTS_PER_EVENT_STATS + 1),
-  ]);
-  if (
-    guests.length > MAX_GUESTS_PER_EVENT_STATS ||
-    assignments.length > MAX_ASSIGNMENTS_PER_EVENT_STATS
-  ) {
-    return null;
-  }
+  guests: readonly CountableGuest[],
+  assignments: readonly CountableAssignment[],
+): GuestListEventCounterFields {
   return {
     eventId,
     selfServiceGuestCount: guests.filter(
@@ -108,6 +143,75 @@ export async function loadAuthoritativeGuestListEventCounters(
   };
 }
 
+async function loadActiveAssignmentsBounded(
+  ctx: Pick<QueryCtx, 'db'>,
+  eventId: Id<'events'>,
+): Promise<Doc<'guestListAssignments'>[]> {
+  return await ctx.db
+    .query('guestListAssignments')
+    .withIndex('by_eventId_and_status', (q) =>
+      q.eq('eventId', eventId).eq('status', 'active'),
+    )
+    .take(MAX_ASSIGNMENTS_PER_EVENT_STATS + 1);
+}
+
+export async function loadGuestListEventCounterOutcome(
+  ctx: Pick<QueryCtx, 'db'>,
+  eventId: Id<'events'>,
+): Promise<GuestListEventCounterOutcome> {
+  const [guests, assignments] = await Promise.all([
+    ctx.db
+      .query('guests')
+      .withIndex('by_event', (q) => q.eq('eventId', eventId))
+      .take(MAX_GUESTS_PER_EVENT_STATS + 1),
+    loadActiveAssignmentsBounded(ctx, eventId),
+  ]);
+  const guestCountAtLeast = guests.length > MAX_GUESTS_PER_EVENT_STATS;
+  const activeAssignmentCountAtLeast =
+    assignments.length > MAX_ASSIGNMENTS_PER_EVENT_STATS;
+  if (guestCountAtLeast || activeAssignmentCountAtLeast) {
+    return {
+      kind: 'oversized',
+      overage: {
+        eventId,
+        guestCount: guests.length,
+        guestCountAtLeast,
+        activeAssignmentCount: assignments.length,
+        activeAssignmentCountAtLeast,
+        maxGuestsPerEvent: MAX_GUESTS_PER_EVENT_STATS,
+        maxActiveAssignmentsPerEvent: MAX_ASSIGNMENTS_PER_EVENT_STATS,
+      },
+    };
+  }
+  return {
+    kind: 'counted',
+    counters: deriveGuestListEventCounters(eventId, guests, assignments),
+  };
+}
+
+export async function loadAuthoritativeGuestListEventCounters(
+  ctx: Pick<QueryCtx, 'db'>,
+  eventId: Id<'events'>,
+): Promise<GuestListEventCounterFields | null> {
+  const outcome = await loadGuestListEventCounterOutcome(ctx, eventId);
+  return outcome.kind === 'counted' ? outcome.counters : null;
+}
+
+/**
+ * Renders a bounded overage for logs and operator-facing error messages.
+ */
+export function describeGuestListEventOverage(
+  overage: GuestListEventOverage,
+): string {
+  const guests = `${overage.guestCountAtLeast ? 'at least ' : ''}${overage.guestCount}`;
+  const assignments = `${overage.activeAssignmentCountAtLeast ? 'at least ' : ''}${overage.activeAssignmentCount}`;
+  return (
+    `event ${overage.eventId} holds ${guests} guest admissions and ${assignments} ` +
+    `active assignments, above the supported per-event limit of ` +
+    `${overage.maxGuestsPerEvent} guests / ${overage.maxActiveAssignmentsPerEvent} active assignments`
+  );
+}
+
 export async function getOrCreateGuestListEventStats(
   ctx: GuestListEventStatsCtx,
   eventId: Id<'events'>,
@@ -126,6 +230,47 @@ export async function getOrCreateGuestListEventStats(
       maxActiveAssignmentsPerEvent: MAX_ASSIGNMENTS_PER_EVENT_STATS,
     },
   );
+}
+
+/**
+ * Variant of {@link getOrCreateGuestListEventStats} for callers that already
+ * performed the bounded roster read (e.g. bulk import dedup). Seeding from the
+ * supplied roster avoids repeating a take(MAX_GUESTS_PER_EVENT_STATS + 1) read
+ * in the same transaction. `roster.complete` must be true only when the array
+ * is known to contain every guest row for the event; otherwise this falls back
+ * to the self-reading initializer.
+ */
+export async function getOrCreateGuestListEventStatsFromRoster(
+  ctx: GuestListEventStatsCtx,
+  eventId: Id<'events'>,
+  roster: {guests: readonly CountableGuest[]; complete: boolean},
+): Promise<Doc<'guestListEventStats'>> {
+  const existing = await getExistingGuestListEventStats(ctx, eventId);
+  if (existing) return existing;
+  if (!roster.complete || roster.guests.length > MAX_GUESTS_PER_EVENT_STATS) {
+    return await getOrCreateGuestListEventStats(ctx, eventId);
+  }
+  const assignments = await loadActiveAssignmentsBounded(ctx, eventId);
+  if (assignments.length > MAX_ASSIGNMENTS_PER_EVENT_STATS) {
+    throwAppError(
+      GUEST_LIST_EVENT_CAP_EXCEEDED,
+      `Guest-list event stats initialization exceeds the supported per-event limit ` +
+        `(${MAX_GUESTS_PER_EVENT_STATS} guests or ${MAX_ASSIGNMENTS_PER_EVENT_STATS} active assignments)`,
+      {
+        maxGuestsPerEvent: MAX_GUESTS_PER_EVENT_STATS,
+        maxActiveAssignmentsPerEvent: MAX_ASSIGNMENTS_PER_EVENT_STATS,
+      },
+    );
+  }
+  const counters = deriveGuestListEventCounters(
+    eventId,
+    roster.guests,
+    assignments,
+  );
+  const statsId = await ctx.db.insert('guestListEventStats', counters);
+  const created = await ctx.db.get('guestListEventStats', statsId);
+  if (!created) throw new Error('Failed to create guest-list event stats');
+  return created;
 }
 
 export async function getExistingGuestListEventStats(

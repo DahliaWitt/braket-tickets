@@ -1058,9 +1058,14 @@ const schemaTables = {
     revokedBy: v.optional(v.id('users')),
     admissionGuestId: v.optional(v.id('guests')),
     idempotencyKey: v.string(),
-    lastResendIdempotencyKey: v.optional(v.string()),
+    recentResendIdempotencyKeys: v.optional(v.array(v.string())),
   })
     .index('by_eventId_and_status', ['eventId', 'status'])
+    // Organizer-facing pagination. `by_eventId_and_status` cannot serve it:
+    // with only `eventId` pinned, its residual descending sort key is `status`,
+    // and `'revoked'` sorts after `'active'`, so revoked rows would fill the
+    // first page. Ordering on `createdAt` is status-independent.
+    .index('by_eventId_and_createdAt', ['eventId', 'createdAt'])
     .index('by_organizerId_and_status', ['organizerId', 'status'])
     .index('by_userId_and_status', ['userId', 'status'])
     .index('by_userId_and_status_and_eventDate', [

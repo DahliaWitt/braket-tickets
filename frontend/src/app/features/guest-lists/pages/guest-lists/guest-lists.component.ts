@@ -27,17 +27,17 @@ import {EventEndTimePipe} from '@/utils/event-end-time.pipe';
         <p
           class="text-xs font-bold tracking-[0.24em] text-muted-foreground uppercase"
         >
-          Door list / delegated access
+          door list / delegated access
         </p>
         <h1
           class="mt-3 font-display text-4xl font-extrabold tracking-tight uppercase sm:text-6xl"
         >
-          Your guest lists
+          your guest lists
         </h1>
         <p
           class="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base"
         >
-          Add the people you want at the door. Every guest receives their ticket
+          add the people you want at the door. every guest receives their ticket
           by email.
         </p>
 
@@ -46,7 +46,7 @@ import {EventEndTimePipe} from '@/utils/event-end-time.pipe';
             data-testid="guest-lists-loading"
             class="mt-12 border-y border-border py-8 text-sm tracking-widest uppercase"
           >
-            Loading assignments…
+            loading assignments…
           </div>
         } @else if (loadFailure()) {
           <section
@@ -54,10 +54,10 @@ import {EventEndTimePipe} from '@/utils/event-end-time.pipe';
             class="mt-12 border-y border-border py-10"
           >
             <h2 class="font-display text-xl font-extrabold uppercase">
-              We couldn’t load your guest lists
+              we couldn’t load your guest lists
             </h2>
             <p class="mt-2 text-sm text-muted-foreground">
-              Check your connection and try again.
+              check your connection and try again.
             </p>
             <button
               data-testid="guest-lists-retry-loading"
@@ -65,7 +65,7 @@ import {EventEndTimePipe} from '@/utils/event-end-time.pipe';
               class="mt-6 text-sm font-bold tracking-widest uppercase underline underline-offset-4"
               (click)="retryLoading()"
             >
-              Try again
+              try again
             </button>
           </section>
         } @else {
@@ -75,10 +75,10 @@ import {EventEndTimePipe} from '@/utils/event-end-time.pipe';
               class="mt-12 border-y border-border py-10"
             >
               <h2 class="font-display text-xl font-extrabold uppercase">
-                No active guest lists
+                no active guest lists
               </h2>
               <p class="mt-2 text-sm text-muted-foreground">
-                Active artist and staff assignments will appear here until their
+                active artist and staff assignments will appear here until their
                 event ends.
               </p>
             </section>
@@ -135,7 +135,7 @@ import {EventEndTimePipe} from '@/utils/event-end-time.pipe';
               [attr.aria-busy]="loadingMore()"
               (click)="loadMore()"
             >
-              {{ loadingMore() ? 'Loading more…' : 'Load more guest lists' }}
+              {{ loadingMore() ? 'loading more…' : 'load more guest lists' }}
             </button>
           }
           @if (paginationFailure()) {
@@ -144,7 +144,7 @@ import {EventEndTimePipe} from '@/utils/event-end-time.pipe';
               role="alert"
               class="mt-6 flex flex-wrap items-center justify-between gap-3 border-y border-destructive/40 py-4 text-sm text-destructive-text"
             >
-              <span>More guest lists couldn’t load — try again?</span>
+              <span>more guest lists couldn’t load — try again?</span>
               <button
                 data-testid="guest-lists-retry-pagination"
                 type="button"
@@ -153,7 +153,7 @@ import {EventEndTimePipe} from '@/utils/event-end-time.pipe';
                 [attr.aria-busy]="loadingMore()"
                 (click)="loadMore()"
               >
-                Try again
+                try again
               </button>
             </div>
           }

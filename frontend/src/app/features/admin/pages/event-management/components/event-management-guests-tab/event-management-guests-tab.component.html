@@ -193,7 +193,10 @@
               >
                 {{ guest.notes || '—' }}
               </td>
-              <td class="px-6 py-4 font-mono text-xs text-muted-foreground">
+              <td
+                data-testid="guest-source"
+                class="px-6 py-4 font-mono text-xs text-muted-foreground"
+              >
                 {{ guestSourceLabel(guest) }}
               </td>
               <td class="space-x-2 px-6 py-4 text-right">
@@ -263,8 +266,10 @@
                   (click)="removeGuest(guest)"
                   data-testid="remove-guest"
                   class="text-destructive-text hover:bg-destructive/10"
-                  [attr.aria-label]="'Remove ' + guestActionLabel(guest)"
-                  [zTooltip]="'Remove ' + guestActionLabel(guest)"
+                  [zDisabled]="isAssignmentAdmission(guest)"
+                  [attr.aria-label]="removeGuestActionLabel(guest)"
+                  [attr.title]="removeGuestTooltip(guest)"
+                  [zTooltip]="removeGuestTooltip(guest)"
                 >
                   <z-icon zType="trash" />
                 </button>
@@ -321,7 +326,9 @@
               </div>
               <div class="col-span-2">
                 <div class="mb-1 text-muted-foreground uppercase">Source</div>
-                <div>{{ guestSourceLabel(guest) }}</div>
+                <div data-testid="guest-source">
+                  {{ guestSourceLabel(guest) }}
+                </div>
               </div>
             </div>
 
@@ -386,8 +393,10 @@
                 (click)="removeGuest(guest)"
                 data-testid="remove-guest"
                 class="border-destructive/30 text-destructive-text hover:bg-destructive/10"
-                [attr.aria-label]="'Remove ' + guestActionLabel(guest)"
-                [zTooltip]="'Remove ' + guestActionLabel(guest)"
+                [zDisabled]="isAssignmentAdmission(guest)"
+                [attr.aria-label]="removeGuestActionLabel(guest)"
+                [attr.title]="removeGuestTooltip(guest)"
+                [zTooltip]="removeGuestTooltip(guest)"
               >
                 <z-icon zType="trash" />
               </button>

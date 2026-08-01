@@ -399,16 +399,14 @@ export class EventManagement {
       this.guestListOverviewQuery.error() != null ||
       this.guestListAssignmentsQuery.error() != null,
   );
+  /**
+   * `null` until the overview query resolves. Falling back to zeros here would
+   * flash "0 total admissions" on an event with hundreds of them, so the
+   * assignments component renders a loading state instead (mirroring
+   * `guest-list-defaults-settings.container.ts`).
+   */
   readonly guestListOverview = computed(
-    () =>
-      this.guestListOverviewQuery.data() ?? {
-        selfServiceGuestCount: 0,
-        activeGrantedSlots: 0,
-        activeArtistGuestCount: 0,
-        activeStaffGuestCount: 0,
-        activeAssignmentCount: 0,
-        totalGuestAdmissionCount: 0,
-      },
+    () => this.guestListOverviewQuery.data() ?? null,
   );
   readonly guestListAssignments = computed(
     () => this.guestListAssignmentsQuery.data()?.page ?? [],

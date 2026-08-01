@@ -226,6 +226,33 @@ export class EventManagementGuestsTabComponent {
     return 'Added manually';
   }
 
+  /**
+   * True for admissions the backend created from an artist/staff assignment.
+   * `events.guest_actions.remove` throws `CONFLICT` for these while their
+   * assignment is still active, so the row's delete control is disabled with an
+   * explanation instead of handing the organizer a raw conflict toast. Only the
+   * backend can tell whether the assignment is still active, so the guard keys
+   * off the source kind and the copy points at revoking the assignment.
+   */
+  isAssignmentAdmission(guest: Guest): boolean {
+    return guest.sourceKind === 'assignment_admission';
+  }
+
+  /** Accessible label for the remove control, including why it's unavailable. */
+  removeGuestActionLabel(guest: Guest): string {
+    const label = `Remove ${this.guestActionLabel(guest)}`;
+    return this.isAssignmentAdmission(guest)
+      ? `${label} — unavailable, revoke the artist/staff assignment first`
+      : label;
+  }
+
+  /** Tooltip/title for the remove control. */
+  removeGuestTooltip(guest: Guest): string {
+    return this.isAssignmentAdmission(guest)
+      ? 'revoke the artist/staff assignment first'
+      : `Remove ${this.guestActionLabel(guest)}`;
+  }
+
   openAddGuestDialog(): void {
     const dialogRef = this.dialogService.create({
       zTitle: 'Add Guest',
@@ -302,6 +329,7 @@ export class EventManagementGuestsTabComponent {
   }
 
   removeGuest(guest: Guest): void {
+    if (this.isAssignmentAdmission(guest)) return;
     const name = guest.name || guest.email || 'this guest';
     this.alertDialog.confirm({
       zTitle: 'remove guest',

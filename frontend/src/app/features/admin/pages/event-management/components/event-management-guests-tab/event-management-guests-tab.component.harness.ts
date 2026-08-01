@@ -41,6 +41,9 @@ export class EventManagementGuestsTabHarness extends ComponentHarness {
   private readonly getRemoveButtons = this.locatorForAll(
     '[data-testid="remove-guest"]',
   );
+  private readonly getSourceCells = this.locatorForAll(
+    '[data-testid="guest-source"]',
+  );
   private readonly getGuestRows = this.locatorForAll(
     '[data-testid="guest-row"]',
   );
@@ -121,6 +124,42 @@ export class EventManagementGuestsTabHarness extends ComponentHarness {
     return Promise.all(
       buttons.map((button) => button.getAttribute('aria-label')),
     );
+  }
+
+  /**
+   * Disabled state, accessible label, and title of every remove control —
+   * desktop table cell and mobile card alike, so both responsive variants are
+   * asserted from one call.
+   */
+  async getRemoveButtonStates(): Promise<
+    {disabled: boolean; ariaLabel: string | null; title: string | null}[]
+  > {
+    const buttons = await this.getRemoveButtons();
+    return Promise.all(
+      buttons.map(async (button) => ({
+        disabled: (await button.getAttribute('disabled')) !== null,
+        ariaLabel: await button.getAttribute('aria-label'),
+        title: await button.getAttribute('title'),
+      })),
+    );
+  }
+
+  async clickRemoveGuestButton(index: number): Promise<void> {
+    const buttons = await this.getRemoveButtons();
+    const button = buttons[index];
+    if (!button) {
+      throw new Error(`No remove-guest button found at index ${index}`);
+    }
+    await button.click();
+  }
+
+  /**
+   * Source-attribution text for every rendered guest row. Includes both the
+   * desktop table cell and the mobile card field.
+   */
+  async getGuestSourceLabels(): Promise<string[]> {
+    const cells = await this.getSourceCells();
+    return Promise.all(cells.map(async (cell) => (await cell.text()).trim()));
   }
 
   /**

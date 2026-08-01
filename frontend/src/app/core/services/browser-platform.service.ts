@@ -98,8 +98,9 @@ export class BrowserPlatformService {
     try {
       const storage = this.localStorageRef;
       if (!storage) return [];
-      return Array.from({length: storage.length}, (_, index) => storage.key(index))
-        .filter((key): key is string => key !== null);
+      return Array.from({length: storage.length}, (_, index) =>
+        storage.key(index),
+      ).filter((key): key is string => key !== null);
     } catch (error: unknown) {
       logger.warn('localStorage key enumeration failed', {error});
       return [];

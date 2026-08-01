@@ -1,6 +1,6 @@
 import type {EventStatus} from '@shared/domain/event-status';
 import {convexTest} from '../setup.testing';
-import {describe, it, expect} from 'vitest';
+import {afterEach, describe, it, expect, vi} from 'vitest';
 import {api, internal} from '../_generated/api';
 import type {Id} from '../_generated/dataModel';
 import {GUEST_TICKET_SEND_LOCK_STALE_MS} from './_impl/guests';
@@ -8,6 +8,8 @@ import {addMember, authz} from '../lib/authz';
 import {ADMIN_AUDIT_ACTIONS} from '../lib/admin_audit_actions';
 
 let _guestTestOrgCounter = 0;
+
+afterEach(() => vi.useRealTimers());
 
 /** Seed a minimal event with an organizer. Returns the eventId. */
 async function seedEvent(
@@ -1323,6 +1325,382 @@ describe('guests.listByEvent', () => {
   });
 });
 
+describe('guest-list sourced guests managed by the organizer', () => {
+  /**
+   * Guest-list assignments require the feature flag and an event that has not
+   * ended, so this block seeds its own future event rather than reusing the
+   * module-level `seedEvent` helper (which dates events in the past).
+   */
+  async function setupGuestListEvent(t: ReturnType<typeof convexTest>) {
+    await t.mutation(api.testing.guest_list.enableFeature, {});
+    _guestTestOrgCounter += 1;
+    const suffix = `${_guestTestOrgCounter}-${Date.now()}`;
+    const organizerId = await t.mutation(
+      api.testing.communities.seedOrganizer,
+      {
+        name: 'Guest List Org',
+        slug: `test-org-guest-list-${suffix}`,
+      },
+    );
+    const eventId = await t.mutation(api.testing.events.seedEvent, {
+      title: 'Guest List Event',
+      price: 2000,
+      totalTickets: 100,
+      date: '2035-07-10T20:00:00.000Z',
+      endDate: '2035-07-11T06:00:00.000Z',
+      status: 'published',
+      visibility: 'public',
+      organizerId,
+    });
+    const managerId = await t.mutation(api.testing.users.createUserDirectly, {
+      name: 'Organizer',
+      email: `guest-list-organizer-${suffix}@test.com`,
+      isRootAdmin: true,
+    });
+    return {
+      organizerId,
+      eventId,
+      managerId,
+      manager: t.withIdentity({subject: managerId}),
+      suffix,
+    };
+  }
+
+  async function readStats(
+    t: ReturnType<typeof convexTest>,
+    eventId: Id<'events'>,
+  ) {
+    return await t.run((ctx) =>
+      ctx.db
+        .query('guestListEventStats')
+        .withIndex('by_eventId', (q) => q.eq('eventId', eventId))
+        .unique(),
+    );
+  }
+
+  /**
+   * Only jobs still awaiting execution. `cancelScheduledWork` leaves cancelled
+   * rows behind, so the raw table cannot answer "was a new send queued?".
+   */
+  async function pendingJobsJson(
+    t: ReturnType<typeof convexTest>,
+  ): Promise<string> {
+    const scheduled = await t.run((ctx) =>
+      ctx.db.system.query('_scheduled_functions').collect(),
+    );
+    return JSON.stringify(
+      scheduled.filter(
+        (job) =>
+          job.state.kind === 'pending' || job.state.kind === 'inProgress',
+      ),
+    );
+  }
+
+  /** Creates an assignment whose admission row is the delegate's OWN ticket. */
+  async function seedAdmission(
+    t: ReturnType<typeof convexTest>,
+    setup: Awaited<ReturnType<typeof setupGuestListEvent>>,
+    overrides?: {email?: string; idempotencyKey?: string; userId?: Id<'users'>},
+  ) {
+    const email = overrides?.email ?? `touring-artist-${setup.suffix}@test.com`;
+    const assignment = await setup.manager.mutation(
+      api.guest_list.assignments.create,
+      {
+        eventId: setup.eventId,
+        role: 'artist',
+        displayName: 'Touring Artist',
+        email,
+        ...(overrides?.userId ? {userId: overrides.userId} : {}),
+        idempotencyKey:
+          overrides?.idempotencyKey ?? `admission-${setup.suffix}`,
+      },
+    );
+    const admissionGuestId = assignment.admissionGuestId;
+    if (!admissionGuestId) {
+      throw new Error('expected the assignment to create an admission guest');
+    }
+    return {assignment, admissionGuestId, email};
+  }
+
+  it('requeues the delivery when an organizer corrects an assignment admission email', async () => {
+    const t = convexTest();
+    const setup = await setupGuestListEvent(t);
+    const {assignment, admissionGuestId, email} = await seedAdmission(t, setup);
+
+    // The ticket already went out — to the typo'd address.
+    await t.mutation(api.testing.guest_list.cancelScheduledWork, {});
+    const claim = await t.mutation(
+      internal.events.guests.beginGuestTicketSend,
+      {id: admissionGuestId, requireUnsent: true},
+    );
+    await t.mutation(internal.events.guests.markAsEmailed, {
+      id: admissionGuestId,
+      lockToken: claim.lockToken!,
+      recipient: email,
+    });
+    expect(
+      await t.run((ctx) => ctx.db.get('guests', admissionGuestId)),
+    ).toMatchObject({ticketDeliveryState: 'sent'});
+
+    const corrected = `touring.artist-${setup.suffix}@test.com`;
+    await setup.manager.mutation(api.events.guests.update, {
+      id: admissionGuestId,
+      name: 'Touring Artist',
+      email: corrected,
+      type: 'artist guest',
+    });
+
+    // Without the reset the artist's own ticket is stranded: emailedAt survives,
+    // the state stays 'sent', nothing is queued, and delegate.retryTicket only
+    // accepts self_service rows — so there is no retry path at all.
+    const after = await t.run((ctx) => ctx.db.get('guests', admissionGuestId));
+    expect(after?.email).toBe(corrected);
+    expect(after?.emailKey).toBe(corrected.toLowerCase());
+    expect(after?.emailedAt).toBeUndefined();
+    expect(after?.ticketDeliveryState).toBe('queued');
+    expect(after?.emailSendLockedAt).toBeNull();
+    expect(after).toMatchObject({
+      sourceAssignmentId: assignment.assignmentId,
+      sourceKind: 'assignment_admission',
+      sourceRole: 'artist',
+      sourceDisplayName: 'Touring Artist',
+    });
+    expect(await pendingJobsJson(t)).toContain('sendAutomaticTicket');
+  });
+
+  it('lets the internal delivery gate accept a corrected assignment admission', async () => {
+    const t = convexTest();
+    const setup = await setupGuestListEvent(t);
+    const {assignment, admissionGuestId} = await seedAdmission(t, setup);
+    await t.mutation(api.testing.guest_list.cancelScheduledWork, {});
+
+    const corrected = `gate-check-${setup.suffix}@test.com`;
+    await setup.manager.mutation(api.events.guests.update, {
+      id: admissionGuestId,
+      name: 'Touring Artist',
+      email: corrected,
+      type: 'artist guest',
+    });
+
+    // The queued attempt is only useful if canDeliverAutomaticTicket accepts an
+    // assignment_admission row whose email diverged from the assignment's.
+    await expect(
+      t.query(internal.guest_list.invite_state.canDeliverAutomaticTicket, {
+        guestId: admissionGuestId,
+        assignmentId: assignment.assignmentId,
+        eventId: setup.eventId,
+        recipient: corrected,
+        sourceKind: 'assignment_admission',
+      }),
+    ).resolves.toBe(true);
+    // The superseded address must not be deliverable.
+    await expect(
+      t.query(internal.guest_list.invite_state.canDeliverAutomaticTicket, {
+        guestId: admissionGuestId,
+        assignmentId: assignment.assignmentId,
+        eventId: setup.eventId,
+        recipient: `touring-artist-${setup.suffix}@test.com`,
+        sourceKind: 'assignment_admission',
+      }),
+    ).resolves.toBe(false);
+  });
+
+  it('keeps the sent state when an admission edit does not change the email', async () => {
+    const t = convexTest();
+    const setup = await setupGuestListEvent(t);
+    const {admissionGuestId, email} = await seedAdmission(t, setup);
+    await t.mutation(api.testing.guest_list.cancelScheduledWork, {});
+    const claim = await t.mutation(
+      internal.events.guests.beginGuestTicketSend,
+      {id: admissionGuestId, requireUnsent: true},
+    );
+    await t.mutation(internal.events.guests.markAsEmailed, {
+      id: admissionGuestId,
+      lockToken: claim.lockToken!,
+      recipient: email,
+    });
+
+    await setup.manager.mutation(api.events.guests.update, {
+      id: admissionGuestId,
+      name: 'Touring Artist (headliner)',
+      email: email.toUpperCase(),
+      type: 'artist guest',
+      notes: 'Arrives at 8pm',
+    });
+
+    // Case-only differences normalize to the same emailKey, so nothing resets.
+    const after = await t.run((ctx) => ctx.db.get('guests', admissionGuestId));
+    expect(typeof after?.emailedAt).toBe('number');
+    expect(after?.ticketDeliveryState).toBe('sent');
+    expect(after?.name).toBe('Touring Artist (headliner)');
+    expect(await pendingJobsJson(t)).not.toContain('sendAutomaticTicket');
+  });
+
+  it('refuses to clear the email on a guest-list sourced row', async () => {
+    const t = convexTest();
+    const setup = await setupGuestListEvent(t);
+    const {admissionGuestId} = await seedAdmission(t, setup);
+
+    await expect(
+      setup.manager.mutation(api.events.guests.update, {
+        id: admissionGuestId,
+        name: 'Touring Artist',
+        type: 'artist guest',
+      }),
+    ).rejects.toThrow(/Email is required/i);
+  });
+
+  it('preserves every stored field, including sourceIdempotencyKey, across an update', async () => {
+    const t = convexTest();
+    const setup = await setupGuestListEvent(t);
+    const delegateId = await t.mutation(api.testing.users.createUserDirectly, {
+      name: 'Touring Artist',
+      email: `delegate-${setup.suffix}@test.com`,
+      authEmailVerified: true,
+    });
+    const {assignment} = await seedAdmission(t, setup, {
+      email: `delegate-${setup.suffix}@test.com`,
+      userId: delegateId,
+    });
+    const delegate = t.withIdentity({subject: delegateId});
+    const added = await delegate.mutation(api.guest_list.delegate.addGuest, {
+      access: {
+        kind: 'signedIn' as const,
+        assignmentId: assignment.assignmentId,
+      },
+      name: 'Plus One',
+      email: `plus-one-${setup.suffix}@test.com`,
+      idempotencyKey: `plus-one-${setup.suffix}`,
+    });
+    await t.mutation(api.testing.guest_list.cancelScheduledWork, {});
+
+    const before = await t.run((ctx) =>
+      ctx.db.get('guests', added.guest.guestId),
+    );
+    expect(before?.sourceIdempotencyKey).toBe(`plus-one-${setup.suffix}`);
+
+    // Same email (so no delivery reset), new name + notes. `db.replace` rewrites
+    // the whole document, so a dropped field would silently erase state — most
+    // damagingly sourceIdempotencyKey, the delegate add-replay guard.
+    await setup.manager.mutation(api.events.guests.update, {
+      id: added.guest.guestId,
+      name: 'Plus One (renamed)',
+      email: `plus-one-${setup.suffix}@test.com`,
+      type: 'guest',
+      notes: 'Comped by the artist',
+    });
+
+    const after = await t.run((ctx) =>
+      ctx.db.get('guests', added.guest.guestId),
+    );
+    expect(after).toEqual({
+      ...before,
+      name: 'Plus One (renamed)',
+      notes: 'Comped by the artist',
+    });
+  });
+
+  it('decrements only the admission total when removing a revoked assignment admission', async () => {
+    const t = convexTest();
+    const setup = await setupGuestListEvent(t);
+
+    // Assignment A: revoked, keeps its admission row behind.
+    const revoked = await seedAdmission(t, setup, {
+      email: `revoked-artist-${setup.suffix}@test.com`,
+      idempotencyKey: `revoked-${setup.suffix}`,
+    });
+    // Assignment B: stays active with one delegate-added self-service guest, so
+    // the self-service and per-role used counters are non-zero at removal time.
+    const delegateId = await t.mutation(api.testing.users.createUserDirectly, {
+      name: 'Active Artist',
+      email: `active-artist-${setup.suffix}@test.com`,
+      authEmailVerified: true,
+    });
+    const active = await seedAdmission(t, setup, {
+      email: `active-artist-${setup.suffix}@test.com`,
+      idempotencyKey: `active-${setup.suffix}`,
+      userId: delegateId,
+    });
+    await t
+      .withIdentity({subject: delegateId})
+      .mutation(api.guest_list.delegate.addGuest, {
+        access: {
+          kind: 'signedIn' as const,
+          assignmentId: active.assignment.assignmentId,
+        },
+        name: 'Plus One',
+        email: `plus-one-${setup.suffix}@test.com`,
+        idempotencyKey: `plus-one-${setup.suffix}`,
+      });
+    await setup.manager.mutation(api.guest_list.assignments.revoke, {
+      assignmentId: revoked.assignment.assignmentId,
+    });
+    await t.mutation(api.testing.guest_list.cancelScheduledWork, {});
+
+    const before = await readStats(t, setup.eventId);
+    expect(before).toMatchObject({
+      selfServiceGuestCount: 1,
+      activeArtistGuestCount: 1,
+      activeAssignmentCount: 1,
+      totalGuestAdmissionCount: 3,
+    });
+
+    await setup.manager.mutation(api.events.guests.remove, {
+      id: revoked.admissionGuestId,
+    });
+
+    // An admission row is not a slot-consuming self-service guest: only the
+    // total moves, and the revoked assignment's pointer is cleared.
+    const after = await readStats(t, setup.eventId);
+    expect(after).toMatchObject({
+      selfServiceGuestCount: 1,
+      activeArtistGuestCount: 1,
+      activeStaffGuestCount: 0,
+      activeAssignmentCount: 1,
+      activeGrantedSlots: before!.activeGrantedSlots,
+      totalGuestAdmissionCount: 2,
+    });
+    expect(
+      await t.run((ctx) => ctx.db.get('guests', revoked.admissionGuestId)),
+    ).toBeNull();
+    const revokedAssignment = await t.run((ctx) =>
+      ctx.db.get('guestListAssignments', revoked.assignment.assignmentId),
+    );
+    expect(revokedAssignment?.admissionGuestId).toBeUndefined();
+    expect(revokedAssignment?.usedSlots).toBe(0);
+  });
+
+  it('rejects removing the admission of a still-active assignment', async () => {
+    const t = convexTest();
+    const setup = await setupGuestListEvent(t);
+    const {admissionGuestId} = await seedAdmission(t, setup);
+
+    await expect(
+      setup.manager.mutation(api.events.guests.remove, {id: admissionGuestId}),
+    ).rejects.toThrow(/active assignment admission/i);
+  });
+
+  it('keeps incrementing the admission counter on manual add once the row exists', async () => {
+    const t = convexTest();
+    const setup = await setupGuestListEvent(t);
+    await seedAdmission(t, setup);
+    await t.mutation(api.testing.guest_list.cancelScheduledWork, {});
+    expect(await readStats(t, setup.eventId)).toMatchObject({
+      totalGuestAdmissionCount: 1,
+    });
+
+    await setup.manager.mutation(api.events.guests.add, {
+      eventId: setup.eventId,
+      name: 'Comped Friend',
+      type: 'guest',
+    });
+
+    expect(await readStats(t, setup.eventId)).toMatchObject({
+      totalGuestAdmissionCount: 2,
+    });
+  });
+});
+
 describe('guest ticket send lock', () => {
   async function seedGuestWithEmail(
     t: ReturnType<typeof convexTest>,
@@ -1560,6 +1938,114 @@ describe('guest ticket send lock', () => {
 
     expect(result.claimed).toBe(true);
     expect(result.reason).toBe('claimed');
+  });
+
+  // The public (organizer "Resend") send path claims the lock, then spends
+  // seconds building the PDF before dispatching. These cover the pre-dispatch
+  // revalidation that keeps a superseded attempt from delivering to an address
+  // that was corrected away mid-flight; the automatic path has its own gate
+  // (canDeliverAutomaticTicket), the public one had none.
+  it('reports an in-flight resend as current while it owns the lock and the recipient matches', async () => {
+    const t = convexTest();
+    const guestId = await seedGuestWithEmail(t);
+    const token = await claimLock(t, guestId);
+
+    await expect(
+      t.query(internal.events.guests.isGuestTicketSendCurrent, {
+        id: guestId,
+        lockToken: token,
+        recipient: 'Lock-Guest@Example.com',
+      }),
+    ).resolves.toBe(true);
+  });
+
+  it('reports an in-flight resend as superseded once the recipient was edited away', async () => {
+    const t = convexTest();
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+    const asAdmin = t.withIdentity({subject: adminId});
+    const guestId = await asAdmin.mutation(api.events.guests.add, {
+      eventId,
+      name: 'Edited Mid-Send',
+      email: 'stale@example.com',
+      type: 'guest',
+    });
+    const token = await claimLock(t, guestId);
+
+    // A plain guest's update PRESERVES the lock, so the token check alone would
+    // still pass — the recipient comparison is what stops the stale delivery.
+    await asAdmin.mutation(api.events.guests.update, {
+      id: guestId,
+      name: 'Edited Mid-Send',
+      email: 'corrected@example.com',
+      type: 'guest',
+    });
+
+    await expect(
+      t.query(internal.events.guests.isGuestTicketSendCurrent, {
+        id: guestId,
+        lockToken: token,
+        recipient: 'stale@example.com',
+      }),
+    ).resolves.toBe(false);
+    await expect(
+      t.query(internal.events.guests.isGuestTicketSendCurrent, {
+        id: guestId,
+        lockToken: token,
+        recipient: 'corrected@example.com',
+      }),
+    ).resolves.toBe(true);
+  });
+
+  it('reports an in-flight resend as superseded once a newer attempt took the lock', async () => {
+    vi.useFakeTimers();
+    const t = convexTest();
+    const guestId = await seedGuestWithEmail(t);
+    const token = await claimLock(t, guestId);
+
+    // A guest-list email correction releases the lock (null) and queues a fresh
+    // automatic attempt, which claims a new token. The clock is advanced so the
+    // two claim timestamps — the lock ownership tokens — cannot collide.
+    await t.mutation(internal.events.guests.clearGuestTicketSendLock, {
+      id: guestId,
+      lockToken: token,
+    });
+    vi.advanceTimersByTime(1_000);
+    const newerToken = await claimLock(t, guestId, false);
+    expect(newerToken).not.toBe(token);
+
+    await expect(
+      t.query(internal.events.guests.isGuestTicketSendCurrent, {
+        id: guestId,
+        lockToken: token,
+        recipient: 'lock-guest@example.com',
+      }),
+    ).resolves.toBe(false);
+    await expect(
+      t.query(internal.events.guests.isGuestTicketSendCurrent, {
+        id: guestId,
+        lockToken: newerToken,
+        recipient: 'lock-guest@example.com',
+      }),
+    ).resolves.toBe(true);
+  });
+
+  it('reports a deleted guest as no longer current', async () => {
+    const t = convexTest();
+    const guestId = await seedGuestWithEmail(t);
+    const token = await claimLock(t, guestId);
+    const adminId = await setupAdmin(t);
+    await t
+      .withIdentity({subject: adminId})
+      .mutation(api.events.guests.remove, {id: guestId});
+
+    await expect(
+      t.query(internal.events.guests.isGuestTicketSendCurrent, {
+        id: guestId,
+        lockToken: token,
+        recipient: 'lock-guest@example.com',
+      }),
+    ).resolves.toBe(false);
   });
 
   it('does not let a stale attempt release a newer reclaimed lock', async () => {

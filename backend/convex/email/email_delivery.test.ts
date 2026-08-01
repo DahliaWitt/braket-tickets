@@ -2,6 +2,11 @@ import {convexTest} from '../setup.testing';
 import {describe, it, expect} from 'vitest';
 import {internal} from '../_generated/api';
 import {emailDeliveryRecipientKeyPatch} from '../migrations';
+import {getAppErrorCode} from '../lib/errors';
+import {
+  EMAIL_DELIVERY_LEGACY_RECIPIENT_SCAN_EXCEEDED,
+  UNNORMALIZABLE_RECIPIENT_KEY,
+} from '../lib/validators/email_delivery';
 
 describe('email_delivery', () => {
   describe('hasDelivery', () => {
@@ -116,6 +121,101 @@ describe('email_delivery', () => {
           recipient: 'Legacy.Guest@Example.com',
         }),
       ).toEqual({recipientKey: 'legacy.guest@example.com'});
+    });
+
+    it('fails closed with an actionable code above the legacy scan cap', async () => {
+      const t = convexTest();
+      await t.run(async (ctx) => {
+        for (let index = 0; index < 101; index += 1) {
+          // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- legacy pre-recipientKey rows required to exceed the bounded fallback
+          await ctx.db.insert('emailDeliveries', {
+            emailId: `legacy-overflow-${index}`,
+            source: 'ticket',
+            sourceId: 'legacy-overflow-guest',
+            recipient: `Legacy.Overflow.${index}@Example.com`,
+            critical: true,
+            manual: false,
+            fallback: false,
+            provider: 'resend',
+            sentAt: Date.now(),
+          });
+        }
+      });
+
+      const error = await t
+        .query(internal.email.email_delivery.hasDelivery, {
+          source: 'ticket',
+          sourceId: 'legacy-overflow-guest',
+          recipient: 'someone-else@example.com',
+        })
+        .then(
+          () => null,
+          (caught: unknown) => caught,
+        );
+
+      // A bare Error would reach production as a redacted "Server Error".
+      expect(getAppErrorCode(error)).toBe(
+        EMAIL_DELIVERY_LEGACY_RECIPIENT_SCAN_EXCEEDED,
+      );
+    });
+  });
+
+  describe('recordDelivery', () => {
+    it('keys an unnormalizable recipient with the sentinel so it leaves the legacy scan', async () => {
+      const t = convexTest();
+
+      await t.mutation(internal.email.email_delivery.recordDelivery, {
+        emailId: 'blank-recipient',
+        source: 'ticket',
+        sourceId: 'guest-blank-recipient',
+        recipient: '   ',
+        critical: true,
+        manual: false,
+        fallback: false,
+        provider: 'resend',
+      });
+
+      const delivery = await t.run((ctx) =>
+        ctx.db
+          .query('emailDeliveries')
+          .withIndex('by_emailId', (q) => q.eq('emailId', 'blank-recipient'))
+          .unique(),
+      );
+      expect(delivery?.recipientKey).toBe(UNNORMALIZABLE_RECIPIENT_KEY);
+
+      // The sentinel never answers a real normalized lookup.
+      await expect(
+        t.query(internal.email.email_delivery.hasDelivery, {
+          source: 'ticket',
+          sourceId: 'guest-blank-recipient',
+          recipient: 'real-guest@example.com',
+        }),
+      ).resolves.toBe(false);
+    });
+
+    it('keeps sentinel rows out of the bounded legacy fallback', async () => {
+      const t = convexTest();
+      for (let index = 0; index < 101; index += 1) {
+        await t.mutation(internal.email.email_delivery.recordDelivery, {
+          emailId: `blank-${index}`,
+          source: 'ticket',
+          sourceId: 'guest-many-blank-recipients',
+          recipient: ' ',
+          critical: true,
+          manual: false,
+          fallback: false,
+          provider: 'resend',
+        });
+      }
+
+      // Unkeyed rows would have tripped the fail-closed cap.
+      await expect(
+        t.query(internal.email.email_delivery.hasDelivery, {
+          source: 'ticket',
+          sourceId: 'guest-many-blank-recipients',
+          recipient: 'real-guest@example.com',
+        }),
+      ).resolves.toBe(false);
     });
   });
 

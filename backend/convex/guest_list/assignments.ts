@@ -16,10 +16,14 @@ import {findExistingImportBatch, insertImportBatch} from '../lib/imports/bulk';
 import {internal} from '../_generated/api';
 import {rateLimiter} from '../lib/rate_limits';
 import {
+  appendRecentResendIdempotencyKey,
   assertValidGuestListIdempotencyKey,
   assignmentView,
   createAssignment,
+  createAssignmentWithContext,
+  insertAudit,
   requireGuestListFeatureEnabled,
+  resolveGuestListAssignmentContext,
   revokeAssignment,
   sourcedGuestView,
   validateAssignmentInput,
@@ -86,9 +90,17 @@ export const listByEvent = query({
   returns: guestListAssignmentPageValidator,
   handler: async (ctx, args) => {
     await requireEventForManage(ctx, args.eventId);
+    // Paginate on `by_eventId_and_createdAt`, not `by_eventId_and_status`.
+    // With only `eventId` pinned on the status index the residual descending
+    // sort key is `status` first, and `'revoked' > 'active'`, so an event with
+    // more revoked than active assignments would hand the organizer a first
+    // page of nothing but revoked rows. Ordering by `createdAt` gives a
+    // newest-first page regardless of status.
     const page = await ctx.db
       .query('guestListAssignments')
-      .withIndex('by_eventId_and_status', (q) => q.eq('eventId', args.eventId))
+      .withIndex('by_eventId_and_createdAt', (q) =>
+        q.eq('eventId', args.eventId),
+      )
       .order('desc')
       .paginate(args.paginationOpts);
     return {
@@ -166,8 +178,13 @@ export const bulkCreateStaff = mutation({
   returns: importBatchResultValidator,
   handler: async (ctx, args) => {
     assertValidGuestListIdempotencyKey(args.batchKey, 'Batch key');
-    const {user} = await requireEventForManage(ctx, args.eventId);
-    await requireGuestListFeatureEnabled(ctx);
+    // Authorization, feature state, event lifecycle, and the organizer document
+    // are resolved exactly once for the whole batch. Calling `createAssignment`
+    // per row re-ran all four — including an authorization component round-trip
+    // — up to 50 times inside a single transaction. Authorization is unchanged:
+    // it is still enforced, just not re-enforced per row.
+    const context = await resolveGuestListAssignmentContext(ctx, args.eventId);
+    const user = context.actor;
     const existing = await findExistingImportBatch(
       ctx,
       args.eventId,
@@ -233,8 +250,7 @@ export const bulkCreateStaff = mutation({
         'guest-list-staff-assignment',
         [args.eventId, args.batchKey, String(rowIndex)],
       );
-      await createAssignment(ctx, {
-        eventId: args.eventId,
+      await createAssignmentWithContext(ctx, context, {
         role: 'staff',
         displayName: row.name,
         email: row.email,
@@ -269,7 +285,7 @@ export const updateGrant = mutation({
       args.assignmentId,
     );
     if (!assignment) return unavailable();
-    const {user} = await requireEventForManage(ctx, assignment.eventId);
+    const {user, event} = await requireEventForManage(ctx, assignment.eventId);
     await requireGuestListFeatureEnabled(ctx);
     if (assignment.status === 'revoked') {
       throwAppError(
@@ -277,6 +293,9 @@ export const updateGrant = mutation({
         'A revoked assignment cannot have its grant changed',
       );
     }
+    // Same lifecycle gate as create/resend/revoke: guest-list mutations stop at
+    // `hasEventEnded`, so a grant edit must not slip through after the event.
+    requireGuestListEventActive(event);
     validateGuestListSlots(args.grantedSlots);
     const previousGrantedSlots = assignment.grantedSlots;
     if (previousGrantedSlots !== args.grantedSlots) {
@@ -291,7 +310,7 @@ export const updateGrant = mutation({
         activeGrantedSlots:
           current.activeGrantedSlots + args.grantedSlots - previousGrantedSlots,
       }));
-      await ctx.db.insert('guestListAuditEvents', {
+      await insertAudit(ctx, {
         eventId: assignment.eventId,
         assignmentId: assignment._id,
         actorKind: 'organizer',
@@ -299,7 +318,6 @@ export const updateGrant = mutation({
         action: 'assignment.grant_change',
         beforeValue: previousGrantedSlots,
         afterValue: args.grantedSlots,
-        createdAt: Date.now(),
       });
     }
     const updated = await ctx.db.get('guestListAssignments', assignment._id);
@@ -344,7 +362,15 @@ export const resendInvite = mutation({
       throwAppError('INVALID_STATE', 'A revoked assignment cannot be resent');
     }
     requireGuestListEventActive(event);
-    if (assignment.lastResendIdempotencyKey === args.idempotencyKey) {
+    // Compare against a bounded history, not just the most recent key. With a
+    // single stored key, replaying key A after key B had been used was not
+    // recognised as a duplicate and minted a third credential plus a third
+    // email.
+    if (
+      (assignment.recentResendIdempotencyKeys ?? []).includes(
+        args.idempotencyKey,
+      )
+    ) {
       return {
         assignmentId: assignment._id,
         inviteState: assignment.inviteState,
@@ -358,15 +384,17 @@ export const resendInvite = mutation({
       inviteState: 'pending',
       inviteAttemptId: args.idempotencyKey,
       inviteFailureCode: undefined,
-      lastResendIdempotencyKey: args.idempotencyKey,
+      recentResendIdempotencyKeys: appendRecentResendIdempotencyKey(
+        assignment.recentResendIdempotencyKeys,
+        args.idempotencyKey,
+      ),
     });
-    await ctx.db.insert('guestListAuditEvents', {
+    await insertAudit(ctx, {
       eventId: assignment.eventId,
       assignmentId: assignment._id,
       actorKind: 'organizer',
       actorUserId: user._id,
       action: 'assignment.resend',
-      createdAt: Date.now(),
     });
     await ctx.scheduler.runAfter(
       0,

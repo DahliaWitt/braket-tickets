@@ -23,12 +23,3 @@ export interface AssignmentFormValue {
   role: 'artist' | 'staff';
   grantOverride: string;
 }
-
-export const EMPTY_OVERVIEW: GuestListEventOverview = {
-  selfServiceGuestCount: 0,
-  activeGrantedSlots: 0,
-  activeArtistGuestCount: 0,
-  activeStaffGuestCount: 0,
-  activeAssignmentCount: 0,
-  totalGuestAdmissionCount: 0,
-};

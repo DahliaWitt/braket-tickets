@@ -98,7 +98,31 @@ export const sendTicket = action({
     const lockToken = claim.lockToken;
 
     try {
-      return await deliverGuestTicket(ctx, guest, lockToken);
+      // Revalidate immediately before dispatch. Building the PDF takes seconds,
+      // and a guest-list email correction during that window releases this lock
+      // and queues a fresh attempt for the new address — without this gate the
+      // in-flight resend would still deliver to the address that was just
+      // corrected away. Mirrors the automatic path's canDeliverAutomaticTicket.
+      const result = await deliverGuestTicket(
+        ctx,
+        guest,
+        lockToken,
+        async () =>
+          await ctx.runQuery(internal.events.guests.isGuestTicketSendCurrent, {
+            id: guest._id,
+            lockToken,
+            recipient: guest.email,
+          }),
+      );
+      if (result.status === 'skipped') {
+        // Token-guarded: a no-op when the lock has already been taken over by
+        // the superseding attempt.
+        await ctx.runMutation(internal.events.guests.clearGuestTicketSendLock, {
+          id: guest._id,
+          lockToken,
+        });
+      }
+      return result;
     } catch (error) {
       // Release the lock so a retry can proceed immediately. This runs for any
       // failure, including a markAsEmailed failure after the provider already

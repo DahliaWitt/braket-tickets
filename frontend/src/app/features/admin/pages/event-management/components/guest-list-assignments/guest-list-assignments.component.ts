@@ -29,10 +29,12 @@ import type {
 } from '@/features/admin/import/import-surface.types';
 import {buildImportErrorReport, buildImportReport} from '../import-report.util';
 import {GuestListOrganizerService} from './guest-list-organizer.service';
-import type {CommunityMemberCandidate} from './guest-list-organizer.service';
+import type {
+  BulkCreateStaffArgs,
+  CommunityMemberCandidate,
+} from './guest-list-organizer.service';
 import {ConfirmationFocusManager} from './confirmation-focus-manager';
 import {
-  EMPTY_OVERVIEW,
   type AssignmentFormValue,
   type GuestListAssignment,
   type GuestListEventOverview,
@@ -46,6 +48,8 @@ import {signalFormFieldErrorMessage} from '@/utils/signal-form';
 export type {GuestListAssignment, GuestListEventOverview};
 
 type GuestListAssignmentId = GuestListAssignment['assignmentId'];
+/** Wire shape for one bulk staff-import row, pulled from the generated API. */
+type StaffImportRow = BulkCreateStaffArgs['rows'][number];
 
 @Component({
   selector: 'app-guest-list-assignments',
@@ -63,7 +67,12 @@ export class GuestListAssignmentsComponent {
   private readonly service = inject(GuestListOrganizerService);
   readonly eventId = input<Id<'events'> | ''>('');
   readonly organizerId = input<Id<'organizers'> | ''>('');
-  readonly overview = input<GuestListEventOverview>(EMPTY_OVERVIEW);
+  /**
+   * `null` while the organizer overview query is still unresolved. Rendering
+   * zeros before the totals land makes a busy event look empty, so the template
+   * shows a loading state instead of fabricated counts.
+   */
+  readonly overview = input<GuestListEventOverview | null>(null);
   readonly assignments = input<readonly GuestListAssignment[]>([]);
   readonly continueCursor = input<string | null>(null);
   private readonly loadedContinueCursor = signal<string | null | undefined>(
@@ -109,11 +118,15 @@ export class GuestListAssignmentsComponent {
   readonly selectedUserId = computed(() => this.selectedMember()?.userId);
   readonly additionalAssignments = signal<readonly GuestListAssignment[]>([]);
   readonly visibleAssignments = computed(() => {
+    // The first page is the live subscription; later pages are point-in-time
+    // snapshots. The reactive copy of an assignment always wins over a stale
+    // snapshot of the same ID, and first-page rows keep rendering first.
     const byId = new Map<string, GuestListAssignment>();
-    for (const assignment of [
-      ...this.assignments(),
-      ...this.additionalAssignments(),
-    ]) {
+    for (const assignment of this.assignments()) {
+      byId.set(assignment.assignmentId, assignment);
+    }
+    for (const assignment of this.additionalAssignments()) {
+      if (byId.has(assignment.assignmentId)) continue;
       byId.set(assignment.assignmentId, assignment);
     }
     return [...byId.values()];
@@ -154,6 +167,33 @@ export class GuestListAssignmentsComponent {
     });
   });
   readonly assignmentSubmitted = signal(false);
+  /**
+   * Idempotency key for the invite currently being submitted, bound to the
+   * exact payload it was minted for. A retry of the same invite after a
+   * commit-then-disconnect (the mutation lands but the response is lost) must
+   * replay as the same operation, or the server creates a second assignment,
+   * credential, and invite email. Editing the recipient first makes it a
+   * different operation, so the key rotates. Cleared on a confirmed success.
+   */
+  private pendingCreate: {signature: string; key: string} | null = null;
+  /** Same replay protection, keyed per assignment, for invite resends. */
+  private readonly resendIdempotencyKeys = new Map<
+    GuestListAssignmentId,
+    string
+  >();
+
+  /**
+   * Validation for the inline grant editor. Mirrors the invite slot-override
+   * field: digits only (so `''`, `1e2`, `0x10`, and `1.5` are all rejected)
+   * within 0..100.
+   */
+  readonly grantEditError = computed<string | null>(() => {
+    const raw = this.grantEditValue().trim();
+    const parsed = Number(raw);
+    return /^\d+$/.test(raw) && Number.isInteger(parsed) && parsed <= 100
+      ? null
+      : 'Use a whole number between 0 and 100';
+  });
 
   protected assignmentNameError(): string | null {
     if (
@@ -215,7 +255,11 @@ export class GuestListAssignmentsComponent {
         attemptedUsage !== assignment.usedSlots &&
         this.loadingGuestsId() !== assignmentId
       ) {
-        void this.fetchGuests(assignmentId, null);
+        // `fetchGuests` reads and writes loading/usage state synchronously
+        // before its first await. Running it untracked keeps those reads out of
+        // this effect's dependency set, so termination does not rely on the
+        // attempted-usage guard alone.
+        untracked(() => void this.fetchGuests(assignmentId, null));
       }
     });
   }
@@ -280,19 +324,32 @@ export class GuestListAssignmentsComponent {
       return;
     const value = this.assignmentModel();
     const override = value.grantOverride.trim();
+    const displayName = value.displayName.trim();
+    const email = value.email.trim();
+    const userId = this.selectedUserId();
     this.isCreating.set(true);
     this.actionError.set(null);
     try {
       await this.service.create({
         eventId,
         role: value.role,
-        displayName: value.displayName.trim(),
-        email: value.email.trim(),
-        userId: this.selectedUserId(),
+        displayName,
+        email,
+        userId,
         grantedSlots: override ? Number(override) : undefined,
-        idempotencyKey: crypto.randomUUID(),
+        idempotencyKey: this.createKeyFor(
+          JSON.stringify([
+            eventId,
+            value.role,
+            displayName,
+            email,
+            userId,
+            override,
+          ]),
+        ),
       });
-      toast.success('Guest list invite queued');
+      this.pendingCreate = null;
+      toast.success('guest list invite queued');
       this.assignmentModel.set({
         search: '',
         displayName: '',
@@ -305,11 +362,23 @@ export class GuestListAssignmentsComponent {
       this.assignmentSubmitted.set(false);
     } catch (error) {
       logger.error('Failed to create guest list assignment', error);
-      toast.error('Failed to send guest list invite');
+      toast.error('failed to send guest list invite');
       this.actionError.set("couldn't send this invite — try again?");
     } finally {
       this.isCreating.set(false);
     }
+  }
+
+  /**
+   * The idempotency key for this exact invite payload — reused while the
+   * payload is unchanged (retry of the same operation), rotated when it
+   * changes (a new operation).
+   */
+  private createKeyFor(signature: string): string {
+    if (this.pendingCreate?.signature !== signature) {
+      this.pendingCreate = {signature, key: crypto.randomUUID()};
+    }
+    return this.pendingCreate.key;
   }
 
   markAssignmentSubmitted(): void {
@@ -320,22 +389,43 @@ export class GuestListAssignmentsComponent {
     const eventId = this.eventId();
     if (!eventId || this.isBulkCreating()) return;
     this.actionError.set(null);
+    // `ASSIGNMENT_STAFF_IMPORT_CONFIG.validateRow` runs `validateRequiredEmail`,
+    // so every confirmed row already carries an email. Narrow rather than
+    // defaulting to `''`: an empty address would be a contract break the server
+    // rejects row-by-row, and silently sending it would hide the regression.
+    const rows: StaffImportRow[] = [];
+    for (const row of payload.rows) {
+      if (!row.email) {
+        logger.error(
+          'Staff import confirmed a row without an email — refusing to import',
+        );
+        this.importReport.set(
+          buildImportErrorReport(
+            new Error('Staff import row is missing an email'),
+            'could not import staff — try again?',
+          ),
+        );
+        this.actionError.set("couldn't import staff — try again?");
+        return;
+      }
+      rows.push({
+        name: row.name,
+        email: row.email,
+        slotOverride: row.slotOverride,
+      });
+    }
     this.isBulkCreating.set(true);
     try {
       const result = await this.service.bulkCreateStaff({
         eventId,
         batchKey: payload.batchKey,
-        rows: payload.rows.map((row) => ({
-          name: row.name,
-          email: row.email ?? '',
-          slotOverride: row.slotOverride,
-        })),
+        rows,
       });
       this.importReport.set(buildImportReport(result));
     } catch (error) {
       logger.error('Failed to import staff assignments', error);
       this.importReport.set(
-        buildImportErrorReport(error, 'Could not import staff — try again?'),
+        buildImportErrorReport(error, 'could not import staff — try again?'),
       );
       this.actionError.set("couldn't import staff — try again?");
     } finally {
@@ -367,9 +457,8 @@ export class GuestListAssignmentsComponent {
     assignment: GuestListAssignment,
     event?: Event,
   ): Promise<void> {
-    if (this.updatingGrantId()) return;
-    const grant = Number(this.grantEditValue());
-    if (!Number.isInteger(grant) || grant < 0 || grant > 100) return;
+    if (this.updatingGrantId() || this.grantEditError()) return;
+    const grant = Number(this.grantEditValue().trim());
     this.confirmationFocus.remember(event);
     this.pendingRevoke.set(null);
     if (grant < assignment.usedSlots) {
@@ -418,7 +507,7 @@ export class GuestListAssignmentsComponent {
         grantedSlots: grant,
       });
       this.editingGrantId.set(null);
-      toast.success('Guest list grant updated');
+      toast.success('guest list grant updated');
       return true;
     } catch (error) {
       logger.error('Failed to update guest list grant', error);
@@ -593,7 +682,7 @@ export class GuestListAssignmentsComponent {
       await this.service.revoke({assignmentId: assignment.assignmentId});
       this.pendingRevoke.set(null);
       this.confirmationFocus.restore(true);
-      toast.success('Guest list access revoked');
+      toast.success('guest list access revoked');
     } catch (error) {
       logger.error('Failed to revoke guest list assignment', error);
       this.actionError.set("couldn't revoke this assignment — try again?");
@@ -606,12 +695,16 @@ export class GuestListAssignmentsComponent {
     if (this.resendingId()) return;
     this.actionError.set(null);
     this.resendingId.set(assignment.assignmentId);
+    const assignmentId = assignment.assignmentId;
+    let idempotencyKey = this.resendIdempotencyKeys.get(assignmentId);
+    if (!idempotencyKey) {
+      idempotencyKey = crypto.randomUUID();
+      this.resendIdempotencyKeys.set(assignmentId, idempotencyKey);
+    }
     try {
-      await this.service.resendInvite({
-        assignmentId: assignment.assignmentId,
-        idempotencyKey: crypto.randomUUID(),
-      });
-      toast.success('Invite queued');
+      await this.service.resendInvite({assignmentId, idempotencyKey});
+      this.resendIdempotencyKeys.delete(assignmentId);
+      toast.success('invite queued');
     } catch (error) {
       logger.error('Failed to resend guest list invite', error);
       this.actionError.set("couldn't resend this invite — try again?");

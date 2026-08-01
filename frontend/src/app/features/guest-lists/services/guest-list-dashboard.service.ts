@@ -10,6 +10,9 @@ type ListMineResult = FunctionReturnType<
   typeof api.guest_list.delegate.listMine
 >;
 
+/** Server-capped page size for `listMine` (see `PAGE_SIZE` in the delegate service). */
+const DISCOVERY_PAGE_SIZE = 50;
+
 @Injectable({providedIn: 'root'})
 export class GuestListDashboardService {
   private readonly convex = injectConvex();
@@ -50,7 +53,11 @@ export class GuestListDashboardService {
         const result: ListMineResult = await this.convex.mutation(
           api.guest_list.delegate.listMine,
           {
-            paginationOpts: {numItems: 1, cursor},
+            // Ask for the server-capped page size, not one row at a time: each
+            // call is a mutation that re-runs a linking scan server-side, and
+            // this runs on every dashboard load and auth change just to answer
+            // "does this user have any active assignment?".
+            paginationOpts: {numItems: DISCOVERY_PAGE_SIZE, cursor},
           } satisfies ListMineArgs,
         );
         if (generation !== this.loadGeneration) return;

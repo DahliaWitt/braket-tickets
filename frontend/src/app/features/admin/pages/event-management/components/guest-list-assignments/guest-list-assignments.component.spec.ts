@@ -55,6 +55,23 @@ async function setup(
   return {fixture, harness, service};
 }
 
+/**
+ * Idempotency keys the component sent, in call order. Reads them out of the
+ * recorded mock arguments without widening anything to `any`.
+ */
+function idempotencyKeys(mock: {
+  mock: {calls: unknown[][]};
+}): (string | null)[] {
+  return mock.mock.calls.map((call) => {
+    const args = call[0];
+    if (!args || typeof args !== 'object' || !('idempotencyKey' in args)) {
+      return null;
+    }
+    const key: unknown = args.idempotencyKey;
+    return typeof key === 'string' ? key : null;
+  });
+}
+
 const activeAssignment = {
   assignmentId: 'assignment-1',
   eventId: 'event-1',
@@ -124,7 +141,7 @@ describe('GuestListAssignmentsComponent', () => {
       '2 guest list slots have been used',
     );
     expect(await harness.getRevokeWarningText()).toContain(
-      'Existing guests and tickets will remain, and source attribution will be preserved.',
+      'existing guests and tickets will remain, and source attribution will be preserved.',
     );
   });
 
@@ -348,6 +365,159 @@ describe('GuestListAssignmentsComponent', () => {
     },
   );
 
+  it('reuses one idempotency key across invite retries and rotates it after a success', async () => {
+    const service = makeServiceMock();
+    service.create.mockRejectedValueOnce(new Error('connection lost'));
+    const {fixture, harness} = await setup(service);
+
+    await harness.setDisplayName('Tour Manager');
+    await harness.setEmail('tour@example.test');
+    await harness.clickInvite();
+    await fixture.whenStable();
+    // The form still holds the input, so the organizer clicks send again.
+    await harness.clickInvite();
+    await fixture.whenStable();
+
+    const [first, retry] = idempotencyKeys(service.create);
+    expect(first).toBeTruthy();
+    expect(retry).toBe(first);
+
+    await harness.setDisplayName('Second Manager');
+    await harness.setEmail('second@example.test');
+    await harness.clickInvite();
+    await fixture.whenStable();
+
+    const keys = idempotencyKeys(service.create);
+    expect(keys).toHaveLength(3);
+    expect(keys[2]).toBeTruthy();
+    expect(keys[2]).not.toBe(first);
+  });
+
+  it('rotates the invite idempotency key when the recipient changes after a failure', async () => {
+    const service = makeServiceMock();
+    service.create.mockRejectedValue(new Error('connection lost'));
+    const {fixture, harness} = await setup(service);
+
+    await harness.setDisplayName('Tour Manager');
+    await harness.setEmail('tour@example.test');
+    await harness.clickInvite();
+    await fixture.whenStable();
+    // Different recipient, so replaying the first key would invite the wrong
+    // person (or silently no-op against the original assignment).
+    await harness.setEmail('typo-fixed@example.test');
+    await harness.clickInvite();
+    await fixture.whenStable();
+
+    const [first, second] = idempotencyKeys(service.create);
+    expect(first).toBeTruthy();
+    expect(second).toBeTruthy();
+    expect(second).not.toBe(first);
+  });
+
+  it('reuses one idempotency key across resend retries and rotates it after a success', async () => {
+    const service = makeServiceMock();
+    service.resendInvite.mockRejectedValueOnce(new Error('connection lost'));
+    const {fixture, harness} = await setup(service, [activeAssignment]);
+
+    await harness.clickResendInvite();
+    await fixture.whenStable();
+    await harness.clickResendInvite();
+    await fixture.whenStable();
+
+    const [first, retry] = idempotencyKeys(service.resendInvite);
+    expect(first).toBeTruthy();
+    expect(retry).toBe(first);
+
+    await harness.clickResendInvite();
+    await fixture.whenStable();
+
+    const keys = idempotencyKeys(service.resendInvite);
+    expect(keys).toHaveLength(3);
+    expect(keys[2]).toBeTruthy();
+    expect(keys[2]).not.toBe(first);
+  });
+
+  it.each(['', 'abc', '-1', '1.5', '101', '1e2'])(
+    'blocks an invalid grant edit of %s',
+    async (value) => {
+      const service = makeServiceMock();
+      const {fixture, harness} = await setup(service, [activeAssignment]);
+
+      await harness.clickEditGrant();
+      await harness.setEditedGrant(value);
+      await fixture.whenStable();
+
+      expect(await harness.getEditGrantState()).toEqual({
+        saveDisabled: true,
+        error: 'Use a whole number between 0 and 100.',
+      });
+      expect(await harness.getEditGrantSemantics()).toEqual({
+        id: 'edit-assignment-grant',
+        ariaInvalid: 'true',
+        ariaDescribedBy: 'edit-assignment-grant-error',
+        errorId: 'edit-assignment-grant-error',
+      });
+
+      await harness.clickSaveGrant();
+
+      expect(service.updateGrant).not.toHaveBeenCalled();
+      expect(await harness.getGrantWarningText()).toBeNull();
+    },
+  );
+
+  it('accepts a valid grant edit without an inline error', async () => {
+    const service = makeServiceMock();
+    const {fixture, harness} = await setup(service, [activeAssignment]);
+
+    await harness.clickEditGrant();
+    await harness.setEditedGrant('0');
+    await fixture.whenStable();
+
+    expect(await harness.getEditGrantState()).toEqual({
+      saveDisabled: false,
+      error: null,
+    });
+  });
+
+  it('shows a loading state instead of zeros until the overview resolves', async () => {
+    const {fixture, harness} = await setup();
+
+    expect(await harness.isOverviewLoading()).toBe(true);
+    expect(await harness.getOverviewText()).not.toContain('0');
+
+    fixture.componentRef.setInput('overview', {
+      selfServiceGuestCount: 3,
+      activeGrantedSlots: 8,
+      activeArtistGuestCount: 2,
+      activeStaffGuestCount: 1,
+      activeAssignmentCount: 2,
+      totalGuestAdmissionCount: 7,
+    });
+    await fixture.whenStable();
+
+    expect(await harness.isOverviewLoading()).toBe(false);
+    expect(await harness.getOverviewText()).toContain('7');
+  });
+
+  it('keeps the reactive first-page row when a later page returns a stale copy', async () => {
+    const service = makeServiceMock();
+    service.listByEvent.mockResolvedValue({
+      page: [{...activeAssignment, usedSlots: 0, displayName: 'Stale Copy'}],
+      isDone: true,
+      continueCursor: '',
+    });
+    const {fixture, harness} = await setup(service, [activeAssignment]);
+    fixture.componentRef.setInput('continueCursor', 'next-page');
+    await fixture.whenStable();
+
+    await harness.clickLoadMore();
+
+    const rows = await harness.getRowTexts();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toContain('Riley Crew');
+    expect(rows[0]).not.toContain('Stale Copy');
+  });
+
   it('uses the shared import surface to bulk create staff assignments', async () => {
     const service = makeServiceMock();
     const {fixture, harness} = await setup(service);
@@ -382,10 +552,10 @@ describe('GuestListAssignmentsComponent', () => {
 
     expect(service.updateGrant).not.toHaveBeenCalled();
     expect(await harness.getGrantWarningText()).toContain(
-      '2 slots are already used. Existing guests and tickets will remain, and source attribution will be preserved.',
+      '2 slots are already used. existing guests and tickets will remain, and source attribution will be preserved.',
     );
     expect(await harness.getGrantWarningText()).toContain(
-      'New additions stay blocked until usage falls below 1.',
+      'new additions stay blocked until usage falls below 1.',
     );
     await harness.clickConfirmGrantReduction();
     expect(service.updateGrant).toHaveBeenCalledWith({

@@ -80,6 +80,12 @@ export class GuestListAssignmentsHarness extends ComponentHarness {
   private readonly saveGrantButton = this.locatorForOptional(
     '[data-testid="save-assignment-grant"]',
   );
+  private readonly editGrantError = this.locatorForOptional(
+    '[data-testid="edit-assignment-grant-error"]',
+  );
+  private readonly overviewLoading = this.locatorForOptional(
+    '[data-testid="guest-list-overview-loading"]',
+  );
   private readonly grantWarning = this.locatorForOptional(
     '[data-testid="grant-reduction-warning"]',
   );
@@ -91,6 +97,9 @@ export class GuestListAssignmentsHarness extends ComponentHarness {
   );
   private readonly expandButtons = this.locatorForAll(
     '[data-testid="expand-assignment-guests"]',
+  );
+  private readonly resendInviteButtons = this.locatorForAll(
+    '[data-testid="resend-assignment-invite"]',
   );
   private readonly sourcedGuestRows = this.locatorForAll(
     '[data-testid="sourced-guest-row"]',
@@ -110,6 +119,45 @@ export class GuestListAssignmentsHarness extends ComponentHarness {
 
   async getOverviewText(): Promise<string> {
     return (await this.overview()).text();
+  }
+
+  /** True while the organizer overview totals are still unresolved. */
+  async isOverviewLoading(): Promise<boolean> {
+    return (await this.overviewLoading()) !== null;
+  }
+
+  /**
+   * Disabled state of the inline grant editor's submit plus the inline
+   * validation message (null when the value is valid).
+   */
+  async getEditGrantState(): Promise<{
+    saveDisabled: boolean;
+    error: string | null;
+  }> {
+    const button = await this.saveGrantButton();
+    if (!button) throw new Error('Grant editor is not open');
+    const error = await this.editGrantError();
+    return {
+      saveDisabled: (await button.getAttribute('disabled')) !== null,
+      error: error ? (await error.text()).trim() : null,
+    };
+  }
+
+  async getEditGrantSemantics(): Promise<{
+    id: string | null;
+    ariaInvalid: string | null;
+    ariaDescribedBy: string | null;
+    errorId: string | null;
+  }> {
+    const input = await this.editGrantInput();
+    if (!input) throw new Error('Grant editor is not open');
+    const error = await this.editGrantError();
+    return {
+      id: await input.getAttribute('id'),
+      ariaInvalid: await input.getAttribute('aria-invalid'),
+      ariaDescribedBy: await input.getAttribute('aria-describedby'),
+      errorId: error ? await error.getAttribute('id') : null,
+    };
   }
 
   async getRowTexts(): Promise<string[]> {
@@ -337,7 +385,8 @@ export class GuestListAssignmentsHarness extends ComponentHarness {
     const input = await this.editGrantInput();
     if (!input) throw new Error('Grant input is not open');
     await input.clear();
-    await input.sendKeys(value);
+    // `sendKeys()` rejects an empty key list, so clearing is the empty case.
+    if (value) await input.sendKeys(value);
   }
 
   async clickSaveGrant(): Promise<void> {
@@ -446,6 +495,12 @@ export class GuestListAssignmentsHarness extends ComponentHarness {
     const row = (await this.rows())[index];
     if (!row) throw new Error(`No assignment row at index ${index}`);
     return row.isFocused();
+  }
+
+  async clickResendInvite(index = 0): Promise<void> {
+    const button = (await this.resendInviteButtons())[index];
+    if (!button) throw new Error(`No resend invite button at index ${index}`);
+    await button.click();
   }
 
   async clickExpandGuests(index = 0): Promise<void> {

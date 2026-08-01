@@ -740,10 +740,10 @@ export type DataModel = {
       invitedAt: number;
       lastInviteAcceptedAt?: number;
       lastInviteSentAt?: number;
-      lastResendIdempotencyKey?: string;
       organizerId: Id<"organizers">;
       pendingTokenDigest?: string;
       pendingTokenPrefix?: string;
+      recentResendIdempotencyKeys?: Array<string>;
       redeemedAt?: number;
       revokedAt?: number;
       revokedBy?: Id<"users">;
@@ -775,10 +775,10 @@ export type DataModel = {
       | "inviteState"
       | "lastInviteAcceptedAt"
       | "lastInviteSentAt"
-      | "lastResendIdempotencyKey"
       | "organizerId"
       | "pendingTokenDigest"
       | "pendingTokenPrefix"
+      | "recentResendIdempotencyKeys"
       | "redeemedAt"
       | "revokedAt"
       | "revokedBy"
@@ -799,6 +799,7 @@ export type DataModel = {
         "eventDate",
         "_creationTime",
       ];
+      by_eventId_and_createdAt: ["eventId", "createdAt", "_creationTime"];
       by_eventId_and_emailKey_and_status: [
         "eventId",
         "emailKey",
@@ -830,7 +831,6 @@ export type DataModel = {
       action:
         | "assignment.create"
         | "assignment.grant_change"
-        | "assignment.invite"
         | "assignment.resend"
         | "assignment.revoke"
         | "assignment.user_link"

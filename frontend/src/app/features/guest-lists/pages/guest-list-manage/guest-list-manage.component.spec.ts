@@ -61,6 +61,24 @@ const availableView = {
   },
 };
 
+/** Idempotency keys sent with `addGuest`, in call order, without using `any`. */
+function addGuestIdempotencyKeys(mock: {
+  mock: {calls: unknown[][]};
+}): (string | null)[] {
+  return mock.mock.calls.map((call) => {
+    const details = call[1];
+    if (
+      !details ||
+      typeof details !== 'object' ||
+      !('idempotencyKey' in details)
+    ) {
+      return null;
+    }
+    const key: unknown = details.idempotencyKey;
+    return typeof key === 'string' ? key : null;
+  });
+}
+
 describe('GuestListManageComponent', () => {
   const delegate = {
     authorizeToken: vi.fn(),
@@ -104,6 +122,7 @@ describe('GuestListManageComponent', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     delegate.getView.mockResolvedValue(availableView);
     delegate.authorizeToken.mockResolvedValue({status: 'available'});
     delegate.claimSignedIn.mockResolvedValue({status: 'available'});
@@ -250,6 +269,96 @@ describe('GuestListManageComponent', () => {
     expect(await harness.hasEventDetails()).toBe(false);
   });
 
+  it('clears the stored credential behind a revoked fragment link', async () => {
+    localStorage.setItem('bt-guest-list-token:assignment-9', 'revoked-secret');
+    localStorage.setItem('bt-guest-list-recent-assignment', 'assignment-9');
+    tokens.captureCredentialFromFragment.mockReturnValue('revoked-secret');
+    delegate.authorizeToken.mockResolvedValue({status: 'unavailable'});
+
+    await create(null);
+    await fixture.whenStable();
+
+    expect(tokens.forget).toHaveBeenCalledWith('assignment-9');
+    expect(await harness.getUnavailableText()).toContain('unavailable');
+  });
+
+  it('leaves unrelated stored credentials alone when a fragment link is revoked', async () => {
+    localStorage.setItem('bt-guest-list-token:assignment-9', 'other-secret');
+    tokens.captureCredentialFromFragment.mockReturnValue('revoked-secret');
+    delegate.authorizeToken.mockResolvedValue({status: 'unavailable'});
+
+    await create(null);
+    await fixture.whenStable();
+
+    expect(tokens.forget).not.toHaveBeenCalled();
+  });
+
+  it('reuses one idempotency key across add retries and rotates it after a success', async () => {
+    vi.spyOn(logger, 'error').mockImplementation(() => undefined);
+    delegate.addGuest.mockRejectedValueOnce(new Error('connection lost'));
+    await create('assignment-1');
+    await harness.fillGuest('Mika', 'mika@example.com');
+
+    await harness.submitGuest();
+    await fixture.whenStable();
+    // The form still holds the guest, so the delegate submits again.
+    await harness.submitGuest();
+    await fixture.whenStable();
+
+    const [first, retry] = addGuestIdempotencyKeys(delegate.addGuest);
+    expect(first).toBeTruthy();
+    expect(retry).toBe(first);
+
+    await harness.fillGuest('Sol', 'sol@example.com');
+    await harness.submitGuest();
+    await fixture.whenStable();
+
+    const keys = addGuestIdempotencyKeys(delegate.addGuest);
+    expect(keys).toHaveLength(3);
+    expect(keys[2]).toBeTruthy();
+    expect(keys[2]).not.toBe(first);
+  });
+
+  it('rotates the add idempotency key when the guest is edited after a failure', async () => {
+    vi.spyOn(logger, 'error').mockImplementation(() => undefined);
+    delegate.addGuest.mockRejectedValue(new Error('connection lost'));
+    await create('assignment-1');
+    await harness.setGuest('Mika', 'mika@example.com');
+
+    await harness.submitGuest();
+    await fixture.whenStable();
+    // Different guest, so replaying the first key would add the wrong person.
+    await harness.setGuest('Mika', 'typo-fixed@example.com');
+    await harness.submitGuest();
+    await fixture.whenStable();
+
+    const [first, second] = addGuestIdempotencyKeys(delegate.addGuest);
+    expect(first).toBeTruthy();
+    expect(second).toBeTruthy();
+    expect(second).not.toBe(first);
+  });
+
+  it('rotates the add idempotency key when the form is explicitly cleared', async () => {
+    vi.spyOn(logger, 'error').mockImplementation(() => undefined);
+    delegate.addGuest.mockRejectedValueOnce(new Error('connection lost'));
+    await create('assignment-1');
+    await harness.fillGuest('Mika', 'mika@example.com');
+
+    await harness.submitGuest();
+    await fixture.whenStable();
+
+    fixture.componentInstance.cancelEdit();
+    await fixture.whenStable();
+    await harness.fillGuest('Mika', 'mika@example.com');
+    await harness.submitGuest();
+    await fixture.whenStable();
+
+    const [first, second] = addGuestIdempotencyKeys(delegate.addGuest);
+    expect(first).toBeTruthy();
+    expect(second).toBeTruthy();
+    expect(second).not.toBe(first);
+  });
+
   it('clears a persisted credential when the server reports it unavailable', async () => {
     tokens.getMostRecent.mockReturnValue({
       assignmentId: 'assignment-1',
@@ -280,9 +389,9 @@ describe('GuestListManageComponent', () => {
 
     await harness.openRemovalConfirmation();
 
-    expect(await harness.getRemovalConfirmationText()).toContain('Remove Rae?');
+    expect(await harness.getRemovalConfirmationText()).toContain('remove Rae?');
     expect(await harness.getRemovalConfirmationText()).toContain(
-      'Their ticket stops working immediately.',
+      'their ticket stops working immediately.',
     );
     expect(await harness.isCancelRemovalFocused()).toBe(true);
     expect(delegate.removeGuest).not.toHaveBeenCalled();
@@ -374,15 +483,15 @@ describe('GuestListManageComponent', () => {
 
     expect(await harness.getEditState()).toEqual({
       disabled: true,
-      text: 'Edit',
+      text: 'edit',
     });
     expect(await harness.getRemoveState()).toEqual({
       disabled: true,
-      text: 'Remove',
+      text: 'remove',
     });
     expect(await harness.getRetryState()).toEqual({
       disabled: true,
-      text: 'Retry email',
+      text: 'retry email',
     });
 
     await harness.openRemovalConfirmation();
@@ -422,15 +531,15 @@ describe('GuestListManageComponent', () => {
 
     expect(await harness.getEditState()).toEqual({
       disabled: true,
-      text: 'Edit',
+      text: 'edit',
     });
     expect(await harness.getRemoveState()).toEqual({
       disabled: true,
-      text: 'Remove',
+      text: 'remove',
     });
     expect(await harness.getRetryState()).toEqual({
       disabled: true,
-      text: 'Retry email',
+      text: 'retry email',
     });
 
     update.resolve({
@@ -661,14 +770,14 @@ describe('GuestListManageComponent', () => {
       'removeGuest',
       'clickRemove',
       'getRemoveState',
-      'Removing…',
+      'removing…',
       'not removed',
     ],
     [
       'retryTicket',
       'clickRetry',
       'getRetryState',
-      'Retrying…',
+      'retrying…',
       'could not resend',
     ],
   ] as const)(
@@ -705,7 +814,7 @@ describe('GuestListManageComponent', () => {
 
       expect(await harness[getState]()).toEqual({
         disabled: false,
-        text: operation === 'removeGuest' ? 'Remove' : 'Retry email',
+        text: operation === 'removeGuest' ? 'remove' : 'retry email',
       });
       expect(await harness.getActionErrorText()).toContain(errorText);
       expect(log).toHaveBeenCalled();
@@ -759,7 +868,7 @@ describe('GuestListManageComponent', () => {
     await create('assignment-1');
     await fixture.whenStable();
 
-    expect((await harness.getGuestRows())[0]).toContain('Ticket email failed');
+    expect((await harness.getGuestRows())[0]).toContain('ticket email failed');
     await harness.clickRetry();
     expect(delegate.retryTicket).toHaveBeenCalled();
   });

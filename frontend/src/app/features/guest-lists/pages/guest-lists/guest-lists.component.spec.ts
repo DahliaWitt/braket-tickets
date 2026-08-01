@@ -116,7 +116,7 @@ describe('GuestListsComponent', () => {
     );
     await fixture.whenStable();
 
-    expect(await harness.getEmptyText()).toContain('No active guest lists');
+    expect(await harness.getEmptyText()).toContain('no active guest lists');
   });
 
   it('shows a retryable failure instead of hanging when assignments fail to load', async () => {
@@ -135,7 +135,7 @@ describe('GuestListsComponent', () => {
     expect(await harness.getLoadFailureText()).toContain('try again');
 
     await harness.retryLoading();
-    expect(await harness.getEmptyText()).toContain('No active guest lists');
+    expect(await harness.getEmptyText()).toContain('no active guest lists');
   });
 
   it('appends assignment pages with an accessible Load more action', async () => {
@@ -251,7 +251,7 @@ describe('GuestListsComponent', () => {
       GuestListsComponentHarness,
     );
 
-    expect(await harness.getEmptyText()).toContain('No active guest lists');
+    expect(await harness.getEmptyText()).toContain('no active guest lists');
     expect(await harness.hasLoadMore()).toBe(true);
   });
 });

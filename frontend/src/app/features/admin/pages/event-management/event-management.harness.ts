@@ -76,6 +76,14 @@ export class EventManagementHarness extends ComponentHarness {
     return el ? (await el.text()).trim() : null;
   }
 
+  /**
+   * The assignment workspace's own harness. Null until the guests tab is open
+   * and the rollout gate is enabled.
+   */
+  async getGuestListWorkspaceHarness(): Promise<GuestListAssignmentsHarness | null> {
+    return this.getGuestListAssignmentsHarness();
+  }
+
   async hasGuestListAssignmentsWorkspace(): Promise<boolean> {
     return (await this.getGuestListAssignmentsHarness()) !== null;
   }

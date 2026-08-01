@@ -89,6 +89,15 @@ describe('guests.addMany', () => {
         rows: [{name: 'Boundary import'}],
       }),
     ).resolves.toMatchObject({insertedCount: 1});
+    // An existing counter row is still maintained by the import.
+    await expect(
+      t.run((ctx) =>
+        ctx.db
+          .query('guestListEventStats')
+          .withIndex('by_eventId', (q) => q.eq('eventId', eventId))
+          .unique(),
+      ),
+    ).resolves.toMatchObject({totalGuestAdmissionCount: 5_000});
     await expect(
       asAdmin.mutation(api.events.guests.addMany, {
         eventId,
@@ -295,6 +304,33 @@ describe('guests.addMany', () => {
         rows: [{name: 'X'}],
       }),
     ).rejects.toThrow('Unauthorized');
+  });
+
+  it('materializes and seeds the guest-list counter row on a first import', async () => {
+    const t = convexTest();
+    const adminId = await setupAdmin(t);
+    const eventId = await seedEvent(t);
+    const asAdmin = t.withIdentity({subject: adminId});
+
+    const result = await asAdmin.mutation(api.events.guests.addMany, {
+      eventId,
+      batchKey: 'batch-no-stats',
+      rows: [{name: 'Alice'}, {name: 'Bob'}],
+    });
+    expect(result.insertedCount).toBe(2);
+
+    // `guest_list.getEventOverview` reports zeros when the counter row is
+    // absent, so the import path has to seed it. NOTE: this second
+    // authoritative count re-reads the same roster addMany already read for
+    // dedup — see the read-budget note in `_impl/guests_import.ts`.
+    await expect(
+      t.run((ctx) =>
+        ctx.db
+          .query('guestListEventStats')
+          .withIndex('by_eventId', (q) => q.eq('eventId', eventId))
+          .unique(),
+      ),
+    ).resolves.toMatchObject({totalGuestAdmissionCount: 2});
   });
 
   it('rejects invalid rows server-side even when preview is bypassed', async () => {

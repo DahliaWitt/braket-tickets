@@ -177,11 +177,16 @@ provider acceptance transitions it to `sent`.
 
 Ticket delivery deduplication uses normalized `emailDeliveries.recipientKey`
 while retaining the original `recipient` value for provider correlation and
-operator display. The field remains optional during rollout. Lookup falls back
-to the exact-recipient index and then at most 100 unkeyed rows for the same
-source; a larger legacy set fails closed. After deploying the optional field and
-composite index, complete `backfillEmailDeliveryRecipientKeys` before enabling
-self-service guest lists. The authoritative command order is in
+operator display. The field remains optional in the schema during rollout, but
+new rows always write a key: a recipient that cannot be normalized gets the
+`!UNNORMALIZABLE` sentinel so it never accumulates in the legacy fallback scan.
+Lookup falls back to the exact-recipient index and then at most 100 unkeyed
+rows for the same source; a larger legacy set fails closed with the structured
+error code `EMAIL_DELIVERY_LEGACY_RECIPIENT_SCAN_EXCEEDED` (run
+`migrations:runEmailDeliveryRecipientKeyBackfill` to clear it). After deploying
+the optional field and composite index, complete that backfill before enabling
+self-service guest lists — `guest_list/maintenance.enable` verifies it. The
+authoritative command order is in
 [Self-service guest-list rollout and operations](./admin-operations.md#self-service-guest-list-rollout-and-operations).
 
 Invitation rotation is two phase. `guest_list/invites.sendInviteAttempt` sends

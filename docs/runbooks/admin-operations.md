@@ -365,22 +365,32 @@ when an expanded assignment's live usage changes, its first guest page is
 refetched, and additional pages require Load more again.
 
 The feature remains fail-closed until both guest-list verification flags are
-complete and `guest_list/maintenance.enable` records `enabledAt`. Operational
-enablement also requires the recipient-key migration below. Use the installed
-migration runner in the deployment being prepared:
+complete and `guest_list/maintenance.enable` records `enabledAt`. Enablement
+also gates on two component-tracked migrations: the email-delivery
+recipient-key backfill and the ticket roster projection backfill. Use the
+runner entrypoints below rather than invoking the migration functions directly
+— the runners record component state under the exact names `enable` checks.
 
-`runGuestListBackfills` is intentionally serial with a fixed batch size of one.
-In particular, the event-stats step processes only one event per transaction
-because a dense event may read its full bounded guest and assignment rosters.
-An operator-supplied `batchSize` cannot increase this limit.
+`migrations:runGuestListBackfills` runs four steps in order — guest email keys,
+ticket roster projection, per-event stats, assignment date projection. Each
+step uses its own batch size: the row-oriented steps advance in normal batches,
+while the event-stats step processes one event per transaction because a dense
+event may read its full bounded guest and assignment rosters. An
+operator-supplied `batchSize` is accepted but ignored so it cannot raise the
+event-stats bound.
 
 ```bash
 pnpm convex run migrations:runGuestListBackfills '{"dryRun":true}'
 pnpm convex run migrations:runGuestListBackfills
-pnpm convex run migrations:backfillEmailDeliveryRecipientKeys '{"dryRun":true}'
-pnpm convex run migrations:backfillEmailDeliveryRecipientKeys
+pnpm convex run migrations:runEmailDeliveryRecipientKeyBackfill '{"dryRun":true}'
+pnpm convex run migrations:runEmailDeliveryRecipientKeyBackfill
+pnpm convex run migrations:runTicketRosterEmailBackfill
 pnpm convex run guest_list/maintenance:recordBackfillVerification
 ```
+
+(`runTicketRosterEmailBackfill` re-runs the projection step standalone; it is
+already part of `runGuestListBackfills`, but running it through its own
+entrypoint also records the completion state `enable` reads.)
 
 Poll the feature state while the verifier advances through its scheduled
 batches:
@@ -396,11 +406,42 @@ Wait until `verificationInProgress` is `false`, both completion flags are
 pnpm convex run guest_list/maintenance:enable
 ```
 
-The recipient-key migration must finish before `enable`. New email-delivery rows
-already write the optional normalized key. Until the backfill completes,
+A rejected enablement throws `GUEST_LIST_ENABLE_BLOCKED` and lists every
+blocker in `error.data.blockers` (for example
+`recipientKeyBackfillIncomplete`, `ticketRosterEmailBackfillIncomplete`, or
+`guestCountBackfillIncomplete`).
+
+The recipient-key migration must finish before `enable`. New email-delivery
+rows always write a normalized key (unnormalizable recipients get a sentinel
+key so they never join the legacy scan). Until the backfill completes,
 recipient-scoped deduplication checks the normalized and exact indexes, then a
-maximum of 100 unkeyed legacy deliveries for the same source; it fails closed
-rather than scanning beyond that cap or risking a duplicate ticket.
+maximum of 100 unkeyed legacy deliveries for the same source; above that cap it
+fails closed with `EMAIL_DELIVERY_LEGACY_RECIPIENT_SCAN_EXCEEDED` rather than
+scanning further or risking a duplicate ticket.
+
+**Oversized legacy events.** An event holding more than 5000 guest admissions
+or 500 active assignments cannot be counted. The stats backfill skips it and
+logs the overage instead of stopping the series, and verification reports it
+and keeps `guestCountBackfillComplete` false. To move forward:
+
+```bash
+pnpm convex run guest_list/maintenance:listEventsMissingGuestListStats
+pnpm convex run guest_list/maintenance:describeGuestListEventLoad '{"eventId":"<id>"}'
+```
+
+Either reduce the event's roster below the caps and run
+`guest_list/maintenance:reconcileEventCounters` for it, or explicitly
+acknowledge it:
+
+```bash
+pnpm convex run guest_list/maintenance:recordBackfillVerification \
+  '{"acknowledgedOversizedEventIds":["<id>"]}'
+```
+
+An acknowledgement only applies to an event that is currently uncountable, is
+logged on every verification batch that consumes it, and never fabricates
+counters — guest-list writes for that event keep failing closed with
+`GUEST_LIST_EVENT_CAP_EXCEEDED` until its roster is reduced and reconciled.
 
 Inspect `guest_list/maintenance.getFeatureState` before exposing the organizer
 UI. Verification is cursor-batched and self-schedules until every guest and
@@ -410,8 +451,12 @@ or either completed scan found a mismatch. Re-run
 authoritative scan. If counters drift, run
 `guest_list/maintenance.reconcileEventCounters` with the affected `eventId`.
 Rollback is fail-closed: run `pnpm convex run guest_list/maintenance:disable`;
-do not delete assignments or sourced guests, because those rows preserve ticket
-validity and attribution.
+delegate access and every guest-list mutation stop immediately, with one
+deliberate exception — organizers can still revoke an assignment while the
+feature is disabled, because revocation is the containment action for a leaked
+invite link and permanently invalidates its credentials. Do not delete
+assignments or sourced guests, because those rows preserve ticket validity and
+attribution.
 
 Guest-list audit events follow the same 365-day retention window as admin audit
 logs. `guest_list/maintenance.cleanupAuditEvents` deletes them in resumable

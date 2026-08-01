@@ -66,6 +66,20 @@ export class GuestListManageComponentHarness extends ComponentHarness {
     ).sendKeys(email);
   }
 
+  /** Replaces the form values (unlike `fillGuest`, which appends). */
+  async setGuest(name: string, email: string): Promise<void> {
+    const nameInput = await this.locatorFor(
+      '[data-testid="guest-list-name"]',
+    )();
+    await nameInput.clear();
+    if (name) await nameInput.sendKeys(name);
+    const emailInput = await this.locatorFor(
+      '[data-testid="guest-list-email"]',
+    )();
+    await emailInput.clear();
+    if (email) await emailInput.sendKeys(email);
+  }
+
   async getGuestFormValues(): Promise<{name: string; email: string}> {
     const name = await this.locatorFor('[data-testid="guest-list-name"]')();
     const email = await this.locatorFor('[data-testid="guest-list-email"]')();

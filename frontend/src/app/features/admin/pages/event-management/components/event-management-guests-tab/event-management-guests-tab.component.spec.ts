@@ -274,9 +274,11 @@ describe('EventManagementGuestsTabComponent', () => {
     ]);
     fixture.detectChanges();
 
-    expect(await harness.hasGuestRowWithText('Added by Artist DJ Moth')).toBe(
-      true,
-    );
+    // Desktop table cell and mobile card field both carry the attribution.
+    expect(await harness.getGuestSourceLabels()).toEqual([
+      'Added by Artist DJ Moth',
+      'Added by Artist DJ Moth',
+    ]);
   });
 
   it('labels an assignment admission without counting it as a sourced guest', async () => {
@@ -291,10 +293,70 @@ describe('EventManagementGuestsTabComponent', () => {
     ]);
     fixture.detectChanges();
 
-    expect(
-      await harness.hasGuestRowWithText('Staff assignment · Riley Crew'),
-    ).toBe(true);
+    expect(await harness.getGuestSourceLabels()).toEqual([
+      'Staff assignment · Riley Crew',
+      'Staff assignment · Riley Crew',
+    ]);
   });
+
+  it('disables removal for an assignment admission on desktop and mobile', async () => {
+    fixture.componentRef.setInput('guests', [
+      {
+        ...mockGuest,
+        type: 'staff',
+        sourceKind: 'assignment_admission',
+        sourceRole: 'staff',
+        sourceDisplayName: 'Riley Crew',
+      },
+    ]);
+    fixture.detectChanges();
+
+    const states = await harness.getRemoveButtonStates();
+    // One control per responsive variant.
+    expect(states).toHaveLength(2);
+    for (const state of states) {
+      expect(state.disabled).toBe(true);
+      expect(state.title).toBe('revoke the artist/staff assignment first');
+      expect(state.ariaLabel).toContain(
+        'revoke the artist/staff assignment first',
+      );
+    }
+
+    await harness.clickRemoveGuestButton(0);
+
+    expect(alertDialogMock.confirm).not.toHaveBeenCalled();
+    expect(adminEventsServiceMock.removeGuest).not.toHaveBeenCalled();
+  });
+
+  it.each(['self_service', undefined] as const)(
+    'keeps removal available for a %s guest',
+    async (sourceKind) => {
+      fixture.componentRef.setInput('guests', [
+        sourceKind
+          ? {
+              ...mockGuest,
+              sourceKind,
+              sourceRole: 'artist',
+              sourceDisplayName: 'DJ Moth',
+            }
+          : mockGuest,
+      ]);
+      fixture.detectChanges();
+
+      const states = await harness.getRemoveButtonStates();
+      expect(states).toHaveLength(2);
+      for (const state of states) {
+        expect(state.disabled).toBe(false);
+        expect(state.title).toBe(
+          'Remove Pat Guest, pat@example.com, guest, id GUEST-1',
+        );
+      }
+
+      await harness.clickRemoveGuestButton(0);
+
+      expect(alertDialogMock.confirm).toHaveBeenCalled();
+    },
+  );
 
   it('opens the bulk-import surface and reaches addMany with the guest row shape', async () => {
     const dataChangedSpy = vi.fn();

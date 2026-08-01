@@ -282,12 +282,16 @@ export const retryTicket = mutation({
       throws: true,
     });
     const guest = await ctx.db.get('guests', args.guestId);
-    if (
-      !guest ||
-      guest.sourceAssignmentId !== resolved.assignment._id ||
-      guest.sourceKind !== 'self_service'
-    )
+    if (!guest || guest.sourceAssignmentId !== resolved.assignment._id)
       return unavailable();
+    // A delegate may retry a guest they added, or the admission this assignment
+    // created for them. The admission is matched through the assignment's own
+    // pointer so a re-attributed row cannot be retried from a stale assignment.
+    const retriable =
+      guest.sourceKind === 'self_service' ||
+      (guest.sourceKind === 'assignment_admission' &&
+        resolved.assignment.admissionGuestId === guest._id);
+    if (!retriable) return unavailable();
     if (guest.emailedAt !== undefined) return {status: 'alreadySent' as const};
     if (isGuestTicketSendInFlight(guest.emailSendLockedAt))
       return {status: 'inFlight' as const};

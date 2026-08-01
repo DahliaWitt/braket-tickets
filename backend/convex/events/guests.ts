@@ -13,6 +13,7 @@ import {
   beginGuestTicketSend as beginGuestTicketSendImpl,
   clearGuestTicketSendLock as clearGuestTicketSendLockImpl,
   getInternal as getInternalImpl,
+  isGuestTicketSendCurrent as isGuestTicketSendCurrentImpl,
   listByEvent as listByEventImpl,
   markAsEmailed as markAsEmailedImpl,
   markGuestTicketSendFailed as markGuestTicketSendFailedImpl,
@@ -95,6 +96,16 @@ export const beginGuestTicketSend = internalMutation({
     lockToken: v.union(v.number(), v.null()),
   }),
   handler: beginGuestTicketSendImpl,
+});
+
+export const isGuestTicketSendCurrent = internalQuery({
+  args: {
+    id: v.id('guests'),
+    lockToken: v.number(),
+    recipient: v.string(),
+  },
+  returns: v.boolean(),
+  handler: isGuestTicketSendCurrentImpl,
 });
 
 export const markAsEmailed = internalMutation({

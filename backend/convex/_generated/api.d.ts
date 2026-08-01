@@ -4725,6 +4725,12 @@ export declare const internal: {
           type: "guest" | "artist guest" | "staff";
         } | null
       >;
+      isGuestTicketSendCurrent: FunctionReference<
+        "query",
+        "internal",
+        { id: Id<"guests">; lockToken: number; recipient: string },
+        boolean
+      >;
       markAsEmailed: FunctionReference<
         "mutation",
         "internal",
@@ -5152,6 +5158,31 @@ export declare const internal: {
         { cutoffTimestamp?: number },
         number
       >;
+      describeGuestListEventLoad: FunctionReference<
+        "query",
+        "internal",
+        { eventId: Id<"events"> },
+        {
+          counters: null | {
+            activeArtistGuestCount: number;
+            activeAssignmentCount: number;
+            activeGrantedSlots: number;
+            activeStaffGuestCount: number;
+            selfServiceGuestCount: number;
+            totalGuestAdmissionCount: number;
+          };
+          hasStatsRow: boolean;
+          overage: null | {
+            activeAssignmentCount: number;
+            activeAssignmentCountAtLeast: boolean;
+            eventId: Id<"events">;
+            guestCount: number;
+            guestCountAtLeast: boolean;
+            maxActiveAssignmentsPerEvent: number;
+            maxGuestsPerEvent: number;
+          };
+        }
+      >;
       disable: FunctionReference<"mutation", "internal", {}, null>;
       enable: FunctionReference<"mutation", "internal", {}, null>;
       getFeatureState: FunctionReference<
@@ -5167,6 +5198,17 @@ export declare const internal: {
           verificationStartedAt?: number;
         }
       >;
+      listEventsMissingGuestListStats: FunctionReference<
+        "query",
+        "internal",
+        { cursor?: string | null; limit?: number },
+        {
+          continueCursor: string;
+          eventIds: Array<Id<"events">>;
+          isDone: boolean;
+          scanned: number;
+        }
+      >;
       reconcileEventCounters: FunctionReference<
         "mutation",
         "internal",
@@ -5176,7 +5218,11 @@ export declare const internal: {
       recordBackfillVerification: FunctionReference<
         "mutation",
         "internal",
-        { batchSize?: number; runId?: string },
+        {
+          acknowledgedOversizedEventIds?: Array<Id<"events">>;
+          batchSize?: number;
+          runId?: string;
+        },
         {
           emailKeyBackfillComplete: boolean;
           guestCountBackfillComplete: boolean;
@@ -5671,6 +5717,20 @@ export declare const internal: {
       },
       any
     >;
+    backfillTicketRosterEmailLower: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      any
+    >;
     backfillUserMarketingUnsubscribeTokenDigests: FunctionReference<
       "mutation",
       "internal",
@@ -5699,11 +5759,33 @@ export declare const internal: {
       },
       any
     >;
+    runEmailDeliveryRecipientKeyBackfill: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        cursor?: string | null;
+        dryRun?: boolean;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      null
+    >;
     runGuestListBackfills: FunctionReference<
       "mutation",
       "internal",
       {
         batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      null
+    >;
+    runTicketRosterEmailBackfill: FunctionReference<
+      "mutation",
+      "internal",
+      {
         cursor?: string | null;
         dryRun?: boolean;
         oneBatchOnly?: boolean;
