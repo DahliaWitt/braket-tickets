@@ -50,6 +50,19 @@ export function extractPaymentErrorMessage(err: unknown): string {
     } else {
       const obj = asRecord(data);
       if (obj) {
+        // The @convex-dev/rate-limiter component throws ConvexError with
+        // {kind: 'RateLimited', name, retryAfter} and no `code` field, so it
+        // would otherwise fall through every branch below to the generic
+        // fallback. Surface the wait time when we have it.
+        if (obj['kind'] === 'RateLimited') {
+          const retryAfter = obj['retryAfter'];
+          if (typeof retryAfter === 'number' && retryAfter > 0) {
+            const minutes = Math.max(1, Math.ceil(retryAfter / 60_000));
+            return `Too many attempts, try again in about ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`;
+          }
+          return PAYMENT_ERROR_MESSAGES.RATE_LIMITED;
+        }
+
         const code = typeof obj['code'] === 'string' ? obj['code'] : null;
         const rawMessage =
           typeof obj['message'] === 'string' ? obj['message'] : '';

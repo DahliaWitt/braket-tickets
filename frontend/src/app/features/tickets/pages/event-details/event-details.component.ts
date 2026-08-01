@@ -23,6 +23,7 @@ import {type Application} from '@/features/vetting/models/application.model';
 import {CommunitiesService} from '@/core/services/communities.service';
 import {ResaleService} from '@/features/tickets/services/resale.service';
 import {extractErrorMessage} from '@/core/utils/error-message.utils';
+import {extractPaymentErrorMessage} from '@/features/tickets/services/payment-error-messages';
 import {STRIPE_CONFIG, type StripeConfig} from '@/app.tokens';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
@@ -487,12 +488,10 @@ export class EventDetailsComponent {
       );
       this.checkoutStore.setGuestSession(email, sessionToken);
     } catch (error: unknown) {
+      // Never render error.message: prod Convex redacts it to "Server Error"
+      // for every error type and carries the payload only on error.data.
       this.paymentStatus.set('error');
-      this.paymentErrorMessage.set(
-        error instanceof Error
-          ? error.message
-          : 'Failed to start guest session',
-      );
+      this.paymentErrorMessage.set(extractPaymentErrorMessage(error));
     }
   }
 
@@ -691,9 +690,7 @@ export class EventDetailsComponent {
       );
     } catch (error: unknown) {
       this.paymentStatus.set('error');
-      this.paymentErrorMessage.set(
-        error instanceof Error ? error.message : 'Payment confirmation failed',
-      );
+      this.paymentErrorMessage.set(extractPaymentErrorMessage(error));
     }
   }
   retryPayment() {
@@ -737,9 +734,7 @@ export class EventDetailsComponent {
         this.paymentStatus.set('success');
       } catch (error: unknown) {
         this.paymentStatus.set('error');
-        this.paymentErrorMessage.set(
-          error instanceof Error ? error.message : 'Failed to claim ticket',
-        );
+        this.paymentErrorMessage.set(extractPaymentErrorMessage(error));
       }
     });
   }

@@ -75,6 +75,42 @@ describe('extractPaymentErrorMessage', () => {
     expect(extractPaymentErrorMessage(err)).toBe(GENERIC_FALLBACK);
   });
 
+  it('maps the rate-limiter component error shape with a wait estimate', () => {
+    // @convex-dev/rate-limiter throws {kind, name, retryAfter} with no `code`.
+    const err = new ConvexError({
+      kind: 'RateLimited',
+      name: 'initiateGuestSession',
+      retryAfter: 5 * 60_000,
+    });
+
+    expect(extractPaymentErrorMessage(err)).toBe(
+      'Too many attempts, try again in about 5 minutes',
+    );
+  });
+
+  it('maps a rate-limiter error without retryAfter to the generic rate-limit copy', () => {
+    const err = new ConvexError({
+      kind: 'RateLimited',
+      name: 'initiateGuestSession',
+    });
+
+    expect(extractPaymentErrorMessage(err)).toBe(
+      'Too many attempts, try again later',
+    );
+  });
+
+  it('uses singular copy when the wait rounds to one minute', () => {
+    const err = new ConvexError({
+      kind: 'RateLimited',
+      name: 'initiateGuestSession',
+      retryAfter: 30_000,
+    });
+
+    expect(extractPaymentErrorMessage(err)).toBe(
+      'Too many attempts, try again in about 1 minute',
+    );
+  });
+
   it('returns a string ConvexError payload directly', () => {
     const err = new ConvexError('Server Error something went wrong');
 
