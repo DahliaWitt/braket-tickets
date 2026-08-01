@@ -590,6 +590,33 @@ describe('orders', () => {
     }
   });
 
+  it('a guest order round-trips through the full-document return validator', async () => {
+    // Guest orders carry fields user orders do not (guestEmailLower). Convex
+    // return validators reject *extra* fields, so a hand-maintained doc
+    // validator that lags the schema breaks the guest checkout path only —
+    // which is how a missing field reached E2E instead of failing here.
+    const t = convexTest();
+    const {eventId} = await createEventWithInventory(t);
+    const {sessionToken} = await createGuestSession(
+      t,
+      'doc-validator-guest@example.com',
+    );
+
+    const opened = await t.mutation(api.orders.core.openForGuest, {
+      sessionToken,
+      eventId,
+      quantity: 1,
+      tier: 'regular',
+      totalAmount: 2500,
+      termsAccepted: true,
+    });
+
+    const order = await t.query(internal.orders.core.getInternal, {
+      orderId: opened.orderId,
+    });
+    expect(order?.guestEmailLower).toBe('doc-validator-guest@example.com');
+  });
+
   it('openForGuest creates an open order owned by the guest session', async () => {
     const t = convexTest();
     const {eventId, inventoryId} = await createEventWithInventory(t);

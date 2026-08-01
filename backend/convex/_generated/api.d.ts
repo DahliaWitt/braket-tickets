@@ -5137,6 +5137,7 @@ export declare const internal: {
           currency: "USD";
           eventId: Id<"events">;
           expiresAt: number;
+          guestEmailLower?: string;
           guestSessionId?: Id<"guest_sessions">;
           idempotencyKey?: string;
           kind: "primary" | "resale";
@@ -5174,6 +5175,7 @@ export declare const internal: {
           currency: "USD";
           eventId: Id<"events">;
           expiresAt: number;
+          guestEmailLower?: string;
           guestSessionId?: Id<"guest_sessions">;
           idempotencyKey?: string;
           kind: "primary" | "resale";
@@ -5224,6 +5226,7 @@ export declare const internal: {
           currency: "USD";
           eventId: Id<"events">;
           expiresAt: number;
+          guestEmailLower?: string;
           guestSessionId?: Id<"guest_sessions">;
           idempotencyKey?: string;
           kind: "primary" | "resale";
