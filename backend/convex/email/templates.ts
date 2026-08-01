@@ -1023,3 +1023,146 @@ export function payoutSentTemplate(
     html: wrapEmail(content, `Payout sent for ${amountFormatted}`),
   };
 }
+
+/**
+ * Buyer-facing confirmation for a processed refund (CUJ 6.9 step 5).
+ *
+ * Covers paid refunds (partial or complete) and zero-dollar ticket
+ * cancellations on paid orders whose money was already returned by an
+ * earlier refund. `ticketsRefunded` is the count cancelled by THIS refund;
+ * it can be 0 for money-only adjustments reconciled from external Stripe
+ * refunds.
+ *
+ * Free orders (`isFreeOrder`) get cancellation framing instead: no money
+ * moved and none will, so "refund" vocabulary would read like a billing
+ * error. The email's job there is telling the holder their entry credential
+ * no longer works.
+ */
+export function refundConfirmationTemplate(args: {
+  event: {title: string; date: string; endDate?: string; location?: string};
+  refundedAmountCents: number;
+  currency: 'USD';
+  ticketsRefunded: number;
+  isFullRefund: boolean;
+  isFreeOrder: boolean;
+  supportEmail?: string;
+}): {subject: string; html: string} {
+  const safeTitle = escapeHtml(args.event.title);
+  const safeLocation = args.event.location
+    ? escapeHtml(args.event.location)
+    : '';
+  const dateStr = formatEventDateTime(args.event);
+  const isZeroDollar = args.refundedAmountCents === 0;
+  const amountFormatted = `$${(args.refundedAmountCents / 100).toFixed(2)} ${args.currency}`;
+  const safeAmount = escapeHtml(amountFormatted);
+  const plural = args.ticketsRefunded > 1;
+
+  const ticketsLine =
+    args.ticketsRefunded === 0
+      ? 'No tickets were cancelled for this refund — it only adjusted the payment.'
+      : args.ticketsRefunded === 1
+        ? 'Your ticket has been cancelled and can no longer be used for entry.'
+        : `${args.ticketsRefunded} tickets have been cancelled and can no longer be used for entry.`;
+
+  const supportLine = args.supportEmail
+    ? `Questions? Reach us at <a href="mailto:${escapeHtml(args.supportEmail)}" style="color: ${baseStyles.accentViolet}; text-decoration: underline;">${escapeHtml(args.supportEmail)}</a> or just reply to this email~`
+    : 'Questions? Just reply to this email and we’ll sort it out~';
+
+  const eventDetailsBlock = `
+      <div style="margin: 24px 0; padding: 20px 0; border-top: 1px solid ${baseStyles.border}; border-bottom: 1px solid ${baseStyles.border};">
+          <p style="margin: 0 0 8px 0; font-size: 11px; color: ${baseStyles.textDim}; font-family: 'Space Mono', 'Courier New', monospace; text-transform: uppercase; letter-spacing: 1.5px;">EVENT DETAILS</p>
+          <p style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: ${baseStyles.accentPink};">${safeTitle}</p>
+          <p style="margin: 0 0 4px 0; font-size: 16px; color: ${baseStyles.textLight};">${escapeHtml(dateStr)}</p>
+          ${safeLocation ? `<p style="margin: 0; font-size: 16px; color: ${baseStyles.textMuted};">${safeLocation}</p>` : ''}
+      </div>
+  `;
+  const supportBlock = `
+      <p style="margin: 24px 0 0 0; font-size: 13px; line-height: 1.5; color: ${baseStyles.textDim};">
+          ${supportLine}
+      </p>
+  `;
+
+  if (args.isFreeOrder) {
+    const heading = plural ? 'Tickets cancelled' : 'Ticket cancelled';
+    const freeLine = plural
+      ? 'They were free tickets, so there’s no charge to send back.'
+      : 'It was a free ticket, so there’s no charge to send back.';
+    const remainingLine = args.isFullRefund
+      ? ''
+      : `<p style="margin: 0 0 8px 0; font-size: 16px; line-height: 1.6; color: ${baseStyles.textMuted};">
+          Any other tickets on your order are still valid.
+      </p>`;
+    // Subjects are plain text, not HTML — use the raw title.
+    const subject = plural
+      ? `Your tickets for ${args.event.title} were cancelled`
+      : `Your ticket for ${args.event.title} was cancelled`;
+
+    const content = `
+      <h2 style="margin: 0 0 16px 0; font-family: 'Syne', 'Chakra Petch', system-ui, sans-serif; font-size: 24px; line-height: 1.15; font-weight: 700; color: ${baseStyles.textLight};">
+          ${heading}
+      </h2>
+      <p style="margin: 0 0 8px 0; font-size: 16px; line-height: 1.6; color: ${baseStyles.textMuted};">
+          ${ticketsLine}
+      </p>
+      ${remainingLine}
+      <p style="margin: 0 0 8px 0; font-size: 16px; line-height: 1.6; color: ${baseStyles.textMuted};">
+          ${freeLine}
+      </p>
+      ${eventDetailsBlock}
+      ${supportBlock}
+  `;
+
+    return {subject, html: wrapEmail(content, `${subject}.`)};
+  }
+
+  // Zero-dollar refunds on paid orders happen when the money was already
+  // returned by an earlier refund (e.g. force-cancelling used tickets after
+  // an external full refund).
+  const moneyLine = isZeroDollar
+    ? 'No additional money was sent back for this refund — your payment was already returned by an earlier refund.'
+    : `We sent <strong style="color: ${baseStyles.textLight};">${safeAmount}</strong> back to your original payment method.`;
+
+  const settlementLine = isZeroDollar
+    ? ''
+    : `<p style="margin: 0 0 24px 0; font-size: 16px; line-height: 1.6; color: ${baseStyles.textMuted};">
+          Refunds usually land back on your card within 5–10 business days, depending on your bank.
+      </p>`;
+
+  // Scope in plain words instead of a "(partial refund)" label: say what it
+  // means for the rest of the order.
+  const scopeLine = args.isFullRefund
+    ? 'Your order is now fully refunded.'
+    : 'The rest of your order is unchanged.';
+
+  const content = `
+      <h2 style="margin: 0 0 16px 0; font-family: 'Syne', 'Chakra Petch', system-ui, sans-serif; font-size: 24px; line-height: 1.15; font-weight: 700; color: ${baseStyles.textLight};">
+          Refund confirmed
+      </h2>
+      <p style="margin: 0 0 8px 0; font-size: 16px; line-height: 1.6; color: ${baseStyles.textMuted};">
+          ${moneyLine}
+      </p>
+      <p style="margin: 0 0 8px 0; font-size: 16px; line-height: 1.6; color: ${baseStyles.textMuted};">
+          ${ticketsLine}
+      </p>
+      <p style="margin: 0 0 8px 0; font-size: 16px; line-height: 1.6; color: ${baseStyles.textMuted};">
+          ${scopeLine}
+      </p>
+      ${eventDetailsBlock}
+      ${settlementLine}
+      ${supportBlock}
+  `;
+
+  // Subjects are plain text, not HTML — use the raw title.
+  const refundNoun = args.isFullRefund ? 'refund' : 'partial refund';
+  const subject = `Your ${refundNoun} for ${args.event.title}`;
+
+  return {
+    subject,
+    html: wrapEmail(
+      content,
+      isZeroDollar
+        ? `Your ${refundNoun} for ${args.event.title} is confirmed.`
+        : `Your ${refundNoun} of ${amountFormatted} for ${args.event.title} is confirmed.`,
+    ),
+  };
+}

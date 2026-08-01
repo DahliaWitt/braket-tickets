@@ -45,6 +45,12 @@ import {
   generateStripeIdempotencyKey,
 } from '../../lib/payments/refunds';
 import {loadOrderFinancial} from '../../lib/orders/financial_reporting';
+import {enqueueEmailDelivery} from '../../lib/email_delivery_wrapper';
+import {guardEmailDedup, releaseEmailDedup} from '../../lib/email_dedup';
+import {takeFromQuery} from '../../lib/query_scan';
+import {emailReplyTo} from '../../lib/resend_component';
+import {refundConfirmationTemplate} from '../../email/templates';
+import {logger} from '../../lib/logger';
 import {ORDER_RELEASE_GRACE_MS} from '../../lib/constants';
 import {LEGAL_TERMS_VERSION} from '@shared/constants';
 
@@ -975,7 +981,229 @@ export async function applyExternalRefundHandler(
     });
   }
 
+  // Buyer confirmation (CUJ 6.9 step 5). Only when this application actually
+  // moved money back or cancelled tickets — reruns of an already-applied
+  // refund (action retries after an unacknowledged commit, duplicate or
+  // out-of-order webhook echoes) compute refundDelta === 0 and an empty
+  // ticketsToRefund and skip. Money-only refunds matching an in-flight
+  // resale seller payout are also suppressed: seller proceeds are paid as a
+  // Stripe refund against the seller's original order, and when that
+  // `charge.refunded` webhook races ahead of the resale settlement's
+  // financial event, the amount-matched in-flight listing is the only
+  // signal that the "refund" is really a sale payout — without it the
+  // seller would race-dependently get a confusing refund confirmation for
+  // a successful sale. Enqueued inside this transaction so the
+  // confirmation commits atomically with the refund state; delivery itself
+  // runs out-of-band and can never roll back the accepted Stripe refund.
+  //
+  // The email reports the STATE TRANSITION this application performed —
+  // refundDelta (not the individual refund's ledger amount) plus the
+  // tickets cancelled here — so out-of-order webhook delivery still yields
+  // one coherent message: if the second of two partial refunds arrives
+  // first, its email carries the full cumulative delta and both tickets,
+  // and the late first refund (no remaining delta) sends nothing.
+  const shouldSendConfirmation =
+    ticketsToRefund.length > 0 ||
+    (refundDelta > 0 &&
+      !(await matchesInFlightResaleSellerPayout(
+        ctx,
+        orderTickets,
+        refundDelta,
+      )));
+  if (shouldSendConfirmation) {
+    event ??= await ctx.db.get('events', order.eventId);
+    await sendRefundConfirmationEmail(ctx, {
+      order,
+      event,
+      // The cumulative cancelled-ticket count is part of the key so a later
+      // application of the SAME Stripe refund that cancels additional
+      // tickets (a force refund whose webhook echo landed first and only
+      // cancelled the valid tickets) sends corrective copy instead of
+      // being suppressed as a duplicate.
+      refundDiscriminator: `${args.stripeRefundId ?? 'zero'}-tickets-${alreadyRefundedCount + ticketsToRefund.length}`,
+      refundedAmountCents: refundDelta,
+      ticketsRefunded: ticketsToRefund.length,
+      // Paid orders are "complete" once every cent is back, even if a
+      // checked-in ticket survives; free orders (no money to measure) are
+      // complete once every remaining active ticket is cancelled.
+      isFullRefund:
+        order.amountCents > 0
+          ? nextRefundedAmount >= order.amountCents
+          : ticketsToRefund.length >= activeTickets.length,
+    });
+  }
+
   return null;
+}
+
+/**
+ * Newest-first cap on the per-ticket listing scan. A sold ticket has exactly
+ * one completed listing and it is necessarily the newest (tickets cannot be
+ * relisted after their sale marks them refunded), so a small newest-first
+ * window is exact for any realistic relist/cancel history while keeping the
+ * read bounded — this runs inside the refund state application, which must
+ * never exceed transaction limits after Stripe has already moved money.
+ */
+const RESALE_LISTING_SCAN_LIMIT = 20;
+
+/**
+ * True when this money-only refund amount matches an in-flight resale
+ * seller payout for one of the order's tickets. Used to recognize
+ * seller-payout refunds arriving via `charge.refunded` before the resale
+ * settlement records its financial event (after settlement, the ledger
+ * early-return handles it). Requires status 'completed' with an unsettled
+ * sellerRefundState AND an exact sellerRefundAmountCents match, so genuine
+ * external refunds on orders with historical resale activity still email —
+ * only the payout itself is suppressed.
+ */
+async function matchesInFlightResaleSellerPayout(
+  ctx: MutationCtx,
+  orderTickets: Array<Doc<'tickets'>>,
+  refundAmountCents: number,
+): Promise<boolean> {
+  for (const ticket of orderTickets) {
+    const listings = await takeFromQuery(
+      ctx.db
+        .query('resale_listings')
+        .withIndex('by_ticket', (q) => q.eq('ticketId', ticket._id))
+        .order('desc'),
+      RESALE_LISTING_SCAN_LIMIT,
+    );
+    const matched = listings.some(
+      (listing) =>
+        listing.status === 'completed' &&
+        listing.sellerRefundState !== 'completed' &&
+        listing.sellerRefundAmountCents === refundAmountCents,
+    );
+    if (matched) return true;
+  }
+  return false;
+}
+
+/**
+ * Enqueue the buyer-facing refund confirmation for one applied refund.
+ *
+ * Idempotency: the emailDedup guard is keyed on the Stripe refund id (or
+ * 'zero' for zero-dollar refunds) plus the cumulative cancelled-ticket
+ * count, so the admin action's direct application and the later
+ * `charge.refunded` webhook echo of the same refund — as well as mutation
+ * retries — produce exactly one email per distinct state transition. The
+ * guard row commits in the same transaction as the refund state, so a
+ * rolled-back application also rolls back the guard and stays sendable.
+ *
+ * Failure containment is phase-ordered so the refund state application
+ * (which must converge with the already-committed Stripe refund) can never
+ * fail on email plumbing, and no failure mode burns the dedup slot:
+ * 1. Resolve + render (no side effects) — errors log and skip; the slot is
+ *    never consumed.
+ * 2. Guard, then enqueue — an enqueue error releases the just-inserted
+ *    dedup row in the same transaction, so the refund still commits and
+ *    the confirmation stays manually re-sendable (see
+ *    docs/runbooks/email-delivery.md). Delivery failures downstream of a
+ *    successful enqueue are recorded in emailDeliveryFailures via the
+ *    critical-delivery pipeline.
+ */
+async function sendRefundConfirmationEmail(
+  ctx: MutationCtx,
+  args: {
+    order: Doc<'ticket_orders'>;
+    event: Doc<'events'> | null;
+    refundDiscriminator: string;
+    refundedAmountCents: number;
+    ticketsRefunded: number;
+    isFullRefund: boolean;
+  },
+): Promise<void> {
+  const {order, event} = args;
+  const dedupKey = `refund-confirmation-${order._id}-${args.refundDiscriminator}`;
+
+  let recipient: string;
+  let subject: string;
+  let html: string;
+  try {
+    let resolvedRecipient: string | null = null;
+    if (order.userId) {
+      const user = await ctx.db.get('users', order.userId);
+      resolvedRecipient = user?.email ?? null;
+    } else if (order.guestSessionId) {
+      const guestSession = await ctx.db.get(
+        'guest_sessions',
+        order.guestSessionId,
+      );
+      resolvedRecipient = guestSession?.email ?? null;
+    }
+    if (!resolvedRecipient) {
+      logger.warn(
+        'payments',
+        'Refund confirmation skipped: order has no reachable recipient',
+        {orderId: order._id, refundDiscriminator: args.refundDiscriminator},
+      );
+      return;
+    }
+    if (!event) {
+      logger.warn(
+        'payments',
+        'Refund confirmation skipped: order event is missing',
+        {orderId: order._id, refundDiscriminator: args.refundDiscriminator},
+      );
+      return;
+    }
+    recipient = resolvedRecipient;
+    ({subject, html} = refundConfirmationTemplate({
+      event: {
+        title: event.title,
+        date: event.date,
+        endDate: event.endDate,
+        location: event.location,
+      },
+      refundedAmountCents: args.refundedAmountCents,
+      currency: order.currency,
+      ticketsRefunded: args.ticketsRefunded,
+      isFullRefund: args.isFullRefund,
+      isFreeOrder: order.amountCents === 0,
+      supportEmail: emailReplyTo()?.[0],
+    }));
+  } catch (error) {
+    logger.error(
+      'payments',
+      'Refund confirmation rendering failed; refund state is unaffected and the dedup slot was not consumed',
+      {
+        orderId: order._id,
+        refundDiscriminator: args.refundDiscriminator,
+        error,
+      },
+    );
+    return;
+  }
+
+  const alreadySent = await guardEmailDedup(ctx, dedupKey);
+  if (alreadySent) return;
+
+  try {
+    await enqueueEmailDelivery(
+      ctx,
+      {to: recipient, subject, html},
+      {
+        source: 'refund',
+        sourceId: `${order._id}:${args.refundDiscriminator}`,
+        recipient,
+        critical: true,
+      },
+    );
+  } catch (error) {
+    // Same-transaction compensation: keep the refund state applied while
+    // freeing the dedup key so the confirmation remains re-sendable.
+    await releaseEmailDedup(ctx, dedupKey);
+    logger.error(
+      'payments',
+      'Refund confirmation enqueue failed; refund state is unaffected and the dedup slot was released',
+      {
+        orderId: order._id,
+        refundDiscriminator: args.refundDiscriminator,
+        error,
+      },
+    );
+  }
 }
 
 export async function clearCheckoutSessionHandler(
