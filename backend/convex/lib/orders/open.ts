@@ -143,9 +143,13 @@ async function countActiveOwnedTicketsForEvent(
 
   // Guests: enforce maxTicketsPerUser per EMAIL, not per session. Re-entering
   // an email on a new device mints a fresh guest session, so a per-session
-  // count would reset the cap on every device switch. Converted sessions
-  // contribute zero here because migration moves their tickets to the user
-  // (clearing guestSessionId), and the by_email scan is bounded by
+  // count would reset the cap on every device switch.
+  //
+  // The primary anchor is tickets.guestEmailLower, written at issuance — it
+  // survives guest session deletion by the cleanup cron. The per-session scan
+  // over the email's surviving sessions covers legacy tickets issued before
+  // that field existed; new tickets appear in both reads, so results are
+  // deduped by ticket id. The by_email scan is bounded by
   // EMAIL_SESSION_SCAN_LIMIT with realistic counts in the single digits.
   const session = await db.get('guest_sessions', owner.guestSessionId);
   if (!session) {
@@ -156,13 +160,35 @@ async function countActiveOwnedTicketsForEvent(
     );
   }
 
-  const sessions = await listGuestSessionsByEmail(db, session.email);
+  const countedTicketIds = new Set<string>();
   let count = 0;
+  const addActiveTickets = (tickets: Doc<'tickets'>[]): void => {
+    for (const ticket of tickets) {
+      if (!isActiveTicketStatus(ticket.status)) continue;
+      if (countedTicketIds.has(ticket._id)) continue;
+      countedTicketIds.add(ticket._id);
+      count += 1;
+    }
+  };
+
+  addActiveTickets(
+    await db
+      .query('tickets')
+      .withIndex('by_guestEmail_event', (q) =>
+        q.eq('guestEmailLower', session.email).eq('eventId', eventId),
+      )
+      .take(200),
+  );
+
+  const sessions = await listGuestSessionsByEmail(db, session.email);
   for (const emailSession of sessions) {
-    count += await countActiveGuestTicketsForSession(
-      db,
-      emailSession._id,
-      eventId,
+    addActiveTickets(
+      await db
+        .query('tickets')
+        .withIndex('by_guestSession_event', (q) =>
+          q.eq('guestSessionId', emailSession._id).eq('eventId', eventId),
+        )
+        .take(200),
     );
   }
   return count;

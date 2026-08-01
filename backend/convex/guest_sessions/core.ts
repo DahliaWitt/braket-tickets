@@ -33,6 +33,7 @@ import {
   getActiveGuestSession,
   hasEmailRedeemedMagicLink,
   isGuestSessionActive,
+  listGuestSessionsByEmail,
   updateGuestSessionLastActive,
 } from '../lib/guest_sessions/lifecycle';
 import {
@@ -63,18 +64,59 @@ function getMagicLinkErrorMessage(error: string | undefined): string {
   }
 }
 
-export const getReusableByEmail = internalQuery({
+/**
+ * Best courtesy-resume target among an email's active sessions.
+ *
+ * With multiple concurrent sessions per email, the newest one may be an empty
+ * just-minted session while an older one holds the buyer's in-flight
+ * checkout. Prefer a session with an open ticket order (something to actually
+ * resume), then fall back to the most recently active session.
+ */
+export const getResumeTargetByEmail = internalQuery({
   args: {email: v.string(), now: v.number()},
   returns: v.union(guestSessionDocValidator, v.null()),
   handler: async (ctx, args) => {
-    const session = await ctx.db
-      .query('guest_sessions')
-      .withIndex('by_email', (q) => q.eq('email', args.email.toLowerCase()))
-      .order('desc')
-      .first();
+    const sessions = await listGuestSessionsByEmail(
+      ctx.db,
+      args.email.toLowerCase(),
+    );
+    const activeSessions = sessions.filter(
+      (session) =>
+        !session.convertedToUserId && isGuestSessionActive(session, args.now),
+    );
+    if (activeSessions.length === 0) return null;
 
-    if (!session) return null;
-    return isGuestSessionActive(session, args.now) ? session : null;
+    const lastTouched = (session: (typeof activeSessions)[number]): number =>
+      session.lastActiveAt ?? session._creationTime;
+
+    let fallback = activeSessions[0];
+    for (const session of activeSessions) {
+      if (lastTouched(session) > lastTouched(fallback)) {
+        fallback = session;
+      }
+    }
+
+    let bestWithOpenOrder: (typeof activeSessions)[number] | null = null;
+    for (const session of activeSessions) {
+      // The index ends in `state` but is prefixed by eventId, which we don't
+      // know here — read the session's orders (a session holds only a
+      // handful) and check state in memory.
+      const orders = await ctx.db
+        .query('ticket_orders')
+        .withIndex('by_owner_guest_event_state', (q) =>
+          q.eq('guestSessionId', session._id),
+        )
+        .take(50);
+      if (!orders.some((order) => order.state === 'open')) continue;
+      if (
+        bestWithOpenOrder === null ||
+        lastTouched(session) > lastTouched(bestWithOpenOrder)
+      ) {
+        bestWithOpenOrder = session;
+      }
+    }
+
+    return bestWithOpenOrder ?? fallback;
   },
 });
 
@@ -187,24 +229,15 @@ export const initiate = internalMutation({
       .order('desc')
       .first();
 
+    // Ticket ownership survives this delete: guest tickets are anchored by
+    // tickets.guestEmailLower at issuance, so the per-email cap does not
+    // depend on session rows staying alive.
     if (
       existing &&
       !existing.convertedToUserId &&
       !isGuestSessionActive(existing, now)
     ) {
-      // Keep sessions that issued tickets: the per-email ticket cap resolves
-      // tickets through their session rows, so deleting a ticketed session
-      // would orphan its tickets from the count and let the same email exceed
-      // the cap after an expiry cycle.
-      const hasTickets = await ctx.db
-        .query('tickets')
-        .withIndex('by_guestSession', (q) =>
-          q.eq('guestSessionId', existing._id),
-        )
-        .first();
-      if (!hasTickets) {
-        await deleteGuestSession(ctx, existing._id);
-      }
+      await deleteGuestSession(ctx, existing._id);
     }
 
     await createGuestSession(ctx, {

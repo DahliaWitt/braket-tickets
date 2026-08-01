@@ -1667,6 +1667,7 @@ export type DataModel = {
       checkedInAt?: number;
       checkedInBy?: Id<"users">;
       eventId: Id<"events">;
+      guestEmailLower?: string;
       guestSessionId?: Id<"guest_sessions">;
       orderId?: Id<"ticket_orders">;
       qrCode?: string;
@@ -1690,6 +1691,7 @@ export type DataModel = {
       | "checkedInAt"
       | "checkedInBy"
       | "eventId"
+      | "guestEmailLower"
       | "guestSessionId"
       | "orderId"
       | "qrCode"
@@ -1716,6 +1718,7 @@ export type DataModel = {
       by_event_and_roster_sort: ["eventId", "rosterSortKey", "_creationTime"];
       by_event_checkedInAt: ["eventId", "checkedInAt", "_creationTime"];
       by_event_status: ["eventId", "status", "_creationTime"];
+      by_guestEmail_event: ["guestEmailLower", "eventId", "_creationTime"];
       by_guestSession: ["guestSessionId", "_creationTime"];
       by_guestSession_event: ["guestSessionId", "eventId", "_creationTime"];
       by_order: ["orderId", "_creationTime"];

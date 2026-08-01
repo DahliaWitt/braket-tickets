@@ -452,6 +452,39 @@ describe('orders', () => {
     expect(inventory?.heldCount).toBe(0);
   });
 
+  it('courtesy resume email targets the session with an in-flight order, not the newest', async () => {
+    const t = convexTest();
+    const {eventId} = await createEventWithInventory(t);
+    const email = 'resume-target-guest@example.com';
+
+    const withCart = await createGuestSession(t, email);
+    await t.mutation(api.orders.core.openForGuest, {
+      sessionToken: withCart.sessionToken,
+      eventId,
+      quantity: 1,
+      tier: 'regular',
+      totalAmount: 2500,
+      termsAccepted: true,
+    });
+
+    // A newer, empty session for the same email (e.g. minted by an earlier
+    // re-entry on another device).
+    const emptyNewer = await createGuestSession(t, email);
+
+    // Tokenless re-entry: the courtesy resume token must be prepared on the
+    // session holding the open order, not on the newest empty session.
+    await t.action(api.guest_sessions.actions.initiateGuestSession, {email});
+
+    const [cartSession, newerSession] = await t.run(async (ctx) =>
+      Promise.all([
+        ctx.db.get('guest_sessions', withCart.sessionId),
+        ctx.db.get('guest_sessions', emptyNewer.sessionId),
+      ]),
+    );
+    expect(cartSession?.pendingSessionTokenDigest).toBeTruthy();
+    expect(newerSession?.pendingSessionTokenDigest).toBeUndefined();
+  });
+
   it('openForGuest creates an open order owned by the guest session', async () => {
     const t = convexTest();
     const {eventId, inventoryId} = await createEventWithInventory(t);
@@ -691,7 +724,7 @@ describe('orders', () => {
     expect(inventory?.soldCount).toBe(3);
   });
 
-  it('keeps a ticketed stale session on re-entry so the per-email cap survives expiry', async () => {
+  it('per-email cap survives deletion of the ticketed session that bought the tickets', async () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(new Date('2030-01-01T00:00:00.000Z'));
@@ -712,9 +745,9 @@ describe('orders', () => {
         idempotencyKey: 'idem-stale-ticketed-claim',
       });
 
-      // Age the session past the 2h inactivity window (before hard expiry),
-      // then re-enter the email. The hygiene branch in core.initiate must NOT
-      // delete the stale session: its ticket anchors the per-email cap.
+      // Age the session past the 2h inactivity window, then re-enter the
+      // email. The hygiene branch in core.initiate deletes the stale session —
+      // the ticket must stay counted via its guestEmailLower anchor.
       vi.setSystemTime(new Date('2030-01-01T03:00:00.000Z'));
       await t.mutation(internal.guest_sessions.core.initiate, {
         email,
@@ -727,9 +760,10 @@ describe('orders', () => {
           .withIndex('by_email', (q) => q.eq('email', email))
           .collect(),
       );
-      expect(sessions).toHaveLength(2);
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0]._id).not.toBe(stale.sessionId);
 
-      // The cap of 1 still counts the stale session's ticket.
+      // The cap of 1 still counts the deleted session's ticket by email.
       await expect(
         t.mutation(api.orders.core.claimFreeTicketAsGuest, {
           sessionToken: 'fresh-after-expiry-token',

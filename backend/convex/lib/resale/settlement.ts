@@ -593,6 +593,11 @@ async function applyResaleTicketTransfer(
 
   const buyerTicketId = await ctx.db.insert('tickets', {
     ...resaleOwnerFields,
+    // Anchor guest tickets to the buyer email so the per-email ticket cap
+    // survives guest session deletion (see countActiveOwnedTicketsForEvent).
+    ...(buyerGuestSession
+      ? {guestEmailLower: buyerGuestSession.email.toLowerCase()}
+      : {}),
     eventId: order.eventId,
     orderId: order._id,
     status: 'valid',

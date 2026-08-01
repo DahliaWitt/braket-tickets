@@ -119,7 +119,7 @@ export async function initiateGuestSessionHandler(
     });
 
     const existingSession = await ctx.runQuery(
-      internal.guest_sessions.core.getReusableByEmail,
+      internal.guest_sessions.core.getResumeTargetByEmail,
       {
         email,
         now: Date.now(),

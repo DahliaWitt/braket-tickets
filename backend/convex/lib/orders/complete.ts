@@ -110,6 +110,11 @@ export async function completePrimaryOrderState(
   const ticketInserts = Array.from({length: order.quantity}, () =>
     ctx.db.insert('tickets', {
       ...extractOwnerFieldsFromOrder(order),
+      // Anchor guest tickets to the buyer email so the per-email ticket cap
+      // survives guest session deletion (see countActiveOwnedTicketsForEvent).
+      ...(guestSession
+        ? {guestEmailLower: guestSession.email.toLowerCase()}
+        : {}),
       eventId: order.eventId,
       orderId: order._id,
       status: 'valid',
