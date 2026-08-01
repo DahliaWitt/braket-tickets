@@ -80,6 +80,54 @@ export async function getActiveGuestSession(
   return session;
 }
 
+/**
+ * Bounded scan cap for sessions sharing one email. Session creation is
+ * rate-limited per email and sessions hard-expire after 24h, so real counts
+ * stay single-digit; the cap only guards against pathological data.
+ */
+export const EMAIL_SESSION_SCAN_LIMIT = 100;
+
+/**
+ * All sessions (active, expired, converted) currently stored for an email.
+ * Multiple concurrent sessions per email are expected: re-entering an email
+ * on a new device/browser mints a fresh session instead of gating on the old
+ * one, so cross-session invariants (ticket limits, magic-link redemptions)
+ * must aggregate over this list rather than assume a single session.
+ */
+export async function listGuestSessionsByEmail(
+  db: QueryCtx['db'],
+  email: string,
+): Promise<Doc<'guest_sessions'>[]> {
+  return await db
+    .query('guest_sessions')
+    .withIndex('by_email', (q) => q.eq('email', email.toLowerCase()))
+    .take(EMAIL_SESSION_SCAN_LIMIT);
+}
+
+/**
+ * Whether any of the email's sessions already redeemed this magic link.
+ * Redemptions count against `maxRedemptions`, and one buyer re-entering their
+ * email across devices must burn at most one redemption — nor may their own
+ * earlier redemption lock them out of a maxed link.
+ */
+export async function hasEmailRedeemedMagicLink(
+  db: QueryCtx['db'],
+  magicLinkId: Id<'magic_links'>,
+  email: string,
+): Promise<boolean> {
+  const sessions = await listGuestSessionsByEmail(db, email);
+  for (const session of sessions) {
+    const redemption = await db
+      .query('magic_link_redemption_log')
+      .withIndex('by_magicLink_guest', (q) =>
+        q.eq('magicLinkId', magicLinkId).eq('guestSessionId', session._id),
+      )
+      .first();
+    if (redemption) return true;
+  }
+  return false;
+}
+
 export async function createGuestSession(
   ctx: MutationCtx,
   args: {
@@ -106,7 +154,10 @@ export async function createGuestSession(
     lastActiveAt: args.lastActiveAt,
   });
 
-  if (args.magicLinkId) {
+  if (
+    args.magicLinkId &&
+    !(await hasEmailRedeemedMagicLink(ctx.db, args.magicLinkId, args.email))
+  ) {
     await ctx.db.insert('magic_link_redemption_log', {
       magicLinkId: args.magicLinkId,
       guestSessionId: sessionId,
@@ -151,14 +202,13 @@ export async function attachMagicLinkTrustToGuestSession(
     await ctx.db.patch('guest_sessions', sessionId, patch);
   }
 
-  const existingRedemption = await ctx.db
-    .query('magic_link_redemption_log')
-    .withIndex('by_magicLink_guest', (q) =>
-      q.eq('magicLinkId', magicLinkId).eq('guestSessionId', sessionId),
-    )
-    .first();
+  const alreadyRedeemed = await hasEmailRedeemedMagicLink(
+    ctx.db,
+    magicLinkId,
+    session.email,
+  );
 
-  if (!existingRedemption) {
+  if (!alreadyRedeemed) {
     await ctx.db.insert('magic_link_redemption_log', {
       magicLinkId,
       guestSessionId: sessionId,

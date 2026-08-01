@@ -5,6 +5,12 @@
  * a 24h hard expiry + 2h sliding inactivity window. No email verification
  * required — the session token is the credential.
  *
+ * One email may hold multiple concurrent sessions: each tokenless re-entry
+ * (new device/browser) mints a fresh session rather than gating on the old
+ * one. Cross-session invariants are enforced per email where they matter:
+ * ticket limits (lib/orders/open.ts) and magic-link redemption dedup
+ * (lib/guest_sessions/lifecycle.ts).
+ *
  * Architecture:
  * - This file: internal queries/mutations for DB operations (V8 runtime).
  * - guest_sessions_actions.ts: public actions (Node.js runtime).
@@ -25,7 +31,9 @@ import {
   createGuestSession,
   deleteGuestSession,
   getActiveGuestSession,
+  hasEmailRedeemedMagicLink,
   isGuestSessionActive,
+  listGuestSessionsByEmail,
   updateGuestSessionLastActive,
 } from '../lib/guest_sessions/lifecycle';
 import {
@@ -39,7 +47,6 @@ import {
 } from '../lib/guest_sessions/migration';
 import {guestSessionDocValidator} from '../lib/guest_sessions/validators';
 import {throwAppError} from '../lib/errors';
-import {throwPaymentAppError} from '../lib/payment_errors';
 import {digestBearerToken, tokenPrefix} from '../lib/token_digests';
 
 function getMagicLinkErrorMessage(error: string | undefined): string {
@@ -57,18 +64,82 @@ function getMagicLinkErrorMessage(error: string | undefined): string {
   }
 }
 
-export const getReusableByEmail = internalQuery({
-  args: {email: v.string(), now: v.number()},
+/**
+ * Best courtesy-resume target among an email's active sessions.
+ *
+ * With multiple concurrent sessions per email, the newest one may be an empty
+ * just-minted session while an older one holds the buyer's in-flight
+ * checkout. Prefer a session with an open ticket order (something to actually
+ * resume), then fall back to the most recently active session.
+ *
+ * When `eventId` is provided, only open orders for THAT event qualify — the
+ * resume link points at that event, so a session whose open cart belongs to a
+ * different event is not a meaningful target and would send the buyer to a
+ * page with nothing to resume.
+ */
+export const getResumeTargetByEmail = internalQuery({
+  args: {
+    email: v.string(),
+    now: v.number(),
+    eventId: v.optional(v.id('events')),
+  },
   returns: v.union(guestSessionDocValidator, v.null()),
   handler: async (ctx, args) => {
-    const session = await ctx.db
-      .query('guest_sessions')
-      .withIndex('by_email', (q) => q.eq('email', args.email.toLowerCase()))
-      .order('desc')
-      .first();
+    const sessions = await listGuestSessionsByEmail(
+      ctx.db,
+      args.email.toLowerCase(),
+    );
+    const activeSessions = sessions.filter(
+      (session) =>
+        !session.convertedToUserId && isGuestSessionActive(session, args.now),
+    );
+    if (activeSessions.length === 0) return null;
 
-    if (!session) return null;
-    return isGuestSessionActive(session, args.now) ? session : null;
+    const lastTouched = (session: (typeof activeSessions)[number]): number =>
+      session.lastActiveAt ?? session._creationTime;
+
+    let fallback = activeSessions[0];
+    for (const session of activeSessions) {
+      if (lastTouched(session) > lastTouched(fallback)) {
+        fallback = session;
+      }
+    }
+
+    const eventId = args.eventId;
+    let bestWithOpenOrder: (typeof activeSessions)[number] | null = null;
+    for (const session of activeSessions) {
+      const hasOpenOrder = eventId
+        ? // Fully indexed on [guestSessionId, eventId, state].
+          (await ctx.db
+            .query('ticket_orders')
+            .withIndex('by_owner_guest_event_state', (q) =>
+              q
+                .eq('guestSessionId', session._id)
+                .eq('eventId', eventId)
+                .eq('state', 'open'),
+            )
+            .first()) !== null
+        : // No event in context: the index prefix stops at guestSessionId, so
+          // read the session's orders (a session holds only a handful) and
+          // check state in memory.
+          (
+            await ctx.db
+              .query('ticket_orders')
+              .withIndex('by_owner_guest_event_state', (q) =>
+                q.eq('guestSessionId', session._id),
+              )
+              .take(50)
+          ).some((order) => order.state === 'open');
+      if (!hasOpenOrder) continue;
+      if (
+        bestWithOpenOrder === null ||
+        lastTouched(session) > lastTouched(bestWithOpenOrder)
+      ) {
+        bestWithOpenOrder = session;
+      }
+    }
+
+    return bestWithOpenOrder ?? fallback;
   },
 });
 
@@ -99,7 +170,19 @@ export const initiate = internalMutation({
     if (args.magicLinkToken) {
       const link = await loadFirstMagicLinkByToken(ctx.db, args.magicLinkToken);
       const evaluation = await evaluateMagicLinkState(ctx.db, link, now);
-      if (!evaluation.valid) {
+      if (evaluation.valid) {
+        magicLinkId = evaluation.link._id;
+      } else if (
+        evaluation.error === 'maxed' &&
+        link &&
+        (await hasEmailRedeemedMagicLink(ctx.db, link._id, email))
+      ) {
+        // The redemption cap is already accounted for by this email's earlier
+        // redemption, and createGuestSession will not burn another. A buyer's
+        // own redemption must never lock them out of re-entering their email
+        // on a new device via the same link.
+        magicLinkId = link._id;
+      } else {
         const validation = await validateMagicLinkToken(ctx.db, {
           token: args.magicLinkToken,
           now,
@@ -109,8 +192,6 @@ export const initiate = internalMutation({
           getMagicLinkErrorMessage(validation.error),
         );
       }
-
-      magicLinkId = evaluation.link._id;
     }
 
     if (args.existingSessionToken) {
@@ -159,24 +240,26 @@ export const initiate = internalMutation({
       }
     }
 
+    // A concurrent active session for this email is allowed: re-entering an
+    // email from a new device/browser mints a fresh session instead of hard-
+    // stopping checkout (cross-session invariants — per-email ticket limits,
+    // magic-link redemption dedup — are enforced where they matter). Only
+    // reap the newest stale session as opportunistic hygiene; the cleanup
+    // cron handles the rest.
     const existing = await ctx.db
       .query('guest_sessions')
       .withIndex('by_email', (q) => q.eq('email', email))
       .order('desc')
       .first();
 
+    // Ticket ownership survives this delete: guest tickets are anchored by
+    // tickets.guestEmailLower at issuance, so the per-email cap does not
+    // depend on session rows staying alive.
     if (
       existing &&
       !existing.convertedToUserId &&
-      isGuestSessionActive(existing, now)
+      !isGuestSessionActive(existing, now)
     ) {
-      throwPaymentAppError(
-        'SESSION_RESUME_REQUIRED',
-        'An active guest session already exists for this email. Resume checkout from the same device or wait for the session to expire.',
-      );
-    }
-
-    if (existing && !existing.convertedToUserId) {
       await deleteGuestSession(ctx, existing._id);
     }
 
@@ -231,30 +314,6 @@ export const prepareResumeSessionToken = internalMutation({
       pendingSessionTokenPrefix: tokenPrefix(args.sessionToken),
     });
     return {status: 'prepared' as const};
-  },
-});
-
-export const promoteResumeSessionToken = internalMutation({
-  args: {sessionId: v.id('guest_sessions'), sessionToken: v.string()},
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const session = await ctx.db.get('guest_sessions', args.sessionId);
-    if (!session?.pendingSessionTokenDigest) return null;
-    const tokenDigest = await digestBearerToken(
-      'guest_session',
-      args.sessionToken,
-    );
-    if (session.pendingSessionTokenDigest !== tokenDigest) return null;
-
-    await ctx.db.patch('guest_sessions', args.sessionId, {
-      sessionTokenDigest: session.pendingSessionTokenDigest,
-      sessionTokenPrefix: session.pendingSessionTokenPrefix,
-      pendingSessionTokenDigest: undefined,
-      pendingSessionTokenPrefix: undefined,
-      sessionToken: undefined,
-      lastActiveAt: Date.now(),
-    });
-    return null;
   },
 });
 

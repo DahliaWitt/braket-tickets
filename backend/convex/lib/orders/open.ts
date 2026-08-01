@@ -18,6 +18,7 @@ import {
   isValidTicketStatus,
   type TicketTier,
 } from '../../lib/validators/ticketing';
+import {listGuestSessionsByEmail} from '../guest_sessions/lifecycle';
 import {validateTierPricing} from '../payments/pricing';
 import {getOrganizerChargeReadiness} from '../stripe_connect_state';
 import {
@@ -110,26 +111,87 @@ function isEquivalentOpenOrder(
   );
 }
 
+async function countActiveGuestTicketsForSession(
+  db: MutationCtx['db'],
+  guestSessionId: Id<'guest_sessions'>,
+  eventId: Id<'events'>,
+): Promise<number> {
+  const tickets = await db
+    .query('tickets')
+    .withIndex('by_guestSession_event', (q) =>
+      q.eq('guestSessionId', guestSessionId).eq('eventId', eventId),
+    )
+    .take(200);
+  return tickets.filter((ticket) => isActiveTicketStatus(ticket.status)).length;
+}
+
 async function countActiveOwnedTicketsForEvent(
   db: MutationCtx['db'],
   owner: OrderOwnerKey,
   eventId: Id<'events'>,
 ): Promise<number> {
-  const query =
-    owner.type === 'user'
-      ? db
-          .query('tickets')
-          .withIndex('by_user_event', (q) =>
-            q.eq('userId', owner.userId).eq('eventId', eventId),
-          )
-      : db
-          .query('tickets')
-          .withIndex('by_guestSession_event', (q) =>
-            q.eq('guestSessionId', owner.guestSessionId).eq('eventId', eventId),
-          );
+  if (owner.type === 'user') {
+    const tickets = await db
+      .query('tickets')
+      .withIndex('by_user_event', (q) =>
+        q.eq('userId', owner.userId).eq('eventId', eventId),
+      )
+      .take(200);
+    return tickets.filter((ticket) => isActiveTicketStatus(ticket.status))
+      .length;
+  }
 
-  const tickets = await query.take(200);
-  return tickets.filter((ticket) => isActiveTicketStatus(ticket.status)).length;
+  // Guests: enforce maxTicketsPerUser per EMAIL, not per session. Re-entering
+  // an email on a new device mints a fresh guest session, so a per-session
+  // count would reset the cap on every device switch.
+  //
+  // The primary anchor is tickets.guestEmailLower, written at issuance — it
+  // survives guest session deletion by the cleanup cron. The per-session scan
+  // over the email's surviving sessions covers legacy tickets issued before
+  // that field existed; new tickets appear in both reads, so results are
+  // deduped by ticket id. The by_email scan is bounded by
+  // EMAIL_SESSION_SCAN_LIMIT with realistic counts in the single digits.
+  const session = await db.get('guest_sessions', owner.guestSessionId);
+  if (!session) {
+    return await countActiveGuestTicketsForSession(
+      db,
+      owner.guestSessionId,
+      eventId,
+    );
+  }
+
+  const countedTicketIds = new Set<string>();
+  let count = 0;
+  const addActiveTickets = (tickets: Doc<'tickets'>[]): void => {
+    for (const ticket of tickets) {
+      if (!isActiveTicketStatus(ticket.status)) continue;
+      if (countedTicketIds.has(ticket._id)) continue;
+      countedTicketIds.add(ticket._id);
+      count += 1;
+    }
+  };
+
+  addActiveTickets(
+    await db
+      .query('tickets')
+      .withIndex('by_guestEmail_event', (q) =>
+        q.eq('guestEmailLower', session.email).eq('eventId', eventId),
+      )
+      .take(200),
+  );
+
+  const sessions = await listGuestSessionsByEmail(db, session.email);
+  for (const emailSession of sessions) {
+    addActiveTickets(
+      await db
+        .query('tickets')
+        .withIndex('by_guestSession_event', (q) =>
+          q.eq('guestSessionId', emailSession._id).eq('eventId', eventId),
+        )
+        .take(200),
+    );
+  }
+  return count;
 }
 
 function assertTicketLimit(
@@ -382,6 +444,12 @@ export async function openPrimaryOrderState(
 
   const orderId = await ctx.db.insert('ticket_orders', {
     ...getOwnerFieldsForInsert(args.identity),
+    // Durable buyer-email snapshot for guest orders: completion copies it onto
+    // the issued tickets, which anchors the per-email cap even when the guest
+    // session row is gone by the time payment settles.
+    ...(args.identity.type === 'guest'
+      ? {guestEmailLower: args.identity.email.toLowerCase()}
+      : {}),
     eventId: args.eventId,
     kind: 'primary',
     quantity: args.quantity,

@@ -417,6 +417,14 @@ const schemaTables = {
      * by setting userId and clearing guestSessionId.
      */
     guestSessionId: v.optional(v.id('guest_sessions')),
+    /**
+     * Lowercased buyer email captured at guest issuance. Anchors the
+     * per-email ticket cap (lib/orders/open.ts) independently of guest
+     * session lifecycle — sessions are freely deleted by the cleanup cron,
+     * but the cap must survive. Set only for guest-issued tickets and
+     * retained through guest→user migration so the cap survives conversion.
+     */
+    guestEmailLower: v.optional(v.string()),
 
     /**
      * - valid: Usable ticket.
@@ -451,6 +459,7 @@ const schemaTables = {
     .index('by_order', ['orderId'])
     .index('by_guestSession', ['guestSessionId'])
     .index('by_guestSession_event', ['guestSessionId', 'eventId'])
+    .index('by_guestEmail_event', ['guestEmailLower', 'eventId'])
     // Used by getRecentCheckIns and getEventCheckInPostMortem.
     // Descending on checkedInAt yields newest check-ins first.
     .index('by_event_checkedInAt', ['eventId', 'checkedInAt'])
@@ -595,6 +604,15 @@ const schemaTables = {
      */
     userId: v.optional(v.id('users')),
     guestSessionId: v.optional(v.id('guest_sessions')),
+    /**
+     * Lowercased buyer email snapshotted at order open for guest orders.
+     * Completion copies it onto issued tickets (`tickets.guestEmailLower`),
+     * which anchors the per-email ticket cap. Snapshotted rather than read
+     * from `guest_sessions` at completion time because the session row may
+     * already be deleted (cleanup cron / re-entry hygiene) when a delayed
+     * payment settles.
+     */
+    guestEmailLower: v.optional(v.string()),
     eventId: v.id('events'),
     /**
      * - primary: consumes event_inventory heldCount while open

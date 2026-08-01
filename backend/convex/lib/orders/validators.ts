@@ -21,6 +21,8 @@ export const ticketOrderDocFields = {
   _creationTime: v.number(),
   userId: v.optional(v.id('users')),
   guestSessionId: v.optional(v.id('guest_sessions')),
+  /** Buyer-email snapshot for guest orders; see schema.ts ticket_orders. */
+  guestEmailLower: v.optional(v.string()),
   eventId: v.id('events'),
   kind: ticketOrderKindValidator,
   resaleListingId: v.optional(v.id('resale_listings')),
