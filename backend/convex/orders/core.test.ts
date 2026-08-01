@@ -631,6 +631,66 @@ describe('orders', () => {
     expect(tickets).toHaveLength(2);
   });
 
+  it('enforces maxTicketsPerUser per email across multiple guest sessions', async () => {
+    const t = convexTest();
+    const {eventId, inventoryId} = await createEventWithInventory(t, {
+      price: 0,
+      maxTicketsPerUser: 2,
+    });
+    const email = 'multi-session-guest@example.com';
+    // Re-entering an email mints a fresh session, so the cap must aggregate
+    // over all of the email's sessions — a per-session count would reset the
+    // limit on every device switch.
+    const first = await createGuestSession(t, email);
+    const second = await createGuestSession(t, email);
+
+    await t.mutation(api.orders.core.claimFreeTicketAsGuest, {
+      sessionToken: first.sessionToken,
+      eventId,
+      quantity: 1,
+      tier: 'regular',
+      termsAccepted: true,
+      idempotencyKey: 'idem-multi-session-first',
+    });
+    await t.mutation(api.orders.core.claimFreeTicketAsGuest, {
+      sessionToken: second.sessionToken,
+      eventId,
+      quantity: 1,
+      tier: 'regular',
+      termsAccepted: true,
+      idempotencyKey: 'idem-multi-session-second',
+    });
+
+    // Third claim from the second session: 2 tickets already exist across the
+    // email's sessions, so the cap of 2 must reject it.
+    await expect(
+      t.mutation(api.orders.core.claimFreeTicketAsGuest, {
+        sessionToken: second.sessionToken,
+        eventId,
+        quantity: 1,
+        tier: 'regular',
+        termsAccepted: true,
+        idempotencyKey: 'idem-multi-session-third',
+      }),
+    ).rejects.toThrow('Maximum 2 tickets per user');
+
+    // A different email is unaffected by the first email's cap.
+    const other = await createGuestSession(t, 'other-guest@example.com');
+    await t.mutation(api.orders.core.claimFreeTicketAsGuest, {
+      sessionToken: other.sessionToken,
+      eventId,
+      quantity: 1,
+      tier: 'regular',
+      termsAccepted: true,
+      idempotencyKey: 'idem-multi-session-other',
+    });
+
+    const inventory = await t.run(async (ctx) =>
+      ctx.db.get('event_inventory', inventoryId),
+    );
+    expect(inventory?.soldCount).toBe(3);
+  });
+
   it('rejects an idempotency key reused for a different claim instead of silently replaying', async () => {
     const t = convexTest();
     const userId = await createUser(

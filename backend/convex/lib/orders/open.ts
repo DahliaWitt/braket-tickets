@@ -18,6 +18,7 @@ import {
   isValidTicketStatus,
   type TicketTier,
 } from '../../lib/validators/ticketing';
+import {listGuestSessionsByEmail} from '../guest_sessions/lifecycle';
 import {validateTierPricing} from '../payments/pricing';
 import {getOrganizerChargeReadiness} from '../stripe_connect_state';
 import {
@@ -110,26 +111,61 @@ function isEquivalentOpenOrder(
   );
 }
 
+async function countActiveGuestTicketsForSession(
+  db: MutationCtx['db'],
+  guestSessionId: Id<'guest_sessions'>,
+  eventId: Id<'events'>,
+): Promise<number> {
+  const tickets = await db
+    .query('tickets')
+    .withIndex('by_guestSession_event', (q) =>
+      q.eq('guestSessionId', guestSessionId).eq('eventId', eventId),
+    )
+    .take(200);
+  return tickets.filter((ticket) => isActiveTicketStatus(ticket.status)).length;
+}
+
 async function countActiveOwnedTicketsForEvent(
   db: MutationCtx['db'],
   owner: OrderOwnerKey,
   eventId: Id<'events'>,
 ): Promise<number> {
-  const query =
-    owner.type === 'user'
-      ? db
-          .query('tickets')
-          .withIndex('by_user_event', (q) =>
-            q.eq('userId', owner.userId).eq('eventId', eventId),
-          )
-      : db
-          .query('tickets')
-          .withIndex('by_guestSession_event', (q) =>
-            q.eq('guestSessionId', owner.guestSessionId).eq('eventId', eventId),
-          );
+  if (owner.type === 'user') {
+    const tickets = await db
+      .query('tickets')
+      .withIndex('by_user_event', (q) =>
+        q.eq('userId', owner.userId).eq('eventId', eventId),
+      )
+      .take(200);
+    return tickets.filter((ticket) => isActiveTicketStatus(ticket.status))
+      .length;
+  }
 
-  const tickets = await query.take(200);
-  return tickets.filter((ticket) => isActiveTicketStatus(ticket.status)).length;
+  // Guests: enforce maxTicketsPerUser per EMAIL, not per session. Re-entering
+  // an email on a new device mints a fresh guest session, so a per-session
+  // count would reset the cap on every device switch. Converted sessions
+  // contribute zero here because migration moves their tickets to the user
+  // (clearing guestSessionId), and the by_email scan is bounded by
+  // EMAIL_SESSION_SCAN_LIMIT with realistic counts in the single digits.
+  const session = await db.get('guest_sessions', owner.guestSessionId);
+  if (!session) {
+    return await countActiveGuestTicketsForSession(
+      db,
+      owner.guestSessionId,
+      eventId,
+    );
+  }
+
+  const sessions = await listGuestSessionsByEmail(db, session.email);
+  let count = 0;
+  for (const emailSession of sessions) {
+    count += await countActiveGuestTicketsForSession(
+      db,
+      emailSession._id,
+      eventId,
+    );
+  }
+  return count;
 }
 
 function assertTicketLimit(
