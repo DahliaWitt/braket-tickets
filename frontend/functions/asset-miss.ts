@@ -2,6 +2,8 @@ interface PagesAssetEnvironment {
   ASSETS: {
     fetch(request: Request): Promise<Response>;
   };
+  /** Public Convex HTTP action base URL, e.g. https://foo.convex.site. */
+  CONVEX_SITE_URL?: string;
 }
 
 interface PagesRequestContext {
@@ -55,3 +57,4 @@ export async function handleAssetRequest(
 }
 
 export {isGuardedAssetPath, isSpaShellFallback};
+export type {PagesAssetEnvironment, PagesRequestContext};

@@ -38,3 +38,22 @@ export const publicEventCardValidator = v.object({
 });
 
 export type PublicEventCard = Infer<typeof publicEventCardValidator>;
+
+/**
+ * Public-safe single-event preview shape, returned by GET /api/events/:id.
+ * Used to populate OG meta tags for social-media unfurling. No raw `endDate`
+ * — `dateLabel` already encodes the range (single-day, overnight, multi-day)
+ * and nothing downstream consumes `endDate`.
+ */
+export const publicEventPreviewValidator = v.object({
+  _id: v.id('events'),
+  title: v.string(),
+  description: v.optional(v.string()), // ALREADY truncated server-side (~300 chars)
+  date: v.string(), // ISO 8601 UTC instant (schema contract)
+  dateLabel: v.string(), // human-readable range label, formatted server-side
+  location: v.optional(v.string()),
+  posterUrl: v.union(v.string(), v.null()), // https-only or null
+  organizerName: v.string(), // organizer is guaranteed live by the visibility gate
+});
+
+export type PublicEventPreview = Infer<typeof publicEventPreviewValidator>;

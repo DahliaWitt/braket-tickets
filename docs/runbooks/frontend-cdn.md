@@ -16,6 +16,9 @@ Source of truth:
 - `frontend/public/_redirects`
 - `frontend/public/_routes.json`
 - `frontend/functions/asset-miss.ts`
+- `frontend/functions/[[path]].ts`
+- `frontend/functions/og-preview.ts`
+- `frontend/wrangler.toml`
 - `.github/workflows/deploy.yml`
 - `.github/workflows/deploy-preview.yml`
 - `frontend/package.json`
@@ -28,6 +31,7 @@ Jump to:
 - [Fix a frontend build or deploy failure](#fix-a-frontend-build-or-deploy-failure)
 - [Fix CSP violations](#fix-csp-violations)
 - [Restore the preview site](#restore-the-preview-site)
+- [Event link OG previews](#event-link-og-previews)
 - [Image transformations: dashboard configuration](#image-transformations-dashboard-configuration)
 - [Image transformations: troubleshooting](#image-transformations-troubleshooting)
 
@@ -56,6 +60,8 @@ The table below lists the common runtime causes:
 If you need to redeploy unchanged frontend assets, use [Deployment & CI: Manually deploy Angular production](./deployment-ci.md#manually-deploy-angular-production). Rerunning the parent `CI` workflow on `main` only re-runs `deploy-frontend` when that run's `changes` job selected the frontend slice.
 
 Cloudflare Pages keeps the Angular app fallback in `frontend/public/_redirects` so direct links to app routes, including unknown extensionless routes handled by Angular's not-found route, load the SPA shell. Stale hashed bundle requests such as `/chunk-OLD.js` would otherwise return `200 text/html`, which Safari reports as a JavaScript MIME type error. `frontend/public/_routes.json` routes root `*.js` and `*.css` requests through `frontend/functions/asset-miss.ts`; that function passes through real assets and returns 404 when the Pages asset binding falls back to HTML.
+
+`frontend/public/_routes.json` also includes `/events/*`, which invokes the same Pages Function (`frontend/functions/[[path]].ts`) for `/events/:id` HTML shell requests so it can rewrite OG/Twitter meta tags for link unfurling — see [Event link OG previews](#event-link-og-previews). Without `/events/*` in the include list, the Function never runs for those paths and every `/events/:id` link unfurls with the static defaults from `frontend/src/index.html`.
 
 ## Fix a frontend build or deploy failure
 
@@ -127,6 +133,37 @@ If the preview deploy pipeline is healthy but the site is stale, trigger a new p
 git commit --allow-empty -m "chore: trigger preview redeploy"
 git push origin develop
 ```
+
+## Event link OG previews
+
+**Symptom:** A link to `/events/:id` shared in Slack, Discord, iMessage, etc. unfurls with the generic Braket logo and homepage copy instead of the event's title, date, and flier.
+
+The Pages Function chain is `frontend/functions/[[path]].ts` → [`frontend/functions/og-preview.ts`](../../frontend/functions/og-preview.ts) (`applyEventPreview`). For a GET request whose path matches `/events/:id` and whose asset response is the SPA HTML shell, it fetches `${CONVEX_SITE_URL}/api/events/{id}` (backend handler: `handleGetPublicEventPreview` in `backend/convex/http/_impl/events.ts`, rate-limited via the `getPublicEventPreview` bucket in `backend/convex/lib/rate_limits.ts`) and rewrites the shell's `<title>`, `og:title`, `og:description`, `og:url`, and — when the event has a poster — `og:image`/`og:image:alt` and `twitter:card` (upgraded from the static `summary` default to `summary_large_image`). See `frontend/src/index.html` for the static defaults this replaces.
+
+This fetch has a 1.5s timeout (`AbortSignal.timeout`) and fails open on any error — a timeout, non-200, network failure, or malformed JSON all fall through to the untouched shell response, never a broken page. `_headers`-applied response headers (including CSP) are preserved on the rewritten response.
+
+**Cache semantics — two layers:**
+
+- The Convex endpoint sends `Cache-Control: public, max-age=300, stale-while-revalidate=600` (5 min fresh, 10 min stale-while-revalidate).
+- The Function's outbound fetch also sets `cf: { cacheTtl: 300, cacheEverything: true }`, so a Cloudflare colo caches the Convex response for up to 300s independently of the browser-facing cache headers on the rewritten shell.
+
+An event's title, date, or poster can take up to ~5 minutes to propagate into new unfurls after an edit, per the layers above.
+
+**Config:** `CONVEX_SITE_URL` is set per environment in [`frontend/wrangler.toml`](../../frontend/wrangler.toml) — `[vars]` for production (`https://modest-impala-722.convex.site`), `[env.preview.vars]` for preview (`https://bright-swordfish-194.convex.site`). Once a Pages project defines `vars` in its Wrangler config file, that file becomes the source of truth and the same variable cannot also be set from the Pages dashboard ([Cloudflare docs](https://developers.cloudflare.com/pages/functions/wrangler-configuration/#source-of-truth)) — if `CONVEX_SITE_URL` looks wrong at runtime, the fix is in `wrangler.toml`, not the dashboard.
+
+**Troubleshooting — event links unfurl with the generic logo:**
+
+1. Confirm `/events/*` is present in `frontend/public/_routes.json`'s `include` list — without it the Function never runs for `/events/:id` requests.
+2. Confirm `CONVEX_SITE_URL` in `frontend/wrangler.toml` (`[vars]` / `[env.preview.vars]`) points at the correct Convex deployment for the environment that served the broken unfurl.
+3. Curl the Convex endpoint directly to isolate a backend problem from a Function problem:
+
+   ```bash
+   curl -i "https://modest-impala-722.convex.site/api/events/<event-id>"
+   ```
+
+   A 404 means the event id is wrong, or the event isn't published/public (the endpoint returns an identical 404 for missing and denied ids by design — see `backend/convex/http/_impl/events.ts`). A 429 means the `getPublicEventPreview` rate-limit bucket is exhausted; retry after the window. A non-JSON or unexpected-shape 200 body will also fail open in the Function — check the response against `PublicEventPreview` in `shared/contracts/public-event`.
+
+4. If the endpoint returns a healthy preview but the unfurl is still stale, it's most likely the 5-minute Convex cache or the Function's 300s colo cache from step above — wait and re-share, or use the target platform's own cache-busting (e.g. append a query string) to force a fresh unfurl fetch.
 
 ## Image transformations: dashboard configuration
 

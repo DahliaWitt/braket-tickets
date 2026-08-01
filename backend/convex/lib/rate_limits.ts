@@ -118,6 +118,18 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
     capacity: 60,
   },
 
+  // Public single-event preview (OG unfurl): 60 requests per IP per minute.
+  // At least as generous as the listing bucket — every preview traffic
+  // egresses from Cloudflare Pages Functions and shares one effective IP
+  // key, so saturation must degrade gracefully (the worker fails open to
+  // the untouched shell rather than surfacing an error to the visitor).
+  getPublicEventPreview: {
+    kind: 'token bucket',
+    rate: 60,
+    period: MINUTE,
+    capacity: 60,
+  },
+
   // File uploads: 10 upload URL requests per user per minute.
   // Prevents upload URL farming from a single account.
   generateUpload: {kind: 'fixed window', rate: 10, period: MINUTE},
@@ -191,6 +203,7 @@ export const limitPublicEndpoint = internalMutation({
       v.literal('listPublicEvents'),
       v.literal('listPublicCommunity'),
       v.literal('getPublicCommunityBySlug'),
+      v.literal('getPublicEventPreview'),
       v.literal('unsubscribeEndpoint'),
     ),
     key: v.string(),
