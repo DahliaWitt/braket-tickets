@@ -485,6 +485,111 @@ describe('orders', () => {
     expect(newerSession?.pendingSessionTokenDigest).toBeUndefined();
   });
 
+  it('resume targeting ignores an open order belonging to a different event', async () => {
+    const t = convexTest();
+    const {eventId: targetEventId} = await createEventWithInventory(t, {
+      title: 'Resume Target Event',
+    });
+    const {eventId: otherEventId} = await createEventWithInventory(t, {
+      title: 'Other Event',
+    });
+    const email = 'cross-event-guest@example.com';
+
+    // Older session holds an open cart, but for a DIFFERENT event than the one
+    // the resume link will point at.
+    const otherEventCart = await createGuestSession(t, email);
+    await t.mutation(api.orders.core.openForGuest, {
+      sessionToken: otherEventCart.sessionToken,
+      eventId: otherEventId,
+      quantity: 1,
+      tier: 'regular',
+      totalAmount: 2500,
+      termsAccepted: true,
+    });
+
+    const newerEmpty = await createGuestSession(t, email);
+
+    await t.action(api.guest_sessions.actions.initiateGuestSession, {
+      email,
+      eventId: targetEventId,
+    });
+
+    // No session holds an open order for the target event, so targeting falls
+    // back to most-recently-active rather than the unrelated cart.
+    const [cartSession, newerSession] = await t.run(async (ctx) =>
+      Promise.all([
+        ctx.db.get('guest_sessions', otherEventCart.sessionId),
+        ctx.db.get('guest_sessions', newerEmpty.sessionId),
+      ]),
+    );
+    expect(cartSession?.pendingSessionTokenDigest).toBeUndefined();
+    expect(newerSession?.pendingSessionTokenDigest).toBeTruthy();
+  });
+
+  it('late settlement after guest-session cleanup still anchors the ticket to the buyer email', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2030-01-01T00:00:00.000Z'));
+      const t = convexTest();
+      const {eventId} = await createEventWithInventory(t, {
+        maxTicketsPerUser: 1,
+      });
+      const email = 'late-settle-guest@example.com';
+      const guest = await createGuestSession(t, email);
+
+      const opened = await t.mutation(api.orders.core.openForGuest, {
+        sessionToken: guest.sessionToken,
+        eventId,
+        quantity: 1,
+        tier: 'regular',
+        totalAmount: 2500,
+        termsAccepted: true,
+      });
+
+      // 25h later the cleanup cron deletes the guest session (past its 24h
+      // hard expiry), and only then does the Stripe settlement land. The
+      // ticket must still carry its email anchor — reading the session at
+      // completion time would find nothing.
+      vi.setSystemTime(new Date('2030-01-02T01:00:00.000Z'));
+      await t.mutation(internal.guest_sessions.core.cleanupExpiredSessions, {});
+      const deletedSession = await t.run(async (ctx) =>
+        ctx.db.get('guest_sessions', guest.sessionId),
+      );
+      expect(deletedSession).toBeNull();
+
+      await t.mutation(internal.orders.core.prepareStripeOrderSettlement, {
+        orderId: opened.orderId,
+        stripePaymentIntentId: 'pi_late_settle_guest',
+      });
+
+      const anchoredTickets = await t.run(async (ctx) =>
+        ctx.db
+          .query('tickets')
+          .withIndex('by_guestEmail_event', (q) =>
+            q.eq('guestEmailLower', email).eq('eventId', eventId),
+          )
+          .collect(),
+      );
+      expect(anchoredTickets).toHaveLength(1);
+      expect(anchoredTickets[0].rosterEmail).toBe(email);
+
+      // The cap still counts that ticket for a brand-new session on the email.
+      const fresh = await createGuestSession(t, email);
+      await expect(
+        t.mutation(api.orders.core.openForGuest, {
+          sessionToken: fresh.sessionToken,
+          eventId,
+          quantity: 1,
+          tier: 'regular',
+          totalAmount: 2500,
+          termsAccepted: true,
+        }),
+      ).rejects.toThrow('Maximum 1 tickets per user');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('openForGuest creates an open order owned by the guest session', async () => {
     const t = convexTest();
     const {eventId, inventoryId} = await createEventWithInventory(t);

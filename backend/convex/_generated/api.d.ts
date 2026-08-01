@@ -4663,7 +4663,7 @@ export declare const internal: {
       getResumeTargetByEmail: FunctionReference<
         "query",
         "internal",
-        { email: string; now: number },
+        { email: string; eventId?: Id<"events">; now: number },
         {
           _creationTime: number;
           _id: Id<"guest_sessions">;

@@ -444,6 +444,12 @@ export async function openPrimaryOrderState(
 
   const orderId = await ctx.db.insert('ticket_orders', {
     ...getOwnerFieldsForInsert(args.identity),
+    // Durable buyer-email snapshot for guest orders: completion copies it onto
+    // the issued tickets, which anchors the per-email cap even when the guest
+    // session row is gone by the time payment settles.
+    ...(args.identity.type === 'guest'
+      ? {guestEmailLower: args.identity.email.toLowerCase()}
+      : {}),
     eventId: args.eventId,
     kind: 'primary',
     quantity: args.quantity,

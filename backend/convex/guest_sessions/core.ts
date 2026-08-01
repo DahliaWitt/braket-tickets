@@ -71,9 +71,18 @@ function getMagicLinkErrorMessage(error: string | undefined): string {
  * just-minted session while an older one holds the buyer's in-flight
  * checkout. Prefer a session with an open ticket order (something to actually
  * resume), then fall back to the most recently active session.
+ *
+ * When `eventId` is provided, only open orders for THAT event qualify — the
+ * resume link points at that event, so a session whose open cart belongs to a
+ * different event is not a meaningful target and would send the buyer to a
+ * page with nothing to resume.
  */
 export const getResumeTargetByEmail = internalQuery({
-  args: {email: v.string(), now: v.number()},
+  args: {
+    email: v.string(),
+    now: v.number(),
+    eventId: v.optional(v.id('events')),
+  },
   returns: v.union(guestSessionDocValidator, v.null()),
   handler: async (ctx, args) => {
     const sessions = await listGuestSessionsByEmail(
@@ -96,18 +105,32 @@ export const getResumeTargetByEmail = internalQuery({
       }
     }
 
+    const eventId = args.eventId;
     let bestWithOpenOrder: (typeof activeSessions)[number] | null = null;
     for (const session of activeSessions) {
-      // The index ends in `state` but is prefixed by eventId, which we don't
-      // know here — read the session's orders (a session holds only a
-      // handful) and check state in memory.
-      const orders = await ctx.db
-        .query('ticket_orders')
-        .withIndex('by_owner_guest_event_state', (q) =>
-          q.eq('guestSessionId', session._id),
-        )
-        .take(50);
-      if (!orders.some((order) => order.state === 'open')) continue;
+      const hasOpenOrder = eventId
+        ? // Fully indexed on [guestSessionId, eventId, state].
+          (await ctx.db
+            .query('ticket_orders')
+            .withIndex('by_owner_guest_event_state', (q) =>
+              q
+                .eq('guestSessionId', session._id)
+                .eq('eventId', eventId)
+                .eq('state', 'open'),
+            )
+            .first()) !== null
+        : // No event in context: the index prefix stops at guestSessionId, so
+          // read the session's orders (a session holds only a handful) and
+          // check state in memory.
+          (
+            await ctx.db
+              .query('ticket_orders')
+              .withIndex('by_owner_guest_event_state', (q) =>
+                q.eq('guestSessionId', session._id),
+              )
+              .take(50)
+          ).some((order) => order.state === 'open');
+      if (!hasOpenOrder) continue;
       if (
         bestWithOpenOrder === null ||
         lastTouched(session) > lastTouched(bestWithOpenOrder)

@@ -123,6 +123,10 @@ export async function initiateGuestSessionHandler(
       {
         email,
         now: Date.now(),
+        // Scope "has something to resume" to the event the resume link will
+        // point at; falls back to most-recently-active when no session holds
+        // an open order for it.
+        ...(args.eventId ? {eventId: args.eventId} : {}),
       },
     );
 

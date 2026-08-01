@@ -604,6 +604,15 @@ const schemaTables = {
      */
     userId: v.optional(v.id('users')),
     guestSessionId: v.optional(v.id('guest_sessions')),
+    /**
+     * Lowercased buyer email snapshotted at order open for guest orders.
+     * Completion copies it onto issued tickets (`tickets.guestEmailLower`),
+     * which anchors the per-email ticket cap. Snapshotted rather than read
+     * from `guest_sessions` at completion time because the session row may
+     * already be deleted (cleanup cron / re-entry hygiene) when a delayed
+     * payment settles.
+     */
+    guestEmailLower: v.optional(v.string()),
     eventId: v.id('events'),
     /**
      * - primary: consumes event_inventory heldCount while open

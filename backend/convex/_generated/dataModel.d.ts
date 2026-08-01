@@ -1548,6 +1548,7 @@ export type DataModel = {
       currency: "USD";
       eventId: Id<"events">;
       expiresAt: number;
+      guestEmailLower?: string;
       guestSessionId?: Id<"guest_sessions">;
       idempotencyKey?: string;
       kind: "primary" | "resale";
@@ -1582,6 +1583,7 @@ export type DataModel = {
       | "currency"
       | "eventId"
       | "expiresAt"
+      | "guestEmailLower"
       | "guestSessionId"
       | "idempotencyKey"
       | "kind"

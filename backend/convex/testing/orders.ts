@@ -60,9 +60,17 @@ export async function insertSeedOrder(
       : undefined;
 
   const userId = args.guestSessionId ? undefined : args.userId;
+  // Mirror production open: guest orders snapshot the buyer email so
+  // completion can anchor the per-email ticket cap.
+  const guestSession = args.guestSessionId
+    ? await ctx.db.get('guest_sessions', args.guestSessionId)
+    : null;
   const orderId = await ctx.db.insert('ticket_orders', {
     userId,
     guestSessionId: args.guestSessionId,
+    ...(guestSession
+      ? {guestEmailLower: guestSession.email.toLowerCase()}
+      : {}),
     eventId: args.eventId,
     kind: 'primary',
     quantity: args.quantity,
