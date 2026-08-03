@@ -103,7 +103,7 @@
     "concurrently": "^10.0.3",
     "convex-helpers": "^0.1.120",
     "jsdom": "^29.1.1",
-    "postcss": "^8.5.22",
+    "postcss": "^8.5.18",
     "remark-gfm": "^4.0.1",
     "serve": "^14.2.6",
     "size-limit": "^12.1.0",
