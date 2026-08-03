@@ -41,7 +41,7 @@
     "@angular/platform-browser": "^22.0.6",
     "@angular/router": "^22.0.6",
     "@convex-dev/better-auth": "catalog:",
-    "@sentry/angular": "^10.63.0",
+    "@sentry/angular": "^10.68.0",
     "@stripe/connect-js": "^3.4.6",
     "@stripe/stripe-js": "^9.9.0",
     "@tiptap/core": "3.27.3",
