@@ -44,7 +44,7 @@
     "@codecov/vite-plugin": "^2.0.1",
     "@convex-dev/eslint-plugin": "^2.0.0",
     "@edge-runtime/vm": "^5.0.0",
-    "@tiptap/core": "3.27.3",
+    "@tiptap/core": "3.30.4",
     "@tiptap/extension-bold": "3.27.3",
     "@tiptap/extension-document": "3.27.3",
     "@tiptap/extension-hard-break": "3.27.3",
