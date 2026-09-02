@@ -44,7 +44,7 @@
     "@sentry/angular": "^10.63.0",
     "@stripe/connect-js": "^3.4.6",
     "@stripe/stripe-js": "^9.9.0",
-    "@tiptap/core": "3.27.3",
+    "@tiptap/core": "3.30.4",
     "@tiptap/extension-bold": "3.27.3",
     "@tiptap/extension-document": "3.27.3",
     "@tiptap/extension-hard-break": "3.27.3",
