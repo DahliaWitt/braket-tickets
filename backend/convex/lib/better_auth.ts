@@ -659,7 +659,9 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
       },
     },
     session: {
-      expiresIn: 60 * 60 * 24 * 7,
+      // 60-day sliding window; the 7-day default logged out attendees
+      // who only return when the next event comes around.
+      expiresIn: 60 * 60 * 24 * 60,
       updateAge: 60 * 60 * 24,
       // Better Auth session cookie cache keeps repeated getSession() calls cheap
       // without making the client stateful. Five minutes is conservative enough

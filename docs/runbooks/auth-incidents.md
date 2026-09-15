@@ -225,7 +225,7 @@ While `authSyncFailed` is true and no app `users` profile is loaded, protected r
 The frontend admits navigations optimistically from the persisted crossDomain credential in localStorage (`braket-tickets_cookie` / `braket-tickets_session_data`) before the Better Auth session settles. See `frontend/src/app/core/guards/auth.guards.ts` and `AuthService.scheduleOptimisticReconciliation` in `frontend/src/app/core/services/auth.service.ts`. Expected symptoms that are NOT bugs:
 
 - A user whose session was revoked server-side (password change elsewhere, admin revocation) briefly sees the dashboard skeleton, then a "session expired. please log in again." toast and a redirect. This is the reconciliation path working as designed.
-- A user with an expired stored credential goes straight to the landing page with no network wait — the guard treats a provably-expired credential as logged out.
+- A user with an expired stored credential goes straight to the landing page with no network wait — the guard treats a provably-expired credential as logged out. Sessions last 60 days, sliding daily on use (`session` config in `backend/convex/lib/better_auth.ts`), so this is only expected for users away longer than that.
 - In E2E/cookie mode the crossDomain plugin is disabled, so none of the optimistic behavior applies; guards always await the settled session.
 
 If users report being stuck on a skeleton dashboard indefinitely, that means auth never settled — check Better Auth endpoint reachability (`*.convex.site`) rather than the guards.
