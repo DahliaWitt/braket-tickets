@@ -16,6 +16,7 @@ export const IMPORT_FIELD_LIMITS = {
   purchaseDateRaw: {max: 50},
   sourceLabel: {max: 100},
   notes: {max: 1000},
+  slotOverride: {min: 0, max: 100},
 } as const;
 
 /** Default source label shown/applied when the admin leaves the field blank. */
@@ -48,6 +49,7 @@ export interface ImportRowValues {
   readonly externalRef?: string;
   readonly orderRef?: string;
   readonly purchaseDateRaw?: string;
+  readonly slotOverride?: number;
 }
 
 /** Copy strings a target supplies so the shared surface stays target-agnostic. */
@@ -70,7 +72,7 @@ export interface ImportCopy {
  * buyer flows is limited to the values here, never duplicated components.
  */
 export interface ImportTargetConfig {
-  readonly target: 'guest' | 'buyer';
+  readonly target: 'guest' | 'buyer' | 'assignmentStaff';
   /** Canonical field keys this target accepts (constrains header resolution). */
   readonly acceptedFields: readonly ImportFieldKey[];
   /** Template header labels + example rows (derived from the synonym constant). */
@@ -148,6 +150,37 @@ function validateCappedOptional(
   return value;
 }
 
+function validateRequiredEmail(
+  raw: string | undefined,
+  reasons: string[],
+): string | undefined {
+  const email = validateEmail(raw, reasons);
+  if (email === undefined) reasons.push('missing email');
+  return email;
+}
+
+function validateSlotOverride(
+  raw: string | undefined,
+  reasons: string[],
+): number | undefined {
+  const value = (raw ?? '').trim();
+  if (value.length === 0) return undefined;
+  if (!/^\d+$/.test(value)) {
+    reasons.push('guest list slots must be a whole number between 0 and 100');
+    return undefined;
+  }
+  const parsed = Number(value);
+  if (
+    !Number.isSafeInteger(parsed) ||
+    parsed < IMPORT_FIELD_LIMITS.slotOverride.min ||
+    parsed > IMPORT_FIELD_LIMITS.slotOverride.max
+  ) {
+    reasons.push('guest list slots must be a whole number between 0 and 100');
+    return undefined;
+  }
+  return parsed;
+}
+
 function validateGuestType(
   raw: string | undefined,
   reasons: string[],
@@ -214,6 +247,47 @@ export const GUEST_IMPORT_CONFIG: ImportTargetConfig = {
   // Guests dedup on name+email (case-insensitive).
   dedupKey: (values) =>
     `${values.name.toLowerCase()} ${(values.email ?? '').toLowerCase()}`,
+};
+
+export const ASSIGNMENT_STAFF_IMPORT_CONFIG: ImportTargetConfig = {
+  target: 'assignmentStaff',
+  acceptedFields: ['name', 'email', 'slotOverride'],
+  templateFields: ['name', 'email', 'slotOverride'],
+  templateExampleRows: [
+    {
+      name: 'zoe example',
+      email: 'zoe@example.test',
+      slotOverride: '',
+    },
+    {
+      name: 'sam sample',
+      email: 'sam@example.test',
+      slotOverride: '4',
+    },
+  ],
+  maxRows: 50,
+  dedupModeSelectable: false,
+  requiresSourceLabel: false,
+  copy: {
+    title: 'invite staff in bulk',
+    inputHint:
+      'paste a list or upload a csv — name and email are required; slots are optional',
+    emptyState:
+      'no staff pasted yet — add a spreadsheet list, or download the template to see the shape',
+    confirmLabel: 'invite staff',
+    overCapMessage: (max) =>
+      `that’s more than ${max} rows — split the file and import it in a few passes`,
+    duplicateSkippedReason: 'duplicate — that email is already in this batch',
+    duplicateIncludedReason: 'duplicate email',
+  },
+  validateRow: (row: ParsedRow): RowValidation => {
+    const reasons: string[] = [];
+    const name = validateName(row.cells.name, reasons);
+    const email = validateRequiredEmail(row.cells.email, reasons);
+    const slotOverride = validateSlotOverride(row.cells.slotOverride, reasons);
+    return {values: {name, email, slotOverride}, reasons};
+  },
+  dedupKey: (values) => values.email?.toLowerCase() ?? null,
 };
 
 export const BUYER_IMPORT_CONFIG: ImportTargetConfig = {

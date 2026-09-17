@@ -26,6 +26,13 @@ export const IMPORT_HEADER_SYNONYMS: Readonly<
   // versa), so a guest CSV's "type" column maps to the guest type here.
   guestType: ['guest type', 'attendee type', 'type'],
   notes: ['notes', 'note', 'comment', 'comments'],
+  slotOverride: [
+    'guest list slots',
+    'slots',
+    'slot override',
+    'guestlist slots',
+    'gl slots',
+  ],
 } as const;
 
 /** Normalize a header label for case-insensitive, whitespace-tolerant matching. */

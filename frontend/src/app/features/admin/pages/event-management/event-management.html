@@ -474,6 +474,38 @@
         aria-labelledby="tab-guests"
         tabindex="0"
       >
+        @if (guestListWorkspaceError()) {
+          <div
+            data-testid="guest-list-workspace-error"
+            role="alert"
+            class="mb-8 border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive-text"
+          >
+            Self-service guest lists couldn't load. Manual guest management is
+            still available below; refresh the page to retry.
+          </div>
+        } @else if (guestListFeatureEnabled()) {
+          <app-guest-list-assignments
+            class="mb-8 block"
+            [eventId]="data.event._id"
+            [organizerId]="data.event.organizerId"
+            [overview]="guestListOverview()"
+            [assignments]="guestListAssignments()"
+            [continueCursor]="guestListContinueCursor()"
+          />
+        } @else {
+          <div
+            data-testid="guest-list-feature-unavailable"
+            role="status"
+            class="mb-8 border border-border bg-muted/40 p-4 text-sm text-muted-foreground"
+          >
+            @if (isGuestListFeatureLoading()) {
+              Checking self-service guest list setup…
+            } @else {
+              Self-service guest lists are not enabled yet. Finish the guest
+              list setup before inviting artists or staff.
+            }
+          </div>
+        }
         <app-event-management-guests-tab
           [eventId]="data.event._id"
           [guests]="guests()"

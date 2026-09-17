@@ -156,3 +156,20 @@ export const seedTicket = testingMutation({
     });
   },
 });
+
+/**
+ * Recreates a pre-roster-projection ticket row so index compatibility paths can
+ * be tested without raw writes in a spec file.
+ */
+export const clearRosterEmailProjection = testingMutation({
+  args: {ticketId: v.id('tickets')},
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- Intentionally recreates a legacy ticket missing denormalized roster email fields.
+    await ctx.db.patch('tickets', args.ticketId, {
+      rosterEmail: undefined,
+      rosterEmailLower: undefined,
+    });
+    return null;
+  },
+});

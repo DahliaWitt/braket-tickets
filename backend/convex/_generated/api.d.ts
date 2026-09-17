@@ -517,6 +517,24 @@ export declare const api: {
           }
         >;
       };
+      guest_list_settings: {
+        get: FunctionReference<
+          "query",
+          "public",
+          { organizerId: Id<"organizers"> },
+          { artistSlots: number; staffSlots: number }
+        >;
+        update: FunctionReference<
+          "mutation",
+          "public",
+          {
+            artistSlots: number;
+            organizerId: Id<"organizers">;
+            staffSlots: number;
+          },
+          { artistSlots: number; staffSlots: number }
+        >;
+      };
       invites: {
         inviteToExisting: FunctionReference<
           "mutation",
@@ -1108,11 +1126,18 @@ export declare const api: {
           checkedInAt?: number;
           checkedInBy?: Id<"users">;
           email?: string;
+          emailKey?: string;
           emailSendLockedAt?: number | null;
           emailedAt?: number;
           eventId: Id<"events">;
           name: string;
           notes?: string;
+          sourceAssignmentId?: Id<"guestListAssignments">;
+          sourceDisplayName?: string;
+          sourceIdempotencyKey?: string;
+          sourceKind?: "assignment_admission" | "self_service";
+          sourceRole?: "artist" | "staff";
+          ticketDeliveryState?: "queued" | "sent" | "failed";
           type: "guest" | "artist guest" | "staff";
         }>
       >;
@@ -1853,6 +1878,346 @@ export declare const api: {
         },
         { recipientCount: number; segment: "approved_no_ticket" }
       >;
+    };
+  };
+  guest_list: {
+    assignments: {
+      bulkCreateStaff: FunctionReference<
+        "mutation",
+        "public",
+        {
+          batchKey: string;
+          eventId: Id<"events">;
+          rows: Array<{ email: string; name: string; slotOverride?: number }>;
+        },
+        {
+          insertedCount: number;
+          outcomes: Array<{
+            reason?: string;
+            rowIndex: number;
+            status: "inserted" | "skipped" | "invalid";
+          }>;
+          skippedCount: number;
+        }
+      >;
+      create: FunctionReference<
+        "mutation",
+        "public",
+        {
+          displayName: string;
+          email: string;
+          eventId: Id<"events">;
+          grantedSlots?: number;
+          idempotencyKey: string;
+          role: "artist" | "staff";
+          userId?: Id<"users">;
+        },
+        {
+          admissionGuestId?: Id<"guests">;
+          assignmentId: Id<"guestListAssignments">;
+          createdAt: number;
+          displayName: string;
+          email: string;
+          eventId: Id<"events">;
+          grantedSlots: number;
+          inviteState: "pending" | "accepted" | "failed";
+          lastInviteAcceptedAt?: number;
+          revokedAt?: number;
+          role: "artist" | "staff";
+          status: "active" | "revoked";
+          usedSlots: number;
+        }
+      >;
+      getEventOverview: FunctionReference<
+        "query",
+        "public",
+        { eventId: Id<"events"> },
+        {
+          activeArtistGuestCount: number;
+          activeAssignmentCount: number;
+          activeGrantedSlots: number;
+          activeStaffGuestCount: number;
+          selfServiceGuestCount: number;
+          totalGuestAdmissionCount: number;
+        }
+      >;
+      listByEvent: FunctionReference<
+        "query",
+        "public",
+        {
+          eventId: Id<"events">;
+          paginationOpts: {
+            cursor: string | null;
+            endCursor?: string | null;
+            id?: number;
+            maximumBytesRead?: number;
+            maximumRowsRead?: number;
+            numItems: number;
+          };
+        },
+        {
+          continueCursor: string;
+          isDone: boolean;
+          page: Array<{
+            admissionGuestId?: Id<"guests">;
+            assignmentId: Id<"guestListAssignments">;
+            createdAt: number;
+            displayName: string;
+            email: string;
+            eventId: Id<"events">;
+            grantedSlots: number;
+            inviteState: "pending" | "accepted" | "failed";
+            lastInviteAcceptedAt?: number;
+            revokedAt?: number;
+            role: "artist" | "staff";
+            status: "active" | "revoked";
+            usedSlots: number;
+          }>;
+          pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+          splitCursor?: string | null;
+        }
+      >;
+      listGuests: FunctionReference<
+        "query",
+        "public",
+        {
+          assignmentId: Id<"guestListAssignments">;
+          paginationOpts: {
+            cursor: string | null;
+            endCursor?: string | null;
+            id?: number;
+            maximumBytesRead?: number;
+            maximumRowsRead?: number;
+            numItems: number;
+          };
+        },
+        {
+          continueCursor: string;
+          isDone: boolean;
+          page: Array<{
+            deliveryState: "not_sent" | "queued" | "sent" | "failed";
+            email: string;
+            emailedAt?: number;
+            guestId: Id<"guests">;
+            name: string;
+          }>;
+          pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+          splitCursor?: string | null;
+        }
+      >;
+      resendInvite: FunctionReference<
+        "mutation",
+        "public",
+        { assignmentId: Id<"guestListAssignments">; idempotencyKey: string },
+        {
+          assignmentId: Id<"guestListAssignments">;
+          inviteState: "pending" | "accepted" | "failed";
+        }
+      >;
+      revoke: FunctionReference<
+        "mutation",
+        "public",
+        { assignmentId: Id<"guestListAssignments"> },
+        {
+          assignmentId: Id<"guestListAssignments">;
+          retainedGuestCount: number;
+          status: "revoked";
+        }
+      >;
+      updateGrant: FunctionReference<
+        "mutation",
+        "public",
+        { assignmentId: Id<"guestListAssignments">; grantedSlots: number },
+        {
+          assignment: {
+            admissionGuestId?: Id<"guests">;
+            assignmentId: Id<"guestListAssignments">;
+            createdAt: number;
+            displayName: string;
+            email: string;
+            eventId: Id<"events">;
+            grantedSlots: number;
+            inviteState: "pending" | "accepted" | "failed";
+            lastInviteAcceptedAt?: number;
+            revokedAt?: number;
+            role: "artist" | "staff";
+            status: "active" | "revoked";
+            usedSlots: number;
+          };
+          belowUsage: boolean;
+          previousGrantedSlots: number;
+        }
+      >;
+    };
+    delegate: {
+      addGuest: FunctionReference<
+        "mutation",
+        "public",
+        {
+          access:
+            | { assignmentId: Id<"guestListAssignments">; kind: "signedIn" }
+            | { kind: "token"; token: string };
+          email: string;
+          idempotencyKey: string;
+          name: string;
+        },
+        {
+          grantedSlots: number;
+          guest: {
+            deliveryState: "not_sent" | "queued" | "sent" | "failed";
+            email: string;
+            emailedAt?: number;
+            guestId: Id<"guests">;
+            name: string;
+          };
+          usedSlots: number;
+        }
+      >;
+      authorizeToken: FunctionReference<
+        "mutation",
+        "public",
+        { token: string },
+        { status: "available" | "unavailable" }
+      >;
+      claimSignedIn: FunctionReference<
+        "mutation",
+        "public",
+        { assignmentId: Id<"guestListAssignments"> },
+        { status: "available" | "unavailable" }
+      >;
+      getView: FunctionReference<
+        "action",
+        "public",
+        {
+          access:
+            | { assignmentId: Id<"guestListAssignments">; kind: "signedIn" }
+            | { kind: "token"; token: string };
+          paginationOpts: {
+            cursor: string | null;
+            endCursor?: string | null;
+            id?: number;
+            maximumBytesRead?: number;
+            maximumRowsRead?: number;
+            numItems: number;
+          };
+        },
+        | { status: "unavailable" }
+        | {
+            assignment: {
+              admissionGuestId?: Id<"guests">;
+              assignmentId: Id<"guestListAssignments">;
+              createdAt: number;
+              displayName: string;
+              email: string;
+              eventId: Id<"events">;
+              grantedSlots: number;
+              inviteState: "pending" | "accepted" | "failed";
+              lastInviteAcceptedAt?: number;
+              revokedAt?: number;
+              role: "artist" | "staff";
+              status: "active" | "revoked";
+              usedSlots: number;
+            };
+            event: {
+              date: string;
+              endDate?: string;
+              location?: string;
+              title: string;
+            };
+            guests: {
+              continueCursor: string;
+              isDone: boolean;
+              page: Array<{
+                deliveryState: "not_sent" | "queued" | "sent" | "failed";
+                email: string;
+                emailedAt?: number;
+                guestId: Id<"guests">;
+                name: string;
+              }>;
+              pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+              splitCursor?: string | null;
+            };
+            status: "available";
+          }
+      >;
+      listMine: FunctionReference<
+        "mutation",
+        "public",
+        {
+          paginationOpts: {
+            cursor: string | null;
+            endCursor?: string | null;
+            id?: number;
+            maximumBytesRead?: number;
+            maximumRowsRead?: number;
+            numItems: number;
+          };
+        },
+        {
+          continueCursor: string;
+          isDone: boolean;
+          page: Array<{
+            assignmentId: Id<"guestListAssignments">;
+            eventDate: string;
+            eventEndDate?: string;
+            eventId: Id<"events">;
+            eventTitle: string;
+            grantedSlots: number;
+            role: "artist" | "staff";
+            usedSlots: number;
+          }>;
+          pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+          splitCursor?: string | null;
+        }
+      >;
+      removeGuest: FunctionReference<
+        "mutation",
+        "public",
+        {
+          access:
+            | { assignmentId: Id<"guestListAssignments">; kind: "signedIn" }
+            | { kind: "token"; token: string };
+          guestId: Id<"guests">;
+        },
+        { removed: boolean; usedSlots: number }
+      >;
+      retryTicket: FunctionReference<
+        "mutation",
+        "public",
+        {
+          access:
+            | { assignmentId: Id<"guestListAssignments">; kind: "signedIn" }
+            | { kind: "token"; token: string };
+          guestId: Id<"guests">;
+        },
+        { status: "queued" | "alreadySent" | "inFlight" }
+      >;
+      updateGuest: FunctionReference<
+        "mutation",
+        "public",
+        {
+          access:
+            | { assignmentId: Id<"guestListAssignments">; kind: "signedIn" }
+            | { kind: "token"; token: string };
+          email: string;
+          guestId: Id<"guests">;
+          name: string;
+        },
+        {
+          grantedSlots: number;
+          guest: {
+            deliveryState: "not_sent" | "queued" | "sent" | "failed";
+            email: string;
+            emailedAt?: number;
+            guestId: Id<"guests">;
+            name: string;
+          };
+          usedSlots: number;
+        }
+      >;
+    };
+    feature_state: {
+      get: FunctionReference<"query", "public", {}, { enabled: boolean }>;
     };
   };
   guest_sessions: {
@@ -2901,6 +3266,21 @@ export declare const api: {
         Id<"events">
       >;
     };
+    guest_list: {
+      cancelScheduledWork: FunctionReference<"mutation", "public", {}, null>;
+      enableFeature: FunctionReference<"mutation", "public", {}, null>;
+      seedHistoricalAssignment: FunctionReference<
+        "mutation",
+        "public",
+        {
+          createdBy: Id<"users">;
+          displayName: string;
+          email: string;
+          eventId: Id<"events">;
+        },
+        Id<"guestListAssignments">
+      >;
+    };
     guest_sessions: {
       getGuestSessionByEmail: FunctionReference<
         "query",
@@ -3077,6 +3457,12 @@ export declare const api: {
       >;
     };
     tickets: {
+      clearRosterEmailProjection: FunctionReference<
+        "mutation",
+        "public",
+        { ticketId: Id<"tickets"> },
+        null
+      >;
       seedTicket: FunctionReference<
         "mutation",
         "public",
@@ -3922,6 +4308,7 @@ export declare const internal: {
         "query",
         "internal",
         {
+          recipient?: string;
           source:
             | "announcement"
             | "broadcast"
@@ -3933,7 +4320,8 @@ export declare const internal: {
             | "ticket"
             | "payout"
             | "resale_available"
-            | "auth";
+            | "auth"
+            | "guest_list_invite";
           sourceId: string;
         },
         boolean
@@ -3960,7 +4348,8 @@ export declare const internal: {
             | "ticket"
             | "payout"
             | "resale_available"
-            | "auth";
+            | "auth"
+            | "guest_list_invite";
           sourceId: string;
         },
         null
@@ -3982,7 +4371,8 @@ export declare const internal: {
             | "ticket"
             | "payout"
             | "resale_available"
-            | "auth";
+            | "auth"
+            | "guest_list_invite";
           sourceId: string;
         },
         null
@@ -4205,7 +4595,8 @@ export declare const internal: {
             | "ticket"
             | "payout"
             | "resale_available"
-            | "auth";
+            | "auth"
+            | "guest_list_invite";
           sourceId: string;
           subject: string;
           text?: string;
@@ -4241,7 +4632,8 @@ export declare const internal: {
             | "ticket"
             | "payout"
             | "resale_available"
-            | "auth";
+            | "auth"
+            | "guest_list_invite";
           sourceId: string;
           subject: string;
           text?: string;
@@ -4289,6 +4681,14 @@ export declare const internal: {
         null
       >;
     };
+    guest_actions: {
+      sendAutomaticTicket: FunctionReference<
+        "action",
+        "internal",
+        { guestId: Id<"guests"> },
+        { status: "sent" | "skipped" }
+      >;
+    };
     guests: {
       beginGuestTicketSend: FunctionReference<
         "mutation",
@@ -4316,15 +4716,34 @@ export declare const internal: {
           checkedInAt?: number;
           checkedInBy?: Id<"users">;
           email?: string;
+          emailKey?: string;
           emailSendLockedAt?: number | null;
           emailedAt?: number;
           eventId: Id<"events">;
           name: string;
           notes?: string;
+          sourceAssignmentId?: Id<"guestListAssignments">;
+          sourceDisplayName?: string;
+          sourceIdempotencyKey?: string;
+          sourceKind?: "assignment_admission" | "self_service";
+          sourceRole?: "artist" | "staff";
+          ticketDeliveryState?: "queued" | "sent" | "failed";
           type: "guest" | "artist guest" | "staff";
         } | null
       >;
+      isGuestTicketSendCurrent: FunctionReference<
+        "query",
+        "internal",
+        { id: Id<"guests">; lockToken: number; recipient: string },
+        boolean
+      >;
       markAsEmailed: FunctionReference<
+        "mutation",
+        "internal",
+        { id: Id<"guests">; lockToken: number; recipient?: string },
+        null
+      >;
+      markGuestTicketSendFailed: FunctionReference<
         "mutation",
         "internal",
         { id: Id<"guests">; lockToken: number },
@@ -4621,6 +5040,221 @@ export declare const internal: {
           totalTickets: number;
           visibility: "private" | "public_viewable" | "public";
         }>
+      >;
+    };
+  };
+  guest_list: {
+    delegate: {
+      getViewInternal: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          access:
+            | { assignmentId: Id<"guestListAssignments">; kind: "signedIn" }
+            | { kind: "token"; token: string };
+          paginationOpts: {
+            cursor: string | null;
+            endCursor?: string | null;
+            id?: number;
+            maximumBytesRead?: number;
+            maximumRowsRead?: number;
+            numItems: number;
+          };
+        },
+        | { status: "unavailable" }
+        | {
+            assignment: {
+              admissionGuestId?: Id<"guests">;
+              assignmentId: Id<"guestListAssignments">;
+              createdAt: number;
+              displayName: string;
+              email: string;
+              eventId: Id<"events">;
+              grantedSlots: number;
+              inviteState: "pending" | "accepted" | "failed";
+              lastInviteAcceptedAt?: number;
+              revokedAt?: number;
+              role: "artist" | "staff";
+              status: "active" | "revoked";
+              usedSlots: number;
+            };
+            event: {
+              date: string;
+              endDate?: string;
+              location?: string;
+              title: string;
+            };
+            guests: {
+              continueCursor: string;
+              isDone: boolean;
+              page: Array<{
+                deliveryState: "not_sent" | "queued" | "sent" | "failed";
+                email: string;
+                emailedAt?: number;
+                guestId: Id<"guests">;
+                name: string;
+              }>;
+              pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+              splitCursor?: string | null;
+            };
+            status: "available";
+          }
+      >;
+    };
+    invite_state: {
+      abortAttempt: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          assignmentId: Id<"guestListAssignments">;
+          attemptId: string;
+          failureCode: string;
+        },
+        boolean
+      >;
+      canDeliverAutomaticTicket: FunctionReference<
+        "query",
+        "internal",
+        {
+          assignmentId: Id<"guestListAssignments">;
+          eventId: Id<"events">;
+          guestId: Id<"guests">;
+          recipient: string;
+          sourceKind: "assignment_admission" | "self_service";
+        },
+        boolean
+      >;
+      failAttempt: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          assignmentId: Id<"guestListAssignments">;
+          attemptId: string;
+          failureCode: string;
+        },
+        boolean
+      >;
+      getAssignmentForTicket: FunctionReference<
+        "query",
+        "internal",
+        { assignmentId: Id<"guestListAssignments"> },
+        null | { eventId: Id<"events"> }
+      >;
+      loadAttempt: FunctionReference<
+        "query",
+        "internal",
+        { assignmentId: Id<"guestListAssignments">; attemptId: string },
+        null | { displayName: string; email: string; eventTitle: string }
+      >;
+      prepareAttempt: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          assignmentId: Id<"guestListAssignments">;
+          attemptId: string;
+          tokenDigest: string;
+          tokenPrefix: string;
+        },
+        boolean
+      >;
+      promoteAttempt: FunctionReference<
+        "mutation",
+        "internal",
+        { assignmentId: Id<"guestListAssignments">; attemptId: string },
+        boolean
+      >;
+    };
+    invites: {
+      sendInviteAttempt: FunctionReference<
+        "action",
+        "internal",
+        { assignmentId: Id<"guestListAssignments">; attemptId: string },
+        null
+      >;
+    };
+    maintenance: {
+      cleanupAuditEvents: FunctionReference<
+        "mutation",
+        "internal",
+        { cutoffTimestamp?: number },
+        number
+      >;
+      describeGuestListEventLoad: FunctionReference<
+        "query",
+        "internal",
+        { eventId: Id<"events"> },
+        {
+          counters: null | {
+            activeArtistGuestCount: number;
+            activeAssignmentCount: number;
+            activeGrantedSlots: number;
+            activeStaffGuestCount: number;
+            selfServiceGuestCount: number;
+            totalGuestAdmissionCount: number;
+          };
+          hasStatsRow: boolean;
+          overage: null | {
+            activeAssignmentCount: number;
+            activeAssignmentCountAtLeast: boolean;
+            eventId: Id<"events">;
+            guestCount: number;
+            guestCountAtLeast: boolean;
+            maxActiveAssignmentsPerEvent: number;
+            maxGuestsPerEvent: number;
+          };
+        }
+      >;
+      disable: FunctionReference<"mutation", "internal", {}, null>;
+      enable: FunctionReference<"mutation", "internal", {}, null>;
+      getFeatureState: FunctionReference<
+        "query",
+        "internal",
+        {},
+        null | {
+          emailKeyBackfillComplete: boolean;
+          enabledAt?: number;
+          guestCountBackfillComplete: boolean;
+          verificationCompletedAt?: number;
+          verificationInProgress: boolean;
+          verificationStartedAt?: number;
+        }
+      >;
+      listEventsMissingGuestListStats: FunctionReference<
+        "query",
+        "internal",
+        { cursor?: string | null; limit?: number },
+        {
+          continueCursor: string;
+          eventIds: Array<Id<"events">>;
+          isDone: boolean;
+          scanned: number;
+        }
+      >;
+      reconcileEventCounters: FunctionReference<
+        "mutation",
+        "internal",
+        { eventId: Id<"events"> },
+        null
+      >;
+      recordBackfillVerification: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          acknowledgedOversizedEventIds?: Array<Id<"events">>;
+          batchSize?: number;
+          runId?: string;
+        },
+        {
+          emailKeyBackfillComplete: boolean;
+          guestCountBackfillComplete: boolean;
+          inProgress: boolean;
+        }
+      >;
+      syncAssignmentEventDate: FunctionReference<
+        "mutation",
+        "internal",
+        { cursor?: string; eventDate: string; eventId: Id<"events"> },
+        null
       >;
     };
   };
@@ -4993,7 +5627,63 @@ export declare const internal: {
       },
       any
     >;
+    backfillEmailDeliveryRecipientKeys: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      any
+    >;
     backfillEventBroadcastDeliveries: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      any
+    >;
+    backfillGuestEmailKeys: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      any
+    >;
+    backfillGuestListAssignmentEventDates: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      any
+    >;
+    backfillGuestListEventStats: FunctionReference<
       "mutation",
       "internal",
       {
@@ -5049,6 +5739,20 @@ export declare const internal: {
       },
       any
     >;
+    backfillTicketRosterEmailLower: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      any
+    >;
     backfillUserMarketingUnsubscribeTokenDigests: FunctionReference<
       "mutation",
       "internal",
@@ -5076,6 +5780,40 @@ export declare const internal: {
         reset?: boolean;
       },
       any
+    >;
+    runEmailDeliveryRecipientKeyBackfill: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        cursor?: string | null;
+        dryRun?: boolean;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      null
+    >;
+    runGuestListBackfills: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      null
+    >;
+    runTicketRosterEmailBackfill: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        cursor?: string | null;
+        dryRun?: boolean;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      null
     >;
     runTokenDigestBackfills: FunctionReference<
       "mutation",

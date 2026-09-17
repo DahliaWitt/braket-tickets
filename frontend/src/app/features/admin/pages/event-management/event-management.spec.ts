@@ -147,6 +147,8 @@ describe('EventManagement', () => {
   let reminderAudienceError: Error | null;
   let guestsData: FunctionReturnType<typeof api.events.guests.listByEvent>;
   let tierPricingStatsData: EventTierPricingStats;
+  let guestListFeatureOnData: ((value: {enabled: boolean}) => void) | null;
+  let guestListFeatureOnError: ((error: Error) => void) | null;
 
   const defaultBroadcastAudience = {
     recipientCount: 5,
@@ -317,6 +319,8 @@ describe('EventManagement', () => {
       ...defaultTierPricingStats,
       tiers: defaultTierPricingStats.tiers.map((tier) => ({...tier})),
     };
+    guestListFeatureOnData = null;
+    guestListFeatureOnError = null;
 
     adminEventsServiceMock = {
       refundPayment: vi.fn().mockResolvedValue(true),
@@ -365,6 +369,14 @@ describe('EventManagement', () => {
         onError: (error: Error) => void,
       ) => {
         queueMicrotask(() => {
+          if (
+            functionReferenceMatches(queryFn, api.guest_list.feature_state.get)
+          ) {
+            guestListFeatureOnData = onData;
+            guestListFeatureOnError = onError;
+            onData({enabled: true});
+            return;
+          }
           if (
             functionReferenceMatches(queryFn, api.events.guests.listByEvent)
           ) {
@@ -629,6 +641,70 @@ describe('EventManagement', () => {
     expect(await harness.getActiveTabAttribute('analytics')).toBe('false');
   });
 
+  it('does not query or render the assignment workspace while the rollout gate is disabled', async () => {
+    expect(guestListFeatureOnData).not.toBeNull();
+    convexMock.client.onUpdate.mockClear();
+    guestListFeatureOnData?.({enabled: false});
+    fixture.componentRef.setInput('id', 'event2');
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    await harness.clickTab('guests');
+
+    expect(await harness.hasGuestListAssignmentsWorkspace()).toBe(false);
+    expect(await harness.getGuestListUnavailableText()).toContain(
+      'Self-service guest lists are not enabled yet',
+    );
+    expect(
+      convexMock.client.onUpdate.mock.calls.some(([queryFn]) =>
+        functionReferenceMatches(
+          queryFn,
+          api.guest_list.assignments.getEventOverview,
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      convexMock.client.onUpdate.mock.calls.some(([queryFn]) =>
+        functionReferenceMatches(
+          queryFn,
+          api.guest_list.assignments.listByEvent,
+        ),
+      ),
+    ).toBe(false);
+  });
+
+  it('shows loading overview tiles instead of zeros before the totals resolve', async () => {
+    await harness.clickTab('guests');
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const workspace = await harness.getGuestListWorkspaceHarness();
+    expect(workspace).not.toBeNull();
+    expect(await workspace!.isOverviewLoading()).toBe(true);
+    expect(await workspace!.getOverviewText()).not.toContain('0');
+  });
+
+  it('isolates a self-service feature-state failure to the guest-list workspace', async () => {
+    const loggerErrorSpy = vi
+      .spyOn(logger, 'error')
+      .mockImplementation(() => undefined);
+    expect(guestListFeatureOnError).not.toBeNull();
+    guestListFeatureOnError?.(new Error('feature state unavailable'));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(await harness.getManagementLoadErrorText()).toBeNull();
+    await harness.clickTab('guests');
+    expect(await harness.getGuestListWorkspaceErrorText()).toContain(
+      "Self-service guest lists couldn't load",
+    );
+    expect(await harness.hasGuestListAssignmentsWorkspace()).toBe(false);
+    expect(loggerErrorSpy).toHaveBeenCalledWith(
+      'Failed to load event management guestListFeature',
+      expect.any(Error),
+    );
+  });
+
   it('should show count badges on buyers and guests tabs', async () => {
     expect(await harness.getTabBadgeText('buyers')).toBe('1');
     expect(await harness.getTabBadgeText('guests')).toBe('0');
@@ -765,8 +841,7 @@ describe('EventManagement', () => {
         -1,
       ) as unknown[] | undefined;
       const confirmOptions = lastConfirmCall?.[0] as
-        | {zDescription?: string}
-        | undefined;
+        {zDescription?: string} | undefined;
       expect(confirmOptions?.zDescription).toContain('$25.00');
     });
   });

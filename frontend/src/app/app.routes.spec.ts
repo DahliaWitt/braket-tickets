@@ -166,6 +166,27 @@ describe('app.routes', () => {
       const helpRoute = layoutChildren.find((r) => r.path === 'help');
       expect(helpRoute).toBeUndefined();
     });
+
+    it('registers authenticated signed-in guest-list routes', () => {
+      const listRoute = layoutChildren.find((r) => r.path === 'guest-lists');
+      const manageRoute = layoutChildren.find(
+        (r) => r.path === 'guest-lists/:assignmentId',
+      );
+
+      expect(listRoute?.canActivate).toEqual(expect.any(Array));
+      expect(manageRoute?.canActivate).toEqual(expect.any(Array));
+      expect(listRoute?.loadComponent).toEqual(expect.any(Function));
+      expect(manageRoute?.loadComponent).toEqual(expect.any(Function));
+    });
+
+    it('keeps the accountless guest-list entry route outside auth guards', () => {
+      const route = routes.find((r) => r.path === 'guest-list/manage');
+
+      expect(route).toBeDefined();
+      expect(route?.canActivate).toBeUndefined();
+      expect(route?.canMatch).toBeUndefined();
+      expect(route?.loadComponent).toEqual(expect.any(Function));
+    });
   });
 
   describe('SCANNER_ROUTES', () => {

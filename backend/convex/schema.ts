@@ -85,6 +85,13 @@ import {
 } from './lib/validators/applications';
 import {adminAuditLogFields} from './lib/admin_audit_log_validators';
 import {
+  guestListAssignmentStatusValidator,
+  guestListAuditActionValidator,
+  guestListAuditActorKindValidator,
+  guestListInviteStateValidator,
+  guestListRoleValidator,
+} from './lib/guest_list/validators';
+import {
   eventStatusValidator,
   eventVisibilityValueValidator,
   ticketSalesStatusValidator,
@@ -240,6 +247,9 @@ const schemaTables = {
      */
     status: communityPublicationStatusValidator,
     codeOfConduct: v.optional(v.string()),
+    /** Defaults copied onto new per-event self-service guest-list assignments. */
+    defaultArtistGuestSlots: v.optional(v.number()),
+    defaultStaffGuestSlots: v.optional(v.number()),
   })
     .index('by_stripeConnectedAccountId', ['stripeConnectedAccountId'])
     .index('by_isPublicDirectory', ['isPublicDirectory'])
@@ -448,6 +458,7 @@ const schemaTables = {
     .index('by_user', ['userId'])
     .index('by_event_status', ['eventId', 'status'])
     .index('by_user_event', ['userId', 'eventId'])
+    .index('by_userId_and_eventId_and_status', ['userId', 'eventId', 'status'])
     .index('by_order', ['orderId'])
     .index('by_guestSession', ['guestSessionId'])
     .index('by_guestSession_event', ['guestSessionId', 'eventId'])
@@ -459,6 +470,11 @@ const schemaTables = {
       'eventId',
       'rosterIsActive',
       'rosterSortKey',
+    ])
+    .index('by_event_and_rosterEmailLower_and_status', [
+      'eventId',
+      'rosterEmailLower',
+      'status',
     ]),
 
   /**
@@ -971,6 +987,8 @@ const schemaTables = {
     eventId: v.id('events'),
     name: v.string(),
     email: v.optional(v.string()),
+    /** Normalized email used for indexed admission deduplication. */
+    emailKey: v.optional(v.string()),
     type: guestTypeValidator,
     notes: v.optional(v.string()),
     emailedAt: v.optional(v.number()),
@@ -983,9 +1001,132 @@ const schemaTables = {
      * `events/_impl/guests.ts` `beginGuestTicketSend`.
      */
     emailSendLockedAt: v.optional(v.union(v.number(), v.null())),
+    /** Durable lifecycle for assignment-triggered ticket delivery. */
+    ticketDeliveryState: v.optional(
+      v.union(v.literal('queued'), v.literal('sent'), v.literal('failed')),
+    ),
     checkedInAt: v.optional(v.number()),
     checkedInBy: v.optional(v.id('users')),
-  }).index('by_event', ['eventId']),
+    sourceAssignmentId: v.optional(v.id('guestListAssignments')),
+    sourceKind: v.optional(
+      v.union(v.literal('assignment_admission'), v.literal('self_service')),
+    ),
+    sourceRole: v.optional(guestListRoleValidator),
+    sourceDisplayName: v.optional(v.string()),
+    sourceIdempotencyKey: v.optional(v.string()),
+  })
+    .index('by_event', ['eventId'])
+    .index('by_event_and_emailKey', ['eventId', 'emailKey'])
+    .index('by_sourceAssignmentId', ['sourceAssignmentId'])
+    .index('by_sourceAssignmentId_and_sourceKind', [
+      'sourceAssignmentId',
+      'sourceKind',
+    ])
+    .index('by_sourceAssignmentId_and_sourceIdempotencyKey', [
+      'sourceAssignmentId',
+      'sourceIdempotencyKey',
+    ]),
+
+  /** Per-event artist/staff delegation for self-service guest lists. */
+  guestListAssignments: defineTable({
+    eventId: v.id('events'),
+    organizerId: v.id('organizers'),
+    role: guestListRoleValidator,
+    displayName: v.string(),
+    email: v.string(),
+    emailKey: v.string(),
+    /** Snapshot of the event start used for current-assignment discovery. */
+    eventDate: v.optional(v.string()),
+    userId: v.optional(v.id('users')),
+    grantedSlots: v.number(),
+    usedSlots: v.number(),
+    status: guestListAssignmentStatusValidator,
+    tokenDigest: v.optional(v.string()),
+    tokenPrefix: v.optional(v.string()),
+    pendingTokenDigest: v.optional(v.string()),
+    pendingTokenPrefix: v.optional(v.string()),
+    inviteState: guestListInviteStateValidator,
+    inviteAttemptId: v.optional(v.string()),
+    inviteFailureCode: v.optional(v.string()),
+    lastInviteAcceptedAt: v.optional(v.number()),
+    createdBy: v.id('users'),
+    createdAt: v.number(),
+    invitedAt: v.number(),
+    lastInviteSentAt: v.optional(v.number()),
+    redeemedAt: v.optional(v.number()),
+    revokedAt: v.optional(v.number()),
+    revokedBy: v.optional(v.id('users')),
+    admissionGuestId: v.optional(v.id('guests')),
+    idempotencyKey: v.string(),
+    recentResendIdempotencyKeys: v.optional(v.array(v.string())),
+  })
+    .index('by_eventId_and_status', ['eventId', 'status'])
+    // Organizer-facing pagination. `by_eventId_and_status` cannot serve it:
+    // with only `eventId` pinned, its residual descending sort key is `status`,
+    // and `'revoked'` sorts after `'active'`, so revoked rows would fill the
+    // first page. Ordering on `createdAt` is status-independent.
+    .index('by_eventId_and_createdAt', ['eventId', 'createdAt'])
+    .index('by_organizerId_and_status', ['organizerId', 'status'])
+    .index('by_userId_and_status', ['userId', 'status'])
+    .index('by_userId_and_status_and_eventDate', [
+      'userId',
+      'status',
+      'eventDate',
+    ])
+    .index('by_emailKey_and_status', ['emailKey', 'status'])
+    .index('by_emailKey_and_status_and_userId_and_eventDate', [
+      'emailKey',
+      'status',
+      'userId',
+      'eventDate',
+    ])
+    .index('by_eventId_and_emailKey_and_status', [
+      'eventId',
+      'emailKey',
+      'status',
+    ])
+    .index('by_eventId_and_idempotencyKey', ['eventId', 'idempotencyKey'])
+    .index('by_tokenPrefix', ['tokenPrefix'])
+    .index('by_pendingTokenPrefix', ['pendingTokenPrefix']),
+
+  guestListEventStats: defineTable({
+    eventId: v.id('events'),
+    selfServiceGuestCount: v.number(),
+    activeGrantedSlots: v.number(),
+    activeArtistGuestCount: v.number(),
+    activeStaffGuestCount: v.number(),
+    activeAssignmentCount: v.number(),
+    totalGuestAdmissionCount: v.number(),
+  }).index('by_eventId', ['eventId']),
+
+  guestListAuditEvents: defineTable({
+    eventId: v.id('events'),
+    assignmentId: v.id('guestListAssignments'),
+    actorKind: guestListAuditActorKindValidator,
+    actorUserId: v.optional(v.id('users')),
+    action: guestListAuditActionValidator,
+    beforeValue: v.optional(v.number()),
+    afterValue: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index('by_eventId_and_createdAt', ['eventId', 'createdAt'])
+    .index('by_assignmentId_and_createdAt', ['assignmentId', 'createdAt']),
+
+  guestListFeatureState: defineTable({
+    key: v.literal('singleton'),
+    emailKeyBackfillComplete: v.boolean(),
+    guestCountBackfillComplete: v.boolean(),
+    verificationInProgress: v.optional(v.boolean()),
+    verificationRunId: v.optional(v.string()),
+    emailKeyVerificationCursor: v.optional(v.string()),
+    guestCountVerificationCursor: v.optional(v.string()),
+    emailKeyVerificationValid: v.optional(v.boolean()),
+    emailKeyVerificationFinished: v.optional(v.boolean()),
+    guestCountVerificationValid: v.optional(v.boolean()),
+    verificationStartedAt: v.optional(v.number()),
+    verificationCompletedAt: v.optional(v.number()),
+    enabledAt: v.optional(v.number()),
+  }).index('by_key', ['key']),
 
   /**
    * External ticket holders imported from other platforms (e.g. Resident
@@ -1031,7 +1172,11 @@ const schemaTables = {
   importBatches: defineTable({
     eventId: v.id('events'),
     batchKey: v.string(),
-    target: v.union(v.literal('guests'), v.literal('importedTickets')),
+    target: v.union(
+      v.literal('guests'),
+      v.literal('importedTickets'),
+      v.literal('assignmentStaff'),
+    ),
     result: v.object({
       insertedCount: v.number(),
       skippedCount: v.number(),
@@ -1444,6 +1589,7 @@ const schemaTables = {
     source: emailDeliverySourceValidator,
     sourceId: v.string(),
     recipient: v.string(),
+    recipientKey: v.optional(v.string()),
     critical: v.boolean(),
     manual: v.boolean(),
     fallback: v.boolean(),
@@ -1453,6 +1599,8 @@ const schemaTables = {
     .index('by_emailId', ['emailId'])
     .index('by_resendId', ['resendId'])
     .index('by_source', ['source', 'sourceId'])
+    .index('by_source_and_recipient', ['source', 'sourceId', 'recipient'])
+    .index('by_source_and_recipientKey', ['source', 'sourceId', 'recipientKey'])
     .index('by_recipient', ['recipient'])
     .index('by_sentAt', ['sentAt']),
 

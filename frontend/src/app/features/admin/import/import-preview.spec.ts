@@ -2,7 +2,11 @@ import {describe, expect, it} from 'vitest';
 import {parseImportText} from './import-parser';
 import {buildPreview, extractValidValues} from './import-preview';
 import {generateTemplateCsv} from './import-template';
-import {BUYER_IMPORT_CONFIG, GUEST_IMPORT_CONFIG} from './import-config';
+import {
+  ASSIGNMENT_STAFF_IMPORT_CONFIG,
+  BUYER_IMPORT_CONFIG,
+  GUEST_IMPORT_CONFIG,
+} from './import-config';
 import type {ImportFieldKey} from './import.types';
 
 function parse(
@@ -17,6 +21,85 @@ function parse(
 }
 
 describe('buildPreview partitioning', () => {
+  describe('staff assignment rows', () => {
+    it('matches the backend transaction cap of 50 rows', () => {
+      expect(ASSIGNMENT_STAFF_IMPORT_CONFIG.maxRows).toBe(50);
+      expect(ASSIGNMENT_STAFF_IMPORT_CONFIG.copy.overCapMessage(50)).toContain(
+        'more than 50 rows',
+      );
+    });
+
+    it('requires an email address', () => {
+      const parsed = parse(ASSIGNMENT_STAFF_IMPORT_CONFIG, 'Name\nzoe');
+      const preview = buildPreview(
+        parsed.rows,
+        ASSIGNMENT_STAFF_IMPORT_CONFIG,
+        {
+          dedupMode: 'skip',
+        },
+      );
+
+      expect(preview.rows[0].partition).toBe('invalid');
+      expect(preview.rows[0].reasons).toContain('missing email');
+    });
+
+    it('parses an optional non-negative integer slot override', () => {
+      const parsed = parse(
+        ASSIGNMENT_STAFF_IMPORT_CONFIG,
+        'Name,Email,Guest list slots\nzoe,zoe@example.test,4',
+      );
+      const preview = buildPreview(
+        parsed.rows,
+        ASSIGNMENT_STAFF_IMPORT_CONFIG,
+        {
+          dedupMode: 'skip',
+        },
+      );
+
+      expect(preview.rows[0].partition).toBe('valid');
+      expect(preview.rows[0].values.slotOverride).toBe(4);
+    });
+
+    it.each(['-1', '1.5', '101', 'lots', '0x10', '1e2'])(
+      'rejects slot override %s',
+      (slotOverride) => {
+        const parsed = parse(
+          ASSIGNMENT_STAFF_IMPORT_CONFIG,
+          `Name,Email,Slots\nzoe,zoe@example.test,${slotOverride}`,
+        );
+        const preview = buildPreview(
+          parsed.rows,
+          ASSIGNMENT_STAFF_IMPORT_CONFIG,
+          {
+            dedupMode: 'skip',
+          },
+        );
+
+        expect(preview.rows[0].partition).toBe('invalid');
+        expect(preview.rows[0].reasons).toContain(
+          'guest list slots must be a whole number between 0 and 100',
+        );
+      },
+    );
+
+    it('deduplicates by normalized email', () => {
+      const parsed = parse(
+        ASSIGNMENT_STAFF_IMPORT_CONFIG,
+        'Name,Email\nzoe,STAFF@example.test\nsam,staff@example.test',
+      );
+      const preview = buildPreview(
+        parsed.rows,
+        ASSIGNMENT_STAFF_IMPORT_CONFIG,
+        {
+          dedupMode: 'skip',
+        },
+      );
+
+      expect(preview.counts.valid).toBe(1);
+      expect(preview.counts.duplicate).toBe(1);
+    });
+  });
+
   it('partitions valid, invalid, and duplicate rows', () => {
     const parsed = parse(
       GUEST_IMPORT_CONFIG,
@@ -249,7 +332,11 @@ describe('buildPreview partitioning', () => {
 });
 
 describe('template round-trip', () => {
-  for (const config of [GUEST_IMPORT_CONFIG, BUYER_IMPORT_CONFIG]) {
+  for (const config of [
+    GUEST_IMPORT_CONFIG,
+    BUYER_IMPORT_CONFIG,
+    ASSIGNMENT_STAFF_IMPORT_CONFIG,
+  ]) {
     it(`${config.target} template parses with every row valid and mapped`, () => {
       const csv = generateTemplateCsv(config);
       const result = parseImportText(csv, {

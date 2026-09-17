@@ -30,6 +30,10 @@ const allResults: AuditRouteResult[] = [];
 function resolvePath(path: string, seedData: Record<string, unknown>): string {
   const resolved = path
     .replace(':eventId', String(seedData['publishedEvent'] ?? ''))
+    .replace(
+      ':assignmentId',
+      String(seedData['guestListAssignment'] ?? 'audit-unavailable'),
+    )
     .replace(':id', String(seedData['communityAdminEvent'] ?? ''));
 
   const remaining = resolved.match(/:[a-zA-Z]+/g);
@@ -113,6 +117,8 @@ async function uploadSeedImage(
 async function seedAllDemoData(
   convexHelper: ConvexHelper,
 ): Promise<Record<string, unknown>> {
+  await convexHelper.mutation(api.testing.guest_list.enableFeature, {});
+
   // Create 7 demo users
   const [cooperId, kimId, nomiId, barneyId, charlieId, tobiasId, cherylId] =
     await Promise.all([
