@@ -244,6 +244,58 @@ DOPPLER_CONFIG=prd pnpm sync:env:prod
 - Then ensure the corresponding financial event is recorded so the order history is complete
 - If ticket state and financial events disagree, prioritize ticket entitlement safety first and escalate
 
+### Buyer refund confirmation email
+
+Every applied refund enqueues one buyer confirmation from
+`applyExternalRefundHandler` in
+[orders/\_impl/core_handlers.ts](../../backend/convex/orders/_impl/core_handlers.ts) —
+this covers admin refunds (standard, force-all, single ticket), zero-dollar
+free-ticket cancellations, and external Stripe-dashboard refunds reconciled by
+the `charge.refunded` webhook.
+
+- The email reports the state transition the application performed: the
+  newly-confirmed refunded amount (cumulative delta, not the individual
+  Stripe refund's amount) and the tickets cancelled by that application.
+  Out-of-order webhook delivery of partial refunds therefore produces one
+  coherent email carrying the full delta; the late stale webhook sends
+  nothing.
+- Delivery uses `source: 'refund'` with a
+  `sourceId: {orderId}:{stripeRefundId|zero}-tickets-{N}` discriminator,
+  where N is the cumulative cancelled-ticket count after the application.
+- Duplicate suppression is an `emailDedup` row keyed
+  `refund-confirmation-{orderId}-{stripeRefundId|zero}-tickets-{N}`. Exact
+  duplicates (webhook redelivery, mutation retries, an admin action's own
+  webhook echo) send exactly one email; a same-refund application that
+  cancels additional tickets (a force refund whose echo landed first) gets
+  a distinct N and sends corrective copy.
+- Email problems never block or roll back refund state: a missing recipient
+  or render error is logged under the `payments` scope and skipped without
+  consuming the dedup slot; an enqueue error releases the just-inserted
+  dedup row in the same transaction so the confirmation stays manually
+  re-sendable. Delivery failures after a successful enqueue are recorded in
+  `emailDeliveryFailures` with `source === 'refund'` and use the critical
+  Gmail SMTP fallback (see [email-delivery.md](email-delivery.md) for
+  recovery, including the dedup-row deletion step to allow a manual
+  re-send).
+- Money-only refunds whose amount matches an in-flight resale seller payout
+  (a `completed` listing on one of the order's tickets with
+  `sellerRefundState` not yet `completed` and an equal
+  `sellerRefundAmountCents`) send no email: seller proceeds are paid as a
+  Stripe refund against the seller's original order, and this rule keeps
+  the seller from receiving a "refund" confirmation for a successful sale
+  when the webhook races ahead of the resale settlement. Genuine refunds on
+  orders with settled resale history, and refunds that cancel tickets,
+  still email normally.
+- Full vs partial in the subject is money-based for paid orders (full once
+  every cent is returned, even if a checked-in ticket survives) and
+  ticket-based for free orders.
+- Free orders get cancellation framing instead of refund framing: subject
+  `Your ticket(s) for {event} was/were cancelled`, no refund vocabulary
+  anywhere in the message. No money moved, so a "refund" subject would read
+  like a billing error; the email's job is telling the holder their entry
+  credential no longer works. Delivery still flows through the same
+  `source: 'refund'` pipeline and dedup keys.
+
 ---
 
 ## Reconcile revenue
