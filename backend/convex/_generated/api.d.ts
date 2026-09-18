@@ -3335,6 +3335,7 @@ export declare const api: {
           } | null;
           eventId: Id<"events">;
           guestEmail?: string;
+          guestEmailLower?: string;
           guestSessionId?: Id<"guest_sessions">;
           orderId?: Id<"ticket_orders">;
           qrCode?: string;
@@ -3395,6 +3396,7 @@ export declare const api: {
           } | null;
           eventId: Id<"events">;
           guestEmail?: string;
+          guestEmailLower?: string;
           guestSessionId?: Id<"guest_sessions">;
           orderId?: Id<"ticket_orders">;
           qrCode?: string;
@@ -3428,6 +3430,7 @@ export declare const api: {
           checkedInBy?: Id<"users">;
           eventId: Id<"events">;
           guestEmail?: string;
+          guestEmailLower?: string;
           guestSessionId?: Id<"guest_sessions">;
           orderId?: Id<"ticket_orders">;
           qrCode?: string;
@@ -4678,10 +4681,10 @@ export declare const internal: {
           sessionTokenPrefix?: string;
         } | null
       >;
-      getReusableByEmail: FunctionReference<
+      getResumeTargetByEmail: FunctionReference<
         "query",
         "internal",
-        { email: string; now: number },
+        { email: string; eventId?: Id<"events">; now: number },
         {
           _creationTime: number;
           _id: Id<"guest_sessions">;
@@ -4746,12 +4749,6 @@ export declare const internal: {
         "internal",
         { sessionId: Id<"guest_sessions">; sessionToken: string },
         { status: "prepared" | "already_pending" | "missing" }
-      >;
-      promoteResumeSessionToken: FunctionReference<
-        "mutation",
-        "internal",
-        { sessionId: Id<"guest_sessions">; sessionToken: string },
-        null
       >;
       rotateSessionToken: FunctionReference<
         "mutation",
@@ -5162,6 +5159,7 @@ export declare const internal: {
           currency: "USD";
           eventId: Id<"events">;
           expiresAt: number;
+          guestEmailLower?: string;
           guestSessionId?: Id<"guest_sessions">;
           idempotencyKey?: string;
           kind: "primary" | "resale";
@@ -5199,6 +5197,7 @@ export declare const internal: {
           currency: "USD";
           eventId: Id<"events">;
           expiresAt: number;
+          guestEmailLower?: string;
           guestSessionId?: Id<"guest_sessions">;
           idempotencyKey?: string;
           kind: "primary" | "resale";
@@ -5249,6 +5248,7 @@ export declare const internal: {
           currency: "USD";
           eventId: Id<"events">;
           expiresAt: number;
+          guestEmailLower?: string;
           guestSessionId?: Id<"guest_sessions">;
           idempotencyKey?: string;
           kind: "primary" | "resale";
@@ -5959,6 +5959,7 @@ export declare const internal: {
           checkedInAt?: number;
           checkedInBy?: Id<"users">;
           eventId: Id<"events">;
+          guestEmailLower?: string;
           guestSessionId?: Id<"guest_sessions">;
           orderId?: Id<"ticket_orders">;
           qrCode?: string;
@@ -5985,6 +5986,7 @@ export declare const internal: {
           checkedInAt?: number;
           checkedInBy?: Id<"users">;
           eventId: Id<"events">;
+          guestEmailLower?: string;
           guestSessionId?: Id<"guest_sessions">;
           orderId?: Id<"ticket_orders">;
           qrCode?: string;
@@ -6011,6 +6013,7 @@ export declare const internal: {
           checkedInAt?: number;
           checkedInBy?: Id<"users">;
           eventId: Id<"events">;
+          guestEmailLower?: string;
           guestSessionId?: Id<"guest_sessions">;
           orderId?: Id<"ticket_orders">;
           qrCode?: string;
