@@ -88,7 +88,7 @@
     "@anthropic-ai/sdk": "^0.112.3",
     "@axe-core/playwright": "^4.12.1",
     "@codecov/vite-plugin": "^2.0.1",
-    "@compodoc/compodoc": "^1.1.26",
+    "@compodoc/compodoc": "^2.0.0",
     "@ngx-playwright/test": "^0.6.1",
     "@playwright/test": "^1.61.1",
     "@size-limit/preset-app": "^12.1.0",
