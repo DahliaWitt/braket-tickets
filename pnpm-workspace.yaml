@@ -22,7 +22,7 @@ packages:
 # catalog entries (pnpm catalog support is GA).
 catalog:
   '@convex-dev/better-auth': ^0.12.5
-  better-auth: 1.6.23
+  better-auth: 1.6.25
 
 # Temporary security override note:
 # Active pnpm overrides live in the root package.json under pnpm.overrides
