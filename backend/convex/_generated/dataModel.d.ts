@@ -365,7 +365,8 @@ export type DataModel = {
         | "ticket"
         | "payout"
         | "resale_available"
-        | "auth";
+        | "auth"
+        | "refund";
       sourceId: string;
       _id: Id<"emailDeliveries">;
       _creationTime: number;
@@ -411,7 +412,8 @@ export type DataModel = {
         | "ticket"
         | "payout"
         | "resale_available"
-        | "auth";
+        | "auth"
+        | "refund";
       sourceId: string;
       _id: Id<"emailDeliveryFailures">;
       _creationTime: number;
