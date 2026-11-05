@@ -452,6 +452,171 @@ describe('orders', () => {
     expect(inventory?.heldCount).toBe(0);
   });
 
+  it('courtesy resume email targets the session with an in-flight order, not the newest', async () => {
+    const t = convexTest();
+    const {eventId} = await createEventWithInventory(t);
+    const email = 'resume-target-guest@example.com';
+
+    const withCart = await createGuestSession(t, email);
+    await t.mutation(api.orders.core.openForGuest, {
+      sessionToken: withCart.sessionToken,
+      eventId,
+      quantity: 1,
+      tier: 'regular',
+      totalAmount: 2500,
+      termsAccepted: true,
+    });
+
+    // A newer, empty session for the same email (e.g. minted by an earlier
+    // re-entry on another device).
+    const emptyNewer = await createGuestSession(t, email);
+
+    // Tokenless re-entry: the courtesy resume token must be prepared on the
+    // session holding the open order, not on the newest empty session.
+    await t.action(api.guest_sessions.actions.initiateGuestSession, {email});
+
+    const [cartSession, newerSession] = await t.run(async (ctx) =>
+      Promise.all([
+        ctx.db.get('guest_sessions', withCart.sessionId),
+        ctx.db.get('guest_sessions', emptyNewer.sessionId),
+      ]),
+    );
+    expect(cartSession?.pendingSessionTokenDigest).toBeTruthy();
+    expect(newerSession?.pendingSessionTokenDigest).toBeUndefined();
+  });
+
+  it('resume targeting ignores an open order belonging to a different event', async () => {
+    const t = convexTest();
+    const {eventId: targetEventId} = await createEventWithInventory(t, {
+      title: 'Resume Target Event',
+    });
+    const {eventId: otherEventId} = await createEventWithInventory(t, {
+      title: 'Other Event',
+    });
+    const email = 'cross-event-guest@example.com';
+
+    // Older session holds an open cart, but for a DIFFERENT event than the one
+    // the resume link will point at.
+    const otherEventCart = await createGuestSession(t, email);
+    await t.mutation(api.orders.core.openForGuest, {
+      sessionToken: otherEventCart.sessionToken,
+      eventId: otherEventId,
+      quantity: 1,
+      tier: 'regular',
+      totalAmount: 2500,
+      termsAccepted: true,
+    });
+
+    const newerEmpty = await createGuestSession(t, email);
+
+    await t.action(api.guest_sessions.actions.initiateGuestSession, {
+      email,
+      eventId: targetEventId,
+    });
+
+    // No session holds an open order for the target event, so targeting falls
+    // back to most-recently-active rather than the unrelated cart.
+    const [cartSession, newerSession] = await t.run(async (ctx) =>
+      Promise.all([
+        ctx.db.get('guest_sessions', otherEventCart.sessionId),
+        ctx.db.get('guest_sessions', newerEmpty.sessionId),
+      ]),
+    );
+    expect(cartSession?.pendingSessionTokenDigest).toBeUndefined();
+    expect(newerSession?.pendingSessionTokenDigest).toBeTruthy();
+  });
+
+  it('late settlement after guest-session cleanup still anchors the ticket to the buyer email', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2030-01-01T00:00:00.000Z'));
+      const t = convexTest();
+      const {eventId} = await createEventWithInventory(t, {
+        maxTicketsPerUser: 1,
+      });
+      const email = 'late-settle-guest@example.com';
+      const guest = await createGuestSession(t, email);
+
+      const opened = await t.mutation(api.orders.core.openForGuest, {
+        sessionToken: guest.sessionToken,
+        eventId,
+        quantity: 1,
+        tier: 'regular',
+        totalAmount: 2500,
+        termsAccepted: true,
+      });
+
+      // 25h later the cleanup cron deletes the guest session (past its 24h
+      // hard expiry), and only then does the Stripe settlement land. The
+      // ticket must still carry its email anchor — reading the session at
+      // completion time would find nothing.
+      vi.setSystemTime(new Date('2030-01-02T01:00:00.000Z'));
+      await t.mutation(internal.guest_sessions.core.cleanupExpiredSessions, {});
+      const deletedSession = await t.run(async (ctx) =>
+        ctx.db.get('guest_sessions', guest.sessionId),
+      );
+      expect(deletedSession).toBeNull();
+
+      await t.mutation(internal.orders.core.prepareStripeOrderSettlement, {
+        orderId: opened.orderId,
+        stripePaymentIntentId: 'pi_late_settle_guest',
+      });
+
+      const anchoredTickets = await t.run(async (ctx) =>
+        ctx.db
+          .query('tickets')
+          .withIndex('by_guestEmail_event', (q) =>
+            q.eq('guestEmailLower', email).eq('eventId', eventId),
+          )
+          .collect(),
+      );
+      expect(anchoredTickets).toHaveLength(1);
+      expect(anchoredTickets[0].rosterEmail).toBe(email);
+
+      // The cap still counts that ticket for a brand-new session on the email.
+      const fresh = await createGuestSession(t, email);
+      await expect(
+        t.mutation(api.orders.core.openForGuest, {
+          sessionToken: fresh.sessionToken,
+          eventId,
+          quantity: 1,
+          tier: 'regular',
+          totalAmount: 2500,
+          termsAccepted: true,
+        }),
+      ).rejects.toThrow('Maximum 1 tickets per user');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a guest order round-trips through the full-document return validator', async () => {
+    // Guest orders carry fields user orders do not (guestEmailLower). Convex
+    // return validators reject *extra* fields, so a hand-maintained doc
+    // validator that lags the schema breaks the guest checkout path only —
+    // which is how a missing field reached E2E instead of failing here.
+    const t = convexTest();
+    const {eventId} = await createEventWithInventory(t);
+    const {sessionToken} = await createGuestSession(
+      t,
+      'doc-validator-guest@example.com',
+    );
+
+    const opened = await t.mutation(api.orders.core.openForGuest, {
+      sessionToken,
+      eventId,
+      quantity: 1,
+      tier: 'regular',
+      totalAmount: 2500,
+      termsAccepted: true,
+    });
+
+    const order = await t.query(internal.orders.core.getInternal, {
+      orderId: opened.orderId,
+    });
+    expect(order?.guestEmailLower).toBe('doc-validator-guest@example.com');
+  });
+
   it('openForGuest creates an open order owned by the guest session', async () => {
     const t = convexTest();
     const {eventId, inventoryId} = await createEventWithInventory(t);
@@ -629,6 +794,121 @@ describe('orders', () => {
     expect(second.orderId).not.toBe(first.orderId);
     expect(inventory?.soldCount).toBe(2);
     expect(tickets).toHaveLength(2);
+  });
+
+  it('enforces maxTicketsPerUser per email across multiple guest sessions', async () => {
+    const t = convexTest();
+    const {eventId, inventoryId} = await createEventWithInventory(t, {
+      price: 0,
+      maxTicketsPerUser: 2,
+    });
+    const email = 'multi-session-guest@example.com';
+    // Re-entering an email mints a fresh session, so the cap must aggregate
+    // over all of the email's sessions — a per-session count would reset the
+    // limit on every device switch.
+    const first = await createGuestSession(t, email);
+    const second = await createGuestSession(t, email);
+
+    await t.mutation(api.orders.core.claimFreeTicketAsGuest, {
+      sessionToken: first.sessionToken,
+      eventId,
+      quantity: 1,
+      tier: 'regular',
+      termsAccepted: true,
+      idempotencyKey: 'idem-multi-session-first',
+    });
+    await t.mutation(api.orders.core.claimFreeTicketAsGuest, {
+      sessionToken: second.sessionToken,
+      eventId,
+      quantity: 1,
+      tier: 'regular',
+      termsAccepted: true,
+      idempotencyKey: 'idem-multi-session-second',
+    });
+
+    // Third claim from the second session: 2 tickets already exist across the
+    // email's sessions, so the cap of 2 must reject it.
+    await expect(
+      t.mutation(api.orders.core.claimFreeTicketAsGuest, {
+        sessionToken: second.sessionToken,
+        eventId,
+        quantity: 1,
+        tier: 'regular',
+        termsAccepted: true,
+        idempotencyKey: 'idem-multi-session-third',
+      }),
+    ).rejects.toThrow('Maximum 2 tickets per user');
+
+    // A different email is unaffected by the first email's cap.
+    const other = await createGuestSession(t, 'other-guest@example.com');
+    await t.mutation(api.orders.core.claimFreeTicketAsGuest, {
+      sessionToken: other.sessionToken,
+      eventId,
+      quantity: 1,
+      tier: 'regular',
+      termsAccepted: true,
+      idempotencyKey: 'idem-multi-session-other',
+    });
+
+    const inventory = await t.run(async (ctx) =>
+      ctx.db.get('event_inventory', inventoryId),
+    );
+    expect(inventory?.soldCount).toBe(3);
+  });
+
+  it('per-email cap survives deletion of the ticketed session that bought the tickets', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2030-01-01T00:00:00.000Z'));
+      const t = convexTest();
+      const {eventId} = await createEventWithInventory(t, {
+        price: 0,
+        maxTicketsPerUser: 1,
+      });
+      const email = 'stale-ticketed-guest@example.com';
+      const stale = await createGuestSession(t, email);
+
+      await t.mutation(api.orders.core.claimFreeTicketAsGuest, {
+        sessionToken: stale.sessionToken,
+        eventId,
+        quantity: 1,
+        tier: 'regular',
+        termsAccepted: true,
+        idempotencyKey: 'idem-stale-ticketed-claim',
+      });
+
+      // Age the session past the 2h inactivity window, then re-enter the
+      // email. The hygiene branch in core.initiate deletes the stale session —
+      // the ticket must stay counted via its guestEmailLower anchor.
+      vi.setSystemTime(new Date('2030-01-01T03:00:00.000Z'));
+      await t.mutation(internal.guest_sessions.core.initiate, {
+        email,
+        sessionToken: 'fresh-after-expiry-token',
+      });
+
+      const sessions = await t.run(async (ctx) =>
+        ctx.db
+          .query('guest_sessions')
+          .withIndex('by_email', (q) => q.eq('email', email))
+          .collect(),
+      );
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0]._id).not.toBe(stale.sessionId);
+
+      // The cap of 1 still counts the deleted session's ticket by email.
+      await expect(
+        t.mutation(api.orders.core.claimFreeTicketAsGuest, {
+          sessionToken: 'fresh-after-expiry-token',
+          eventId,
+          quantity: 1,
+          tier: 'regular',
+          termsAccepted: true,
+          idempotencyKey: 'idem-stale-ticketed-second',
+        }),
+      ).rejects.toThrow('Maximum 1 tickets per user');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('rejects an idempotency key reused for a different claim instead of silently replaying', async () => {

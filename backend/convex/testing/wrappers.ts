@@ -64,6 +64,7 @@ export const ticketDocValidator = v.object({
   eventId: v.id('events'),
   orderId: v.optional(v.id('ticket_orders')),
   guestSessionId: v.optional(v.id('guest_sessions')),
+  guestEmailLower: v.optional(v.string()),
   status: ticketStatusValidator,
   tier: tierValidator,
   qrCode: v.optional(v.string()),

@@ -591,8 +591,19 @@ async function applyResaleTicketTransfer(
       : Promise.resolve(null),
   ]);
 
+  // Defensive: openResaleOrderState rejects guest identities today, so a
+  // resale order never carries a guestSessionId. Kept aligned with the primary
+  // path so enabling guest resale cannot silently drop the cap anchor.
+  const buyerGuestEmail =
+    order.guestEmailLower ?? buyerGuestSession?.email ?? null;
+
   const buyerTicketId = await ctx.db.insert('tickets', {
     ...resaleOwnerFields,
+    // Anchor guest tickets to the buyer email so the per-email ticket cap
+    // survives guest session deletion (see countActiveOwnedTicketsForEvent).
+    ...(order.guestSessionId && buyerGuestEmail
+      ? {guestEmailLower: buyerGuestEmail.toLowerCase()}
+      : {}),
     eventId: order.eventId,
     orderId: order._id,
     status: 'valid',
@@ -604,8 +615,8 @@ async function applyResaleTicketTransfer(
     buildTicketRosterProjection({
       ticketId: buyerTicketId,
       status: 'valid',
-      attendeeName: buyerUser?.name ?? buyerGuestSession?.email ?? null,
-      email: buyerUser?.email ?? buyerGuestSession?.email ?? null,
+      attendeeName: buyerUser?.name ?? buyerGuestEmail,
+      email: buyerUser?.email ?? buyerGuestEmail,
       checkedInByName: null,
     }),
   );

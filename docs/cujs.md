@@ -357,17 +357,23 @@ This is the most critical journey on the platform. If buying a ticket breaks, th
 **Path**
 
 1. Guest abandons mid-checkout. Backend captures session state.
-2. After a short delay, an email is sent containing a resume link tied to the same guest session.
-3. Guest clicks the link, lands back on the event page with the prior state, and can complete payment.
+2. When the guest re-enters the same email without the original device's session token (new browser context, e.g. an in-app browser vs Safari), the backend mints a fresh session immediately — re-entry is never blocked — and, as a best-effort courtesy, emails a resume link tied to the abandoned session.
+3. Guest either continues in the fresh session, or clicks the emailed link to land back in the abandoned session with its prior state. The resume token stays pending until first use, so the original device's credential keeps working; first use promotes it.
 
 **Failure modes**
 
-- Resume link expires: guest must start fresh. The cart is gone.
+- Resume link expires: guest continues in a fresh session. The old cart is gone.
+- Resume email fails to send: checkout still proceeds in the fresh session; the pending resume token is cleared.
 - Inventory was bought up while the user was away: standard sold-out behavior takes over.
+
+**Cross-session invariants** (one email may hold several concurrent sessions):
+
+- `maxTicketsPerUser` is enforced per email across all its sessions ([lib/orders/open.ts](backend/convex/lib/orders/open.ts)).
+- One magic-link redemption per email across sessions, and a buyer's own redemption never locks them out of a maxed link ([lib/guest_sessions/lifecycle.ts](backend/convex/lib/guest_sessions/lifecycle.ts)).
 
 **Code anchors**
 
-- Backend: [guest_sessions/\_impl/actions.ts](backend/convex/guest_sessions/_impl/actions.ts), [guest_sessions/core.ts](backend/convex/guest_sessions/core.ts) (`prepareResumeSessionToken`, `promoteResumeSessionToken`)
+- Backend: [guest_sessions/\_impl/actions.ts](backend/convex/guest_sessions/_impl/actions.ts), [guest_sessions/core.ts](backend/convex/guest_sessions/core.ts) (`prepareResumeSessionToken`, `clearResumeSessionToken`, use-time promotion in `initiate`)
 - Email: `guestCheckoutResumeTemplate` in [email/templates.ts](backend/convex/email/templates.ts)
 
 ### 3.4 Claim a free ticket
