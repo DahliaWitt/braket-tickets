@@ -31,3 +31,11 @@ catalog:
 # Remove when @convex-dev/* and @modelcontextprotocol/sdk resolve patched Hono
 # without overrides.
 # Recheck with: pnpm why hono && pnpm audit --prod
+#
+# The `name@^MAJOR` overrides (basic-ftp, body-parser, brace-expansion,
+# browserslist, compression, dompurify, fast-uri, handlebars, ip-address,
+# js-yaml, launch-editor, lodash, nanoid, piscina, shell-quote, source-map-js,
+# undici, vite, zod) pin transitive deps to the patched release within the
+# major their parents already accept, as of November 5, 2026. Remove each one
+# once `pnpm why <name>` shows parents resolving the patched version unaided.
+# Recheck with: pnpm audit
