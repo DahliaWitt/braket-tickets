@@ -18,6 +18,16 @@ export interface CommunityProfileFormValue {
   codeOfConduct: string;
 }
 
+export function getOrganizerStatus(
+  status: CommunityPublicationStatus | undefined,
+  vettingQuestions: {id: string}[] | undefined,
+): CommunityPublicationStatus {
+  if (status) return status;
+  return vettingQuestions && vettingQuestions.length > 0
+    ? 'published'
+    : 'draft';
+}
+
 export interface VettingQuestionFormValue {
   id: string;
   question: string;

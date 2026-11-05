@@ -42,6 +42,23 @@ export class BrowserPlatformService {
     return this.windowRef?.location.origin;
   }
 
+  /** Returns the current hash in a browser, or null during SSR. */
+  locationHash(): string | null {
+    return this.windowRef?.location.hash ?? null;
+  }
+
+  /**
+   * Removes a URL fragment without navigating or adding a history entry.
+   * Callers use this before logging, analytics, or network work when a fragment
+   * contains a bearer credential.
+   */
+  replaceUrlWithoutHash(): void {
+    const windowRef = this.windowRef;
+    if (!windowRef) return;
+    const safeUrl = `${windowRef.location.pathname}${windowRef.location.search}`;
+    windowRef.history.replaceState(windowRef.history.state, '', safeUrl);
+  }
+
   /**
    * Whether a usable `localStorage` reference exists. Mirrors the condition
    * `auth.client.ts` uses to decide whether the Better Auth crossDomain plugin
@@ -74,6 +91,27 @@ export class BrowserPlatformService {
       this.localStorageRef?.removeItem(key);
     } catch (error: unknown) {
       logger.warn('localStorage.removeItem failed', {key, error});
+    }
+  }
+
+  getLocalStorageKeys(): string[] {
+    try {
+      const storage = this.localStorageRef;
+      if (!storage) return [];
+      return Array.from({length: storage.length}, (_, index) =>
+        storage.key(index),
+      ).filter((key): key is string => key !== null);
+    } catch (error: unknown) {
+      logger.warn('localStorage key enumeration failed', {error});
+      return [];
+    }
+  }
+
+  removeLocalStorageItemsWithPrefix(prefix: string): void {
+    for (const key of this.getLocalStorageKeys()) {
+      if (key.startsWith(prefix)) {
+        this.removeLocalStorageItem(key);
+      }
     }
   }
 

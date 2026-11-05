@@ -3,7 +3,10 @@ import type {MutationCtx, QueryCtx} from '../../_generated/server';
 import {hasEventEnded} from '../../lib/timezone';
 import type {CallerIdentity} from '../../lib/caller_identity';
 import {throwAppError} from '../../lib/errors';
+import {getIdempotencyKeyValidationError} from '../../lib/idempotency';
 import type {PaymentErrorCode} from '@shared/contracts/payment-error-codes';
+
+export {MAX_IDEMPOTENCY_KEY_LENGTH} from '../../lib/idempotency';
 
 export type OrderErrorCode = PaymentErrorCode | 'FORBIDDEN';
 
@@ -86,22 +89,6 @@ export function assertPositiveInteger(value: number, label: string): void {
 }
 
 /**
- * Upper bound on a client free-claim idempotency key. The frontend mints a
- * 36-char `crypto.randomUUID()`; 64 leaves headroom for any future prefixed
- * scheme while keeping the value far below Convex's document/index size limits
- * so a direct (non-browser) caller cannot write a huge document or index entry.
- */
-export const MAX_IDEMPOTENCY_KEY_LENGTH = 64;
-
-/**
- * Restrict the key to the UUID charset plus URL-safe separators. `randomUUID`
- * only ever produces `[0-9a-f-]`; `_` is permitted so the contract survives a
- * base64url-style key without a schema change. Anything else (whitespace,
- * punctuation, control bytes, multi-byte payloads) is a contract violation.
- */
-const IDEMPOTENCY_KEY_REGEX = /^[A-Za-z0-9_-]+$/;
-
-/**
  * Validate a caller-supplied free-claim idempotency key before it is used for
  * an index lookup or persisted on the order. These are public mutations, so
  * the value is fully attacker-controlled: reject blank / over-long /
@@ -109,18 +96,8 @@ const IDEMPOTENCY_KEY_REGEX = /^[A-Za-z0-9_-]+$/;
  * data on every order.
  */
 export function assertValidIdempotencyKey(value: string): void {
-  if (value.trim().length === 0) {
-    throwOrderError('INVALID_STATE', 'Idempotency key must not be blank');
-  }
-  if (value.length > MAX_IDEMPOTENCY_KEY_LENGTH) {
-    throwOrderError(
-      'INVALID_STATE',
-      `Idempotency key exceeds maximum length of ${MAX_IDEMPOTENCY_KEY_LENGTH} characters`,
-    );
-  }
-  if (!IDEMPOTENCY_KEY_REGEX.test(value)) {
-    throwOrderError('INVALID_STATE', 'Idempotency key is malformed');
-  }
+  const error = getIdempotencyKeyValidationError(value);
+  if (error) throwOrderError('INVALID_STATE', error);
 }
 
 export async function getOrderForCaller(

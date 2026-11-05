@@ -8,6 +8,18 @@ import {resolveSiteUrl} from '../lib/site_url';
 import {EVENT_DATE_TIME_ZONE, formatEventDateTime} from '../lib/timezone';
 import {escapeHtml} from '../lib/email/escape_html';
 
+export function guestListInviteTemplate(args: {
+  displayName: string;
+  eventTitle: string;
+  manageUrl: string;
+}): {subject: string; html: string} {
+  const subjectTitle = args.eventTitle.replace(/[\r\n]+/g, ' ').trim();
+  return {
+    subject: `Manage your guest list for ${subjectTitle}`,
+    html: `<p>Hi ${escapeHtml(args.displayName)},</p><p>You can manage your guest list for ${escapeHtml(args.eventTitle)} using this reusable link through the end of the event:</p><p><a href="${escapeHtml(args.manageUrl)}">Manage guest list</a></p>`,
+  };
+}
+
 // Base styles for email-safe CSS (inline everything)
 const baseStyles = {
   bgDark: '#0D0A0C',

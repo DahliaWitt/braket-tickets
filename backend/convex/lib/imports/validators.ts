@@ -6,12 +6,17 @@
  */
 import {v} from 'convex/values';
 
-export const IMPORT_TARGETS = ['guests', 'importedTickets'] as const;
+export const IMPORT_TARGETS = [
+  'guests',
+  'importedTickets',
+  'assignmentStaff',
+] as const;
 export type ImportTarget = (typeof IMPORT_TARGETS)[number];
 
 export const importTargetValidator = v.union(
   v.literal(IMPORT_TARGETS[0]),
   v.literal(IMPORT_TARGETS[1]),
+  v.literal(IMPORT_TARGETS[2]),
 );
 
 /**

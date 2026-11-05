@@ -75,6 +75,12 @@ export const AUDIT_ROUTES: AuditRoute[] = [
     readyLocator: 'role=heading[level=1]',
     seedRequirements: ['publishedEvent'],
   },
+  {
+    label: 'Guest List — Accountless Access',
+    path: '/guest-list/manage',
+    role: 'anon',
+    readyLocator: '[data-testid="guest-list-unavailable"]',
+  },
 
   // ---------------------------------------------------------------------------
   // User routes — authGuard
@@ -96,6 +102,18 @@ export const AUDIT_ROUTES: AuditRoute[] = [
     path: '/account',
     role: 'user',
     readyLocator: 'role=heading[level=1]',
+  },
+  {
+    label: 'My Guest Lists',
+    path: '/guest-lists',
+    role: 'user',
+    readyLocator: '[data-testid="guest-lists-empty"]',
+  },
+  {
+    label: 'Guest List — Unavailable Assignment',
+    path: '/guest-lists/:assignmentId',
+    role: 'user',
+    readyLocator: '[data-testid="guest-list-unavailable"]',
   },
 
   // ---------------------------------------------------------------------------

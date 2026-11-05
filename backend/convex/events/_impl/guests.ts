@@ -2,12 +2,28 @@ import type {Doc, Id} from '../../_generated/dataModel';
 import type {MutationCtx, QueryCtx} from '../../_generated/server';
 import {scheduleBroadcastCatchup} from '../../lib/broadcast_catchup';
 import {internal} from '../../_generated/api';
-import {throwNotFound} from '../../lib/errors';
+import {
+  throwConflict,
+  throwInvalidInput,
+  throwNotFound,
+} from '../../lib/errors';
 import {validateGuestFieldsAndNormalizeEmail} from '../../lib/events/guest_fields';
+import {validateEmail, normalizeEmailOrNull} from '../../lib/validation';
 import {requireEventForEdit, requireEventForRoster} from '../../lib/access';
 import {ADMIN_AUDIT_ACTIONS} from '../../lib/admin_audit_actions';
 import {insertAdminAuditLog} from '../../lib/admin_audit_log';
 import {loadManagementDatasetWithinLimit} from '../../lib/management_limits';
+import {removeSourcedGuestAndUpdateCounters} from '../../lib/guest_list/core';
+import {
+  assertGuestAdmissionCapacity,
+  getExistingGuestListEventStats,
+  getOrCreateGuestListEventStats,
+  updateGuestListEventStatsAfterReduction,
+  updateGuestListEventStats,
+} from '../../lib/guest_list/event_stats';
+import {isGuestTicketSendInFlight} from '../../lib/guest_ticket_delivery';
+
+export {GUEST_TICKET_SEND_LOCK_STALE_MS} from '../../lib/guest_ticket_delivery';
 
 export async function add(
   ctx: MutationCtx,
@@ -29,10 +45,21 @@ export async function add(
 
   // Persist the trimmed, validated email so the stored record matches the
   // value used by scheduling and the broadcast audience lookups downstream.
+  //
+  // The counter row is materialized on demand: `guest_list.getEventOverview`
+  // reports zeros when it is absent, so an event whose only guests were added
+  // manually must still get one. The first manual add for an event therefore
+  // pays a one-time authoritative count (<=5,001 guests + <=501 assignments).
+  const stats = await getOrCreateGuestListEventStats(ctx, args.eventId);
+  assertGuestAdmissionCapacity(stats, 1);
   const guestId = await ctx.db.insert('guests', {
     ...args,
     email,
+    emailKey: email?.toLowerCase(),
   });
+  await updateGuestListEventStats(ctx, stats, (current) => ({
+    totalGuestAdmissionCount: current.totalGuestAdmissionCount + 1,
+  }));
 
   await insertAdminAuditLog(
     {db: ctx.db, meta: ctx.meta},
@@ -77,21 +104,54 @@ export async function update(
   // lenient `@`-presence email rule the guest paths deliberately apply.
   const email = validateGuestFieldsAndNormalizeEmail(args);
 
+  // Both guest-list-sourced kinds carry an automatic ticket delivery:
+  // `self_service` rows are a delegate's invited guest, `assignment_admission`
+  // rows are the artist's/staff member's OWN admission. Either way a corrected
+  // address means the ticket that was already dispatched went somewhere wrong,
+  // so the delivery state must reset and a fresh attempt must be queued.
+  // Scoping this to `self_service` stranded admission rows: `emailedAt`
+  // survived, `ticketDeliveryState` stayed `sent`, no send was queued, and
+  // `guest_list/delegate.retryTicket` refuses non-`self_service` rows — leaving
+  // no retry path at all.
+  const isSourcedGuest =
+    guest.sourceAssignmentId !== undefined && guest.sourceKind !== undefined;
+  if (isSourcedGuest) {
+    if (!email) throwInvalidInput('Email is required');
+    validateEmail(email, 'Email');
+  }
+  const emailKey = email?.toLowerCase();
+  const emailChanged = guest.emailKey !== emailKey;
+  const resetTicketDelivery = isSourcedGuest && emailChanged;
   await ctx.db.replace('guests', args.id, {
     eventId: guest.eventId,
     name: args.name,
     email,
+    emailKey,
     type: args.type,
     notes: args.notes,
-    emailedAt: guest.emailedAt,
-    // Carry the in-flight ticket-send lock through the replace. Omitting it
-    // would drop the field (replace overwrites the whole document), silently
-    // clearing a lock a concurrent `sendTicket` action is holding and allowing
-    // a duplicate ticket email. See `beginGuestTicketSend` for the lock's role.
-    emailSendLockedAt: guest.emailSendLockedAt,
+    emailedAt: resetTicketDelivery ? undefined : guest.emailedAt,
     checkedInAt: guest.checkedInAt,
     checkedInBy: guest.checkedInBy,
+    emailSendLockedAt: resetTicketDelivery ? null : guest.emailSendLockedAt,
+    ticketDeliveryState: resetTicketDelivery
+      ? 'queued'
+      : guest.ticketDeliveryState,
+    sourceAssignmentId: guest.sourceAssignmentId,
+    sourceKind: guest.sourceKind,
+    sourceRole: guest.sourceRole,
+    sourceDisplayName: guest.sourceDisplayName,
+    sourceIdempotencyKey: guest.sourceIdempotencyKey,
   });
+
+  if (resetTicketDelivery) {
+    await ctx.scheduler.runAfter(
+      0,
+      internal.events.guest_actions.sendAutomaticTicket,
+      {
+        guestId: guest._id,
+      },
+    );
+  }
 
   await insertAdminAuditLog(
     {db: ctx.db, meta: ctx.meta},
@@ -117,9 +177,48 @@ export async function remove(
   const guest = await ctx.db.get('guests', args.id);
   if (!guest) throwNotFound('Guest');
 
-  await requireEventForEdit(ctx, guest.eventId);
+  const {user} = await requireEventForEdit(ctx, guest.eventId);
 
-  await ctx.db.delete('guests', args.id);
+  let admissionAssignment: Doc<'guestListAssignments'> | null = null;
+  if (guest.sourceAssignmentId && guest.sourceKind === 'assignment_admission') {
+    admissionAssignment = await ctx.db.get(
+      'guestListAssignments',
+      guest.sourceAssignmentId,
+    );
+    if (
+      admissionAssignment?.status === 'active' &&
+      admissionAssignment.admissionGuestId === guest._id
+    ) {
+      throwConflict('Cannot remove an active assignment admission');
+    }
+  }
+
+  if (guest.sourceAssignmentId && guest.sourceKind === 'self_service') {
+    await removeSourcedGuestAndUpdateCounters(ctx, {
+      guest,
+      actorKind: 'organizer',
+      actorUserId: user._id,
+    });
+  } else {
+    const stats = await getExistingGuestListEventStats(ctx, guest.eventId);
+    if (admissionAssignment?.admissionGuestId === guest._id) {
+      await ctx.db.patch('guestListAssignments', admissionAssignment._id, {
+        admissionGuestId: undefined,
+      });
+    }
+    await ctx.db.delete('guests', args.id);
+    await updateGuestListEventStatsAfterReduction(
+      ctx,
+      guest.eventId,
+      stats,
+      (current) => ({
+        totalGuestAdmissionCount: Math.max(
+          0,
+          current.totalGuestAdmissionCount - 1,
+        ),
+      }),
+    );
+  }
   return null;
 }
 
@@ -149,15 +248,6 @@ export async function getInternal(
 ): Promise<Doc<'guests'> | null> {
   return await ctx.db.get('guests', args.id);
 }
-
-/**
- * How long a guest ticket-email send lock is honored before it is treated as
- * abandoned. A normal send (PDF build + email dispatch) completes in seconds; a
- * lock older than this only survives when the send action crashed between
- * claiming and releasing, so reclaiming it lets a retry proceed. Kept well above
- * realistic send latency so a genuinely in-flight send is never stolen.
- */
-export const GUEST_TICKET_SEND_LOCK_STALE_MS = 5 * 60 * 1000;
 
 export type BeginGuestTicketSendResult = {
   claimed: boolean;
@@ -208,42 +298,98 @@ export async function beginGuestTicketSend(
     }
     const alreadyDelivered = await ctx.runQuery(
       internal.email.email_delivery.hasDelivery,
-      {source: 'ticket', sourceId: args.id},
+      {
+        source: 'ticket',
+        sourceId: args.id,
+        ...(guest.email ? {recipient: guest.email} : {}),
+      },
     );
     if (alreadyDelivered) {
+      if (guest.sourceAssignmentId && guest.ticketDeliveryState !== 'sent') {
+        await ctx.db.patch('guests', args.id, {ticketDeliveryState: 'sent'});
+      }
       return {claimed: false, reason: 'already_sent', lockToken: null};
     }
   }
 
   const now = Date.now();
   const lockedAt = guest.emailSendLockedAt;
-  if (
-    typeof lockedAt === 'number' &&
-    now - lockedAt < GUEST_TICKET_SEND_LOCK_STALE_MS
-  ) {
+  if (isGuestTicketSendInFlight(lockedAt, now)) {
     return {claimed: false, reason: 'in_flight', lockToken: null};
   }
 
-  await ctx.db.patch('guests', args.id, {emailSendLockedAt: now});
+  await ctx.db.patch('guests', args.id, {
+    emailSendLockedAt: now,
+    ...(guest.sourceAssignmentId
+      ? {ticketDeliveryState: 'queued' as const}
+      : {}),
+  });
   return {claimed: true, reason: 'claimed', lockToken: now};
 }
 
 /**
- * Records a successful send. Always sets `emailedAt` (the delivery happened),
- * but only releases the lock when this attempt still owns it, so a send that
- * resumed after being stale-reclaimed cannot clear the newer holder's lock.
+ * Pre-dispatch revalidation for the organizer-initiated ("Resend") send path.
+ *
+ * `beginGuestTicketSend` claims the lock, then the action spends seconds
+ * building the PDF. During that window a guest-list email correction
+ * (`guests.update` / `delegate.updateGuest`) deliberately releases the lock so
+ * the corrected address gets a fresh automatic attempt. Without this recheck
+ * the already-claimed resend would still dispatch to the address the delegate
+ * just removed — two emails, one to a stale recipient. `markAsEmailed`'s
+ * recipient guard keeps the row consistent afterwards, but cannot un-send.
+ *
+ * Returns true only while this attempt still owns the lock AND the recipient it
+ * snapshotted is still the guest's current address. The automatic path has its
+ * own equivalent gate (`canDeliverAutomaticTicket`), which additionally
+ * validates the assignment linkage.
+ */
+export async function isGuestTicketSendCurrent(
+  ctx: QueryCtx,
+  args: {
+    id: Id<'guests'>;
+    lockToken: number;
+    recipient: string;
+  },
+): Promise<boolean> {
+  const guest = await ctx.db.get('guests', args.id);
+  if (!guest) return false;
+  if (guest.emailSendLockedAt !== args.lockToken) return false;
+  const currentEmailKey =
+    guest.emailKey ?? normalizeEmailOrNull(guest.email ?? '');
+  return normalizeEmailOrNull(args.recipient) === currentEmailKey;
+}
+
+/**
+ * Records a successful send when it still targets the guest's current email.
+ * A late success for a corrected address must not mark the new recipient as
+ * sent. The lock is only released when this attempt still owns it, so a send
+ * that resumed after being stale-reclaimed cannot clear the newer holder's
+ * lock.
  */
 export async function markAsEmailed(
   ctx: MutationCtx,
   args: {
     id: Id<'guests'>;
     lockToken: number;
+    recipient?: string;
   },
 ): Promise<null> {
   const guest = await ctx.db.get('guests', args.id);
   if (!guest) return null;
+  const currentEmailKey =
+    guest.emailKey ?? normalizeEmailOrNull(guest.email ?? '');
+  const recipientStillMatches =
+    args.recipient === undefined ||
+    normalizeEmailOrNull(args.recipient) === currentEmailKey;
   await ctx.db.patch('guests', args.id, {
-    emailedAt: Date.now(),
+    ...(recipientStillMatches
+      ? {
+          emailedAt: Date.now(),
+          ...(guest.sourceAssignmentId
+            ? {ticketDeliveryState: 'sent' as const}
+            : {}),
+        }
+      : {}),
     ...(guest.emailSendLockedAt === args.lockToken
       ? {emailSendLockedAt: null}
       : {}),
@@ -271,6 +417,23 @@ export async function clearGuestTicketSendLock(
   const guest = await ctx.db.get('guests', args.id);
   if (guest && guest.emailSendLockedAt === args.lockToken) {
     await ctx.db.patch('guests', args.id, {emailSendLockedAt: null});
+  }
+  return null;
+}
+
+/** Marks an assignment-triggered automatic ticket attempt as retryable. */
+export async function markGuestTicketSendFailed(
+  ctx: MutationCtx,
+  args: {id: Id<'guests'>; lockToken: number},
+): Promise<null> {
+  const guest = await ctx.db.get('guests', args.id);
+  if (guest && guest.emailSendLockedAt === args.lockToken) {
+    await ctx.db.patch('guests', args.id, {
+      emailSendLockedAt: null,
+      ...(guest.sourceAssignmentId
+        ? {ticketDeliveryState: 'failed' as const}
+        : {}),
+    });
   }
   return null;
 }

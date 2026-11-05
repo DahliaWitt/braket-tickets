@@ -1,5 +1,6 @@
 import {ComponentHarness, HarnessPredicate} from '@angular/cdk/testing';
 import {ZardSelectComponentHarness} from '@/ui/components/primitives/select/select.component.harness';
+import {GuestListDefaultsSettingsHarness} from './guest-list-defaults-settings.component.harness';
 
 export class CommunityAdminSettingsHarness extends ComponentHarness {
   static hostSelector = 'app-community-admin-settings';
@@ -8,6 +9,14 @@ export class CommunityAdminSettingsHarness extends ComponentHarness {
     options: {selector?: string} = {},
   ): HarnessPredicate<CommunityAdminSettingsHarness> {
     return new HarnessPredicate(CommunityAdminSettingsHarness, options);
+  }
+
+  private readonly _guestListDefaults = this.locatorForOptional(
+    GuestListDefaultsSettingsHarness,
+  );
+
+  async getGuestListDefaults(): Promise<GuestListDefaultsSettingsHarness | null> {
+    return this._guestListDefaults();
   }
 
   // ─── Profile ───────────────────────────────────────

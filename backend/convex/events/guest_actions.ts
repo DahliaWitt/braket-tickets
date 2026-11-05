@@ -1,7 +1,7 @@
 'use node';
 
 import {v} from 'convex/values';
-import {action, type ActionCtx} from '../_generated/server';
+import {action, internalAction, type ActionCtx} from '../_generated/server';
 import {internal} from '../_generated/api';
 import * as QRCode from 'qrcode';
 import {purchasedTicketTemplate} from '../email/templates';
@@ -98,7 +98,31 @@ export const sendTicket = action({
     const lockToken = claim.lockToken;
 
     try {
-      return await deliverGuestTicket(ctx, guest, lockToken);
+      // Revalidate immediately before dispatch. Building the PDF takes seconds,
+      // and a guest-list email correction during that window releases this lock
+      // and queues a fresh attempt for the new address — without this gate the
+      // in-flight resend would still deliver to the address that was just
+      // corrected away. Mirrors the automatic path's canDeliverAutomaticTicket.
+      const result = await deliverGuestTicket(
+        ctx,
+        guest,
+        lockToken,
+        async () =>
+          await ctx.runQuery(internal.events.guests.isGuestTicketSendCurrent, {
+            id: guest._id,
+            lockToken,
+            recipient: guest.email,
+          }),
+      );
+      if (result.status === 'skipped') {
+        // Token-guarded: a no-op when the lock has already been taken over by
+        // the superseding attempt.
+        await ctx.runMutation(internal.events.guests.clearGuestTicketSendLock, {
+          id: guest._id,
+          lockToken,
+        });
+      }
+      return result;
     } catch (error) {
       // Release the lock so a retry can proceed immediately. This runs for any
       // failure, including a markAsEmailed failure after the provider already
@@ -118,11 +142,67 @@ export const sendTicket = action({
   },
 });
 
+export const sendAutomaticTicket = internalAction({
+  args: {guestId: v.id('guests')},
+  returns: v.object({status: v.union(v.literal('sent'), v.literal('skipped'))}),
+  handler: async (ctx, args) => {
+    const guest = await ctx.runQuery(internal.events.guests.getInternal, {
+      id: args.guestId,
+    });
+    if (!guest?.email || !guest.sourceAssignmentId || !guest.sourceKind)
+      return {status: 'skipped' as const};
+    const deliverySnapshot = {
+      guestId: guest._id,
+      assignmentId: guest.sourceAssignmentId,
+      eventId: guest.eventId,
+      recipient: guest.email,
+      sourceKind: guest.sourceKind,
+    };
+    const canDeliver = await ctx.runQuery(
+      internal.guest_list.invite_state.canDeliverAutomaticTicket,
+      deliverySnapshot,
+    );
+    if (!canDeliver) return {status: 'skipped' as const};
+    const claim = await ctx.runMutation(
+      internal.events.guests.beginGuestTicketSend,
+      {id: guest._id, requireUnsent: true},
+    );
+    if (!claim.claimed || claim.lockToken === null)
+      return {status: 'skipped' as const};
+    try {
+      const result = await deliverGuestTicket(
+        ctx,
+        {...guest, email: guest.email},
+        claim.lockToken,
+        async () =>
+          await ctx.runQuery(
+            internal.guest_list.invite_state.canDeliverAutomaticTicket,
+            deliverySnapshot,
+          ),
+      );
+      if (result.status === 'skipped') {
+        await ctx.runMutation(internal.events.guests.clearGuestTicketSendLock, {
+          id: guest._id,
+          lockToken: claim.lockToken,
+        });
+      }
+      return result;
+    } catch (error) {
+      await ctx.runMutation(internal.events.guests.markGuestTicketSendFailed, {
+        id: guest._id,
+        lockToken: claim.lockToken,
+      });
+      throw error;
+    }
+  },
+});
+
 async function deliverGuestTicket(
   ctx: ActionCtx,
   guest: Awaited<ReturnType<typeof requireGuestTicketSendAccess>>,
   lockToken: number,
-): Promise<{status: 'sent'}> {
+  canDeliver?: () => Promise<boolean>,
+): Promise<{status: 'sent' | 'skipped'}> {
   const eventP = ctx.runQuery(internal.events.management.getInternal, {
     id: guest.eventId,
   });
@@ -161,6 +241,10 @@ async function deliverGuestTicket(
     },
   );
 
+  if (canDeliver && !(await canDeliver())) {
+    return {status: 'skipped'};
+  }
+
   await sendEmailDeliveryNow(
     ctx,
     {
@@ -197,6 +281,7 @@ async function deliverGuestTicket(
   await ctx.runMutation(internal.events.guests.markAsEmailed, {
     id: guest._id,
     lockToken,
+    recipient: guest.email,
   });
 
   return {status: 'sent'};

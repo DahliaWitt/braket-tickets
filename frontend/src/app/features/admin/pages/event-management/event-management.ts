@@ -45,6 +45,7 @@ import {MarketingAnnouncementCardComponent} from '@/features/admin/components/ma
 import {EventManagementBuyersTabComponent} from './components/event-management-buyers-tab/event-management-buyers-tab.component';
 import {EventManagementGuestsTabComponent} from './components/event-management-guests-tab/event-management-guests-tab.component';
 import {EventManagementResaleTabComponent} from './components/event-management-resale-tab/event-management-resale-tab.component';
+import {GuestListAssignmentsComponent} from './components/guest-list-assignments/guest-list-assignments.component';
 import {logger} from '@/utils/logger';
 import {safeResourceValue} from '@/utils/resource';
 import {toast} from 'ngx-sonner';
@@ -133,6 +134,7 @@ function getManagementLoadErrorMessage(error: unknown): string | null {
     EventManagementBuyersTabComponent,
     EventManagementGuestsTabComponent,
     EventManagementResaleTabComponent,
+    GuestListAssignmentsComponent,
   ],
   providers: [DatePipe],
   templateUrl: './event-management.html',
@@ -242,6 +244,35 @@ export class EventManagement {
     },
   );
 
+  /** Canonical rollout gate. Assignment reads must remain skipped until enabled. */
+  private readonly guestListFeatureQuery = injectQuery(
+    api.guest_list.feature_state.get,
+    () => ({}),
+  );
+
+  private readonly guestListOverviewQuery = injectQuery(
+    api.guest_list.assignments.getEventOverview,
+    () => {
+      const eventId = this.eventId();
+      return eventId && this.guestListFeatureQuery.data()?.enabled
+        ? {eventId: eventId as Id<'events'>}
+        : skipToken;
+    },
+  );
+
+  private readonly guestListAssignmentsQuery = injectQuery(
+    api.guest_list.assignments.listByEvent,
+    () => {
+      const eventId = this.eventId();
+      return eventId && this.guestListFeatureQuery.data()?.enabled
+        ? {
+            eventId: eventId as Id<'events'>,
+            paginationOpts: {numItems: 50, cursor: null},
+          }
+        : skipToken;
+    },
+  );
+
   /**
    * Imported external ticket-holders — fetched (one-shot `convex.query`) from
    * the roster-authorized `api.events.imported_tickets.listByEvent` and reloaded
@@ -297,6 +328,9 @@ export class EventManagement {
         purchases: this.purchasesResource.error(),
         resale: this.resaleResource.error(),
         guests: this.guestsQuery.error(),
+        guestListFeature: this.guestListFeatureQuery.error(),
+        guestListOverview: this.guestListOverviewQuery.error(),
+        guestListAssignments: this.guestListAssignmentsQuery.error(),
         importedTickets: this.importedTicketsResource.error(),
       };
       for (const [label, error] of Object.entries(surfaces)) {
@@ -355,6 +389,32 @@ export class EventManagement {
 
   /** Guests accessor */
   readonly guests = computed(() => this.guestsQuery.data() ?? []);
+  readonly guestListFeatureEnabled = computed(
+    () => this.guestListFeatureQuery.data()?.enabled === true,
+  );
+  readonly isGuestListFeatureLoading = this.guestListFeatureQuery.isLoading;
+  readonly guestListWorkspaceError = computed(
+    () =>
+      this.guestListFeatureQuery.error() != null ||
+      this.guestListOverviewQuery.error() != null ||
+      this.guestListAssignmentsQuery.error() != null,
+  );
+  /**
+   * `null` until the overview query resolves. Falling back to zeros here would
+   * flash "0 total admissions" on an event with hundreds of them, so the
+   * assignments component renders a loading state instead (mirroring
+   * `guest-list-defaults-settings.container.ts`).
+   */
+  readonly guestListOverview = computed(
+    () => this.guestListOverviewQuery.data() ?? null,
+  );
+  readonly guestListAssignments = computed(
+    () => this.guestListAssignmentsQuery.data()?.page ?? [],
+  );
+  readonly guestListContinueCursor = computed(() => {
+    const page = this.guestListAssignmentsQuery.data();
+    return page && !page.isDone ? page.continueCursor : null;
+  });
 
   /** Imported external ticket-holders accessor (one-shot fetch, reloadable). */
   readonly importedTickets = computed(
