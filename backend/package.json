@@ -68,7 +68,7 @@
     "tsx": "^4.23.1",
     "typescript": "~6.0.3",
     "vite": "^8.1.5",
-    "vitest": "^4.1.9",
+    "vitest": "^5.1.0",
     "vitest-mock-extended": "^4.0.0"
   },
   "packageManager": "pnpm@9.15.0"
