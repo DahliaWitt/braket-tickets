@@ -21,8 +21,8 @@ packages:
 # Bump both versions here in one place. Dependabot's "auth" group updates the
 # catalog entries (pnpm catalog support is GA).
 catalog:
-  '@convex-dev/better-auth': ^0.12.5
-  better-auth: 1.6.25
+  '@convex-dev/better-auth': ^0.13.0
+  better-auth: 1.7.18
 
 # Temporary security override note:
 # Active pnpm overrides live in the root package.json under pnpm.overrides
