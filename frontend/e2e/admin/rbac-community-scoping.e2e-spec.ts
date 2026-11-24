@@ -320,6 +320,107 @@ test.describe('RBAC Community Admin Scoping', () => {
         alert.getByRole('link', {name: /Back to Events/i}),
       ).toBeVisible();
     });
+
+    test('revoked ?community= settings link blocks settings form without backend authz errors and recovers to active community', async ({
+      page,
+      convexHelper,
+    }) => {
+      const suffix = `revoked-${Date.now()}`;
+      const adminId = await getRootAdminId(convexHelper);
+      const oldOrgSlug = `old-org-${suffix}`;
+      const activeOrgName = uniqueName(`Active Org ${suffix}`);
+      const activeOrgSlug = `active-org-${suffix}`;
+
+      const oldOrgId = await convexHelper.mutation(
+        api.testing.communities.seedOrganizer,
+        {
+          name: uniqueName(`Old Org ${suffix}`),
+          slug: oldOrgSlug,
+          status: 'published',
+        },
+      );
+      const activeOrgId = await convexHelper.mutation(
+        api.testing.communities.seedOrganizer,
+        {
+          name: activeOrgName,
+          slug: activeOrgSlug,
+          status: 'published',
+        },
+      );
+
+      // User's role now lives on activeOrgId only (oldOrgId is revoked/unmanaged).
+      const user = await seedCommunityAdminUser(convexHelper, {
+        suffix,
+        orgId: activeOrgId,
+        grantedBy: adminId,
+      });
+
+      const consoleErrors: string[] = [];
+      page.on('console', (msg) => {
+        if (msg.type() === 'error') {
+          consoleErrors.push(msg.text());
+        }
+      });
+
+      await signInUser(page, user.email, user.password);
+
+      // 1. Repro via slug bookmark: /community-admin/settings?community=<old-slug>
+      await page.goto(`/community-admin/settings?community=${oldOrgSlug}`);
+
+      const errorCard = page.getByTestId('unresolved-community-error');
+      await expect(errorCard).toBeVisible({timeout: 15000});
+      await expect(errorCard).toContainText(oldOrgSlug);
+
+      // Settings form and Stripe Connect CTA must NOT mount on the revoked community.
+      await expect(page.getByTestId('section-profile')).toHaveCount(0);
+      await expect(page.getByTestId('section-payments')).toHaveCount(0);
+
+      // Single-community recovery button must display the active community's name, not its raw ID.
+      const pickButton = page.getByTestId('unresolved-community-pick').first();
+      await expect(pickButton).toBeVisible({timeout: 15000});
+      await expect(pickButton).toHaveText(activeOrgName);
+
+      // 2. Repro via raw ID bookmark: /community-admin/settings?community=<old-id>
+      await page.goto(`/community-admin/settings?community=${oldOrgId}`);
+      await expect(errorCard).toBeVisible({timeout: 15000});
+      await expect(errorCard).toContainText(oldOrgId);
+      await expect(page.getByTestId('section-profile')).toHaveCount(0);
+
+      // Zero authz/redacted Convex errors should have fired for the revoked community.
+      expect(
+        consoleErrors.filter((line) =>
+          /Not a community admin|Unauthorized|Community not found|Called by client/i.test(
+            line,
+          ),
+        ),
+      ).toEqual([]);
+
+      // 3. Recover by picking the active community and saving profile settings.
+      await pickButton.click();
+      await expect(errorCard).toHaveCount(0, {timeout: 15000});
+      await expect(page.getByTestId('section-profile')).toBeVisible({
+        timeout: 15000,
+      });
+
+      const env = createEnvironment(page);
+      const settings = await env.getHarness(CommunityAdminSettingsHarness);
+      const toastHarness = await env.getHarness(BraToastHarness);
+
+      await expect
+        .poll(() => settings.getProfileName(), {timeout: 15000})
+        .toBe(activeOrgName);
+
+      await settings.setProfileDescription(
+        'Verified settings save after recovery',
+      );
+      await settings.clickSaveProfile();
+
+      await expect
+        .poll(() => toastHarness.hasToastWithText(/Settings saved/i), {
+          timeout: 15000,
+        })
+        .toBe(true);
+    });
   });
 
   test.describe('Route Guard Enforcement', () => {
