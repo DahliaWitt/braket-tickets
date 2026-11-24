@@ -180,9 +180,10 @@ describe('injectScopedQuery', () => {
     expect(query.status()).toBe('success');
   });
 
-  it('re-masks if a late u1 push arrives after scope switches to u2 before effect flush', async () => {
+  it('drops a late u1 push arriving after scope switches to u2 before effect flush', async () => {
     let firstOnData: ((value: unknown) => void) | undefined;
     let secondOnData: ((value: unknown) => void) | undefined;
+    const onSuccess = vi.fn();
 
     convexMock.onUpdate
       .mockImplementationOnce(
@@ -199,19 +200,22 @@ describe('injectScopedQuery', () => {
       );
     convexMock.client.onUpdate = convexMock.onUpdate;
 
-    const {scope, query} = createHarness('u1');
+    const {scope, query} = createHarness('u1', {onSuccess});
     await flushReactiveWork();
 
     firstOnData?.(true);
     await flushReactiveWork();
     expect(query.data()).toBe(true);
+    expect(onSuccess).toHaveBeenCalledTimes(1);
 
     // Switch scope and deliver a late push on u1's still-open subscription before tick.
     scope.set('u2');
     firstOnData?.(true);
+    // Synchronously masked before effect flush and stale callback suppressed.
+    expect(query.data()).toBeUndefined();
+    expect(onSuccess).toHaveBeenCalledTimes(1);
     await flushReactiveWork();
 
-    // Effect refetched for u2 and cleared visibility, so u1's late push is hidden.
     expect(convexMock.onUpdate).toHaveBeenCalledTimes(2);
     expect(query.data()).toBeUndefined();
     expect(query.isLoading()).toBe(true);
@@ -219,6 +223,53 @@ describe('injectScopedQuery', () => {
     secondOnData?.(false);
     await flushReactiveWork();
     expect(query.data()).toBe(false);
+    expect(onSuccess).toHaveBeenCalledTimes(2);
+  });
+
+  it('drops a late pre-refresh push before effect flush on idle triggerRefresh', async () => {
+    let firstOnData: ((value: unknown) => void) | undefined;
+    let secondOnData: ((value: unknown) => void) | undefined;
+    const onSuccess = vi.fn();
+
+    convexMock.onUpdate
+      .mockImplementationOnce(
+        (_query, _args, onData: (value: unknown) => void) => {
+          firstOnData = onData;
+          return vi.fn();
+        },
+      )
+      .mockImplementationOnce(
+        (_query, _args, onData: (value: unknown) => void) => {
+          secondOnData = onData;
+          return vi.fn();
+        },
+      );
+    convexMock.client.onUpdate = convexMock.onUpdate;
+
+    const {query} = createHarness('u1', {onSuccess});
+    await flushReactiveWork();
+
+    firstOnData?.(true);
+    await flushReactiveWork();
+    expect(query.data()).toBe(true);
+    expect(onSuccess).toHaveBeenCalledTimes(1);
+
+    // Idle triggerRefresh queues a new refetch generation; a push from the
+    // still-open pre-refresh subscription before flush must stay masked.
+    query.triggerRefresh();
+    firstOnData?.(true);
+    expect(query.data()).toBeUndefined();
+    expect(query.isLoading()).toBe(true);
+    expect(onSuccess).toHaveBeenCalledTimes(1);
+    await flushReactiveWork();
+
+    expect(convexMock.onUpdate).toHaveBeenCalledTimes(2);
+    expect(query.data()).toBeUndefined();
+
+    secondOnData?.(false);
+    await flushReactiveWork();
+    expect(query.data()).toBe(false);
+    expect(onSuccess).toHaveBeenCalledTimes(2);
   });
 
   it('does not wedge data on rapid u1 -> u2 -> u1 or u1 -> null -> u1 before effect flush', async () => {
@@ -396,6 +447,7 @@ describe('injectScopedQuery', () => {
     });
 
     const envInjector = TestBed.inject(EnvironmentInjector);
+    const onSuccess = vi.fn();
     const query = injectScopedQuery(
       api.communities.trust_links.checkUserTrust,
       scope,
@@ -403,19 +455,24 @@ describe('injectScopedQuery', () => {
         const id = organizerId();
         return id ? {organizerId: id} : skipToken;
       },
-      {injectRef: envInjector},
+      {injectRef: envInjector, onSuccess},
     );
     await flushReactiveWork();
 
     firstOnData?.({trusted: true, source: 'direct', via: null});
     await flushReactiveWork();
     expect(query.data()?.trusted).toBe(true);
+    expect(onSuccess).toHaveBeenCalledTimes(1);
 
-    // Switching organizerId under the same user masks org1's result immediately.
+    // Switching organizerId under the same user masks org1's result immediately,
+    // and a late push from org1 before effect flush is dropped.
     organizerId.set('org2' as Id<'organizers'>);
+    firstOnData?.({trusted: true, source: 'direct', via: null});
     expect(query.data()).toBeUndefined();
     expect(query.isLoading()).toBe(true);
+    expect(onSuccess).toHaveBeenCalledTimes(1);
     await flushReactiveWork();
+    expect(query.data()).toBeUndefined();
 
     // Error on org2 must not leak org1's trusted result.
     secondOnError?.(new Error('org2 error'));
@@ -426,6 +483,7 @@ describe('injectScopedQuery', () => {
     secondOnData?.({trusted: false, source: null, via: null});
     await flushReactiveWork();
     expect(query.data()?.trusted).toBe(false);
+    expect(onSuccess).toHaveBeenCalledTimes(2);
 
     // Skipping via argsFn while scope is non-null masks synchronously and ignores triggerRefresh.
     organizerId.set(null);

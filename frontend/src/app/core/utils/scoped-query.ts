@@ -1,4 +1,4 @@
-import {computed, effect, signal, type Signal} from '@angular/core';
+import {computed, effect, signal, untracked, type Signal} from '@angular/core';
 import {
   injectQuery,
   skipToken,
@@ -35,7 +35,7 @@ export interface ScopedQueryResult<
  * value to another (for example, direct account switch `u1 -> u2`), this helper
  * forces a resubscribe and masks `data()`, `error()`, and status signals until
  * a response arrives for the new `(scope, args)` pair. `data()` only unmasks on
- * a successful response.
+ * a successful response (including after hydration or warm-cache seed).
  *
  * **Scope invariant:** `scope` must be derived from a Convex-synced identity
  * signal (such as `auth.user()?._id`), not a pre-reauth session signal. On
@@ -45,8 +45,9 @@ export interface ScopedQueryResult<
  * the client cache for the new identity before `scope` flips.
  *
  * `options.onSuccess` and `options.onError` are only invoked for settled
- * responses that apply to the active query (dropped settles after logout or
- * superseded by a queued `triggerRefresh` are suppressed).
+ * responses belonging to the active subscription and refetch generation
+ * (dropped settles after logout, stale pre-flush pushes, or settles superseded
+ * by a queued `triggerRefresh` are suppressed).
  */
 export function injectScopedQuery<Query extends QueryReference>(
   query: Query,
@@ -58,6 +59,12 @@ export function injectScopedQuery<Query extends QueryReference>(
   const pendingRefetch = signal(false);
   const settledSuccessKey = signal<string | null>(null);
   const settledErrorKey = signal<string | null>(null);
+
+  let lastSubscribedArgsKey: string | null = null;
+  let lastSubscribedRefetchGen = 0;
+  let requestedRefetchGen = 0;
+  let subscribedKey: string | null = null;
+  let subscribedRefetchGen = 0;
 
   const effectiveArgs = computed<FunctionArgs<Query> | SkipToken>(() =>
     scope() === null ? skipToken : argsFn(),
@@ -73,6 +80,11 @@ export function injectScopedQuery<Query extends QueryReference>(
     return `${currentScope}:${JSON.stringify(convexToJson(args))}`;
   });
 
+  const requestRefetch = (): void => {
+    requestedRefetchGen += 1;
+    rawQuery.refetch();
+  };
+
   const onSettled = (outcome: 'success' | 'error'): boolean => {
     const currentKey = activeKey();
     if (currentKey === null) {
@@ -83,9 +95,16 @@ export function injectScopedQuery<Query extends QueryReference>(
       return false;
     }
 
+    if (
+      subscribedKey !== currentKey ||
+      subscribedRefetchGen !== requestedRefetchGen
+    ) {
+      return false;
+    }
+
     if (pendingRefetch()) {
       pendingRefetch.set(false);
-      rawQuery.refetch();
+      requestRefetch();
       return false;
     }
 
@@ -102,30 +121,55 @@ export function injectScopedQuery<Query extends QueryReference>(
     return true;
   };
 
-  const rawQuery = injectQuery(query, effectiveArgs, {
-    ...options,
-    onSuccess: (result) => {
-      if (onSettled('success')) {
-        options?.onSuccess?.(result);
+  const rawQuery = injectQuery(
+    query,
+    () => {
+      const args = effectiveArgs();
+      if (args === skipToken) {
+        lastSubscribedArgsKey = null;
+        subscribedKey = null;
+        return skipToken;
       }
-    },
-    onError: (err) => {
-      if (onSettled('error')) {
-        options?.onError?.(err);
-      }
-    },
-  });
 
-  let previousScope: string | null | undefined;
+      const argsKey = JSON.stringify(convexToJson(args));
+      const currentScope = untracked(scope);
+      // Mirror injectQuery's `${refetchVersion}:${argsKey}` dedupe check so
+      // subscribedKey only advances when injectQuery actually opens a fresh
+      // subscription (first subscribe, args changed, or requested refetch).
+      if (
+        argsKey !== lastSubscribedArgsKey ||
+        requestedRefetchGen !== lastSubscribedRefetchGen
+      ) {
+        lastSubscribedArgsKey = argsKey;
+        lastSubscribedRefetchGen = requestedRefetchGen;
+        subscribedKey =
+          currentScope === null ? null : `${currentScope}:${argsKey}`;
+        subscribedRefetchGen = requestedRefetchGen;
+      }
+
+      return args;
+    },
+    {
+      ...options,
+      onSuccess: (result) => {
+        if (onSettled('success')) {
+          options?.onSuccess?.(result);
+        }
+      },
+      onError: (err) => {
+        if (onSettled('error')) {
+          options?.onError?.(err);
+        }
+      },
+    },
+  );
+
   let previousKey: string | null | undefined;
 
   effect(
     () => {
-      const currentScope = scope();
       const currentKey = activeKey();
-      const prevScope = previousScope;
       const prevKey = previousKey;
-      previousScope = currentScope;
       previousKey = currentKey;
 
       if (currentKey === null) {
@@ -139,16 +183,14 @@ export function injectScopedQuery<Query extends QueryReference>(
       if (prevKey !== undefined && prevKey !== currentKey) {
         pendingRefetch.set(false);
         refreshMaskActive.set(false);
-      }
-
-      if (
-        prevScope !== undefined &&
-        prevScope !== null &&
-        prevScope !== currentScope
-      ) {
         settledSuccessKey.set(null);
         settledErrorKey.set(null);
-        rawQuery.refetch();
+      }
+
+      if (subscribedKey !== currentKey) {
+        settledSuccessKey.set(null);
+        settledErrorKey.set(null);
+        requestRefetch();
       }
     },
     options?.injectRef ? {injector: options.injectRef} : undefined,
@@ -166,7 +208,7 @@ export function injectScopedQuery<Query extends QueryReference>(
     }
 
     pendingRefetch.set(false);
-    rawQuery.refetch();
+    requestRefetch();
   };
 
   const isSkipped = computed(() => activeKey() === null);
