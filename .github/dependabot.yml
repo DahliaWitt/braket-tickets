@@ -33,6 +33,13 @@ updates:
       semver-major-days: 21
       semver-minor-days: 7
       semver-patch-days: 3
+    ignore:
+      # Keep @types/node aligned with the Node major pinned in .nvmrc (currently
+      # 22.x) so TypeScript does not accept Node 24/26 APIs unavailable at runtime.
+      # Step this manually alongside .nvmrc when upgrading Node LTS.
+      - dependency-name: '@types/node'
+        update-types:
+          - 'version-update:semver-major'
     # A dependency joins the FIRST group it matches — keep the named risk
     # groups above the catch-alls. Majors outside the named groups arrive as
     # individual PRs for individual review.

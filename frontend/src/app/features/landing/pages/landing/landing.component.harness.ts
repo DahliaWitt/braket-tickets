@@ -21,6 +21,16 @@ export class LandingComponentHarness extends ComponentHarness {
     await btn.click();
   }
 
+  async getLoginButtonAriaLabel(): Promise<string | null> {
+    const btn = await this._loginBtn();
+    return btn ? btn.getAttribute('aria-label') : null;
+  }
+
+  async getLoginButtonText(): Promise<string | null> {
+    const btn = await this._loginBtn();
+    return btn ? (await btn.text()).trim() : null;
+  }
+
   async hasIykyk(): Promise<boolean> {
     const el = await this._iykyk();
     return el !== null;
@@ -81,9 +91,25 @@ export class LandingComponentHarness extends ComponentHarness {
   private _communities = this.locatorForOptional(
     '[data-testid="landing-communities"]',
   );
+  private _eventLinks = this.locatorForAll(
+    '[data-testid="landing-events"] a[href^="/events/"]',
+  );
+  private _communityLinks = this.locatorForAll(
+    '[data-testid="landing-communities"] a[href^="/communities/"]',
+  );
 
   async hasCommunitiesSection(): Promise<boolean> {
     const el = await this._communities();
     return el !== null;
+  }
+
+  async getEventLinkAriaLabels(): Promise<(string | null)[]> {
+    const links = await this._eventLinks();
+    return Promise.all(links.map((link) => link.getAttribute('aria-label')));
+  }
+
+  async getCommunityLinkAriaLabels(): Promise<(string | null)[]> {
+    const links = await this._communityLinks();
+    return Promise.all(links.map((link) => link.getAttribute('aria-label')));
   }
 }

@@ -72,7 +72,6 @@ import {EventEndTimePipe} from '@/utils/event-end-time.pipe';
               (click)="login()"
               data-testid="landing-login-btn"
               [class]="ctaClass"
-              aria-label="Navigate to login page"
             >
               log in / sign up
             </button>
@@ -141,7 +140,6 @@ import {EventEndTimePipe} from '@/utils/event-end-time.pipe';
                 <a
                   [routerLink]="['/events', event._id]"
                   class="focus-ring grid grid-cols-1 border-b border-border transition-colors last:border-b-0 hover:bg-foreground/[0.02] md:grid-cols-[auto_1fr]"
-                  [attr.aria-label]="'View details for ' + event.title"
                 >
                   @if (event.posterUrl) {
                     <div
@@ -212,7 +210,6 @@ import {EventEndTimePipe} from '@/utils/event-end-time.pipe';
                       : ['/communities']
                   "
                   class="flex min-h-6 flex-shrink-0 items-center gap-1.5 transition-colors hover:text-primary"
-                  [attr.aria-label]="'View ' + community.name + ' community'"
                 >
                   <bra-community-avatar
                     [name]="community.name"
