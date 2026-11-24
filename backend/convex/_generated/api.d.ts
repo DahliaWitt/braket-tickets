@@ -3078,6 +3078,12 @@ export declare const api: {
       >;
     };
     tickets: {
+      seedGuestTicketWithoutOrder: FunctionReference<
+        "mutation",
+        "public",
+        { eventId: Id<"events">; guestSessionId: Id<"guest_sessions"> },
+        Id<"tickets">
+      >;
       seedTicket: FunctionReference<
         "mutation",
         "public",

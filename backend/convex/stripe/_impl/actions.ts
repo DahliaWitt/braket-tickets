@@ -9,6 +9,7 @@ import {internal} from '../../_generated/api';
 import type {FunctionReturnType} from 'convex/server';
 import type {CheckoutThemeMode} from '../../lib/orders/validators';
 import {logger} from '../../lib/logger';
+import {isOrderOwnedByIdentity} from '../../lib/access';
 import {withRetry} from '../../lib/resilience';
 import {
   ORDER_HOLD_EXPIRATION_MS,
@@ -122,11 +123,7 @@ function assertOrderOwnership(
     guestSessionId?: Id<'guest_sessions'>;
   },
 ): void {
-  const ownsOrder =
-    identity.type === 'user'
-      ? order.userId === identity.userId
-      : order.guestSessionId === identity.guestSessionId;
-  if (!ownsOrder) {
+  if (!isOrderOwnedByIdentity(order, identity)) {
     throwUnauthorized();
   }
 }
@@ -362,7 +359,23 @@ export async function startTicketOrderCheckoutSessionImpl(
 
   if (order.stripeCheckoutSessionId) {
     const checkoutSessionId = order.stripeCheckoutSessionId;
+    const assertGuestCheckoutAccess = async () => {
+      if (identity.type !== 'guest') return;
+      if (!args.sessionToken) {
+        throwPaymentAppError(
+          'RESERVATION_EXPIRED',
+          'Guest session is invalid or expired',
+        );
+      }
+      await ctx.runQuery(internal.orders.core.assertGuestCheckoutAccess, {
+        orderId: order._id,
+        callerGuestSessionId: identity.guestSessionId,
+        callerGuestSessionToken: args.sessionToken,
+        now: Date.now(),
+      });
+    };
     if (isTestEnvironment()) {
+      await assertGuestCheckoutAccess();
       return {
         orderId: order._id,
         clientSecret: `${checkoutSessionId}_secret_mock`,
@@ -396,20 +409,7 @@ export async function startTicketOrderCheckoutSessionImpl(
         },
       );
 
-    if (identity.type === 'guest') {
-      if (!args.sessionToken) {
-        throwPaymentAppError(
-          'RESERVATION_EXPIRED',
-          'Guest session is invalid or expired',
-        );
-      }
-      await ctx.runQuery(internal.orders.core.assertGuestCheckoutAccess, {
-        orderId: order._id,
-        callerGuestSessionId: identity.guestSessionId,
-        callerGuestSessionToken: args.sessionToken,
-        now: Date.now(),
-      });
-    }
+    await assertGuestCheckoutAccess();
 
     if (existingSession.status !== 'expired') {
       if (existingSession.status !== 'open') {

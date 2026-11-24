@@ -74,6 +74,10 @@ export {
   type PurchaseAccess,
   type PurchaseAccessGranted,
 } from './access/purchase';
+export {
+  isOrderOwnedByIdentity,
+  requireGuestCheckoutAccess,
+} from './orders/access';
 
 // Shared types
 

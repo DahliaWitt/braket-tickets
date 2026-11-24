@@ -339,17 +339,10 @@ describe('cleanupExpiredSessions', () => {
         },
       );
 
-      // Seed references through production mutations:
-      // 1) ticket + completed order via claimFreeTicketAsGuest
-      await t.mutation(api.orders.core.claimFreeTicketAsGuest, {
-        sessionToken: 'ticket-owner-token',
+      await t.mutation(api.testing.tickets.seedGuestTicketWithoutOrder, {
         eventId: freeEventId,
-        quantity: 1,
-        tier: 'regular',
-        termsAccepted: true,
-        idempotencyKey: 'idem-cleanup-ticket-owner',
+        guestSessionId: ticketSessionId,
       });
-      // 2) pending resume token prepared while session is still active
       const prepared = await t.mutation(
         internal.guest_sessions.core.prepareResumeSessionToken,
         {
@@ -358,7 +351,6 @@ describe('cleanupExpiredSessions', () => {
         },
       );
       expect(prepared).toEqual({status: 'prepared'});
-      // 3) order-only reference (no ticket issued yet) via openForGuest
       await t.mutation(api.orders.core.openForGuest, {
         sessionToken: 'order-owner-token',
         eventId: paidEventId,

@@ -1,7 +1,12 @@
 import {convexTest} from '../setup.testing';
 import {describe, it, expect, beforeEach, afterEach, vi} from 'vitest';
+import {getFunctionName} from 'convex/server';
+import type {Value} from 'convex/values';
+import {mock} from 'vitest-mock-extended';
 import {api, internal} from '../_generated/api';
 import type {Id} from '../_generated/dataModel';
+import type {ActionCtx} from '../_generated/server';
+import {startTicketOrderCheckoutSessionImpl} from './_impl/actions';
 import {
   ORDER_HOLD_EXPIRATION_MS,
   STRIPE_CHECKOUT_EXPIRY_BUFFER_MS,
@@ -741,6 +746,66 @@ describe('Stripe checkout creation and recovery', () => {
     });
     const bound = await t.run((ctx) => ctx.db.get('ticket_orders', orderId));
     expect(bound?.stripeCheckoutSessionId).toBe(checkoutSessionId);
+  });
+
+  it('rejects reuse of a mock checkout secret when the guest token rotates during order lookup', async () => {
+    process.env['IS_TEST'] = 'true';
+    const t = convexTest();
+    const oldToken = 'mock-guest-before-rotation';
+    const newToken = 'mock-guest-after-rotation';
+    const {orderId, guestSessionId} = await openGuestOrderForCheckout(
+      t,
+      oldToken,
+    );
+    const checkoutSessionId = 'cs_mock_checkout_reuse';
+    await t.mutation(internal.orders.core.bindCheckoutSession, {
+      orderId,
+      stripeCheckoutSessionId: checkoutSessionId,
+    });
+    const runQuery = vi
+      .fn()
+      .mockImplementation(
+        async (
+          ref: Parameters<ActionCtx['runQuery']>[0],
+          args: Record<string, Value>,
+        ) => {
+          const result: unknown = await t.query(ref, args);
+          if (
+            getFunctionName(ref) ===
+            getFunctionName(internal.orders.core.getInternal)
+          ) {
+            await t.mutation(internal.guest_sessions.core.rotateSessionToken, {
+              sessionId: guestSessionId,
+              sessionToken: newToken,
+            });
+          }
+          return result;
+        },
+      );
+    const runMutation = vi
+      .fn()
+      .mockImplementation(
+        (
+          ref: Parameters<ActionCtx['runMutation']>[0],
+          args: Record<string, Value>,
+        ) => t.mutation(ref, args),
+      );
+    const ctx = mock<ActionCtx>({runQuery, runMutation});
+
+    await expect(
+      startTicketOrderCheckoutSessionImpl(ctx, {
+        orderId,
+        sessionToken: oldToken,
+      }),
+    ).rejects.toThrow('Guest session is invalid or expired');
+    await expect(
+      t.action(api.orders.core.startCheckout, {
+        orderId,
+        sessionToken: newToken,
+      }),
+    ).resolves.toMatchObject({
+      clientSecret: `${checkoutSessionId}_secret_mock`,
+    });
   });
 
   it('preserves the replacement binding when a stale checkout restart finishes last', async () => {

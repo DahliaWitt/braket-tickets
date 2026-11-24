@@ -3,6 +3,7 @@ import type {ActionCtx, MutationCtx, QueryCtx} from '../../_generated/server';
 import {internal} from '../../_generated/api';
 import {getAuthUser, getAuthUserId} from '../../lib/auth_identity';
 import {resolveCallerIdentity} from '../../lib/caller_identity';
+import {requireGuestCheckoutAccess} from '../../lib/access';
 import {rateLimiter} from '../../lib/rate_limits';
 import {
   isActiveTicketStatus,
@@ -20,10 +21,7 @@ import {
   completeResaleOrderState,
 } from '../../lib/orders/complete';
 import {appendFinancialEvent} from '../../lib/orders/financial_events';
-import {
-  findGuestSessionByToken,
-  getActiveGuestSession,
-} from '../../lib/guest_sessions/lifecycle';
+import {findGuestSessionByToken} from '../../lib/guest_sessions/lifecycle';
 import {
   markLateInvalidRefundedState,
   prepareLateInvalidRefundState,
@@ -651,29 +649,6 @@ export async function getByStripePaymentIntentIdHandler(
     .first();
 }
 
-async function assertGuestOrderSessionActive(
-  ctx: Pick<QueryCtx, 'db'> | Pick<MutationCtx, 'db'>,
-  order: Doc<'ticket_orders'>,
-  callerGuestSessionId: Id<'guest_sessions'>,
-  callerGuestSessionToken: string,
-  now: number,
-): Promise<void> {
-  if (order.guestSessionId !== callerGuestSessionId) {
-    throwOrderError('FORBIDDEN', 'You do not have access to this order');
-  }
-  const guestSession = await getActiveGuestSession(
-    ctx,
-    callerGuestSessionToken,
-    now,
-  );
-  if (!guestSession || guestSession._id !== callerGuestSessionId) {
-    throwOrderError(
-      'RESERVATION_EXPIRED',
-      'Guest session is invalid or expired',
-    );
-  }
-}
-
 export async function assertGuestCheckoutAccessHandler(
   ctx: QueryCtx,
   args: {
@@ -687,13 +662,7 @@ export async function assertGuestCheckoutAccessHandler(
   if (!order) {
     throwOrderError('INVALID_STATE', 'Order not found');
   }
-  await assertGuestOrderSessionActive(
-    ctx,
-    order,
-    args.callerGuestSessionId,
-    args.callerGuestSessionToken,
-    args.now,
-  );
+  await requireGuestCheckoutAccess(ctx, order, args);
   return null;
 }
 
@@ -713,13 +682,11 @@ export async function bindCheckoutSessionHandler(
         'Guest session is invalid or expired',
       );
     }
-    await assertGuestOrderSessionActive(
-      ctx,
-      order,
-      args.callerGuestSessionId,
-      args.callerGuestSessionToken,
-      Date.now(),
-    );
+    await requireGuestCheckoutAccess(ctx, order, {
+      callerGuestSessionId: args.callerGuestSessionId,
+      callerGuestSessionToken: args.callerGuestSessionToken,
+      now: Date.now(),
+    });
   }
 
   if (

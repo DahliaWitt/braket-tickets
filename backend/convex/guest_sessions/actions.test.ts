@@ -539,7 +539,14 @@ describe('guest_sessions_actions.initiateGuestSession', () => {
     const runCase = async (
       mode: 'missing_on_prepare' | 'inactive_on_clear',
     ) => {
-      const initiateCalls: Array<Record<string, unknown>> = [];
+      const prepare = getFunctionName(
+        internal.guest_sessions.core.prepareResumeSessionToken,
+      );
+      const clear = getFunctionName(
+        internal.guest_sessions.core.clearResumeSessionToken,
+      );
+      const initiate = getFunctionName(internal.guest_sessions.core.initiate);
+      const guestSessionCalls: string[] = [];
       const mockCtx = {
         runQuery: vi.fn(async (ref: FunctionReference<'query', 'internal'>) => {
           if (
@@ -565,28 +572,18 @@ describe('guest_sessions_actions.initiateGuestSession', () => {
             } catch {
               return {ok: true};
             }
-            if (
-              name ===
-              getFunctionName(
-                internal.guest_sessions.core.prepareResumeSessionToken,
-              )
-            ) {
+            if (name === prepare) {
+              guestSessionCalls.push(name);
               return mode === 'missing_on_prepare'
                 ? {status: 'missing'}
                 : {status: 'prepared'};
             }
-            if (
-              name ===
-              getFunctionName(
-                internal.guest_sessions.core.clearResumeSessionToken,
-              )
-            ) {
+            if (name === clear) {
+              guestSessionCalls.push(name);
               return {status: 'inactive'};
             }
-            if (
-              name === getFunctionName(internal.guest_sessions.core.initiate)
-            ) {
-              initiateCalls.push(args);
+            if (name === initiate) {
+              guestSessionCalls.push(name);
               return {sessionToken: String(args['sessionToken'])};
             }
             // Rate limiter component call
@@ -602,7 +599,11 @@ describe('guest_sessions_actions.initiateGuestSession', () => {
       try {
         const result = await initiateGuestSessionHandler(mockCtx, {email});
         expect(result.sessionToken).toBeTruthy();
-        expect(initiateCalls).toHaveLength(1);
+        expect(guestSessionCalls).toEqual(
+          mode === 'inactive_on_clear'
+            ? [prepare, clear, initiate]
+            : [prepare, initiate],
+        );
       } finally {
         if (originalSiteUrl === undefined) {
           delete process.env['SITE_URL'];

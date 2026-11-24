@@ -80,6 +80,8 @@ If checkout creation succeeds in Stripe but Convex rejects binding the session, 
 
 When a checkout restart races another request that changes `stripeCheckoutSessionId`, the stale request returns `INVALID_STATE`. A retry reads the current binding. Checkout sync also revalidates the guest token before attaching an unbound Stripe session.
 
+Checkout revalidates the guest token before returning a client secret for a reused Stripe session. The mocked checkout path applies the same check before returning its test secret.
+
 ### Resolution
 
 - If Stripe shows the Checkout Session is `expired` but the order is still `open`, manually run:
