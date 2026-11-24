@@ -16,7 +16,8 @@ export type ImportFieldKey =
   | 'orderRef'
   | 'purchaseDateRaw'
   | 'guestType'
-  | 'notes';
+  | 'notes'
+  | 'slotOverride';
 
 /**
  * Guest type mirror. Runtime values live on the frontend because the
@@ -65,9 +66,7 @@ export interface HeaderColumn {
 }
 
 export type ParseErrorCode =
-  | 'no-rows-found'
-  | 'duplicate-headers'
-  | 'no-name-column';
+  'no-rows-found' | 'duplicate-headers' | 'no-name-column';
 
 export interface ParseError {
   readonly code: ParseErrorCode;

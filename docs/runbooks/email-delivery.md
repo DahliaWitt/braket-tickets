@@ -159,6 +159,48 @@ Source of truth:
 - `backend/convex/events/_impl/broadcasts_handlers.ts` — send fan-out and `deliverMissedBroadcasts`
 - `backend/convex/lib/orders/complete.ts`, `backend/convex/lib/resale/settlement.ts`, `backend/convex/events/_impl/guests.ts` — scheduling triggers
 
+## Self-service guest-list delivery
+
+Creating an artist/staff assignment queues two independent messages when the
+delegate does not already have admission: the reusable management invitation
+and the delegate's guest admission ticket. Each self-service guest add queues
+`internal.events.guest_actions.sendAutomaticTicket`; an email-address change
+resets the sent marker and queues the ticket for the new address. Delivery
+deduplication for this path is scoped to both guest ID and recipient,
+so a delivery recorded for the old address does not suppress the corrected
+recipient. Completion verifies the attempted recipient still matches the
+guest's current address; a late old-address success cannot mark the corrected
+address as sent. Failed sends leave the guest admission intact, record a durable
+`failed` delivery state, and may be retried from the delegate UI. Retry first
+returns the row to `queued`;
+provider acceptance transitions it to `sent`.
+
+Ticket delivery deduplication uses normalized `emailDeliveries.recipientKey`
+while retaining the original `recipient` value for provider correlation and
+operator display. The field remains optional in the schema during rollout, but
+new rows always write a key: a recipient that cannot be normalized gets the
+`!UNNORMALIZABLE` sentinel so it never accumulates in the legacy fallback scan.
+Lookup falls back to the exact-recipient index and then at most 100 unkeyed
+rows for the same source; a larger legacy set fails closed with the structured
+error code `EMAIL_DELIVERY_LEGACY_RECIPIENT_SCAN_EXCEEDED` (run
+`migrations:runEmailDeliveryRecipientKeyBackfill` to clear it). After deploying
+the optional field and composite index, complete that backfill before enabling
+self-service guest lists — `guest_list/maintenance.enable` verifies it. The
+authoritative command order is in
+[Self-service guest-list rollout and operations](./admin-operations.md#self-service-guest-list-rollout-and-operations).
+
+Invitation rotation is two phase. `guest_list/invites.sendInviteAttempt` sends
+the new fragment-based URL, then `guest_list/invite_state.promoteAttempt`
+activates its digest only after provider acceptance. A failed resend clears the
+pending digest and leaves the prior accepted credential usable. Raw credentials
+are never stored on assignment rows.
+
+Source of truth:
+
+- `backend/convex/guest_list/invites.ts`
+- `backend/convex/guest_list/invite_state.ts`
+- `backend/convex/events/guest_actions.ts`
+
 ### Backfill after deploy
 
 Run `migrations:backfillEventBroadcastDeliveries` promptly after the feature

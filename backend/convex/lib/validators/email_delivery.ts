@@ -16,6 +16,7 @@ export const EMAIL_DELIVERY_SOURCES = [
   'payout',
   'resale_available',
   'auth',
+  'guest_list_invite',
 ] as const;
 export type EmailDeliverySource = (typeof EMAIL_DELIVERY_SOURCES)[number];
 
@@ -31,12 +32,36 @@ export const emailDeliverySourceValidator = v.union(
   v.literal(EMAIL_DELIVERY_SOURCES[8]),
   v.literal(EMAIL_DELIVERY_SOURCES[9]),
   v.literal(EMAIL_DELIVERY_SOURCES[10]),
+  v.literal(EMAIL_DELIVERY_SOURCES[11]),
 );
 
 const _emailDeliverySourceValidatorMatchesType: AssertEqual<
   Infer<typeof emailDeliverySourceValidator>,
   EmailDeliverySource
 > = true;
+
+/**
+ * Sentinel written to `emailDeliveries.recipientKey` when the recorded
+ * recipient cannot be normalized (empty or whitespace-only address).
+ *
+ * Leaving the field unset would keep such rows in the "legacy, not yet
+ * backfilled" bucket forever: `hasDelivery`'s bounded fallback scans rows whose
+ * `recipientKey` is `undefined`, so permanently unkeyed rows accumulate against
+ * the 100-row cap and can eventually fail every recipient-scoped send for that
+ * source, even after the backfill has verifiably completed.
+ *
+ * The value contains uppercase characters, which `normalizeEmail` (trim +
+ * lowercase) can never produce, so it can never collide with a real lookup key.
+ */
+export const UNNORMALIZABLE_RECIPIENT_KEY = '!UNNORMALIZABLE';
+
+/**
+ * Stable error code for the fail-closed branch in `email_delivery.hasDelivery`.
+ * Thrown as a structured `ConvexError` so the code survives production error
+ * redaction, which replaces every plain `Error` message with "Server Error".
+ */
+export const EMAIL_DELIVERY_LEGACY_RECIPIENT_SCAN_EXCEEDED =
+  'EMAIL_DELIVERY_LEGACY_RECIPIENT_SCAN_EXCEEDED';
 
 export const emailAttachmentValidator = v.object({
   filename: v.string(),

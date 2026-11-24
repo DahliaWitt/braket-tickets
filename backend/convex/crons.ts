@@ -11,6 +11,13 @@ crons.interval(
 );
 
 crons.interval(
+  'cleanup old guest-list audit logs',
+  {hours: 24},
+  internal.guest_list.maintenance.cleanupAuditEvents,
+  {},
+);
+
+crons.interval(
   'cleanup stale resale listings',
   {minutes: 30},
   internal.resale.listings.cleanupStaleResaleListings,

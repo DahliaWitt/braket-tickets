@@ -69,6 +69,7 @@ async function setup(options?: {
   searchResultsData?: unknown[];
   deferSearch?: boolean;
   notifPrefData?: {mode: 'all' | 'digest'; digestHour: number} | null;
+  guestListDefaults?: {artistSlots: number; staffSlots: number};
   queryParams?: Record<string, string | null>;
 }) {
   const ctxMock = makeCommunityContextMock({
@@ -88,6 +89,10 @@ async function setup(options?: {
   // undefined means "not provided" (use default null); null means "no pref stored"
   const notifPrefData =
     options?.notifPrefData !== undefined ? options.notifPrefData : null;
+  const guestListDefaults = options?.guestListDefaults ?? {
+    artistSlots: 2,
+    staffSlots: 2,
+  };
   let organizerQueryOnData: ((data: unknown) => void) | null = null;
 
   const searchResultsData = options?.searchResultsData ?? [];
@@ -118,6 +123,11 @@ async function setup(options?: {
         if (name === getFunctionName(api.communities.profile.getAdmin)) {
           organizerQueryOnData = onData;
           emitAsync(() => onData(orgData));
+        } else if (
+          name ===
+          getFunctionName(api.communities.management.guest_list_settings.get)
+        ) {
+          emitAsync(() => onData(guestListDefaults));
         } else if (
           name === getFunctionName(api.communities.admins.listByCommunity)
         ) {
@@ -242,6 +252,34 @@ async function setup(options?: {
     searchSubscriptions,
   };
 }
+
+describe('guest list defaults', () => {
+  it('renders the effective community defaults', async () => {
+    const {harness} = await setup({
+      guestListDefaults: {artistSlots: 5, staffSlots: 3},
+    });
+
+    const defaults = await harness.getGuestListDefaults();
+    expect(defaults).not.toBeNull();
+    expect(await defaults!.getArtistSlots()).toBe('5');
+    expect(await defaults!.getStaffSlots()).toBe('3');
+  });
+
+  it('saves both values through the generated settings contract', async () => {
+    const {harness, convexMock} = await setup();
+    const defaults = await harness.getGuestListDefaults();
+    expect(defaults).not.toBeNull();
+
+    await defaults!.setArtistSlots('6');
+    await defaults!.setStaffSlots('4');
+    await defaults!.clickSave();
+
+    expect(convexMock.mutation).toHaveBeenCalledWith(
+      api.communities.management.guest_list_settings.update,
+      {organizerId: FAKE_ORG_ID, artistSlots: 6, staffSlots: 4},
+    );
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Tests

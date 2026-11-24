@@ -22,6 +22,7 @@ import {
 } from '@shared/pricing/pricing-summary';
 import {EventDatePipe} from '@/utils/event-date.pipe';
 import {EventEndTimePipe} from '@/utils/event-end-time.pipe';
+import {GuestListDashboardService} from '@/features/guest-lists/services/guest-list-dashboard.service';
 import {outlineMonoCta} from '@/features/shared/outline-cta';
 
 @Component({
@@ -57,6 +58,8 @@ export class DashboardComponent {
   private dashboardData = inject(DashboardDataService);
   private dashboardPageData = inject(DashboardPageDataService);
   private readonly browser = inject(BrowserPlatformService);
+  private readonly guestLists = inject(GuestListDashboardService);
+  readonly hasActiveGuestLists = this.guestLists.hasActiveAssignments;
 
   // Consume resource-based signals from service
   applicationStatus = this.dashboardData.applicationStatus;

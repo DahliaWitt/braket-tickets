@@ -14,6 +14,7 @@ import {
   assertBatchSizeWithinCap,
   assertEventImportCapNotExceeded,
   findExistingImportBatch,
+  IMPORT_ERROR_CODES,
   insertImportBatch,
   nameEmailDedupKey,
 } from '../../lib/imports/bulk';
@@ -23,6 +24,11 @@ import type {
 } from '../../lib/imports/validators';
 import {MANAGEMENT_DATASET_LIMITS} from '../../lib/management_limits';
 import {takeFromQuery} from '../../lib/query_scan';
+import {
+  assertGuestAdmissionCapacity,
+  getOrCreateGuestListEventStatsFromRoster,
+  updateGuestListEventStats,
+} from '../../lib/guest_list/event_stats';
 
 /**
  * One raw guest row from the parsed CSV. `type` is a free string here because
@@ -180,11 +186,29 @@ export async function addMany(
     entity: 'guests',
   });
 
+  // Seed the counter row from the roster read above instead of repeating a
+  // take(5001) in the same transaction. The roster is complete whenever the
+  // bounded read came back under its limit; at or over the limit the cap
+  // assertion above has already rejected any import that would write rows.
+  const stats =
+    toInsert.length > 0
+      ? await getOrCreateGuestListEventStatsFromRoster(ctx, args.eventId, {
+          guests: existingGuests,
+          complete: existingGuests.length < guestLimit,
+        })
+      : null;
+  if (stats) {
+    assertGuestAdmissionCapacity(stats, toInsert.length, {
+      errorCode: IMPORT_ERROR_CODES.IMPORT_CAP_EXCEEDED,
+      operation: 'importing',
+    });
+  }
   for (const {rowIndex, row} of toInsert) {
     await ctx.db.insert('guests', {
       eventId: args.eventId,
       name: row.name,
       ...(row.email !== undefined ? {email: row.email} : {}),
+      ...(row.email !== undefined ? {emailKey: row.email.toLowerCase()} : {}),
       type: row.type,
       ...(row.notes !== undefined ? {notes: row.notes} : {}),
     });
@@ -193,6 +217,12 @@ export async function addMany(
   outcomes.sort((a, b) => a.rowIndex - b.rowIndex);
 
   const insertedCount = toInsert.length;
+  if (stats) {
+    await updateGuestListEventStats(ctx, stats, (current) => ({
+      totalGuestAdmissionCount:
+        current.totalGuestAdmissionCount + insertedCount,
+    }));
+  }
   const result: ImportBatchResult = {insertedCount, skippedCount, outcomes};
 
   await insertImportBatch(ctx, {
