@@ -171,6 +171,7 @@ async function setup(options: {
   hasMultiple?: boolean;
   communities?: Id<'organizers'>[];
   isAdminOverride?: boolean;
+  isMemberOf?: boolean;
   userRole?: string;
   queryParams?: Record<string, string | null>;
   routeParams?: Record<string, string | null>;
@@ -221,6 +222,14 @@ async function setup(options: {
         onData: (data: unknown) => void,
         onError?: (err: Error) => void,
       ) => {
+        if (
+          options.isMemberOf !== undefined &&
+          functionReferenceMatches(_query, api.communities.admins.isMemberOf)
+        ) {
+          emitAsync(() => onData(options.isMemberOf));
+          return () => void 0;
+        }
+
         if (
           functionReferenceMatches(
             _query,
@@ -2189,13 +2198,19 @@ describe('CommunityAdminComponent', () => {
       expect(await harness.getCustomHeaderText()).toContain('Unable to load');
     });
 
-    it('suppresses admin override banner while ?community= is unresolved', async () => {
+    it('suppresses admin override banner and preserves ?community= in tab links while resolving and unresolved', async () => {
+      const lookupDeferred = createDeferred<{
+        _id: Id<'organizers'>;
+        name: string;
+        slug?: string | null;
+      } | null>();
+      const queryParamMap$ = new BehaviorSubject(convertToParamMap({}));
       const {harness, fixture} = await setup({
-        queryParams: {community: 'revoked-slug'},
-        communityBySlug: null,
+        queryParamMap$,
         selectedId: FAKE_ORG_ID,
         userRole: 'root_admin',
-        isAdminOverride: true,
+        isMemberOf: false,
+        getAdminBySlugOrId: vi.fn(() => lookupDeferred.promise),
         spyOnNavigate: false,
       });
 
@@ -2203,8 +2218,29 @@ describe('CommunityAdminComponent', () => {
       await fixture.whenStable();
       fixture.detectChanges();
 
+      // Active root-admin override banner is visible before an unresolved ?community= transition.
+      expect(await harness.hasOverrideBanner()).toBe(true);
+
+      // Start resolving ?community=revoked-slug: banner hides and tab links preserve pending param.
+      queryParamMap$.next(convertToParamMap({community: 'revoked-slug'}));
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.isResolvingCommunityParam()).toBe(true);
+      expect(await harness.hasOverrideBanner()).toBe(false);
+      expect(fixture.componentInstance.tabQueryParams()).toEqual({
+        community: 'revoked-slug',
+      });
+
+      // Lookup settles null: unresolved error card renders, banner stays hidden, tab links retain unresolved param.
+      lookupDeferred.resolve(null);
+      await fixture.whenStable();
+      fixture.detectChanges();
+
       expect(await harness.getUnresolvedCommunityError()).not.toBeNull();
       expect(await harness.hasOverrideBanner()).toBe(false);
+      expect(fixture.componentInstance.tabQueryParams()).toEqual({
+        community: 'revoked-slug',
+      });
     });
 
     it('ignores stale settlement during an ABA ?community= param transition', async () => {

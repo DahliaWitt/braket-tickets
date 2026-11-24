@@ -146,7 +146,9 @@ export class CommunityAdminComponent implements HasUnsavedChanges {
     () => {
       const id = this.communityCtx.selectedCommunityId();
       const isBlocked =
-        this.hasLoadError() || this.unresolvedCommunitySlug() !== null;
+        this.isResolvingCommunityParam() ||
+        this.hasLoadError() ||
+        this.unresolvedCommunitySlug() !== null;
       const isMagicLinks = this.activeTab() === 'magic-links';
       return {
         isMemberOf:
@@ -189,7 +191,11 @@ export class CommunityAdminComponent implements HasUnsavedChanges {
   );
 
   readonly isAdminOverride = computed(() => {
-    if (this.hasLoadError() || this.unresolvedCommunitySlug() !== null) {
+    if (
+      this.isResolvingCommunityParam() ||
+      this.hasLoadError() ||
+      this.unresolvedCommunitySlug() !== null
+    ) {
       return false;
     }
     return (
@@ -213,7 +219,9 @@ export class CommunityAdminComponent implements HasUnsavedChanges {
     () => this.communityDoc()?.status ?? 'draft',
   );
   readonly tabQueryParams = computed(() => {
-    if (this.hasLoadError() || this.unresolvedCommunitySlug()) return null;
+    if (this.hasLoadError()) return null;
+    const unresolved = this.unresolvedCommunitySlug();
+    if (unresolved) return {community: unresolved};
     if (this.isResolvingCommunityParam()) {
       const pending = this.lastHandledCommunityParam();
       return pending ? {community: pending} : null;
