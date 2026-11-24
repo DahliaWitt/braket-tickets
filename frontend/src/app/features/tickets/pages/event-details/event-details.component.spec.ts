@@ -689,8 +689,7 @@ describe('EventDetailsComponent', () => {
     await harness.clickContactCommunityButton();
 
     const config = mockDialogService.create.mock.calls.at(-1)?.[0] as
-      | ContactDialogConfigForEventDetails
-      | undefined;
+      ContactDialogConfigForEventDetails | undefined;
 
     expect(config).toMatchObject({
       zTitle: 'Contact Void Collective',
@@ -720,8 +719,7 @@ describe('EventDetailsComponent', () => {
     component.contactOrganizer();
 
     const config = mockDialogService.create.mock.calls.at(-1)?.[0] as
-      | ContactDialogConfigForEventDetails
-      | undefined;
+      ContactDialogConfigForEventDetails | undefined;
 
     expect(config).toMatchObject({
       zTitle: 'Contact Org Name',
@@ -747,8 +745,7 @@ describe('EventDetailsComponent', () => {
     component.contactOrganizer();
 
     const config = mockDialogService.create.mock.calls.at(-1)?.[0] as
-      | ContactDialogConfigForEventDetails
-      | undefined;
+      ContactDialogConfigForEventDetails | undefined;
 
     expect(config).toMatchObject({
       zTitle: 'Contact Org Name',
@@ -1785,6 +1782,127 @@ describe('EventDetailsComponent', () => {
       const text = await harness.getPausedSalesBannerText();
       expect(text).toContain('Ticket Sales Are Paused');
       expect(text).toContain('Sales temporarily paused by the organizer');
+    });
+  });
+
+  describe('trustQuery account-switch isolation', () => {
+    it('masks prior-account trust result across direct u1 -> u2 switch and first-response errors', async () => {
+      fixture.destroy();
+
+      const userSignal = signal<{_id: string; name: string} | null>({
+        _id: 'u1',
+        name: 'First User',
+      });
+      mockAuthService.user = userSignal;
+
+      const privateEvent = {
+        ...mockEvent,
+        _id: 'private-event',
+        visibility: 'private',
+        organizerId: 'org1',
+      } as unknown as EventDetail;
+      eventDocsById.set('private-event', privateEvent);
+      availabilityByEventId.set('private-event', {
+        ...defaultAvailability,
+        purchaseAccess: {allowed: false},
+      });
+
+      const firstTrustUnsubscribe = vi.fn();
+      let trustSubscribeCount = 0;
+      let firstTrustOnData: ((data: unknown) => void) | undefined;
+      let secondTrustOnData: ((data: unknown) => void) | undefined;
+      let secondTrustOnError: ((err: Error) => void) | undefined;
+
+      const scopedOnUpdate = vi
+        .fn()
+        .mockImplementation(
+          (
+            _queryRef: unknown,
+            args: unknown,
+            onData: (data: unknown) => void,
+            onError?: (err: Error) => void,
+          ) => {
+            const typedArgs = args as Record<string, string>;
+            if ('id' in typedArgs) {
+              emitAsync(onData, privateEvent);
+              return () => void 0;
+            }
+            if ('eventId' in typedArgs) {
+              emitAsync(onData, availabilityByEventId.get('private-event'));
+              return () => void 0;
+            }
+            if (
+              'organizerId' in typedArgs &&
+              !('eventId' in typedArgs) &&
+              !('id' in typedArgs)
+            ) {
+              trustSubscribeCount += 1;
+              if (trustSubscribeCount === 1) {
+                firstTrustOnData = onData;
+                return firstTrustUnsubscribe;
+              }
+              secondTrustOnData = onData;
+              secondTrustOnError = onError;
+              return () => void 0;
+            }
+            emitAsync(onData, null);
+            return () => void 0;
+          },
+        );
+      mockConvexClient.onUpdate = scopedOnUpdate;
+      mockConvexClient.client.onUpdate = scopedOnUpdate;
+
+      const localFixture = TestBed.createComponent(EventDetailsComponent);
+      localFixture.componentRef.setInput('id', 'private-event');
+      localFixture.detectChanges();
+      await localFixture.whenStable();
+      localFixture.detectChanges();
+
+      const harness = await TestbedHarnessEnvironment.harnessForFixture(
+        localFixture,
+        EventDetailsHarness,
+      );
+
+      expect(trustSubscribeCount).toBe(1);
+      firstTrustOnData?.({trusted: true, source: 'direct', via: null});
+      localFixture.detectChanges();
+      await localFixture.whenStable();
+
+      expect(localFixture.componentInstance.trustResult()).toEqual({
+        trusted: true,
+        source: 'direct',
+        via: null,
+      });
+      expect(await harness.isVettingNoticeVisible()).toBe(false);
+
+      // Direct switch u1 -> u2 without passing through null
+      userSignal.set({_id: 'u2', name: 'Second User'});
+      expect(localFixture.componentInstance.trustResult()).toBeNull();
+      localFixture.detectChanges();
+      await localFixture.whenStable();
+
+      expect(firstTrustUnsubscribe).toHaveBeenCalledTimes(1);
+      expect(trustSubscribeCount).toBe(2);
+      expect(localFixture.componentInstance.trustResult()).toBeNull();
+
+      // Error on first u2 response keeps u1's trusted result hidden
+      secondTrustOnError?.(new Error('transient trust error'));
+      localFixture.detectChanges();
+      await localFixture.whenStable();
+      expect(localFixture.componentInstance.trustResult()).toBeNull();
+
+      // Success for u2 unmasks u2's untrusted result and shows vetting notice
+      secondTrustOnData?.({trusted: false, source: null, via: null});
+      localFixture.detectChanges();
+      await localFixture.whenStable();
+
+      expect(localFixture.componentInstance.trustResult()).toEqual({
+        trusted: false,
+        source: null,
+        via: null,
+      });
+      expect(await harness.isVettingNoticeVisible()).toBe(true);
+      localFixture.destroy();
     });
   });
 });

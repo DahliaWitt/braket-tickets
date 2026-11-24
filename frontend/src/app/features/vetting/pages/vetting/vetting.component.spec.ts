@@ -1413,4 +1413,75 @@ describe('VettingComponent', () => {
       expect(await harness.isSubmitButtonVisible()).toBe(false);
     });
   });
+
+  describe('existingApplicationQuery account-switch isolation', () => {
+    it('masks prior-account application status across direct u1 -> u2 switch and first-response errors', async () => {
+      fixture.destroy();
+      mockConvexClient.onUpdate.mockClear();
+
+      existingApplicationDoc = {
+        _id: 'app-u1',
+        _creationTime: Date.now(),
+        userId: '123',
+        status: 'approved',
+        answers: {},
+      };
+
+      fixture = TestBed.createComponent(VettingComponent);
+      fixture.componentRef.setInput('id', 'org-123');
+      fixture.detectChanges();
+      await waitForVettingResource();
+
+      harness = await TestbedHarnessEnvironment.harnessForFixture(
+        fixture,
+        VettingComponentHarness,
+      );
+
+      expect(await harness.isApprovedStateVisible()).toBe(true);
+      expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(1);
+
+      // Hold the resubscribed u2 query open while switching u1 -> u2 directly
+      suppressExistingEmit = true;
+      (
+        authServiceMock as {
+          user: WritableSignal<{_id: string; id: string; email: string}>;
+        }
+      ).user.set({
+        _id: '456',
+        id: '456',
+        email: 'second@example.com',
+      });
+      fixture.detectChanges();
+      await waitForVettingResource();
+
+      expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(2);
+      expect(await harness.isApprovedStateVisible()).toBe(false);
+      expect(await harness.isGateLoadingStateVisible()).toBe(true);
+
+      // First response for u2 errors: u1's approved state stays hidden
+      emitExistingError?.(new Error('transient application error'));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(await harness.isApprovedStateVisible()).toBe(false);
+      expect(await harness.isGateErrorStateVisible()).toBe(true);
+
+      // Subsequent success for u2 unmasks u2's own pending application state
+      emitExisting?.({
+        _id: 'app-u2',
+        _creationTime: Date.now(),
+        userId: '456',
+        status: 'pending',
+        answers: {},
+      });
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(await harness.isApprovedStateVisible()).toBe(false);
+      expect(await harness.isGateErrorStateVisible()).toBe(false);
+      expect(await harness.isPendingStateVisible()).toBe(true);
+    });
+  });
 });
