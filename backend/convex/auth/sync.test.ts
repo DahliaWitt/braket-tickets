@@ -99,6 +99,139 @@ describe('auth_sync', () => {
       }
     });
 
+    it('migrates tickets, orders, and magic-link redemptions from retained retired and active guest sessions on signup', async () => {
+      const t = convexTest();
+      vi.useFakeTimers();
+
+      try {
+        const start = Date.now();
+        const guestEmail = 'retired-guest-signup@example.com';
+        const adminId = (await t.mutation(
+          api.testing.users.createUserDirectly,
+          {
+            email: 'retired-signup-admin@example.com',
+            name: 'Admin',
+          },
+        )) as Id<'users'>;
+        const organizerId = await t.mutation(
+          api.testing.communities.seedOrganizer,
+          {
+            name: 'Retired Signup Org',
+            slug: 'retired-signup-org',
+          },
+        );
+        const eventId = await t.mutation(api.testing.events.seedEvent, {
+          title: 'Retired Signup Event',
+          date: '2099-06-01T20:00:00Z',
+          price: 0,
+          totalTickets: 25,
+          status: 'published',
+          visibility: 'public',
+          organizerId,
+        });
+        const {linkId} = await t.mutation(
+          api.testing.magic_links.seedMagicLink,
+          {
+            createdBy: adminId,
+            organizerId,
+            token: 'retired-signup-magic-link',
+            status: 'active',
+          },
+        );
+
+        const retiredSessionId = await t.mutation(
+          api.testing.guest_sessions.seedGuestSession,
+          {
+            email: guestEmail,
+            magicLinkId: linkId,
+            sessionToken: 'retired-signup-session-token',
+            expiresAt: start + 60_000,
+          },
+        );
+
+        const claim1 = await t.mutation(
+          api.orders.core.claimFreeTicketAsGuest,
+          {
+            sessionToken: 'retired-signup-session-token',
+            eventId,
+            quantity: 1,
+            tier: 'regular',
+            termsAccepted: true,
+            idempotencyKey: 'idem-retired-signup-claim-1',
+          },
+        );
+
+        // Advance past expiry and retire the first session via hourly cleanup.
+        vi.advanceTimersByTime(120_000);
+        const cleaned = await t.mutation(
+          internal.guest_sessions.core.cleanupExpiredSessions,
+          {},
+        );
+        expect(cleaned).toBe(1);
+
+        // Guest later starts a second session and claims another ticket.
+        const secondSession = await t.action(
+          api.guest_sessions.actions.initiateGuestSession,
+          {email: guestEmail},
+        );
+        const claim2 = await t.mutation(
+          api.orders.core.claimFreeTicketAsGuest,
+          {
+            sessionToken: secondSession.sessionToken,
+            eventId,
+            quantity: 1,
+            tier: 'regular',
+            termsAccepted: true,
+            idempotencyKey: 'idem-retired-signup-claim-2',
+          },
+        );
+
+        // User signs up with the same verified email: both sessions must migrate.
+        const syncResult = await t.mutation(internal.auth.sync.syncUser, {
+          betterAuthUserId: 'ba-user-retired-signup',
+          email: guestEmail,
+          authEmailVerified: true,
+        });
+        await finishAllScheduledFunctions(t);
+
+        await t.run(async (ctx) => {
+          const retiredSession = await ctx.db.get(
+            'guest_sessions',
+            retiredSessionId,
+          );
+          expect(retiredSession?.retiredAt).toBeTypeOf('number');
+          expect(retiredSession?.convertedToUserId).toBe(syncResult.userId);
+
+          const order1 = await ctx.db.get('ticket_orders', claim1.orderId);
+          const order2 = await ctx.db.get('ticket_orders', claim2.orderId);
+          expect(order1?.userId).toBe(syncResult.userId);
+          expect(order1?.guestSessionId).toBeUndefined();
+          expect(order2?.userId).toBe(syncResult.userId);
+          expect(order2?.guestSessionId).toBeUndefined();
+
+          const tickets = await ctx.db
+            .query('tickets')
+            .withIndex('by_user', (q) => q.eq('userId', syncResult.userId))
+            .collect();
+          expect(tickets).toHaveLength(2);
+          expect(tickets.every((tk) => tk.guestSessionId === undefined)).toBe(
+            true,
+          );
+
+          const redemptions = await ctx.db
+            .query('magic_link_redemption_log')
+            .withIndex('by_guestSession', (q) =>
+              q.eq('guestSessionId', retiredSessionId),
+            )
+            .collect();
+          expect(redemptions).toHaveLength(1);
+          expect(redemptions[0].userId).toBe(syncResult.userId);
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('updates an existing Better Auth-linked user without overwriting a custom name', async () => {
       const t = convexTest();
 

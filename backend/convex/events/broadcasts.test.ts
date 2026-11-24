@@ -1,7 +1,7 @@
-import {describe, expect, it} from 'vitest';
+import {describe, expect, it, vi} from 'vitest';
 import type {TicketStatus} from '@shared/domain/ticket-status';
 import {createAutoDrainConvexTest} from '../setup.testing';
-import {api} from '../_generated/api';
+import {api, internal} from '../_generated/api';
 import type {Id} from '../_generated/dataModel';
 
 const convexTest = createAutoDrainConvexTest();
@@ -292,6 +292,65 @@ describe('eventBroadcasts.getAudience', () => {
 
     expect(result.recipientCount).toBe(1);
     expect(result.exceedsCap).toBe(false);
+  });
+
+  it('retains guest-checkout ticket holders in the broadcast audience after session expiration cleanup', async () => {
+    const t = convexTest();
+    vi.useFakeTimers();
+
+    try {
+      const start = Date.now();
+      const adminId = await t.mutation(api.testing.users.createUserDirectly, {
+        name: 'Admin',
+        email: 'admin-retired-broadcast@braket.gay',
+        isRootAdmin: true,
+      });
+      const organizerId = await t.mutation(
+        api.testing.communities.seedOrganizer,
+        {
+          name: 'Retired Broadcast Org',
+          slug: 'retired-broadcast-org',
+        },
+      );
+      const eventId = await t.mutation(api.testing.events.seedEvent, {
+        ...EVENT_SEED_BASE,
+        date: '2099-06-15T02:00:00.000Z',
+        price: 0,
+        organizerId,
+      });
+      const asAdmin = t.withIdentity({subject: adminId});
+
+      await t.mutation(api.testing.guest_sessions.seedGuestSession, {
+        email: 'expired-guest-holder@example.com',
+        sessionToken: 'expired-broadcast-guest-token',
+        expiresAt: start + 60_000,
+      });
+
+      await t.mutation(api.orders.core.claimFreeTicketAsGuest, {
+        sessionToken: 'expired-broadcast-guest-token',
+        eventId,
+        quantity: 1,
+        tier: 'regular',
+        termsAccepted: true,
+        idempotencyKey: 'idem-broadcast-retired-guest',
+      });
+
+      vi.advanceTimersByTime(120_000);
+      const cleaned = await t.mutation(
+        internal.guest_sessions.core.cleanupExpiredSessions,
+        {},
+      );
+      expect(cleaned).toBe(1);
+
+      const result = await asAdmin.query(api.events.broadcasts.getAudience, {
+        eventId,
+      });
+
+      expect(result.recipientCount).toBe(1);
+      expect(result.exceedsCap).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
   it('rejects unauthenticated users', async () => {
     const t = convexTest();

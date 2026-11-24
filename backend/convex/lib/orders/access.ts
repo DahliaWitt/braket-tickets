@@ -4,6 +4,7 @@ import {hasEventEnded} from '../../lib/timezone';
 import type {CallerIdentity} from '../../lib/caller_identity';
 import {throwAppError} from '../../lib/errors';
 import type {PaymentErrorCode} from '@shared/contracts/payment-error-codes';
+import {getActiveGuestSession} from '../guest_sessions/lifecycle';
 
 export type OrderErrorCode = PaymentErrorCode | 'FORBIDDEN';
 
@@ -19,9 +20,13 @@ export function getOwnerFieldsForInsert(
     : {guestSessionId: identity.guestSessionId};
 }
 
+type OrderOwnerIdentity =
+  | Pick<Extract<CallerIdentity, {type: 'user'}>, 'type' | 'userId'>
+  | Pick<Extract<CallerIdentity, {type: 'guest'}>, 'type' | 'guestSessionId'>;
+
 export function isOrderOwnedByIdentity(
   order: Pick<Doc<'ticket_orders'>, 'userId' | 'guestSessionId'>,
-  identity: CallerIdentity,
+  identity: OrderOwnerIdentity,
 ): boolean {
   return identity.type === 'user'
     ? order.userId === identity.userId
@@ -30,10 +35,36 @@ export function isOrderOwnedByIdentity(
 
 export function assertOrderOwnedByIdentity(
   order: Pick<Doc<'ticket_orders'>, 'userId' | 'guestSessionId'>,
-  identity: CallerIdentity,
+  identity: OrderOwnerIdentity,
 ): void {
   if (!isOrderOwnedByIdentity(order, identity)) {
     throwOrderError('FORBIDDEN', 'You do not have access to this order');
+  }
+}
+
+export async function requireGuestCheckoutAccess(
+  ctx: Pick<QueryCtx, 'db'>,
+  order: Doc<'ticket_orders'>,
+  args: {
+    callerGuestSessionId: Id<'guest_sessions'>;
+    callerGuestSessionToken: string;
+    now: number;
+  },
+): Promise<void> {
+  assertOrderOwnedByIdentity(order, {
+    type: 'guest',
+    guestSessionId: args.callerGuestSessionId,
+  });
+  const guestSession = await getActiveGuestSession(
+    ctx,
+    args.callerGuestSessionToken,
+    args.now,
+  );
+  if (guestSession?._id !== args.callerGuestSessionId) {
+    throwOrderError(
+      'RESERVATION_EXPIRED',
+      'Guest session is invalid or expired',
+    );
   }
 }
 

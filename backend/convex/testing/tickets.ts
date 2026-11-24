@@ -15,7 +15,7 @@ import {insertSeedOrder} from './orders';
 interface InsertSeedTicketArgs {
   userId?: Id<'users'>;
   eventId: Id<'events'>;
-  orderId: Id<'ticket_orders'>;
+  orderId?: Id<'ticket_orders'>;
   status: TicketStatus;
   tier: TicketTier;
   guestSessionId?: Id<'guest_sessions'>;
@@ -155,4 +155,14 @@ export const seedTicket = testingMutation({
       checkedInAt: args.checkedInAt,
     });
   },
+});
+
+export const seedGuestTicketWithoutOrder = testingMutation({
+  args: {
+    eventId: v.id('events'),
+    guestSessionId: v.id('guest_sessions'),
+  },
+  returns: v.id('tickets'),
+  handler: async (ctx, args) =>
+    insertSeedTicket(ctx, {...args, status: 'valid', tier: 'regular'}),
 });

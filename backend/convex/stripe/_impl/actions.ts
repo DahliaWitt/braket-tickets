@@ -9,6 +9,7 @@ import {internal} from '../../_generated/api';
 import type {FunctionReturnType} from 'convex/server';
 import type {CheckoutThemeMode} from '../../lib/orders/validators';
 import {logger} from '../../lib/logger';
+import {isOrderOwnedByIdentity} from '../../lib/access';
 import {withRetry} from '../../lib/resilience';
 import {
   ORDER_HOLD_EXPIRATION_MS,
@@ -122,11 +123,7 @@ function assertOrderOwnership(
     guestSessionId?: Id<'guest_sessions'>;
   },
 ): void {
-  const ownsOrder =
-    identity.type === 'user'
-      ? order.userId === identity.userId
-      : order.guestSessionId === identity.guestSessionId;
-  if (!ownsOrder) {
+  if (!isOrderOwnedByIdentity(order, identity)) {
     throwUnauthorized();
   }
 }
@@ -362,7 +359,23 @@ export async function startTicketOrderCheckoutSessionImpl(
 
   if (order.stripeCheckoutSessionId) {
     const checkoutSessionId = order.stripeCheckoutSessionId;
+    const assertGuestCheckoutAccess = async () => {
+      if (identity.type !== 'guest') return;
+      if (!args.sessionToken) {
+        throwPaymentAppError(
+          'RESERVATION_EXPIRED',
+          'Guest session is invalid or expired',
+        );
+      }
+      await ctx.runQuery(internal.orders.core.assertGuestCheckoutAccess, {
+        orderId: order._id,
+        callerGuestSessionId: identity.guestSessionId,
+        callerGuestSessionToken: args.sessionToken,
+        now: Date.now(),
+      });
+    };
     if (isTestEnvironment()) {
+      await assertGuestCheckoutAccess();
       return {
         orderId: order._id,
         clientSecret: `${checkoutSessionId}_secret_mock`,
@@ -396,32 +409,42 @@ export async function startTicketOrderCheckoutSessionImpl(
         },
       );
 
-    if (existingSession.status === 'expired') {
-      await ctx.runMutation(internal.orders.core.clearCheckoutSession, {
-        orderId: order._id,
-      });
-    } else if (existingSession.status !== 'open') {
-      throwPaymentAppError(
-        'INVALID_STATE',
-        'This checkout session is no longer available',
-      );
-    } else if (!hasCurrentCheckoutBranding(existingSession, checkoutTheme)) {
+    await assertGuestCheckoutAccess();
+
+    if (existingSession.status !== 'expired') {
+      if (existingSession.status !== 'open') {
+        throwPaymentAppError(
+          'INVALID_STATE',
+          'This checkout session is no longer available',
+        );
+      }
+      if (hasCurrentCheckoutBranding(existingSession, checkoutTheme)) {
+        return {
+          orderId: order._id,
+          clientSecret: getCheckoutSessionClientSecret(existingSession),
+          stripeCheckoutSessionId: existingSession.id,
+          expiresAt: safeExpiresAtMs,
+          connectedAccountId: orderConnectedAccountId,
+        };
+      }
       await stripe.checkout.sessions.expire(
         existingSession.id,
         {},
         retrieveOptions,
       );
-      await ctx.runMutation(internal.orders.core.clearCheckoutSession, {
+    }
+    const cleared = await ctx.runMutation(
+      internal.orders.core.clearCheckoutSession,
+      {
         orderId: order._id,
-      });
-    } else {
-      return {
-        orderId: order._id,
-        clientSecret: getCheckoutSessionClientSecret(existingSession),
-        stripeCheckoutSessionId: existingSession.id,
-        expiresAt: safeExpiresAtMs,
-        connectedAccountId: orderConnectedAccountId,
-      };
+        stripeCheckoutSessionId: checkoutSessionId,
+      },
+    );
+    if (!cleared) {
+      throwPaymentAppError(
+        'INVALID_STATE',
+        'Checkout changed while opening. Please try again.',
+      );
     }
   }
 
@@ -444,6 +467,12 @@ export async function startTicketOrderCheckoutSessionImpl(
       orderId: order._id,
       stripeCheckoutSessionId: mockSessionId,
       expiresAt: safeExpiresAtMs,
+      ...(identity.type === 'guest'
+        ? {
+            callerGuestSessionId: identity.guestSessionId,
+            callerGuestSessionToken: args.sessionToken,
+          }
+        : {}),
     });
     return {
       orderId: order._id,
@@ -550,10 +579,18 @@ export async function startTicketOrderCheckoutSessionImpl(
     },
   );
 
+  // A rejected bind leaves Stripe's expiry in place because another request
+  // with the same idempotency key may still bind this session.
   await ctx.runMutation(internal.orders.core.bindCheckoutSession, {
     orderId: order._id,
     stripeCheckoutSessionId: sessionResult.checkoutSessionId,
     expiresAt: safeExpiresAtMs,
+    ...(identity.type === 'guest'
+      ? {
+          callerGuestSessionId: identity.guestSessionId,
+          callerGuestSessionToken: args.sessionToken,
+        }
+      : {}),
   });
 
   return {
@@ -643,6 +680,12 @@ export async function syncTicketOrderCheckoutSessionImpl(
     await ctx.runMutation(internal.orders.core.bindCheckoutSession, {
       orderId: order._id,
       stripeCheckoutSessionId: session.id,
+      ...(identity.type === 'guest'
+        ? {
+            callerGuestSessionId: identity.guestSessionId,
+            callerGuestSessionToken: args.sessionToken,
+          }
+        : {}),
     });
     order = await ctx.runQuery(internal.orders.core.getInternal, {
       orderId: order._id,
@@ -714,6 +757,7 @@ export async function syncTicketOrderCheckoutSessionImpl(
     await ctx.runMutation(internal.orders.core.expire, {
       orderId: order._id,
       force: true,
+      stripeCheckoutSessionId: session.id,
     });
   }
 

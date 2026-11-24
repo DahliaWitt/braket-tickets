@@ -1272,20 +1272,34 @@ const schemaTables = {
     pendingSessionTokenPrefix: v.optional(v.string()),
     lastActiveAt: v.optional(v.number()), // sliding 2h inactivity window
     expiresAt: v.number(), // 24h hard expiry
+    /**
+     * Timestamp when an expired or replaced session was retired in place
+     * because tickets, orders, or magic-link redemption history still reference
+     * it. Retired rows retain contact/ownership metadata (e.g. email) while
+     * permanently revoking bearer credentials.
+     */
+    retiredAt: v.optional(v.number()),
     convertedToUserId: v.optional(v.id('users')),
   })
     .index('by_email', ['email'])
+    .index('by_email_convertedToUserId_retiredAt', [
+      'email',
+      'convertedToUserId',
+      'retiredAt',
+    ])
     .index('by_clientKey', ['clientKey'])
     .index('by_sessionToken', ['sessionToken'])
     .index('by_sessionTokenDigest', ['sessionTokenDigest'])
     .index('by_pendingSessionTokenDigest', ['pendingSessionTokenDigest'])
     .index('by_magicLink', ['magicLinkId'])
     .index('by_expiresAt', ['expiresAt'])
-    // Cleanup reads only deletable rows: convertedToUserId === undefined
-    // (converted sessions are preserved for audit trail) with expiresAt in the
-    // past. Equality on convertedToUserId first, range on expiresAt second.
-    .index('by_convertedToUserId_expiresAt', [
+    // Cleanup reads only unretired, unconverted rows with expiresAt in the
+    // past. Converted sessions (audit trail) and retired sessions (retained
+    // for tickets, orders, or redemption history) leave this index range so
+    // cleanup never re-scans retained records.
+    .index('by_convertedToUserId_retiredAt_expiresAt', [
       'convertedToUserId',
+      'retiredAt',
       'expiresAt',
     ]),
 

@@ -62,9 +62,7 @@ type HandlerResult = {
 };
 
 type OrderConnectedAccountValidation =
-  | 'ok'
-  | 'order_not_found'
-  | 'account_mismatch';
+  'ok' | 'order_not_found' | 'account_mismatch';
 
 type WebhookActionCtx = Pick<
   ActionCtx,
@@ -404,7 +402,11 @@ async function handleCheckoutSessionExpired(
     return {orderId, nonActionable: 'order_not_found'};
   }
 
-  await ctx.runMutation(internal.orders.core.expire, {orderId, force: true});
+  await ctx.runMutation(internal.orders.core.expire, {
+    orderId,
+    force: true,
+    stripeCheckoutSessionId: session.id,
+  });
   return {orderId};
 }
 

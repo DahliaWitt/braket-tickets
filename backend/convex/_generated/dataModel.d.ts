@@ -664,6 +664,7 @@ export type DataModel = {
       magicLinkId?: Id<"magic_links">;
       pendingSessionTokenDigest?: string;
       pendingSessionTokenPrefix?: string;
+      retiredAt?: number;
       sessionToken?: string;
       sessionTokenDigest?: string;
       sessionTokenPrefix?: string;
@@ -681,6 +682,7 @@ export type DataModel = {
       | "magicLinkId"
       | "pendingSessionTokenDigest"
       | "pendingSessionTokenPrefix"
+      | "retiredAt"
       | "sessionToken"
       | "sessionTokenDigest"
       | "sessionTokenPrefix";
@@ -688,12 +690,19 @@ export type DataModel = {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_clientKey: ["clientKey", "_creationTime"];
-      by_convertedToUserId_expiresAt: [
+      by_convertedToUserId_retiredAt_expiresAt: [
         "convertedToUserId",
+        "retiredAt",
         "expiresAt",
         "_creationTime",
       ];
       by_email: ["email", "_creationTime"];
+      by_email_convertedToUserId_retiredAt: [
+        "email",
+        "convertedToUserId",
+        "retiredAt",
+        "_creationTime",
+      ];
       by_expiresAt: ["expiresAt", "_creationTime"];
       by_magicLink: ["magicLinkId", "_creationTime"];
       by_pendingSessionTokenDigest: [

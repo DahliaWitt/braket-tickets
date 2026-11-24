@@ -274,4 +274,230 @@ describe('cleanupExpiredSessions', () => {
       vi.useRealTimers();
     }
   });
+
+  test('retires expired sessions in place when referenced by a ticket, order, or magic-link redemption and permanently revokes credentials', async () => {
+    const t = convexTest();
+    vi.useFakeTimers();
+
+    try {
+      const start = Date.now();
+      const adminId = await t.mutation(api.testing.users.createUserDirectly, {
+        name: 'Cleanup Admin',
+        email: 'cleanup-ref-admin@example.com',
+      });
+      const organizerId = await t.mutation(
+        api.testing.communities.seedOrganizer,
+        {
+          name: 'Cleanup Ref Org',
+          slug: 'cleanup-ref-org',
+          isPlatformOrganizer: true,
+        },
+      );
+      const freeEventId = await t.mutation(api.testing.events.seedEvent, {
+        title: 'Cleanup Free Event',
+        date: '2099-06-01T20:00:00Z',
+        price: 0,
+        totalTickets: 50,
+        status: 'published',
+        visibility: 'public',
+        organizerId,
+      });
+      const paidEventId = await t.mutation(api.testing.events.seedEvent, {
+        title: 'Cleanup Paid Event',
+        date: '2099-06-01T20:00:00Z',
+        price: 1500,
+        totalTickets: 50,
+        status: 'published',
+        visibility: 'public',
+        organizerId,
+      });
+      const {linkId} = await t.mutation(api.testing.magic_links.seedMagicLink, {
+        createdBy: adminId,
+        organizerId,
+        token: 'cleanup-ref-magic-link',
+        status: 'active',
+      });
+
+      const expiresAt = start + 60_000;
+      const ticketSessionId = await createGuestSession(t, {
+        email: 'ticket-owner@example.com',
+        sessionToken: 'ticket-owner-token',
+        expiresAt,
+      });
+      const orderSessionId = await createGuestSession(t, {
+        email: 'order-owner@example.com',
+        sessionToken: 'order-owner-token',
+        expiresAt,
+      });
+      const redemptionSessionId = await t.mutation(
+        api.testing.guest_sessions.seedGuestSession,
+        {
+          email: 'redemption-owner@example.com',
+          sessionToken: 'redemption-owner-token',
+          magicLinkId: linkId,
+          expiresAt,
+        },
+      );
+
+      await t.mutation(api.testing.tickets.seedGuestTicketWithoutOrder, {
+        eventId: freeEventId,
+        guestSessionId: ticketSessionId,
+      });
+      const prepared = await t.mutation(
+        internal.guest_sessions.core.prepareResumeSessionToken,
+        {
+          sessionId: ticketSessionId,
+          sessionToken: 'pending-ticket-owner-token',
+        },
+      );
+      expect(prepared).toEqual({status: 'prepared'});
+      await t.mutation(api.orders.core.openForGuest, {
+        sessionToken: 'order-owner-token',
+        eventId: paidEventId,
+        quantity: 1,
+        tier: 'regular',
+        totalAmount: 1500,
+        termsAccepted: true,
+      });
+
+      // Advance clock past expiresAt so cleanup retires all three.
+      vi.advanceTimersByTime(120_000);
+
+      const firstRun = await t.mutation(
+        internal.guest_sessions.core.cleanupExpiredSessions,
+        {},
+      );
+      expect(firstRun).toBe(3);
+
+      // Subsequent cleanup run must skip already-retired rows without re-scanning.
+      const secondRun = await t.mutation(
+        internal.guest_sessions.core.cleanupExpiredSessions,
+        {},
+      );
+      expect(secondRun).toBe(0);
+
+      for (const [id, expectedEmail] of [
+        [ticketSessionId, 'ticket-owner@example.com'],
+        [orderSessionId, 'order-owner@example.com'],
+        [redemptionSessionId, 'redemption-owner@example.com'],
+      ] as const) {
+        const session = await t.run(async (ctx) =>
+          ctx.db.get('guest_sessions', id),
+        );
+        expect(session).not.toBeNull();
+        expect(session!.email).toBe(expectedEmail);
+        expect(session!.retiredAt).toBeTypeOf('number');
+        expect(session!.sessionToken).toBeUndefined();
+        expect(session!.sessionTokenDigest).toBeUndefined();
+        expect(session!.sessionTokenPrefix).toBeUndefined();
+        expect(session!.pendingSessionTokenDigest).toBeUndefined();
+        expect(session!.pendingSessionTokenPrefix).toBeUndefined();
+      }
+
+      // Pass a timestamp BEFORE expiresAt to prove credential revocation
+      // independently of wall-clock expiry for both primary and pending tokens.
+      const beforeExpiry = expiresAt - 1_000;
+      const primaryLookup = await t.query(
+        internal.guest_sessions.core.getBySessionToken,
+        {
+          sessionToken: 'ticket-owner-token',
+          now: beforeExpiry,
+        },
+      );
+      const pendingLookup = await t.query(
+        internal.guest_sessions.core.getBySessionToken,
+        {
+          sessionToken: 'pending-ticket-owner-token',
+          now: beforeExpiry,
+        },
+      );
+      expect(primaryLookup).toBeNull();
+      expect(pendingLookup).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('deletes expired unreferenced sessions stuck behind >=200 retained retired sessions without re-scanning them', async () => {
+    const t = convexTest();
+    vi.useFakeTimers();
+
+    try {
+      const now = Date.now();
+      const adminId = await t.mutation(api.testing.users.createUserDirectly, {
+        name: 'Retired Head Admin',
+        email: 'retired-head-admin@example.com',
+      });
+      const organizerId = await t.mutation(
+        api.testing.communities.seedOrganizer,
+        {
+          name: 'Retired Head Org',
+          slug: 'retired-head-org',
+        },
+      );
+      const {linkId} = await t.mutation(api.testing.magic_links.seedMagicLink, {
+        createdBy: adminId,
+        organizerId,
+        token: 'retired-head-magic-link',
+        status: 'active',
+      });
+
+      // Seed CLEANUP_BATCH_SIZE expired sessions with redemption references so
+      // they are retired in place and sit at older expiresAt timestamps.
+      await Promise.all(
+        Array.from({length: CLEANUP_BATCH_SIZE}, (_unused, i) =>
+          t.mutation(api.testing.guest_sessions.seedGuestSession, {
+            email: `retained-${i}@example.com`,
+            sessionToken: `retained-token-${i}`,
+            magicLinkId: linkId,
+            expiresAt: now - 20_000,
+          }),
+        ),
+      );
+
+      // First cleanup retires all CLEANUP_BATCH_SIZE referenced rows.
+      const firstCleaned = await t.mutation(
+        internal.guest_sessions.core.cleanupExpiredSessions,
+        {},
+      );
+      await finishAllScheduledFunctions(t);
+      expect(firstCleaned).toBe(CLEANUP_BATCH_SIZE);
+
+      // Now add unreferenced expired sessions with newer expiresAt behind the
+      // retained rows.
+      const unreferencedIds = await Promise.all(
+        Array.from({length: 3}, (_unused, i) =>
+          createGuestSession(t, {
+            email: `behind-retired-${i}@example.com`,
+            sessionToken: `behind-retired-token-${i}`,
+            expiresAt: now - 1_000,
+          }),
+        ),
+      );
+
+      const secondCleaned = await t.mutation(
+        internal.guest_sessions.core.cleanupExpiredSessions,
+        {},
+      );
+      await finishAllScheduledFunctions(t);
+      expect(secondCleaned).toBe(3);
+
+      await t.run(async (ctx) => {
+        for (const id of unreferencedIds) {
+          expect(await ctx.db.get('guest_sessions', id)).toBeNull();
+        }
+      });
+
+      const retainedRows = await t.run(async (ctx) =>
+        ctx.db
+          .query('guest_sessions')
+          .withIndex('by_expiresAt', (q) => q.lt('expiresAt', now))
+          .collect(),
+      );
+      expect(retainedRows).toHaveLength(CLEANUP_BATCH_SIZE);
+      expect(retainedRows.every((s) => s.retiredAt !== undefined)).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

@@ -35,6 +35,7 @@ import {
   normalizeTicketOrderIdHandler,
   getByCheckoutSessionIdHandler,
   getByStripePaymentIntentIdHandler,
+  assertGuestCheckoutAccessHandler,
   bindCheckoutSessionHandler,
   expireHandler,
   releaseForPaymentFailureHandler,
@@ -222,18 +223,35 @@ export const getByStripePaymentIntentId = internalQuery({
   handler: getByStripePaymentIntentIdHandler,
 });
 
+export const assertGuestCheckoutAccess = internalQuery({
+  args: {
+    orderId: v.id('ticket_orders'),
+    callerGuestSessionId: v.id('guest_sessions'),
+    callerGuestSessionToken: v.string(),
+    now: v.number(),
+  },
+  returns: v.null(),
+  handler: assertGuestCheckoutAccessHandler,
+});
+
 export const bindCheckoutSession = internalMutation({
   args: {
     orderId: v.id('ticket_orders'),
     stripeCheckoutSessionId: v.string(),
     expiresAt: v.optional(v.number()),
+    callerGuestSessionId: v.optional(v.id('guest_sessions')),
+    callerGuestSessionToken: v.optional(v.string()),
   },
   returns: checkoutSessionResultValidator,
   handler: bindCheckoutSessionHandler,
 });
 
 export const expire = internalMutation({
-  args: {orderId: v.id('ticket_orders'), force: v.optional(v.boolean())},
+  args: {
+    orderId: v.id('ticket_orders'),
+    force: v.optional(v.boolean()),
+    stripeCheckoutSessionId: v.optional(v.string()),
+  },
   returns: v.null(),
   handler: expireHandler,
 });
@@ -353,8 +371,11 @@ export const applyExternalRefund = internalMutation({
 });
 
 export const clearCheckoutSession = internalMutation({
-  args: {orderId: v.id('ticket_orders')},
-  returns: v.null(),
+  args: {
+    orderId: v.id('ticket_orders'),
+    stripeCheckoutSessionId: v.string(),
+  },
+  returns: v.boolean(),
   handler: clearCheckoutSessionHandler,
 });
 

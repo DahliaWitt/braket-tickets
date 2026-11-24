@@ -133,43 +133,58 @@ export async function initiateGuestSessionHandler(
         },
       );
 
-      const resumeEmailSent =
-        resumeTokenPreparation.status === 'prepared'
-          ? await sendSessionResumeEmail(
-              ctx,
-              {
-                email,
-                eventId: args.eventId,
-                magicLinkToken: args.magicLinkToken,
-              },
-              resumeSessionToken,
-            )
-          : false;
+      if (resumeTokenPreparation.status !== 'missing') {
+        const resumeEmailSent =
+          resumeTokenPreparation.status === 'prepared'
+            ? await sendSessionResumeEmail(
+                ctx,
+                {
+                  email,
+                  eventId: args.eventId,
+                  magicLinkToken: args.magicLinkToken,
+                },
+                resumeSessionToken,
+              )
+            : false;
 
-      if (resumeEmailSent) {
-        await ctx.runMutation(
-          internal.guest_sessions.core.promoteResumeSessionToken,
-          {
-            sessionId: existingSession._id,
-            sessionToken: resumeSessionToken,
-          },
-        );
-      } else if (resumeTokenPreparation.status === 'prepared') {
-        await ctx.runMutation(
-          internal.guest_sessions.core.clearResumeSessionToken,
-          {
-            sessionId: existingSession._id,
-            sessionToken: resumeSessionToken,
-          },
-        );
+        let sessionBecameInactive = false;
+        let resumeLinkActivated = false;
+
+        if (resumeEmailSent) {
+          const promotion = await ctx.runMutation(
+            internal.guest_sessions.core.promoteResumeSessionToken,
+            {
+              sessionId: existingSession._id,
+              sessionToken: resumeSessionToken,
+            },
+          );
+          if (promotion.status === 'inactive') {
+            sessionBecameInactive = true;
+          } else if (promotion.status === 'promoted') {
+            resumeLinkActivated = true;
+          }
+        } else if (resumeTokenPreparation.status === 'prepared') {
+          const cleared = await ctx.runMutation(
+            internal.guest_sessions.core.clearResumeSessionToken,
+            {
+              sessionId: existingSession._id,
+              sessionToken: resumeSessionToken,
+            },
+          );
+          if (cleared.status === 'inactive') {
+            sessionBecameInactive = true;
+          }
+        }
+
+        if (!sessionBecameInactive) {
+          throwPaymentAppError(
+            'SESSION_RESUME_REQUIRED',
+            resumeLinkActivated
+              ? 'An active guest session already exists for this email. We sent a resume link to your email.'
+              : 'An active guest session already exists for this email. Resume checkout from the same device or wait for the session to expire.',
+          );
+        }
       }
-
-      throwPaymentAppError(
-        'SESSION_RESUME_REQUIRED',
-        resumeEmailSent
-          ? 'An active guest session already exists for this email. We sent a resume link to your email.'
-          : 'An active guest session already exists for this email. Resume checkout from the same device or wait for the session to expire.',
-      );
     }
   }
 

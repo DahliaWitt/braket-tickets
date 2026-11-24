@@ -2917,6 +2917,7 @@ export declare const api: {
           magicLinkId?: Id<"magic_links">;
           pendingSessionTokenDigest?: string;
           pendingSessionTokenPrefix?: string;
+          retiredAt?: number;
           sessionToken?: string;
           sessionTokenDigest?: string;
           sessionTokenPrefix?: string;
@@ -3077,6 +3078,12 @@ export declare const api: {
       >;
     };
     tickets: {
+      seedGuestTicketWithoutOrder: FunctionReference<
+        "mutation",
+        "public",
+        { eventId: Id<"events">; guestSessionId: Id<"guest_sessions"> },
+        Id<"tickets">
+      >;
       seedTicket: FunctionReference<
         "mutation",
         "public",
@@ -4636,7 +4643,7 @@ export declare const internal: {
         "mutation",
         "internal",
         { sessionId: Id<"guest_sessions">; sessionToken: string },
-        null
+        { status: "cleared" | "inactive" | "skipped" }
       >;
       getById: FunctionReference<
         "query",
@@ -4653,6 +4660,7 @@ export declare const internal: {
           magicLinkId?: Id<"magic_links">;
           pendingSessionTokenDigest?: string;
           pendingSessionTokenPrefix?: string;
+          retiredAt?: number;
           sessionToken?: string;
           sessionTokenDigest?: string;
           sessionTokenPrefix?: string;
@@ -4673,6 +4681,7 @@ export declare const internal: {
           magicLinkId?: Id<"magic_links">;
           pendingSessionTokenDigest?: string;
           pendingSessionTokenPrefix?: string;
+          retiredAt?: number;
           sessionToken?: string;
           sessionTokenDigest?: string;
           sessionTokenPrefix?: string;
@@ -4693,6 +4702,7 @@ export declare const internal: {
           magicLinkId?: Id<"magic_links">;
           pendingSessionTokenDigest?: string;
           pendingSessionTokenPrefix?: string;
+          retiredAt?: number;
           sessionToken?: string;
           sessionTokenDigest?: string;
           sessionTokenPrefix?: string;
@@ -4713,6 +4723,7 @@ export declare const internal: {
           magicLinkId?: Id<"magic_links">;
           pendingSessionTokenDigest?: string;
           pendingSessionTokenPrefix?: string;
+          retiredAt?: number;
           sessionToken?: string;
           sessionTokenDigest?: string;
           sessionTokenPrefix?: string;
@@ -4751,7 +4762,7 @@ export declare const internal: {
         "mutation",
         "internal",
         { sessionId: Id<"guest_sessions">; sessionToken: string },
-        null
+        { status: "promoted" | "inactive" | "skipped" }
       >;
       rotateSessionToken: FunctionReference<
         "mutation",
@@ -4762,8 +4773,8 @@ export declare const internal: {
       updateLastActive: FunctionReference<
         "mutation",
         "internal",
-        { sessionId: Id<"guest_sessions"> },
-        null
+        { sessionId: Id<"guest_sessions">; sessionToken?: string },
+        boolean
       >;
     };
   };
@@ -5115,10 +5126,23 @@ export declare const internal: {
         },
         null
       >;
+      assertGuestCheckoutAccess: FunctionReference<
+        "query",
+        "internal",
+        {
+          callerGuestSessionId: Id<"guest_sessions">;
+          callerGuestSessionToken: string;
+          now: number;
+          orderId: Id<"ticket_orders">;
+        },
+        null
+      >;
       bindCheckoutSession: FunctionReference<
         "mutation",
         "internal",
         {
+          callerGuestSessionId?: Id<"guest_sessions">;
+          callerGuestSessionToken?: string;
           expiresAt?: number;
           orderId: Id<"ticket_orders">;
           stripeCheckoutSessionId: string;
@@ -5140,13 +5164,17 @@ export declare const internal: {
       clearCheckoutSession: FunctionReference<
         "mutation",
         "internal",
-        { orderId: Id<"ticket_orders"> },
-        null
+        { orderId: Id<"ticket_orders">; stripeCheckoutSessionId: string },
+        boolean
       >;
       expire: FunctionReference<
         "mutation",
         "internal",
-        { force?: boolean; orderId: Id<"ticket_orders"> },
+        {
+          force?: boolean;
+          orderId: Id<"ticket_orders">;
+          stripeCheckoutSessionId?: string;
+        },
         null
       >;
       getByCheckoutSessionId: FunctionReference<

@@ -1,4 +1,4 @@
-import {expect, test, describe} from 'vitest';
+import {expect, test, describe, vi} from 'vitest';
 import {convexTest} from '../setup.testing';
 import {api, internal} from '../_generated/api';
 import type {Id, Doc} from '../_generated/dataModel';
@@ -743,6 +743,178 @@ describe('guest_sessions', () => {
 
       expect(pendingResult).toBeNull();
       expect(currentResult?._id).toBe(sessionId);
+    });
+
+    test('in-flight resume and rotation mutations cannot re-credential a retired session', async () => {
+      const t = convexTest();
+      vi.useFakeTimers();
+
+      try {
+        const start = Date.now();
+        const adminId = await createUser(t, 'race-admin@test.com');
+        const linkId = await createMagicLink(t, adminId);
+
+        const sessionId = await t.mutation(
+          api.testing.guest_sessions.seedGuestSession,
+          {
+            email: 'race-retired@test.com',
+            magicLinkId: linkId,
+            sessionToken: 'initial-race-token',
+            expiresAt: start + 60_000,
+          },
+        );
+
+        // Prepare an in-flight resume token while the session is still active.
+        const initialPrepare = await t.mutation(
+          internal.guest_sessions.core.prepareResumeSessionToken,
+          {
+            sessionId,
+            sessionToken: 'in-flight-resume-token',
+          },
+        );
+        expect(initialPrepare).toEqual({status: 'prepared'});
+
+        // Advance past expiry and let cleanup retire the referenced session.
+        vi.advanceTimersByTime(120_000);
+        const cleaned = await t.mutation(
+          internal.guest_sessions.core.cleanupExpiredSessions,
+          {},
+        );
+        expect(cleaned).toBe(1);
+
+        // In-flight promote, clear, rotate, and prepare must all refuse to touch it.
+        const promoted = await t.mutation(
+          internal.guest_sessions.core.promoteResumeSessionToken,
+          {
+            sessionId,
+            sessionToken: 'in-flight-resume-token',
+          },
+        );
+        expect(promoted).toEqual({status: 'inactive'});
+
+        const cleared = await t.mutation(
+          internal.guest_sessions.core.clearResumeSessionToken,
+          {
+            sessionId,
+            sessionToken: 'in-flight-resume-token',
+          },
+        );
+        expect(cleared).toEqual({status: 'inactive'});
+
+        await t.mutation(internal.guest_sessions.core.rotateSessionToken, {
+          sessionId,
+          sessionToken: 'rotated-after-retire-token',
+        });
+        const prepared = await t.mutation(
+          internal.guest_sessions.core.prepareResumeSessionToken,
+          {
+            sessionId,
+            sessionToken: 'prepared-after-retire-token',
+          },
+        );
+        expect(prepared).toEqual({status: 'missing'});
+
+        const session = await getSession(t, sessionId);
+        expect(session).not.toBeNull();
+        expect(session!.retiredAt).toBeTypeOf('number');
+        expect(session!.sessionToken).toBeUndefined();
+        expect(session!.sessionTokenDigest).toBeUndefined();
+        expect(session!.sessionTokenPrefix).toBeUndefined();
+        expect(session!.pendingSessionTokenDigest).toBeUndefined();
+        expect(session!.pendingSessionTokenPrefix).toBeUndefined();
+        expect(session!.lastActiveAt).toBeUndefined();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    test('promoteResumeSessionToken clears pending token and reports inactive without reviving an inactivity-expired session', async () => {
+      const t = convexTest();
+      vi.useFakeTimers();
+
+      try {
+        const start = Date.now();
+        const sessionId = await t.mutation(
+          api.testing.guest_sessions.seedGuestSession,
+          {
+            email: 'race-inactive@test.com',
+            sessionToken: 'current-inactive-token',
+            lastActiveAt: start,
+          },
+        );
+
+        const prepared = await t.mutation(
+          internal.guest_sessions.core.prepareResumeSessionToken,
+          {
+            sessionId,
+            sessionToken: 'in-flight-inactive-resume-token',
+          },
+        );
+        expect(prepared).toEqual({status: 'prepared'});
+
+        // Session goes inactive while resume email is in flight.
+        vi.advanceTimersByTime(3 * 60 * 60 * 1000);
+
+        const promotion = await t.mutation(
+          internal.guest_sessions.core.promoteResumeSessionToken,
+          {
+            sessionId,
+            sessionToken: 'in-flight-inactive-resume-token',
+          },
+        );
+        expect(promotion).toEqual({status: 'inactive'});
+
+        const session = await getSession(t, sessionId);
+        expect(session!.lastActiveAt).toBe(start);
+        expect(session!.pendingSessionTokenDigest).toBeUndefined();
+        expect(session!.pendingSessionTokenPrefix).toBeUndefined();
+        expect(session!.sessionTokenDigest).toBe(
+          await digestBearerToken('guest_session', 'current-inactive-token'),
+        );
+
+        const resumed = await t.query(
+          internal.guest_sessions.core.getBySessionToken,
+          {
+            sessionToken: 'in-flight-inactive-resume-token',
+            now: start + 1_000,
+          },
+        );
+        expect(resumed).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    test('promoteResumeSessionToken treats an already-promoted matching token as promoted', async () => {
+      const t = convexTest();
+      const sessionId = await t.mutation(
+        api.testing.guest_sessions.seedGuestSession,
+        {
+          email: 'idempotent-promote@test.com',
+          sessionToken: 'initial-idempotent-token',
+        },
+      );
+
+      await t.mutation(internal.guest_sessions.core.prepareResumeSessionToken, {
+        sessionId,
+        sessionToken: 'already-promoted-token',
+      });
+      const first = await t.mutation(
+        internal.guest_sessions.core.promoteResumeSessionToken,
+        {
+          sessionId,
+          sessionToken: 'already-promoted-token',
+        },
+      );
+      const second = await t.mutation(
+        internal.guest_sessions.core.promoteResumeSessionToken,
+        {
+          sessionId,
+          sessionToken: 'already-promoted-token',
+        },
+      );
+      expect(first).toEqual({status: 'promoted'});
+      expect(second).toEqual({status: 'promoted'});
     });
 
     test('returns null for expired session', async () => {

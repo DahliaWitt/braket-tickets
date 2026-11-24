@@ -9,7 +9,6 @@ import {
   lookupUserByBetterAuthUserId,
   lookupUserByNormalizedEmail,
 } from '../../lib/auth_identity';
-import {findMatchingInQuery} from '../../lib/query_scan';
 import {internal} from '../../_generated/api';
 import type {MutationCtx} from '../../_generated/server';
 
@@ -25,13 +24,12 @@ async function scheduleGuestMigrationIfNeeded(
   email: string,
   userId: Id<'users'>,
 ): Promise<void> {
-  const guestSessionsQuery = ctx.db
+  const hasGuestSession = await ctx.db
     .query('guest_sessions')
-    .withIndex('by_email', (q) => q.eq('email', email));
-  const hasGuestSession = await findMatchingInQuery(
-    guestSessionsQuery,
-    (session) => !session.convertedToUserId,
-  );
+    .withIndex('by_email_convertedToUserId_retiredAt', (q) =>
+      q.eq('email', email).eq('convertedToUserId', undefined),
+    )
+    .first();
 
   if (hasGuestSession) {
     await ctx.scheduler.runAfter(
