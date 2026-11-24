@@ -360,4 +360,33 @@ describe('LandingComponent', () => {
       expect(await landingHarness.hasCommunitiesSection()).toBe(true);
     });
   });
+
+  // -----------------------------------------------------------------------
+  // Accessibility — WCAG 2.5.3 Label in Name
+  // -----------------------------------------------------------------------
+
+  describe('accessible names', () => {
+    it('does not override visible text with mismatched aria-labels on interactive controls', async () => {
+      const communities: MockCommunity[] = [
+        {
+          _id: 'org-1',
+          name: 'Queer Collective',
+          description: 'A space for everyone',
+          website: 'https://example.com',
+          logoUrl: null,
+          slug: 'queer-collective',
+        },
+      ];
+      const events = [makeEvent({_id: 'evt-1', title: 'Queer Rave'})];
+
+      const {landingHarness} = await setup(communities, events);
+
+      expect(await landingHarness.getLoginButtonText()).toBe(
+        'log in / sign up',
+      );
+      expect(await landingHarness.getLoginButtonAriaLabel()).toBeNull();
+      expect(await landingHarness.getEventLinkAriaLabels()).toEqual([null]);
+      expect(await landingHarness.getCommunityLinkAriaLabels()).toEqual([null]);
+    });
+  });
 });
