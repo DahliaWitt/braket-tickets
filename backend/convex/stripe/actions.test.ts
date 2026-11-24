@@ -307,6 +307,26 @@ async function createUser(
   });
 }
 
+async function openGuestOrderForCheckout(
+  t: ReturnType<typeof convexTest>,
+  sessionToken: string,
+) {
+  const {eventId} = await createEventForCheckout(t);
+  const guestSessionId = await t.mutation(
+    api.testing.guest_sessions.seedGuestSession,
+    {email: 'checkout-rotation@example.com', sessionToken},
+  );
+  const {orderId} = await t.mutation(api.orders.core.openForGuest, {
+    eventId,
+    sessionToken,
+    quantity: 1,
+    tier: 'regular',
+    totalAmount: 2500,
+    termsAccepted: true,
+  });
+  return {orderId, guestSessionId};
+}
+
 describe('startTicketOrderCheckoutSession — safe expiresAt (BRA-315)', () => {
   const originalIsTest = process.env['IS_TEST'];
 
@@ -584,7 +604,7 @@ describe('syncTicketOrderCheckoutSession — webhook-first completion', () => {
   });
 });
 
-describe('startTicketOrderCheckoutSession — checkout line item pricing', () => {
+describe('Stripe checkout creation and recovery', () => {
   const originalIsTest = process.env['IS_TEST'];
   const originalStripeKey = process.env['STRIPE_SECRET_KEY'];
 
@@ -628,24 +648,12 @@ describe('startTicketOrderCheckoutSession — checkout line item pricing', () =>
 
   it('keeps an idempotent checkout session usable after a guest token rotates during creation', async () => {
     const t = convexTest();
-    const {eventId} = await createEventForCheckout(t);
     const oldToken = 'checkout-guest-before-rotation';
     const newToken = 'checkout-guest-after-rotation';
-    const guestSessionId = await t.mutation(
-      api.testing.guest_sessions.seedGuestSession,
-      {
-        email: 'checkout-rotation@example.com',
-        sessionToken: oldToken,
-      },
+    const {orderId, guestSessionId} = await openGuestOrderForCheckout(
+      t,
+      oldToken,
     );
-    const {orderId} = await t.mutation(api.orders.core.openForGuest, {
-      eventId,
-      sessionToken: oldToken,
-      quantity: 1,
-      tier: 'regular',
-      totalAmount: 2500,
-      termsAccepted: true,
-    });
 
     const stripeSession = {
       id: 'cs_shared_guest_checkout',
@@ -691,6 +699,83 @@ describe('startTicketOrderCheckoutSession — checkout line item pricing', () =>
     } finally {
       clock.mockRestore();
     }
+  });
+
+  it('rejects checkout sync binding when the guest token rotates during Stripe retrieval', async () => {
+    const t = convexTest();
+    const oldToken = 'sync-guest-before-rotation';
+    const newToken = 'sync-guest-after-rotation';
+    const {orderId, guestSessionId} = await openGuestOrderForCheckout(
+      t,
+      oldToken,
+    );
+    const checkoutSessionId = 'cs_guest_sync_recovery';
+    const session = {
+      id: checkoutSessionId,
+      metadata: {orderId},
+      status: 'open',
+      payment_status: 'unpaid',
+    };
+    checkoutSessionsRetrieveMock
+      .mockImplementationOnce(async () => {
+        await t.mutation(internal.guest_sessions.core.rotateSessionToken, {
+          sessionId: guestSessionId,
+          sessionToken: newToken,
+        });
+        return session;
+      })
+      .mockResolvedValueOnce(session);
+
+    await expect(
+      t.action(api.orders.core.syncCheckoutSession, {
+        checkoutSessionId,
+        sessionToken: oldToken,
+      }),
+    ).rejects.toThrow('Guest session is invalid or expired');
+    const unbound = await t.run((ctx) => ctx.db.get('ticket_orders', orderId));
+    expect(unbound?.stripeCheckoutSessionId).toBeUndefined();
+
+    await t.action(api.orders.core.syncCheckoutSession, {
+      checkoutSessionId,
+      sessionToken: newToken,
+    });
+    const bound = await t.run((ctx) => ctx.db.get('ticket_orders', orderId));
+    expect(bound?.stripeCheckoutSessionId).toBe(checkoutSessionId);
+  });
+
+  it('preserves the replacement binding when a stale checkout restart finishes last', async () => {
+    const t = convexTest();
+    const userId = await createUser(
+      t,
+      'Checkout Buyer',
+      'restart-race@example.com',
+    );
+    const {eventId} = await createEventForCheckout(t);
+    const asUser = t.withIdentity({subject: userId});
+    const {orderId} = await asUser.mutation(api.orders.core.open, {
+      eventId,
+      quantity: 1,
+      tier: 'regular',
+      totalAmount: 2500,
+    });
+    const expiredSession = {id: 'cs_expired_before_restart', status: 'expired'};
+    await t.mutation(internal.orders.core.bindCheckoutSession, {
+      orderId,
+      stripeCheckoutSessionId: expiredSession.id,
+    });
+    checkoutSessionsRetrieveMock
+      .mockImplementationOnce(async () => {
+        await asUser.action(api.orders.core.startCheckout, {orderId});
+        return expiredSession;
+      })
+      .mockResolvedValueOnce(expiredSession);
+
+    await expect(
+      asUser.action(api.orders.core.startCheckout, {orderId}),
+    ).rejects.toThrow('Checkout changed while opening');
+    expect(checkoutSessionsCreateMock).toHaveBeenCalledTimes(1);
+    const order = await t.run((ctx) => ctx.db.get('ticket_orders', orderId));
+    expect(order?.stripeCheckoutSessionId).toBe('cs_test_checkout_123');
   });
 
   it('itemizes checkout line item quantity while preserving the canonical order total', async () => {

@@ -169,7 +169,10 @@ type ApplyExternalRefundArgs = {
   auditSource?: string;
 };
 
-type ClearCheckoutSessionArgs = {orderId: Id<'ticket_orders'>};
+type ClearCheckoutSessionArgs = {
+  orderId: Id<'ticket_orders'>;
+  stripeCheckoutSessionId: string;
+};
 type CancelOpenOrdersForEventArgs = {eventId: Id<'events'>};
 type GetHeldInventoryReconciliationArgs = {eventId: Id<'events'>};
 type RepairHeldInventoryCountArgs = {
@@ -1064,13 +1067,16 @@ export async function clearCheckoutSessionHandler(
   args: ClearCheckoutSessionArgs,
 ) {
   const order = await ctx.db.get('ticket_orders', args.orderId);
-  if (!order || order.state !== 'open') {
-    return null;
+  if (
+    order?.state !== 'open' ||
+    order.stripeCheckoutSessionId !== args.stripeCheckoutSessionId
+  ) {
+    return false;
   }
   await ctx.db.patch('ticket_orders', args.orderId, {
     stripeCheckoutSessionId: undefined,
   });
-  return null;
+  return true;
 }
 
 export async function cancelOpenOrdersForEventHandler(

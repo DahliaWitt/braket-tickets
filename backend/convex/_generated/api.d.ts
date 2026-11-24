@@ -5158,8 +5158,8 @@ export declare const internal: {
       clearCheckoutSession: FunctionReference<
         "mutation",
         "internal",
-        { orderId: Id<"ticket_orders"> },
-        null
+        { orderId: Id<"ticket_orders">; stripeCheckoutSessionId: string },
+        boolean
       >;
       expire: FunctionReference<
         "mutation",

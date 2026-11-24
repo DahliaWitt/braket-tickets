@@ -78,6 +78,8 @@ When investigating a ticketing incident, check these in order:
 
 If checkout creation succeeds in Stripe but Convex rejects binding the session, Stripe lets the session expire at its configured `expires_at`. The rejected request receives no client secret. An expiry webhook releases the order only when its session ID matches `stripeCheckoutSessionId`. An order with no bound session still has its scheduled expiry.
 
+When a checkout restart races another request that changes `stripeCheckoutSessionId`, the stale request returns `INVALID_STATE`. A retry reads the current binding. Checkout sync also revalidates the guest token before attaching an unbound Stripe session.
+
 ### Resolution
 
 - If Stripe shows the Checkout Session is `expired` but the order is still `open`, manually run:

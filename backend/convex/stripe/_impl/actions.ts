@@ -411,32 +411,40 @@ export async function startTicketOrderCheckoutSessionImpl(
       });
     }
 
-    if (existingSession.status === 'expired') {
-      await ctx.runMutation(internal.orders.core.clearCheckoutSession, {
-        orderId: order._id,
-      });
-    } else if (existingSession.status !== 'open') {
-      throwPaymentAppError(
-        'INVALID_STATE',
-        'This checkout session is no longer available',
-      );
-    } else if (!hasCurrentCheckoutBranding(existingSession, checkoutTheme)) {
+    if (existingSession.status !== 'expired') {
+      if (existingSession.status !== 'open') {
+        throwPaymentAppError(
+          'INVALID_STATE',
+          'This checkout session is no longer available',
+        );
+      }
+      if (hasCurrentCheckoutBranding(existingSession, checkoutTheme)) {
+        return {
+          orderId: order._id,
+          clientSecret: getCheckoutSessionClientSecret(existingSession),
+          stripeCheckoutSessionId: existingSession.id,
+          expiresAt: safeExpiresAtMs,
+          connectedAccountId: orderConnectedAccountId,
+        };
+      }
       await stripe.checkout.sessions.expire(
         existingSession.id,
         {},
         retrieveOptions,
       );
-      await ctx.runMutation(internal.orders.core.clearCheckoutSession, {
+    }
+    const cleared = await ctx.runMutation(
+      internal.orders.core.clearCheckoutSession,
+      {
         orderId: order._id,
-      });
-    } else {
-      return {
-        orderId: order._id,
-        clientSecret: getCheckoutSessionClientSecret(existingSession),
-        stripeCheckoutSessionId: existingSession.id,
-        expiresAt: safeExpiresAtMs,
-        connectedAccountId: orderConnectedAccountId,
-      };
+        stripeCheckoutSessionId: checkoutSessionId,
+      },
+    );
+    if (!cleared) {
+      throwPaymentAppError(
+        'INVALID_STATE',
+        'Checkout changed while opening. Please try again.',
+      );
     }
   }
 
@@ -672,6 +680,12 @@ export async function syncTicketOrderCheckoutSessionImpl(
     await ctx.runMutation(internal.orders.core.bindCheckoutSession, {
       orderId: order._id,
       stripeCheckoutSessionId: session.id,
+      ...(identity.type === 'guest'
+        ? {
+            callerGuestSessionId: identity.guestSessionId,
+            callerGuestSessionToken: args.sessionToken,
+          }
+        : {}),
     });
     order = await ctx.runQuery(internal.orders.core.getInternal, {
       orderId: order._id,

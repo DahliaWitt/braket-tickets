@@ -371,8 +371,11 @@ export const applyExternalRefund = internalMutation({
 });
 
 export const clearCheckoutSession = internalMutation({
-  args: {orderId: v.id('ticket_orders')},
-  returns: v.null(),
+  args: {
+    orderId: v.id('ticket_orders'),
+    stripeCheckoutSessionId: v.string(),
+  },
+  returns: v.boolean(),
   handler: clearCheckoutSessionHandler,
 });
 
