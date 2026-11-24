@@ -247,7 +247,11 @@ export const bindCheckoutSession = internalMutation({
 });
 
 export const expire = internalMutation({
-  args: {orderId: v.id('ticket_orders'), force: v.optional(v.boolean())},
+  args: {
+    orderId: v.id('ticket_orders'),
+    force: v.optional(v.boolean()),
+    stripeCheckoutSessionId: v.optional(v.string()),
+  },
   returns: v.null(),
   handler: expireHandler,
 });

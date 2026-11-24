@@ -105,7 +105,11 @@ type BindCheckoutSessionArgs = {
   callerGuestSessionToken?: string;
 };
 
-type ExpireArgs = {orderId: Id<'ticket_orders'>; force?: boolean};
+type ExpireArgs = {
+  orderId: Id<'ticket_orders'>;
+  force?: boolean;
+  stripeCheckoutSessionId?: string;
+};
 
 type ReleaseForPaymentFailureArgs = {
   orderId: Id<'ticket_orders'>;
@@ -757,6 +761,12 @@ export async function expireHandler(ctx: MutationCtx, args: ExpireArgs) {
   const order = await ctx.db.get('ticket_orders', args.orderId);
   if (!order) return null;
   if (order.state !== 'open') return null;
+  if (
+    args.stripeCheckoutSessionId !== undefined &&
+    order.stripeCheckoutSessionId !== args.stripeCheckoutSessionId
+  ) {
+    return null;
+  }
   const now = Date.now();
   if (!args.force && order.expiresAt > now) {
     await ctx.scheduler.runAfter(

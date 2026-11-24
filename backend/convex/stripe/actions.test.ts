@@ -11,6 +11,7 @@ const {
   MockStripeSignatureVerificationError,
   stripeCtorMock,
   checkoutSessionsCreateMock,
+  checkoutSessionsExpireMock,
   checkoutSessionsRetrieveMock,
   chargesRetrieveMock,
   v2AccountsRetrieveMock,
@@ -23,6 +24,7 @@ const {
     MockStripeSignatureVerificationError,
     stripeCtorMock: vi.fn(),
     checkoutSessionsCreateMock: vi.fn(),
+    checkoutSessionsExpireMock: vi.fn(),
     checkoutSessionsRetrieveMock: vi.fn(),
     chargesRetrieveMock: vi.fn(),
     v2AccountsRetrieveMock: vi.fn(),
@@ -41,6 +43,7 @@ vi.mock('stripe', () => ({
     checkout = {
       sessions: {
         create: checkoutSessionsCreateMock,
+        expire: checkoutSessionsExpireMock,
         retrieve: checkoutSessionsRetrieveMock,
       },
     };
@@ -224,6 +227,45 @@ describe('verifyAndProcessWebhook', () => {
         signature: 't=0,v1=invalidsig',
       }),
     ).rejects.toThrow('Webhook signature verification failed');
+  });
+
+  it('releases an order only when the expiry webhook matches its bound checkout session', async () => {
+    const t = convexTest();
+    const userId = await createUser(
+      t,
+      'Checkout Buyer',
+      'expiry-webhook@example.com',
+    );
+    const {eventId} = await createEventForCheckout(t);
+    const {orderId} = await t
+      .withIdentity({subject: userId})
+      .mutation(api.orders.core.open, {
+        eventId,
+        quantity: 1,
+        tier: 'regular',
+        totalAmount: 2500,
+      });
+    await t.mutation(internal.orders.core.bindCheckoutSession, {
+      orderId,
+      stripeCheckoutSessionId: 'cs_bound',
+    });
+
+    for (const [sessionId, expectedState] of [
+      ['cs_unbound', 'open'],
+      ['cs_bound', 'released'],
+    ]) {
+      webhooksConstructEventMock.mockReturnValueOnce({
+        id: `evt_expired_${sessionId}`,
+        type: 'checkout.session.expired',
+        data: {object: {id: sessionId, metadata: {orderId}}},
+      });
+      await t.action(internal.stripe.actions.verifyAndProcessWebhook, {
+        payload: '{}',
+        signature: 'test-signature',
+      });
+      const order = await t.run((ctx) => ctx.db.get('ticket_orders', orderId));
+      expect(order?.state).toBe(expectedState);
+    }
   });
 });
 
@@ -581,6 +623,73 @@ describe('startTicketOrderCheckoutSession — checkout line item pricing', () =>
       delete process.env['IS_TEST'];
     } else {
       process.env['IS_TEST'] = originalIsTest;
+    }
+  });
+
+  it('keeps an idempotent checkout session usable after a guest token rotates during creation', async () => {
+    const t = convexTest();
+    const {eventId} = await createEventForCheckout(t);
+    const oldToken = 'checkout-guest-before-rotation';
+    const newToken = 'checkout-guest-after-rotation';
+    const guestSessionId = await t.mutation(
+      api.testing.guest_sessions.seedGuestSession,
+      {
+        email: 'checkout-rotation@example.com',
+        sessionToken: oldToken,
+      },
+    );
+    const {orderId} = await t.mutation(api.orders.core.openForGuest, {
+      eventId,
+      sessionToken: oldToken,
+      quantity: 1,
+      tier: 'regular',
+      totalAmount: 2500,
+      termsAccepted: true,
+    });
+
+    const stripeSession = {
+      id: 'cs_shared_guest_checkout',
+      client_secret: 'cs_shared_guest_checkout_secret',
+      status: 'open',
+    };
+    checkoutSessionsCreateMock
+      .mockResolvedValue(stripeSession)
+      .mockImplementationOnce(async () => {
+        await t.mutation(internal.guest_sessions.core.rotateSessionToken, {
+          sessionId: guestSessionId,
+          sessionToken: newToken,
+        });
+        return stripeSession;
+      });
+
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now());
+    try {
+      await expect(
+        t.action(api.orders.core.startCheckout, {
+          orderId,
+          sessionToken: oldToken,
+        }),
+      ).rejects.toThrow('Guest session is invalid or expired');
+
+      const result = await t.action(api.orders.core.startCheckout, {
+        orderId,
+        sessionToken: newToken,
+      });
+
+      expect(checkoutSessionsCreateMock).toHaveBeenCalledTimes(2);
+      const firstKey =
+        checkoutSessionsCreateMock.mock.calls[0]?.[1]?.idempotencyKey;
+      expect(firstKey).toBeTypeOf('string');
+      expect(
+        checkoutSessionsCreateMock.mock.calls[1]?.[1]?.idempotencyKey,
+      ).toBe(firstKey);
+      expect(checkoutSessionsExpireMock).not.toHaveBeenCalled();
+      expect(result).toMatchObject({
+        stripeCheckoutSessionId: stripeSession.id,
+        clientSecret: stripeSession.client_secret,
+      });
+    } finally {
+      clock.mockRestore();
     }
   });
 

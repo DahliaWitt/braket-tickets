@@ -571,49 +571,19 @@ export async function startTicketOrderCheckoutSessionImpl(
     },
   );
 
-  try {
-    await ctx.runMutation(internal.orders.core.bindCheckoutSession, {
-      orderId: order._id,
-      stripeCheckoutSessionId: sessionResult.checkoutSessionId,
-      expiresAt: safeExpiresAtMs,
-      ...(identity.type === 'guest'
-        ? {
-            callerGuestSessionId: identity.guestSessionId,
-            callerGuestSessionToken: args.sessionToken,
-          }
-        : {}),
-    });
-  } catch (error) {
-    // Best-effort expire the newly created Stripe Checkout Session if binding
-    // was rejected (e.g., guest session retired or migrated mid-flight), unless
-    // a concurrent idempotent request already bound this exact session ID.
-    try {
-      const currentOrder = await ctx.runQuery(
-        internal.orders.core.getInternal,
-        {orderId: order._id},
-      );
-      if (
-        currentOrder?.stripeCheckoutSessionId !==
-        sessionResult.checkoutSessionId
-      ) {
-        const stripe = getStripeClient();
-        await stripe.checkout.sessions.expire(
-          sessionResult.checkoutSessionId,
-          {},
-          orderConnectedAccountId
-            ? {stripeAccount: orderConnectedAccountId}
-            : undefined,
-        );
-      }
-    } catch (expireError) {
-      logger.warn(
-        'stripe',
-        'Failed to expire unbound Checkout Session after bind rejection',
-        summarizeStripeError(expireError),
-      );
-    }
-    throw error;
-  }
+  // A rejected bind leaves Stripe's expiry in place because another request
+  // with the same idempotency key may still bind this session.
+  await ctx.runMutation(internal.orders.core.bindCheckoutSession, {
+    orderId: order._id,
+    stripeCheckoutSessionId: sessionResult.checkoutSessionId,
+    expiresAt: safeExpiresAtMs,
+    ...(identity.type === 'guest'
+      ? {
+          callerGuestSessionId: identity.guestSessionId,
+          callerGuestSessionToken: args.sessionToken,
+        }
+      : {}),
+  });
 
   return {
     orderId: order._id,
@@ -773,6 +743,7 @@ export async function syncTicketOrderCheckoutSessionImpl(
     await ctx.runMutation(internal.orders.core.expire, {
       orderId: order._id,
       force: true,
+      stripeCheckoutSessionId: session.id,
     });
   }
 
