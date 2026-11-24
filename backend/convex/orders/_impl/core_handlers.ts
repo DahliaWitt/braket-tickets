@@ -20,7 +20,10 @@ import {
   completeResaleOrderState,
 } from '../../lib/orders/complete';
 import {appendFinancialEvent} from '../../lib/orders/financial_events';
-import {findGuestSessionByToken} from '../../lib/guest_sessions/lifecycle';
+import {
+  findGuestSessionByToken,
+  getActiveGuestSession,
+} from '../../lib/guest_sessions/lifecycle';
 import {
   markLateInvalidRefundedState,
   prepareLateInvalidRefundState,
@@ -98,6 +101,8 @@ type BindCheckoutSessionArgs = {
   orderId: Id<'ticket_orders'>;
   stripeCheckoutSessionId: string;
   expiresAt?: number;
+  callerGuestSessionId?: Id<'guest_sessions'>;
+  callerGuestSessionToken?: string;
 };
 
 type ExpireArgs = {orderId: Id<'ticket_orders'>; force?: boolean};
@@ -342,7 +347,11 @@ async function resolveOrderCallerForQuery(
   // whether checkout is still viable. Mutations re-check freshness against
   // wall-clock independently.
   const guestSession = await findGuestSessionByToken(ctx, sessionToken);
-  if (!guestSession || guestSession.convertedToUserId) {
+  if (
+    !guestSession ||
+    guestSession.convertedToUserId ||
+    guestSession.retiredAt !== undefined
+  ) {
     throwOrderError(
       'RESERVATION_EXPIRED',
       'Guest session is invalid or expired',
@@ -635,6 +644,52 @@ export async function getByStripePaymentIntentIdHandler(
     .first();
 }
 
+async function assertGuestOrderSessionActive(
+  ctx: Pick<QueryCtx, 'db'> | Pick<MutationCtx, 'db'>,
+  order: Doc<'ticket_orders'>,
+  callerGuestSessionId: Id<'guest_sessions'>,
+  callerGuestSessionToken: string,
+  now: number,
+): Promise<void> {
+  if (order.guestSessionId !== callerGuestSessionId) {
+    throwOrderError('FORBIDDEN', 'You do not have access to this order');
+  }
+  const guestSession = await getActiveGuestSession(
+    ctx,
+    callerGuestSessionToken,
+    now,
+  );
+  if (!guestSession || guestSession._id !== callerGuestSessionId) {
+    throwOrderError(
+      'RESERVATION_EXPIRED',
+      'Guest session is invalid or expired',
+    );
+  }
+}
+
+export async function assertGuestCheckoutAccessHandler(
+  ctx: QueryCtx,
+  args: {
+    orderId: Id<'ticket_orders'>;
+    callerGuestSessionId: Id<'guest_sessions'>;
+    callerGuestSessionToken: string;
+    now: number;
+  },
+): Promise<null> {
+  const order = await ctx.db.get('ticket_orders', args.orderId);
+  if (!order) {
+    throwOrderError('INVALID_STATE', 'Order not found');
+  }
+  await assertGuestOrderSessionActive(
+    ctx,
+    order,
+    args.callerGuestSessionId,
+    args.callerGuestSessionToken,
+    args.now,
+  );
+  return null;
+}
+
 export async function bindCheckoutSessionHandler(
   ctx: MutationCtx,
   args: BindCheckoutSessionArgs,
@@ -642,6 +697,22 @@ export async function bindCheckoutSessionHandler(
   const order = await ctx.db.get('ticket_orders', args.orderId);
   if (!order) {
     throwOrderError('INVALID_STATE', 'Order not found');
+  }
+
+  if (args.callerGuestSessionId !== undefined) {
+    if (!args.callerGuestSessionToken) {
+      throwOrderError(
+        'RESERVATION_EXPIRED',
+        'Guest session is invalid or expired',
+      );
+    }
+    await assertGuestOrderSessionActive(
+      ctx,
+      order,
+      args.callerGuestSessionId,
+      args.callerGuestSessionToken,
+      Date.now(),
+    );
   }
 
   if (

@@ -396,6 +396,21 @@ export async function startTicketOrderCheckoutSessionImpl(
         },
       );
 
+    if (identity.type === 'guest') {
+      if (!args.sessionToken) {
+        throwPaymentAppError(
+          'RESERVATION_EXPIRED',
+          'Guest session is invalid or expired',
+        );
+      }
+      await ctx.runQuery(internal.orders.core.assertGuestCheckoutAccess, {
+        orderId: order._id,
+        callerGuestSessionId: identity.guestSessionId,
+        callerGuestSessionToken: args.sessionToken,
+        now: Date.now(),
+      });
+    }
+
     if (existingSession.status === 'expired') {
       await ctx.runMutation(internal.orders.core.clearCheckoutSession, {
         orderId: order._id,
@@ -444,6 +459,12 @@ export async function startTicketOrderCheckoutSessionImpl(
       orderId: order._id,
       stripeCheckoutSessionId: mockSessionId,
       expiresAt: safeExpiresAtMs,
+      ...(identity.type === 'guest'
+        ? {
+            callerGuestSessionId: identity.guestSessionId,
+            callerGuestSessionToken: args.sessionToken,
+          }
+        : {}),
     });
     return {
       orderId: order._id,
@@ -550,11 +571,49 @@ export async function startTicketOrderCheckoutSessionImpl(
     },
   );
 
-  await ctx.runMutation(internal.orders.core.bindCheckoutSession, {
-    orderId: order._id,
-    stripeCheckoutSessionId: sessionResult.checkoutSessionId,
-    expiresAt: safeExpiresAtMs,
-  });
+  try {
+    await ctx.runMutation(internal.orders.core.bindCheckoutSession, {
+      orderId: order._id,
+      stripeCheckoutSessionId: sessionResult.checkoutSessionId,
+      expiresAt: safeExpiresAtMs,
+      ...(identity.type === 'guest'
+        ? {
+            callerGuestSessionId: identity.guestSessionId,
+            callerGuestSessionToken: args.sessionToken,
+          }
+        : {}),
+    });
+  } catch (error) {
+    // Best-effort expire the newly created Stripe Checkout Session if binding
+    // was rejected (e.g., guest session retired or migrated mid-flight), unless
+    // a concurrent idempotent request already bound this exact session ID.
+    try {
+      const currentOrder = await ctx.runQuery(
+        internal.orders.core.getInternal,
+        {orderId: order._id},
+      );
+      if (
+        currentOrder?.stripeCheckoutSessionId !==
+        sessionResult.checkoutSessionId
+      ) {
+        const stripe = getStripeClient();
+        await stripe.checkout.sessions.expire(
+          sessionResult.checkoutSessionId,
+          {},
+          orderConnectedAccountId
+            ? {stripeAccount: orderConnectedAccountId}
+            : undefined,
+        );
+      }
+    } catch (expireError) {
+      logger.warn(
+        'stripe',
+        'Failed to expire unbound Checkout Session after bind rejection',
+        summarizeStripeError(expireError),
+      );
+    }
+    throw error;
+  }
 
   return {
     orderId: order._id,

@@ -1,6 +1,12 @@
 import type {Doc, Id} from '../../_generated/dataModel';
 import {internal} from '../../_generated/api';
 import type {MutationCtx, QueryCtx} from '../../_generated/server';
+import {
+  magicLinkRedemptionsByGuestSessionQuery,
+  ticketOrdersByGuestSessionQuery,
+  ticketsByGuestSessionQuery,
+} from '../indexed_loaders';
+import {collectAllQueryUnsafe, findMatchingInQuery} from '../query_scan';
 import {logger} from '../../lib/logger';
 import {digestBearerToken, tokenPrefix} from '../token_digests';
 
@@ -20,11 +26,12 @@ type SessionLookupCtx = {
 export function isGuestSessionActive(
   session: Pick<
     Doc<'guest_sessions'>,
-    'expiresAt' | 'lastActiveAt' | 'convertedToUserId'
+    'expiresAt' | 'lastActiveAt' | 'convertedToUserId' | 'retiredAt'
   >,
   now: number,
 ): boolean {
   if (session.convertedToUserId) return false;
+  if (session.retiredAt !== undefined) return false;
   if (now > session.expiresAt) return false;
   if (
     session.lastActiveAt &&
@@ -67,6 +74,45 @@ export async function findGuestSessionByToken(
       .query('guest_sessions')
       .withIndex('by_sessionToken', (q) => q.eq('sessionToken', sessionToken))
       .first())
+  );
+}
+
+export async function loadUnretiredGuestSessionsByEmail(
+  ctx: SessionLookupCtx,
+  email: string,
+): Promise<Array<Doc<'guest_sessions'>>> {
+  // Bounded per email: `initiate` retires all prior unretired rows before
+  // inserting a new one, so an email has at most one unretired row in steady
+  // state (or a handful from legacy/concurrent edge cases).
+  return await collectAllQueryUnsafe(
+    ctx.db
+      .query('guest_sessions')
+      .withIndex('by_email_convertedToUserId_retiredAt', (q) =>
+        q
+          .eq('email', email.toLowerCase())
+          .eq('convertedToUserId', undefined)
+          .eq('retiredAt', undefined),
+      )
+      .order('desc'),
+  );
+}
+
+export async function findActiveGuestSessionByEmail(
+  ctx: SessionLookupCtx,
+  email: string,
+  now: number,
+): Promise<Doc<'guest_sessions'> | null> {
+  return await findMatchingInQuery(
+    ctx.db
+      .query('guest_sessions')
+      .withIndex('by_email_convertedToUserId_retiredAt', (q) =>
+        q
+          .eq('email', email.toLowerCase())
+          .eq('convertedToUserId', undefined)
+          .eq('retiredAt', undefined),
+      )
+      .order('desc'),
+    (session) => isGuestSessionActive(session, now),
   );
 }
 
@@ -120,11 +166,20 @@ export async function createGuestSession(
 export async function updateGuestSessionLastActive(
   ctx: MutationCtx,
   sessionId: Id<'guest_sessions'>,
-): Promise<void> {
+  sessionToken?: string,
+): Promise<boolean> {
   const now = Date.now();
-  const session = await ctx.db.get('guest_sessions', sessionId);
-  if (!session) return;
-  if (!isGuestSessionActive(session, now)) return;
+  const session =
+    sessionToken !== undefined
+      ? await getActiveGuestSession(ctx, sessionToken, now)
+      : await ctx.db.get('guest_sessions', sessionId);
+  if (
+    !session ||
+    session._id !== sessionId ||
+    !isGuestSessionActive(session, now)
+  ) {
+    return false;
+  }
 
   if (
     !session.lastActiveAt ||
@@ -132,6 +187,7 @@ export async function updateGuestSessionLastActive(
   ) {
     await ctx.db.patch('guest_sessions', sessionId, {lastActiveAt: now});
   }
+  return true;
 }
 
 export async function attachMagicLinkTrustToGuestSession(
@@ -139,8 +195,11 @@ export async function attachMagicLinkTrustToGuestSession(
   sessionId: Id<'guest_sessions'>,
   magicLinkId: Id<'magic_links'>,
 ): Promise<void> {
+  const now = Date.now();
   const session = await ctx.db.get('guest_sessions', sessionId);
-  if (!session) return;
+  if (!session || !isGuestSessionActive(session, now)) {
+    return;
+  }
 
   const patch: Partial<Doc<'guest_sessions'>> = {};
   if (session.magicLinkId !== magicLinkId) {
@@ -162,59 +221,100 @@ export async function attachMagicLinkTrustToGuestSession(
     await ctx.db.insert('magic_link_redemption_log', {
       magicLinkId,
       guestSessionId: sessionId,
-      redeemedAt: Date.now(),
+      redeemedAt: now,
     });
   }
 }
 
-export async function deleteGuestSession(
-  ctx: MutationCtx,
+async function hasGuestSessionReferences(
+  ctx: Pick<MutationCtx, 'db'>,
   sessionId: Id<'guest_sessions'>,
-): Promise<void> {
-  await ctx.db.delete('guest_sessions', sessionId);
+): Promise<boolean> {
+  const [ticket, order, redemption] = await Promise.all([
+    ticketsByGuestSessionQuery(ctx.db, sessionId).first(),
+    ticketOrdersByGuestSessionQuery(ctx.db, sessionId).first(),
+    magicLinkRedemptionsByGuestSessionQuery(ctx.db, sessionId).first(),
+  ]);
+  return ticket !== null || order !== null || redemption !== null;
 }
 
-/** Max guest sessions deleted per cleanup batch before rescheduling. */
+export type RetireGuestSessionResult = 'deleted' | 'retained' | 'noop';
+
+/**
+ * Retire an expired or replaced guest session.
+ *
+ * - If tickets, orders, or magic-link redemption rows still reference the
+ *   session, keep the document for ownership/contact lookups and future
+ *   account migration while permanently revoking all bearer credentials.
+ * - Otherwise delete the unreferenced session row.
+ */
+export async function retireGuestSessionDoc(
+  ctx: MutationCtx,
+  session: Doc<'guest_sessions'>,
+  now = Date.now(),
+): Promise<RetireGuestSessionResult> {
+  if (session.convertedToUserId || session.retiredAt !== undefined) {
+    return 'noop';
+  }
+
+  if (await hasGuestSessionReferences(ctx, session._id)) {
+    await ctx.db.patch('guest_sessions', session._id, {
+      retiredAt: now,
+      sessionToken: undefined,
+      sessionTokenDigest: undefined,
+      sessionTokenPrefix: undefined,
+      pendingSessionTokenDigest: undefined,
+      pendingSessionTokenPrefix: undefined,
+    });
+    return 'retained';
+  }
+
+  await ctx.db.delete('guest_sessions', session._id);
+  return 'deleted';
+}
+
+/** Max guest sessions retired per cleanup batch before rescheduling. */
 export const CLEANUP_BATCH_SIZE = 200;
 
 export async function cleanupExpiredGuestSessions(
   ctx: MutationCtx,
 ): Promise<number> {
   const now = Date.now();
-  // Read only deletable rows directly from the [convertedToUserId, expiresAt]
-  // index: unconverted sessions (convertedToUserId === undefined) whose hard
-  // expiry has passed. Converted sessions are preserved for the audit trail and
-  // never deleted, but their expiresAt still lapses — so filtering them in
-  // memory after an ascending by_expiresAt scan would let them pile up at the
-  // head of the range. Once >=BATCH_SIZE converted rows existed, take() would
-  // return an all-converted batch that deletes nothing yet still reschedules,
-  // an infinite zero-progress runAfter(0) loop. Indexing on convertedToUserId
-  // skips those rows entirely, so every row read here is deletable.
+  // Read only unretired, unconverted rows directly from
+  // [convertedToUserId, retiredAt, expiresAt]. Converted sessions (audit
+  // trail) and retired sessions (retained for tickets, orders, or redemption
+  // history) have non-undefined convertedToUserId or retiredAt, so the index
+  // skips them and cleanup never re-scans retained rows or stalls behind them.
   const expiredSessions = await ctx.db
     .query('guest_sessions')
-    .withIndex('by_convertedToUserId_expiresAt', (q) =>
-      q.eq('convertedToUserId', undefined).lt('expiresAt', now),
+    .withIndex('by_convertedToUserId_retiredAt_expiresAt', (q) =>
+      q
+        .eq('convertedToUserId', undefined)
+        .eq('retiredAt', undefined)
+        .lt('expiresAt', now),
     )
     .take(CLEANUP_BATCH_SIZE);
 
-  await Promise.all(
-    expiredSessions.map((session) =>
-      ctx.db.delete('guest_sessions', session._id),
-    ),
+  const outcomes = await Promise.all(
+    expiredSessions.map((session) => retireGuestSessionDoc(ctx, session, now)),
   );
 
-  const cleaned = expiredSessions.length;
+  const deleted = outcomes.filter((outcome) => outcome === 'deleted').length;
+  const retained = outcomes.filter((outcome) => outcome === 'retained').length;
+  const cleaned = deleted + retained;
   if (cleaned > 0) {
-    logger.info('guest_sessions', '[CRON] Cleaned up expired guest sessions', {
+    logger.info('guest_sessions', '[CRON] Retired expired guest sessions', {
       cleaned,
+      deleted,
+      retained,
     });
   }
 
-  // Reschedule only when the batch was full, i.e. more deletable rows likely
-  // remain. Each run deletes the rows it read, so the remaining deletable
-  // population strictly shrinks and the self-scheduling chain terminates once a
-  // run clears fewer than a full batch.
-  if (cleaned === CLEANUP_BATCH_SIZE) {
+  // Reschedule only when the batch was full, i.e. more unretired expired rows
+  // likely remain. Every row processed here is either deleted or stamped with
+  // retiredAt (leaving the index range), so the remaining population strictly
+  // shrinks and the self-scheduling chain terminates.
+  if (expiredSessions.length === CLEANUP_BATCH_SIZE) {
     await ctx.scheduler.runAfter(
       0,
       internal.guest_sessions.core.cleanupExpiredSessions,

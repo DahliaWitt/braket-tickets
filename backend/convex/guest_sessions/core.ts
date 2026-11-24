@@ -23,9 +23,11 @@ import {
   attachMagicLinkTrustToGuestSession,
   cleanupExpiredGuestSessions,
   createGuestSession,
-  deleteGuestSession,
+  findActiveGuestSessionByEmail,
   getActiveGuestSession,
   isGuestSessionActive,
+  loadUnretiredGuestSessionsByEmail,
+  retireGuestSessionDoc,
   updateGuestSessionLastActive,
 } from '../lib/guest_sessions/lifecycle';
 import {
@@ -61,14 +63,7 @@ export const getReusableByEmail = internalQuery({
   args: {email: v.string(), now: v.number()},
   returns: v.union(guestSessionDocValidator, v.null()),
   handler: async (ctx, args) => {
-    const session = await ctx.db
-      .query('guest_sessions')
-      .withIndex('by_email', (q) => q.eq('email', args.email.toLowerCase()))
-      .order('desc')
-      .first();
-
-    if (!session) return null;
-    return isGuestSessionActive(session, args.now) ? session : null;
+    return await findActiveGuestSessionByEmail(ctx, args.email, args.now);
   },
 });
 
@@ -159,16 +154,13 @@ export const initiate = internalMutation({
       }
     }
 
-    const existing = await ctx.db
-      .query('guest_sessions')
-      .withIndex('by_email', (q) => q.eq('email', email))
-      .order('desc')
-      .first();
+    const unretiredSessions = await loadUnretiredGuestSessionsByEmail(
+      ctx,
+      email,
+    );
 
     if (
-      existing &&
-      !existing.convertedToUserId &&
-      isGuestSessionActive(existing, now)
+      unretiredSessions.some((session) => isGuestSessionActive(session, now))
     ) {
       throwPaymentAppError(
         'SESSION_RESUME_REQUIRED',
@@ -176,9 +168,11 @@ export const initiate = internalMutation({
       );
     }
 
-    if (existing && !existing.convertedToUserId) {
-      await deleteGuestSession(ctx, existing._id);
-    }
+    await Promise.all(
+      unretiredSessions.map((session) =>
+        retireGuestSessionDoc(ctx, session, now),
+      ),
+    );
 
     await createGuestSession(ctx, {
       email,
@@ -194,6 +188,12 @@ export const rotateSessionToken = internalMutation({
   args: {sessionId: v.id('guest_sessions'), sessionToken: v.string()},
   returns: v.null(),
   handler: async (ctx, args) => {
+    const now = Date.now();
+    const session = await ctx.db.get('guest_sessions', args.sessionId);
+    if (!session || !isGuestSessionActive(session, now)) {
+      return null;
+    }
+
     await ctx.db.patch('guest_sessions', args.sessionId, {
       sessionTokenDigest: await digestBearerToken(
         'guest_session',
@@ -201,7 +201,7 @@ export const rotateSessionToken = internalMutation({
       ),
       sessionTokenPrefix: tokenPrefix(args.sessionToken),
       sessionToken: undefined,
-      lastActiveAt: Date.now(),
+      lastActiveAt: now,
     });
     return null;
   },
@@ -217,8 +217,11 @@ export const prepareResumeSessionToken = internalMutation({
     ),
   }),
   handler: async (ctx, args) => {
+    const now = Date.now();
     const session = await ctx.db.get('guest_sessions', args.sessionId);
-    if (!session) return {status: 'missing' as const};
+    if (!session || !isGuestSessionActive(session, now)) {
+      return {status: 'missing' as const};
+    }
     if (session.pendingSessionTokenDigest) {
       return {status: 'already_pending' as const};
     }
@@ -236,15 +239,43 @@ export const prepareResumeSessionToken = internalMutation({
 
 export const promoteResumeSessionToken = internalMutation({
   args: {sessionId: v.id('guest_sessions'), sessionToken: v.string()},
-  returns: v.null(),
+  returns: v.object({
+    status: v.union(
+      v.literal('promoted'),
+      v.literal('inactive'),
+      v.literal('skipped'),
+    ),
+  }),
   handler: async (ctx, args) => {
+    const now = Date.now();
     const session = await ctx.db.get('guest_sessions', args.sessionId);
-    if (!session?.pendingSessionTokenDigest) return null;
+    if (!session) return {status: 'inactive' as const};
+
     const tokenDigest = await digestBearerToken(
       'guest_session',
       args.sessionToken,
     );
-    if (session.pendingSessionTokenDigest !== tokenDigest) return null;
+
+    if (!isGuestSessionActive(session, now)) {
+      if (session.pendingSessionTokenDigest === tokenDigest) {
+        await ctx.db.patch('guest_sessions', args.sessionId, {
+          pendingSessionTokenDigest: undefined,
+          pendingSessionTokenPrefix: undefined,
+        });
+      }
+      return {status: 'inactive' as const};
+    }
+
+    if (
+      !session.pendingSessionTokenDigest &&
+      session.sessionTokenDigest === tokenDigest
+    ) {
+      return {status: 'promoted' as const};
+    }
+
+    if (session.pendingSessionTokenDigest !== tokenDigest) {
+      return {status: 'skipped' as const};
+    }
 
     await ctx.db.patch('guest_sessions', args.sessionId, {
       sessionTokenDigest: session.pendingSessionTokenDigest,
@@ -252,29 +283,45 @@ export const promoteResumeSessionToken = internalMutation({
       pendingSessionTokenDigest: undefined,
       pendingSessionTokenPrefix: undefined,
       sessionToken: undefined,
-      lastActiveAt: Date.now(),
+      lastActiveAt: now,
     });
-    return null;
+    return {status: 'promoted' as const};
   },
 });
 
 export const clearResumeSessionToken = internalMutation({
   args: {sessionId: v.id('guest_sessions'), sessionToken: v.string()},
-  returns: v.null(),
+  returns: v.object({
+    status: v.union(
+      v.literal('cleared'),
+      v.literal('inactive'),
+      v.literal('skipped'),
+    ),
+  }),
   handler: async (ctx, args) => {
+    const now = Date.now();
     const session = await ctx.db.get('guest_sessions', args.sessionId);
-    if (!session?.pendingSessionTokenDigest) return null;
+    if (!session) return {status: 'inactive' as const};
+
     const tokenDigest = await digestBearerToken(
       'guest_session',
       args.sessionToken,
     );
-    if (session.pendingSessionTokenDigest !== tokenDigest) return null;
+    const matchesPending = session.pendingSessionTokenDigest === tokenDigest;
+    if (matchesPending) {
+      await ctx.db.patch('guest_sessions', args.sessionId, {
+        pendingSessionTokenDigest: undefined,
+        pendingSessionTokenPrefix: undefined,
+      });
+    }
 
-    await ctx.db.patch('guest_sessions', args.sessionId, {
-      pendingSessionTokenDigest: undefined,
-      pendingSessionTokenPrefix: undefined,
-    });
-    return null;
+    if (!isGuestSessionActive(session, now)) {
+      return {status: 'inactive' as const};
+    }
+
+    return {
+      status: matchesPending ? ('cleared' as const) : ('skipped' as const),
+    };
   },
 });
 
@@ -287,19 +334,26 @@ export const getById = internalQuery({
 });
 
 export const updateLastActive = internalMutation({
-  args: {sessionId: v.id('guest_sessions')},
-  returns: v.null(),
+  args: {
+    sessionId: v.id('guest_sessions'),
+    sessionToken: v.optional(v.string()),
+  },
+  returns: v.boolean(),
   handler: async (ctx, args) => {
-    await updateGuestSessionLastActive(ctx, args.sessionId);
-    return null;
+    return await updateGuestSessionLastActive(
+      ctx,
+      args.sessionId,
+      args.sessionToken,
+    );
   },
 });
 
 /**
- * Clean up expired guest sessions.
- * Runs as a cron job. Sessions past their 24h expiresAt are deleted.
- * Sessions that were converted to users (convertedToUserId set) are preserved
- * for audit trail but could be cleaned up after a longer retention period.
+ * Retire expired guest sessions.
+ * Runs as a cron job. Unreferenced sessions past their 24h expiresAt are
+ * deleted; sessions referenced by tickets, orders, or magic-link redemptions
+ * are retired in place (retiredAt set, credentials cleared) so ownership and
+ * contact records remain intact. Converted sessions are preserved as-is.
  */
 export const cleanupExpiredSessions = internalMutation({
   args: {},

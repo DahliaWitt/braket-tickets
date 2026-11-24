@@ -13,5 +13,6 @@ export const guestSessionDocValidator = v.object({
   pendingSessionTokenPrefix: v.optional(v.string()),
   lastActiveAt: v.optional(v.number()),
   expiresAt: v.number(),
+  retiredAt: v.optional(v.number()),
   convertedToUserId: v.optional(v.id('users')),
 });

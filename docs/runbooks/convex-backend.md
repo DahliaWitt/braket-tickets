@@ -200,16 +200,16 @@ localStorage.setItem('debug', 'verbose');
 
 ### Use the current cron reference
 
-| Cron                                   | Schedule         | Monitors                                                                   |
-| -------------------------------------- | ---------------- | -------------------------------------------------------------------------- |
-| Cleanup old admin audit logs           | Daily            | Admin audit trail growth and retention                                     |
-| Cleanup stale resale listings          | Every 30 minutes | Resale listings that have expired or become invalid                        |
-| Cleanup expired guest sessions         | Hourly           | `guest_sessions` table, sessions past 24h                                  |
-| Process scheduled Stripe payouts       | Daily            | Queues a bounded batch of payout-eligible events into the payout workpool  |
-| Cleanup stale email dedup keys         | Every 6 hours    | `emailDedup` table, keys older than 24h                                    |
-| Send daily vetting digests             | Hourly           | New vetting submissions for community admins                               |
-| Cleanup old email delivery failures    | Daily            | `emailDeliveryFailures` rows older than 30 days                            |
-| Cleanup Resend component email records | Daily            | Resend component delivery metadata after provider status retention windows |
+| Cron                                   | Schedule         | Monitors                                                                                                                                             |
+| -------------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cleanup old admin audit logs           | Daily            | Admin audit trail growth and retention                                                                                                               |
+| Cleanup stale resale listings          | Every 30 minutes | Resale listings that have expired or become invalid                                                                                                  |
+| Cleanup expired guest sessions         | Hourly           | `guest_sessions` past 24h: deletes unreferenced rows, retires referenced rows (`retiredAt` set, credentials revoked), skips converted & retired rows |
+| Process scheduled Stripe payouts       | Daily            | Queues a bounded batch of payout-eligible events into the payout workpool                                                                            |
+| Cleanup stale email dedup keys         | Every 6 hours    | `emailDedup` table, keys older than 24h                                                                                                              |
+| Send daily vetting digests             | Hourly           | New vetting submissions for community admins                                                                                                         |
+| Cleanup old email delivery failures    | Daily            | `emailDeliveryFailures` rows older than 30 days                                                                                                      |
+| Cleanup Resend component email records | Daily            | Resend component delivery metadata after provider status retention windows                                                                           |
 
 Expired ticket orders are released by the order expiry path, not by a cron. If that path is broken, investigate `orders/core:expire` and the Stripe checkout expiry handler. If inventory appears held with no open primary orders, use the held-count reconciliation steps in `docs/runbooks/payments.md`.
 

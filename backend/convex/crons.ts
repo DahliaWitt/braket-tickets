@@ -20,11 +20,14 @@ crons.interval(
 /**
  * Cleanup Expired Guest Sessions
  *
- * Runs every hour to delete guest sessions past their 24h hard expiry.
- * Sessions that were converted to user accounts (convertedToUserId set)
- * are preserved for audit trail.
+ * Runs every hour to retire guest sessions past their 24h hard expiry.
+ * Unreferenced sessions are deleted; sessions still referenced by tickets,
+ * orders, or magic-link redemption history are retired in place (`retiredAt`
+ * stamped and credentials permanently cleared) so ownership/contact records
+ * remain intact without re-scanning retained rows. Converted sessions
+ * (`convertedToUserId` set) are preserved for the audit trail.
  *
- * @see convex/guest_sessions.ts - cleanupExpiredSessions for implementation
+ * @see convex/guest_sessions/core.ts - cleanupExpiredSessions
  */
 crons.interval(
   'cleanup expired guest sessions',

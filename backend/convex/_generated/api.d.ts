@@ -2917,6 +2917,7 @@ export declare const api: {
           magicLinkId?: Id<"magic_links">;
           pendingSessionTokenDigest?: string;
           pendingSessionTokenPrefix?: string;
+          retiredAt?: number;
           sessionToken?: string;
           sessionTokenDigest?: string;
           sessionTokenPrefix?: string;
@@ -4636,7 +4637,7 @@ export declare const internal: {
         "mutation",
         "internal",
         { sessionId: Id<"guest_sessions">; sessionToken: string },
-        null
+        { status: "cleared" | "inactive" | "skipped" }
       >;
       getById: FunctionReference<
         "query",
@@ -4653,6 +4654,7 @@ export declare const internal: {
           magicLinkId?: Id<"magic_links">;
           pendingSessionTokenDigest?: string;
           pendingSessionTokenPrefix?: string;
+          retiredAt?: number;
           sessionToken?: string;
           sessionTokenDigest?: string;
           sessionTokenPrefix?: string;
@@ -4673,6 +4675,7 @@ export declare const internal: {
           magicLinkId?: Id<"magic_links">;
           pendingSessionTokenDigest?: string;
           pendingSessionTokenPrefix?: string;
+          retiredAt?: number;
           sessionToken?: string;
           sessionTokenDigest?: string;
           sessionTokenPrefix?: string;
@@ -4693,6 +4696,7 @@ export declare const internal: {
           magicLinkId?: Id<"magic_links">;
           pendingSessionTokenDigest?: string;
           pendingSessionTokenPrefix?: string;
+          retiredAt?: number;
           sessionToken?: string;
           sessionTokenDigest?: string;
           sessionTokenPrefix?: string;
@@ -4713,6 +4717,7 @@ export declare const internal: {
           magicLinkId?: Id<"magic_links">;
           pendingSessionTokenDigest?: string;
           pendingSessionTokenPrefix?: string;
+          retiredAt?: number;
           sessionToken?: string;
           sessionTokenDigest?: string;
           sessionTokenPrefix?: string;
@@ -4751,7 +4756,7 @@ export declare const internal: {
         "mutation",
         "internal",
         { sessionId: Id<"guest_sessions">; sessionToken: string },
-        null
+        { status: "promoted" | "inactive" | "skipped" }
       >;
       rotateSessionToken: FunctionReference<
         "mutation",
@@ -4762,8 +4767,8 @@ export declare const internal: {
       updateLastActive: FunctionReference<
         "mutation",
         "internal",
-        { sessionId: Id<"guest_sessions"> },
-        null
+        { sessionId: Id<"guest_sessions">; sessionToken?: string },
+        boolean
       >;
     };
   };
@@ -5115,10 +5120,23 @@ export declare const internal: {
         },
         null
       >;
+      assertGuestCheckoutAccess: FunctionReference<
+        "query",
+        "internal",
+        {
+          callerGuestSessionId: Id<"guest_sessions">;
+          callerGuestSessionToken: string;
+          now: number;
+          orderId: Id<"ticket_orders">;
+        },
+        null
+      >;
       bindCheckoutSession: FunctionReference<
         "mutation",
         "internal",
         {
+          callerGuestSessionId?: Id<"guest_sessions">;
+          callerGuestSessionToken?: string;
           expiresAt?: number;
           orderId: Id<"ticket_orders">;
           stripeCheckoutSessionId: string;

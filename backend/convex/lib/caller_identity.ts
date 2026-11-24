@@ -137,15 +137,21 @@ export async function resolveCallerIdentityAction(
       {sessionToken, now: Date.now()},
     );
     if (session) {
-      await ctx.runMutation(internal.guest_sessions.core.updateLastActive, {
-        sessionId: session._id,
-      });
-      return {
-        type: 'guest',
-        guestSessionId: session._id,
-        email: session.email,
-        guestOwnerKey: `session:${session._id}`,
-      };
+      const stillActive = await ctx.runMutation(
+        internal.guest_sessions.core.updateLastActive,
+        {
+          sessionId: session._id,
+          sessionToken,
+        },
+      );
+      if (stillActive) {
+        return {
+          type: 'guest',
+          guestSessionId: session._id,
+          email: session.email,
+          guestOwnerKey: `session:${session._id}`,
+        };
+      }
     }
   }
 
