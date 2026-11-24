@@ -91,8 +91,34 @@ export async function initializeSentry(
         : 0,
       // Send 100% of errors
       sampleRate: 1.0,
-      // Don't send PII like user IPs
-      sendDefaultPii: false,
+      // Sentry v11 defaults to permissive data collection. Explicitly lock down
+      // every category to match our Privacy Policy (no inferred IPs, cookies,
+      // headers, or HTTP bodies; scrub auth/PII query params while preserving
+      // non-sensitive route/filter params for debugging).
+      dataCollection: {
+        userInfo: false,
+        cookies: false,
+        httpHeaders: false,
+        httpBodies: [],
+        urlQueryParams: {
+          deny: [
+            'ott',
+            'code',
+            'state',
+            'email',
+            'forwarded',
+            '-ip',
+            'remote-',
+            'via',
+            '-user',
+          ],
+        },
+        graphQL: {document: false, variables: false},
+        genAI: {inputs: false, outputs: false},
+        mcp: {inputs: false, outputs: false},
+        databaseQueryData: false,
+        queues: false,
+      },
     });
 
     return Sentry;

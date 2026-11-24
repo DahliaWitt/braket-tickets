@@ -92,8 +92,34 @@ describe('sentry-loader', () => {
         environment: 'test',
         tunnel: '/monitor',
         tracesSampleRate: 0.1,
+        dataCollection: {
+          userInfo: false,
+          cookies: false,
+          httpHeaders: false,
+          httpBodies: [],
+          urlQueryParams: {
+            deny: expect.arrayContaining([
+              'ott',
+              'code',
+              'state',
+              'email',
+              'forwarded',
+              '-ip',
+              'remote-',
+              'via',
+              '-user',
+            ]),
+          },
+          graphQL: {document: false, variables: false},
+          genAI: {inputs: false, outputs: false},
+          mcp: {inputs: false, outputs: false},
+          databaseQueryData: false,
+          queues: false,
+        },
       }),
     );
+    const [initOptions] = initMock.mock.calls[0] ?? [];
+    expect(initOptions).not.toHaveProperty('sendDefaultPii');
     expect(browserTracingIntegrationMock).toHaveBeenCalledOnce();
   });
 
