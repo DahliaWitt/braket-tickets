@@ -37,7 +37,8 @@ import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton
 import {BraDialogService} from '@ui/components/composites/dialog/dialog.service';
 import {type Id} from '@convex/_generated/dataModel';
 import {api} from '@convex/_generated/api';
-import {injectQuery, skipToken} from 'convex-angular';
+import {skipToken} from 'convex-angular';
+import {injectScopedQuery} from '@/core/utils/scoped-query';
 import type {CommunityPublicationStatus} from '@shared/domain/community-publication-status';
 import {ConvexError} from 'convex/values';
 import {logger} from '@/utils/logger';
@@ -170,6 +171,10 @@ export class VettingComponent {
   /** Shows success state after submission before navigation */
   readonly submissionComplete = signal(false);
 
+  private readonly existingApplicationScope = computed(
+    () => this.auth.user()?._id ?? null,
+  );
+
   /**
    * Pre-check for existing application for the specific community.
    * If the user already has a pending or approved application for THIS organizer,
@@ -177,12 +182,12 @@ export class VettingComponent {
    * Note: Uses the resolved organizerId (from questionsResource) so slug-based
    * routes work correctly — the raw route param may be a slug, not a Convex ID.
    */
-  private existingApplicationQuery = injectQuery(
+  private existingApplicationQuery = injectScopedQuery(
     api.communities.applications.getMyApplicationForOrganizer,
+    this.existingApplicationScope,
     () => {
       const organizerId = this.organizerIdFromResource();
-      const user = this.auth.user();
-      return organizerId && user ? {organizerId} : skipToken;
+      return organizerId ? {organizerId} : skipToken;
     },
   );
 
@@ -759,17 +764,13 @@ export class VettingComponent {
   asBoolField(
     field: MaybeFieldTree<VettingFieldValue> | null,
   ): MaybeFieldTree<boolean> | null {
-    return castSignalFormField<boolean>(
-      field,
-    );
+    return castSignalFormField<boolean>(field);
   }
 
   asArrayField(
     field: MaybeFieldTree<VettingFieldValue> | null,
   ): MaybeFieldTree<string[]> | null {
-    return castSignalFormField<string[]>(
-      field,
-    );
+    return castSignalFormField<string[]>(field);
   }
 
   isRadioSelected(

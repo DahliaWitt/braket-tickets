@@ -1,14 +1,8 @@
-import {
-  Injectable,
-  computed,
-  effect,
-  inject,
-  linkedSignal,
-  signal,
-} from '@angular/core';
-import {injectConvex, injectQuery, skipToken} from 'convex-angular';
+import {Injectable, computed, inject} from '@angular/core';
+import {injectConvex} from 'convex-angular';
 
 import {AuthService} from '@/core/services/auth.service';
+import {injectScopedQuery} from '@/core/utils/scoped-query';
 import {api} from '@convex/_generated/api';
 import {type Ticket} from '../models/ticket.model';
 import {type Id} from '@convex/_generated/dataModel';
@@ -58,107 +52,14 @@ export class PaymentService {
     return user ? user._id : 'authenticated';
   });
 
-  private readonly refreshMaskActive = signal(false);
-  private readonly pendingTicketsRefetch = signal(false);
-
-  private readonly visibleTicketsScope = linkedSignal<
-    string | null,
-    string | null
-  >({
-    source: this.authScope,
-    computation: (scope, previous) => {
-      if (scope === null) {
-        return null;
-      }
-
-      return previous?.source === scope ? previous.value : null;
-    },
-  });
-
-  private readonly shouldHideTicketsResource = computed(() => {
-    const scope = this.authScope();
-    return (
-      scope !== null &&
-      (this.refreshMaskActive() || this.visibleTicketsScope() !== scope)
-    );
-  });
-
-  private readonly ticketsQuery = injectQuery(
+  private readonly ticketsQuery = injectScopedQuery(
     api.tickets.public.getMyTickets,
-    () => (this.authScope() === null ? skipToken : {}),
-    {
-      onSuccess: () => this.onTicketsQuerySettled('success'),
-      onError: () => this.onTicketsQuerySettled('error'),
-    },
+    this.authScope,
+    () => ({}),
   );
 
-  constructor() {
-    let previousScope = this.authScope();
-
-    effect(() => {
-      const scope = this.authScope();
-      const prev = previousScope;
-      previousScope = scope;
-
-      if (scope === null) {
-        this.pendingTicketsRefetch.set(false);
-        this.refreshMaskActive.set(false);
-        return;
-      }
-
-      if (prev !== null && prev !== scope) {
-        // convex-angular 1.11 deduplicates subscriptions when serialized args
-        // match ({} -> {}). Force an immediate resubscribe on any non-null
-        // authScope change (including 'authenticated' -> user._id and direct
-        // user switches) so prior-account data can never leak and
-        // visibleTicketsScope never wedges at null.
-        this.pendingTicketsRefetch.set(false);
-        this.ticketsQuery.refetch();
-      }
-    });
-  }
-
   triggerRefresh(): void {
-    if (this.authScope() === null) {
-      return;
-    }
-
-    this.refreshMaskActive.set(true);
-    this.refetchTicketsWhenIdle();
-  }
-
-  private onTicketsQuerySettled(outcome: 'success' | 'error'): void {
-    const scope = this.authScope();
-    if (scope === null) {
-      this.pendingTicketsRefetch.set(false);
-      this.refreshMaskActive.set(false);
-      this.visibleTicketsScope.set(null);
-      return;
-    }
-
-    if (this.pendingTicketsRefetch()) {
-      this.pendingTicketsRefetch.set(false);
-      this.ticketsQuery.refetch();
-      return;
-    }
-
-    this.refreshMaskActive.set(false);
-    // Only mark the current authScope visible after a successful response.
-    // injectQuery retains prior data on error, so unmasking on error after an
-    // account switch would expose the previous account's tickets.
-    if (outcome === 'success') {
-      this.visibleTicketsScope.set(scope);
-    }
-  }
-
-  private refetchTicketsWhenIdle(): void {
-    if (this.ticketsQuery.isLoading()) {
-      this.pendingTicketsRefetch.set(true);
-      return;
-    }
-
-    this.pendingTicketsRefetch.set(false);
-    this.ticketsQuery.refetch();
+    this.ticketsQuery.triggerRefresh();
   }
 
   private mapTickets(ticketsData: unknown): Ticket[] {
@@ -187,13 +88,7 @@ export class PaymentService {
   }
 
   readonly ticketsResource = {
-    value: computed(() => {
-      if (this.authScope() === null || this.shouldHideTicketsResource()) {
-        return [];
-      }
-
-      return this.mapTickets(this.ticketsQuery.data());
-    }),
+    value: computed(() => this.mapTickets(this.ticketsQuery.data())),
     isLoading: this.ticketsQuery.isLoading,
     error: this.ticketsQuery.error,
   };

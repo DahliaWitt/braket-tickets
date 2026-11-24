@@ -1764,4 +1764,97 @@ describe('AuthService', () => {
       expect(service.authSettled()).toBe(true);
     });
   });
+
+  describe('scannerStaffQuery account-switch isolation', () => {
+    it('masks prior-account scanner assignment across direct u1 -> u2 switch and first-response errors', async () => {
+      TestBed.resetTestingModule();
+
+      const localConvexMock = createMockConvexClient();
+      const firstScannerUnsubscribe = vi.fn();
+      let onUserData: ((value: unknown) => void) | undefined;
+      let firstScannerOnData: ((value: unknown) => void) | undefined;
+      let secondScannerOnData: ((value: unknown) => void) | undefined;
+      let secondScannerOnError: ((err: Error) => void) | undefined;
+      let scannerSubscribeCount = 0;
+
+      localConvexMock.onUpdate.mockImplementation(
+        (
+          queryRef: unknown,
+          _args: unknown,
+          onData: (value: unknown) => void,
+          onError?: (err: Error) => void,
+        ) => {
+          // First subscription is userQuery (api.users.profile.current);
+          // subsequent subscriptions are scannerStaffQuery.
+          if (!onUserData) {
+            void queryRef;
+            onUserData = onData;
+            return vi.fn();
+          }
+
+          scannerSubscribeCount += 1;
+          if (scannerSubscribeCount === 1) {
+            firstScannerOnData = onData;
+            return firstScannerUnsubscribe;
+          }
+
+          secondScannerOnData = onData;
+          secondScannerOnError = onError;
+          return vi.fn();
+        },
+      );
+      localConvexMock.client.onUpdate = localConvexMock.onUpdate;
+
+      TestBed.configureTestingModule({
+        providers: [
+          AuthService,
+          {provide: CONVEX, useValue: localConvexMock},
+          {provide: Router, useValue: routerSpy},
+          {provide: BraToastService, useValue: toastSpy},
+          {
+            provide: AUTH_CLIENT,
+            useValue: authClient as unknown as AuthClient,
+          },
+        ],
+      });
+
+      const realService = TestBed.inject(AuthService);
+      const internals = realService as unknown as AuthServiceInternals;
+      internals.setSessionState?.({user: {email: 'u1@example.com'}});
+      TestBed.tick();
+      await Promise.resolve();
+
+      onUserData?.({_id: 'u1', _creationTime: 1, email: 'u1@example.com'});
+      TestBed.tick();
+      await Promise.resolve();
+
+      expect(scannerSubscribeCount).toBe(1);
+      firstScannerOnData?.(true);
+      TestBed.tick();
+      await Promise.resolve();
+      expect(realService.isScannerStaff()).toBe(true);
+
+      // Direct switch u1 -> u2 without logging out
+      onUserData?.({_id: 'u2', _creationTime: 2, email: 'u2@example.com'});
+      expect(realService.isScannerStaff()).toBe(false);
+      TestBed.tick();
+      await Promise.resolve();
+
+      expect(firstScannerUnsubscribe).toHaveBeenCalledTimes(1);
+      expect(scannerSubscribeCount).toBe(2);
+      expect(realService.isScannerStaff()).toBe(false);
+
+      // Error on first u2 response must keep u1's `true` hidden
+      secondScannerOnError?.(new Error('transient reauth failure'));
+      TestBed.tick();
+      await Promise.resolve();
+      expect(realService.isScannerStaff()).toBe(false);
+
+      // Success for u2 unmasks u2's actual assignment state
+      secondScannerOnData?.(false);
+      TestBed.tick();
+      await Promise.resolve();
+      expect(realService.isScannerStaff()).toBe(false);
+    });
+  });
 });

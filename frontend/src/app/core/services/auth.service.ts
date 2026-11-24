@@ -27,6 +27,7 @@ import {
   extractErrorMessage,
   isRetryableAuthBackendError,
 } from '@/core/utils/auth.utils';
+import {injectScopedQuery} from '@/core/utils/scoped-query';
 import {COMPROMISED_PASSWORD_MESSAGE} from '@shared/constants';
 import {
   isCompromisedPasswordError,
@@ -251,9 +252,14 @@ export class AuthService implements ConvexAuthProvider {
     return 'user';
   });
 
-  private readonly scannerStaffQuery = injectQuery(
+  private readonly scannerStaffScope = computed(() =>
+    this.isAuthenticated() ? (this.user()?._id ?? null) : null,
+  );
+
+  private readonly scannerStaffQuery = injectScopedQuery(
     api.communities.scanners.hasAnyAssignment,
-    () => (this.isAuthenticated() && !!this.user() ? {} : skipToken),
+    this.scannerStaffScope,
+    () => ({}),
   );
 
   /** Whether the scanner staff query is still loading. */

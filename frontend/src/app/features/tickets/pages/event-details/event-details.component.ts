@@ -16,7 +16,8 @@ import {toSignal} from '@angular/core/rxjs-interop';
 import {NgOptimizedImage} from '@angular/common';
 import {ActivatedRoute, Router, RouterLink} from '@angular/router';
 import {AuthService} from '@/core/services/auth.service';
-import {injectQueries, injectQuery, skipToken} from 'convex-angular';
+import {injectQueries, skipToken} from 'convex-angular';
+import {injectScopedQuery} from '@/core/utils/scoped-query';
 import {PaymentService} from '@/features/tickets/services/payment.service';
 import {ApplicationsService} from '@/features/vetting/services/applications.service';
 import {type Application} from '@/features/vetting/models/application.model';
@@ -182,10 +183,11 @@ export class EventDetailsComponent {
       }
     },
   });
-  private readonly trustQuery = injectQuery(
+  private readonly trustScope = computed(() => this.auth.user()?._id ?? null);
+  private readonly trustQuery = injectScopedQuery(
     api.communities.trust_links.checkUserTrust,
+    this.trustScope,
     () => {
-      const user = this.auth.user();
       // Read through the memoized `event` computed rather than
       // `queries.results().event` directly: `results()` emits a new object on
       // every settle of any key (event OR availability), so reading it here
@@ -195,7 +197,7 @@ export class EventDetailsComponent {
       // on the event document alone.
       const event = this.event();
       if (event?.visibility === EVENT_VISIBILITY.PUBLIC) return skipToken;
-      if (!user?._id || !event) return skipToken;
+      if (!event) return skipToken;
       return {
         organizerId: event.organizerId,
       };
