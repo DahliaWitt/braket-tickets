@@ -87,19 +87,34 @@ export class PaymentService {
     api.tickets.public.getMyTickets,
     () => (this.authScope() === null ? skipToken : {}),
     {
-      onSuccess: () => this.onTicketsQuerySettled(),
-      onError: () => this.onTicketsQuerySettled(),
+      onSuccess: () => this.onTicketsQuerySettled('success'),
+      onError: () => this.onTicketsQuerySettled('error'),
     },
   );
 
   constructor() {
+    let previousScope = this.authScope();
+
     effect(() => {
-      if (this.authScope() !== null) {
+      const scope = this.authScope();
+      const prev = previousScope;
+      previousScope = scope;
+
+      if (scope === null) {
+        this.pendingTicketsRefetch.set(false);
+        this.refreshMaskActive.set(false);
         return;
       }
 
-      this.pendingTicketsRefetch.set(false);
-      this.refreshMaskActive.set(false);
+      if (prev !== null && prev !== scope) {
+        // convex-angular 1.11 deduplicates subscriptions when serialized args
+        // match ({} -> {}). Force an immediate resubscribe on any non-null
+        // authScope change (including 'authenticated' -> user._id and direct
+        // user switches) so prior-account data can never leak and
+        // visibleTicketsScope never wedges at null.
+        this.pendingTicketsRefetch.set(false);
+        this.ticketsQuery.refetch();
+      }
     });
   }
 
@@ -112,7 +127,7 @@ export class PaymentService {
     this.refetchTicketsWhenIdle();
   }
 
-  private onTicketsQuerySettled(): void {
+  private onTicketsQuerySettled(outcome: 'success' | 'error'): void {
     const scope = this.authScope();
     if (scope === null) {
       this.pendingTicketsRefetch.set(false);
@@ -128,7 +143,12 @@ export class PaymentService {
     }
 
     this.refreshMaskActive.set(false);
-    this.visibleTicketsScope.set(scope);
+    // Only mark the current authScope visible after a successful response.
+    // injectQuery retains prior data on error, so unmasking on error after an
+    // account switch would expose the previous account's tickets.
+    if (outcome === 'success') {
+      this.visibleTicketsScope.set(scope);
+    }
   }
 
   private refetchTicketsWhenIdle(): void {

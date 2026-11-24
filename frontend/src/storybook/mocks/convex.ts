@@ -1,11 +1,18 @@
 import type {ConvexClient, ConnectionState} from 'convex/browser';
-import type {FunctionArgs, FunctionReference} from 'convex/server';
+import type {
+  FunctionArgs,
+  FunctionReference,
+  FunctionReference_future,
+} from 'convex/server';
 
 const STORY_NO_QUERY_UPDATE = Symbol('STORY_NO_QUERY_UPDATE');
 
-type StoryQueryReference = FunctionReference<'query'>;
-type StoryMutationReference = FunctionReference<'mutation'>;
-type StoryActionReference = FunctionReference<'action'>;
+type StoryQueryReference =
+  FunctionReference<'query'> | FunctionReference_future<'query'>;
+type StoryMutationReference =
+  FunctionReference<'mutation'> | FunctionReference_future<'mutation'>;
+type StoryActionReference =
+  FunctionReference<'action'> | FunctionReference_future<'action'>;
 
 interface StoryOnUpdateContext<Query extends StoryQueryReference> {
   query: Query;
