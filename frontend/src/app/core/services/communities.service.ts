@@ -97,6 +97,26 @@ export class CommunitiesService {
   }
 
   /**
+   * Fetches a community by slug or Convex ID only if the caller can administer it.
+   *
+   * Authorization is enforced server-side via `canManageCommunity`, returning
+   * null for both missing and unauthorized communities.
+   */
+  getAdminBySlugOrId(slugOrId: string): Promise<AdminCommunity | null> {
+    return retryWithDelays({
+      delaysMs: COMMUNITY_READ_RETRY_DELAYS_MS,
+      run: () =>
+        this.convex.query(api.communities.profile.getAdminBySlugOrId, {
+          slugOrId,
+        }),
+      shouldRetry: (error, attemptIndex) => {
+        if (isNonRetryableReadError(error)) return false;
+        return attemptIndex < COMMUNITY_READ_RETRY_DELAYS_MS.length - 1;
+      },
+    });
+  }
+
+  /**
    * Creates a new community.
    *
    * Registers a new community on the platform with their name, description,

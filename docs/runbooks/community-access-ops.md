@@ -21,8 +21,11 @@ Source of truth:
 - `backend/convex/lib/authz.ts`
 - `backend/convex/users/profile.ts`
 - `backend/convex/communities/directory/users.ts`
+- `backend/convex/communities/profile.ts`
 - `frontend/src/app/features/invite/pages/invite/invite.component.ts`
 - `frontend/src/app/features/admin/pages/community-admin/community-admin.component.ts`
+- `frontend/src/app/features/admin/pages/community-admin-settings/community-admin-settings.component.ts`
+- `frontend/src/app/features/admin/services/community-context.service.ts`
 - `frontend/src/app/features/admin/services/vetting-trust-links.service.ts`
 
 Jump to:
@@ -33,6 +36,7 @@ Jump to:
 - [Create or revoke a trust link](#create-or-revoke-a-trust-link)
 - [Explain event visibility](#explain-event-visibility)
 - [Explain why a user still cannot access a trusted community](#explain-why-a-user-still-cannot-access-a-trusted-community)
+- [Troubleshoot revoked or broken community-admin links](#troubleshoot-revoked-or-broken-community-admin-links)
 - [Rebuild the organizer admin directory projection](#rebuild-the-organizer-admin-directory-projection)
 - [Reproduce the issue locally](#reproduce-the-issue-locally)
 
@@ -187,6 +191,17 @@ Keep these boundaries in mind:
 - a magic-link redemption grants direct access to the community that issued the link
 - removing a trust link stops shared access immediately
 - root admins bypass community vetting checks
+
+## Troubleshoot revoked or broken community-admin links
+
+`/community-admin/:tab?community=<slug-or-id>` and `/community-admin/events/new?community=<slug-or-id>` resolve the `?community=` parameter through `api.communities.profile.getAdminBySlugOrId` (slug checked before organizer ID via `findOrganizerBySlugOrId`, gated by `requireUser` and `canManageCommunity`). `CommunityContextService.selectedCommunityId` enforces that only organizers returned by `api.communities.admins.listMyCommunities` can become active.
+
+Expected UI states:
+
+- **Revoked or unknown `?community=` link:** `getAdminBySlugOrId` returns `null`, and the admin shell renders the `COMMUNITY NOT FOUND` error card with a switcher for the caller's remaining communities (if any) rather than mounting child admin tabs.
+- **Transient or network lookup failure:** If `listMyCommunities` fails before loading or `getAdminBySlugOrId` throws, the admin shell renders the `UNABLE TO LOAD COMMUNITIES` error card so the caller can refresh and retry instead of seeing a false "not found" state.
+- **Live revocation during editing:** In `/community-admin/:tab` with no pinned `?community=` param, dropping the active community falls back to the next managed community and surfaces a warning toast. In `/community-admin/settings`, switching or falling back to another community clears pending logo changes, and if `api.communities.profile.getAdmin` returns `null`, the settings page renders `SETTINGS UNAVAILABLE` and clears dirty-navigation blocking. In `/community-admin/events/new`, losing access to the draft's bound community blocks saving with an inline warning rather than silently retargeting the draft to another community.
+- **Unhandled Convex server errors:** Frontend error extraction (`frontend/src/app/core/utils/error-message.utils.ts`) strips `[CONVEX ...]` and `Called by client` framing while preserving `[Request ID: <id>] Server Error` so operators can look up the exact request ID in Convex logs and Sentry.
 
 ## Rebuild the organizer admin directory projection
 

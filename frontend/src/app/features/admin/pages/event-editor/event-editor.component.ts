@@ -182,7 +182,7 @@ export class EventEditorComponent implements HasUnsavedChanges {
       return community ? {community} : undefined;
     },
     loader: async ({params}): Promise<ResolvedCreateCommunityScope> => {
-      const community = await this.communitiesService.getBySlugOrId(
+      const community = await this.communitiesService.getAdminBySlugOrId(
         params.community,
       );
       if (!community) {
@@ -205,7 +205,21 @@ export class EventEditorComponent implements HasUnsavedChanges {
     this.communityContext?.setResolvedNames(new Map([[scope.id, scope.name]]));
   });
 
+  private readonly isCreateOrganizerRevoked = computed(() => {
+    if (!this.isCreateMode()) return false;
+    const boundOrganizerId = this.eventModel().organizerId;
+    if (!boundOrganizerId) return false;
+    if (!this.communityContext?.isLoaded()) return false;
+    return !this.communityContext
+      .communities()
+      .includes(boundOrganizerId as Id<'organizers'>);
+  });
+
   readonly createCommunityScopeMessage = computed(() => {
+    if (this.isCreateOrganizerRevoked()) {
+      return 'Your access to this community is no longer available. Go back to events and pick a valid community before saving.';
+    }
+
     const community = this.createCommunityScopeParam();
     if (!community) return null;
 
@@ -221,6 +235,10 @@ export class EventEditorComponent implements HasUnsavedChanges {
   });
 
   readonly isCreateCommunityScopeBlocking = computed(() => {
+    if (this.isCreateOrganizerRevoked()) {
+      return true;
+    }
+
     return (
       this.createCommunityScopeParam() !== undefined &&
       this.resolvedCreateCommunityScope() === null
@@ -493,6 +511,10 @@ export class EventEditorComponent implements HasUnsavedChanges {
 
   /** Display name of the auto-scoped community, or null if unavailable */
   readonly communityName = computed(() => {
+    if (this.isCreateOrganizerRevoked()) {
+      return null;
+    }
+
     const community = this.createCommunityScopeParam();
     if (community) {
       return this.resolvedCreateCommunityScope()?.name ?? null;

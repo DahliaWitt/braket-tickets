@@ -15,7 +15,10 @@ import {
   cascadeUnpublishEvents,
   deleteOrganizerTrustLinks,
 } from '../../lib/communities/lifecycle';
-import {mapAdminCommunitiesWithLogoUrls} from '../../lib/communities/read_models';
+import {
+  findOrganizerBySlugOrId,
+  mapAdminCommunitiesWithLogoUrls,
+} from '../../lib/communities/read_models';
 import {
   cleanupRemovedVettingQuestionAnswers,
   getRemovedVettingQuestionIds,
@@ -36,6 +39,25 @@ export async function getAdminCommunity(
   const {_id: userId} = await requireUser(ctx);
 
   const organizer = await ctx.db.get('organizers', args.id);
+  if (!organizer) return null;
+
+  if (!(await canManageCommunity(ctx, userId, organizer._id))) {
+    return null;
+  }
+
+  const [communityWithLogoUrl] = await mapAdminCommunitiesWithLogoUrls(ctx, [
+    organizer,
+  ]);
+  return communityWithLogoUrl ?? null;
+}
+
+export async function getAdminCommunityBySlugOrId(
+  ctx: QueryCtx,
+  args: {slugOrId: string},
+) {
+  const {_id: userId} = await requireUser(ctx);
+
+  const organizer = await findOrganizerBySlugOrId(ctx.db, args.slugOrId);
   if (!organizer) return null;
 
   if (!(await canManageCommunity(ctx, userId, organizer._id))) {

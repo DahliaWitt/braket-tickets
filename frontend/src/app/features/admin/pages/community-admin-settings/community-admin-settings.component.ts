@@ -57,6 +57,9 @@ import {
   buildDigestHourOptions,
   type CommunityProfileFormValue,
   DebounceTimer,
+  getMatchedOrganizer,
+  getOrganizerStatus,
+  isOrganizerQueryLoading,
   isProfileDirty,
   moveVettingQuestion,
   needsVettingOptions,
@@ -77,16 +80,6 @@ import {
   saveCommunityAdminNotificationPreference,
   saveCommunityProfile,
 } from './community-admin-settings.actions';
-
-function getOrganizerStatus(
-  status: CommunityPublicationStatus | undefined,
-  vettingQuestions: {id: string}[] | undefined,
-): CommunityPublicationStatus {
-  if (status) return status;
-  return vettingQuestions && vettingQuestions.length > 0
-    ? 'published'
-    : 'draft';
-}
 
 type StripeOnboardingStatus = NonNullable<
   Doc<'organizers'>['stripeOnboardingStatus']
@@ -180,7 +173,12 @@ export class CommunityAdminSettingsComponent {
   );
   readonly vettingDirty = signal(false);
   /** Combined dirty state — used by the navigation guard */
-  readonly isDirty = computed(() => this.profileDirty() || this.vettingDirty());
+  readonly isDirty = computed(
+    () =>
+      this.organizer() !== null &&
+      !this.organizerLoadError() &&
+      (this.profileDirty() || this.vettingDirty()),
+  );
 
   onBeforeUnload(event: BeforeUnloadEvent): void {
     if (this.isDirty()) {
@@ -209,13 +207,22 @@ export class CommunityAdminSettingsComponent {
     if (this.isLogoRemoved()) return null;
     return this.existingLogoUrl();
   });
-  // Page skeleton gates on the organizer query only; per-key status maps
-  // skipToken → 'skipped' → false (matching the old skipToken → isLoading:false)
-  // and a still-loading organizer → 'pending' → true.
-  readonly isLoading = computed(
-    () => this.queries.statuses().organizer === 'pending',
+  readonly isLoading = computed(() =>
+    isOrganizerQueryLoading(
+      this.queries.statuses().organizer,
+      this.communityCtx.selectedCommunityId(),
+      this.queries.results().organizer,
+    ),
   );
-  readonly organizer = computed(() => this.queries.results().organizer ?? null);
+  readonly organizerLoadError = computed(
+    () => this.queries.statuses().organizer === 'error',
+  );
+  readonly organizer = computed(() =>
+    getMatchedOrganizer(
+      this.communityCtx.selectedCommunityId(),
+      this.queries.results().organizer,
+    ),
+  );
   readonly adminList = computed(() => this.queries.results().admins ?? []);
   readonly scannerList = computed(() => this.queries.results().scanners ?? []);
   readonly isLastAdmin = computed(() => this.adminList().length <= 1);
@@ -392,6 +399,7 @@ export class CommunityAdminSettingsComponent {
       if (!org) return;
       if (this.initializedProfileCommunityId === org._id) return;
       this.initializedProfileCommunityId = org._id;
+      this.resetPendingLogo();
       const values = {
         name: org.name ?? '',
         email: org.email ?? '',
@@ -537,6 +545,13 @@ export class CommunityAdminSettingsComponent {
     this.isLogoRemoved.set(false);
   }
 
+  private resetPendingLogo(): void {
+    this.revokeLogoBlobUrl();
+    this.logoFile.set(null);
+    this.logoFileName.set('');
+    this.isLogoRemoved.set(false);
+  }
+
   removeLogo(): void {
     this.revokeLogoBlobUrl();
     this.logoFile.set(null);
@@ -576,16 +591,11 @@ export class CommunityAdminSettingsComponent {
       );
 
       this.pristineProfile.set(submittedProfile);
-      this.revokeLogoBlobUrl();
-      this.logoFile.set(null);
-      this.logoFileName.set('');
-      this.isLogoRemoved.set(false);
+      this.resetPendingLogo();
       toast.success('Settings saved');
     } catch (e) {
       logger.error('Failed to save settings', e);
-      const message =
-        e instanceof Error ? e.message : 'Failed to save settings';
-      toast.error(message);
+      toast.error(extractErrorMessage(e) || 'Failed to save settings');
     } finally {
       this.isSaving.set(false);
     }
@@ -623,9 +633,7 @@ export class CommunityAdminSettingsComponent {
       toast.success('Questions saved');
     } catch (e) {
       logger.error('Failed to save vetting questions', e);
-      const message =
-        e instanceof Error ? e.message : 'Failed to save questions';
-      toast.error(message);
+      toast.error(extractErrorMessage(e) || 'Failed to save questions');
     } finally {
       this.isSavingVetting.set(false);
     }
@@ -739,8 +747,7 @@ export class CommunityAdminSettingsComponent {
       toast.success('Admin removed');
     } catch (e) {
       logger.error('Failed to revoke admin', e);
-      const message = e instanceof Error ? e.message : 'Failed to revoke admin';
-      toast.error(message);
+      toast.error(extractErrorMessage(e) || 'Failed to revoke admin');
     }
   }
 
@@ -828,9 +835,7 @@ export class CommunityAdminSettingsComponent {
       toast.success('Scanner removed');
     } catch (e) {
       logger.error('Failed to revoke scanner', e);
-      const message =
-        e instanceof Error ? e.message : 'Failed to revoke scanner';
-      toast.error(message);
+      toast.error(extractErrorMessage(e) || 'Failed to revoke scanner');
     }
   }
 
@@ -857,11 +862,9 @@ export class CommunityAdminSettingsComponent {
       toast.success('Notification preference saved');
     } catch (e) {
       logger.error('Failed to save notification preference', e);
-      const message =
-        e instanceof Error
-          ? e.message
-          : 'Failed to save notification preference';
-      toast.error(message);
+      toast.error(
+        extractErrorMessage(e) || 'Failed to save notification preference',
+      );
     } finally {
       this.notifSaving.set(false);
     }

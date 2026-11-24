@@ -4,7 +4,10 @@ import {
   batchGetStorageUrls,
   type StorageUrlContext,
 } from '../../lib/storage_urls';
-import {isOrganizerChargeReady, isOrganizerPayoutReady} from '../../lib/stripe_connect_state';
+import {
+  isOrganizerChargeReady,
+  isOrganizerPayoutReady,
+} from '../../lib/stripe_connect_state';
 
 type CommunityDoc = Doc<'organizers'>;
 type CommunityViewerDoc = Omit<
@@ -93,6 +96,21 @@ export async function mapAdminCommunitiesWithLogoUrls(
   return communities.map((community) =>
     toCommunityAdminWithLogoUrl(community, logoUrlMap),
   );
+}
+
+export async function findOrganizerBySlugOrId(
+  db: QueryCtx['db'],
+  slugOrId: string,
+): Promise<CommunityDoc | null> {
+  const bySlug = await db
+    .query('organizers')
+    .withIndex('by_slug', (q) => q.eq('slug', slugOrId))
+    .first();
+  if (bySlug) return bySlug;
+
+  const normalizedId = db.normalizeId('organizers', slugOrId);
+  if (!normalizedId) return null;
+  return await db.get('organizers', normalizedId);
 }
 
 export async function loadCommunityWithLogoUrl(

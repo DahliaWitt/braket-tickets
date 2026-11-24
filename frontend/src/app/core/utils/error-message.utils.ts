@@ -9,6 +9,13 @@ function getObjectStringProperty(
   return typeof propertyValue === 'string' ? propertyValue : null;
 }
 
+const RATE_LIMITED_MESSAGE = 'Too many requests. Please try again later.';
+
+function nonBlankOrNull(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 export function extractConvexErrorMessage(error: unknown): string | null {
   if (!(error instanceof ConvexError)) {
     return null;
@@ -16,13 +23,34 @@ export function extractConvexErrorMessage(error: unknown): string | null {
 
   const data: unknown = error.data;
   if (typeof data === 'string') {
-    return data;
+    return nonBlankOrNull(data);
   }
   if (typeof data !== 'object' || data === null) {
     return null;
   }
 
-  return getObjectStringProperty(data, 'message');
+  const message = getObjectStringProperty(data, 'message');
+  if (message !== null) {
+    const trimmed = nonBlankOrNull(message);
+    if (trimmed !== null) {
+      return trimmed;
+    }
+  }
+
+  if (getObjectStringProperty(data, 'kind') === 'RateLimited') {
+    const retryAfterMs: unknown = Reflect.get(data, 'retryAfter');
+    if (
+      typeof retryAfterMs === 'number' &&
+      Number.isFinite(retryAfterMs) &&
+      retryAfterMs > 0
+    ) {
+      const minutes = Math.ceil(retryAfterMs / 60000);
+      return `Too many requests. Please try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`;
+    }
+    return RATE_LIMITED_MESSAGE;
+  }
+
+  return null;
 }
 
 export function normalizeRuntimeErrorMessage(message: string): string {
@@ -37,10 +65,12 @@ export function normalizeRuntimeErrorMessage(message: string): string {
     }
   }
 
-  const convexPrefixMatch = normalized.match(/^\[CONVEX [A-Z]\([^)]+\)]\s*/);
+  const convexPrefixMatch = normalized.match(/^\[CONVEX [A-Z?]\([^)]+\)]\s*/);
   if (convexPrefixMatch) {
     normalized = normalized.slice(convexPrefixMatch[0].length).trim();
   }
+
+  normalized = normalized.replace(/\s+Called by client\s*$/, '').trim();
 
   return normalized.replace(/^Server Error\s+/, '').trim();
 }
@@ -61,6 +91,10 @@ function extractErrorMessageImpl(error: unknown, depth: number): string {
     return normalizeRuntimeErrorMessage(error.message);
   }
 
+  if (error === null || error === undefined) {
+    return '';
+  }
+
   // Unwrap Angular router rejection-wrapped errors.
   // Depth guard prevents stack overflow on circular rejection references.
   if (isRecord(error)) {
@@ -71,13 +105,22 @@ function extractErrorMessageImpl(error: unknown, depth: number): string {
     if (typeof error['message'] === 'string') {
       return normalizeRuntimeErrorMessage(error['message']);
     }
+    return '';
   }
 
   if (typeof error === 'string') {
     return normalizeRuntimeErrorMessage(error);
   }
 
-  return normalizeRuntimeErrorMessage(String(error));
+  if (
+    typeof error === 'number' ||
+    typeof error === 'boolean' ||
+    typeof error === 'bigint'
+  ) {
+    return normalizeRuntimeErrorMessage(String(error));
+  }
+
+  return '';
 }
 
 export function extractErrorMessage(error: unknown): string {

@@ -9,6 +9,7 @@ import {communityPublicationStatusValidator} from '../lib/validators/communities
 import {
   createCommunity,
   getAdminCommunity,
+  getAdminCommunityBySlugOrId,
   removeCommunity,
   setPlatformOrganizer as setPlatformOrganizerImpl,
   updateCommunity,
@@ -18,6 +19,12 @@ export const getAdmin = query({
   args: {id: v.id('organizers')},
   returns: v.union(communityAdminDocValidator, v.null()),
   handler: async (ctx, args) => getAdminCommunity(ctx, args),
+});
+
+export const getAdminBySlugOrId = query({
+  args: {slugOrId: v.string()},
+  returns: v.union(communityAdminDocValidator, v.null()),
+  handler: async (ctx, args) => getAdminCommunityBySlugOrId(ctx, args),
 });
 
 export const create = mutation({

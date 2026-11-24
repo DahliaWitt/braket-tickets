@@ -613,6 +613,46 @@ export declare const api: {
           website?: string;
         } | null
       >;
+      getAdminBySlugOrId: FunctionReference<
+        "query",
+        "public",
+        { slugOrId: string },
+        {
+          _creationTime: number;
+          _id: Id<"organizers">;
+          codeOfConduct?: string;
+          contactInfo?: string;
+          description?: string;
+          email?: string;
+          isPlatformOrganizer?: boolean;
+          isPublicDirectory: boolean;
+          logoStorageId?: Id<"_storage"> | null;
+          logoUrl?: string;
+          name: string;
+          organizerPaymentReady?: boolean;
+          organizerPayoutReady?: boolean;
+          slug?: string;
+          status?: "draft" | "published";
+          stripeChargesEnabled?: boolean;
+          stripeConnectedAccountId?: string;
+          stripeCurrentlyDue?: Array<string>;
+          stripeOnboardingStatus?:
+            | "not_started"
+            | "in_progress"
+            | "payout_settings_pending"
+            | "complete"
+            | "restricted";
+          stripePayoutsEnabled?: boolean;
+          vettingQuestions?: Array<{
+            id: string;
+            options?: Array<string>;
+            question: string;
+            required: boolean;
+            type: "text" | "long_text" | "boolean" | "select" | "checkbox";
+          }>;
+          website?: string;
+        } | null
+      >;
       remove: FunctionReference<
         "mutation",
         "public",

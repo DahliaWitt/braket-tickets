@@ -420,3 +420,37 @@ export class ScannerSearchState<TCandidate, TUserId> {
 export function scannerSearchOptionId(index: number): string {
   return `scanner-search-option-${index}`;
 }
+
+/**
+ * Treats pre-subscription (`status === undefined`) and cross-community transitions
+ * (stale organizer still in results before `injectQueries` flips to `'pending'`)
+ * as loading so "SETTINGS UNAVAILABLE" never flashes transiently.
+ */
+export function isOrganizerQueryLoading(
+  status: string | undefined,
+  selectedId: string | null,
+  org: {_id: string} | null | undefined,
+): boolean {
+  if (status === 'pending') return true;
+  if (!selectedId) return false;
+  if (status === undefined || status === 'skipped') return true;
+  return status === 'success' && org != null && org._id !== selectedId;
+}
+
+/** Returns `org` only when it matches `selectedId`, discarding stale cross-community data. */
+export function getMatchedOrganizer<T extends {_id: string}>(
+  selectedId: string | null,
+  org: T | null | undefined,
+): T | null {
+  return org && selectedId && org._id === selectedId ? org : null;
+}
+
+export function getOrganizerStatus<T extends string>(
+  status: T | undefined,
+  vettingQuestions: {id: string}[] | undefined,
+): T | 'published' | 'draft' {
+  if (status) return status;
+  return vettingQuestions && vettingQuestions.length > 0
+    ? 'published'
+    : 'draft';
+}

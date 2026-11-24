@@ -1534,6 +1534,263 @@ describe('Communities', () => {
     });
   });
 
+  describe('profile.getAdminBySlugOrId', () => {
+    it('returns the admin community by slug or ID for a community admin, including drafts', async () => {
+      const t = convexTest();
+      const adminId = await t.run(async (ctx) => {
+        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- intentionally minimal user for query authorization test
+        return await ctx.db.insert('users', {
+          name: 'Scoped Admin',
+          email: 'scoped-admin@example.com',
+        });
+      });
+      const organizerId = await t.run(async (ctx) => {
+        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- intentionally minimal organizer for query authorization test
+        const id = await insertOrganizer(ctx, {
+          name: 'Managed Draft',
+          slug: 'managed-draft',
+          status: 'draft',
+          isPublicDirectory: false,
+          email: 'managed@example.com',
+        });
+        await assignCommunityAdmin(ctx, adminId, id);
+        return id;
+      });
+
+      const asAdmin = t.withIdentity({subject: adminId});
+      const bySlug = await asAdmin.query(
+        api.communities.profile.getAdminBySlugOrId,
+        {slugOrId: 'managed-draft'},
+      );
+      const byId = await asAdmin.query(
+        api.communities.profile.getAdminBySlugOrId,
+        {slugOrId: organizerId},
+      );
+
+      expect(bySlug?._id).toBe(organizerId);
+      expect(bySlug?.name).toBe('Managed Draft');
+      expect(byId?._id).toBe(organizerId);
+    });
+
+    it('returns null for a published community the caller does not administer', async () => {
+      const t = convexTest();
+      const adminId = await t.run(async (ctx) => {
+        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- intentionally minimal user for query authorization test
+        return await ctx.db.insert('users', {
+          name: 'Other Admin',
+          email: 'other-admin@example.com',
+        });
+      });
+      const {otherOrgId} = await t.run(async (ctx) => {
+        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- intentionally minimal organizers for query authorization test
+        const ownId = await insertOrganizer(ctx, {
+          name: 'Own Org',
+          slug: 'own-org',
+          status: 'draft',
+          isPublicDirectory: false,
+        });
+        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- intentionally minimal organizers for query authorization test
+        const otherId = await insertOrganizer(ctx, {
+          name: 'Revoked Org',
+          slug: 'revoked-org',
+          status: 'published',
+          isPublicDirectory: true,
+        });
+        await assignCommunityAdmin(ctx, adminId, ownId);
+        return {ownOrgId: ownId, otherOrgId: otherId};
+      });
+
+      const asAdmin = t.withIdentity({subject: adminId});
+      expect(
+        await asAdmin.query(api.communities.profile.getAdminBySlugOrId, {
+          slugOrId: 'revoked-org',
+        }),
+      ).toBeNull();
+      expect(
+        await asAdmin.query(api.communities.profile.getAdminBySlugOrId, {
+          slugOrId: otherOrgId,
+        }),
+      ).toBeNull();
+    });
+
+    it('returns any community for a root admin and null for unknown slugs or malformed IDs', async () => {
+      const t = convexTest();
+      const rootId = await t.run(async (ctx) =>
+        createRootAdmin(ctx, 'Root', 'root-slug@example.com'),
+      );
+      const orgId = await t.run(async (ctx) =>
+        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- intentionally minimal organizer for query authorization test
+        insertOrganizer(ctx, {
+          name: 'Any Org',
+          slug: 'any-org',
+          status: 'draft',
+          isPublicDirectory: false,
+        }),
+      );
+
+      const asRoot = t.withIdentity({subject: rootId});
+      const resolved = await asRoot.query(
+        api.communities.profile.getAdminBySlugOrId,
+        {slugOrId: 'any-org'},
+      );
+      expect(resolved?._id).toBe(orgId);
+      expect(
+        await asRoot.query(api.communities.profile.getAdminBySlugOrId, {
+          slugOrId: 'not-a-valid-slug-or-id',
+        }),
+      ).toBeNull();
+    });
+
+    it('rejects unauthenticated callers', async () => {
+      const t = convexTest();
+      await expect(
+        t.query(api.communities.profile.getAdminBySlugOrId, {
+          slugOrId: 'any-org',
+        }),
+      ).rejects.toThrow(/Unauthenticated/i);
+    });
+
+    it('returns null after community_admin is revoked from an organizer', async () => {
+      const t = convexTest();
+      const {adminId, orgId} = await t.run(async (ctx) => {
+        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- intentionally minimal user for query authorization test
+        const uId = await ctx.db.insert('users', {
+          name: 'Former Admin',
+          email: 'former-admin@example.com',
+        });
+        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- intentionally minimal organizer for query authorization test
+        const oId = await insertOrganizer(ctx, {
+          name: 'Previously Managed Org',
+          slug: 'prev-managed-org',
+          status: 'published',
+          isPublicDirectory: true,
+        });
+        await assignCommunityAdmin(ctx, uId, oId);
+        return {adminId: uId, orgId: oId};
+      });
+
+      const asAdmin = t.withIdentity({subject: adminId});
+      expect(
+        (
+          await asAdmin.query(api.communities.profile.getAdminBySlugOrId, {
+            slugOrId: 'prev-managed-org',
+          })
+        )?._id,
+      ).toBe(orgId);
+
+      await t.run(async (ctx) => {
+        await authz.revokeRole(ctx, adminId, 'community_admin', {
+          type: 'organizer',
+          id: orgId,
+        });
+      });
+
+      expect(
+        await asAdmin.query(api.communities.profile.getAdminBySlugOrId, {
+          slugOrId: 'prev-managed-org',
+        }),
+      ).toBeNull();
+      expect(
+        await asAdmin.query(api.communities.profile.getAdminBySlugOrId, {
+          slugOrId: orgId,
+        }),
+      ).toBeNull();
+    });
+
+    it('returns null for regular members and community_scanners', async () => {
+      const t = convexTest();
+      const {memberId, scannerId, orgId} = await t.run(async (ctx) => {
+        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- intentionally minimal users for query authorization test
+        const mId = await ctx.db.insert('users', {
+          name: 'Regular Member',
+          email: 'member@example.com',
+        });
+        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- intentionally minimal users for query authorization test
+        const sId = await ctx.db.insert('users', {
+          name: 'Door Scanner',
+          email: 'scanner@example.com',
+        });
+        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- intentionally minimal organizer for query authorization test
+        const oId = await insertOrganizer(ctx, {
+          name: 'Scoped Org',
+          slug: 'scoped-org',
+          status: 'published',
+          isPublicDirectory: true,
+        });
+        await addMember(ctx, mId, oId);
+        await addMember(ctx, sId, oId);
+        await authz.assignRole(ctx, sId, 'community_scanner', {
+          type: 'organizer',
+          id: oId,
+        });
+        return {memberId: mId, scannerId: sId, orgId: oId};
+      });
+
+      expect(
+        await t
+          .withIdentity({subject: memberId})
+          .query(api.communities.profile.getAdminBySlugOrId, {
+            slugOrId: 'scoped-org',
+          }),
+      ).toBeNull();
+      expect(
+        await t
+          .withIdentity({subject: scannerId})
+          .query(api.communities.profile.getAdminBySlugOrId, {
+            slugOrId: orgId,
+          }),
+      ).toBeNull();
+    });
+
+    it('returns null for a valid Convex ID from another table', async () => {
+      const t = convexTest();
+      const rootId = await t.run(async (ctx) =>
+        createRootAdmin(ctx, 'Root Cross-Table', 'root-xtable@example.com'),
+      );
+
+      expect(
+        await t
+          .withIdentity({subject: rootId})
+          .query(api.communities.profile.getAdminBySlugOrId, {
+            slugOrId: rootId,
+          }),
+      ).toBeNull();
+    });
+
+    it('prefers slug over ID when another organizer slug matches an organizer ID', async () => {
+      const t = convexTest();
+      const {rootId, orgAId, orgBId} = await t.run(async (ctx) => {
+        const rId = await createRootAdmin(
+          ctx,
+          'Root Precedence',
+          'root-prec@example.com',
+        );
+        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- intentionally minimal organizer for precedence test
+        const aId = await insertOrganizer(ctx, {
+          name: 'Org A',
+          slug: 'org-a',
+          status: 'published',
+          isPublicDirectory: true,
+        });
+        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- intentionally minimal organizer for precedence test
+        const bId = await insertOrganizer(ctx, {
+          name: 'Org B',
+          slug: aId,
+          status: 'published',
+          isPublicDirectory: true,
+        });
+        return {rootId: rId, orgAId: aId, orgBId: bId};
+      });
+
+      const resolved = await t
+        .withIdentity({subject: rootId})
+        .query(api.communities.profile.getAdminBySlugOrId, {
+          slugOrId: orgAId,
+        });
+      expect(resolved?._id).toBe(orgBId);
+    });
+  });
+
   describe('update — directory and new fields', () => {
     async function setupDirectoryData() {
       const t = convexTest();

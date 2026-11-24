@@ -210,9 +210,15 @@ export class CommunitySelectorComponent {
   );
 
   private readonly resolvedNamesEffect = effect(() => {
+    const opts = this.options();
     this.ctx.setResolvedNames(
-      new Map(this.options().map((option) => [option.id, option.name])),
+      new Map(opts.map((option) => [option.id, option.name])),
     );
+    const slugs = new Map<string, string>();
+    for (const option of opts) {
+      if (option.slug) slugs.set(option.id, option.slug);
+    }
+    this.ctx.setResolvedSlugs(slugs);
   });
 
   onSelectionChange(event: Event): void {

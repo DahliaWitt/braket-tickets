@@ -2,8 +2,8 @@ import type {Id} from '../../_generated/dataModel';
 import type {QueryCtx} from '../../_generated/server';
 import {requireUser} from '../../lib/auth_identity';
 import {canViewCommunity, canViewCommunityForVetting} from '../../lib/access';
-import {logger} from '../../lib/logger';
 import {
+  findOrganizerBySlugOrId,
   mapCommunitiesWithLogoUrls,
   resolveCommunityLogoUrl,
 } from '../../lib/communities/read_models';
@@ -35,30 +35,7 @@ export async function getCommunityBySlugOrId(
 ) {
   const {_id: userId} = await requireUser(ctx);
 
-  let organizer = await ctx.db
-    .query('organizers')
-    .withIndex('by_slug', (q) => q.eq('slug', args.slugOrId))
-    .first();
-
-  if (!organizer) {
-    try {
-      organizer = await ctx.db.get(
-        'organizers',
-        args.slugOrId as Id<'organizers'>,
-      );
-    } catch (error: unknown) {
-      logger.warn(
-        'communities',
-        'slugOrId is not a valid document ID, treating as not found',
-        {
-          slugOrId: args.slugOrId,
-          error,
-        },
-      );
-      return null;
-    }
-  }
-
+  const organizer = await findOrganizerBySlugOrId(ctx.db, args.slugOrId);
   if (!organizer) return null;
 
   if (await canViewCommunity(ctx, userId, organizer)) {

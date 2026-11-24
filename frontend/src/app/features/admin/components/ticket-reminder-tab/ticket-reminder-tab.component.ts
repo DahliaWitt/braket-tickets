@@ -28,6 +28,7 @@ import {ZardCardComponent} from '@ui/components/primitives/card/card.component';
 import {ZardInputDirective} from '@ui/components/primitives/input/input.directive';
 import {BraDialogService} from '@ui/components/composites/dialog/dialog.service';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
+import {extractErrorMessage} from '@/core/utils/error-message.utils';
 import {logger} from '@/utils/logger';
 
 @Component({
@@ -134,8 +135,9 @@ export class TicketReminderTabComponent {
   readonly reminderAudienceError = computed(() => {
     const error = this.reminderAudienceQuery.error();
     if (!error) return null;
-    return error instanceof Error && error.message
-      ? `couldn't load reminder audience — ${error.message}`
+    const message = extractErrorMessage(error);
+    return message
+      ? `couldn't load reminder audience — ${message}`
       : "couldn't load reminder audience";
   });
   readonly reminderMissingCommunity = computed(
@@ -212,9 +214,7 @@ export class TicketReminderTabComponent {
     } catch (error) {
       logger.error('Failed to send ticket reminder', error);
       const messageText =
-        error instanceof Error
-          ? error.message
-          : 'Failed to send ticket reminder';
+        extractErrorMessage(error) || 'Failed to send ticket reminder';
       toast.error(messageText);
     } finally {
       this.isSendingTicketReminder.set(false);

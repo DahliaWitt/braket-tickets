@@ -104,6 +104,43 @@
       </div>
     </div>
   </div>
+} @else if (organizerLoadError()) {
+  <div
+    data-testid="settings-load-error"
+    role="alert"
+    class="flex flex-col items-center justify-center gap-4 rounded-xl border border-border/50 bg-card/30 px-6 py-16 text-center"
+  >
+    <div
+      class="rounded-full border border-destructive/30 bg-destructive/10 p-3"
+    >
+      <z-icon zType="circle-alert" class="h-6 w-6 text-destructive-text" />
+    </div>
+    <p class="mono-label text-2xs text-destructive-text">
+      UNABLE TO LOAD SETTINGS
+    </p>
+    <p class="max-w-md text-sm text-muted-foreground">
+      We couldn't load settings for this community. Refresh the page to try
+      again.
+    </p>
+  </div>
+} @else if (!organizer()) {
+  <div
+    data-testid="settings-unavailable"
+    class="flex flex-col items-center justify-center gap-4 rounded-xl border border-border/50 bg-card/30 px-6 py-16 text-center"
+  >
+    <div
+      class="rounded-full border border-destructive/30 bg-destructive/10 p-3"
+    >
+      <z-icon zType="circle-alert" class="h-6 w-6 text-destructive-text" />
+    </div>
+    <p class="mono-label text-2xs text-destructive-text">
+      SETTINGS UNAVAILABLE
+    </p>
+    <p class="max-w-md text-sm text-muted-foreground">
+      You do not have permission to manage this community, or it could not be
+      found.
+    </p>
+  </div>
 } @else {
   <div class="space-y-8">
     <!-- Profile Section -->

@@ -9,9 +9,11 @@ import {
 } from '@angular/router';
 import {TestbedHarnessEnvironment} from '@angular/cdk/testing/testbed';
 import {getFunctionName} from 'convex/server';
+import {ConvexError} from 'convex/values';
 import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest';
 import {of} from 'rxjs';
 import {CommunityAdminSettingsComponent} from './community-admin-settings.component';
+import {isOrganizerQueryLoading} from './community-admin-settings.helpers';
 import {CONVEX} from 'convex-angular';
 import {api} from '@convex/_generated/api';
 import {BraDialogService} from '@ui/components/composites/dialog/dialog.service';
@@ -63,7 +65,8 @@ function makeCommunityContextMock(options: {
 
 async function setup(options?: {
   selectedId?: Id<'organizers'> | null;
-  organizerData?: Record<string, unknown>;
+  organizerData?: Record<string, unknown> | null;
+  failOrganizerQuery?: boolean;
   adminData?: unknown[];
   scannerData?: unknown[];
   searchResultsData?: unknown[];
@@ -76,19 +79,24 @@ async function setup(options?: {
       options?.selectedId !== undefined ? options.selectedId : FAKE_ORG_ID,
   });
 
-  let orgData = options?.organizerData ?? {
-    _id: FAKE_ORG_ID,
-    name: 'Test Community',
-    email: 'test@example.com',
-    contactInfo: 'Call us',
-    vettingQuestions: [],
-  };
+  let orgData: Record<string, unknown> | null =
+    options && 'organizerData' in options
+      ? (options.organizerData ?? null)
+      : {
+          _id: FAKE_ORG_ID,
+          name: 'Test Community',
+          email: 'test@example.com',
+          contactInfo: 'Call us',
+          vettingQuestions: [],
+        };
+  let failNextOrganizerQuery = options?.failOrganizerQuery ?? false;
   const adminData = options?.adminData ?? [];
   const scannerData = options?.scannerData ?? [];
   // undefined means "not provided" (use default null); null means "no pref stored"
   const notifPrefData =
     options?.notifPrefData !== undefined ? options.notifPrefData : null;
   let organizerQueryOnData: ((data: unknown) => void) | null = null;
+  let organizerQueryOnError: ((err: Error) => void) | null = null;
 
   const searchResultsData = options?.searchResultsData ?? [];
   // When set, the search query does NOT auto-resolve. Instead every
@@ -105,7 +113,12 @@ async function setup(options?: {
   const onUpdate = vi
     .fn()
     .mockImplementation(
-      (queryRef: unknown, _args: unknown, onData: (data: unknown) => void) => {
+      (
+        queryRef: unknown,
+        _args: unknown,
+        onData: (data: unknown) => void,
+        onError?: (err: Error) => void,
+      ) => {
         // Discriminate by the query's stable function name rather than args
         // shape + call order — args-shape routing silently misroutes any new
         // query that also carries `organizerId` (e.g. searchGrantCandidates).
@@ -117,7 +130,12 @@ async function setup(options?: {
         );
         if (name === getFunctionName(api.communities.profile.getAdmin)) {
           organizerQueryOnData = onData;
-          emitAsync(() => onData(orgData));
+          organizerQueryOnError = onError ?? null;
+          if (failNextOrganizerQuery) {
+            emitAsync(() => onError?.(new Error('Organizer query failed')));
+          } else {
+            emitAsync(() => onData(orgData));
+          }
         } else if (
           name === getFunctionName(api.communities.admins.listByCommunity)
         ) {
@@ -153,9 +171,17 @@ async function setup(options?: {
       },
     );
 
-  const refreshOrganizerQuery = (nextData: Record<string, unknown>): void => {
+  const refreshOrganizerQuery = (
+    nextData: Record<string, unknown> | null,
+  ): void => {
     orgData = nextData;
     organizerQueryOnData?.(orgData);
+  };
+  const setFailNextOrganizerQuery = (fail: boolean): void => {
+    failNextOrganizerQuery = fail;
+  };
+  const emitOrganizerQueryError = (err: Error): void => {
+    organizerQueryOnError?.(err);
   };
 
   convexMock.query = query;
@@ -238,6 +264,8 @@ async function setup(options?: {
     routerNavigateSpy: routerMock.navigate,
     routeMock,
     refreshOrganizerQuery,
+    setFailNextOrganizerQuery,
+    emitOrganizerQueryError,
     resolveSearch,
     searchSubscriptions,
   };
@@ -2512,6 +2540,180 @@ describe('CommunityAdminSettingsComponent', () => {
       });
 
       expect(await harness.isSaveProfileDisabled()).toBe(true);
+    });
+  });
+
+  describe('unavailable organizer state and ConvexError toast formatting', () => {
+    it('renders settings-unavailable instead of an editable form when getAdmin returns null', async () => {
+      const {harness} = await setup({organizerData: null});
+
+      expect(await harness.hasSettingsUnavailable()).toBe(true);
+      expect(await harness.getSettingsUnavailableText()).toContain(
+        'SETTINGS UNAVAILABLE',
+      );
+      expect(await harness.hasProfileSection()).toBe(false);
+      expect(await harness.hasPaymentsSection()).toBe(false);
+      expect(await harness.hasVettingSection()).toBe(false);
+      expect(await harness.hasTeamSection()).toBe(false);
+    });
+
+    it('renders settings-load-error when getAdmin fails on initial load', async () => {
+      const {harness} = await setup({failOrganizerQuery: true});
+
+      expect(await harness.hasSettingsLoadError()).toBe(true);
+      expect(await harness.getSettingsLoadErrorText()).toContain(
+        'UNABLE TO LOAD SETTINGS',
+      );
+      expect(await harness.hasSettingsUnavailable()).toBe(false);
+      expect(await harness.hasProfileSection()).toBe(false);
+    });
+
+    it('hides stale previous-community form when switching communities and the new getAdmin query errors', async () => {
+      const {fixture, harness, ctxMock, setFailNextOrganizerQuery} =
+        await setup();
+
+      expect(await harness.hasProfileSection()).toBe(true);
+      expect(await harness.getProfileName()).toBe('Test Community');
+
+      // Switch to community B whose getAdmin query fails; must NOT render A's form.
+      setFailNextOrganizerQuery(true);
+      ctxMock.selectedCommunityId.set('org-second' as Id<'organizers'>);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(await harness.hasSettingsLoadError()).toBe(true);
+      expect(await harness.hasProfileSection()).toBe(false);
+    });
+
+    it('surfaces structured ConvexError data.message instead of redacted Server Error in saveProfile toast', async () => {
+      const {harness, convexMock} = await setup();
+      const toastErrorSpy = vi.spyOn(toast, 'error');
+
+      const prodConvexError = new ConvexError(
+        '[CONVEX M(communities/profile:update)] [Request ID: abcdef1234567890] Server Error\n  Called by client',
+      );
+      Object.assign(prodConvexError, {
+        data: {code: 'NOT_FOUND', message: 'Community not found'},
+      });
+      convexMock.mutation.mockRejectedValueOnce(prodConvexError);
+
+      await harness.setProfileName('Updated Name');
+      await harness.clickSaveProfile();
+
+      expect(toastErrorSpy).toHaveBeenCalledWith('Community not found');
+    });
+
+    it('preserves Request ID and Server Error when saveProfile fails with an unhandled non-ConvexError Server Error', async () => {
+      const {harness, convexMock} = await setup();
+      const toastErrorSpy = vi.spyOn(toast, 'error');
+
+      convexMock.mutation.mockRejectedValueOnce(
+        new Error(
+          '[CONVEX M(communities/profile:update)] [Request ID: abcdef1234567890] Server Error\n  Called by client',
+        ),
+      );
+
+      await harness.setProfileName('Updated Name');
+      await harness.clickSaveProfile();
+
+      expect(toastErrorSpy).toHaveBeenCalledWith(
+        '[Request ID: abcdef1234567890] Server Error',
+      );
+    });
+
+    it('treats cross-community transition as loading before injectQueries flips status to pending', async () => {
+      const {fixture, harness, ctxMock} = await setup();
+      expect(await harness.hasProfileSection()).toBe(true);
+
+      // Mutate selectedCommunityId before injectQueries's effect runs:
+      // status is still 'success' and results().organizer still holds FAKE_ORG_ID.
+      ctxMock.selectedCommunityId.set('org-second' as Id<'organizers'>);
+
+      expect(fixture.componentInstance.organizer()).toBeNull();
+      expect(fixture.componentInstance.isLoading()).toBe(true);
+    });
+
+    it('clears isDirty when organizer becomes null or query errors so navigation is not blocked', async () => {
+      const {fixture, harness, refreshOrganizerQuery, emitOrganizerQueryError} =
+        await setup();
+
+      await harness.setProfileName('Unsaved Edit');
+      expect(fixture.componentInstance.isDirty()).toBe(true);
+
+      refreshOrganizerQuery(null);
+      fixture.detectChanges();
+      expect(fixture.componentInstance.organizer()).toBeNull();
+      expect(fixture.componentInstance.isDirty()).toBe(false);
+
+      // Restore organizer, re-dirty, then trigger query error.
+      refreshOrganizerQuery({
+        _id: FAKE_ORG_ID,
+        name: 'Test Community',
+        email: 'test@example.com',
+        vettingQuestions: [],
+      });
+      fixture.detectChanges();
+      await harness.setProfileName('Another Edit');
+      expect(fixture.componentInstance.isDirty()).toBe(true);
+
+      emitOrganizerQueryError(new Error('network lost'));
+      fixture.detectChanges();
+      expect(fixture.componentInstance.organizerLoadError()).toBe(true);
+      expect(fixture.componentInstance.isDirty()).toBe(false);
+    });
+
+    it('clears pending logo replacement and removal when switching to another community', async () => {
+      const orgBId = 'org-second' as Id<'organizers'>;
+      const {fixture, ctxMock, refreshOrganizerQuery} = await setup();
+      const comp = fixture.componentInstance;
+
+      // Stage a pending logo replacement on community A.
+      const fakeFile = new File(['png-bytes'], 'org-a-logo.png', {
+        type: 'image/png',
+      });
+      comp.logoFile.set(fakeFile);
+      comp.logoFileName.set('org-a-logo.png');
+      expect(comp.logoFile()).toBe(fakeFile);
+
+      // Community context switches/falls back to community B.
+      ctxMock.selectedCommunityId.set(orgBId);
+      fixture.detectChanges();
+      refreshOrganizerQuery({
+        _id: orgBId,
+        name: 'Second Community',
+        email: 'second@example.com',
+        vettingQuestions: [],
+      });
+      fixture.detectChanges();
+
+      expect(comp.logoFile()).toBeNull();
+      expect(comp.logoFileName()).toBe('');
+      expect(comp.isLogoRemoved()).toBe(false);
+
+      // Now stage a pending logo removal on community B, then switch back to community A.
+      comp.removeLogo();
+      expect(comp.isLogoRemoved()).toBe(true);
+
+      ctxMock.selectedCommunityId.set(FAKE_ORG_ID);
+      fixture.detectChanges();
+      refreshOrganizerQuery({
+        _id: FAKE_ORG_ID,
+        name: 'Test Community',
+        email: 'test@example.com',
+        vettingQuestions: [],
+      });
+      fixture.detectChanges();
+
+      expect(comp.isLogoRemoved()).toBe(false);
+      expect(comp.logoFile()).toBeNull();
+    });
+
+    it('treats skipped status with a selected community ID as loading until re-subscribed', () => {
+      expect(isOrganizerQueryLoading('skipped', FAKE_ORG_ID, undefined)).toBe(
+        true,
+      );
+      expect(isOrganizerQueryLoading('skipped', null, undefined)).toBe(false);
     });
   });
 });

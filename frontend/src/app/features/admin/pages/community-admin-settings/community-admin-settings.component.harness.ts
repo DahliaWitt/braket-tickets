@@ -60,6 +60,12 @@ export class CommunityAdminSettingsHarness extends ComponentHarness {
   private _settingsSkeleton = this.locatorForOptional(
     '[data-testid="settings-skeleton"]',
   );
+  private _settingsUnavailable = this.locatorForOptional(
+    '[data-testid="settings-unavailable"]',
+  );
+  private _settingsLoadError = this.locatorForOptional(
+    '[data-testid="settings-load-error"]',
+  );
 
   async getProfileName(): Promise<string> {
     const el = await this._profileName();
@@ -613,6 +619,20 @@ export class CommunityAdminSettingsHarness extends ComponentHarness {
   // Section existence checks
   async hasSettingsSkeleton(): Promise<boolean> {
     return (await this._settingsSkeleton()) !== null;
+  }
+  async hasSettingsUnavailable(): Promise<boolean> {
+    return (await this._settingsUnavailable()) !== null;
+  }
+  async getSettingsUnavailableText(): Promise<string | null> {
+    const el = await this._settingsUnavailable();
+    return el ? (await el.text()).trim() : null;
+  }
+  async hasSettingsLoadError(): Promise<boolean> {
+    return (await this._settingsLoadError()) !== null;
+  }
+  async getSettingsLoadErrorText(): Promise<string | null> {
+    const el = await this._settingsLoadError();
+    return el ? (await el.text()).trim() : null;
   }
   async hasProfileSection(): Promise<boolean> {
     return (await this._sectionProfile()) !== null;

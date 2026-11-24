@@ -28,6 +28,65 @@ describe('error-message utils', () => {
         extractConvexErrorMessage(new ConvexError({code: 'UNKNOWN'})),
       ).toBeNull();
     });
+
+    it('returns a readable message for RateLimited ConvexError data', () => {
+      expect(
+        extractConvexErrorMessage(
+          new ConvexError({
+            kind: 'RateLimited',
+            name: 'updateOrganizer',
+            retryAfter: 5000,
+          }),
+        ),
+      ).toBe('Too many requests. Please try again in 1 minute.');
+
+      expect(
+        extractConvexErrorMessage(
+          new ConvexError({
+            kind: 'RateLimited',
+            name: 'updateOrganizer',
+            retryAfter: 120000,
+          }),
+        ),
+      ).toBe('Too many requests. Please try again in 2 minutes.');
+
+      expect(
+        extractConvexErrorMessage(
+          new ConvexError({
+            kind: 'RateLimited',
+            name: 'updateOrganizer',
+          }),
+        ),
+      ).toBe('Too many requests. Please try again later.');
+    });
+
+    it('returns null for blank string or blank object message payloads', () => {
+      expect(extractConvexErrorMessage(new ConvexError('   '))).toBeNull();
+      expect(
+        extractConvexErrorMessage(new ConvexError({message: '   '})),
+      ).toBeNull();
+    });
+
+    it('falls through to RateLimited when object message is blank and guards non-finite retryAfter', () => {
+      expect(
+        extractConvexErrorMessage(
+          new ConvexError({
+            kind: 'RateLimited',
+            message: '   ',
+            retryAfter: 5000,
+          }),
+        ),
+      ).toBe('Too many requests. Please try again in 1 minute.');
+
+      expect(
+        extractConvexErrorMessage(
+          new ConvexError({
+            kind: 'RateLimited',
+            retryAfter: Number.POSITIVE_INFINITY,
+          }),
+        ),
+      ).toBe('Too many requests. Please try again later.');
+    });
   });
 
   describe('normalizeRuntimeErrorMessage', () => {
@@ -45,6 +104,20 @@ describe('error-message utils', () => {
           '[CONVEX A(events:create)] Uncaught Error: Upload failed\n    at handler',
         ),
       ).toBe('Upload failed');
+    });
+
+    it('preserves Request ID and Server Error for unhandled production Convex errors', () => {
+      expect(
+        normalizeRuntimeErrorMessage(
+          '[CONVEX M(communities/profile:update)] [Request ID: abcdef1234567890] Server Error\n  Called by client',
+        ),
+      ).toBe('[Request ID: abcdef1234567890] Server Error');
+
+      expect(
+        normalizeRuntimeErrorMessage(
+          '[CONVEX ?(communities/profile:update)] [Request ID: abcdef1234567890] Server Error\n  Called by client\n  ',
+        ),
+      ).toBe('[Request ID: abcdef1234567890] Server Error');
     });
   });
 
@@ -84,8 +157,14 @@ describe('error-message utils', () => {
       const b: {rejection?: unknown; message?: string} = {};
       a.rejection = b;
       b.rejection = a;
-      // Should not throw; falls through to String() after depth guard
-      expect(extractErrorMessage(a)).toBe('[object Object]');
+      // Should not throw; returns empty string so caller fallbacks trigger.
+      expect(extractErrorMessage(a)).toBe('');
+    });
+
+    it('returns empty string for null, undefined, and plain objects without a message', () => {
+      expect(extractErrorMessage(null)).toBe('');
+      expect(extractErrorMessage(undefined)).toBe('');
+      expect(extractErrorMessage({})).toBe('');
     });
 
     it('extracts message from objects with a .message property that are not Error instances', () => {
