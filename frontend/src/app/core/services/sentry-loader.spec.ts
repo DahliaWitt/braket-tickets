@@ -8,7 +8,7 @@ const captureExceptionMock = vi.fn();
 const createErrorHandlerMock = vi.fn();
 const createFeedbackFormMock = vi.fn();
 const handleErrorMock = vi.fn();
-const initMock = vi.fn();
+const initMock = vi.fn<(options: Record<string, unknown>) => void>();
 const lazyLoadIntegrationMock = vi.fn();
 const getFeedbackMock = vi.fn();
 const traceServiceConstructorMock = vi.fn();
@@ -98,7 +98,7 @@ describe('sentry-loader', () => {
           httpHeaders: false,
           httpBodies: [],
           urlQueryParams: {
-            deny: expect.arrayContaining([
+            deny: [
               'ott',
               'code',
               'state',
@@ -108,7 +108,7 @@ describe('sentry-loader', () => {
               'remote-',
               'via',
               '-user',
-            ]),
+            ],
           },
           graphQL: {document: false, variables: false},
           genAI: {inputs: false, outputs: false},
@@ -118,8 +118,8 @@ describe('sentry-loader', () => {
         },
       }),
     );
-    const [initOptions] = initMock.mock.calls[0] ?? [];
-    expect(initOptions).not.toHaveProperty('sendDefaultPii');
+    const firstInitCall = initMock.mock.calls[0];
+    expect(firstInitCall?.[0]).not.toHaveProperty('sendDefaultPii');
     expect(browserTracingIntegrationMock).toHaveBeenCalledOnce();
   });
 
