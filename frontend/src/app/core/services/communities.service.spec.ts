@@ -148,6 +148,61 @@ describe('CommunitiesService', () => {
     });
   });
 
+  describe('getAdminBySlugOrId', () => {
+    it('should query the admin-scoped slug/id endpoint', async () => {
+      const mockCommunity = mockCommunities[0];
+      convexClientMock.client.query.mockResolvedValue(mockCommunity);
+
+      const community = await service.getAdminBySlugOrId('test-community');
+
+      expect(community).toBe(mockCommunity);
+      expect(convexClientMock.client.query).toHaveBeenCalledWith(
+        api.communities.profile.getAdminBySlugOrId,
+        {slugOrId: 'test-community'},
+      );
+    });
+
+    it('should return null when the caller cannot administer the community', async () => {
+      convexClientMock.client.query.mockResolvedValue(null);
+
+      await expect(
+        service.getAdminBySlugOrId('revoked-community'),
+      ).resolves.toBeNull();
+    });
+
+    it('should retry transient failures and not retry authorization failures', async () => {
+      const mockCommunity = mockCommunities[0];
+      convexClientMock.client.query
+        .mockRejectedValueOnce(new Error('Function execution timed out'))
+        .mockResolvedValueOnce(mockCommunity);
+
+      await expect(service.getAdminBySlugOrId('test-community')).resolves.toBe(
+        mockCommunity,
+      );
+      expect(convexClientMock.client.query).toHaveBeenCalledTimes(2);
+
+      convexClientMock.client.query.mockReset();
+      convexClientMock.client.query.mockRejectedValue(
+        new Error('Unauthorized'),
+      );
+
+      await expect(
+        service.getAdminBySlugOrId('test-community'),
+      ).rejects.toThrow('Unauthorized');
+      expect(convexClientMock.client.query).toHaveBeenCalledTimes(1);
+
+      convexClientMock.client.query.mockReset();
+      convexClientMock.client.query.mockRejectedValue(
+        new Error('Unauthenticated'),
+      );
+
+      await expect(
+        service.getAdminBySlugOrId('test-community'),
+      ).rejects.toThrow('Unauthenticated');
+      expect(convexClientMock.client.query).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('update', () => {
     it('should forward partial update args without requiring a name', async () => {
       convexClientMock.client.mutation.mockResolvedValue(undefined);

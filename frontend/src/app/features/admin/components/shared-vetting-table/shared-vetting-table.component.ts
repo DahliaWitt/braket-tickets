@@ -21,6 +21,7 @@ import {ZardSkeletonComponent} from '@ui/components/primitives/skeleton/skeleton
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
 import {BraDialogService} from '@ui/components/composites/dialog/dialog.service';
 import {toast} from 'ngx-sonner';
+import {extractErrorMessage} from '@/core/utils/error-message.utils';
 import {api} from '@convex/_generated/api';
 import {type Id} from '@convex/_generated/dataModel';
 import {logger} from '@/utils/logger';
@@ -476,7 +477,7 @@ export class SharedVettingTableComponent {
           toast.success('Trust link created');
         } catch (e: unknown) {
           const message =
-            e instanceof Error ? e.message : 'Failed to create trust link';
+            extractErrorMessage(e) || 'Failed to create trust link';
           toast.error(message);
         }
       },
@@ -502,7 +503,7 @@ export class SharedVettingTableComponent {
           toast.success(`Trust link to ${link.trustedOrganizerName} removed`);
         } catch (e: unknown) {
           const message =
-            e instanceof Error ? e.message : 'Failed to remove trust link';
+            extractErrorMessage(e) || 'Failed to remove trust link';
           toast.error(message);
         }
       },

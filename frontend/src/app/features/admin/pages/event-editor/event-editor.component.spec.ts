@@ -61,6 +61,8 @@ type MockAuthService = Pick<AuthService, 'currentUser' | 'userRole'>;
 interface MockCommunityContextService {
   selectedCommunityId: WritableSignal<string>;
   selectedCommunityName: WritableSignal<string>;
+  isLoaded: WritableSignal<boolean>;
+  communities: WritableSignal<string[]>;
   selectCommunity: ReturnType<typeof vi.fn>;
   setResolvedNames: ReturnType<typeof vi.fn>;
 }
@@ -73,7 +75,7 @@ interface MockEventsService {
 }
 interface MockCommunitiesService {
   list: ReturnType<typeof vi.fn>;
-  getBySlugOrId: ReturnType<typeof vi.fn>;
+  getAdminBySlugOrId: ReturnType<typeof vi.fn>;
 }
 interface MockRouter {
   navigate: ReturnType<typeof vi.fn>;
@@ -152,7 +154,7 @@ describe('EventEditorComponent', () => {
         {_id: 'org1', name: 'Community 1', email: 'org1@example.com'},
         {_id: 'org2', name: 'Community 2', email: 'org2@example.com'},
       ]),
-      getBySlugOrId: vi.fn().mockResolvedValue({
+      getAdminBySlugOrId: vi.fn().mockResolvedValue({
         _id: 'org1',
         name: 'Community 1',
         email: 'org1@example.com',
@@ -162,6 +164,8 @@ describe('EventEditorComponent', () => {
     communityContextMock = {
       selectedCommunityId: signal('org1'),
       selectedCommunityName: signal('Community 1'),
+      isLoaded: signal(true),
+      communities: signal(['org1', 'org2']),
       selectCommunity: vi.fn((id: string) =>
         communityContextMock.selectedCommunityId.set(id),
       ),
@@ -1230,7 +1234,7 @@ describe('EventEditorComponent - Create Mode', () => {
         {_id: 'org1', name: 'Community 1', email: 'org1@example.com'},
         {_id: 'org2', name: 'Community 2', email: 'org2@example.com'},
       ]),
-      getBySlugOrId: vi.fn().mockResolvedValue({
+      getAdminBySlugOrId: vi.fn().mockResolvedValue({
         _id: 'org1',
         name: 'Community 1',
         email: 'org1@example.com',
@@ -1892,9 +1896,13 @@ describe('EventEditorComponent - Create Mode', () => {
 describe('EventEditorComponent - Create Mode Community Query Scope', () => {
   interface ScopeSetupOptions {
     resolvedCommunity: {_id: string; name: string; email: string} | null;
+    queryParams?: Record<string, string>;
+    communities?: string[];
+    selectedCommunityId?: string;
   }
 
-  async function setupScopeTest({resolvedCommunity}: ScopeSetupOptions) {
+  async function setupScopeTest(options: ScopeSetupOptions) {
+    const {resolvedCommunity} = options;
     await TestBed.resetTestingModule();
 
     const eventsServiceMock: MockEventsService = {
@@ -1907,12 +1915,21 @@ describe('EventEditorComponent - Create Mode Community Query Scope', () => {
 
     const communitiesServiceMock: MockCommunitiesService = {
       list: vi.fn().mockResolvedValue([]),
-      getBySlugOrId: vi.fn().mockResolvedValue(resolvedCommunity),
+      getAdminBySlugOrId: vi.fn().mockResolvedValue(resolvedCommunity),
     };
 
+    const initialSelectedId = options.selectedCommunityId ?? 'auto-org';
+    const initialCommunities =
+      options.communities ??
+      (resolvedCommunity
+        ? [initialSelectedId, resolvedCommunity._id]
+        : [initialSelectedId]);
+
     const communityContextMock: MockCommunityContextService = {
-      selectedCommunityId: signal('auto-org'),
+      selectedCommunityId: signal(initialSelectedId),
       selectedCommunityName: signal('Auto Community'),
+      isLoaded: signal(true),
+      communities: signal(initialCommunities),
       selectCommunity: vi.fn((id: string) =>
         communityContextMock.selectedCommunityId.set(id),
       ),
@@ -1934,7 +1951,9 @@ describe('EventEditorComponent - Create Mode Community Query Scope', () => {
           has: () => false,
           keys: [],
         },
-        queryParamMap: convertToParamMap({community: 'lot-45'}),
+        queryParamMap: convertToParamMap(
+          options.queryParams ?? {community: 'lot-45'},
+        ),
       },
     } as unknown as MockActivatedRoute;
 
@@ -1964,7 +1983,13 @@ describe('EventEditorComponent - Create Mode Community Query Scope', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    return {component, communitiesServiceMock, communityContextMock};
+    return {
+      fixture,
+      component,
+      eventsServiceMock,
+      communitiesServiceMock,
+      communityContextMock,
+    };
   }
 
   it('uses the resolved community query param as the create organizer', async () => {
@@ -1977,7 +2002,9 @@ describe('EventEditorComponent - Create Mode Community Query Scope', () => {
         },
       });
 
-    expect(communitiesServiceMock.getBySlugOrId).toHaveBeenCalledWith('lot-45');
+    expect(communitiesServiceMock.getAdminBySlugOrId).toHaveBeenCalledWith(
+      'lot-45',
+    );
     expect(component.isCreateCommunityScopeBlocking()).toBe(false);
     expect(component.eventModel().organizerId).toBe('query-org');
     expect(component.communityName()).toBe('Query Community');
@@ -2001,5 +2028,46 @@ describe('EventEditorComponent - Create Mode Community Query Scope', () => {
     expect(component.submitError()).toContain(
       'Could not resolve community "lot-45"',
     );
+  });
+
+  it('blocks saving instead of retargeting an unsaved draft when the bound community is revoked', async () => {
+    const {fixture, component, eventsServiceMock, communityContextMock} =
+      await setupScopeTest({
+        resolvedCommunity: null,
+        queryParams: {},
+        selectedCommunityId: 'org-a',
+        communities: ['org-a', 'org-b'],
+      });
+
+    component.eventModel.update((m) => ({
+      ...m,
+      title: 'Org A Launch Party',
+      date: getFutureDate(14),
+      time: '20:00',
+      price: '20',
+      totalTickets: '50',
+    }));
+    fixture.detectChanges();
+
+    expect(component.eventModel().organizerId).toBe('org-a');
+    expect(component.isCreateCommunityScopeBlocking()).toBe(false);
+
+    // Live revocation drops org-a and CommunityContextService falls back to org-b.
+    communityContextMock.communities.set(['org-b']);
+    communityContextMock.selectedCommunityId.set('org-b');
+    fixture.detectChanges();
+
+    // Must NOT silently rewrite the draft's organizerId to org-b.
+    expect(component.eventModel().organizerId).toBe('org-a');
+    expect(component.communityName()).toBeNull();
+    expect(component.isCreateCommunityScopeBlocking()).toBe(true);
+    expect(component.createCommunityScopeMessage()).toContain(
+      'no longer available',
+    );
+
+    await component.save('published');
+
+    expect(eventsServiceMock.createWithPoster).not.toHaveBeenCalled();
+    expect(component.submitError()).toContain('no longer available');
   });
 });

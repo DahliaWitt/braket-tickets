@@ -27,6 +27,7 @@ import {
 } from '@/core/services/communities.service';
 import {AuthService} from '@/core/services/auth.service';
 import {toast} from 'ngx-sonner';
+import {extractErrorMessage} from '@/core/utils/error-message.utils';
 import {ZardButtonComponent} from '@ui/components/primitives/button/button.component';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
 import {ZardCardComponent} from '@ui/components/primitives/card/card.component';
@@ -440,8 +441,7 @@ export class AdminCommunityEditorComponent {
       void this.router.navigate(['/admin/communities']);
     } catch (error) {
       logger.error('Failed to save community', error);
-      const message =
-        error instanceof Error ? error.message : 'Failed to save community';
+      const message = extractErrorMessage(error) || 'Failed to save community';
       toast.error(message);
     } finally {
       this.isSaving.set(false);

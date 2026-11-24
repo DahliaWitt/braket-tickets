@@ -4,6 +4,7 @@ import {EVENT_VISIBILITIES} from '@shared/domain/event-visibility';
 import {throwInvalidInput, throwUnauthorized} from '../../lib/errors';
 import {isPlatformAdmin, requireManageCommunity} from '../../lib/access';
 import {getUserCommunities} from '../../lib/authz';
+import {findOrganizerBySlugOrId} from '../../lib/communities/read_models';
 import {hasEventEnded, ongoingEventStartLowerBound} from '../../lib/timezone';
 import {logger} from '../../lib/logger';
 
@@ -35,15 +36,10 @@ export async function resolveOrganizerIdFromEventListArgs(
   args: OrganizerLookupArgs,
 ): Promise<Id<'organizers'> | undefined> {
   if (args.communityParam) {
-    const normalized = ctx.db.normalizeId('organizers', args.communityParam);
-    if (normalized) {
-      return normalized;
-    }
-
-    const organizer = await ctx.db
-      .query('organizers')
-      .withIndex('by_slug', (q) => q.eq('slug', args.communityParam!))
-      .first();
+    const organizer = await findOrganizerBySlugOrId(
+      ctx.db,
+      args.communityParam,
+    );
     return organizer?._id;
   }
 

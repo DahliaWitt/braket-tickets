@@ -1,7 +1,7 @@
-import { Injectable, computed, signal } from '@angular/core';
-import { injectQuery } from 'convex-angular';
-import { api } from '@convex/_generated/api';
-import type { Id } from '@convex/_generated/dataModel';
+import {Injectable, computed, signal} from '@angular/core';
+import {injectQuery} from 'convex-angular';
+import {api} from '@convex/_generated/api';
+import type {Id} from '@convex/_generated/dataModel';
 
 /**
  * Tracks which community the current user is administering.
@@ -26,11 +26,29 @@ export class CommunityContextService {
   /** All administerable community IDs, or empty array while loading. */
   readonly communities = computed(() => this.communitiesQuery.data() ?? []);
 
-  /** True while the initial query result has not yet arrived. */
-  readonly isLoading = this.communitiesQuery.isLoading;
+  /** True once `listMyCommunities` has produced a result (retained across transient errors). */
+  readonly isLoaded = computed(
+    () => this.communitiesQuery.data() !== undefined,
+  );
+
+  /** True when `listMyCommunities` failed with no previously loaded data to fall back on. */
+  readonly hasError = computed(
+    () =>
+      this.communitiesQuery.status() === 'error' &&
+      this.communitiesQuery.data() === undefined,
+  );
+
+  /** True while the initial query result has not yet arrived and has not errored. */
+  readonly isLoading = computed(
+    () =>
+      this.communitiesQuery.isLoading() ||
+      (!this.isLoaded() && !this.hasError()),
+  );
 
   /** True when the user administers more than one community (drives selector UI visibility). */
-  readonly hasMultipleCommunities = computed(() => this.communities().length > 1);
+  readonly hasMultipleCommunities = computed(
+    () => this.communities().length > 1,
+  );
 
   /** Holds the user's explicit community selection. Null means "use auto-selection". */
   private readonly _selectedId = signal<Id<'organizers'> | null>(null);
@@ -38,34 +56,34 @@ export class CommunityContextService {
   /**
    * The active community ID.
    *
-   * Resolution order:
-   * 1. Explicit selection via selectCommunity() / setAdminOverrideCommunity().
-   * 2. First community in the list (auto-select fallback).
-   * 3. Null if the list is empty.
+   * Enforces the authorization invariant at the service boundary: only IDs
+   * present in `communities()` (which already includes every organizer for
+   * platform admins via `listMyCommunities`) can become active. Returns null
+   * until `listMyCommunities` has loaded so child views never query an
+   * unverified or revoked organizer.
    */
   readonly selectedCommunityId = computed<Id<'organizers'> | null>(() => {
-    const explicit = this._selectedId();
-    if (explicit !== null) return explicit;
+    if (!this.isLoaded()) return null;
     const list = this.communities();
-    return list.length > 0 ? list[0] : null;
+    const explicit = this._selectedId();
+    if (explicit !== null && list.includes(explicit)) return explicit;
+    return list[0] ?? null;
   });
 
   /**
-   * True when the selected community is not in the user's own communities list.
-   * Guards against false positives while the list is still loading.
+   * Kept for backwards compatibility with components/mocks. Because
+   * `listMyCommunities` returns all organizers for platform admins and
+   * `selectedCommunityId` enforces membership in that list, an unauthorized
+   * selection can no longer enter override mode.
    */
-  readonly isAdminOverride = computed<boolean>(() => {
-    const selected = this.selectedCommunityId();
-    if (selected === null) return false;
-    if (this.isLoading()) return false;
-    return !this.communities().includes(selected);
-  });
+  readonly isAdminOverride = computed<boolean>(() => false);
 
   /**
-   * Resolved display names for community IDs, populated by the parent shell after
-   * fetching organizer documents. Keyed by Id<'organizers'>.
+   * Resolved display names and slugs for community IDs, populated by the
+   * community selector after fetching organizer documents. Keyed by Id<'organizers'>.
    */
   private readonly _resolvedNames = signal<Map<string, string>>(new Map());
+  private readonly _resolvedSlugs = signal<Map<string, string>>(new Map());
 
   /** Display name for the currently selected community, or null if unresolved. */
   readonly selectedCommunityName = computed<string | null>(() => {
@@ -99,7 +117,15 @@ export class CommunityContextService {
     this._resolvedNames.set(names);
   }
 
+  setResolvedSlugs(slugs: Map<string, string>): void {
+    this._resolvedSlugs.set(slugs);
+  }
+
   resolvedNameFor(id: Id<'organizers'>): string | null {
     return this._resolvedNames().get(id) ?? null;
+  }
+
+  resolvedSlugFor(id: Id<'organizers'>): string | null {
+    return this._resolvedSlugs().get(id) ?? null;
   }
 }

@@ -1534,6 +1534,269 @@ describe('Communities', () => {
     });
   });
 
+  describe('profile.getAdminBySlugOrId', () => {
+    it('returns the admin community by slug or ID for a community admin, including drafts', async () => {
+      const t = convexTest();
+      const rootId = await t.run(async (ctx) =>
+        createRootAdmin(ctx, 'Grantor Root', 'grantor-draft@example.com'),
+      );
+      const adminId = await t.mutation(api.testing.users.seedAppUser, {
+        name: 'Scoped Admin',
+        email: 'scoped-admin@example.com',
+      });
+      const organizerId = await t.mutation(
+        api.testing.communities.seedOrganizer,
+        {
+          name: 'Managed Draft',
+          slug: 'managed-draft',
+          status: 'draft',
+          isPublicDirectory: false,
+          email: 'managed@example.com',
+        },
+      );
+      await t.mutation(api.testing.communities.seedCommunityAdmin, {
+        userId: adminId,
+        organizerId,
+        grantedBy: rootId,
+      });
+
+      const asAdmin = t.withIdentity({subject: adminId});
+      const bySlug = await asAdmin.query(
+        api.communities.profile.getAdminBySlugOrId,
+        {slugOrId: 'managed-draft'},
+      );
+      const byId = await asAdmin.query(
+        api.communities.profile.getAdminBySlugOrId,
+        {slugOrId: organizerId},
+      );
+
+      expect(bySlug?._id).toBe(organizerId);
+      expect(bySlug?.name).toBe('Managed Draft');
+      expect(byId?._id).toBe(organizerId);
+    });
+
+    it('returns null for a published community the caller does not administer', async () => {
+      const t = convexTest();
+      const rootId = await t.run(async (ctx) =>
+        createRootAdmin(ctx, 'Grantor Root', 'grantor-other@example.com'),
+      );
+      const adminId = await t.mutation(api.testing.users.seedAppUser, {
+        name: 'Other Admin',
+        email: 'other-admin@example.com',
+      });
+      const ownOrgId = await t.mutation(api.testing.communities.seedOrganizer, {
+        name: 'Own Org',
+        slug: 'own-org',
+        status: 'draft',
+        isPublicDirectory: false,
+      });
+      const otherOrgId = await t.mutation(
+        api.testing.communities.seedOrganizer,
+        {
+          name: 'Revoked Org',
+          slug: 'revoked-org',
+          status: 'published',
+          isPublicDirectory: true,
+        },
+      );
+      await t.mutation(api.testing.communities.seedCommunityAdmin, {
+        userId: adminId,
+        organizerId: ownOrgId,
+        grantedBy: rootId,
+      });
+
+      const asAdmin = t.withIdentity({subject: adminId});
+      expect(
+        await asAdmin.query(api.communities.profile.getAdminBySlugOrId, {
+          slugOrId: 'revoked-org',
+        }),
+      ).toBeNull();
+      expect(
+        await asAdmin.query(api.communities.profile.getAdminBySlugOrId, {
+          slugOrId: otherOrgId,
+        }),
+      ).toBeNull();
+    });
+
+    it('returns any community for a root admin and null for unknown slugs or malformed IDs', async () => {
+      const t = convexTest();
+      const rootId = await t.run(async (ctx) =>
+        createRootAdmin(ctx, 'Root', 'root-slug@example.com'),
+      );
+      const orgId = await t.mutation(api.testing.communities.seedOrganizer, {
+        name: 'Any Org',
+        slug: 'any-org',
+        status: 'draft',
+        isPublicDirectory: false,
+      });
+
+      const asRoot = t.withIdentity({subject: rootId});
+      const resolved = await asRoot.query(
+        api.communities.profile.getAdminBySlugOrId,
+        {slugOrId: 'any-org'},
+      );
+      expect(resolved?._id).toBe(orgId);
+      expect(
+        await asRoot.query(api.communities.profile.getAdminBySlugOrId, {
+          slugOrId: 'not-a-valid-slug-or-id',
+        }),
+      ).toBeNull();
+    });
+
+    it('rejects unauthenticated callers', async () => {
+      const t = convexTest();
+      await expect(
+        t.query(api.communities.profile.getAdminBySlugOrId, {
+          slugOrId: 'any-org',
+        }),
+      ).rejects.toThrow(/Unauthenticated/i);
+    });
+
+    it('returns null after community_admin is revoked from an organizer', async () => {
+      const t = convexTest();
+      const rootId = await t.run(async (ctx) =>
+        createRootAdmin(ctx, 'Grantor Root', 'grantor-revoke@example.com'),
+      );
+      const adminId = await t.mutation(api.testing.users.seedAppUser, {
+        name: 'Former Admin',
+        email: 'former-admin@example.com',
+      });
+      const remainingAdminId = await t.mutation(api.testing.users.seedAppUser, {
+        name: 'Remaining Admin',
+        email: 'remaining-admin@example.com',
+      });
+      const orgId = await t.mutation(api.testing.communities.seedOrganizer, {
+        name: 'Previously Managed Org',
+        slug: 'prev-managed-org',
+        status: 'published',
+        isPublicDirectory: true,
+      });
+      await t.mutation(api.testing.communities.seedCommunityAdmin, {
+        userId: adminId,
+        organizerId: orgId,
+        grantedBy: rootId,
+      });
+      await t.mutation(api.testing.communities.seedCommunityAdmin, {
+        userId: remainingAdminId,
+        organizerId: orgId,
+        grantedBy: rootId,
+      });
+
+      const asAdmin = t.withIdentity({subject: adminId});
+      expect(
+        (
+          await asAdmin.query(api.communities.profile.getAdminBySlugOrId, {
+            slugOrId: 'prev-managed-org',
+          })
+        )?._id,
+      ).toBe(orgId);
+
+      await t
+        .withIdentity({subject: rootId})
+        .mutation(api.communities.admins.revoke, {
+          userId: adminId,
+          organizerId: orgId,
+        });
+
+      expect(
+        await asAdmin.query(api.communities.profile.getAdminBySlugOrId, {
+          slugOrId: 'prev-managed-org',
+        }),
+      ).toBeNull();
+      expect(
+        await asAdmin.query(api.communities.profile.getAdminBySlugOrId, {
+          slugOrId: orgId,
+        }),
+      ).toBeNull();
+    });
+
+    it('returns null for regular members and community_scanners', async () => {
+      const t = convexTest();
+      const rootId = await t.run(async (ctx) =>
+        createRootAdmin(ctx, 'Grantor Root', 'grantor-roles@example.com'),
+      );
+      const memberId = await t.mutation(api.testing.users.seedAppUser, {
+        name: 'Regular Member',
+        email: 'member@example.com',
+      });
+      const scannerId = await t.mutation(api.testing.users.seedAppUser, {
+        name: 'Door Scanner',
+        email: 'scanner@example.com',
+      });
+      const orgId = await t.mutation(api.testing.communities.seedOrganizer, {
+        name: 'Scoped Org',
+        slug: 'scoped-org',
+        status: 'published',
+        isPublicDirectory: true,
+      });
+      await t.mutation(api.testing.applications.seedApprovedApplication, {
+        userId: memberId,
+        organizerId: orgId,
+      });
+      await t.mutation(api.testing.communities.seedCommunityScanner, {
+        userId: scannerId,
+        organizerId: orgId,
+        grantedBy: rootId,
+      });
+
+      expect(
+        await t
+          .withIdentity({subject: memberId})
+          .query(api.communities.profile.getAdminBySlugOrId, {
+            slugOrId: 'scoped-org',
+          }),
+      ).toBeNull();
+      expect(
+        await t
+          .withIdentity({subject: scannerId})
+          .query(api.communities.profile.getAdminBySlugOrId, {
+            slugOrId: orgId,
+          }),
+      ).toBeNull();
+    });
+
+    it('returns null for a valid Convex ID from another table', async () => {
+      const t = convexTest();
+      const rootId = await t.run(async (ctx) =>
+        createRootAdmin(ctx, 'Root Cross-Table', 'root-xtable@example.com'),
+      );
+
+      expect(
+        await t
+          .withIdentity({subject: rootId})
+          .query(api.communities.profile.getAdminBySlugOrId, {
+            slugOrId: rootId,
+          }),
+      ).toBeNull();
+    });
+
+    it('prefers slug over ID when another organizer slug matches an organizer ID', async () => {
+      const t = convexTest();
+      const rootId = await t.run(async (ctx) =>
+        createRootAdmin(ctx, 'Root Precedence', 'root-prec@example.com'),
+      );
+      const orgAId = await t.mutation(api.testing.communities.seedOrganizer, {
+        name: 'Org A',
+        slug: 'org-a',
+        status: 'published',
+        isPublicDirectory: true,
+      });
+      const orgBId = await t.mutation(api.testing.communities.seedOrganizer, {
+        name: 'Org B',
+        slug: orgAId,
+        status: 'published',
+        isPublicDirectory: true,
+      });
+
+      const resolved = await t
+        .withIdentity({subject: rootId})
+        .query(api.communities.profile.getAdminBySlugOrId, {
+          slugOrId: orgAId,
+        });
+      expect(resolved?._id).toBe(orgBId);
+    });
+  });
+
   describe('update — directory and new fields', () => {
     async function setupDirectoryData() {
       const t = convexTest();

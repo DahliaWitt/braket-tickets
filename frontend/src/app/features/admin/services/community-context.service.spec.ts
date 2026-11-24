@@ -1,10 +1,14 @@
-import { ChangeDetectionStrategy, Component, provideZonelessChangeDetection } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
-import { describe, it, expect, vi } from 'vitest';
-import { CONVEX } from 'convex-angular';
-import { CommunityContextService } from './community-context.service';
-import type { Id } from '@convex/_generated/dataModel';
-import { type MockConvexClient } from '../../../../testing/mock-types';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  provideZonelessChangeDetection,
+} from '@angular/core';
+import {TestBed} from '@angular/core/testing';
+import {describe, it, expect, vi} from 'vitest';
+import {CONVEX} from 'convex-angular';
+import {CommunityContextService} from './community-context.service';
+import type {Id} from '@convex/_generated/dataModel';
+import {type MockConvexClient} from '../../../../testing/mock-types';
 
 // Host component to satisfy injectConvexQuery's injection context requirement.
 // The service is provided at this component level (not root) to mirror the
@@ -18,7 +22,10 @@ class CommunityContextHostComponent {
   service = TestBed.inject(CommunityContextService);
 }
 
-function createConvexMock(communities: Id<'organizers'>[] = []): {
+function createConvexMock(
+  communities: Id<'organizers'>[] = [],
+  options?: {defer?: boolean; error?: Error},
+): {
   onUpdate: ReturnType<typeof vi.fn>;
   onPaginatedUpdate_experimental: ReturnType<typeof vi.fn>;
   localQueryResult: ReturnType<typeof vi.fn>;
@@ -28,6 +35,8 @@ function createConvexMock(communities: Id<'organizers'>[] = []): {
   action: ReturnType<typeof vi.fn>;
   query: ReturnType<typeof vi.fn>;
   handleAuthError: ReturnType<typeof vi.fn>;
+  emitCommunities: (next: Id<'organizers'>[]) => void;
+  emitError: (err: Error) => void;
   client: {
     onUpdate: ReturnType<typeof vi.fn>;
     onPaginatedUpdate_experimental: ReturnType<typeof vi.fn>;
@@ -36,15 +45,34 @@ function createConvexMock(communities: Id<'organizers'>[] = []): {
     subscribeToConnectionState: ReturnType<typeof vi.fn>;
   };
 } {
+  let latestOnData: ((v: unknown) => void) | null = null;
+  let latestOnError: ((err: Error) => void) | null = null;
   const onUpdate = vi
     .fn()
-    .mockImplementation((_q: unknown, _args: unknown, onData: (v: unknown) => void) => {
-      onData(communities);
-      return () => void 0;
-    });
+    .mockImplementation(
+      (
+        _q: unknown,
+        _args: unknown,
+        onData: (v: unknown) => void,
+        onError?: (err: Error) => void,
+      ) => {
+        latestOnData = onData;
+        latestOnError = onError ?? null;
+        if (!options?.defer) {
+          if (options?.error) {
+            onError?.(options.error);
+          } else {
+            onData(communities);
+          }
+        }
+        return () => void 0;
+      },
+    );
 
   return {
     onUpdate,
+    emitCommunities: (next: Id<'organizers'>[]) => latestOnData?.(next),
+    emitError: (err: Error) => latestOnError?.(err),
     onPaginatedUpdate_experimental: vi.fn(),
     localQueryResult: vi.fn().mockReturnValue(undefined),
     query: vi.fn(),
@@ -76,7 +104,9 @@ function createConvexMock(communities: Id<'organizers'>[] = []): {
         inflightMutations: 0,
         inflightActions: 0,
       }),
-      subscribeToConnectionState: vi.fn().mockImplementation(() => () => void 0),
+      subscribeToConnectionState: vi
+        .fn()
+        .mockImplementation(() => () => void 0),
     },
   };
 }
@@ -86,15 +116,18 @@ describe('CommunityContextService', () => {
   const communityA = 'org-a' as Id<'organizers'>;
   const communityB = 'org-b' as Id<'organizers'>;
 
-  function setup(communities: Id<'organizers'>[] = []) {
-    const convexMock = createConvexMock(communities);
+  function setup(
+    communities: Id<'organizers'>[] = [],
+    options?: {defer?: boolean; error?: Error},
+  ) {
+    const convexMock = createConvexMock(communities, options);
 
     TestBed.configureTestingModule({
       imports: [CommunityContextHostComponent],
       providers: [
         provideZonelessChangeDetection(),
         CommunityContextService,
-        { provide: CONVEX, useValue: convexMock as unknown as MockConvexClient },
+        {provide: CONVEX, useValue: convexMock as unknown as MockConvexClient},
       ],
     });
 
@@ -102,6 +135,7 @@ describe('CommunityContextService', () => {
     TestBed.tick();
 
     service = TestBed.inject(CommunityContextService);
+    return {convexMock};
   }
 
   describe('creation', () => {
@@ -157,123 +191,106 @@ describe('CommunityContextService', () => {
     });
   });
 
-  describe('selectCommunity', () => {
-    it('overrides auto-selection with an explicit choice', () => {
+  describe('selectCommunity (membership invariant)', () => {
+    it('overrides auto-selection with an explicit choice in the managed list', () => {
       setup([communityA, communityB]);
       service.selectCommunity(communityB);
       expect(service.selectedCommunityId()).toBe(communityB);
     });
 
-    it('returns the explicit id even when not in the communities list, and isAdminOverride becomes true', () => {
+    it('falls back to the first managed community when an explicit ID is not in communities()', () => {
       setup([communityA]);
       const unknownId = 'org-unknown' as Id<'organizers'>;
       service.selectCommunity(unknownId);
-      expect(service.selectedCommunityId()).toBe(unknownId);
-      expect(service.isAdminOverride()).toBe(true);
-    });
-  });
-
-  describe('isAdminOverride (derived from membership)', () => {
-    it('is false by default when auto-selected community is in the list', () => {
-      setup([communityA]);
+      expect(service.selectedCommunityId()).toBe(communityA);
       expect(service.isAdminOverride()).toBe(false);
     });
 
-    it('is false when selected id is in communities list', () => {
-      setup([communityA, communityB]);
+    it('returns null while listMyCommunities is still loading, then honors an explicit selection once loaded', () => {
+      const {convexMock} = setup([], {defer: true});
+      service.selectCommunity(communityB);
+      expect(service.isLoading()).toBe(true);
+      expect(service.isLoaded()).toBe(false);
+      expect(service.selectedCommunityId()).toBeNull();
+
+      convexMock.emitCommunities([communityA, communityB]);
+      TestBed.tick();
+
+      expect(service.isLoaded()).toBe(true);
+      expect(service.selectedCommunityId()).toBe(communityB);
+    });
+
+    it('reverts to the next valid community when the selected community is revoked live', () => {
+      const {convexMock} = setup([communityA, communityB]);
       service.selectCommunity(communityA);
-      expect(service.isAdminOverride()).toBe(false);
+      expect(service.selectedCommunityId()).toBe(communityA);
+
+      convexMock.emitCommunities([communityB]);
+      TestBed.tick();
+
+      expect(service.selectedCommunityId()).toBe(communityB);
     });
 
-    it('is true when selected id is not in communities list after loading settled', () => {
-      setup([communityA]);
-      const unknownId = 'org-override' as Id<'organizers'>;
-      service.selectCommunity(unknownId);
-      expect(service.isAdminOverride()).toBe(true);
-    });
-
-    it('is false while isLoading even when selected id is not in the empty list', () => {
-      // Simulate loading: onUpdate never calls onData, so communities() = [] and isLoading() = true
-      const loadingOnUpdate = vi.fn().mockImplementation(() => () => void 0);
-      const loadingMock = {
-        onUpdate: loadingOnUpdate,
-        onPaginatedUpdate_experimental: vi.fn(),
-        localQueryResult: vi.fn().mockReturnValue(undefined),
-        query: vi.fn(),
-        mutation: vi.fn(),
-        action: vi.fn(),
-        connectionState: vi.fn().mockReturnValue({
-          hasInflightRequests: false,
-          isWebSocketConnected: true,
-          timeOfOldestInflightRequest: null,
-          hasEverConnected: true,
-          connectionCount: 1,
-          connectionRetries: 0,
-          inflightMutations: 0,
-          inflightActions: 0,
-        }),
-        subscribeToConnectionState: vi.fn().mockImplementation(() => () => void 0),
-        handleAuthError: vi.fn(),
-        client: {
-          onUpdate: loadingOnUpdate,
-          onPaginatedUpdate_experimental: vi.fn(),
-          localQueryResult: vi.fn().mockReturnValue(undefined),
-          connectionState: vi.fn().mockReturnValue({
-            hasInflightRequests: false,
-            isWebSocketConnected: true,
-            timeOfOldestInflightRequest: null,
-            hasEverConnected: true,
-            connectionCount: 1,
-            connectionRetries: 0,
-            inflightMutations: 0,
-            inflightActions: 0,
-          }),
-          subscribeToConnectionState: vi.fn().mockImplementation(() => () => void 0),
-        },
-      };
-
+    it('treats pre-effect construction state as loading and unselected before injectQuery subscribes', () => {
+      const convexMock = createConvexMock([communityA], {defer: true});
       TestBed.configureTestingModule({
         imports: [CommunityContextHostComponent],
         providers: [
           provideZonelessChangeDetection(),
           CommunityContextService,
-          { provide: CONVEX, useValue: loadingMock as unknown as MockConvexClient },
+          {
+            provide: CONVEX,
+            useValue: convexMock as unknown as MockConvexClient,
+          },
         ],
       });
-      TestBed.createComponent(CommunityContextHostComponent);
-      TestBed.tick();
-      service = TestBed.inject(CommunityContextService);
 
-      service.selectCommunity('org-unknown' as Id<'organizers'>);
-      expect(service.isLoading()).toBe(true);
-      expect(service.isAdminOverride()).toBe(false);
+      // Intentionally do NOT call TestBed.tick() yet: injectQuery's effect has not run.
+      TestBed.createComponent(CommunityContextHostComponent);
+      const freshService = TestBed.inject(CommunityContextService);
+
+      expect(freshService.isLoading()).toBe(true);
+      expect(freshService.isLoaded()).toBe(false);
+      expect(freshService.hasError()).toBe(false);
+      expect(freshService.selectedCommunityId()).toBeNull();
+    });
+
+    it('exposes hasError and returns null selectedCommunityId when listMyCommunities fails before loading', () => {
+      setup([], {error: new Error('network failed')});
+      service.selectCommunity(communityA);
+      expect(service.hasError()).toBe(true);
+      expect(service.isLoaded()).toBe(false);
+      expect(service.selectedCommunityId()).toBeNull();
+    });
+
+    it('keeps the last loaded community list and avoids hasError on a transient error after initial load', () => {
+      const {convexMock} = setup([communityA, communityB]);
+      service.selectCommunity(communityB);
+      expect(service.selectedCommunityId()).toBe(communityB);
+
+      convexMock.emitError(new Error('transient reconnect blip'));
+      TestBed.tick();
+
+      expect(service.isLoaded()).toBe(true);
+      expect(service.hasError()).toBe(false);
+      expect(service.selectedCommunityId()).toBe(communityB);
     });
   });
 
   describe('setAdminOverrideCommunity / clearAdminOverride (back-compat shims)', () => {
-    it('setAdminOverrideCommunity is equivalent to selectCommunity', () => {
-      setup([communityA]);
-      const unknownId = 'org-override' as Id<'organizers'>;
-      service.setAdminOverrideCommunity(unknownId);
-      expect(service.selectedCommunityId()).toBe(unknownId);
-      expect(service.isAdminOverride()).toBe(true);
-    });
-
     it('clearAdminOverride clears _selectedId and reverts to auto-selection', () => {
       setup([communityA, communityB]);
-      const overrideId = 'org-override' as Id<'organizers'>;
-      service.setAdminOverrideCommunity(overrideId);
+      service.setAdminOverrideCommunity(communityB);
+      expect(service.selectedCommunityId()).toBe(communityB);
       service.clearAdminOverride();
-      expect(service.isAdminOverride()).toBe(false);
       expect(service.selectedCommunityId()).toBe(communityA);
     });
 
-    it('resolves community name for override id from resolved names map', () => {
+    it('stores and retrieves resolved slugs per community ID', () => {
       setup([communityA]);
-      const overrideId = 'org-override' as Id<'organizers'>;
-      service.setAdminOverrideCommunity(overrideId);
-      service.setResolvedNames(new Map([[overrideId, 'Sister City']]));
-      expect(service.selectedCommunityName()).toBe('Sister City');
+      service.setResolvedSlugs(new Map([[communityA, 'alpha-crew']]));
+      expect(service.resolvedSlugFor(communityA)).toBe('alpha-crew');
+      expect(service.resolvedSlugFor(communityB)).toBeNull();
     });
   });
 

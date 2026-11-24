@@ -4,6 +4,7 @@ import {injectConvex} from 'convex-angular';
 import {api} from '@convex/_generated/api';
 import {type Id} from '@convex/_generated/dataModel';
 import {type FunctionArgs, type FunctionReturnType} from 'convex/server';
+import {extractErrorMessage} from '@/core/utils/error-message.utils';
 import {logger} from '@/utils/logger';
 import {parseQRScanData} from '../pages/check-in/qr-parse';
 import {WEB_HAPTICS_CTOR} from './web-haptics.token';
@@ -116,7 +117,7 @@ export class CheckInService {
         this.playFailure();
       }
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      const errorMessage = extractErrorMessage(err) || 'Unknown error';
       this.lastResult.set({
         success: false,
         message: `Error: ${errorMessage}`,
@@ -149,8 +150,7 @@ export class CheckInService {
       logger.error('Operation failed', err);
       this.lastResult.set({
         success: false,
-        message:
-          err instanceof Error ? err.message : 'Failed to check in guest',
+        message: extractErrorMessage(err) || 'Failed to check in guest',
       });
       this.playFailure();
     } finally {
@@ -179,7 +179,7 @@ export class CheckInService {
       this.playFailure();
       return {
         success: false,
-        message: err instanceof Error ? err.message : 'Failed to undo check-in',
+        message: extractErrorMessage(err) || 'Failed to undo check-in',
       };
     } finally {
       this.isProcessing.set(false);
@@ -220,9 +220,8 @@ export class CheckInService {
       return {
         success: false,
         message:
-          err instanceof Error
-            ? err.message
-            : 'Failed to check in external ticket holder',
+          extractErrorMessage(err) ||
+          'Failed to check in external ticket holder',
       };
     } finally {
       this.isProcessing.set(false);

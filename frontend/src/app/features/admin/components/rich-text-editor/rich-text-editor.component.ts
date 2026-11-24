@@ -17,6 +17,7 @@ import {Editor, type JSONContent} from '@tiptap/core';
 import {cva} from 'class-variance-authority';
 import {toast} from 'ngx-sonner';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
+import {extractErrorMessage} from '@/core/utils/error-message.utils';
 import {logger} from '@/utils/logger';
 import {
   ACCEPTED_IMAGE_FILE_INPUT,
@@ -52,7 +53,7 @@ export type RichTextImageUploadFn = (
 
 /** Toolbar button styling, keyed on whether its formatting mark is active. */
 const toolbarButtonVariants = cva(
-  'rounded-sm px-2 py-1 text-2xs font-mono uppercase tracking-wider transition-colors disabled:cursor-not-allowed disabled:opacity-40',
+  'rounded-sm px-2 py-1 font-mono text-2xs tracking-wider uppercase transition-colors disabled:cursor-not-allowed disabled:opacity-40',
   {
     variants: {
       active: {
@@ -621,9 +622,7 @@ export class RichTextEditorComponent {
         .run();
     } catch (error) {
       logger.error('rich-text-editor: image upload failed', error);
-      toast.error(
-        error instanceof Error ? error.message : 'image upload failed',
-      );
+      toast.error(extractErrorMessage(error) || 'image upload failed');
     } finally {
       this.isUploadingImage.set(false);
       this.uploadProgress.set(null);

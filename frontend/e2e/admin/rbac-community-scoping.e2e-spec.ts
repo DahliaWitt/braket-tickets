@@ -320,6 +320,147 @@ test.describe('RBAC Community Admin Scoping', () => {
         alert.getByRole('link', {name: /Back to Events/i}),
       ).toBeVisible();
     });
+
+    test('revoked ?community= settings link blocks settings form without backend authz errors and recovers to active community', async ({
+      page,
+      convexHelper,
+    }) => {
+      const suffix = `revoked-${Date.now()}`;
+      const adminId = await getRootAdminId(convexHelper);
+      const oldOrgSlug = `old-org-${suffix}`;
+      const activeOrgName = uniqueName(`Active Org ${suffix}`);
+      const activeOrgSlug = `active-org-${suffix}`;
+
+      const oldOrgId = await convexHelper.mutation(
+        api.testing.communities.seedOrganizer,
+        {
+          name: uniqueName(`Old Org ${suffix}`),
+          slug: oldOrgSlug,
+          status: 'published',
+        },
+      );
+      const activeOrgId = await convexHelper.mutation(
+        api.testing.communities.seedOrganizer,
+        {
+          name: activeOrgName,
+          slug: activeOrgSlug,
+          status: 'published',
+        },
+      );
+
+      // User's role now lives on activeOrgId only (oldOrgId is revoked/unmanaged).
+      const user = await seedCommunityAdminUser(convexHelper, {
+        suffix,
+        orgId: activeOrgId,
+        grantedBy: adminId,
+      });
+
+      const consoleErrors: string[] = [];
+      page.on('console', (msg) => {
+        if (msg.type() === 'error') {
+          consoleErrors.push(msg.text());
+        }
+      });
+
+      await signInUser(page, user.email, user.password);
+
+      const env = createEnvironment(page);
+
+      // 1. Repro via slug bookmark: /community-admin/settings?community=<old-slug>
+      await page.goto(`/community-admin/settings?community=${oldOrgSlug}`);
+
+      const communityAdmin = await getHarnessWhenVisible(
+        page,
+        CommunityAdminHarness,
+        15000,
+        'attached',
+      );
+      await expect
+        .poll(() => communityAdmin.getUnresolvedCommunityError(), {
+          timeout: 15000,
+        })
+        .toContain(oldOrgSlug);
+
+      // Settings form and Stripe Connect CTA must NOT mount on the revoked community.
+      expect(
+        await env.getHarnessOrNull(CommunityAdminSettingsHarness),
+      ).toBeNull();
+
+      // Recovery must offer exactly one community labeled with its display name, not raw ID.
+      await expect
+        .poll(() => communityAdmin.getUnresolvedCommunityPickLabels(), {
+          timeout: 15000,
+        })
+        .toEqual([activeOrgName]);
+
+      // 2. Repro via raw ID bookmark: /community-admin/settings?community=<old-id>
+      await page.goto(`/community-admin/settings?community=${oldOrgId}`);
+      const communityAdminById = await getHarnessWhenVisible(
+        page,
+        CommunityAdminHarness,
+        15000,
+        'attached',
+      );
+      await expect
+        .poll(() => communityAdminById.getUnresolvedCommunityError(), {
+          timeout: 15000,
+        })
+        .toContain(oldOrgId);
+      expect(
+        await env.getHarnessOrNull(CommunityAdminSettingsHarness),
+      ).toBeNull();
+      await expect
+        .poll(() => communityAdminById.getUnresolvedCommunityPickLabels(), {
+          timeout: 15000,
+        })
+        .toEqual([activeOrgName]);
+
+      // Zero authz/redacted Convex errors should have fired for the revoked community.
+      expect(
+        consoleErrors.filter((line) =>
+          /Not a community admin|Unauthorized|Community not found|Called by client/i.test(
+            line,
+          ),
+        ),
+      ).toEqual([]);
+
+      // 3. Recover by picking the active community and saving profile settings.
+      await communityAdminById.pickUnresolvedCommunity(0);
+      await expect
+        .poll(() => communityAdminById.getUnresolvedCommunityError(), {
+          timeout: 15000,
+        })
+        .toBeNull();
+
+      const settings = await getHarnessWhenVisible(
+        page,
+        CommunityAdminSettingsHarness,
+        15000,
+        'attached',
+      );
+      const toastHarness = await env.getHarness(BraToastHarness);
+
+      await expect
+        .poll(() => settings.hasProfileSection(), {timeout: 15000})
+        .toBe(true);
+      await expect
+        .poll(() => settings.hasPaymentsSection(), {timeout: 15000})
+        .toBe(true);
+      await expect
+        .poll(() => settings.getProfileName(), {timeout: 15000})
+        .toBe(activeOrgName);
+
+      await settings.setProfileDescription(
+        'Verified settings save after recovery',
+      );
+      await settings.clickSaveProfile();
+
+      await expect
+        .poll(() => toastHarness.hasToastWithText(/Settings saved/i), {
+          timeout: 15000,
+        })
+        .toBe(true);
+    });
   });
 
   test.describe('Route Guard Enforcement', () => {

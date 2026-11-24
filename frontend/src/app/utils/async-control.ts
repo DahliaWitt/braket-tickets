@@ -9,6 +9,7 @@ export function isNonRetryableReadError(error: unknown): boolean {
     (error instanceof Error && error.name === 'ArgumentValidationError') ||
     normalizedMessage.includes('not found') ||
     normalizedMessage.includes('unauthorized') ||
+    normalizedMessage.includes('unauthenticated') ||
     normalizedMessage.includes('forbidden') ||
     normalizedMessage.includes('value does not match validator')
   );

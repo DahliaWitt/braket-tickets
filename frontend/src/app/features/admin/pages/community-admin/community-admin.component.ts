@@ -44,6 +44,7 @@ import {ZardAlertComponent} from '@ui/components/primitives/alert/alert.componen
 import {ZardTooltipDirective} from '@ui/components/primitives/tooltip/tooltip';
 import {BraStatusBadgeComponent} from '@ui/components/primitives/status-badge/status-badge.component';
 import {logger} from '@/utils/logger';
+import {extractErrorMessage} from '@/core/utils/error-message.utils';
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
 import {ADMIN_DATE} from '@/features/admin/utils/date-formats';
 
@@ -132,27 +133,43 @@ export class CommunityAdminComponent implements HasUnsavedChanges {
     CommunityAdminSettingsComponent,
   );
   private readonly lastHandledCommunityParam = signal<string | null>(null);
+  private readonly lookupFailedSlug = signal<string | null>(null);
+  private readonly lookupError = signal(false);
+  private readonly resolvedParamId = signal<Id<'organizers'> | null>(null);
+  private resolveRequestSeq = 0;
+  readonly isResolvingCommunityParam = signal(false);
+  readonly hasLoadError = computed(
+    () => this.communityCtx.hasError() || this.lookupError(),
+  );
 
   private readonly communityQueries = injectQueries(
     () => {
       const id = this.communityCtx.selectedCommunityId();
+      const isBlocked =
+        this.isResolvingCommunityParam() ||
+        this.hasLoadError() ||
+        this.unresolvedCommunitySlug() !== null;
       const isMagicLinks = this.activeTab() === 'magic-links';
       return {
-        isMemberOf: id
-          ? {query: api.communities.admins.isMemberOf, args: {organizerId: id}}
-          : skipToken,
+        isMemberOf:
+          id && !isBlocked
+            ? {
+                query: api.communities.admins.isMemberOf,
+                args: {organizerId: id},
+              }
+            : skipToken,
         community: id
           ? {query: api.communities.public.get, args: {id}}
           : skipToken,
         links:
-          isMagicLinks && id
+          isMagicLinks && id && !isBlocked
             ? {
                 query: api.communities.invite_links.listMyLinks,
                 args: {organizerId: id},
               }
             : skipToken,
         linksPast:
-          isMagicLinks && id
+          isMagicLinks && id && !isBlocked
             ? {
                 query: api.communities.invite_links.listPastMyLinks,
                 args: {organizerId: id},
@@ -174,6 +191,13 @@ export class CommunityAdminComponent implements HasUnsavedChanges {
   );
 
   readonly isAdminOverride = computed(() => {
+    if (
+      this.isResolvingCommunityParam() ||
+      this.hasLoadError() ||
+      this.unresolvedCommunitySlug() !== null
+    ) {
+      return false;
+    }
     return (
       this.auth.userRole() === 'root_admin' &&
       this.communityQueries.results().isMemberOf === false
@@ -181,9 +205,11 @@ export class CommunityAdminComponent implements HasUnsavedChanges {
   });
 
   /** Full community document for the selected community (logo, status, etc.) */
-  readonly communityDoc = computed(
-    () => this.communityQueries.results().community ?? null,
-  );
+  readonly communityDoc = computed(() => {
+    const selectedId = this.communityCtx.selectedCommunityId();
+    const doc = this.communityQueries.results().community ?? null;
+    return doc && selectedId && doc._id === selectedId ? doc : null;
+  });
   readonly communityName = computed(
     () =>
       this.communityDoc()?.name ?? this.communityCtx.selectedCommunityName(),
@@ -193,10 +219,39 @@ export class CommunityAdminComponent implements HasUnsavedChanges {
     () => this.communityDoc()?.status ?? 'draft',
   );
   readonly tabQueryParams = computed(() => {
+    if (this.hasLoadError()) return null;
+    const unresolved = this.unresolvedCommunitySlug();
+    if (unresolved) return {community: unresolved};
+    if (this.isResolvingCommunityParam()) {
+      const pending = this.lastHandledCommunityParam();
+      return pending ? {community: pending} : null;
+    }
     const selectedId = this.communityCtx.selectedCommunityId();
     if (!selectedId) return null;
-    const slug = this.communityDoc()?.slug ?? null;
+    const doc = this.communityDoc();
+    const slug =
+      (doc && doc._id === selectedId ? doc.slug : null) ??
+      this.communityCtx.resolvedSlugFor(selectedId);
     return {community: slug ?? selectedId};
+  });
+
+  readonly unresolvedCommunitySlug = computed<string | null>(() => {
+    if (this.hasLoadError()) return null;
+    const failed = this.lookupFailedSlug();
+    if (failed !== null) return failed;
+
+    const param = this.lastHandledCommunityParam();
+    const resolvedId = this.resolvedParamId();
+    if (
+      param !== null &&
+      resolvedId !== null &&
+      this.communityCtx.isLoaded() &&
+      !this.communityCtx.communities().includes(resolvedId)
+    ) {
+      return param;
+    }
+
+    return null;
   });
 
   constructor() {
@@ -206,13 +261,20 @@ export class CommunityAdminComponent implements HasUnsavedChanges {
       const communityParam = qp.get('community') ?? legacyOrgId;
 
       if (!communityParam) {
+        this.resolveRequestSeq += 1;
         this.lastHandledCommunityParam.set(null);
-        this.unresolvedCommunitySlug.set(null);
+        this.lookupFailedSlug.set(null);
+        this.lookupError.set(false);
+        this.resolvedParamId.set(null);
+        this.isResolvingCommunityParam.set(false);
         return;
       }
       if (untracked(() => this.lastHandledCommunityParam()) === communityParam)
         return;
       this.lastHandledCommunityParam.set(communityParam);
+      this.lookupFailedSlug.set(null);
+      this.lookupError.set(false);
+      this.resolvedParamId.set(null);
 
       if (legacyOrgId && !qp.get('community')) {
         afterNextRender(
@@ -228,7 +290,62 @@ export class CommunityAdminComponent implements HasUnsavedChanges {
         );
       }
 
+      // Skip redundant lookup + skeleton flash when the URL param already
+      // matches the active selection's unique slug (matching backend slug-first
+      // resolution). ID params always resolve through the backend so an org
+      // whose slug equals another org's ID cannot resolve inconsistently.
+      const activeId = untracked(() => this.communityCtx.selectedCommunityId());
+      const activeDoc = untracked(() => this.communityDoc());
+      const activeSlug =
+        activeId !== null
+          ? (untracked(() => this.communityCtx.resolvedSlugFor(activeId)) ??
+            (activeDoc && activeDoc._id === activeId ? activeDoc.slug : null))
+          : null;
+      if (
+        activeId !== null &&
+        activeSlug != null &&
+        communityParam === activeSlug
+      ) {
+        this.resolveRequestSeq += 1;
+        this.resolvedParamId.set(activeId);
+        this.isResolvingCommunityParam.set(false);
+        this.communityCtx.selectCommunity(activeId);
+        return;
+      }
+
       void this.loadCommunityBySlugOrId(communityParam);
+    });
+
+    // Notify the user when live revocation drops the active community while no
+    // explicit ?community= param is pinned, so fallback to another community is
+    // visible rather than silent.
+    let previousActiveId: Id<'organizers'> | null = null;
+    effect(() => {
+      const currentId = this.communityCtx.selectedCommunityId();
+      const loaded = this.communityCtx.isLoaded();
+      const communities = this.communityCtx.communities();
+      const hasParam = untracked(
+        () => this.lastHandledCommunityParam() !== null,
+      );
+      if (
+        loaded &&
+        !hasParam &&
+        previousActiveId !== null &&
+        currentId !== previousActiveId &&
+        !communities.includes(previousActiveId)
+      ) {
+        const previousName = untracked(() =>
+          this.communityCtx.resolvedNameFor(previousActiveId!),
+        );
+        toast.warning(
+          previousName
+            ? `Your admin access to ${previousName} was removed.`
+            : 'Your admin access to the previous community was removed.',
+        );
+      }
+      if (loaded) {
+        previousActiveId = currentId;
+      }
     });
   }
 
@@ -268,31 +385,50 @@ export class CommunityAdminComponent implements HasUnsavedChanges {
     });
   };
 
-  readonly unresolvedCommunitySlug = signal<string | null>(null);
-
   private async loadCommunityBySlugOrId(slugOrId: string): Promise<void> {
+    const seq = ++this.resolveRequestSeq;
+    this.isResolvingCommunityParam.set(true);
     try {
-      const community = await this.communitiesService.getBySlugOrId(slugOrId);
-      if (!this.isLatestCommunityParam(slugOrId)) return;
+      const community =
+        await this.communitiesService.getAdminBySlugOrId(slugOrId);
+      if (seq !== this.resolveRequestSeq) return;
       if (!community) {
-        this.unresolvedCommunitySlug.set(slugOrId);
+        this.resolvedParamId.set(null);
+        this.lookupError.set(false);
+        this.lookupFailedSlug.set(slugOrId);
         return;
       }
-      this.unresolvedCommunitySlug.set(null);
+      this.lookupFailedSlug.set(null);
+      this.lookupError.set(false);
+      this.resolvedParamId.set(community._id);
       this.communityCtx.selectCommunity(community._id);
     } catch (error) {
-      if (!this.isLatestCommunityParam(slugOrId)) return;
+      if (seq !== this.resolveRequestSeq) return;
       logger.error('Failed to resolve ?community slug', error);
-      this.unresolvedCommunitySlug.set(slugOrId);
+      this.resolvedParamId.set(null);
+      this.lookupFailedSlug.set(null);
+      this.lookupError.set(true);
+    } finally {
+      if (seq === this.resolveRequestSeq) {
+        this.isResolvingCommunityParam.set(false);
+      }
     }
   }
 
-  private isLatestCommunityParam(slugOrId: string): boolean {
-    return untracked(() => this.lastHandledCommunityParam()) === slugOrId;
+  protected communityLabel(id: Id<'organizers'>): string {
+    const resolved = this.communityCtx.resolvedNameFor(id);
+    if (resolved) return resolved;
+    const doc = this.communityDoc();
+    if (doc && doc._id === id) return doc.name;
+    return id;
   }
 
   pickCommunity(id: Id<'organizers'>): void {
-    this.unresolvedCommunitySlug.set(null);
+    this.resolveRequestSeq += 1;
+    this.lookupFailedSlug.set(null);
+    this.lookupError.set(false);
+    this.resolvedParamId.set(null);
+    this.isResolvingCommunityParam.set(false);
     this.communityCtx.selectCommunity(id);
     void this.router.navigate([], {
       relativeTo: this.route,
@@ -402,7 +538,7 @@ export class CommunityAdminComponent implements HasUnsavedChanges {
       }
     } catch (e) {
       logger.error('Failed to create magic link', e);
-      const message = e instanceof Error ? e.message : 'Failed to create link';
+      const message = extractErrorMessage(e) || 'Failed to create link';
       toast.error(message);
     } finally {
       this.isCreating.set(false);
@@ -436,8 +572,7 @@ export class CommunityAdminComponent implements HasUnsavedChanges {
       toast.success(labels[action]);
     } catch (e) {
       logger.error(`Failed to ${action} link`, e);
-      const message =
-        e instanceof Error ? e.message : `Failed to ${action} link`;
+      const message = extractErrorMessage(e) || `Failed to ${action} link`;
       toast.error(message);
     }
   }

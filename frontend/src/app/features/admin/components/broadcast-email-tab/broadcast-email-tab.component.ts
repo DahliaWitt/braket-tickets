@@ -30,6 +30,7 @@ import {ZardInputDirective} from '@ui/components/primitives/input/input.directiv
 import {BraDialogService} from '@ui/components/composites/dialog/dialog.service';
 import {ZardIconComponent} from '@ui/components/primitives/icon/icon.component';
 import {ZardSwitchComponent} from '@ui/components/primitives/switch/switch.component';
+import {extractErrorMessage} from '@/core/utils/error-message.utils';
 import {logger} from '@/utils/logger';
 
 @Component({
@@ -158,8 +159,9 @@ export class BroadcastEmailTabComponent {
   readonly broadcastAudienceError = computed(() => {
     const error = this.queries.errors().audience;
     if (!error) return null;
-    return error instanceof Error && error.message
-      ? `couldn't load audience — ${error.message}`
+    const message = extractErrorMessage(error);
+    return message
+      ? `couldn't load audience — ${message}`
       : "couldn't load audience";
   });
 
@@ -172,8 +174,9 @@ export class BroadcastEmailTabComponent {
   readonly broadcastHistoryError = computed(() => {
     const error = this.queries.errors().history;
     if (!error) return null;
-    return error instanceof Error && error.message
-      ? `couldn't load broadcast history — ${error.message}`
+    const message = extractErrorMessage(error);
+    return message
+      ? `couldn't load broadcast history — ${message}`
       : "couldn't load broadcast history";
   });
 
@@ -291,9 +294,7 @@ export class BroadcastEmailTabComponent {
     } catch (error) {
       logger.error('Failed to send broadcast email', error);
       const messageText =
-        error instanceof Error
-          ? error.message
-          : 'Failed to send broadcast email';
+        extractErrorMessage(error) || 'Failed to send broadcast email';
       toast.error(messageText);
       this.sendFeedback.set({kind: 'error', message: messageText});
     } finally {

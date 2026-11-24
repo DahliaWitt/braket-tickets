@@ -428,15 +428,37 @@ export class CommunityAdminHarness extends ComponentHarness {
   private getUnresolvedCommunityErrorEl = this.locatorForOptional(
     '[data-testid="unresolved-community-error"]',
   );
+  private getCommunitiesLoadErrorEl = this.locatorForOptional(
+    '[data-testid="communities-load-error"]',
+  );
   private getUnresolvedCommunityPickButtonsAll = this.locatorForAll(
     '[data-testid="unresolved-community-pick"]',
   );
+
+  /** Returns true when the top-level loading skeleton state is visible. */
+  async hasLoadingState(): Promise<boolean> {
+    return (await this.getLoadingStateEl()) !== null;
+  }
+
+  /** Returns the text content of the communities load error card, or null if not visible. */
+  async getCommunitiesLoadError(): Promise<string | null> {
+    const el = await this.getCommunitiesLoadErrorEl();
+    if (!el) return null;
+    return (await el.text()).trim();
+  }
 
   /** Returns the text content of the unresolved community error card, or null if not visible. */
   async getUnresolvedCommunityError(): Promise<string | null> {
     const el = await this.getUnresolvedCommunityErrorEl();
     if (!el) return null;
     return (await el.text()).trim();
+  }
+
+  /** Returns the trimmed labels of all recovery pick buttons on the unresolved community error card. */
+  async getUnresolvedCommunityPickLabels(): Promise<string[]> {
+    const buttons = await this.getUnresolvedCommunityPickButtonsAll();
+    const labels = await Promise.all(buttons.map((button) => button.text()));
+    return labels.map((label) => label.trim());
   }
 
   /** Clicks the pick button at the given index. */

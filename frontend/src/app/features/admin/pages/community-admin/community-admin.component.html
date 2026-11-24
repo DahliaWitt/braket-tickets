@@ -26,7 +26,26 @@
 
     <!-- Community identity: logo + name + status -->
     <div class="flex min-w-0 items-center gap-5">
-      @if (unresolvedCommunitySlug()) {
+      @if (communityCtx.isLoading() || isResolvingCommunityParam()) {
+        <div class="flex items-center gap-4">
+          <z-skeleton class="h-10 w-48 rounded sm:h-12 sm:w-64" />
+          <z-skeleton class="h-5 w-20 rounded" />
+        </div>
+      } @else if (hasLoadError()) {
+        <div class="flex min-w-0 items-center gap-4">
+          <h1
+            class="min-w-0 truncate font-display text-3xl font-bold tracking-tight text-foreground uppercase sm:text-4xl lg:text-5xl"
+          >
+            Unable to load
+          </h1>
+          <bra-status-badge
+            status="destructive"
+            class="shrink-0"
+            data-testid="community-status-badge"
+            >error</bra-status-badge
+          >
+        </div>
+      } @else if (unresolvedCommunitySlug()) {
         <div class="flex min-w-0 items-center gap-4">
           <h1
             class="min-w-0 truncate font-display text-3xl font-bold tracking-tight text-foreground uppercase sm:text-4xl lg:text-5xl"
@@ -89,7 +108,7 @@
 
   <!-- CREATE LINK button moved inline with info alert inside the magic-links tab -->
 
-  @if (communityCtx.isLoading()) {
+  @if (communityCtx.isLoading() || isResolvingCommunityParam()) {
     <!-- Loading State -->
     <div
       data-testid="loading-state"
@@ -117,6 +136,26 @@
         </div>
       }
     </div>
+  } @else if (hasLoadError()) {
+    <!-- Failed to load managed communities or resolve ?community= -->
+    <div
+      data-testid="communities-load-error"
+      role="alert"
+      class="flex flex-col items-center justify-center gap-6 rounded-xl border border-border/50 bg-card/30 py-24"
+    >
+      <div
+        class="rounded-full border border-destructive/30 bg-destructive/10 p-4"
+      >
+        <z-icon zType="circle-alert" class="h-8 w-8 text-destructive-text" />
+      </div>
+      <p class="mono-label text-2xs text-destructive-text">
+        UNABLE TO LOAD COMMUNITIES
+      </p>
+      <p class="max-w-md text-center text-muted-foreground">
+        We couldn't load your communities right now. Refresh the page to try
+        again.
+      </p>
+    </div>
   } @else if (unresolvedCommunitySlug()) {
     <!-- Unresolved community slug error card -->
     <div
@@ -134,7 +173,10 @@
       <p class="max-w-md text-center text-muted-foreground">
         Could not find a community matching
         <strong>{{ unresolvedCommunitySlug() }}</strong
-        >. Pick one from the list below to continue.
+        >.
+        @if (communityCtx.communities().length > 0) {
+          Pick one from the list below to continue.
+        }
       </p>
       @if (communityCtx.communities().length > 0) {
         <div class="flex w-full max-w-xs flex-col gap-2">
@@ -147,7 +189,7 @@
               (click)="pickCommunity(communityId)"
               class="w-full"
             >
-              {{ communityCtx.resolvedNameFor(communityId) ?? communityId }}
+              {{ communityLabel(communityId) }}
             </button>
           }
         </div>

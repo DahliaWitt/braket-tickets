@@ -40,6 +40,7 @@ function makeCommunityContextMock(options: {
     isAdminOverride: vi.fn(() => isAdminOverride),
     selectCommunity: vi.fn(),
     setResolvedNames: vi.fn(),
+    setResolvedSlugs: vi.fn(),
     isLoading: vi.fn(() => false),
   };
 }
@@ -488,6 +489,28 @@ describe('CommunitySelectorComponent', () => {
 
       expect(await harness.isDropdownVisible()).toBe(false);
       expect(await harness.isStaticNameVisible()).toBe(false);
+    });
+  });
+
+  describe('resolved slug propagation', () => {
+    const communityA = 'org-a' as Id<'organizers'>;
+    const communityB = 'org-b' as Id<'organizers'>;
+
+    it('publishes resolved slugs to CommunityContextService', async () => {
+      const {ctxMock} = await setup({
+        communities: [communityA, communityB],
+        selectedId: communityA,
+        hasMultiple: true,
+        communityNamesById: {
+          [communityA]: {name: 'Alpha Crew', slug: 'alpha-crew'},
+          [communityB]: {name: 'Beta Crew', slug: null},
+        },
+      });
+
+      const lastCall = ctxMock.setResolvedSlugs.mock.calls.at(-1)?.[0] as
+        Map<string, string> | undefined;
+      expect(lastCall?.get(communityA)).toBe('alpha-crew');
+      expect(lastCall?.has(communityB)).toBe(false);
     });
   });
 });

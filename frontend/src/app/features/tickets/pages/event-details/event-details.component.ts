@@ -491,9 +491,7 @@ export class EventDetailsComponent {
     } catch (error: unknown) {
       this.paymentStatus.set('error');
       this.paymentErrorMessage.set(
-        error instanceof Error
-          ? error.message
-          : 'Failed to start guest session',
+        extractErrorMessage(error) || 'Failed to start guest session',
       );
     }
   }
@@ -694,7 +692,7 @@ export class EventDetailsComponent {
     } catch (error: unknown) {
       this.paymentStatus.set('error');
       this.paymentErrorMessage.set(
-        error instanceof Error ? error.message : 'Payment confirmation failed',
+        extractErrorMessage(error) || 'Payment confirmation failed',
       );
     }
   }
@@ -740,7 +738,7 @@ export class EventDetailsComponent {
       } catch (error: unknown) {
         this.paymentStatus.set('error');
         this.paymentErrorMessage.set(
-          error instanceof Error ? error.message : 'Failed to claim ticket',
+          extractErrorMessage(error) || 'Failed to claim ticket',
         );
       }
     });

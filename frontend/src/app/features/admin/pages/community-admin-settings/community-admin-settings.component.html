@@ -104,6 +104,43 @@
       </div>
     </div>
   </div>
+} @else if (organizerLoadError()) {
+  <div
+    data-testid="settings-load-error"
+    role="alert"
+    class="flex flex-col items-center justify-center gap-4 rounded-xl border border-border/50 bg-card/30 px-6 py-16 text-center"
+  >
+    <div
+      class="rounded-full border border-destructive/30 bg-destructive/10 p-3"
+    >
+      <z-icon zType="circle-alert" class="h-6 w-6 text-destructive-text" />
+    </div>
+    <p class="mono-label text-2xs text-destructive-text">
+      UNABLE TO LOAD SETTINGS
+    </p>
+    <p class="max-w-md text-sm text-muted-foreground">
+      We couldn't load settings for this community. Refresh the page to try
+      again.
+    </p>
+  </div>
+} @else if (!organizer()) {
+  <div
+    data-testid="settings-unavailable"
+    class="flex flex-col items-center justify-center gap-4 rounded-xl border border-border/50 bg-card/30 px-6 py-16 text-center"
+  >
+    <div
+      class="rounded-full border border-destructive/30 bg-destructive/10 p-3"
+    >
+      <z-icon zType="circle-alert" class="h-6 w-6 text-destructive-text" />
+    </div>
+    <p class="mono-label text-2xs text-destructive-text">
+      SETTINGS UNAVAILABLE
+    </p>
+    <p class="max-w-md text-sm text-muted-foreground">
+      You do not have permission to manage this community, or it could not be
+      found.
+    </p>
+  </div>
 } @else {
   <div class="space-y-8">
     <!-- Profile Section -->
@@ -351,6 +388,8 @@
             <div class="flex flex-col gap-2">
               <label
                 for="logoUpload"
+                [class.pointer-events-none]="isSaving()"
+                [class.opacity-50]="isSaving()"
                 class="inline-block cursor-pointer rounded-lg border border-border bg-muted px-4 py-2 font-mono text-xs tracking-widest text-foreground/80 uppercase transition-all hover:border-primary/30 hover:bg-accent/10"
               >
                 [ {{ logoFileName() || 'choose file' }} ]
@@ -358,6 +397,7 @@
               <input
                 id="logoUpload"
                 type="file"
+                [disabled]="isSaving()"
                 [attr.accept]="acceptedImageFileInput"
                 data-testid="logo-upload"
                 (change)="onLogoFileChange($event)"
@@ -367,8 +407,9 @@
                 <button
                   type="button"
                   data-testid="remove-logo"
+                  [disabled]="isSaving()"
                   (click)="removeLogo()"
-                  class="text-left font-mono text-xs tracking-widest text-muted-foreground uppercase transition-colors hover:text-destructive-text"
+                  class="text-left font-mono text-xs tracking-widest text-muted-foreground uppercase transition-colors hover:text-destructive-text disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Remove Logo
                 </button>

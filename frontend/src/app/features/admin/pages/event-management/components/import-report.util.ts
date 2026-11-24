@@ -1,4 +1,4 @@
-import {ConvexError} from 'convex/values';
+import {extractConvexErrorMessage} from '@/core/utils/error-message.utils';
 import {type ImportBatchResult} from '@/features/admin/models/event-management.model';
 import {
   type ImportReport,
@@ -48,20 +48,4 @@ export function buildImportErrorReport(
 ): ImportReport {
   const message = extractConvexErrorMessage(error) ?? fallback;
   return {inserted: 0, skipped: 0, errorMessage: message};
-}
-
-function extractConvexErrorMessage(error: unknown): string | null {
-  if (!(error instanceof ConvexError)) return null;
-  const data: unknown = error.data;
-  if (typeof data === 'string') return nonBlankOrNull(data);
-  if (data && typeof data === 'object' && 'message' in data) {
-    const message = data.message;
-    if (typeof message === 'string') return nonBlankOrNull(message);
-  }
-  return null;
-}
-
-/** Returns the string only when it has non-whitespace content, else null. */
-function nonBlankOrNull(value: string): string | null {
-  return value.trim().length > 0 ? value : null;
 }

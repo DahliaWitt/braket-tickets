@@ -48,14 +48,19 @@ function emitAsync(fn: () => void): void {
 
 function makeCommunityContextMock(options: {
   isLoading?: boolean;
+  isLoaded?: boolean;
+  hasError?: boolean;
   selectedId?: Id<'organizers'> | null;
   selectedName?: string | null;
   hasMultiple?: boolean;
   communities?: Id<'organizers'>[];
   isAdminOverride?: boolean;
+  resolvedSlugs?: Record<string, string>;
 }) {
   return {
     isLoading: vi.fn(() => options.isLoading ?? false),
+    isLoaded: vi.fn(() => options.isLoaded ?? !(options.isLoading ?? false)),
+    hasError: vi.fn(() => options.hasError ?? false),
     selectedCommunityId: vi.fn(() => options.selectedId ?? null),
     selectedCommunityName: vi.fn(() => options.selectedName ?? null),
     hasMultipleCommunities: vi.fn(() => options.hasMultiple ?? false),
@@ -65,7 +70,9 @@ function makeCommunityContextMock(options: {
     setAdminOverrideCommunity: vi.fn(),
     clearAdminOverride: vi.fn(),
     setResolvedNames: vi.fn(),
+    setResolvedSlugs: vi.fn(),
     resolvedNameFor: vi.fn((_id: unknown) => null),
+    resolvedSlugFor: vi.fn((id: string) => options.resolvedSlugs?.[id] ?? null),
   };
 }
 
@@ -155,6 +162,8 @@ function createActivatedRouteMock(
 async function setup(options: {
   tab?: string;
   isLoading?: boolean;
+  hasError?: boolean;
+  resolvedSlugs?: Record<string, string>;
   selectedId?: Id<'organizers'> | null;
   selectedName?: string | null;
   communitySlug?: string | null;
@@ -162,12 +171,13 @@ async function setup(options: {
   hasMultiple?: boolean;
   communities?: Id<'organizers'>[];
   isAdminOverride?: boolean;
+  isMemberOf?: boolean;
   userRole?: string;
   queryParams?: Record<string, string | null>;
   routeParams?: Record<string, string | null>;
   queryParamMap$?: BehaviorSubject<ParamMap>;
   routeParamMap$?: BehaviorSubject<ParamMap>;
-  getBySlugOrId?: ReturnType<typeof vi.fn>;
+  getAdminBySlugOrId?: ReturnType<typeof vi.fn>;
   communityBySlug?: {
     _id: Id<'organizers'>;
     name: string;
@@ -181,6 +191,8 @@ async function setup(options: {
 }) {
   const ctxMock = makeCommunityContextMock({
     isLoading: options.isLoading ?? false,
+    hasError: options.hasError ?? false,
+    resolvedSlugs: options.resolvedSlugs,
     selectedId:
       options.selectedId !== undefined ? options.selectedId : FAKE_ORG_ID,
     selectedName:
@@ -210,6 +222,14 @@ async function setup(options: {
         onData: (data: unknown) => void,
         onError?: (err: Error) => void,
       ) => {
+        if (
+          options.isMemberOf !== undefined &&
+          functionReferenceMatches(_query, api.communities.admins.isMemberOf)
+        ) {
+          emitAsync(() => onData(options.isMemberOf));
+          return () => void 0;
+        }
+
         if (
           functionReferenceMatches(
             _query,
@@ -335,8 +355,8 @@ async function setup(options: {
 
   const communitiesServiceMock = {
     get: vi.fn().mockResolvedValue({name: 'Test Community'}),
-    getBySlugOrId:
-      options.getBySlugOrId ??
+    getAdminBySlugOrId:
+      options.getAdminBySlugOrId ??
       vi.fn().mockResolvedValue(options.communityBySlug ?? null),
   };
 
@@ -510,7 +530,7 @@ describe('CommunityAdminComponent', () => {
   });
 
   describe('community query param', () => {
-    it('loads the community matching the community slug query param', async () => {
+    it('loads the community matching the community slug query param via admin-scoped resolver', async () => {
       const selectedCommunity = {
         _id: 'org-selected' as Id<'organizers'>,
         name: 'Lot 45',
@@ -519,14 +539,67 @@ describe('CommunityAdminComponent', () => {
       const {communitiesServiceMock, ctxMock} = await setup({
         queryParams: {community: 'lot-45'},
         communityBySlug: selectedCommunity,
+        communities: [selectedCommunity._id],
       });
 
-      expect(communitiesServiceMock.getBySlugOrId).toHaveBeenCalledWith(
+      expect(communitiesServiceMock.getAdminBySlugOrId).toHaveBeenCalledWith(
         'lot-45',
       );
       expect(ctxMock.selectCommunity).toHaveBeenCalledWith(
         selectedCommunity._id,
       );
+    });
+
+    it('shows unresolved error card without calling selectCommunity when getAdminBySlugOrId returns null (unauthorized or missing)', async () => {
+      const {ctxMock, harness} = await setup({
+        queryParams: {community: 'old-org'},
+        communityBySlug: null,
+        userRole: 'community_admin',
+        communities: [FAKE_ORG_ID],
+        selectedId: FAKE_ORG_ID,
+      });
+
+      expect(ctxMock.selectCommunity).not.toHaveBeenCalled();
+      const errorText = await harness.getUnresolvedCommunityError();
+      expect(errorText).not.toBeNull();
+      expect(errorText).toContain('old-org');
+    });
+
+    it('skips redundant lookup and skeleton when ?community already matches the active selection slug', async () => {
+      const queryParamMap$ = new BehaviorSubject(convertToParamMap({}));
+      const lookupDeferred = createDeferred<{
+        _id: Id<'organizers'>;
+        name: string;
+        slug: string;
+      } | null>();
+      const getAdminBySlugOrId = vi.fn(() => lookupDeferred.promise);
+
+      const {fixture, harness} = await setup({
+        queryParamMap$,
+        getAdminBySlugOrId,
+        selectedId: FAKE_ORG_ID,
+        resolvedSlugs: {[FAKE_ORG_ID]: 'lot-45'},
+      });
+
+      queryParamMap$.next(convertToParamMap({community: 'lot-45'}));
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(getAdminBySlugOrId).not.toHaveBeenCalled();
+      expect(await harness.hasLoadingState()).toBe(false);
+    });
+
+    it('shows load-error card instead of no-community empty state when listMyCommunities fails', async () => {
+      const {harness} = await setup({
+        hasError: true,
+        selectedId: null,
+        communities: [],
+      });
+
+      expect(await harness.getCommunitiesLoadError()).toContain(
+        'UNABLE TO LOAD COMMUNITIES',
+      );
+      expect(await harness.hasEmptyState()).toBe(false);
     });
 
     it('ignores stale community query results after the URL changes', async () => {
@@ -541,7 +614,7 @@ describe('CommunityAdminComponent', () => {
         name: string;
         slug: string;
       } | null>();
-      const getBySlugOrId = vi.fn((slugOrId: string) => {
+      const getAdminBySlugOrId = vi.fn((slugOrId: string) => {
         if (slugOrId === 'lot-45') return staleLookup.promise;
         if (slugOrId === 'second-room') return currentLookup.promise;
         return Promise.resolve(null);
@@ -549,7 +622,11 @@ describe('CommunityAdminComponent', () => {
 
       const {ctxMock, fixture} = await setup({
         queryParamMap$,
-        getBySlugOrId,
+        getAdminBySlugOrId,
+        communities: [
+          'org-stale' as Id<'organizers'>,
+          'org-current' as Id<'organizers'>,
+        ],
       });
 
       queryParamMap$.next(convertToParamMap({community: 'lot-45'}));
@@ -560,8 +637,8 @@ describe('CommunityAdminComponent', () => {
       fixture.detectChanges();
       await fixture.whenStable();
 
-      expect(getBySlugOrId).toHaveBeenCalledWith('lot-45');
-      expect(getBySlugOrId).toHaveBeenCalledWith('second-room');
+      expect(getAdminBySlugOrId).toHaveBeenCalledWith('lot-45');
+      expect(getAdminBySlugOrId).toHaveBeenCalledWith('second-room');
 
       staleLookup.resolve({
         _id: 'org-stale' as Id<'organizers'>,
@@ -589,14 +666,14 @@ describe('CommunityAdminComponent', () => {
         name: string;
         slug: string;
       } | null>();
-      const getBySlugOrId = vi.fn((slugOrId: string) => {
+      const getAdminBySlugOrId = vi.fn((slugOrId: string) => {
         if (slugOrId === 'lot-45') return staleLookup.promise;
         return Promise.resolve(null);
       });
 
-      const {ctxMock, fixture} = await setup({
+      const {ctxMock, fixture, harness} = await setup({
         queryParamMap$,
-        getBySlugOrId,
+        getAdminBySlugOrId,
       });
 
       queryParamMap$.next(convertToParamMap({community: 'lot-45'}));
@@ -607,8 +684,8 @@ describe('CommunityAdminComponent', () => {
       fixture.detectChanges();
       await fixture.whenStable();
 
-      expect(getBySlugOrId).toHaveBeenCalledWith('lot-45');
-      expect(fixture.componentInstance.unresolvedCommunitySlug()).toBeNull();
+      expect(getAdminBySlugOrId).toHaveBeenCalledWith('lot-45');
+      expect(await harness.getUnresolvedCommunityError()).toBeNull();
 
       staleLookup.resolve({
         _id: 'org-stale' as Id<'organizers'>,
@@ -629,6 +706,7 @@ describe('CommunityAdminComponent', () => {
           name: 'Lot 45',
           slug: 'lot-45',
         },
+        communities: ['org-selected' as Id<'organizers'>],
         tab: 'settings',
         routerUrl: '/community-admin/settings?community=lot-45',
       });
@@ -1971,7 +2049,7 @@ describe('CommunityAdminComponent', () => {
             provide: CommunitiesService,
             useValue: {
               get: vi.fn().mockResolvedValue({name: 'Test Community'}),
-              getBySlugOrId: vi
+              getAdminBySlugOrId: vi
                 .fn()
                 .mockResolvedValue({_id: FAKE_ORG_ID, name: 'Test Community'}),
             },
@@ -2060,7 +2138,7 @@ describe('CommunityAdminComponent', () => {
             provide: CommunitiesService,
             useValue: {
               get: vi.fn().mockResolvedValue({name: 'Test Community'}),
-              getBySlugOrId: vi
+              getAdminBySlugOrId: vi
                 .fn()
                 .mockResolvedValue({_id: FAKE_ORG_ID, name: 'Test Community'}),
             },
@@ -2081,7 +2159,7 @@ describe('CommunityAdminComponent', () => {
   });
 
   describe('BRA-406: unresolved ?community slug', () => {
-    it('shows error card and retains URL param when getBySlugOrId returns null', async () => {
+    it('shows error card and retains URL param when getAdminBySlugOrId returns null', async () => {
       const {harness, fixture} = await setup({
         queryParams: {community: 'invalid-slug'},
         communityBySlug: null,
@@ -2095,6 +2173,163 @@ describe('CommunityAdminComponent', () => {
       const errorText = await harness.getUnresolvedCommunityError();
       expect(errorText).not.toBeNull();
       expect(errorText).toContain('invalid-slug');
+    });
+
+    it('renders communities-load-error instead of community-not-found when getAdminBySlugOrId rejects', async () => {
+      const queryParamMap$ = new BehaviorSubject(convertToParamMap({}));
+      const {harness, fixture, communitiesServiceMock} = await setup({
+        queryParamMap$,
+        selectedId: null,
+        spyOnNavigate: false,
+      });
+      communitiesServiceMock.getAdminBySlugOrId.mockRejectedValueOnce(
+        new Error('Network offline'),
+      );
+
+      queryParamMap$.next(convertToParamMap({community: 'network-fail-slug'}));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(await harness.getCommunitiesLoadError()).toContain(
+        'UNABLE TO LOAD COMMUNITIES',
+      );
+      expect(await harness.getUnresolvedCommunityError()).toBeNull();
+      expect(await harness.getCustomHeaderText()).toContain('Unable to load');
+    });
+
+    it('suppresses admin override banner and preserves ?community= in tab links while resolving and unresolved', async () => {
+      const lookupDeferred = createDeferred<{
+        _id: Id<'organizers'>;
+        name: string;
+        slug?: string | null;
+      } | null>();
+      const queryParamMap$ = new BehaviorSubject(convertToParamMap({}));
+      const {harness, fixture} = await setup({
+        queryParamMap$,
+        selectedId: FAKE_ORG_ID,
+        userRole: 'root_admin',
+        isMemberOf: false,
+        getAdminBySlugOrId: vi.fn(() => lookupDeferred.promise),
+        spyOnNavigate: false,
+      });
+
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      // Active root-admin override banner is visible before an unresolved ?community= transition.
+      expect(await harness.hasOverrideBanner()).toBe(true);
+
+      // Start resolving ?community=revoked-slug: banner hides and tab links preserve pending param.
+      queryParamMap$.next(convertToParamMap({community: 'revoked-slug'}));
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.isResolvingCommunityParam()).toBe(true);
+      expect(await harness.hasOverrideBanner()).toBe(false);
+      expect(fixture.componentInstance.tabQueryParams()).toEqual({
+        community: 'revoked-slug',
+      });
+
+      // Lookup settles null: unresolved error card renders, banner stays hidden, tab links retain unresolved param.
+      lookupDeferred.resolve(null);
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(await harness.getUnresolvedCommunityError()).not.toBeNull();
+      expect(await harness.hasOverrideBanner()).toBe(false);
+      expect(fixture.componentInstance.tabQueryParams()).toEqual({
+        community: 'revoked-slug',
+      });
+    });
+
+    it('ignores stale settlement during an ABA ?community= param transition', async () => {
+      const orgA = 'org-aba-a' as Id<'organizers'>;
+      const orgB = 'org-aba-b' as Id<'organizers'>;
+      let resolveFirstA!: (
+        v: {_id: Id<'organizers'>; name: string} | null,
+      ) => void;
+      let resolveSecondA!: (
+        v: {_id: Id<'organizers'>; name: string} | null,
+      ) => void;
+      let callCountA = 0;
+
+      const queryParamMap$ = new BehaviorSubject(convertToParamMap({}));
+      const getAdminBySlugOrId = vi.fn(
+        (
+          slugOrId: string,
+        ): Promise<{_id: Id<'organizers'>; name: string} | null> => {
+          if (slugOrId === 'slug-a') {
+            callCountA += 1;
+            return new Promise((resolve) => {
+              if (callCountA === 1) resolveFirstA = resolve;
+              else resolveSecondA = resolve;
+            });
+          }
+          return Promise.resolve({_id: orgB, name: 'Org B'});
+        },
+      );
+      const {fixture, ctxMock} = await setup({
+        queryParamMap$,
+        selectedId: orgB,
+        communities: [orgA, orgB],
+        getAdminBySlugOrId,
+        spyOnNavigate: false,
+      });
+
+      // A (req #1 in flight) -> B -> A (req #2 in flight)
+      queryParamMap$.next(convertToParamMap({community: 'slug-a'}));
+      fixture.detectChanges();
+      queryParamMap$.next(convertToParamMap({community: 'slug-b'}));
+      fixture.detectChanges();
+      queryParamMap$.next(convertToParamMap({community: 'slug-a'}));
+      fixture.detectChanges();
+
+      // Stale req #1 settles with null — must NOT clear isResolvingCommunityParam or show error.
+      resolveFirstA(null);
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.isResolvingCommunityParam()).toBe(true);
+      expect(fixture.componentInstance.unresolvedCommunitySlug()).toBeNull();
+
+      // Current req #2 settles with orgA.
+      resolveSecondA({_id: orgA, name: 'Org A'});
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.isResolvingCommunityParam()).toBe(false);
+      expect(ctxMock.selectCommunity).toHaveBeenCalledWith(orgA);
+    });
+
+    it('resolves ID-shaped ?community= through backend even when it matches selectedCommunityId', async () => {
+      const orgA = 'org-id-a' as Id<'organizers'>;
+      const orgB = 'org-id-b' as Id<'organizers'>;
+      const queryParamMap$ = new BehaviorSubject(convertToParamMap({}));
+      const {fixture, ctxMock, communitiesServiceMock} = await setup({
+        queryParamMap$,
+        selectedId: orgA,
+        communities: [orgA, orgB],
+        resolvedSlugs: {[orgA]: 'org-a-slug'},
+        spyOnNavigate: false,
+      });
+
+      // Backend slug-first lookup resolves orgB whose slug equals orgA's ID.
+      communitiesServiceMock.getAdminBySlugOrId.mockResolvedValueOnce({
+        _id: orgB,
+        name: 'Org B',
+        slug: orgA,
+      });
+
+      queryParamMap$.next(convertToParamMap({community: orgA}));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(communitiesServiceMock.getAdminBySlugOrId).toHaveBeenCalledWith(
+        orgA,
+      );
+      expect(ctxMock.selectCommunity).toHaveBeenCalledWith(orgB);
     });
 
     it('clears error card and selects community when pick button is clicked', async () => {
@@ -2119,6 +2354,298 @@ describe('CommunityAdminComponent', () => {
       await fixture.whenStable();
 
       expect(ctxMock.selectCommunity).toHaveBeenCalledWith(communityId);
+    });
+  });
+
+  describe('real CommunityContextService integration (async race & live revocation)', () => {
+    async function setupWithRealContext(options: {
+      queryParams?: Record<string, string | null>;
+      resolvedAdminCommunity: {
+        _id: Id<'organizers'>;
+        name: string;
+        slug: string;
+      } | null;
+      communitiesById: Record<
+        string,
+        {_id: Id<'organizers'>; name: string; slug: string; status: string}
+      >;
+    }) {
+      let emitMyCommunities: ((ids: Id<'organizers'>[]) => void) | null = null;
+      const convexMock: MockConvexClient = createMockConvexClient();
+      const onUpdate = vi
+        .fn()
+        .mockImplementation(
+          (
+            queryRef: unknown,
+            args: Record<string, unknown>,
+            onData: (data: unknown) => void,
+          ) => {
+            if (
+              functionReferenceMatches(
+                queryRef,
+                api.communities.admins.listMyCommunities,
+              )
+            ) {
+              emitMyCommunities = (ids) => onData(ids);
+              return () => void 0;
+            }
+            if (
+              functionReferenceMatches(queryRef, api.communities.public.get)
+            ) {
+              const id = typeof args['id'] === 'string' ? args['id'] : '';
+              emitAsync(() => onData(options.communitiesById[id] ?? null));
+              return () => void 0;
+            }
+            if (
+              functionReferenceMatches(
+                queryRef,
+                api.communities.admins.isMemberOf,
+              )
+            ) {
+              emitAsync(() => onData(true));
+              return () => void 0;
+            }
+            emitAsync(() => onData([]));
+            return () => void 0;
+          },
+        );
+      const onPaginatedUpdate = vi
+        .fn()
+        .mockImplementation(
+          (
+            _q: unknown,
+            _a: unknown,
+            _o: unknown,
+            onData: (d: {
+              results: unknown[];
+              status: string;
+              loadMore: () => boolean;
+            }) => void,
+          ) => {
+            onData({results: [], status: 'Exhausted', loadMore: () => false});
+            return () => void 0;
+          },
+        );
+      convexMock.onUpdate = onUpdate;
+      convexMock.client.onUpdate = onUpdate;
+      convexMock.onPaginatedUpdate_experimental = onPaginatedUpdate;
+      convexMock.client.onPaginatedUpdate_experimental = onPaginatedUpdate;
+
+      const communitiesServiceMock = {
+        get: vi.fn(),
+        getAdminBySlugOrId: vi
+          .fn()
+          .mockResolvedValue(options.resolvedAdminCommunity),
+      };
+
+      const activatedRouteMock = createActivatedRouteMock(
+        options.queryParams ?? {},
+      );
+
+      await TestBed.configureTestingModule({
+        imports: [CommunityAdminComponent],
+        providers: [
+          provideZonelessChangeDetection(),
+          provideRouter([{path: '**', children: []}]),
+          CommunityContextService,
+          {
+            provide: AuthService,
+            useValue: {
+              userRole: vi.fn(() => 'community_admin'),
+              logout: vi.fn(),
+              user: vi.fn(() => ({_id: 'user-1' as Id<'users'>})),
+              currentUser: vi.fn(() => ({_id: 'user-1' as Id<'users'>})),
+            },
+          },
+          {provide: CONVEX, useValue: convexMock},
+          {provide: BraDialogService, useValue: {create: vi.fn()}},
+          {provide: CommunitiesService, useValue: communitiesServiceMock},
+          {provide: ActivatedRoute, useValue: activatedRouteMock},
+        ],
+      }).compileComponents();
+
+      const router = TestBed.inject(Router);
+      vi.spyOn(router, 'navigate').mockResolvedValue(true);
+
+      const fixture = TestBed.createComponent(CommunityAdminComponent);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      const harness = await TestbedHarnessEnvironment.harnessForFixture(
+        fixture,
+        CommunityAdminHarness,
+      );
+      const ctx = TestBed.inject(CommunityContextService);
+
+      return {
+        fixture,
+        harness,
+        ctx,
+        emitMyCommunities: (ids: Id<'organizers'>[]) => {
+          emitMyCommunities?.(ids);
+          fixture.detectChanges();
+        },
+      };
+    }
+
+    it('handles getAdminBySlugOrId settling before listMyCommunities and recovers on live role revocation', async () => {
+      const orgA = 'org-a' as Id<'organizers'>;
+      const orgB = 'org-b' as Id<'organizers'>;
+      const toastWarningSpy = vi.spyOn(toast, 'warning');
+      const {fixture, harness, ctx, emitMyCommunities} =
+        await setupWithRealContext({
+          queryParams: {community: 'org-a-slug'},
+          resolvedAdminCommunity: {
+            _id: orgA,
+            name: 'Org A',
+            slug: 'org-a-slug',
+          },
+          communitiesById: {
+            [orgA]: {
+              _id: orgA,
+              name: 'Org A',
+              slug: 'org-a-slug',
+              status: 'published',
+            },
+            [orgB]: {
+              _id: orgB,
+              name: 'Org B',
+              slug: 'org-b-slug',
+              status: 'draft',
+            },
+          },
+        });
+
+      // getAdminBySlugOrId already resolved, but listMyCommunities has not emitted yet.
+      expect(await harness.hasLoadingState()).toBe(true);
+      expect(ctx.selectedCommunityId()).toBeNull();
+
+      // listMyCommunities arrives with [orgB, orgA] — explicit ?community=org-a-slug wins.
+      emitMyCommunities([orgB, orgA]);
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(await harness.hasLoadingState()).toBe(false);
+      expect(await harness.getUnresolvedCommunityError()).toBeNull();
+      expect(ctx.selectedCommunityId()).toBe(orgA);
+      expect(toastWarningSpy).not.toHaveBeenCalled();
+
+      // Live role revocation: orgA is removed from listMyCommunities.
+      emitMyCommunities([orgB]);
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(ctx.selectedCommunityId()).toBe(orgB);
+      // Pinned ?community= shows the not-found error card instead of firing the unpinned toast.
+      expect(toastWarningSpy).not.toHaveBeenCalled();
+      const errorText = await harness.getUnresolvedCommunityError();
+      expect(errorText).toContain('org-a-slug');
+      // Single-community admin recovery button displays community name, not raw Convex ID.
+      expect(errorText).toContain('Org B');
+      expect(errorText).not.toContain(orgB);
+
+      // Clicking the pick button switches cleanly back to orgB and clears the error card.
+      await harness.pickUnresolvedCommunity(0);
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(await harness.getUnresolvedCommunityError()).toBeNull();
+      expect(ctx.selectedCommunityId()).toBe(orgB);
+    });
+
+    it('warns via toast when live revocation drops the active community without a pinned ?community= param', async () => {
+      const orgA = 'org-unpinned-a' as Id<'organizers'>;
+      const orgB = 'org-unpinned-b' as Id<'organizers'>;
+      const orgC = 'org-unpinned-c' as Id<'organizers'>;
+      const toastWarningSpy = vi.spyOn(toast, 'warning');
+      const {fixture, ctx, emitMyCommunities} = await setupWithRealContext({
+        queryParams: {},
+        resolvedAdminCommunity: null,
+        communitiesById: {
+          [orgA]: {
+            _id: orgA,
+            name: 'Alpha Crew',
+            slug: 'alpha-crew',
+            status: 'published',
+          },
+          [orgB]: {
+            _id: orgB,
+            name: 'Beta Crew',
+            slug: 'beta-crew',
+            status: 'published',
+          },
+          [orgC]: {
+            _id: orgC,
+            name: 'Gamma Crew',
+            slug: 'gamma-crew',
+            status: 'published',
+          },
+        },
+      });
+
+      // Initial load must NOT trigger a revocation warning toast.
+      emitMyCommunities([orgA, orgB, orgC]);
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(ctx.selectedCommunityId()).toBe(orgA);
+      expect(toastWarningSpy).not.toHaveBeenCalled();
+
+      // Revoke orgA when its display name is resolved -> toast includes community name.
+      ctx.setResolvedNames(new Map([[orgA, 'Alpha Crew']]));
+      emitMyCommunities([orgB, orgC]);
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(ctx.selectedCommunityId()).toBe(orgB);
+      expect(toastWarningSpy).toHaveBeenCalledWith(
+        'Your admin access to Alpha Crew was removed.',
+      );
+
+      // Revoke orgB when its display name is NOT resolved -> toast uses fallback copy.
+      toastWarningSpy.mockClear();
+      ctx.setResolvedNames(new Map());
+      emitMyCommunities([orgC]);
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(ctx.selectedCommunityId()).toBe(orgC);
+      expect(toastWarningSpy).toHaveBeenCalledWith(
+        'Your admin access to the previous community was removed.',
+      );
+    });
+
+    it('shows header skeleton instead of list[0] name while ?community= is resolving', async () => {
+      const deferred = createDeferred<{
+        _id: Id<'organizers'>;
+        name: string;
+        slug: string;
+      } | null>();
+      const queryParamMap$ = new BehaviorSubject(convertToParamMap({}));
+      const {fixture, harness} = await setup({
+        queryParamMap$,
+        selectedId: FAKE_ORG_ID,
+        selectedName: 'Fallback Org',
+        getAdminBySlugOrId: vi.fn(() => deferred.promise),
+        spyOnNavigate: false,
+      });
+
+      queryParamMap$.next(convertToParamMap({community: 'revoked-org-slug'}));
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.isResolvingCommunityParam()).toBe(true);
+      expect(fixture.componentInstance.tabQueryParams()).toEqual({
+        community: 'revoked-org-slug',
+      });
+      expect(await harness.getCustomHeaderText()).not.toContain('Fallback Org');
+
+      deferred.resolve(null);
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(await harness.getCustomHeaderText()).toContain(
+        'Community not found',
+      );
     });
   });
 });
