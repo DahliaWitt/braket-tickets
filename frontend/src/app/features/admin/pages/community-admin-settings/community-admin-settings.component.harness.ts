@@ -142,6 +142,16 @@ export class CommunityAdminSettingsHarness extends ComponentHarness {
     await btn.click();
   }
 
+  async isLogoUploadDisabled(): Promise<boolean> {
+    const el = await this._logoUpload();
+    return el !== null && (await el.getAttribute('disabled')) !== null;
+  }
+
+  async isRemoveLogoDisabled(): Promise<boolean> {
+    const el = await this._removeLogo();
+    return el !== null && (await el.getAttribute('disabled')) !== null;
+  }
+
   async isPublicDirectoryChecked(): Promise<boolean> {
     const el = await this._publicDirectoryToggle();
     if (!el) return false;

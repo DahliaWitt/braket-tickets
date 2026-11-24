@@ -190,6 +190,16 @@ describe('CommunitiesService', () => {
         service.getAdminBySlugOrId('test-community'),
       ).rejects.toThrow('Unauthorized');
       expect(convexClientMock.client.query).toHaveBeenCalledTimes(1);
+
+      convexClientMock.client.query.mockReset();
+      convexClientMock.client.query.mockRejectedValue(
+        new Error('Unauthenticated'),
+      );
+
+      await expect(
+        service.getAdminBySlugOrId('test-community'),
+      ).rejects.toThrow('Unauthenticated');
+      expect(convexClientMock.client.query).toHaveBeenCalledTimes(1);
     });
   });
 

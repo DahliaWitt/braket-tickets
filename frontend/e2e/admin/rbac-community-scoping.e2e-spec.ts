@@ -364,27 +364,56 @@ test.describe('RBAC Community Admin Scoping', () => {
 
       await signInUser(page, user.email, user.password);
 
+      const env = createEnvironment(page);
+
       // 1. Repro via slug bookmark: /community-admin/settings?community=<old-slug>
       await page.goto(`/community-admin/settings?community=${oldOrgSlug}`);
 
-      const errorCard = page.getByTestId('unresolved-community-error');
-      await expect(errorCard).toBeVisible({timeout: 15000});
-      await expect(errorCard).toContainText(oldOrgSlug);
+      const communityAdmin = await getHarnessWhenVisible(
+        page,
+        CommunityAdminHarness,
+        15000,
+        'attached',
+      );
+      await expect
+        .poll(() => communityAdmin.getUnresolvedCommunityError(), {
+          timeout: 15000,
+        })
+        .toContain(oldOrgSlug);
 
       // Settings form and Stripe Connect CTA must NOT mount on the revoked community.
-      await expect(page.getByTestId('section-profile')).toHaveCount(0);
-      await expect(page.getByTestId('section-payments')).toHaveCount(0);
+      expect(
+        await env.getHarnessOrNull(CommunityAdminSettingsHarness),
+      ).toBeNull();
 
-      // Single-community recovery button must display the active community's name, not its raw ID.
-      const pickButton = page.getByTestId('unresolved-community-pick').first();
-      await expect(pickButton).toBeVisible({timeout: 15000});
-      await expect(pickButton).toHaveText(activeOrgName);
+      // Recovery must offer exactly one community labeled with its display name, not raw ID.
+      await expect
+        .poll(() => communityAdmin.getUnresolvedCommunityPickLabels(), {
+          timeout: 15000,
+        })
+        .toEqual([activeOrgName]);
 
       // 2. Repro via raw ID bookmark: /community-admin/settings?community=<old-id>
       await page.goto(`/community-admin/settings?community=${oldOrgId}`);
-      await expect(errorCard).toBeVisible({timeout: 15000});
-      await expect(errorCard).toContainText(oldOrgId);
-      await expect(page.getByTestId('section-profile')).toHaveCount(0);
+      const communityAdminById = await getHarnessWhenVisible(
+        page,
+        CommunityAdminHarness,
+        15000,
+        'attached',
+      );
+      await expect
+        .poll(() => communityAdminById.getUnresolvedCommunityError(), {
+          timeout: 15000,
+        })
+        .toContain(oldOrgId);
+      expect(
+        await env.getHarnessOrNull(CommunityAdminSettingsHarness),
+      ).toBeNull();
+      await expect
+        .poll(() => communityAdminById.getUnresolvedCommunityPickLabels(), {
+          timeout: 15000,
+        })
+        .toEqual([activeOrgName]);
 
       // Zero authz/redacted Convex errors should have fired for the revoked community.
       expect(
@@ -396,16 +425,27 @@ test.describe('RBAC Community Admin Scoping', () => {
       ).toEqual([]);
 
       // 3. Recover by picking the active community and saving profile settings.
-      await pickButton.click();
-      await expect(errorCard).toHaveCount(0, {timeout: 15000});
-      await expect(page.getByTestId('section-profile')).toBeVisible({
-        timeout: 15000,
-      });
+      await communityAdminById.pickUnresolvedCommunity(0);
+      await expect
+        .poll(() => communityAdminById.getUnresolvedCommunityError(), {
+          timeout: 15000,
+        })
+        .toBeNull();
 
-      const env = createEnvironment(page);
-      const settings = await env.getHarness(CommunityAdminSettingsHarness);
+      const settings = await getHarnessWhenVisible(
+        page,
+        CommunityAdminSettingsHarness,
+        15000,
+        'attached',
+      );
       const toastHarness = await env.getHarness(BraToastHarness);
 
+      await expect
+        .poll(() => settings.hasProfileSection(), {timeout: 15000})
+        .toBe(true);
+      await expect
+        .poll(() => settings.hasPaymentsSection(), {timeout: 15000})
+        .toBe(true);
       await expect
         .poll(() => settings.getProfileName(), {timeout: 15000})
         .toBe(activeOrgName);

@@ -1537,24 +1537,27 @@ describe('Communities', () => {
   describe('profile.getAdminBySlugOrId', () => {
     it('returns the admin community by slug or ID for a community admin, including drafts', async () => {
       const t = convexTest();
-      const adminId = await t.run(async (ctx) => {
-        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- intentionally minimal user for query authorization test
-        return await ctx.db.insert('users', {
-          name: 'Scoped Admin',
-          email: 'scoped-admin@example.com',
-        });
+      const rootId = await t.run(async (ctx) =>
+        createRootAdmin(ctx, 'Grantor Root', 'grantor-draft@example.com'),
+      );
+      const adminId = await t.mutation(api.testing.users.seedAppUser, {
+        name: 'Scoped Admin',
+        email: 'scoped-admin@example.com',
       });
-      const organizerId = await t.run(async (ctx) => {
-        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- intentionally minimal organizer for query authorization test
-        const id = await insertOrganizer(ctx, {
+      const organizerId = await t.mutation(
+        api.testing.communities.seedOrganizer,
+        {
           name: 'Managed Draft',
           slug: 'managed-draft',
           status: 'draft',
           isPublicDirectory: false,
           email: 'managed@example.com',
-        });
-        await assignCommunityAdmin(ctx, adminId, id);
-        return id;
+        },
+      );
+      await t.mutation(api.testing.communities.seedCommunityAdmin, {
+        userId: adminId,
+        organizerId,
+        grantedBy: rootId,
       });
 
       const asAdmin = t.withIdentity({subject: adminId});
@@ -1574,30 +1577,32 @@ describe('Communities', () => {
 
     it('returns null for a published community the caller does not administer', async () => {
       const t = convexTest();
-      const adminId = await t.run(async (ctx) => {
-        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- intentionally minimal user for query authorization test
-        return await ctx.db.insert('users', {
-          name: 'Other Admin',
-          email: 'other-admin@example.com',
-        });
+      const rootId = await t.run(async (ctx) =>
+        createRootAdmin(ctx, 'Grantor Root', 'grantor-other@example.com'),
+      );
+      const adminId = await t.mutation(api.testing.users.seedAppUser, {
+        name: 'Other Admin',
+        email: 'other-admin@example.com',
       });
-      const {otherOrgId} = await t.run(async (ctx) => {
-        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- intentionally minimal organizers for query authorization test
-        const ownId = await insertOrganizer(ctx, {
-          name: 'Own Org',
-          slug: 'own-org',
-          status: 'draft',
-          isPublicDirectory: false,
-        });
-        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- intentionally minimal organizers for query authorization test
-        const otherId = await insertOrganizer(ctx, {
+      const ownOrgId = await t.mutation(api.testing.communities.seedOrganizer, {
+        name: 'Own Org',
+        slug: 'own-org',
+        status: 'draft',
+        isPublicDirectory: false,
+      });
+      const otherOrgId = await t.mutation(
+        api.testing.communities.seedOrganizer,
+        {
           name: 'Revoked Org',
           slug: 'revoked-org',
           status: 'published',
           isPublicDirectory: true,
-        });
-        await assignCommunityAdmin(ctx, adminId, ownId);
-        return {ownOrgId: ownId, otherOrgId: otherId};
+        },
+      );
+      await t.mutation(api.testing.communities.seedCommunityAdmin, {
+        userId: adminId,
+        organizerId: ownOrgId,
+        grantedBy: rootId,
       });
 
       const asAdmin = t.withIdentity({subject: adminId});
@@ -1618,15 +1623,12 @@ describe('Communities', () => {
       const rootId = await t.run(async (ctx) =>
         createRootAdmin(ctx, 'Root', 'root-slug@example.com'),
       );
-      const orgId = await t.run(async (ctx) =>
-        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- intentionally minimal organizer for query authorization test
-        insertOrganizer(ctx, {
-          name: 'Any Org',
-          slug: 'any-org',
-          status: 'draft',
-          isPublicDirectory: false,
-        }),
-      );
+      const orgId = await t.mutation(api.testing.communities.seedOrganizer, {
+        name: 'Any Org',
+        slug: 'any-org',
+        status: 'draft',
+        isPublicDirectory: false,
+      });
 
       const asRoot = t.withIdentity({subject: rootId});
       const resolved = await asRoot.query(
@@ -1652,21 +1654,32 @@ describe('Communities', () => {
 
     it('returns null after community_admin is revoked from an organizer', async () => {
       const t = convexTest();
-      const {adminId, orgId} = await t.run(async (ctx) => {
-        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- intentionally minimal user for query authorization test
-        const uId = await ctx.db.insert('users', {
-          name: 'Former Admin',
-          email: 'former-admin@example.com',
-        });
-        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- intentionally minimal organizer for query authorization test
-        const oId = await insertOrganizer(ctx, {
-          name: 'Previously Managed Org',
-          slug: 'prev-managed-org',
-          status: 'published',
-          isPublicDirectory: true,
-        });
-        await assignCommunityAdmin(ctx, uId, oId);
-        return {adminId: uId, orgId: oId};
+      const rootId = await t.run(async (ctx) =>
+        createRootAdmin(ctx, 'Grantor Root', 'grantor-revoke@example.com'),
+      );
+      const adminId = await t.mutation(api.testing.users.seedAppUser, {
+        name: 'Former Admin',
+        email: 'former-admin@example.com',
+      });
+      const remainingAdminId = await t.mutation(api.testing.users.seedAppUser, {
+        name: 'Remaining Admin',
+        email: 'remaining-admin@example.com',
+      });
+      const orgId = await t.mutation(api.testing.communities.seedOrganizer, {
+        name: 'Previously Managed Org',
+        slug: 'prev-managed-org',
+        status: 'published',
+        isPublicDirectory: true,
+      });
+      await t.mutation(api.testing.communities.seedCommunityAdmin, {
+        userId: adminId,
+        organizerId: orgId,
+        grantedBy: rootId,
+      });
+      await t.mutation(api.testing.communities.seedCommunityAdmin, {
+        userId: remainingAdminId,
+        organizerId: orgId,
+        grantedBy: rootId,
       });
 
       const asAdmin = t.withIdentity({subject: adminId});
@@ -1678,12 +1691,12 @@ describe('Communities', () => {
         )?._id,
       ).toBe(orgId);
 
-      await t.run(async (ctx) => {
-        await authz.revokeRole(ctx, adminId, 'community_admin', {
-          type: 'organizer',
-          id: orgId,
+      await t
+        .withIdentity({subject: rootId})
+        .mutation(api.communities.admins.revoke, {
+          userId: adminId,
+          organizerId: orgId,
         });
-      });
 
       expect(
         await asAdmin.query(api.communities.profile.getAdminBySlugOrId, {
@@ -1699,31 +1712,31 @@ describe('Communities', () => {
 
     it('returns null for regular members and community_scanners', async () => {
       const t = convexTest();
-      const {memberId, scannerId, orgId} = await t.run(async (ctx) => {
-        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- intentionally minimal users for query authorization test
-        const mId = await ctx.db.insert('users', {
-          name: 'Regular Member',
-          email: 'member@example.com',
-        });
-        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- intentionally minimal users for query authorization test
-        const sId = await ctx.db.insert('users', {
-          name: 'Door Scanner',
-          email: 'scanner@example.com',
-        });
-        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- intentionally minimal organizer for query authorization test
-        const oId = await insertOrganizer(ctx, {
-          name: 'Scoped Org',
-          slug: 'scoped-org',
-          status: 'published',
-          isPublicDirectory: true,
-        });
-        await addMember(ctx, mId, oId);
-        await addMember(ctx, sId, oId);
-        await authz.assignRole(ctx, sId, 'community_scanner', {
-          type: 'organizer',
-          id: oId,
-        });
-        return {memberId: mId, scannerId: sId, orgId: oId};
+      const rootId = await t.run(async (ctx) =>
+        createRootAdmin(ctx, 'Grantor Root', 'grantor-roles@example.com'),
+      );
+      const memberId = await t.mutation(api.testing.users.seedAppUser, {
+        name: 'Regular Member',
+        email: 'member@example.com',
+      });
+      const scannerId = await t.mutation(api.testing.users.seedAppUser, {
+        name: 'Door Scanner',
+        email: 'scanner@example.com',
+      });
+      const orgId = await t.mutation(api.testing.communities.seedOrganizer, {
+        name: 'Scoped Org',
+        slug: 'scoped-org',
+        status: 'published',
+        isPublicDirectory: true,
+      });
+      await t.mutation(api.testing.applications.seedApprovedApplication, {
+        userId: memberId,
+        organizerId: orgId,
+      });
+      await t.mutation(api.testing.communities.seedCommunityScanner, {
+        userId: scannerId,
+        organizerId: orgId,
+        grantedBy: rootId,
       });
 
       expect(
@@ -1759,27 +1772,20 @@ describe('Communities', () => {
 
     it('prefers slug over ID when another organizer slug matches an organizer ID', async () => {
       const t = convexTest();
-      const {rootId, orgAId, orgBId} = await t.run(async (ctx) => {
-        const rId = await createRootAdmin(
-          ctx,
-          'Root Precedence',
-          'root-prec@example.com',
-        );
-        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- intentionally minimal organizer for precedence test
-        const aId = await insertOrganizer(ctx, {
-          name: 'Org A',
-          slug: 'org-a',
-          status: 'published',
-          isPublicDirectory: true,
-        });
-        // eslint-disable-next-line no-raw-db-mutations/no-raw-db-mutation -- intentionally minimal organizer for precedence test
-        const bId = await insertOrganizer(ctx, {
-          name: 'Org B',
-          slug: aId,
-          status: 'published',
-          isPublicDirectory: true,
-        });
-        return {rootId: rId, orgAId: aId, orgBId: bId};
+      const rootId = await t.run(async (ctx) =>
+        createRootAdmin(ctx, 'Root Precedence', 'root-prec@example.com'),
+      );
+      const orgAId = await t.mutation(api.testing.communities.seedOrganizer, {
+        name: 'Org A',
+        slug: 'org-a',
+        status: 'published',
+        isPublicDirectory: true,
+      });
+      const orgBId = await t.mutation(api.testing.communities.seedOrganizer, {
+        name: 'Org B',
+        slug: orgAId,
+        status: 'published',
+        isPublicDirectory: true,
       });
 
       const resolved = await t

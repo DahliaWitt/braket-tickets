@@ -388,6 +388,8 @@
             <div class="flex flex-col gap-2">
               <label
                 for="logoUpload"
+                [class.pointer-events-none]="isSaving()"
+                [class.opacity-50]="isSaving()"
                 class="inline-block cursor-pointer rounded-lg border border-border bg-muted px-4 py-2 font-mono text-xs tracking-widest text-foreground/80 uppercase transition-all hover:border-primary/30 hover:bg-accent/10"
               >
                 [ {{ logoFileName() || 'choose file' }} ]
@@ -395,6 +397,7 @@
               <input
                 id="logoUpload"
                 type="file"
+                [disabled]="isSaving()"
                 [attr.accept]="acceptedImageFileInput"
                 data-testid="logo-upload"
                 (change)="onLogoFileChange($event)"
@@ -404,8 +407,9 @@
                 <button
                   type="button"
                   data-testid="remove-logo"
+                  [disabled]="isSaving()"
                   (click)="removeLogo()"
-                  class="text-left font-mono text-xs tracking-widest text-muted-foreground uppercase transition-colors hover:text-destructive-text"
+                  class="text-left font-mono text-xs tracking-widest text-muted-foreground uppercase transition-colors hover:text-destructive-text disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Remove Logo
                 </button>

@@ -2715,5 +2715,26 @@ describe('CommunityAdminSettingsComponent', () => {
       );
       expect(isOrganizerQueryLoading('skipped', null, undefined)).toBe(false);
     });
+
+    it('disables logo upload and remove controls while a profile save is in flight', async () => {
+      const {fixture, harness} = await setup({
+        organizerData: {
+          _id: FAKE_ORG_ID,
+          name: 'Test Community',
+          email: 'test@example.com',
+          logoUrl: 'https://cdn.example.com/logo.png',
+          vettingQuestions: [],
+        },
+      });
+
+      expect(await harness.isLogoUploadDisabled()).toBe(false);
+      expect(await harness.isRemoveLogoDisabled()).toBe(false);
+
+      fixture.componentInstance.isSaving.set(true);
+      fixture.detectChanges();
+
+      expect(await harness.isLogoUploadDisabled()).toBe(true);
+      expect(await harness.isRemoveLogoDisabled()).toBe(true);
+    });
   });
 });

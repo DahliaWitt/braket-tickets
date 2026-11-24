@@ -454,6 +454,13 @@ export class CommunityAdminHarness extends ComponentHarness {
     return (await el.text()).trim();
   }
 
+  /** Returns the trimmed labels of all recovery pick buttons on the unresolved community error card. */
+  async getUnresolvedCommunityPickLabels(): Promise<string[]> {
+    const buttons = await this.getUnresolvedCommunityPickButtonsAll();
+    const labels = await Promise.all(buttons.map((button) => button.text()));
+    return labels.map((label) => label.trim());
+  }
+
   /** Clicks the pick button at the given index. */
   async pickUnresolvedCommunity(index: number): Promise<void> {
     const buttons = await this.getUnresolvedCommunityPickButtonsAll();

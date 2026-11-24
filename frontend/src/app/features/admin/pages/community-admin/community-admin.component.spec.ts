@@ -2598,6 +2598,9 @@ describe('CommunityAdminComponent', () => {
       fixture.detectChanges();
 
       expect(fixture.componentInstance.isResolvingCommunityParam()).toBe(true);
+      expect(fixture.componentInstance.tabQueryParams()).toEqual({
+        community: 'revoked-org-slug',
+      });
       expect(await harness.getCustomHeaderText()).not.toContain('Fallback Org');
 
       deferred.resolve(null);

@@ -214,6 +214,10 @@ export class CommunityAdminComponent implements HasUnsavedChanges {
   );
   readonly tabQueryParams = computed(() => {
     if (this.hasLoadError() || this.unresolvedCommunitySlug()) return null;
+    if (this.isResolvingCommunityParam()) {
+      const pending = this.lastHandledCommunityParam();
+      return pending ? {community: pending} : null;
+    }
     const selectedId = this.communityCtx.selectedCommunityId();
     if (!selectedId) return null;
     const doc = this.communityDoc();
