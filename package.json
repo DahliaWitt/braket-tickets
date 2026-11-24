@@ -67,12 +67,12 @@
     "audit:visual:llm": "pnpm --filter frontend audit:visual:llm"
   },
   "devDependencies": {
-    "@convex-dev/eslint-plugin": "^2.0.0",
+    "@convex-dev/eslint-plugin": "^5.0.1",
     "@eslint/js": "^10.0.1",
     "@types/node": "^22.10.7",
     "angular-eslint": "^22.7.0",
     "chokidar": "^5.0.0",
-    "convex": "^1.42.1",
+    "convex": "^1.50.0",
     "eslint": "^10.15.0",
     "git-format-staged": "^4.0.2",
     "globals": "^17.14.0",
