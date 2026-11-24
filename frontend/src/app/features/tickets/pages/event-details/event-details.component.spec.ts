@@ -19,6 +19,7 @@ import {provideHttpClient} from '@angular/common/http';
 import {provideHttpClientTesting} from '@angular/common/http/testing';
 import {AuthService} from '@/core/services/auth.service';
 import {CONVEX} from 'convex-angular';
+import {ConvexError} from 'convex/values';
 import {PaymentService} from '@/features/tickets/services/payment.service';
 import {ApplicationsService} from '@/features/vetting/services/applications.service';
 import {ResaleService} from '@/features/tickets/services/resale.service';
@@ -689,8 +690,7 @@ describe('EventDetailsComponent', () => {
     await harness.clickContactCommunityButton();
 
     const config = mockDialogService.create.mock.calls.at(-1)?.[0] as
-      | ContactDialogConfigForEventDetails
-      | undefined;
+      ContactDialogConfigForEventDetails | undefined;
 
     expect(config).toMatchObject({
       zTitle: 'Contact Void Collective',
@@ -720,8 +720,7 @@ describe('EventDetailsComponent', () => {
     component.contactOrganizer();
 
     const config = mockDialogService.create.mock.calls.at(-1)?.[0] as
-      | ContactDialogConfigForEventDetails
-      | undefined;
+      ContactDialogConfigForEventDetails | undefined;
 
     expect(config).toMatchObject({
       zTitle: 'Contact Org Name',
@@ -747,8 +746,7 @@ describe('EventDetailsComponent', () => {
     component.contactOrganizer();
 
     const config = mockDialogService.create.mock.calls.at(-1)?.[0] as
-      | ContactDialogConfigForEventDetails
-      | undefined;
+      ContactDialogConfigForEventDetails | undefined;
 
     expect(config).toMatchObject({
       zTitle: 'Contact Org Name',
@@ -1441,6 +1439,28 @@ describe('EventDetailsComponent', () => {
     beforeEach(async () => {
       eventDocsById.set('public-event-1', publicEvent);
       availabilityByEventId.set('public-event-1', {...defaultAvailability});
+    });
+
+    it('shows the friendly payment copy when guest session initiation fails, never the redacted prod message', async () => {
+      // In production Convex redacts error.message to "Server Error" for ALL
+      // errors (ConvexError included) — only error.data carries the payload.
+      const prodShapedError = new ConvexError({
+        code: 'RATE_LIMITED',
+        message: 'raw backend diagnostic',
+      });
+      prodShapedError.message =
+        '[CONVEX A(guest_sessions/actions:initiateGuestSession)] [Request ID: b01719d1c01ff47a] Server Error\n  Called by client';
+      mockPaymentService.initiateGuestSession.mockRejectedValueOnce(
+        prodShapedError,
+      );
+
+      await component.onGuestEmailCollected('buyer@example.com');
+
+      expect(component.paymentStatus()).toBe('error');
+      expect(component.paymentErrorMessage()).toBe(
+        'Too many attempts, try again later',
+      );
+      expect(component.paymentErrorMessage()).not.toContain('Server Error');
     });
 
     it('does not show guest option for authenticated users', async () => {

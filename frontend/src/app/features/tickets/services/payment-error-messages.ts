@@ -40,7 +40,13 @@ const PAYMENT_ERROR_MESSAGES = {
   TERMS_NOT_ACCEPTED: 'Please accept the terms of service to continue',
 } satisfies Record<PaymentErrorCode, string>;
 
-export function extractPaymentErrorMessage(err: unknown): string {
+const GENERIC_PAYMENT_FALLBACK =
+  'Payment processing failed. Please try again or contact support if the problem persists.';
+
+export function extractPaymentErrorMessage(
+  err: unknown,
+  fallback: string = GENERIC_PAYMENT_FALLBACK,
+): string {
   let message = '';
 
   if (err instanceof ConvexError) {
@@ -50,6 +56,19 @@ export function extractPaymentErrorMessage(err: unknown): string {
     } else {
       const obj = asRecord(data);
       if (obj) {
+        // The @convex-dev/rate-limiter component throws ConvexError with
+        // {kind: 'RateLimited', name, retryAfter} and no `code` field, so it
+        // would otherwise fall through every branch below to the generic
+        // fallback. Surface the wait time when we have it.
+        if (obj['kind'] === 'RateLimited') {
+          const retryAfter = obj['retryAfter'];
+          if (typeof retryAfter === 'number' && retryAfter > 0) {
+            const minutes = Math.max(1, Math.ceil(retryAfter / 60_000));
+            return `Too many attempts, try again in about ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`;
+          }
+          return PAYMENT_ERROR_MESSAGES.RATE_LIMITED;
+        }
+
         const code = typeof obj['code'] === 'string' ? obj['code'] : null;
         const rawMessage =
           typeof obj['message'] === 'string' ? obj['message'] : '';
@@ -83,7 +102,7 @@ export function extractPaymentErrorMessage(err: unknown): string {
     message === 'Error' ||
     message === 'Server Error'
   ) {
-    return 'Payment processing failed. Please try again or contact support if the problem persists.';
+    return fallback;
   }
 
   return message;

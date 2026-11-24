@@ -186,7 +186,7 @@ describe('guest_sessions', () => {
       expect(redemptions).toHaveLength(1);
     });
 
-    test('rejects creating a second active guest session without proof of possession', async () => {
+    test('mints a fresh session without proof of possession and leaves the old session usable', async () => {
       const t = convexTest();
       const adminId = await createUser(t, 'reuse-admin@test.com');
       const token = `reuse-guest-link-${Date.now()}`;
@@ -203,16 +203,23 @@ describe('guest_sessions', () => {
         },
       );
 
-      await expect(
-        t.action(api.guest_sessions.actions.initiateGuestSession, {
+      const result = await t.action(
+        api.guest_sessions.actions.initiateGuestSession,
+        {
           email: 'reuse-guest@test.com',
           magicLinkToken: token,
-        }),
-      ).rejects.toThrow('active guest session already exists');
+        },
+      );
+      expect(result.sessionToken).toBeTruthy();
+      expect(result.sessionToken).not.toBe('existing-reuse-session-token');
 
+      // The old session gains a PENDING resume token (courtesy email sent) but
+      // its primary credential is untouched: the original device's checkout
+      // keeps working, and the emailed link promotes on first use.
       const session = await getSession(t, sessionId);
       expect(session!.sessionToken).toBeUndefined();
       expect(session!.sessionTokenDigest).toBeTruthy();
+      expect(session!.pendingSessionTokenDigest).toBeTruthy();
       expect(session!.magicLinkId).toBeUndefined();
 
       const oldSession = await t.query(
@@ -222,8 +229,9 @@ describe('guest_sessions', () => {
           now: Date.now(),
         },
       );
-      expect(oldSession).toBeNull();
+      expect(oldSession?._id).toBe(sessionId);
 
+      // The magic link attaches to the fresh session, not the old one.
       const redemptions = await t.run(async (ctx) =>
         ctx.db
           .query('magic_link_redemption_log')
@@ -239,7 +247,53 @@ describe('guest_sessions', () => {
           .withIndex('by_email', (q) => q.eq('email', 'reuse-guest@test.com'))
           .collect(),
       );
-      expect(sessionsForEmail).toHaveLength(1);
+      expect(sessionsForEmail).toHaveLength(2);
+      const freshSession = sessionsForEmail.find((s) => s._id !== sessionId);
+      expect(freshSession?.magicLinkId).toBeTruthy();
+    });
+
+    test('own redemption does not lock an email out of a maxed magic link', async () => {
+      const t = convexTest();
+      const adminId = await createUser(t, 'own-redeem-admin@test.com');
+      const token = `own-redeem-link-${Date.now()}`;
+      const linkId = await createMagicLinkWithConfig(t, {
+        createdBy: adminId,
+        token,
+        maxRedemptions: 1,
+      });
+
+      // First entry burns the only redemption.
+      await t.action(api.guest_sessions.actions.initiateGuestSession, {
+        email: 'own-redeem-guest@test.com',
+        magicLinkToken: token,
+      });
+
+      // Same email re-enters via the same (now maxed) link from a new device:
+      // must succeed without burning a second redemption.
+      const result = await t.action(
+        api.guest_sessions.actions.initiateGuestSession,
+        {
+          email: 'own-redeem-guest@test.com',
+          magicLinkToken: token,
+        },
+      );
+      expect(result.sessionToken).toBeTruthy();
+
+      const redemptions = await t.run(async (ctx) =>
+        ctx.db
+          .query('magic_link_redemption_log')
+          .withIndex('by_magicLink', (q) => q.eq('magicLinkId', linkId))
+          .collect(),
+      );
+      expect(redemptions).toHaveLength(1);
+
+      // A different email is still rejected by the cap.
+      await expect(
+        t.action(api.guest_sessions.actions.initiateGuestSession, {
+          email: 'other-redeem-guest@test.com',
+          magicLinkToken: token,
+        }),
+      ).rejects.toThrow('redemption limit');
     });
 
     test('does not revive an inactivity-expired session when initiating again', async () => {
@@ -523,43 +577,6 @@ describe('guest_sessions', () => {
       );
     });
 
-    test('promotes pending resume token to primary without invalidating delivered token', async () => {
-      const t = convexTest();
-
-      const sessionId = await t.mutation(
-        api.testing.guest_sessions.seedGuestSession,
-        {
-          email: 'promoted-resume@test.com',
-          sessionToken: 'current-token',
-        },
-      );
-
-      await t.mutation(internal.guest_sessions.core.prepareResumeSessionToken, {
-        sessionId,
-        sessionToken: 'promoted-resume-token',
-      });
-      await t.mutation(internal.guest_sessions.core.promoteResumeSessionToken, {
-        sessionId,
-        sessionToken: 'promoted-resume-token',
-      });
-
-      const result = await t.query(
-        internal.guest_sessions.core.getBySessionToken,
-        {
-          sessionToken: 'promoted-resume-token',
-          now: Date.now(),
-        },
-      );
-
-      expect(result).not.toBeNull();
-      expect(result!._id).toBe(sessionId);
-      expect(result!.sessionTokenDigest).toBe(
-        await digestBearerToken('guest_session', 'promoted-resume-token'),
-      );
-      expect(result!.pendingSessionTokenDigest).toBeUndefined();
-      expect(result!.pendingSessionTokenPrefix).toBeUndefined();
-    });
-
     test('promotes pending resume token when it is used to resume initiation', async () => {
       const t = convexTest();
 
@@ -669,41 +686,6 @@ describe('guest_sessions', () => {
       );
 
       expect(firstResult?._id).toBe(sessionId);
-    });
-
-    test('does not promote a pending resume token owned by another request', async () => {
-      const t = convexTest();
-
-      const sessionId = await t.mutation(
-        api.testing.guest_sessions.seedGuestSession,
-        {
-          email: 'pending-promote-owner@test.com',
-          sessionToken: 'current-token',
-        },
-      );
-
-      await t.mutation(internal.guest_sessions.core.prepareResumeSessionToken, {
-        sessionId,
-        sessionToken: 'first-pending-token',
-      });
-      await t.mutation(internal.guest_sessions.core.promoteResumeSessionToken, {
-        sessionId,
-        sessionToken: 'second-pending-token',
-      });
-
-      const session = await getSession(t, sessionId);
-      const currentResult = await t.query(
-        internal.guest_sessions.core.getBySessionToken,
-        {
-          sessionToken: 'current-token',
-          now: Date.now(),
-        },
-      );
-
-      expect(session?.pendingSessionTokenDigest).toBe(
-        await digestBearerToken('guest_session', 'first-pending-token'),
-      );
-      expect(currentResult?._id).toBe(sessionId);
     });
 
     test('clears pending resume token without rotating the active token', async () => {

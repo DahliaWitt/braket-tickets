@@ -74,8 +74,12 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
   // Prevents brute-force token guessing from a single IP.
   redeemMagicLink: {kind: 'fixed window', rate: 10, period: HOUR},
 
-  // Guest session initiation: 3 per email per hour.
-  initiateGuestSession: {kind: 'fixed window', rate: 3, period: HOUR},
+  // Guest session initiation: 5 tokenless entries per email per hour. Valid
+  // token-holding re-entries bypass this limit (see initiateGuestSessionHandler);
+  // the limit bounds fresh-session minting and courtesy resume emails, and a
+  // legitimate buyer bouncing between an in-app browser and their real browser
+  // can burn several entries in minutes.
+  initiateGuestSession: {kind: 'fixed window', rate: 5, period: HOUR},
 
   // RBAC: community admin grant/revoke — 10 per admin per minute.
   grantCommunityAdmin: {kind: 'fixed window', rate: 10, period: MINUTE},

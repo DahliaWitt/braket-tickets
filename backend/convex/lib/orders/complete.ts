@@ -102,6 +102,11 @@ export async function completePrimaryOrderState(
       ? ctx.db.get('guest_sessions', order.guestSessionId)
       : Promise.resolve(null),
   ]);
+  // Prefer the order's snapshot: the guest session may already be deleted
+  // (cleanup cron / re-entry hygiene) when a delayed payment settles. The
+  // session read is the fallback for orders opened before the snapshot
+  // existed.
+  const guestEmail = order.guestEmailLower ?? guestSession?.email ?? null;
   // Two-write pattern: insert tickets to obtain ticketId, then patch
   // roster projection fields. buildTicketRosterProjection computes
   // `rosterSortKey` using the real ticketId (see
@@ -110,6 +115,11 @@ export async function completePrimaryOrderState(
   const ticketInserts = Array.from({length: order.quantity}, () =>
     ctx.db.insert('tickets', {
       ...extractOwnerFieldsFromOrder(order),
+      // Anchor guest tickets to the buyer email so the per-email ticket cap
+      // survives guest session deletion (see countActiveOwnedTicketsForEvent).
+      ...(order.guestSessionId && guestEmail
+        ? {guestEmailLower: guestEmail.toLowerCase()}
+        : {}),
       eventId: order.eventId,
       orderId: order._id,
       status: 'valid',
@@ -125,8 +135,8 @@ export async function completePrimaryOrderState(
         buildTicketRosterProjection({
           ticketId,
           status: 'valid',
-          attendeeName: attendeeUser?.name ?? guestSession?.email ?? null,
-          email: attendeeUser?.email ?? guestSession?.email ?? null,
+          attendeeName: attendeeUser?.name ?? guestEmail,
+          email: attendeeUser?.email ?? guestEmail,
           checkedInByName: null,
         }),
       ),

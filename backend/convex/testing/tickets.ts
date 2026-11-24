@@ -29,6 +29,11 @@ export async function insertSeedTicket(
   ctx: MutationCtx,
   args: InsertSeedTicketArgs,
 ): Promise<Id<'tickets'>> {
+  // Mirror production issuance: guest tickets are anchored by the buyer
+  // email so the per-email ticket cap survives session deletion.
+  const guestSession = args.guestSessionId
+    ? await ctx.db.get('guest_sessions', args.guestSessionId)
+    : null;
   const ticketId = await ctx.db.insert('tickets', {
     userId: args.userId,
     eventId: args.eventId,
@@ -36,6 +41,9 @@ export async function insertSeedTicket(
     status: args.status,
     tier: args.tier,
     guestSessionId: args.guestSessionId,
+    ...(guestSession
+      ? {guestEmailLower: guestSession.email.toLowerCase()}
+      : {}),
     qrCode: `demo-qr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     checkedInAt: args.checkedInAt,
     checkedInBy: args.checkedInBy,

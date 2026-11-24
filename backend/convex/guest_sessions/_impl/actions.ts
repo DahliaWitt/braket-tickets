@@ -14,7 +14,6 @@ import {
 import {guestCheckoutResumeTemplate} from '../../email/templates';
 import {sendEmailDeliveryNow} from '../../lib/email_delivery_wrapper';
 import {resolveSiteUrl} from '../../lib/site_url';
-import {throwPaymentAppError} from '../../lib/payment_errors';
 import {generateBearerToken} from '../../lib/token_digests';
 
 type InitiateGuestSessionArgs = {
@@ -98,11 +97,6 @@ export async function initiateGuestSessionHandler(
   validateStringLength(email, 'Email', MAX_EMAIL_LENGTH);
   validateEmail(email, 'Email');
 
-  await rateLimiter.limit(ctx, 'initiateGuestSession', {
-    key: email,
-    throws: true,
-  });
-
   const resumableSessionFromToken = args.existingSessionToken
     ? await ctx.runQuery(internal.guest_sessions.core.getBySessionToken, {
         sessionToken: args.existingSessionToken,
@@ -115,15 +109,34 @@ export async function initiateGuestSessionHandler(
     !resumableSessionFromToken.convertedToUserId;
 
   if (!hasValidExistingSessionToken) {
+    // Rate-limit only tokenless entries: a caller presenting a valid session
+    // token already holds the session credential, and re-entry with it is a
+    // cheap reuse (no new session, no email). Tokenless entries mint sessions
+    // and can trigger a courtesy email to the address, so they stay limited.
+    await rateLimiter.limit(ctx, 'initiateGuestSession', {
+      key: email,
+      throws: true,
+    });
+
     const existingSession = await ctx.runQuery(
-      internal.guest_sessions.core.getReusableByEmail,
+      internal.guest_sessions.core.getResumeTargetByEmail,
       {
         email,
         now: Date.now(),
+        // Scope "has something to resume" to the event the resume link will
+        // point at; falls back to most-recently-active when no session holds
+        // an open order for it.
+        ...(args.eventId ? {eventId: args.eventId} : {}),
       },
     );
 
     if (existingSession && !existingSession.convertedToUserId) {
+      // The buyer likely has an in-flight checkout in another browser context
+      // (e.g. Instagram's in-app browser vs Safari). Email them a resume link
+      // for that session as a best-effort courtesy, then continue minting a
+      // fresh session for this device. This path must never block checkout —
+      // hard-stopping here is what stranded real buyers behind a redacted
+      // "Server Error" screen.
       const resumeSessionToken = generateBearerToken();
       const resumeTokenPreparation = await ctx.runMutation(
         internal.guest_sessions.core.prepareResumeSessionToken,
@@ -146,15 +159,13 @@ export async function initiateGuestSessionHandler(
             )
           : false;
 
-      if (resumeEmailSent) {
-        await ctx.runMutation(
-          internal.guest_sessions.core.promoteResumeSessionToken,
-          {
-            sessionId: existingSession._id,
-            sessionToken: resumeSessionToken,
-          },
-        );
-      } else if (resumeTokenPreparation.status === 'prepared') {
+      // On success the resume token stays PENDING: session lookup accepts the
+      // pending digest, and core.initiate promotes it to primary on first use.
+      // Promoting here would rotate the old session's live credential and
+      // break the original device's checkout — which, now that this path is
+      // reachable without proof of possession, would let anyone typing an
+      // email invalidate that email's in-flight session.
+      if (!resumeEmailSent && resumeTokenPreparation.status === 'prepared') {
         await ctx.runMutation(
           internal.guest_sessions.core.clearResumeSessionToken,
           {
@@ -163,13 +174,6 @@ export async function initiateGuestSessionHandler(
           },
         );
       }
-
-      throwPaymentAppError(
-        'SESSION_RESUME_REQUIRED',
-        resumeEmailSent
-          ? 'An active guest session already exists for this email. We sent a resume link to your email.'
-          : 'An active guest session already exists for this email. Resume checkout from the same device or wait for the session to expire.',
-      );
     }
   }
 
