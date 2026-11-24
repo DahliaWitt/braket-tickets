@@ -8,6 +8,8 @@ import {vi, describe, it, expect, beforeEach, type Mock} from 'vitest';
 import {signal} from '@angular/core';
 import {CONVEX} from 'convex-angular';
 import type * as ConvexAngular from 'convex-angular';
+import {getFunctionName, type FunctionReference} from 'convex/server';
+import {api} from '@convex/_generated/api';
 import {type UserModel} from '@/testing/user-model';
 import {logger} from '@/utils/logger';
 import {
@@ -1777,29 +1779,36 @@ describe('AuthService', () => {
       let secondScannerOnError: ((err: Error) => void) | undefined;
       let scannerSubscribeCount = 0;
 
+      const userQueryName = getFunctionName(api.users.profile['current']);
+      const scannerQueryName = getFunctionName(
+        api.communities.scanners.hasAnyAssignment,
+      );
+
       localConvexMock.onUpdate.mockImplementation(
         (
-          queryRef: unknown,
+          queryRef: FunctionReference<'query'>,
           _args: unknown,
           onData: (value: unknown) => void,
           onError?: (err: Error) => void,
         ) => {
-          // First subscription is userQuery (api.users.profile.current);
-          // subsequent subscriptions are scannerStaffQuery.
-          if (!onUserData) {
-            void queryRef;
+          const name = getFunctionName(queryRef);
+          if (name === userQueryName) {
             onUserData = onData;
             return vi.fn();
           }
 
-          scannerSubscribeCount += 1;
-          if (scannerSubscribeCount === 1) {
-            firstScannerOnData = onData;
-            return firstScannerUnsubscribe;
+          if (name === scannerQueryName) {
+            scannerSubscribeCount += 1;
+            if (scannerSubscribeCount === 1) {
+              firstScannerOnData = onData;
+              return firstScannerUnsubscribe;
+            }
+
+            secondScannerOnData = onData;
+            secondScannerOnError = onError;
+            return vi.fn();
           }
 
-          secondScannerOnData = onData;
-          secondScannerOnError = onError;
           return vi.fn();
         },
       );
@@ -1850,11 +1859,11 @@ describe('AuthService', () => {
       await Promise.resolve();
       expect(realService.isScannerStaff()).toBe(false);
 
-      // Success for u2 unmasks u2's actual assignment state
-      secondScannerOnData?.(false);
+      // Success for u2 unmasks u2's actual assignment state (true proves unmasking)
+      secondScannerOnData?.(true);
       TestBed.tick();
       await Promise.resolve();
-      expect(realService.isScannerStaff()).toBe(false);
+      expect(realService.isScannerStaff()).toBe(true);
     });
   });
 });

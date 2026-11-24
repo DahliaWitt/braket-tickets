@@ -1902,6 +1902,7 @@ describe('EventDetailsComponent', () => {
         via: null,
       });
       expect(await harness.isVettingNoticeVisible()).toBe(true);
+      localFixture.destroy();
     });
   });
 });

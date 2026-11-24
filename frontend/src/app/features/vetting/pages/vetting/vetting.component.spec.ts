@@ -1467,15 +1467,21 @@ describe('VettingComponent', () => {
       expect(await harness.isApprovedStateVisible()).toBe(false);
       expect(await harness.isGateErrorStateVisible()).toBe(true);
 
-      // Subsequent success for u2 (no existing application) unmasks the form
-      emitExisting?.(null);
+      // Subsequent success for u2 unmasks u2's own pending application state
+      emitExisting?.({
+        _id: 'app-u2',
+        _creationTime: Date.now(),
+        userId: '456',
+        status: 'pending',
+        answers: {},
+      });
       fixture.detectChanges();
       await fixture.whenStable();
       fixture.detectChanges();
 
       expect(await harness.isApprovedStateVisible()).toBe(false);
       expect(await harness.isGateErrorStateVisible()).toBe(false);
-      expect(await harness.isReferralInputVisible()).toBe(true);
+      expect(await harness.isPendingStateVisible()).toBe(true);
     });
   });
 });
