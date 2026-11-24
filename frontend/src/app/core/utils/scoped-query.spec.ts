@@ -298,10 +298,14 @@ describe('injectScopedQuery', () => {
     expect(convexMock.onUpdate).toHaveBeenCalledTimes(1);
 
     scope.set(null);
+    // A late push arriving during a brief skip before flush must not wipe
+    // settled state if the scope returns to u1 before effects run.
+    onData?.(true);
     expect(query.data()).toBeUndefined();
     scope.set('u1');
     await flushReactiveWork();
     expect(query.data()).toBe(true);
+    expect(query.status()).toBe('success');
     expect(convexMock.onUpdate).toHaveBeenCalledTimes(1);
   });
 

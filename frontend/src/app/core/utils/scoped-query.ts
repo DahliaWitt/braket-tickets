@@ -35,7 +35,8 @@ export interface ScopedQueryResult<
  * value to another (for example, direct account switch `u1 -> u2`), this helper
  * forces a resubscribe and masks `data()`, `error()`, and status signals until
  * a response arrives for the new `(scope, args)` pair. `data()` only unmasks on
- * a successful response (including after hydration or warm-cache seed).
+ * a live `onSuccess` response (warm-cache or SSR-transferred values remain
+ * masked until the subscription delivers a live result).
  *
  * **Scope invariant:** `scope` must be derived from a Convex-synced identity
  * signal (such as `auth.user()?._id`), not a pre-reauth session signal. On
@@ -87,15 +88,11 @@ export function injectScopedQuery<Query extends QueryReference>(
 
   const onSettled = (outcome: 'success' | 'error'): boolean => {
     const currentKey = activeKey();
-    if (currentKey === null) {
-      pendingRefetch.set(false);
-      refreshMaskActive.set(false);
-      settledSuccessKey.set(null);
-      settledErrorKey.set(null);
-      return false;
-    }
-
+    // Do not wipe settled keys here when currentKey is null: a brief
+    // u1 -> null -> u1 transition before effects flush keeps the original
+    // subscription open, and the effect clears state if the skip persists.
     if (
+      currentKey === null ||
       subscribedKey !== currentKey ||
       subscribedRefetchGen !== requestedRefetchGen
     ) {
@@ -133,9 +130,10 @@ export function injectScopedQuery<Query extends QueryReference>(
 
       const argsKey = JSON.stringify(convexToJson(args));
       const currentScope = untracked(scope);
-      // Mirror injectQuery's `${refetchVersion}:${argsKey}` dedupe check so
-      // subscribedKey only advances when injectQuery actually opens a fresh
-      // subscription (first subscribe, args changed, or requested refetch).
+      // Mirror convex-angular 1.11's `${refetchVersion}:${argsKey}` dedupe
+      // check so subscribedKey only advances when injectQuery actually opens a
+      // fresh subscription (first subscribe, args changed, or requested
+      // refetch). Re-verify this mirror on convex-angular upgrades.
       if (
         argsKey !== lastSubscribedArgsKey ||
         requestedRefetchGen !== lastSubscribedRefetchGen
@@ -279,6 +277,7 @@ export function injectScopedQuery<Query extends QueryReference>(
     isSkipped,
     isSuccess,
     status,
+    refetch: requestRefetch,
     triggerRefresh,
   };
 }
