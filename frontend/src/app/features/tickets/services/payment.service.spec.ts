@@ -500,6 +500,114 @@ describe('PaymentService', () => {
       ]);
     });
 
+    it('keeps prior-account tickets hidden across warm-cache replay and first-response errors', async () => {
+      TestBed.resetTestingModule();
+
+      const localConvexMock = createMockConvexClient();
+      const localAuthMock: MockAuthService = createMockAuthService({
+        user: {
+          _id: 'u1' as Id<'users'>,
+          _creationTime: Date.now(),
+          name: 'First User',
+          email: 'first@example.com',
+        },
+        isAuthenticated: true,
+      });
+
+      const priorAccountTickets = [
+        {
+          _id: 'ticket_u1',
+          _creationTime: Date.now(),
+          eventId: 'event_1',
+          userId: 'u1',
+          status: 'valid',
+          tier: 'regular',
+        },
+      ];
+
+      let firstOnData: ((value: unknown) => void) | undefined;
+      let secondOnError: ((err: Error) => void) | undefined;
+      let secondOnData: ((value: unknown) => void) | undefined;
+
+      localConvexMock.client.localQueryResult = vi
+        .fn()
+        .mockReturnValue(priorAccountTickets);
+      localConvexMock.onUpdate
+        .mockImplementationOnce(
+          (_query, _args, onData: (value: unknown) => void) => {
+            firstOnData = onData;
+            return vi.fn();
+          },
+        )
+        .mockImplementationOnce(
+          (
+            _query,
+            _args,
+            onData: (value: unknown) => void,
+            onError?: (err: Error) => void,
+          ) => {
+            secondOnData = onData;
+            secondOnError = onError;
+            return vi.fn();
+          },
+        );
+      localConvexMock.client.onUpdate = localConvexMock.onUpdate;
+
+      TestBed.configureTestingModule({
+        providers: [
+          provideZonelessChangeDetection(),
+          PaymentService,
+          {provide: CONVEX, useValue: localConvexMock},
+          {provide: AuthService, useValue: localAuthMock},
+        ],
+      });
+
+      const localService = TestBed.inject(PaymentService);
+      await flushReactiveWork();
+
+      firstOnData?.(priorAccountTickets);
+      await flushReactiveWork();
+      expect(localService.ticketsResource.value()).toHaveLength(1);
+
+      // Direct switch to u2 while localQueryResult still replays u1's warm cache
+      localAuthMock.user.set({
+        _id: 'u2' as Id<'users'>,
+        _creationTime: Date.now(),
+        name: 'Second User',
+        email: 'second@example.com',
+      });
+      await flushReactiveWork();
+
+      expect(localConvexMock.onUpdate).toHaveBeenCalledTimes(2);
+      expect(localService.ticketsResource.value()).toEqual([]);
+
+      // First response for u2 errors: prior-account data retained by injectQuery
+      // must stay hidden until u2 receives a successful result.
+      secondOnError?.(new Error('transient auth refresh error'));
+      await flushReactiveWork();
+      expect(localService.ticketsResource.value()).toEqual([]);
+      expect(localService.ticketsResource.error()).toBeInstanceOf(Error);
+
+      // Subsequent success for u2 unmasks u2's tickets.
+      secondOnData?.([
+        {
+          _id: 'ticket_u2',
+          _creationTime: Date.now(),
+          eventId: 'event_2',
+          userId: 'u2',
+          status: 'valid',
+          tier: 'supporter',
+        },
+      ]);
+      await flushReactiveWork();
+      expect(localService.ticketsResource.value()).toEqual([
+        expect.objectContaining({
+          _id: 'ticket_u2',
+          userId: 'u2',
+        }),
+      ]);
+    });
+
     it('defers manual refreshes until the active query settles', async () => {
       TestBed.resetTestingModule();
 

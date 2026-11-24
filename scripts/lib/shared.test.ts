@@ -15,7 +15,7 @@ import {
 describe('local Convex backend release', () => {
   it('pins the E2E backend binary instead of following latest', () => {
     expect(DEFAULT_CONVEX_LOCAL_BACKEND_RELEASE).toBe(
-      'precompiled-2026-05-12-cadb2c2',
+      'precompiled-2026-11-21-cf39368',
     );
   });
 

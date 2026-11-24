@@ -1,10 +1,4 @@
 import type {injectConvex} from 'convex-angular';
-import {
-  type FunctionArgs,
-  type FunctionReference,
-  type FunctionReturnType,
-} from 'convex/server';
-import {type MutationOptions} from 'convex/browser';
 
 export type SessionChannelMessage = {type: 'LOGIN'} | {type: 'LOGOUT'};
 
@@ -41,9 +35,7 @@ export const MISSING_USER_REPAIR_MAX_QUERY_ERRORS = 6;
  * without a service→guards→service import cycle.
  */
 export type SettledUser =
-  | {socialSignupCompletionRequired?: boolean; _id?: string}
-  | null
-  | undefined;
+  {socialSignupCompletionRequired?: boolean; _id?: string} | null | undefined;
 
 export function requiresSocialSignupCompletion(user: SettledUser): boolean {
   return user?.socialSignupCompletionRequired === true;
@@ -52,27 +44,6 @@ export function requiresSocialSignupCompletion(user: SettledUser): boolean {
 export type ConvexClientWithErrorHandling = ReturnType<typeof injectConvex> & {
   __braketAuthWrapped?: boolean;
 };
-
-export type ConvexQueryMethod = <Query extends FunctionReference<'query'>>(
-  this: ConvexClientWithErrorHandling,
-  query: Query,
-  args: Query['_args'],
-) => Promise<Awaited<Query['_returnType']>>;
-
-export type ConvexMutationMethod = <
-  Mutation extends FunctionReference<'mutation'>,
->(
-  this: ConvexClientWithErrorHandling,
-  mutation: Mutation,
-  args: FunctionArgs<Mutation>,
-  options?: MutationOptions,
-) => Promise<Awaited<FunctionReturnType<Mutation>>>;
-
-export type ConvexActionMethod = <Action extends FunctionReference<'action'>>(
-  this: ConvexClientWithErrorHandling,
-  action: Action,
-  args: FunctionArgs<Action>,
-) => Promise<Awaited<FunctionReturnType<Action>>>;
 
 function isSessionMessageType(
   value: unknown,

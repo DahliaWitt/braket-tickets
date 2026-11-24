@@ -35,6 +35,10 @@ jobs:
         uses: ./.github/actions/setup-node-pnpm
       - name: Install dependencies
         # Installs every workspace package (frontend included) from the root lockfile.
+        # Pass GITHUB_TOKEN so @vscode/ripgrep (pulled by ifttt-lint) authenticates
+        # its GitHub Releases API lookup instead of hitting unauthenticated 403s.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm install --frozen-lockfile
       - name: Check Convex generated files are fresh
         if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
@@ -68,6 +72,10 @@ jobs:
         uses: ./.github/actions/setup-node-pnpm
       - name: Install dependencies
         # Installs every workspace package (frontend included) from the root lockfile.
+        # Pass GITHUB_TOKEN so @vscode/ripgrep (pulled by ifttt-lint) authenticates
+        # its GitHub Releases API lookup instead of hitting unauthenticated 403s.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm install --frozen-lockfile
       - name: Unit tests (frontend)
         working-directory: ./frontend
@@ -152,6 +160,8 @@ jobs:
       - name: Setup pnpm + Node
         uses: ./.github/actions/setup-node-pnpm
       - name: Install dependencies
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm install --frozen-lockfile
       - name: Run Stripe sandbox preflight checks
         run: pnpm test:convex:sandbox:preflight
@@ -174,6 +184,10 @@ jobs:
         uses: ./.github/actions/setup-node-pnpm
       - name: Install dependencies
         # Installs every workspace package (frontend included) from the root lockfile.
+        # Pass GITHUB_TOKEN so @vscode/ripgrep (pulled by ifttt-lint) authenticates
+        # its GitHub Releases API lookup instead of hitting unauthenticated 403s.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm install --frozen-lockfile
       - name: Enable Angular build cache on CI
         # The Angular CLI disables its build cache when it detects CI. Enable it
@@ -258,6 +272,10 @@ jobs:
         uses: ./.github/actions/setup-node-pnpm
       - name: Install dependencies
         # Installs every workspace package (frontend included) from the root lockfile.
+        # Pass GITHUB_TOKEN so @vscode/ripgrep (pulled by ifttt-lint) authenticates
+        # its GitHub Releases API lookup instead of hitting unauthenticated 403s.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm install --frozen-lockfile
       - name: Build Storybook
         working-directory: ./frontend
@@ -315,6 +333,8 @@ jobs:
         uses: ./.github/actions/setup-node-pnpm
 
       - name: Install dependencies
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm install --frozen-lockfile
 
       - name: Resolve Playwright version

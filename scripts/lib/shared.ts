@@ -35,7 +35,7 @@ export const CONVEX_CLI = path.join(
 
 export const LOCAL_DIR = path.join(PROJECT_ROOT, '.convex-local');
 export const DEFAULT_CONVEX_LOCAL_BACKEND_RELEASE =
-  'precompiled-2026-07-03-b7209ce';
+  'precompiled-2026-11-21-cf39368';
 export const CONVEX_LOCAL_BACKEND_RELEASE =
   process.env['CONVEX_LOCAL_BACKEND_RELEASE'] ??
   DEFAULT_CONVEX_LOCAL_BACKEND_RELEASE;
@@ -430,7 +430,7 @@ export interface BackendBinaryHandle {
   logFile: string;
 }
 
-const SUPPORTED_LOCAL_NODE_MAJORS = new Set([18, 20, 22, 24]);
+const SUPPORTED_LOCAL_NODE_MAJORS = new Set([22, 24]);
 
 function parseNodeMajor(version: string): number | null {
   const match = /^v(\d+)\./.exec(version.trim());
@@ -459,7 +459,7 @@ function candidateNodePaths(): string[] {
   }
 
   for (const prefix of ['/opt/homebrew/opt', '/usr/local/opt']) {
-    for (const major of [24, 22, 20, 18]) {
+    for (const major of [24, 22]) {
       candidates.add(path.join(prefix, `node@${major}`, 'bin', 'node'));
     }
   }

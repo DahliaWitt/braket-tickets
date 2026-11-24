@@ -212,7 +212,9 @@ describe('notification_digests.sendDailyDigests', () => {
     // constant for the whole multi-page run.
     const digestHour = 23;
     const startMs = Date.parse('2026-01-15T23:59:59Z');
-    vi.setSystemTime(new Date(startMs));
+    // Seed 10s before the run so convex-test's monotonic _creationTime ticks
+    // across 800+ inserted docs stay strictly before startMs.
+    vi.setSystemTime(new Date(startMs - 10_000));
 
     const t = convexTest();
     const orgId = await t.mutation(api.testing.communities.seedOrganizer, {
@@ -256,6 +258,7 @@ describe('notification_digests.sendDailyDigests', () => {
     }
 
     // Page 1 runs at 23:59:59 and self-schedules the next page.
+    vi.setSystemTime(new Date(startMs));
     await t.mutation(internal.marketing.digests.sendDailyDigests, {});
 
     // Advance past midnight, then let the real Convex scheduler drive the

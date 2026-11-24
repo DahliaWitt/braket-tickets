@@ -13,6 +13,7 @@ import {type MutationOptions} from 'convex/browser';
 import {
   type FunctionArgs,
   type FunctionReference,
+  type FunctionReference_future,
   type FunctionReturnType,
 } from 'convex/server';
 import {api} from '@convex/_generated/api';
@@ -430,10 +431,13 @@ export class AuthService implements ConvexAuthProvider {
     }
 
     const originalQuery = convex.query;
-    convex.query = async <Query extends FunctionReference<'query'>>(
+    convex.query = async <
+      Query extends
+        FunctionReference<'query'> | FunctionReference_future<'query'>,
+    >(
       query: Query,
-      args: Query['_args'],
-    ): Promise<Awaited<Query['_returnType']>> => {
+      args: FunctionArgs<Query>,
+    ): Promise<Awaited<FunctionReturnType<Query>>> => {
       try {
         return await originalQuery.call(convex, query, args);
       } catch (err) {
@@ -443,7 +447,10 @@ export class AuthService implements ConvexAuthProvider {
     };
 
     const originalMutation = convex.mutation;
-    convex.mutation = async <Mutation extends FunctionReference<'mutation'>>(
+    convex.mutation = async <
+      Mutation extends
+        FunctionReference<'mutation'> | FunctionReference_future<'mutation'>,
+    >(
       mutation: Mutation,
       args: FunctionArgs<Mutation>,
       options?: MutationOptions,
@@ -457,7 +464,10 @@ export class AuthService implements ConvexAuthProvider {
     };
 
     const originalAction = convex.action;
-    convex.action = async <Action extends FunctionReference<'action'>>(
+    convex.action = async <
+      Action extends
+        FunctionReference<'action'> | FunctionReference_future<'action'>,
+    >(
       action: Action,
       args: FunctionArgs<Action>,
     ): Promise<Awaited<FunctionReturnType<Action>>> => {
