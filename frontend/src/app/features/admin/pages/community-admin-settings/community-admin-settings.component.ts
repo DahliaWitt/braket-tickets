@@ -54,11 +54,11 @@ import {
 import {BrowserPlatformService} from '@/core/services/browser-platform.service';
 import {
   addVettingQuestion,
+  buildCommunityProfileFormValue,
   buildDigestHourOptions,
   type CommunityProfileFormValue,
   DebounceTimer,
   getMatchedOrganizer,
-  getOrganizerStatus,
   isOrganizerQueryLoading,
   isProfileDirty,
   moveVettingQuestion,
@@ -400,17 +400,7 @@ export class CommunityAdminSettingsComponent {
       if (this.initializedProfileCommunityId === org._id) return;
       this.initializedProfileCommunityId = org._id;
       this.resetPendingLogo();
-      const values = {
-        name: org.name ?? '',
-        email: org.email ?? '',
-        contactInfo: org.contactInfo ?? '',
-        description: org.description ?? '',
-        website: org.website ?? '',
-        slug: org.slug ?? '',
-        status: getOrganizerStatus(org.status, org.vettingQuestions),
-        isPublicDirectory: org.isPublicDirectory ?? false,
-        codeOfConduct: org.codeOfConduct ?? '',
-      };
+      const values = buildCommunityProfileFormValue(org);
       this.profileModel.set(values);
       this.pristineProfile.set(values);
     });

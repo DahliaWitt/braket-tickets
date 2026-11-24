@@ -454,3 +454,28 @@ export function getOrganizerStatus<T extends string>(
     ? 'published'
     : 'draft';
 }
+
+export function buildCommunityProfileFormValue(org: {
+  name?: string;
+  email?: string;
+  contactInfo?: string;
+  description?: string;
+  website?: string;
+  slug?: string;
+  status?: CommunityProfileFormValue['status'];
+  vettingQuestions?: {id: string}[];
+  isPublicDirectory?: boolean;
+  codeOfConduct?: string;
+}): CommunityProfileFormValue {
+  return {
+    name: org.name ?? '',
+    email: org.email ?? '',
+    contactInfo: org.contactInfo ?? '',
+    description: org.description ?? '',
+    website: org.website ?? '',
+    slug: org.slug ?? '',
+    status: getOrganizerStatus(org.status, org.vettingQuestions),
+    isPublicDirectory: org.isPublicDirectory ?? false,
+    codeOfConduct: org.codeOfConduct ?? '',
+  };
+}
