@@ -21,7 +21,7 @@ overrides:
   postcss: 8.5.33
   webpack: 5.105.4
   esbuild: 0.27.3
-  react: 19.2.6
+  react: 19.3.1
   react-dom: 19.2.6
   basic-ftp@^5: 5.3.1
   body-parser@^2: 2.4.0
@@ -54,7 +54,7 @@ importers:
     devDependencies:
       '@convex-dev/eslint-plugin':
         specifier: ^6.0.0
-        version: 6.0.0(convex@1.51.0(react@19.2.6))(eslint@10.15.0(jiti@2.7.0))
+        version: 6.0.0(convex@1.51.0(react@19.3.1))(eslint@10.15.0(jiti@2.7.0))
       '@eslint/js':
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.15.0(jiti@2.7.0))
@@ -69,7 +69,7 @@ importers:
         version: 5.0.0
       convex:
         specifier: 1.51.0
-        version: 1.51.0(react@19.2.6)
+        version: 1.51.0(react@19.3.1)
       eslint:
         specifier: ^10.15.0
         version: 10.15.0(jiti@2.7.0)
@@ -126,34 +126,34 @@ importers:
     dependencies:
       '@convex-dev/better-auth':
         specifier: 'catalog:'
-        version: 0.12.5(@standard-schema/spec@1.1.0)(better-auth@1.6.25(@opentelemetry/api@1.9.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(vitest@4.1.10))(convex@1.51.0(react@19.2.6))(prettier@3.10.1)(react@19.2.6)(typescript@6.0.3)
+        version: 0.12.5(@standard-schema/spec@1.1.0)(better-auth@1.6.25(@opentelemetry/api@1.9.1)(react-dom@19.2.6(react@19.3.1))(react@19.3.1)(vitest@4.1.10))(convex@1.51.0(react@19.3.1))(prettier@3.10.1)(react@19.3.1)(typescript@6.0.3)
       '@convex-dev/migrations':
         specifier: ^0.3.9
-        version: 0.3.9(convex-helpers@0.1.136(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.2.6))(prettier@3.10.1)(react@19.2.6)(typescript@6.0.3)(zod@4.6.7))(convex@1.51.0(react@19.2.6))
+        version: 0.3.9(convex-helpers@0.1.136(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.3.1))(prettier@3.10.1)(react@19.3.1)(typescript@6.0.3)(zod@4.6.7))(convex@1.51.0(react@19.3.1))
       '@convex-dev/rate-limiter':
         specifier: 0.3.2
-        version: 0.3.2(convex@1.51.0(react@19.2.6))(react@19.2.6)
+        version: 0.3.2(convex@1.51.0(react@19.3.1))(react@19.3.1)
       '@convex-dev/resend':
         specifier: 0.2.5
-        version: 0.2.5(convex-helpers@0.1.136(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.2.6))(prettier@3.10.1)(react@19.2.6)(typescript@6.0.3)(zod@4.6.7))(convex@1.51.0(react@19.2.6))(react@19.2.6)
+        version: 0.2.5(convex-helpers@0.1.136(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.3.1))(prettier@3.10.1)(react@19.3.1)(typescript@6.0.3)(zod@4.6.7))(convex@1.51.0(react@19.3.1))(react@19.3.1)
       '@convex-dev/workpool':
         specifier: 0.4.7
-        version: 0.4.7(convex-helpers@0.1.136(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.2.6))(prettier@3.10.1)(react@19.2.6)(typescript@6.0.3)(zod@4.6.7))(convex@1.51.0(react@19.2.6))
+        version: 0.4.7(convex-helpers@0.1.136(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.3.1))(prettier@3.10.1)(react@19.3.1)(typescript@6.0.3)(zod@4.6.7))(convex@1.51.0(react@19.3.1))
       '@djpanda/convex-authz':
         specifier: ^2.4.1
-        version: 2.4.1(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.2.6))(prettier@3.10.1)(react@19.2.6)(typescript@6.0.3)(zod@4.6.7)
+        version: 2.4.1(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.3.1))(prettier@3.10.1)(react@19.3.1)(typescript@6.0.3)(zod@4.6.7)
       '@react-pdf/renderer':
         specifier: ^4.5.1
-        version: 4.5.1(react@19.2.6)
+        version: 4.5.1(react@19.3.1)
       better-auth:
         specifier: 'catalog:'
-        version: 1.6.25(@opentelemetry/api@1.9.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(vitest@4.1.10)
+        version: 1.6.25(@opentelemetry/api@1.9.1)(react-dom@19.2.6(react@19.3.1))(react@19.3.1)(vitest@4.1.10)
       convex:
         specifier: 1.51.0
-        version: 1.51.0(react@19.2.6)
+        version: 1.51.0(react@19.3.1)
       convex-helpers:
         specifier: ^0.1.136
-        version: 0.1.136(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.2.6))(prettier@3.10.1)(react@19.2.6)(typescript@6.0.3)(zod@4.6.7)
+        version: 0.1.136(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.3.1))(prettier@3.10.1)(react@19.3.1)(typescript@6.0.3)(zod@4.6.7)
       fontkit:
         specifier: ^2.0.4
         version: 2.0.4
@@ -164,8 +164,8 @@ importers:
         specifier: ^1.5.4
         version: 1.5.4
       react:
-        specifier: 19.2.6
-        version: 19.2.6
+        specifier: 19.3.1
+        version: 19.3.1
       resend:
         specifier: ^6.38.1
         version: 6.39.0
@@ -178,7 +178,7 @@ importers:
         version: 2.0.1(vite@8.3.8(@types/node@22.19.7)(esbuild@0.27.3)(jiti@2.7.0)(less@4.9.1)(sass-embedded@1.108.2)(sass@1.108.2)(terser@5.51.4)(tsx@4.23.15)(yaml@2.9.1))
       '@convex-dev/eslint-plugin':
         specifier: ^6.0.0
-        version: 6.0.0(convex@1.51.0(react@19.2.6))(eslint@10.15.0(jiti@2.7.0))
+        version: 6.0.0(convex@1.51.0(react@19.3.1))(eslint@10.15.0(jiti@2.7.0))
       '@edge-runtime/vm':
         specifier: ^5.0.0
         version: 5.0.0
@@ -241,7 +241,7 @@ importers:
         version: 4.1.10(vitest@4.1.10)
       convex-test:
         specifier: ^0.0.75
-        version: 0.0.75(convex@1.51.0(react@19.2.6))
+        version: 0.0.75(convex@1.51.0(react@19.3.1))
       eslint:
         specifier: ^10.15.0
         version: 10.15.0(jiti@2.7.0)
@@ -286,7 +286,7 @@ importers:
         version: 22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(@angular/platform-browser@22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1)))(rxjs@7.8.2)
       '@convex-dev/better-auth':
         specifier: 'catalog:'
-        version: 0.12.5(@standard-schema/spec@1.1.0)(better-auth@1.6.25(@opentelemetry/api@1.9.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(vitest@4.1.10))(convex@1.51.0(react@19.2.6))(prettier@3.10.1)(react@19.2.6)(typescript@6.0.3)
+        version: 0.12.5(@standard-schema/spec@1.1.0)(better-auth@1.6.25(@opentelemetry/api@1.9.1)(react-dom@19.2.6(react@19.3.1))(react@19.3.1)(vitest@4.1.10))(convex@1.51.0(react@19.3.1))(prettier@3.10.1)(react@19.3.1)(typescript@6.0.3)
       '@sentry/angular':
         specifier: ^11.10.0
         version: 11.17.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(@angular/router@22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(@angular/platform-browser@22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1)))(rxjs@7.8.2))(rxjs@7.8.2)
@@ -337,7 +337,7 @@ importers:
         version: 5.16.0
       better-auth:
         specifier: 'catalog:'
-        version: 1.6.25(@opentelemetry/api@1.9.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(vitest@4.1.10)
+        version: 1.6.25(@opentelemetry/api@1.9.1)(react-dom@19.2.6(react@19.3.1))(react@19.3.1)(vitest@4.1.10)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -346,10 +346,10 @@ importers:
         version: 2.1.1
       convex:
         specifier: 1.51.0
-        version: 1.51.0(react@19.2.6)
+        version: 1.51.0(react@19.3.1)
       convex-angular:
         specifier: ^1.11.0
-        version: 1.11.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(@angular/router@22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(@angular/platform-browser@22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1)))(rxjs@7.8.2))(convex@1.51.0(react@19.2.6))(rxjs@7.8.2)
+        version: 1.11.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(@angular/router@22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(@angular/platform-browser@22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1)))(rxjs@7.8.2))(convex@1.51.0(react@19.3.1))(rxjs@7.8.2)
       flexsearch:
         specifier: ^0.8.212
         version: 0.8.212
@@ -391,7 +391,7 @@ importers:
         version: 2.9.1
       web-haptics:
         specifier: ^0.0.6
-        version: 0.0.6(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+        version: 0.0.6(react-dom@19.2.6(react@19.3.1))(react@19.3.1)
     devDependencies:
       '@analogjs/vite-plugin-angular':
         specifier: ^2.9.7
@@ -437,16 +437,16 @@ importers:
         version: 12.1.0(size-limit@12.1.0(jiti@2.7.0))
       '@storybook/addon-a11y':
         specifier: ^10.6.7
-        version: 10.6.7(storybook@10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.2.6))
+        version: 10.6.7(storybook@10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.3.1))
       '@storybook/addon-docs':
         specifier: ^10.6.7
-        version: 10.6.7(@types/react@19.3.0)(storybook@10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.2.6))
+        version: 10.6.7(@types/react@19.3.0)(storybook@10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.3.1))
       '@storybook/addon-themes':
         specifier: ^10.6.7
-        version: 10.6.7(storybook@10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.2.6))
+        version: 10.6.7(storybook@10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.3.1))
       '@storybook/angular':
         specifier: ^10.6.7
-        version: 10.6.7(zt4pgyowbp36ki22wcmpmsfa5i)
+        version: 10.6.7(rqltqi3x6kq2utmi3c6wbl5vgu)
       '@tailwindcss/postcss':
         specifier: ^4.3.5
         version: 4.3.5
@@ -464,7 +464,7 @@ importers:
         version: 10.0.7
       convex-helpers:
         specifier: ^0.1.136
-        version: 0.1.136(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.2.6))(prettier@3.10.1)(react@19.2.6)(typescript@6.0.3)(zod@4.6.7)
+        version: 0.1.136(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.3.1))(prettier@3.10.1)(react@19.3.1)(typescript@6.0.3)(zod@4.6.7)
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1(@noble/hashes@2.2.0)
@@ -482,7 +482,7 @@ importers:
         version: 12.1.0(jiti@2.7.0)
       storybook:
         specifier: ^10.6.7
-        version: 10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.2.6)
+        version: 10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.3.1)
       tailwindcss:
         specifier: ^4.3.5
         version: 4.3.5
@@ -1712,7 +1712,7 @@ packages:
     peerDependencies:
       better-auth: '>=1.6.11 <1.7.0'
       convex: ^1.25.0
-      react: 19.2.6
+      react: 19.3.1
 
   '@convex-dev/crons@0.2.2':
     resolution: {integrity: sha512-V5kLBb0kTb2MA6uN0MgEYEgeW1mp+1oioA0tnuh8yWZcb6FToY+e67MJ5SQ98N1JjY2K0JIofAzLUYe9gEdU2A==}
@@ -1734,7 +1734,7 @@ packages:
     resolution: {integrity: sha512-+oBPsBfFbzdxiF/9XaaTQmVnvDlvEfg/c69/v8LxTbw4VLuiflIKlfnPQL8OS0azXQQ11hcPWHmU8ytFmHKDXA==}
     peerDependencies:
       convex: ^1.24.8
-      react: 19.2.6
+      react: 19.3.1
     peerDependenciesMeta:
       react:
         optional: true
@@ -1799,7 +1799,7 @@ packages:
     resolution: {integrity: sha512-+nqEztMuTBBdCgDTxGo6f4/d/9/WUqvY1INU6gzn3nK1B8LmmyaTqIlrj1FtmMdG2kwRtNxnQordDAQLhuRtxw==}
     peerDependencies:
       convex: ^1.29.3
-      react: 19.2.6
+      react: 19.3.1
 
   '@edge-runtime/primitives@6.0.0':
     resolution: {integrity: sha512-FqoxaBT+prPBHBwE1WXS1ocnu/VLTQyZ6NMUBAdbP7N2hsFTTxMC/jMu2D/8GAlMQfxeuppcPuCUk/HO3fpIvA==}
@@ -2638,7 +2638,7 @@ packages:
     resolution: {integrity: sha512-f++rKLQgUVYDAtECQ6fn/is15GkEH9+nZPM3MS0RcxVqoTfawHvDlSCH7JbMhAM6uJ32v3eXLvLmLvjGu7PTQw==}
     peerDependencies:
       '@types/react': '>=16'
-      react: 19.2.6
+      react: 19.3.1
 
   '@mermaid-js/parser@1.2.1':
     resolution: {integrity: sha512-n12NohV3mrUyUL2o93IgG/ifeW9FTyeJn3zDxkhwa8MJ9Fxg3HQMlA3RiGmD/3UnJvheztkjjQAjA2T4LmUcpw==}
@@ -3747,7 +3747,7 @@ packages:
   '@react-pdf/reconciler@2.0.0':
     resolution: {integrity: sha512-7zaPRujpbHSmCpIrZ+b9HSTJHthcVZzX0Wx7RzvQGsGBUbHP4p6s5itXrAIOuQuPvDepoHGNOvf6xUuMVvdoyw==}
     peerDependencies:
-      react: 19.2.6
+      react: 19.3.1
 
   '@react-pdf/render@4.5.1':
     resolution: {integrity: sha512-IW/N4HWJWtioBXCf7n02IR24VJJ8gbdS3jGypf+vW/rSErEx3/URRzh9UK6Ma8Fpog9+T/W6GE2NHJ5AAKHhVA==}
@@ -3755,7 +3755,7 @@ packages:
   '@react-pdf/renderer@4.5.1':
     resolution: {integrity: sha512-5r1VQrE6FRLXX5wWUxwZzM24E2BJMo6g8AQWuS8WyPs9ugu5yMnb2g8/RpPYka/Z6J+RUEWc32wty2NoUJF42Q==}
     peerDependencies:
-      react: 19.2.6
+      react: 19.3.1
 
   '@react-pdf/stylesheet@6.2.1':
     resolution: {integrity: sha512-2+UEk+7e+z8baaWi2l5kPLWmwtJeOI+T5wW9GGeN3iDH7vd3kbTqOpN1yt9mmfNVZFxQsnDHpznFb5v5UF983A==}
@@ -4349,14 +4349,14 @@ packages:
   '@storybook/icons@2.2.0':
     resolution: {integrity: sha512-FpUB/xizIrV1ILhCIYFo+TtQNN9YEoLjfcnAW0JtOXL+BcM2aisSysI0B54JMWDnljriXySBHgN6ps4s9lb75A==}
     peerDependencies:
-      react: 19.2.6
+      react: 19.3.1
 
   '@storybook/react-dom-shim@10.6.7':
     resolution: {integrity: sha512-h5VsEhWyLI4BsqcFwK/nOwvy5t8Hu3Tt7msUn4smHM0NbqtMlyZmA3LH58Q2plRy41T6lg0BLVjz5S/9s8cTZA==}
     peerDependencies:
       '@types/react': ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
       '@types/react-dom': ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
-      react: 19.2.6
+      react: 19.3.1
       react-dom: 19.2.6
       storybook: ^10.6.7
     peerDependenciesMeta:
@@ -5428,7 +5428,7 @@ packages:
       next: ^14.0.0 || ^15.0.0 || ^16.0.0
       pg: ^8.0.0
       prisma: ^5.0.0 || ^6.0.0 || ^7.0.0
-      react: 19.2.6
+      react: 19.3.1
       react-dom: 19.2.6
       solid-js: ^1.0.0
       svelte: ^4.0.0 || ^5.0.0
@@ -5863,7 +5863,7 @@ packages:
       convex: ^1.46.0
       hono: 4.12.34
       prettier: ^3.0.0
-      react: 19.2.6
+      react: 19.3.1
       typescript: ^5.5 || ^6.0.0 || ^7.0.0
       zod: 4.6.7
     peerDependenciesMeta:
@@ -5893,7 +5893,7 @@ packages:
       '@auth0/auth0-react': ^2.0.1
       '@clerk/clerk-react': ^4.12.8 || ^5.0.0
       '@clerk/react': ^6.4.3
-      react: 19.2.6
+      react: 19.3.1
     peerDependenciesMeta:
       '@auth0/auth0-react':
         optional: true
@@ -8612,7 +8612,7 @@ packages:
   react-dom@19.2.6:
     resolution: {integrity: sha512-0prMI+hvBbPjsWnxDLxlCGyM8PN6UuWjEUCYmZhO67xIV9Xasa/r/vDnq+Xyq4Lo27g8QSbO5YzARu0D1Sps3g==}
     peerDependencies:
-      react: 19.2.6
+      react: 19.3.1
 
   react-is@16.13.1:
     resolution: {integrity: sha512-24e6ynE2H+OKt4kqsOvNd8kBpV65zoxbA4BVsEOB3ARVWQki/DHzaUoC5KuON/BiccDaCCTZBuOcfZs70kR8bQ==}
@@ -8620,8 +8620,8 @@ packages:
   react-is@17.0.2:
     resolution: {integrity: sha512-w2GsyukL62IJnlaff/nRegPQR94C/XXamvMWmSHRJ4y7Ts/4ocGRmTHvOs8PSE6pB3dWOrD/nueuU5sduBsQ4w==}
 
-  react@19.2.6:
-    resolution: {integrity: sha512-sfWGGfavi0xr8Pg0sVsyHMAOziVYKgPLNrS7ig+ivMNb3wbCBw3KxtflsGBAwD3gYQlE/AEZsTLgToRrSCjb0Q==}
+  react@19.3.1:
+    resolution: {integrity: sha512-QNhWdt7nrgVWWQG58QuGsAR3jv3Hbe4mb4vz7w2csnHavciZJgda1CPNaldF6eVxv90ud3jUXpKlHL69gO38yw==}
     engines: {node: '>=0.10.0'}
 
   readdirp@4.1.2:
@@ -9806,7 +9806,7 @@ packages:
   use-sync-external-store@1.7.0:
     resolution: {integrity: sha512-6L+EeigHMQhdaIPNIFUKwfWJSwWFQ8gJbJ2DLOs5sDIegTwR9fRxvnM3uciHKjIZhFz+KAv2emhWMRvDmMcY8A==}
     peerDependencies:
-      react: 19.2.6
+      react: 19.3.1
 
   util-deprecate@1.0.2:
     resolution: {integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==}
@@ -9992,7 +9992,7 @@ packages:
   web-haptics@0.0.6:
     resolution: {integrity: sha512-eCzcf1LDi20+Fr0x9V3OkX92k0gxEQXaHajmhXHitsnk6SxPeshv8TBtBRqxyst8HI1uf2FyFVE7QS3jo1gkrw==}
     peerDependencies:
-      react: 19.2.6
+      react: 19.3.1
       react-dom: 19.2.6
       svelte: '>=4'
       vue: '>=3'
@@ -11817,15 +11817,15 @@ snapshots:
       dot: 2.0.0-beta.1
       fs-extra: 11.4.1
 
-  '@convex-dev/better-auth@0.12.5(@standard-schema/spec@1.1.0)(better-auth@1.6.25(@opentelemetry/api@1.9.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(vitest@4.1.10))(convex@1.51.0(react@19.2.6))(prettier@3.10.1)(react@19.2.6)(typescript@6.0.3)':
+  '@convex-dev/better-auth@0.12.5(@standard-schema/spec@1.1.0)(better-auth@1.6.25(@opentelemetry/api@1.9.1)(react-dom@19.2.6(react@19.3.1))(react@19.3.1)(vitest@4.1.10))(convex@1.51.0(react@19.3.1))(prettier@3.10.1)(react@19.3.1)(typescript@6.0.3)':
     dependencies:
       '@better-fetch/fetch': 1.3.1
-      better-auth: 1.6.25(@opentelemetry/api@1.9.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(vitest@4.1.10)
+      better-auth: 1.6.25(@opentelemetry/api@1.9.1)(react-dom@19.2.6(react@19.3.1))(react@19.3.1)(vitest@4.1.10)
       common-tags: 1.8.2
-      convex: 1.51.0(react@19.2.6)
-      convex-helpers: 0.1.136(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.2.6))(prettier@3.10.1)(react@19.2.6)(typescript@6.0.3)(zod@4.6.7)
+      convex: 1.51.0(react@19.3.1)
+      convex-helpers: 0.1.136(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.3.1))(prettier@3.10.1)(react@19.3.1)(typescript@6.0.3)(zod@4.6.7)
       jose: 6.2.3
-      react: 19.2.6
+      react: 19.3.1
       remeda: 2.39.0
       semver: 7.8.5
       type-fest: 5.8.0
@@ -11836,39 +11836,39 @@ snapshots:
       - prettier
       - typescript
 
-  '@convex-dev/crons@0.2.2(convex@1.51.0(react@19.2.6))':
+  '@convex-dev/crons@0.2.2(convex@1.51.0(react@19.3.1))':
     dependencies:
-      convex: 1.51.0(react@19.2.6)
+      convex: 1.51.0(react@19.3.1)
       cron-parser: 4.9.0
 
-  '@convex-dev/eslint-plugin@6.0.0(convex@1.51.0(react@19.2.6))(eslint@10.15.0(jiti@2.7.0))':
+  '@convex-dev/eslint-plugin@6.0.0(convex@1.51.0(react@19.3.1))(eslint@10.15.0(jiti@2.7.0))':
     dependencies:
       '@typescript-eslint/parser': 8.58.2(eslint@10.15.0(jiti@2.7.0))(typescript@5.9.3)
       '@typescript-eslint/types': 8.58.2
       '@typescript-eslint/utils': 8.58.2(eslint@10.15.0(jiti@2.7.0))(typescript@5.9.3)
-      convex: 1.51.0(react@19.2.6)
+      convex: 1.51.0(react@19.3.1)
       typescript: 5.9.3
     transitivePeerDependencies:
       - eslint
       - supports-color
 
-  '@convex-dev/migrations@0.3.9(convex-helpers@0.1.136(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.2.6))(prettier@3.10.1)(react@19.2.6)(typescript@6.0.3)(zod@4.6.7))(convex@1.51.0(react@19.2.6))':
+  '@convex-dev/migrations@0.3.9(convex-helpers@0.1.136(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.3.1))(prettier@3.10.1)(react@19.3.1)(typescript@6.0.3)(zod@4.6.7))(convex@1.51.0(react@19.3.1))':
     dependencies:
-      convex: 1.51.0(react@19.2.6)
-      convex-helpers: 0.1.136(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.2.6))(prettier@3.10.1)(react@19.2.6)(typescript@6.0.3)(zod@4.6.7)
+      convex: 1.51.0(react@19.3.1)
+      convex-helpers: 0.1.136(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.3.1))(prettier@3.10.1)(react@19.3.1)(typescript@6.0.3)(zod@4.6.7)
 
-  '@convex-dev/rate-limiter@0.3.2(convex@1.51.0(react@19.2.6))(react@19.2.6)':
+  '@convex-dev/rate-limiter@0.3.2(convex@1.51.0(react@19.3.1))(react@19.3.1)':
     dependencies:
-      convex: 1.51.0(react@19.2.6)
+      convex: 1.51.0(react@19.3.1)
     optionalDependencies:
-      react: 19.2.6
+      react: 19.3.1
 
-  '@convex-dev/resend@0.2.5(convex-helpers@0.1.136(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.2.6))(prettier@3.10.1)(react@19.2.6)(typescript@6.0.3)(zod@4.6.7))(convex@1.51.0(react@19.2.6))(react@19.2.6)':
+  '@convex-dev/resend@0.2.5(convex-helpers@0.1.136(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.3.1))(prettier@3.10.1)(react@19.3.1)(typescript@6.0.3)(zod@4.6.7))(convex@1.51.0(react@19.3.1))(react@19.3.1)':
     dependencies:
-      '@convex-dev/rate-limiter': 0.3.2(convex@1.51.0(react@19.2.6))(react@19.2.6)
-      '@convex-dev/workpool': 0.4.7(convex-helpers@0.1.136(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.2.6))(prettier@3.10.1)(react@19.2.6)(typescript@6.0.3)(zod@4.6.7))(convex@1.51.0(react@19.2.6))
-      convex: 1.51.0(react@19.2.6)
-      convex-helpers: 0.1.136(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.2.6))(prettier@3.10.1)(react@19.2.6)(typescript@6.0.3)(zod@4.6.7)
+      '@convex-dev/rate-limiter': 0.3.2(convex@1.51.0(react@19.3.1))(react@19.3.1)
+      '@convex-dev/workpool': 0.4.7(convex-helpers@0.1.136(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.3.1))(prettier@3.10.1)(react@19.3.1)(typescript@6.0.3)(zod@4.6.7))(convex@1.51.0(react@19.3.1))
+      convex: 1.51.0(react@19.3.1)
+      convex-helpers: 0.1.136(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.3.1))(prettier@3.10.1)(react@19.3.1)(typescript@6.0.3)(zod@4.6.7)
       remeda: 2.39.0
       resend: 6.39.0
       svix: 1.92.2
@@ -11876,10 +11876,10 @@ snapshots:
       - '@react-email/render'
       - react
 
-  '@convex-dev/workpool@0.4.7(convex-helpers@0.1.136(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.2.6))(prettier@3.10.1)(react@19.2.6)(typescript@6.0.3)(zod@4.6.7))(convex@1.51.0(react@19.2.6))':
+  '@convex-dev/workpool@0.4.7(convex-helpers@0.1.136(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.3.1))(prettier@3.10.1)(react@19.3.1)(typescript@6.0.3)(zod@4.6.7))(convex@1.51.0(react@19.3.1))':
     dependencies:
-      convex: 1.51.0(react@19.2.6)
-      convex-helpers: 0.1.136(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.2.6))(prettier@3.10.1)(react@19.2.6)(typescript@6.0.3)(zod@4.6.7)
+      convex: 1.51.0(react@19.3.1)
+      convex-helpers: 0.1.136(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.3.1))(prettier@3.10.1)(react@19.3.1)(typescript@6.0.3)(zod@4.6.7)
 
   '@cspotcode/source-map-support@0.8.1':
     dependencies:
@@ -11911,13 +11911,13 @@ snapshots:
 
   '@discoveryjs/json-ext@1.1.0': {}
 
-  '@djpanda/convex-authz@2.4.1(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.2.6))(prettier@3.10.1)(react@19.2.6)(typescript@6.0.3)(zod@4.6.7)':
+  '@djpanda/convex-authz@2.4.1(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.3.1))(prettier@3.10.1)(react@19.3.1)(typescript@6.0.3)(zod@4.6.7)':
     dependencies:
-      '@convex-dev/crons': 0.2.2(convex@1.51.0(react@19.2.6))
+      '@convex-dev/crons': 0.2.2(convex@1.51.0(react@19.3.1))
       '@testing-library/dom': 10.4.1
-      convex: 1.51.0(react@19.2.6)
-      convex-helpers: 0.1.136(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.2.6))(prettier@3.10.1)(react@19.2.6)(typescript@6.0.3)(zod@4.6.7)
-      react: 19.2.6
+      convex: 1.51.0(react@19.3.1)
+      convex-helpers: 0.1.136(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.3.1))(prettier@3.10.1)(react@19.3.1)(typescript@6.0.3)(zod@4.6.7)
+      react: 19.3.1
     transitivePeerDependencies:
       - '@standard-schema/spec'
       - hono
@@ -12628,11 +12628,11 @@ snapshots:
   '@lmdb/lmdb-win32-x64@3.5.9':
     optional: true
 
-  '@mdx-js/react@3.1.1(@types/react@19.3.0)(react@19.2.6)':
+  '@mdx-js/react@3.1.1(@types/react@19.3.0)(react@19.3.1)':
     dependencies:
       '@types/mdx': 2.0.14
       '@types/react': 19.3.0
-      react: 19.2.6
+      react: 19.3.1
 
   '@mermaid-js/parser@1.2.1':
     dependencies:
@@ -13483,10 +13483,10 @@ snapshots:
 
   '@react-pdf/primitives@4.3.0': {}
 
-  '@react-pdf/reconciler@2.0.0(react@19.2.6)':
+  '@react-pdf/reconciler@2.0.0(react@19.3.1)':
     dependencies:
       object-assign: 4.1.1
-      react: 19.2.6
+      react: 19.3.1
       scheduler: 0.25.0-rc-603e6108-20241029
 
   '@react-pdf/render@4.5.1':
@@ -13502,7 +13502,7 @@ snapshots:
       parse-svg-path: 0.1.2
       svg-arc-to-cubic-bezier: 3.2.0
 
-  '@react-pdf/renderer@4.5.1(react@19.2.6)':
+  '@react-pdf/renderer@4.5.1(react@19.3.1)':
     dependencies:
       '@babel/runtime': 7.29.2
       '@react-pdf/fns': 3.1.3
@@ -13510,14 +13510,14 @@ snapshots:
       '@react-pdf/layout': 4.6.1
       '@react-pdf/pdfkit': 5.1.1
       '@react-pdf/primitives': 4.3.0
-      '@react-pdf/reconciler': 2.0.0(react@19.2.6)
+      '@react-pdf/reconciler': 2.0.0(react@19.3.1)
       '@react-pdf/render': 4.5.1
       '@react-pdf/types': 2.11.1
       events: 3.3.0
       object-assign: 4.1.1
       prop-types: 15.8.1
       queue: 6.0.2
-      react: 19.2.6
+      react: 19.3.1
 
   '@react-pdf/stylesheet@6.2.1':
     dependencies:
@@ -13921,20 +13921,20 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
-  '@storybook/addon-a11y@10.6.7(storybook@10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.2.6))':
+  '@storybook/addon-a11y@10.6.7(storybook@10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.3.1))':
     dependencies:
       '@storybook/global': 5.0.0
       axe-core: 4.14.1
-      storybook: 10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.2.6)
+      storybook: 10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.3.1)
 
-  '@storybook/addon-docs@10.6.7(@types/react@19.3.0)(storybook@10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.2.6))':
+  '@storybook/addon-docs@10.6.7(@types/react@19.3.0)(storybook@10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.3.1))':
     dependencies:
-      '@mdx-js/react': 3.1.1(@types/react@19.3.0)(react@19.2.6)
-      '@storybook/icons': 2.2.0(react@19.2.6)
-      '@storybook/react-dom-shim': 10.6.7(@types/react@19.3.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(storybook@10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.2.6))
-      react: 19.2.6
-      react-dom: 19.2.6(react@19.2.6)
-      storybook: 10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.2.6)
+      '@mdx-js/react': 3.1.1(@types/react@19.3.0)(react@19.3.1)
+      '@storybook/icons': 2.2.0(react@19.3.1)
+      '@storybook/react-dom-shim': 10.6.7(@types/react@19.3.0)(react-dom@19.2.6(react@19.3.1))(react@19.3.1)(storybook@10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.3.1))
+      react: 19.3.1
+      react-dom: 19.2.6(react@19.3.1)
+      storybook: 10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.3.1)
       ts-dedent: 2.3.0
       unplugin: 2.3.11
     optionalDependencies:
@@ -13942,12 +13942,12 @@ snapshots:
     transitivePeerDependencies:
       - '@types/react-dom'
 
-  '@storybook/addon-themes@10.6.7(storybook@10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.2.6))':
+  '@storybook/addon-themes@10.6.7(storybook@10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.3.1))':
     dependencies:
-      storybook: 10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.2.6)
+      storybook: 10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.3.1)
       ts-dedent: 2.3.0
 
-  '@storybook/angular@10.6.7(zt4pgyowbp36ki22wcmpmsfa5i)':
+  '@storybook/angular@10.6.7(rqltqi3x6kq2utmi3c6wbl5vgu)':
     dependencies:
       '@angular-devkit/architect': 0.2202.8(chokidar@5.0.0)
       '@angular-devkit/build-angular': 22.2.7(@angular/compiler-cli@22.3.0(@angular/compiler@22.3.0)(typescript@6.0.3))(@angular/compiler@22.3.0)(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(@angular/platform-browser@22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1)))(@types/node@26.6.6)(chokidar@5.0.0)(html-webpack-plugin@5.6.8(webpack@5.105.4(esbuild@0.27.3)(postcss@8.5.33)))(jiti@2.7.0)(rollup@4.60.2)(sass-embedded@1.108.2)(sass@1.108.2)(tailwindcss@4.3.5)(tsx@4.23.15)(typescript@6.0.3)(vitest@4.1.10)(yaml@2.9.1)
@@ -13958,10 +13958,10 @@ snapshots:
       '@angular/core': 22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1)
       '@angular/platform-browser': 22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))
       '@angular/platform-browser-dynamic': 21.2.8(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(rxjs@7.8.2))(@angular/compiler@22.3.0)(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(@angular/platform-browser@22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1)))
-      '@storybook/builder-webpack5': 10.6.7(esbuild@0.27.3)(postcss@8.5.33)(storybook@10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.2.6))(typescript@6.0.3)
+      '@storybook/builder-webpack5': 10.6.7(esbuild@0.27.3)(postcss@8.5.33)(storybook@10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.3.1))(typescript@6.0.3)
       '@storybook/global': 5.0.0
       rxjs: 7.8.2
-      storybook: 10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.2.6)
+      storybook: 10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.3.1)
       telejson: 8.0.0
       ts-dedent: 2.3.0
       tsconfig-paths-webpack-plugin: 4.2.0
@@ -13986,9 +13986,9 @@ snapshots:
       - uglify-js
       - webpack-cli
 
-  '@storybook/builder-webpack5@10.6.7(esbuild@0.27.3)(postcss@8.5.33)(storybook@10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.2.6))(typescript@6.0.3)':
+  '@storybook/builder-webpack5@10.6.7(esbuild@0.27.3)(postcss@8.5.33)(storybook@10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.3.1))(typescript@6.0.3)':
     dependencies:
-      '@storybook/core-webpack': 10.6.7(storybook@10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.2.6))
+      '@storybook/core-webpack': 10.6.7(storybook@10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.3.1))
       case-sensitive-paths-webpack-plugin: 2.4.0
       cjs-module-lexer: 1.4.3
       css-loader: 7.1.5(webpack@5.105.4(esbuild@0.27.3)(postcss@8.5.33))
@@ -13997,7 +13997,7 @@ snapshots:
       html-webpack-plugin: 5.6.8(webpack@5.105.4(esbuild@0.27.3)(postcss@8.5.33))
       magic-string: 1.4.5
       semver: 7.8.6
-      storybook: 10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.2.6)
+      storybook: 10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.3.1)
       style-loader: 4.0.0(webpack@5.105.4(esbuild@0.27.3)(postcss@8.5.33))
       terser-webpack-plugin: 5.6.1(esbuild@0.27.3)(postcss@8.5.33)(webpack@5.105.4(esbuild@0.27.3)(postcss@8.5.33))
       ts-dedent: 2.3.0
@@ -14023,22 +14023,22 @@ snapshots:
       - uglify-js
       - webpack-cli
 
-  '@storybook/core-webpack@10.6.7(storybook@10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.2.6))':
+  '@storybook/core-webpack@10.6.7(storybook@10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.3.1))':
     dependencies:
-      storybook: 10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.2.6)
+      storybook: 10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.3.1)
       ts-dedent: 2.3.0
 
   '@storybook/global@5.0.0': {}
 
-  '@storybook/icons@2.2.0(react@19.2.6)':
+  '@storybook/icons@2.2.0(react@19.3.1)':
     dependencies:
-      react: 19.2.6
+      react: 19.3.1
 
-  '@storybook/react-dom-shim@10.6.7(@types/react@19.3.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(storybook@10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.2.6))':
+  '@storybook/react-dom-shim@10.6.7(@types/react@19.3.0)(react-dom@19.2.6(react@19.3.1))(react@19.3.1)(storybook@10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.3.1))':
     dependencies:
-      react: 19.2.6
-      react-dom: 19.2.6(react@19.2.6)
-      storybook: 10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.2.6)
+      react: 19.3.1
+      react-dom: 19.2.6(react@19.3.1)
+      storybook: 10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.3.1)
     optionalDependencies:
       '@types/react': 19.3.0
 
@@ -15255,7 +15255,7 @@ snapshots:
 
   before-after-hook@4.0.0: {}
 
-  better-auth@1.6.25(@opentelemetry/api@1.9.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(vitest@4.1.10):
+  better-auth@1.6.25(@opentelemetry/api@1.9.1)(react-dom@19.2.6(react@19.3.1))(react@19.3.1)(vitest@4.1.10):
     dependencies:
       '@better-auth/core': 1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.6.7))(jose@6.2.3)(kysely@0.29.3)(nanostores@1.4.0)
       '@better-auth/drizzle-adapter': 1.6.25(@better-auth/core@1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.6.7))(jose@6.2.3)(kysely@0.29.3)(nanostores@1.4.0))(@better-auth/utils@0.4.2)
@@ -15275,8 +15275,8 @@ snapshots:
       nanostores: 1.4.0
       zod: 4.6.7
     optionalDependencies:
-      react: 19.2.6
-      react-dom: 19.2.6(react@19.2.6)
+      react: 19.3.1
+      react-dom: 19.2.6(react@19.3.1)
       vitest: 4.1.10(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.1)(@types/node@22.19.7)(@vitest/coverage-v8@4.1.10)(happy-dom@20.10.6)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.3.8(@types/node@22.19.7)(esbuild@0.27.3)(jiti@2.7.0)(less@4.9.1)(sass-embedded@1.108.2)(sass@1.108.2)(terser@5.51.4)(tsx@4.23.15)(yaml@2.9.1))
     transitivePeerDependencies:
       - '@cloudflare/workers-types'
@@ -15676,36 +15676,36 @@ snapshots:
 
   convert-source-map@2.0.0: {}
 
-  convex-angular@1.11.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(@angular/router@22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(@angular/platform-browser@22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1)))(rxjs@7.8.2))(convex@1.51.0(react@19.2.6))(rxjs@7.8.2):
+  convex-angular@1.11.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(@angular/router@22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(@angular/platform-browser@22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1)))(rxjs@7.8.2))(convex@1.51.0(react@19.3.1))(rxjs@7.8.2):
     dependencies:
       '@angular/common': 22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(rxjs@7.8.2)
       '@angular/core': 22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1)
       '@angular/router': 22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(@angular/platform-browser@22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)(zone.js@0.16.1)))(rxjs@7.8.2)
-      convex: 1.51.0(react@19.2.6)
+      convex: 1.51.0(react@19.3.1)
       rxjs: 7.8.2
       tslib: 2.9.1
 
-  convex-helpers@0.1.136(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.2.6))(prettier@3.10.1)(react@19.2.6)(typescript@6.0.3)(zod@4.6.7):
+  convex-helpers@0.1.136(@standard-schema/spec@1.1.0)(convex@1.51.0(react@19.3.1))(prettier@3.10.1)(react@19.3.1)(typescript@6.0.3)(zod@4.6.7):
     dependencies:
-      convex: 1.51.0(react@19.2.6)
+      convex: 1.51.0(react@19.3.1)
     optionalDependencies:
       '@standard-schema/spec': 1.1.0
       prettier: 3.10.1
-      react: 19.2.6
+      react: 19.3.1
       typescript: 6.0.3
       zod: 4.6.7
 
-  convex-test@0.0.75(convex@1.51.0(react@19.2.6)):
+  convex-test@0.0.75(convex@1.51.0(react@19.3.1)):
     dependencies:
-      convex: 1.51.0(react@19.2.6)
+      convex: 1.51.0(react@19.3.1)
 
-  convex@1.51.0(react@19.2.6):
+  convex@1.51.0(react@19.3.1):
     dependencies:
       esbuild: 0.27.3
       prettier: 3.10.1
       ws: 8.21.0
     optionalDependencies:
-      react: 19.2.6
+      react: 19.3.1
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -18855,16 +18855,16 @@ snapshots:
       minimist: 1.2.8
       strip-json-comments: 2.0.1
 
-  react-dom@19.2.6(react@19.2.6):
+  react-dom@19.2.6(react@19.3.1):
     dependencies:
-      react: 19.2.6
+      react: 19.3.1
       scheduler: 0.27.0
 
   react-is@16.13.1: {}
 
   react-is@17.0.2: {}
 
-  react@19.2.6: {}
+  react@19.3.1: {}
 
   readdirp@4.1.2: {}
 
@@ -19624,10 +19624,10 @@ snapshots:
 
   stdin-discarder@0.3.2: {}
 
-  storybook@10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.2.6):
+  storybook@10.6.7(@types/react@19.3.0)(prettier@3.10.1)(react@19.3.1):
     dependencies:
       '@storybook/global': 5.0.0
-      '@storybook/icons': 2.2.0(react@19.2.6)
+      '@storybook/icons': 2.2.0(react@19.3.1)
       '@testing-library/dom': 10.4.2
       '@testing-library/jest-dom': 6.9.1
       '@testing-library/user-event': 14.6.13(@testing-library/dom@10.4.2)
@@ -19641,7 +19641,7 @@ snapshots:
       oxc-resolver: 11.21.2
       recast: 0.23.21
       semver: 7.8.6
-      use-sync-external-store: 1.7.0(react@19.2.6)
+      use-sync-external-store: 1.7.0(react@19.3.1)
       ws: 8.23.0
     optionalDependencies:
       '@types/react': 19.3.0
@@ -20089,9 +20089,9 @@ snapshots:
     dependencies:
       punycode: 2.3.1
 
-  use-sync-external-store@1.7.0(react@19.2.6):
+  use-sync-external-store@1.7.0(react@19.3.1):
     dependencies:
-      react: 19.2.6
+      react: 19.3.1
 
   util-deprecate@1.0.2: {}
 
@@ -20296,10 +20296,10 @@ snapshots:
   weak-lru-cache@1.2.3:
     optional: true
 
-  web-haptics@0.0.6(react-dom@19.2.6(react@19.2.6))(react@19.2.6):
+  web-haptics@0.0.6(react-dom@19.2.6(react@19.3.1))(react@19.3.1):
     optionalDependencies:
-      react: 19.2.6
-      react-dom: 19.2.6(react@19.2.6)
+      react: 19.3.1
+      react-dom: 19.2.6(react@19.3.1)
 
   web-streams-polyfill@4.0.0-beta.3: {}
 
